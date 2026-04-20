@@ -1,0 +1,31 @@
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <div class="space-y-8">
+    <div>
+      <h1 class="text-3xl font-semibold tracking-tight">
+        Hi, {@current_user.username}.
+      </h1>
+      <p class="mt-2 text-base-content/70">
+        Welcome to BurpeeTrainer. Pick something to do.
+      </p>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <%= for {href, title, description} <- [
+        {~p"/plans", "Plans", "Build and run workouts"},
+        {~p"/log", "Log", "Record a free-form session"},
+        {~p"/history", "History", "Charts and PRs"},
+        {~p"/goals", "Goals", "Targets and progression"}
+      ] do %>
+        <.link
+          navigate={href}
+          class="rounded-lg border border-base-300 bg-base-100 p-5 hover:bg-base-200 hover:border-primary/40 transition group"
+        >
+          <div class="text-base font-semibold">{title}</div>
+          <div class="mt-1 text-sm text-base-content/60 group-hover:text-base-content/80">
+            {description}
+          </div>
+        </.link>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

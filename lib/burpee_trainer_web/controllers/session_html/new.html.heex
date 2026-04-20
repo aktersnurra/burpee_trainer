@@ -1,0 +1,37 @@
+<Layouts.app flash={@flash} current_user={nil}>
+  <div class="max-w-sm mx-auto mt-16 space-y-6">
+    <div class="text-center space-y-1">
+      <h1 class="text-2xl font-semibold tracking-tight">BurpeeTrainer</h1>
+      <p class="text-sm text-base-content/70">Sign in to continue</p>
+    </div>
+
+    <.form :let={f} for={%{}} as={:user} action={~p"/login"} id="login-form" class="space-y-4">
+      <.input
+        field={f[:username]}
+        type="text"
+        label="Username"
+        value={@username}
+        autocomplete="username"
+        required
+      />
+      <.input
+        field={f[:password]}
+        type="password"
+        label="Password"
+        autocomplete="current-password"
+        required
+      />
+
+      <%= if @error_message do %>
+        <p class="text-sm text-error">{@error_message}</p>
+      <% end %>
+
+      <button
+        type="submit"
+        class="w-full rounded-md bg-primary px-4 py-2 font-medium text-primary-content hover:bg-primary/90 transition"
+      >
+        Sign in
+      </button>
+    </.form>
+  </div>
+</Layouts.app>
