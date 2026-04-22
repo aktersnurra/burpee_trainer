@@ -213,7 +213,14 @@ defmodule BurpeeTrainer.Planner do
       |> Enum.reduce(0, fn event, acc -> acc + (event.burpee_count || 0) end)
 
     duration_sec_total =
-      Enum.reduce(timeline, 0.0, fn event, acc -> acc + event.duration_sec end)
+      Enum.reduce(plan.blocks, 0.0, fn block, acc ->
+        duration_block =
+          Enum.reduce(block.sets, 0.0, fn set, inner ->
+            inner + set.burpee_count * set.sec_per_rep + set.end_of_set_rest
+          end)
+
+        acc + duration_block * block.repeat_count
+      end)
 
     blocks =
       plan.blocks
@@ -381,20 +388,8 @@ defmodule BurpeeTrainer.Planner do
     end
   end
 
-  defp build_timeline_block_set_label(
-         %Block{repeat_count: 1, position: block_pos},
-         _round,
-         set_index
-       ) do
-    "Block #{block_pos} · Set #{set_index}"
-  end
-
-  defp build_timeline_block_set_label(
-         %Block{position: block_pos, repeat_count: repeat_count},
-         round,
-         set_index
-       ) do
-    "Block #{block_pos} · Round #{round}/#{repeat_count} · Set #{set_index}"
+  defp build_timeline_block_set_label(%Block{position: block_pos}, _round, _set_index) do
+    "Block #{block_pos}"
   end
 
   defp build_timeline_shave_rest(%WorkoutPlan{shave_off_sec: shave_sec}, _blocks, _index)

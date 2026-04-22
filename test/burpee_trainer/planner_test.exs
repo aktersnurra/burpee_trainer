@@ -45,7 +45,7 @@ defmodule BurpeeTrainer.PlannerTest do
                  type: :work_burpee,
                  duration_sec: 20.0,
                  burpee_count: 5,
-                 label: "Block 1 · Set 1"
+                 label: "Block 1"
                }
              ] = Planner.to_timeline(plan)
     end
@@ -62,9 +62,9 @@ defmodule BurpeeTrainer.PlannerTest do
       events = Planner.to_timeline(plan)
 
       assert [
-               %Event{type: :work_burpee, burpee_count: 4, label: "Block 1 · Set 1"},
+               %Event{type: :work_burpee, burpee_count: 4, label: "Block 1"},
                %Event{type: :work_rest, duration_sec: 30.0},
-               %Event{type: :work_burpee, burpee_count: 3, label: "Block 1 · Set 2"}
+               %Event{type: :work_burpee, burpee_count: 3, label: "Block 1"}
              ] = events
     end
 
@@ -76,9 +76,9 @@ defmodule BurpeeTrainer.PlannerTest do
         ])
 
       assert [
-               %Event{type: :work_burpee, burpee_count: 4, label: "Block 1 · Set 1"},
+               %Event{type: :work_burpee, burpee_count: 4, label: "Block 1"},
                %Event{type: :work_rest, duration_sec: 60.0},
-               %Event{type: :work_burpee, burpee_count: 3, label: "Block 2 · Set 1"}
+               %Event{type: :work_burpee, burpee_count: 3, label: "Block 2"}
              ] = Planner.to_timeline(plan)
     end
 
@@ -93,16 +93,16 @@ defmodule BurpeeTrainer.PlannerTest do
         ])
 
       [first, _rest, third, fourth] = Planner.to_timeline(plan)
-      assert first.label == "Block 1 · Set 1"
+      assert first.label == "Block 1"
       assert first.burpee_count == 4
-      assert third.label == "Block 1 · Set 2"
+      assert third.label == "Block 1"
       assert third.burpee_count == 2
-      assert fourth.label == "Block 2 · Set 1"
+      assert fourth.label == "Block 2"
     end
   end
 
   describe "to_timeline/1 — repeat_count > 1" do
-    test "repeat_count=3 emits the block's sets three times with round labels" do
+    test "repeat_count=3 emits the block's sets three times labelled with the block" do
       plan = build_plan([build_block(1, 3, [build_set(1, 4, 4.0, 36)])])
 
       events = Planner.to_timeline(plan)
@@ -112,11 +112,7 @@ defmodule BurpeeTrainer.PlannerTest do
 
       labels = for %Event{type: :work_burpee, label: l} <- events, do: l
 
-      assert labels == [
-               "Block 1 · Round 1/3 · Set 1",
-               "Block 1 · Round 2/3 · Set 1",
-               "Block 1 · Round 3/3 · Set 1"
-             ]
+      assert labels == ["Block 1", "Block 1", "Block 1"]
     end
 
     test "repeat_count=0 emits no events for that block" do
@@ -126,7 +122,7 @@ defmodule BurpeeTrainer.PlannerTest do
           build_block(2, 1, [build_set(1, 3, 4.0, 0)])
         ])
 
-      assert [%Event{label: "Block 2 · Set 1"}] = Planner.to_timeline(plan)
+      assert [%Event{label: "Block 2"}] = Planner.to_timeline(plan)
     end
   end
 
@@ -170,7 +166,7 @@ defmodule BurpeeTrainer.PlannerTest do
                  label: "Warmup Round 2"
                },
                %Event{type: :warmup_rest, duration_sec: 180.0},
-               %Event{type: :work_burpee, label: "Block 1 · Set 1"}
+               %Event{type: :work_burpee, label: "Block 1"}
              ] = Planner.to_timeline(plan)
     end
 
@@ -421,7 +417,7 @@ defmodule BurpeeTrainer.PlannerTest do
   end
 
   describe "summary/1" do
-    test "totals include warmup duration but exclude warmup burpees from count" do
+    test "totals count main sets only; warmup is excluded from both burpees and duration" do
       plan =
         build_plan(
           [build_block(1, 1, [build_set(1, 10, 4.0, 0)])],
@@ -435,9 +431,9 @@ defmodule BurpeeTrainer.PlannerTest do
 
       summary = Planner.summary(plan)
 
-      # work = 10 * 4.0 = 40s, warmup_burpee = 5 * 4.0 = 20s, warmup_rest = 60s
+      # Only main work sets count: 10 * 4.0 = 40s. Warmup intentionally omitted.
       assert summary.burpee_count_total == 10
-      assert summary.duration_sec_total == 120.0
+      assert summary.duration_sec_total == 40.0
     end
 
     test "per-block summary multiplies by repeat_count" do

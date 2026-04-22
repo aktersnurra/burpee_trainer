@@ -30,7 +30,6 @@ defmodule BurpeeTrainerWeb.Layouts do
           </nav>
 
           <div class="flex items-center gap-3">
-            <.theme_toggle />
             <span class="text-xs text-base-content/60 hidden sm:inline">
               {@current_user.username}
             </span>
@@ -45,7 +44,6 @@ defmodule BurpeeTrainerWeb.Layouts do
           </div>
         <% else %>
           <div class="flex-1" />
-          <.theme_toggle />
         <% end %>
       </div>
     </header>
@@ -111,41 +109,4 @@ defmodule BurpeeTrainerWeb.Layouts do
     """
   end
 
-  @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-  """
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="relative flex flex-row items-center border border-base-300 bg-base-200 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border border-base-300 bg-base-100 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
-      <button
-        class="relative flex p-1.5 cursor-pointer w-1/3 justify-center"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-        aria-label="System theme"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="relative flex p-1.5 cursor-pointer w-1/3 justify-center"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-        aria-label="Light theme"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="relative flex p-1.5 cursor-pointer w-1/3 justify-center"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-        aria-label="Dark theme"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-    </div>
-    """
-  end
 end

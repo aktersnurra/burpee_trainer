@@ -70,9 +70,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def handle_event("start", _, socket) do
     socket =
       socket
-      |> assign(:status, :running)
+      |> assign(:status, :preroll)
+      |> assign(:remaining_sec, @preroll_sec)
       |> schedule_tick()
-      |> push_event_for_current_event()
+      |> push_preroll_event()
 
     {:noreply, socket}
   end
@@ -91,10 +92,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
      |> assign(:status, :running)
      |> schedule_tick()
      |> push_event_for_current_event()}
-  end
-
-  def handle_event("skip", _, socket) do
-    {:noreply, advance_event(socket)}
   end
 
   def handle_event("finish_early", _, socket) do
@@ -134,6 +131,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def handle_info(:tick, socket) do
     case socket.assigns.status do
       :running -> {:noreply, tick(socket)}
+      :preroll -> {:noreply, preroll_tick(socket)}
       _ -> {:noreply, socket}
     end
   end
@@ -146,6 +144,23 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
     if remaining <= 0 do
       advance_event(socket)
+    else
+      socket
+      |> assign(:remaining_sec, remaining)
+      |> schedule_tick()
+    end
+  end
+
+  defp preroll_tick(socket) do
+    remaining = socket.assigns.remaining_sec - 1
+
+    if remaining <= 0 do
+      socket
+      |> cancel_tick()
+      |> assign(:status, :running)
+      |> assign(:remaining_sec, event_duration_sec(socket.assigns.timeline, 0))
+      |> schedule_tick()
+      |> push_event_for_current_event()
     else
       socket
       |> assign(:remaining_sec, remaining)
@@ -192,6 +207,30 @@ defmodule BurpeeTrainerWeb.SessionLive do
         Process.cancel_timer(ref)
         assign(socket, :tick_ref, nil)
     end
+  end
+
+  defp burpees_remaining(%{type: type, burpee_count: count, duration_sec: dur}, remaining_sec)
+       when type in [:work_burpee, :warmup_burpee] and is_integer(count) and count > 0 and
+              is_number(dur) and dur > 0 do
+    sec_per_rep = dur / count
+
+    remaining_sec
+    |> Kernel./(sec_per_rep)
+    |> Float.ceil()
+    |> trunc()
+    |> min(count)
+    |> max(0)
+  end
+
+  defp burpees_remaining(_, _), do: nil
+
+  defp push_preroll_event(socket) do
+    push_event(socket, "burpee:event_changed", %{
+      type: "countdown",
+      remaining_sec: socket.assigns.remaining_sec,
+      sec_per_rep: nil,
+      burpee_count: nil
+    })
   end
 
   defp push_event_for_current_event(socket) do
@@ -264,6 +303,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
             <.not_runnable_panel />
           <% :idle -> %>
             <.idle_panel summary={@summary} />
+          <% :preroll -> %>
+            <.preroll_panel remaining_sec={@remaining_sec} />
           <% status when status in [:running, :paused] -> %>
             <.running_panel
               status={@status}
@@ -272,6 +313,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               total_events={length(@timeline)}
               remaining_sec={@remaining_sec}
               elapsed_total_sec={@elapsed_total_sec}
+              burpees_remaining={burpees_remaining(Enum.at(@timeline, @event_index), @remaining_sec)}
             />
           <% :completed -> %>
             <.completion_panel
@@ -322,12 +364,27 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
+  attr :remaining_sec, :integer, required: true
+
+  defp preroll_panel(assigns) do
+    ~H"""
+    <section class="rounded-lg border border-base-300 bg-base-100 p-8 space-y-6 text-center">
+      <p class="text-sm uppercase tracking-wide text-base-content/50">Get ready</p>
+      <div class="font-mono text-8xl font-bold tabular-nums tracking-tight">
+        {@remaining_sec}
+      </div>
+      <p class="text-sm text-base-content/60">First set starts at zero.</p>
+    </section>
+    """
+  end
+
   attr :status, :atom, required: true
   attr :event, :any, required: true
   attr :event_index, :integer, required: true
   attr :total_events, :integer, required: true
   attr :remaining_sec, :integer, required: true
   attr :elapsed_total_sec, :integer, required: true
+  attr :burpees_remaining, :any, required: true
 
   defp running_panel(assigns) do
     ~H"""
@@ -354,9 +411,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
           {Fmt.duration_sec(@remaining_sec)}
         </div>
 
-        <%= if @event.burpee_count do %>
+        <%= if @burpees_remaining do %>
           <p class="text-sm text-base-content/60">
-            {@event.burpee_count} burpee{if @event.burpee_count == 1, do: "", else: "s"} to do
+            {@burpees_remaining} burpee{if @burpees_remaining == 1, do: "", else: "s"} to do
           </p>
         <% end %>
 
@@ -383,13 +440,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
             Resume
           </button>
         <% end %>
-        <button
-          type="button"
-          phx-click="skip"
-          class="rounded-md border border-base-300 px-4 py-2 text-sm hover:bg-base-200 transition"
-        >
-          Skip
-        </button>
         <button
           type="button"
           phx-click="finish_early"
