@@ -65,4 +65,24 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
+/* Session runner phase color tokens — aliases into the base16 palette.
+   Kept as separate names so phase meaning is decoupled from palette roles. */
+:root {
+  --phase-work: var(--color-primary);
+  --phase-work-content: var(--color-primary-content);
+  --phase-warmup: var(--color-warning);
+  --phase-warmup-content: var(--color-warning-content);
+  --phase-rest: var(--color-secondary);
+  --phase-rest-content: var(--color-secondary-content);
+  --phase-done: var(--color-accent);
+  --phase-done-content: var(--color-accent-content);
+}
+
+/* Subtle pulse for the clock ring when 5s remain in a rest. */
+@keyframes burpee-ring-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.015); }
+}
+.burpee-ring-pulse { animation: burpee-ring-pulse 1s ease-in-out infinite; }
+
 /* This file is for your main application CSS */
