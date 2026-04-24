@@ -258,8 +258,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       type: "countdown",
       remaining_sec: socket.assigns.remaining_sec,
       sec_per_rep: nil,
-      burpee_count: nil,
-      next_is_work: next_is_work?(socket.assigns.timeline, -1)
+      burpee_count: nil
     })
   end
 
@@ -275,8 +274,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           type: Atom.to_string(event.type),
           remaining_sec: remaining,
           sec_per_rep: sec_per_rep(event),
-          burpee_count: event.burpee_count,
-          next_is_work: next_is_work?(timeline, index)
+          burpee_count: event.burpee_count
         })
     end
   end
@@ -287,13 +285,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   defp sec_per_rep(_), do: nil
-
-  defp next_is_work?(timeline, index) do
-    case Enum.at(timeline, index + 1) do
-      %{type: type} when type in [:work_burpee, :warmup_burpee] -> true
-      _ -> false
-    end
-  end
 
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}
 
@@ -394,7 +385,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp session_runner(assigns) do
     view = runner_view_state(assigns)
-    assigns = Map.merge(assigns, view)
+    assigns = assign(assigns, view)
 
     ~H"""
     <div class="relative flex flex-col gap-5">
@@ -439,7 +430,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
-  defp runner_view_state(%{status: :idle, timeline: timeline}) do
+  defp runner_view_state(assigns) do
+    case assigns.status do
+      :idle -> runner_view_idle(assigns)
+      :preroll -> runner_view_preroll(assigns)
+      s when s in [:running, :paused] -> runner_view_event(assigns)
+    end
+  end
+
+  defp runner_view_idle(%{timeline: timeline}) do
     event = List.first(timeline)
     is_work_like = event && event.type in [:work_burpee, :warmup_burpee]
 
@@ -455,7 +454,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
     }
   end
 
-  defp runner_view_state(%{status: :preroll, remaining_sec: remaining, preroll_total_sec: total}) do
+  defp runner_view_preroll(%{remaining_sec: remaining, preroll_total_sec: total}) do
     %{
       phase_type: :preroll,
       set_label: "First set starts soon",
@@ -468,13 +467,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
     }
   end
 
-  defp runner_view_state(%{
+  defp runner_view_event(%{
          status: status,
          timeline: timeline,
          event_index: idx,
          remaining_sec: remaining
-       })
-       when status in [:running, :paused] do
+       }) do
     event = Enum.at(timeline, idx)
     is_work = event && event.type in [:work_burpee, :warmup_burpee]
     is_rest = event && event.type in [:work_rest, :warmup_rest, :shave_rest]
@@ -484,20 +482,23 @@ defmodule BurpeeTrainerWeb.SessionLive do
       phase_type: (event && event.type) || :preroll,
       set_label: (event && event.label) || "",
       ring_progress: ring_progress(duration - remaining, duration),
-      center_top: cond do
-        is_work -> "reps left"
-        is_rest -> "rest"
-        true -> ""
-      end,
-      center_primary: cond do
-        is_work -> burpees_remaining(event, remaining)
-        is_rest -> remaining
-        true -> ""
-      end,
-      center_bottom: cond do
-        is_work -> "of #{event.burpee_count}"
-        true -> ""
-      end,
+      center_top:
+        cond do
+          is_work -> "reps left"
+          is_rest -> "rest"
+          true -> ""
+        end,
+      center_primary:
+        cond do
+          is_work -> burpees_remaining(event, remaining)
+          is_rest -> remaining
+          true -> ""
+        end,
+      center_bottom:
+        cond do
+          is_work -> "of #{event.burpee_count}"
+          true -> ""
+        end,
       pulse_ring: status == :running and is_rest and remaining > 0 and remaining <= 5,
       done: cumulative_burpees_done(timeline, idx, remaining)
     }

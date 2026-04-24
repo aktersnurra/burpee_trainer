@@ -15,7 +15,7 @@ Follow TigerStyle naming principles throughout the codebase:
 - **No abbreviations.** Write `duration_sec` not `dur_sec`, `burpee_count` not `rep_count`,
   `position` not `pos`. Exception: conventional loop indices.
 - **Equal-length related names.** When two variables are paired, prefer names of equal character
-  count so they line up in code. Example: `note_pre` / `note_post` over `pre_note` / `post_note`.
+  count so they line up in code. Example: `note_pre` / `note_post`.
 - **Infuse names with meaning.** A name should tell you what the thing *is* and *why it exists*,
   not just its type. `rest_sec_shave_accumulated` is better than `extra_rest`.
 - **State invariants positively.** Name booleans in their true form: `warmup_enabled` not
@@ -54,10 +54,11 @@ burpee_type                   -- enum: six_count | navy_seal
 warmup_enabled                -- bool (true means warmup is active)
 warmup_reps                   -- int, manually set
 warmup_rounds                 -- int, manually set
-rest_sec_warmup_between       -- int, default 120  (rest between warmup rounds)
-rest_sec_warmup_before_main   -- int, default 180  (rest after last warmup round, before main workout)
-shave_off_sec                 -- int, nullable (seconds saved per block repetition)
-shave_off_block_count         -- int, nullable (accumulate savings from blocks 1..N, inject before block N+1)
+rest_sec_warmup_between       -- int, default 120
+rest_sec_warmup_before_main   -- int, default 180
+shave_off_sec                 -- int, nullable
+shave_off_block_count         -- int, nullable
+video_id                      -- nullable foreign key -> WorkoutVideos
 has_many blocks (ordered by position)
 ```
 
@@ -66,12 +67,12 @@ has_many blocks (ordered by position)
 id
 plan_id
 position                      -- int (ordering, 1-based)
-repeat_count                  -- int, default 1 ("execute this block N times")
+repeat_count                  -- int, default 1
 has_many sets (ordered by position)
 ```
 
 > **No separate inter-block rest field.** The last set's `rest_sec_after_set` serves as the gap
-> before the next block. This is not a coincidence — it is the design. Document this in code comments.
+> before the next block. This is not a coincidence — it is the design. Document in code comments.
 
 ### Set
 ```
@@ -79,15 +80,15 @@ id
 block_id
 position                      -- int (ordering, 1-based)
 burpee_count                  -- int
-sec_per_burpee                -- float (time to complete one rep)
-rest_sec_after_set            -- int, default 0 (0 on the last set of the last block)
+sec_per_burpee                -- float
+rest_sec_after_set            -- int, default 0
 ```
 
 ### WorkoutSession
 ```
 id
 user_id
-plan_id                       -- nullable (free-form sessions have no plan)
+plan_id                       -- nullable
 burpee_type                   -- enum: six_count | navy_seal
 burpee_count_planned          -- int
 duration_sec_planned          -- int
@@ -95,152 +96,297 @@ burpee_count_actual           -- int
 duration_sec_actual           -- int
 note_pre                      -- text, nullable
 note_post                     -- text, nullable
-inserted_at                   -- used as the session date
+tags                          -- stored as comma-separated string in SQLite
+                              -- values: tired | great_energy | bad_sleep | sick | travel | hot
+
+-- Derived fields (computed and stored at save time, never recomputed):
+rate_per_min_actual           -- float: burpee_count_actual / duration_sec_actual * 60
+days_since_last               -- int: days since previous session of same burpee_type (null if first)
+rate_delta                    -- float: rate_per_min_actual minus previous session rate (null if first)
+rate_avg_rolling_3            -- float: EMA of last 3 sessions rate_per_min_actual, same burpee_type
+time_of_day_bucket            -- atom, derived from local hour of inserted_at:
+                              --   :morning   06:00-11:59
+                              --   :afternoon 12:00-16:59
+                              --   :evening   17:00-20:59
+                              --   :night     21:00-05:59
+style_name                    -- atom, nullable: archetype used
+mood                          -- int: -1 | 0 | 1
+
+inserted_at                   -- full timestamp, time preserved
 ```
+
+> Compute all derived fields in `Workouts.save_session/2` before inserting. Store them —
+> never recompute at read time.
 
 ### Goal
 ```
 id
 user_id
-burpee_type                   -- enum: six_count | navy_seal (one active goal per type max)
-burpee_count_target           -- int (e.g. 200)
-duration_sec_target           -- int (e.g. 1200 = 20 min)
+burpee_type                   -- enum: six_count | navy_seal (one active per type max)
+burpee_count_target           -- int
+duration_sec_target           -- int
 date_target                   -- date
-burpee_count_baseline         -- int (from benchmark session)
+burpee_count_baseline         -- int
 duration_sec_baseline         -- int
 date_baseline                 -- date
 status                        -- enum: active | achieved | abandoned
 inserted_at
 ```
 
+### StylePerformance
+```
+id
+user_id
+style_name                    -- atom: long_sets | burst | pyramid | ladder_up | even |
+                              --       even_spaced | front_loaded | descending | minute_on
+burpee_type                   -- enum: six_count | navy_seal
+mood                          -- int: -1 | 0 | 1
+level                         -- atom: level_1a .. level_4 | graduated
+time_of_day_bucket            -- atom: :morning | :afternoon | :evening | :night
+session_count                 -- int
+completion_ratio_sum          -- float
+rate_sum                      -- float
+```
+
+> Context bucket: `(user_id, style_name, burpee_type, mood, level, time_of_day_bucket)`.
+> Upserted after each session save.
+
+### WorkoutVideo
+```
+id
+name                          -- e.g. "Day 1 - Level 1A 6-count"
+filename                      -- e.g. "bdp_day1_6count.mp4"
+burpee_type                   -- enum: six_count | navy_seal
+duration_sec                  -- int (informational)
+inserted_at
+```
+
+---
+
+## LEVELS MODULE
+
+Pure Elixir module `BurpeeTrainer.Levels`. No Ecto dependency.
+
+### Landmark table (hardcoded)
+```elixir
+@landmarks [
+  %{level: :graduated, six_count: 325, navy_seal: 150},
+  %{level: :level_4,   six_count: 275, navy_seal: 120},
+  %{level: :level_3,   six_count: 250, navy_seal: 100},
+  %{level: :level_2,   six_count: 200, navy_seal:  80},
+  %{level: :level_1d,  six_count: 150, navy_seal:  60},
+  %{level: :level_1c,  six_count: 100, navy_seal:  40},
+  %{level: :level_1b,  six_count:  50, navy_seal:  20},
+  %{level: :level_1a,  six_count:   1, navy_seal:   1},
+]
+```
+
+Qualifies when: `duration_sec_actual <= 1200` AND `burpee_count_actual >= threshold`.
+Level is derived from sessions, never stored.
+
+### Public API
+```elixir
+BurpeeTrainer.Levels.current_level/1
+# [%WorkoutSession{}] -> level_atom  (lower of the two per-type levels)
+
+BurpeeTrainer.Levels.level_for_type/2
+# [%WorkoutSession{}], burpee_type -> level_atom
+
+BurpeeTrainer.Levels.next_landmark/2
+# [%WorkoutSession{}], burpee_type -> %{level: atom, burpee_count_required: int}
+
+BurpeeTrainer.Levels.landmark_achieved?/3
+# [%WorkoutSession{}], burpee_type, level -> boolean
+
+BurpeeTrainer.Levels.landmark_history/1
+# [%WorkoutSession{}] -> [%{level, burpee_type, session_id, date_unlocked}]
+```
+
+### Tests (ExUnit)
+Cover: landmark qualification, overall level = min of two types, next_landmark threshold,
+graduated state, zero sessions.
+
+---
+
+## PLAN WIZARD MODULE
+
+Pure Elixir module `BurpeeTrainer.PlanWizard`. No Ecto dependency.
+Converts simple high-level inputs into a fully structured `%WorkoutPlan{}`.
+
+### Input struct
+```elixir
+%WizardInput{
+  duration_sec_total,     -- int: total workout time e.g. 1200
+  burpee_type,            -- atom: :six_count | :navy_seal
+  burpee_count_total,     -- int: total reps e.g. 120
+  sec_per_burpee,         -- float: time per rep e.g. 5.0
+  pacing_style,           -- atom: :even | :cluster
+  extra_rest,             -- nullable: %{after_block: int, rest_sec: int}
+}
+```
+
+### Generation logic
+
+```
+work_sec_total = burpee_count_total * sec_per_burpee
+rest_sec_total = duration_sec_total - work_sec_total
+
+:even ->
+  Distribute reps into equal sets with consistent rest between each.
+  Produces one block, repeat_count = set_count, one set per repetition.
+
+:cluster ->
+  Cluster reps into groups with micro-rest (3-5s) inside groups,
+  longer rest between groups.
+  set_size: six_count -> 8-15 reps, navy_seal -> 3-5 reps.
+  Produces one block with multiple sets.
+
+extra_rest ->
+  Split into two blocks at after_block boundary.
+  Last set of block N gets rest_sec_after_set = extra_rest.rest_sec.
+  Remaining rest budget redistributed across other sets.
+```
+
+Output is `%WorkoutPlan{}` with all blocks/sets populated, unsaved, ready for editor review.
+
+### Public API
+```elixir
+BurpeeTrainer.PlanWizard.generate/1
+# %WizardInput{} -> {:ok, %WorkoutPlan{}} | {:error, reason}
+
+BurpeeTrainer.PlanWizard.validate/1
+# %WizardInput{} -> :ok | {:error, [reason]}
+```
+
+### Tests (ExUnit)
+Cover: even pacing totals, cluster pacing, extra rest block split,
+work time exceeding total duration returns error, zero burpees returns error.
+
 ---
 
 ## PLANNER MODULE
 
-Pure Elixir module `BurpeeTrainer.Planner`. No Ecto dependency. Takes a `%WorkoutPlan{}` struct
-(with preloaded blocks and sets) and produces a flat ordered list of timed events — the **timeline**.
+Pure Elixir module `BurpeeTrainer.Planner`. No Ecto dependency.
 
 ### Event struct
 ```elixir
 %Event{
-  type:          :warmup_burpee | :warmup_rest | :work_burpee | :work_rest | :shave_rest,
-  duration_sec:  float,
-  burpee_count:  integer | nil,
-  label:         string        # e.g. "Block 2 · Set 1", "Warmup Round 1", "Shave-off Rest"
+  type:         :warmup_burpee | :warmup_rest | :work_burpee | :work_rest | :shave_rest,
+  duration_sec: float,
+  burpee_count: integer | nil,
+  label:        string
 }
 ```
 
 ### Timeline logic
 
-1. **Warmup** (if `warmup_enabled`):
-   - Emit `warmup_rounds` rounds of (`warmup_reps` burpees at first block's first set pace).
-   - Between rounds: `:warmup_rest` of `rest_sec_warmup_between`.
-   - After final warmup round: `:warmup_rest` of `rest_sec_warmup_before_main`.
-
-2. **Main workout**:
-   - Expand each block by `repeat_count`. For each repetition emit its sets in order.
-   - Each set emits `:work_burpee` (duration = `burpee_count * sec_per_burpee`) then `:work_rest`
-     (duration = `rest_sec_after_set`), skipping rest if 0.
-
-3. **Shave-off rest**:
-   - After all repetitions of blocks 1..`shave_off_block_count` are emitted, inject one `:shave_rest` event.
-   - Duration = `shave_off_sec * total_repetitions_in_blocks_1_to_N`.
-   - Then continue with block `shave_off_block_count + 1`.
+1. **Warmup** (if `warmup_enabled`): emit rounds, inter-round rest, pre-main rest.
+2. **Main**: expand each block by `repeat_count`, emit sets as work+rest pairs.
+3. **Shave-off**: after blocks 1..N, inject `:shave_rest` of `shave_off_sec * repetitions`.
 
 ### Public API
 ```elixir
-BurpeeTrainer.Planner.to_timeline/1
-# %WorkoutPlan{} -> [%Event{}]
-
-BurpeeTrainer.Planner.summary/1
-# %WorkoutPlan{} -> %{burpee_count_total, duration_sec_total, blocks: [...]}
+BurpeeTrainer.Planner.to_timeline/1   # %WorkoutPlan{} -> [%Event{}]
+BurpeeTrainer.Planner.summary/1       # %WorkoutPlan{} -> %{burpee_count_total, duration_sec_total, blocks: [...]}
 ```
 
-Helper functions follow the calling-function prefix convention:
-```elixir
-build_timeline/1
-build_timeline_warmup/1
-build_timeline_block/2
-build_timeline_shave_rest/2
-```
-
-### Example mapping (navy seal plan)
-```
-Block(repeat_count=3): [ Set(burpee_count=4, sec_per_burpee=4.0, rest_sec_after_set=36) ]
-Block(repeat_count=1): [ Set(burpee_count=3, sec_per_burpee=4.0, rest_sec_after_set=0)  ]
-shave_off_sec=8, shave_off_block_count=1
-→ after 3 repetitions of block 1: inject shave_rest of 8×3=24s before block 2
-```
+Helpers: `build_timeline/1`, `build_timeline_warmup/1`, `build_timeline_block/2`,
+`build_timeline_shave_rest/2`.
 
 ### Tests (ExUnit)
-Cover: basic plan expansion, shave-off accumulation, warmup generation, zero-rest edge cases,
-`repeat_count` > 1, empty block list.
+Cover: plan expansion, shave-off accumulation, warmup generation, zero-rest edge cases,
+repeat_count > 1, empty block list.
 
 ---
 
 ## PROGRESSION MODULE
 
-Pure Elixir module `BurpeeTrainer.Progression`. No Ecto dependency. Takes a `%Goal{}` and a list
-of recent `%WorkoutSession{}` structs, returns a `%Recommendation{}`.
+Pure Elixir module `BurpeeTrainer.Progression`. No Ecto dependency.
 
-### Periodization logic (3 weeks build + 1 week deload)
-
+### Periodization (3 weeks build + 1 deload)
 ```elixir
-weeks_total   = ceil((date_target   - date_baseline) / 7)
-weeks_elapsed = ceil((date_today    - date_baseline) / 7)
-
-# Linear interpolation toward goal
-burpee_count_target_linear =
-  burpee_count_baseline +
-  (burpee_count_target - burpee_count_baseline) * (weeks_elapsed / weeks_total)
-
 phase = case rem(weeks_elapsed, 4) do
-  1 -> :build_1   # multiplier 0.90
-  2 -> :build_2   # multiplier 1.00
-  3 -> :build_3   # multiplier 1.05
-  0 -> :deload    # multiplier 0.80
+  1 -> :build_1   # 0.90
+  2 -> :build_2   # 1.00
+  3 -> :build_3   # 1.05
+  0 -> :deload    # 0.80
 end
-
 burpee_count_suggested = round(burpee_count_target_linear * phase_multiplier)
 ```
 
-### Trend monitoring
-
-From the last 4 sessions of matching `burpee_type`, fit a linear trend using least squares
-(implement in pure Elixir — arithmetic on lists only). Project reps at `date_target`:
-
-- Projected >= target → `:on_track` or `:ahead`
-- Projected < target by > 10% → `:behind`; boost next week's multiplier by +0.05
-- Fewer than 2 sessions in last 14 days → `:low_consistency`
-
-### Recommendation struct
-```elixir
-%Recommendation{
-  goal_id,
-  burpee_type,
-  phase,                              # :build_1 | :build_2 | :build_3 | :deload
-  trend_status,                       # :ahead | :on_track | :behind | :low_consistency
-  burpee_count_suggested,
-  duration_sec_suggested,
-  sec_per_burpee_suggested,           # derived: duration_sec_suggested / burpee_count_suggested
-  rationale,                          # e.g. "Build week 2 · on track · target 165 reps in 20 min"
-  weeks_remaining,
-  burpee_count_projected_at_goal      # from trend line projected at date_target
-}
-```
+### Trend status
+- `:ahead` | `:on_track` — projected on target
+- `:behind` — projected < target by > 10%; boost multiplier +0.05
+- `:low_consistency` — fewer than 2 sessions in last 14 days
+- `:plateau` — last 4 `rate_delta` within ±3%
 
 ### Public API
 ```elixir
-BurpeeTrainer.Progression.recommend/2
-# %Goal{}, [%WorkoutSession{}] -> %Recommendation{}
-
-BurpeeTrainer.Progression.project_trend/1
-# [%WorkoutSession{}] -> [{date, burpee_count_projected}]
+BurpeeTrainer.Progression.recommend/2   # %Goal{} | :implicit, [%WorkoutSession{}] -> %Recommendation{}
+BurpeeTrainer.Progression.project_trend/1  # [%WorkoutSession{}] -> [{date, burpee_count_projected}]
 ```
 
 ### Tests (ExUnit)
-Cover: on-track projection, behind adjustment (+0.05 boost), deload week calculation,
-fewer-than-4-sessions edge case, zero sessions edge case.
+Cover: on-track, behind, deload, plateau, < 4 sessions, zero sessions, implicit goal.
+
+---
+
+## STYLE RECOMMENDER
+
+### Archetypes
+
+6-count: `long_sets` (1C+), `burst` (any), `pyramid` (1B+), `ladder_up` (1B+), `even` (any)
+Navy seal: `even_spaced` (any), `front_loaded` (1B+), `descending` (1C+), `minute_on` (1D+)
+
+### BurpeeTrainer.StyleGenerator
+```elixir
+BurpeeTrainer.StyleGenerator.generate/2
+# style_name, %Recommendation{} -> %WorkoutPlan{}
+```
+
+### BurpeeTrainer.StyleRecommender
+```elixir
+BurpeeTrainer.StyleRecommender.recommend/1
+# %{burpee_type, mood, level, time_of_day_bucket, sessions, performances, progression_rec}
+# -> [%StyleSuggestion{}, ...] (top 3)
+```
+
+### Bayesian scoring
+```elixir
+@prior_weight 3
+@prior_mean   0.85
+score = (@prior_weight * @prior_mean + session_count * avg_completion) /
+          (@prior_weight + session_count)
+```
+
+### Modifiers (hardcoded starting priors — overridden by data within ~5 sessions)
+
+Mood:
+```
+-1: burst +0.10, even +0.05, long_sets -0.10, descending -0.10
++1: long_sets +0.10, pyramid +0.05, descending +0.05, burst -0.05
+```
+
+Time of day:
+```
+evening: burst +0.05, long_sets -0.05, descending -0.05
+night:   burst +0.10, long_sets -0.10, descending -0.10, even +0.05
+```
+
+Plateau override: unused styles (last 3 sessions) get +0.15.
+
+### StyleSuggestion struct
+```elixir
+%StyleSuggestion{style_name, score, session_count, plan, rationale}
+```
+
+### Upgrade path
+Contextual bandit documented as comment in `style_recommender.ex`.
+Context = `(mood, level, time_of_day_bucket)`, arms = archetypes, reward = completion_ratio.
+
+### Tests (ExUnit)
+Cover: score convergence, prior at zero sessions, level filter, plateau override,
+mood/time modifiers, top 3 returned.
 
 ---
 
@@ -248,117 +394,152 @@ fewer-than-4-sessions edge case, zero sessions edge case.
 
 ### State machine
 ```
-idle → warmup_burpee → warmup_rest → work_burpee → work_rest → shave_rest → done
+idle -> warmup_burpee -> warmup_rest -> work_burpee -> work_rest -> shave_rest -> done
 ```
 
-The LiveView process drives state transitions via `:timer.send_interval`. The timeline from
-`Planner.to_timeline/1` is computed on mount and used as the source of truth for all transitions.
-
 ### Display
-- Phase label: e.g. "Block 2 · Set 1 · Rep 4/8" or "Warmup Round 1" or "Shave-off Rest"
-- Burpees remaining in current set
-- Time remaining in current phase (countdown, in seconds)
-- Overall progress bar: `duration_sec_elapsed / duration_sec_total`
-- Pause button — freezes server timer, sends `"pause_metronome"` push_event to JS hook
+Phase label, burpees remaining in set, countdown, overall progress bar, pause button.
 
-### Audio (JS Hook: `BurpeeHook`)
-Web Audio API only — no audio files, no external dependencies.
-- **Rep beep**: short tone. Client-side metronome (`setInterval` at `sec_per_burpee * 1000` ms).
-  Started/stopped by `push_event` from LiveView on phase transitions.
-- **Rest-ending beep**: distinct longer tone. Triggered by `push_event` from server when
-  `rest_sec_warning = 5` seconds remain in any rest phase.
+### JS Hooks
+
+`BurpeeHook` — Web Audio API:
+- Rep beep: 880hz, 80ms, square. Client metronome at `sec_per_burpee * 1000` ms.
+- Rest-ending beep: 440hz, 400ms, sine. Server push when 5s remain in rest.
+
+`VideoHook` — HTML5 video sync:
+- Receives `push_event`: `"video_play"` / `"video_pause"`.
+- Pause button triggers both `"pause_metronome"` and `"video_pause"`.
+- Resume triggers both `"start_metronome"` and `"video_play"`.
+- Video panel: collapsible, collapsed by default on mobile. Toggle: "Show / Hide video".
+- src="/videos/#{filename}" — routed through VideoController for auth.
+
+### Mood input
+Tap-to-start overlay: 😮‍💨 Tired (-1) / 😐 OK (0) / 💪 Hyped (+1).
+Initializes AudioContext on tap (browser requirement).
 
 ### Completion modal
-Triggered when state machine reaches `:done`. Fields pre-filled from plan, all editable:
-- `burpee_count_actual` (pre-filled: `burpee_count_planned`)
-- `duration_sec_actual`  (pre-filled: `duration_sec_planned`)
-- `note_pre`  (text, optional)
-- `note_post` (text, optional)
-
-Saving creates a `%WorkoutSession{}` record. Cancelling discards without saving (confirm dialog).
+Pre-filled, all editable: `burpee_count_actual`, `duration_sec_actual`, `mood`,
+`tags` (multi-select), `note_pre`, `note_post`.
+On save: `Workouts.save_session/2` computes all derived fields, upserts `StylePerformance`.
 
 ---
 
-## PLANNER UI — `/plans`
+## PLANS PAGE — `/plans`
 
-### Plan list
-- Grid of saved plans showing: name, burpee_type, `burpee_count_total`, `duration_sec_total`
-  (from `Planner.summary/1`).
-- Actions: new, edit, delete, duplicate.
+Two entry points into plan creation:
 
-### Plan editor
-- **Header**: name field, burpee_type selector (six_count | navy_seal).
-- **Warmup section** (collapsible, toggled by `warmup_enabled`):
-  - `warmup_reps`, `warmup_rounds`, `rest_sec_warmup_between`, `rest_sec_warmup_before_main`
-- **Shave-off panel** (collapsible):
-  - `shave_off_sec`, `shave_off_block_count`
-  - Live-computed summary: *"Saving 8s × 3 repetitions = 24s extra rest before block 2"*
-- **Block builder**:
-  - Add / remove / reorder blocks (up/down buttons)
-  - Each block: `repeat_count` field + set list
-  - Each set: `burpee_count`, `sec_per_burpee`, `rest_sec_after_set` + add/remove set buttons
-- **Live summary sidebar** (recomputed on every change via `Planner.summary/1`):
-  - `burpee_count_total`, `duration_sec_total`
-  - Per-block breakdown: "Block 1 (×3): 4 reps × 3 sets = 12 burpees, ~52s work + 36s rest"
+```
+[ Quick Generate ]   [ Build Manual ]
+
+Saved Plans
+[ Plan ] [ Plan ] [ Plan ] ...
+```
+
+### Quick generator wizard (primary path)
+
+Six steps, one per screen, forward/back navigation:
+
+```
+Step 1  Total time        slider/input, default 20 min, range 5-60 min
+Step 2  Burpee type       two large tap targets: [6-Count] [Navy Seal]
+Step 3  Total burpees     number input. Live hint: "X burpees/min".
+                          Warn if work_sec > duration_sec.
+Step 4  Sec per burpee    +/- buttons, default 5s. Live: "Work Xm Ys · Rest Xm Ys"
+Step 5  Pacing style      [Even pacing] [Cluster sets]
+Step 6  Extra rest?       toggle off by default. If on: "After block _ , rest _ sec"
+```
+
+Generate -> `PlanWizard.generate/1` -> opens full editor pre-populated.
+Validation error -> inline message, stay on relevant step.
+
+### Full plan editor (advanced / post-wizard review)
+
+- Header: name, burpee_type, video selector (filtered by type, nullable).
+- Warmup (collapsible): `warmup_reps`, `warmup_rounds`, `rest_sec_warmup_between`,
+  `rest_sec_warmup_before_main`.
+- Shave-off (collapsible): `shave_off_sec`, `shave_off_block_count`, live summary text.
+- Block builder: add/remove/reorder, repeat_count, sets with burpee_count/sec_per_burpee/
+  rest_sec_after_set.
+- Live summary sidebar via `Planner.summary/1`.
 - Save button.
 
 ---
 
 ## HISTORY PAGE — `/history`
 
-### Chart
-Chart.js via CDN, driven by a LiveView JS hook (`ChartHook`).
-- X-axis: session date (`inserted_at`)
-- Y-axis: `burpee_count_actual`
-- One series per `burpee_type`: six_count = blue, navy_seal = orange
-- If an active goal exists for a type, overlay two dotted lines at reduced opacity:
-  1. **Goal line**: `date_baseline / burpee_count_baseline` → `date_target / burpee_count_target`
-  2. **Trend line**: from `Progression.project_trend/1`
+Chart: x=date, y=`burpee_count_actual`, series per type (blue/orange).
+Dots shaped by `time_of_day_bucket`: morning=filled circle, afternoon=filled square,
+evening=open circle, night=open square.
+Overlays: goal line, trend line (dotted), landmark reference lines.
 
-### PR panel
-Per `burpee_type`:
-- Most burpees in a single session (`burpee_count_actual` max)
-- Longest session (`duration_sec_actual` max)
-- Best rate: `burpee_count_actual / duration_sec_actual * 60` (burpees per minute)
+PR panel: best burpees, longest session, best rate, best rate by time-of-day bucket.
 
-### Session table
-Sortable by date, type, burpees, duration. Columns: date, type badge, `burpee_count_actual`,
-`duration_sec_actual`, notes preview (truncated). Click row to expand `note_pre` / `note_post`.
+Session table: date, time-of-day badge, type badge, burpees, duration, mood, tags, notes.
 
 ---
 
 ## GOALS PAGE — `/goals`
 
-Per `burpee_type`: show active goal card or "Set a goal" prompt.
+Level display:
+```
+Current Level: 1C
+6-counts   1C unlocked  next: 150 for 1D
+Navy Seals 1B unlocked  next:  40 for 1C  <- bottleneck in amber
+```
 
-### Goal card
-- Target summary: *"200 6-counts in 20 min by July 1"*
-- Three-point progress bar: `burpee_count_baseline` → trend projection today → `burpee_count_target`
-- Weeks remaining, current phase badge (Build W1/W2/W3 | Deload), trend status badge
+Goal card: target summary, three-point progress bar, phase + trend badges.
+Implicit goal from next landmark if no explicit goal set.
 
-### Next session recommendation panel
-- `Recommendation.rationale` string
-- `burpee_count_suggested`, `duration_sec_suggested`, `sec_per_burpee_suggested`
-- **"Build plan from this"** → opens PlannerLive pre-populated:
-  - `burpee_type` from goal
-  - One block, `repeat_count` derived from `burpee_count_suggested / reasonable_set_size`
-  - `sec_per_burpee` from `sec_per_burpee_suggested`
-  - User reviews and adjusts before saving
-- **"Log free session"** → opens log form pre-filled with suggested values
-
-### Goal management
-- Create: `burpee_type`, `burpee_count_target`, `duration_sec_target`, `date_target`,
-  baseline (auto-filled from most recent session of that type, or manual entry)
-- Abandon goal (with confirmation dialog)
-- Achieved goals shown in collapsed history section below
+Recommendation panel:
+- "Get style recommendation" -> mood picker -> time auto-detected -> top 3 cards
+  -> "Use this" (editor) or "Run directly" (session).
+- "Build plan manually" -> wizard pre-filled with suggestion.
+- "Log free session".
 
 ---
 
 ## FREE-FORM LOGGING — `/log`
 
-Manual session entry without a plan:
-- Fields: `burpee_type`, `burpee_count_actual`, `duration_sec_actual`, `note_pre`, `note_post`
-- `inserted_at` defaults to today (date picker, editable)
+Fields: `burpee_type`, `burpee_count_actual`, `duration_sec_actual`,
+`mood`, `tags`, `note_pre`, `note_post`, `inserted_at` (default now, editable).
+On save: same derived field computation as completion modal.
+
+---
+
+## VIDEO STREAMING
+
+Files at `/var/lib/burpee_trainer/videos/`. Managed manually via mix task.
+
+### Auth — X-Accel-Redirect
+```elixir
+# VideoController
+def stream(conn, %{"filename" => filename}) do
+  if conn.assigns.current_user do
+    conn
+    |> put_resp_header("x-accel-redirect", "/protected-videos/#{filename}")
+    |> put_resp_header("content-type", "video/mp4")
+    |> send_resp(200, "")
+  else
+    redirect(conn, to: ~p"/login")
+  end
+end
+```
+
+### Nginx
+```nginx
+location /videos/ {
+    proxy_pass http://localhost:4000;
+}
+
+location /protected-videos/ {
+    internal;
+    alias /var/lib/burpee_trainer/videos/;
+    mp4;
+    mp4_buffer_size     1m;
+    mp4_max_buffer_size 5m;
+    add_header Accept-Ranges bytes;
+}
+```
 
 ---
 
@@ -367,27 +548,34 @@ Manual session entry without a plan:
 ```
 lib/
   burpee_trainer/
-    accounts.ex          # User auth context (get_user, authenticate_user, etc.)
-    workouts.ex          # Ecto context: plans, blocks, sets, sessions
-    goals.ex             # Ecto context: goals CRUD
-    planner.ex           # Pure functional: plan -> timeline + summary
-    progression.ex       # Pure functional: goal + sessions -> recommendation
+    accounts.ex            # User auth context
+    workouts.ex            # Plans, blocks, sets, sessions, style_performances
+    goals.ex               # Goals CRUD
+    videos.ex              # WorkoutVideo CRUD
+    levels.ex              # Pure: level derivation
+    plan_wizard.ex         # Pure: WizardInput -> WorkoutPlan
+    planner.ex             # Pure: plan -> timeline + summary
+    progression.ex         # Pure: goal + sessions -> recommendation
+    style_recommender.ex   # Pure: context -> top 3 StyleSuggestion
+    style_generator.ex     # Pure: archetype + recommendation -> WorkoutPlan
   burpee_trainer_web/
+    controllers/
+      video_controller.ex  # X-Accel-Redirect auth
     live/
-      session_live.ex    # Live session runner
-      planner_live.ex    # Plan builder/editor
-      history_live.ex    # History + charts
-      goals_live.ex      # Goals + recommendations
-      log_live.ex        # Free-form session logging
+      session_live.ex
+      planner_live.ex      # wizard + full editor
+      history_live.ex
+      goals_live.ex
+      log_live.ex
     components/
-      ...                # Shared LiveView components
 priv/
   repo/migrations/
 assets/
   js/
     hooks/
-      burpee_hook.js     # Web Audio metronome + beep hook
-      chart_hook.js      # Chart.js history chart hook
+      burpee_hook.js
+      chart_hook.js
+      video_hook.js
 ```
 
 ---
@@ -395,22 +583,56 @@ assets/
 ## MIX TASKS
 
 ```
-mix burpee_trainer.create_user   # prompts for username + password, seeds User row
+mix burpee_trainer.create_user
+mix burpee_trainer.add_video NAME FILENAME BURPEE_TYPE
 ```
+
+---
+
+## DEPLOYMENT
+
+- nginx: `burpee.gustafrydholm.xyz` -> `localhost:4000`
+- TLS: certbot
+- Process: systemd
+- Release: `mix release`
+- SQLite: `/var/lib/burpee_trainer/db.sqlite3` via `DATABASE_PATH` env var
+- Videos: `/var/lib/burpee_trainer/videos/`
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+APP=burpee_trainer
+HOST=burpee.gustafrydholm.xyz
+DEPLOY_PATH=/opt/$APP
+MIX_ENV=prod mix deps.get --only prod
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release --overwrite
+rsync -avz --delete _build/prod/rel/$APP/ $HOST:$DEPLOY_PATH/
+ssh $HOST "systemctl restart $APP"
+```
+
+---
+
+## FUTURE FEATURES
+
+- **Chat-based plan generation**: natural language -> OpenRouter LLM -> structured intent
+  -> `StyleGenerator` -> plan editor. One module `BurpeeTrainer.ChatPlanner`.
+  Build after core app is stable with real session data.
 
 ---
 
 ## CONSTRAINTS & PREFERENCES
 
 - SQLite via `ecto_sqlite3`. No Postgres.
-- No JavaScript frameworks. Tailwind + Phoenix LiveView + minimal vanilla JS hooks only.
-- Web Audio API for all audio. No audio files, no external audio libs.
-- Chart.js via CDN for history chart.
-- `BurpeeTrainer.Planner` and `BurpeeTrainer.Progression` are pure functional modules —
-  no Ecto, no side effects, fully unit-testable. All I/O at the edges; logic in the middle.
-- Write ExUnit tests for both pure modules.
-- Prefer plain `GenServer` / `Process` for concurrency. No third-party concurrency libs.
-- Do not generate VS Code config files (`.vscode/`, `launch.json`, etc.).
-- Apply TigerStyle naming conventions as described in the NAMING CONVENTIONS section above.
-  In particular: units and qualifiers trail (`duration_sec_actual` not `actual_duration_sec`),
-  no abbreviations, helper functions prefixed with their calling function name.
+- Raw SQL via `Ecto.Adapters.SQL.query!/3` for all queries. No `Ecto.Schema`, no
+  `Ecto.Changeset`. Ecto for connection pooling, migrations, transactions only.
+- No JavaScript frameworks. Tailwind + LiveView + minimal vanilla JS hooks only.
+- Web Audio API for audio. No audio files, no external libs.
+- Chart.js via CDN.
+- All `BurpeeTrainer.*` modules: pure functional, no Ecto, no side effects, unit-testable.
+- ExUnit tests for: `Levels`, `PlanWizard`, `Planner`, `Progression`,
+  `StyleRecommender`, `StyleGenerator`.
+- Plain `GenServer`/`Process` for concurrency. No third-party concurrency libs.
+- No VS Code config files.
+- TigerStyle naming: units and qualifiers trail, no abbreviations,
+  helpers prefixed with calling function name.

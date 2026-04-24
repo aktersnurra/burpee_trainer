@@ -13,12 +13,15 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
   defp tick(view), do: send(view.pid, :tick) |> then(fn _ -> render(view) end)
 
-  test "idle state shows Start button and totals", %{conn: conn, user: user} do
+  defp start(view), do: view |> element("button", "Ready") |> render_click()
+
+  test "idle state shows tap-to-start overlay and totals", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Grinder"})
     {:ok, _view, html} = live(conn, ~p"/session/#{plan.id}")
 
     assert html =~ "Grinder"
-    assert html =~ "Start session"
+    assert html =~ "Ready"
+    assert html =~ "Tap anywhere to begin"
     assert html =~ "30"
   end
 
@@ -26,12 +29,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    html =
-      view
-      |> element("button", "Start session")
-      |> render_click()
+    html = start(view)
 
     assert html =~ "Get ready"
+    assert html =~ "starts in"
     assert_push_event(view, "burpee:event_changed", %{type: "countdown", remaining_sec: 5})
   end
 
@@ -39,7 +40,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Start session") |> render_click()
+    start(view)
     assert render(view) =~ "Get ready"
 
     _ = tick(view)
@@ -49,9 +50,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     Enum.each(1..4, fn _ -> tick(view) end)
 
     html = render(view)
-    assert html =~ "Pause"
-    # First work event is 10 burpees × 6.0 sec/rep = 60s
-    assert html =~ "1:00"
+    assert html =~ "Work"
+    assert html =~ "reps left"
+    # First work event: 10 burpees, so the clock center shows "of 10".
+    assert html =~ "of 10"
     assert_push_event(view, "burpee:event_changed", %{type: "work_burpee"})
   end
 
@@ -59,7 +61,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Start session") |> render_click()
+    start(view)
     # Advance past preroll
     Enum.each(1..5, fn _ -> tick(view) end)
 
@@ -73,7 +75,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Start session") |> render_click()
+    start(view)
     Enum.each(1..5, fn _ -> tick(view) end)
     html = view |> element("button", "Finish early") |> render_click()
 
@@ -85,7 +87,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Start session") |> render_click()
+    start(view)
     Enum.each(1..5, fn _ -> tick(view) end)
     view |> element("button", "Finish early") |> render_click()
 

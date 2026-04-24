@@ -77,26 +77,32 @@ const BurpeeHook = {
 
   // Single-partial tonal hit. Sine-only by default for a clean,
   // mid-forward sound that cuts through without harshness.
+  //
+  // The 10ms lookahead (start + 0.01) guards against the audio thread
+  // picking up the schedule a sample or two late — if `now` is already
+  // in the past by the time hardware processes it, the attack transient
+  // can be clipped or swallowed. Most noticeable on the first beep of a
+  // set, where the main thread is also running the LiveView render.
   tick({freq, durMs, gain, type = "sine", attackMs = 3, sweepTo = null}) {
     const ctx = this.audioContext()
     const bus = this.masterBus()
-    const now = ctx.currentTime
+    const startAt = ctx.currentTime + 0.01
     const dur = durMs / 1000
 
     const osc = ctx.createOscillator()
     osc.type = type
-    osc.frequency.setValueAtTime(freq, now)
-    if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, now + dur)
+    osc.frequency.setValueAtTime(freq, startAt)
+    if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, startAt + dur)
 
     const g = ctx.createGain()
-    g.gain.setValueAtTime(0, now)
-    g.gain.linearRampToValueAtTime(gain, now + attackMs / 1000)
-    g.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+    g.gain.setValueAtTime(0, startAt)
+    g.gain.linearRampToValueAtTime(gain, startAt + attackMs / 1000)
+    g.gain.exponentialRampToValueAtTime(0.0001, startAt + dur)
 
     osc.connect(g)
     g.connect(bus)
-    osc.start(now)
-    osc.stop(now + dur + 0.02)
+    osc.start(startAt)
+    osc.stop(startAt + dur + 0.02)
   },
 
   // Bell/chime via additive synthesis. Fundamental + harmonic partials
@@ -107,7 +113,7 @@ const BurpeeHook = {
   chime({freq, durMs = 350, gain = 0.45}) {
     const ctx = this.audioContext()
     const bus = this.masterBus()
-    const now = ctx.currentTime
+    const startAt = ctx.currentTime + 0.01
     const dur = durMs / 1000
 
     const partials = [
@@ -124,17 +130,17 @@ const BurpeeHook = {
     partials.forEach(({mult, level, decay}) => {
       const osc = ctx.createOscillator()
       osc.type = "sine"
-      osc.frequency.setValueAtTime(freq * mult, now)
+      osc.frequency.setValueAtTime(freq * mult, startAt)
 
       const g = ctx.createGain()
-      g.gain.setValueAtTime(0, now)
-      g.gain.linearRampToValueAtTime(level, now + 0.003)
-      g.gain.exponentialRampToValueAtTime(0.0001, now + decay)
+      g.gain.setValueAtTime(0, startAt)
+      g.gain.linearRampToValueAtTime(level, startAt + 0.003)
+      g.gain.exponentialRampToValueAtTime(0.0001, startAt + decay)
 
       osc.connect(g)
       g.connect(master)
-      osc.start(now)
-      osc.stop(now + decay + 0.02)
+      osc.start(startAt)
+      osc.stop(startAt + decay + 0.02)
     })
   },
 
@@ -174,7 +180,7 @@ const BurpeeHook = {
     this.ensureRunningAudio()
     this.requestWakeLock()
 
-    const {type, remaining_sec, sec_per_rep, burpee_count, next_is_work} = data
+    const {type, remaining_sec, sec_per_rep, burpee_count} = data
 
     const isLeadIn =
       type === "work_rest" ||
@@ -185,45 +191,23 @@ const BurpeeHook = {
     const isWork = type === "work_burpee" || type === "warmup_burpee"
 
     if (isLeadIn) {
-      // -2s and -1s warning beeps.
+      // -2s and -1s countdown beeps. The rep-1 "GO" beep is fired by
+      // the subsequent work event_changed handler below.
       ;[2, 1].forEach((offset) => {
         const delayMs = Math.max((remaining_sec - offset) * 1000, 0)
         this.schedule(delayMs, () => this.leadBeep())
       })
-      // Rep-1 handoff: schedule the GO beep to land at t=remaining_sec
-      // (i.e. when the next work event begins). Firing it from the
-      // lead-in event — rather than waiting for the work event's
-      // event_changed to arrive — sidesteps the server→client latency
-      // that was swallowing the first beep. Only scheduled when the
-      // server confirms a work event follows (otherwise we'd beep into
-      // the completion fanfare).
-      if (next_is_work) {
-        const delayMs = Math.max(remaining_sec * 1000, 0)
-        this.schedule(delayMs, () => {
-          this._rep1PlayedAt = performance.now()
-          this.repBeep()
-        })
-      }
     } else if (isWork && sec_per_rep && sec_per_rep > 0 && burpee_count > 0) {
       const duration = burpee_count * sec_per_rep
       const elapsed = duration - remaining_sec
       const partial = elapsed % sec_per_rep
       const firstDelaySec = partial === 0 ? 0 : sec_per_rep - partial
 
-      // Skip rep-1 if the previous lead-in just played it (within the
-      // last 200ms). Otherwise, fire it ourselves — this covers
-      // workouts with no lead-in before the first work event (unusual
-      // but possible), and resume-at-rep-boundary.
       let t = firstDelaySec
-      const now = performance.now()
-      const rep1JustPlayed =
-        this._rep1PlayedAt && now - this._rep1PlayedAt < 200
-
       if (t === 0) {
-        if (!rep1JustPlayed) this.repBeep()
+        this.repBeep()
         t = sec_per_rep
       }
-      this._rep1PlayedAt = null
 
       for (; t < remaining_sec; t += sec_per_rep) {
         this.schedule(t * 1000, () => this.repBeep())
