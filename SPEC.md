@@ -58,7 +58,6 @@ rest_sec_warmup_between       -- int, default 120
 rest_sec_warmup_before_main   -- int, default 180
 shave_off_sec                 -- int, nullable
 shave_off_block_count         -- int, nullable
-video_id                      -- nullable foreign key -> WorkoutVideos
 has_many blocks (ordered by position)
 ```
 
@@ -220,7 +219,7 @@ Converts simple high-level inputs into a fully structured `%WorkoutPlan{}`.
   burpee_type,            -- atom: :six_count | :navy_seal
   burpee_count_total,     -- int: total reps e.g. 120
   sec_per_burpee,         -- float: time per rep e.g. 5.0
-  pacing_style,           -- atom: :even | :unbroken
+  pacing_style,           -- atom: :even | :cluster
   extra_rest,             -- nullable: %{after_block: int, rest_sec: int}
 }
 ```
@@ -235,8 +234,8 @@ rest_sec_total = duration_sec_total - work_sec_total
   Distribute reps into equal sets with consistent rest between each.
   Produces one block, repeat_count = set_count, one set per repetition.
 
-:unbroken ->
-  unbroken reps into groups with micro-rest (3-5s) inside groups,
+:cluster ->
+  Cluster reps into groups with micro-rest (3-5s) inside groups,
   longer rest between groups.
   set_size: six_count -> 8-15 reps, navy_seal -> 3-5 reps.
   Produces one block with multiple sets.
@@ -259,7 +258,7 @@ BurpeeTrainer.PlanWizard.validate/1
 ```
 
 ### Tests (ExUnit)
-Cover: even pacing totals, unbroken pacing, extra rest block split,
+Cover: even pacing totals, cluster pacing, extra rest block split,
 work time exceeding total duration returns error, zero burpees returns error.
 
 ---
@@ -406,13 +405,6 @@ Phase label, burpees remaining in set, countdown, overall progress bar, pause bu
 - Rep beep: 880hz, 80ms, square. Client metronome at `sec_per_burpee * 1000` ms.
 - Rest-ending beep: 440hz, 400ms, sine. Server push when 5s remain in rest.
 
-`VideoHook` — HTML5 video sync:
-- Receives `push_event`: `"video_play"` / `"video_pause"`.
-- Pause button triggers both `"pause_metronome"` and `"video_pause"`.
-- Resume triggers both `"start_metronome"` and `"video_play"`.
-- Video panel: collapsible, collapsed by default on mobile. Toggle: "Show / Hide video".
-- src="/videos/#{filename}" — routed through VideoController for auth.
-
 ### Mood input
 Tap-to-start overlay: 😮‍💨 Tired (-1) / 😐 OK (0) / 💪 Hyped (+1).
 Initializes AudioContext on tap (browser requirement).
@@ -445,7 +437,7 @@ Step 2  Burpee type       two large tap targets: [6-Count] [Navy Seal]
 Step 3  Total burpees     number input. Live hint: "X burpees/min".
                           Warn if work_sec > duration_sec.
 Step 4  Sec per burpee    +/- buttons, default 5s. Live: "Work Xm Ys · Rest Xm Ys"
-Step 5  Pacing style      [Even pacing] [unbroken sets]
+Step 5  Pacing style      [Even pacing] [Cluster sets]
 Step 6  Extra rest?       toggle off by default. If on: "After block _ , rest _ sec"
 ```
 
@@ -454,7 +446,7 @@ Validation error -> inline message, stay on relevant step.
 
 ### Full plan editor (advanced / post-wizard review)
 
-- Header: name, burpee_type, video selector (filtered by type, nullable).
+- Header: name, burpee_type.
 - Warmup (collapsible): `warmup_reps`, `warmup_rounds`, `rest_sec_warmup_between`,
   `rest_sec_warmup_before_main`.
 - Shave-off (collapsible): `shave_off_sec`, `shave_off_block_count`, live summary text.
@@ -506,21 +498,56 @@ On save: same derived field computation as completion modal.
 
 ---
 
-## VIDEO STREAMING
+## VIDEOS — `/videos` and `/videos/:id`
 
-Files at `/var/lib/burpee_trainer/videos/`. Managed manually via mix task.
+Videos are completely standalone — no plan, no FSM, no timer, no beeps.
+They are a separate training modality: watch a Busy Dad Training video as your workout,
+then log what happened when it ends.
+
+### Video index — `/videos`
+
+Grid of video cards showing: name, burpee_type badge, duration.
+Filtered by burpee_type (tab selector at top). Click card → `/videos/:id`.
+
+### Video player — `/videos/:id`
+
+Full-width `<video>` element. Controls visible (native browser controls).
+`src="/videos/#{video.filename}"` — routed through `VideoController` for auth check.
+
+When video ends (`ended` DOM event), `VideoHook` sends `"video_ended"` to LiveView.
+LiveView responds by sliding up a log form at the bottom of the page:
+
+```
+burpee_type      -- pre-filled from video.burpee_type, not editable
+duration_sec_actual  -- pre-filled from video.duration_sec, editable
+burpee_count_actual  -- empty, required
+mood             -- picker: 😮‍💨 / 😐 / 💪
+tags             -- multi-select
+note_post        -- text, optional
+```
+
+Save → `Workouts.save_session/2` with `plan_id = null`, `style_name = null`.
+Same derived field computation as all other session saves.
+
+User can also tap "Log session" manually before video ends (in case they stop early).
 
 ### Auth — X-Accel-Redirect
+
+Video bytes never pass through Phoenix. Phoenix does the auth check; nginx serves the file.
+
 ```elixir
-# VideoController
-def stream(conn, %{"filename" => filename}) do
-  if conn.assigns.current_user do
-    conn
-    |> put_resp_header("x-accel-redirect", "/protected-videos/#{filename}")
-    |> put_resp_header("content-type", "video/mp4")
-    |> send_resp(200, "")
-  else
-    redirect(conn, to: ~p"/login")
+defmodule BurpeeTrainerWeb.VideoController do
+  use BurpeeTrainerWeb, :controller
+
+  def stream(conn, %{"filename" => filename}) do
+    if conn.assigns.current_user do
+      conn
+      |> put_resp_header("x-accel-redirect", "/protected-videos/#{filename}")
+      |> put_resp_header("content-type", "video/mp4")
+      |> send_resp(200, "")
+    else
+      redirect(conn, to: ~p"/login")
+    end
   end
 end
 ```
@@ -540,6 +567,20 @@ location /protected-videos/ {
     add_header Accept-Ranges bytes;
 }
 ```
+
+### VideoHook (video_hook.js)
+
+Minimal — just listens for the `ended` event and notifies LiveView:
+
+```javascript
+VideoHook = {
+  mounted() {
+    this.el.addEventListener("ended", () => this.pushEvent("video_ended", {}))
+  }
+}
+```
+
+No play/pause sync needed. No metronome. No server-driven events.
 
 ---
 
@@ -567,6 +608,8 @@ lib/
       history_live.ex
       goals_live.ex
       log_live.ex
+      video_index_live.ex  # /videos — grid of video cards
+      video_player_live.ex # /videos/:id — player + post-video log form
     components/
 priv/
   repo/migrations/
@@ -575,7 +618,7 @@ assets/
     hooks/
       burpee_hook.js
       chart_hook.js
-      video_hook.js
+      video_hook.js        # fires video_ended event to LiveView on video completion
 ```
 
 ---

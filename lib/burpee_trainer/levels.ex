@@ -6,8 +6,14 @@ defmodule BurpeeTrainer.Levels do
   A session qualifies for a landmark when `duration_sec_actual <= 1200`
   and `burpee_count_actual >= threshold`.
 
-  `current_level/1` returns the *lower* of the two per-type levels,
-  because both burpee types must progress together to advance.
+  A level is *achieved* only when both `:six_count` and `:navy_seal`
+  threshold sessions occur within the same ISO calendar week. Doing
+  navy seal Level 2 in week 1 and six-count Level 2 in week 2 does
+  not grant Level 2.
+
+  `level_for_type/2` still returns the highest per-type level regardless
+  of the co-week requirement — useful for showing individual progress and
+  identifying which type is the bottleneck.
   """
 
   @landmarks [
@@ -21,21 +27,23 @@ defmodule BurpeeTrainer.Levels do
     %{level: :level_1a,  six_count:   1, navy_seal:   1}
   ]
 
-  # Ascending order used for level comparison.
-  @level_order [:level_1a, :level_1b, :level_1c, :level_1d, :level_2, :level_3, :level_4, :graduated]
 
   @doc """
-  Returns the overall level — the lower of the per-type levels for
-  `:six_count` and `:navy_seal`. Returns `:level_1a` with zero sessions.
+  Returns the highest level where both types have qualifying sessions in
+  the same ISO week. Returns `:level_1a` when no co-week pair exists.
   """
   @spec current_level([map]) :: atom
   def current_level(sessions) do
-    lower_of(level_for_type(sessions, :six_count), level_for_type(sessions, :navy_seal))
+    found = Enum.find(@landmarks, fn lm ->
+      co_week_achieved?(sessions, lm.six_count, lm.navy_seal)
+    end)
+
+    if found, do: found.level, else: :level_1a
   end
 
   @doc """
-  Returns the highest landmark level achieved for a given burpee type.
-  Returns `:level_1a` when no qualifying sessions exist for that type.
+  Returns the highest landmark level achieved for a given burpee type,
+  ignoring the co-week requirement. Returns `:level_1a` with no sessions.
   """
   @spec level_for_type([map], atom) :: atom
   def level_for_type(sessions, burpee_type) do
@@ -51,8 +59,8 @@ defmodule BurpeeTrainer.Levels do
   end
 
   @doc """
-  Returns the next landmark to reach for a given type, or `nil` if
-  already graduated.
+  Returns the next co-week landmark to reach for a given type, or `nil`
+  if already graduated. Shows the per-type threshold for the next level.
   """
   @spec next_landmark([map], atom) ::
           %{level: atom, burpee_count_required: integer} | nil
@@ -61,9 +69,7 @@ defmodule BurpeeTrainer.Levels do
     idx = Enum.find_index(@landmarks, fn %{level: l} -> l == current end)
 
     case idx do
-      0 ->
-        nil
-
+      0 -> nil
       i ->
         next = Enum.at(@landmarks, i - 1)
         %{level: next.level, burpee_count_required: Map.get(next, burpee_type)}
@@ -71,8 +77,8 @@ defmodule BurpeeTrainer.Levels do
   end
 
   @doc """
-  Returns `true` if any qualifying session meets the threshold for the
-  given burpee type and level.
+  Returns `true` if any qualifying session for the given type meets the
+  threshold for the given level (per-type check, no co-week requirement).
   """
   @spec landmark_achieved?([map], atom, atom) :: boolean
   def landmark_achieved?(sessions, burpee_type, level) do
@@ -90,44 +96,88 @@ defmodule BurpeeTrainer.Levels do
   end
 
   @doc """
-  Returns a chronological list of every landmark first achieved,
-  across both burpee types.
+  Returns a chronological list of co-week level unlocks. An entry is
+  created only when both types' thresholds are first met in the same
+  ISO week. The `session_id` is the later of the two sessions in that
+  week (the one that "completed" the pair).
   """
   @spec landmark_history([map]) :: [
-          %{level: atom, burpee_type: atom, session_id: integer, date_unlocked: Date.t()}
+          %{level: atom, session_id: integer, date_unlocked: Date.t()}
         ]
   def landmark_history(sessions) do
-    for burpee_type <- [:six_count, :navy_seal],
-        %{level: level} = lm <- @landmarks,
-        threshold = Map.get(lm, burpee_type),
-        first =
-          sessions
-          |> Enum.filter(&(&1.burpee_type == burpee_type))
-          |> Enum.filter(&qualifies?/1)
-          |> Enum.filter(&(&1.burpee_count_actual >= threshold))
-          |> Enum.sort_by(& &1.inserted_at)
-          |> List.first(),
-        not is_nil(first) do
-      %{
-        level: level,
-        burpee_type: burpee_type,
-        session_id: first.id,
-        date_unlocked: DateTime.to_date(first.inserted_at)
-      }
+    for %{level: level, six_count: six_threshold, navy_seal: navy_threshold} <- @landmarks,
+        entry = first_co_week_unlock(sessions, six_threshold, navy_threshold),
+        not is_nil(entry) do
+      Map.put(entry, :level, level)
     end
     |> Enum.sort_by(& &1.date_unlocked)
   end
 
-  # A session qualifies if it was done within 20 minutes with at least 1 rep.
+  # ---------------------------------------------------------------------------
+  # Private
+  # ---------------------------------------------------------------------------
+
+  defp co_week_achieved?(sessions, six_threshold, navy_threshold) do
+    six_weeks = qualifying_week_keys(sessions, :six_count, six_threshold)
+    navy_weeks = qualifying_week_keys(sessions, :navy_seal, navy_threshold)
+    not MapSet.disjoint?(six_weeks, navy_weeks)
+  end
+
+  defp qualifying_week_keys(sessions, burpee_type, threshold) do
+    sessions
+    |> Enum.filter(&(&1.burpee_type == burpee_type))
+    |> Enum.filter(&qualifies?/1)
+    |> Enum.filter(&(&1.burpee_count_actual >= threshold))
+    |> MapSet.new(&week_key/1)
+  end
+
+  # Find the earliest ISO week where both types have a qualifying session,
+  # and return the later session's id and date as the "completing" entry.
+  defp first_co_week_unlock(sessions, six_threshold, navy_threshold) do
+    six_by_week = latest_qualifying_by_week(sessions, :six_count, six_threshold)
+    navy_by_week = latest_qualifying_by_week(sessions, :navy_seal, navy_threshold)
+
+    common_weeks =
+      MapSet.intersection(
+        MapSet.new(Map.keys(six_by_week)),
+        MapSet.new(Map.keys(navy_by_week))
+      )
+
+    case Enum.min_by(common_weeks, & &1, fn -> nil end) do
+      nil ->
+        nil
+
+      week ->
+        {six_date, six_dt, six_id} = six_by_week[week]
+        {navy_date, navy_dt, navy_id} = navy_by_week[week]
+
+        if DateTime.compare(six_dt, navy_dt) != :lt,
+          do: %{session_id: six_id, date_unlocked: six_date},
+          else: %{session_id: navy_id, date_unlocked: navy_date}
+    end
+  end
+
+  # Returns a map of ISO week key => {date, datetime, session_id} for the
+  # latest qualifying session in each week for the given type and threshold.
+  defp latest_qualifying_by_week(sessions, burpee_type, threshold) do
+    sessions
+    |> Enum.filter(&(&1.burpee_type == burpee_type))
+    |> Enum.filter(&qualifies?/1)
+    |> Enum.filter(&(&1.burpee_count_actual >= threshold))
+    |> Enum.group_by(&week_key/1)
+    |> Map.new(fn {week, week_sessions} ->
+      last = Enum.max_by(week_sessions, & &1.inserted_at, DateTime)
+      {week, {DateTime.to_date(last.inserted_at), last.inserted_at, last.id}}
+    end)
+  end
+
+  defp week_key(session) do
+    :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.inserted_at)))
+  end
+
   defp qualifies?(%{duration_sec_actual: d, burpee_count_actual: n})
        when is_integer(d) and is_integer(n),
        do: d <= 1200 and n >= 1
 
   defp qualifies?(_), do: false
-
-  defp lower_of(a, b) do
-    ia = Enum.find_index(@level_order, &(&1 == a))
-    ib = Enum.find_index(@level_order, &(&1 == b))
-    if ia <= ib, do: a, else: b
-  end
 end

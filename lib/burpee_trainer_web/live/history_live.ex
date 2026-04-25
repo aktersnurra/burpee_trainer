@@ -23,6 +23,11 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       sessions
       |> Levels.landmark_history()
       |> Enum.group_by(& &1.session_id)
+      |> Map.new(fn {session_id, unlocks} ->
+        # Multiple levels may share the same completing session; show only the highest.
+        highest = Enum.max_by(unlocks, &history_level_index(&1.level))
+        {session_id, [highest]}
+      end)
 
     {:ok,
      socket
@@ -225,7 +230,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
                       <div class="flex items-center gap-2">
                         <%= for unlock <- Map.get(@level_unlocks, session.id, []) do %>
                           <span class="inline-flex items-center rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success shrink-0">
-                            {level_label(unlock.burpee_type)} {history_level_label(unlock.level)}
+                            Level {history_level_label(unlock.level)}
                           </span>
                         <% end %>
                         {note_preview(session)}
@@ -288,8 +293,8 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     """
   end
 
-  defp level_label(:six_count), do: "6-count"
-  defp level_label(:navy_seal), do: "Navy SEAL"
+  @level_order [:level_1a, :level_1b, :level_1c, :level_1d, :level_2, :level_3, :level_4, :graduated]
+  defp history_level_index(level), do: Enum.find_index(@level_order, &(&1 == level)) || 0
 
   defp history_level_label(:graduated), do: "Grad"
   defp history_level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()

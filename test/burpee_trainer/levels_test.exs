@@ -21,17 +21,17 @@ defmodule BurpeeTrainer.LevelsTest do
       assert Levels.current_level([]) == :level_1a
     end
 
-    test "returns the lower of the two per-type levels" do
+    test "returns the highest co-week level when both types done same week" do
       sessions = [
         session(%{burpee_type: :six_count, burpee_count_actual: 100}),
         session(%{burpee_type: :navy_seal, burpee_count_actual: 20})
       ]
 
-      # six_count at 1c (100), navy_seal at 1b (20) — overall = 1b
+      # six_count 100 ≥ 1c threshold, navy_seal 20 ≥ 1b threshold — co-week = 1b
       assert Levels.current_level(sessions) == :level_1b
     end
 
-    test "returns :graduated when both types meet graduated threshold" do
+    test "returns :graduated when both types meet graduated threshold same week" do
       sessions = [
         session(%{burpee_type: :six_count, burpee_count_actual: 325}),
         session(%{burpee_type: :navy_seal, burpee_count_actual: 150})
@@ -40,13 +40,41 @@ defmodule BurpeeTrainer.LevelsTest do
       assert Levels.current_level(sessions) == :graduated
     end
 
-    test "bottleneck type keeps overall level down" do
+    test "bottleneck type keeps overall level down even same week" do
       sessions = [
         session(%{burpee_type: :six_count, burpee_count_actual: 325}),
         session(%{burpee_type: :navy_seal, burpee_count_actual: 1})
       ]
 
       assert Levels.current_level(sessions) == :level_1a
+    end
+
+    test "does not level up if thresholds met in different weeks" do
+      sessions = [
+        # week 2 of 2026
+        session(%{burpee_type: :six_count, burpee_count_actual: 50,
+                  inserted_at: ~U[2026-01-05 12:00:00Z]}),
+        # week 3 of 2026
+        session(%{burpee_type: :navy_seal, burpee_count_actual: 20,
+                  inserted_at: ~U[2026-01-12 12:00:00Z]})
+      ]
+
+      assert Levels.current_level(sessions) == :level_1a
+    end
+
+    test "levels up once both types share a week, regardless of prior weeks" do
+      sessions = [
+        # six_count does 1b in week 2 alone
+        session(%{burpee_type: :six_count, burpee_count_actual: 50,
+                  inserted_at: ~U[2026-01-05 12:00:00Z]}),
+        # navy_seal joins in week 3 — co-week 1b achieved in week 3
+        session(%{burpee_type: :six_count, burpee_count_actual: 50,
+                  inserted_at: ~U[2026-01-12 10:00:00Z]}),
+        session(%{burpee_type: :navy_seal, burpee_count_actual: 20,
+                  inserted_at: ~U[2026-01-12 14:00:00Z]})
+      ]
+
+      assert Levels.current_level(sessions) == :level_1b
     end
   end
 
@@ -149,22 +177,25 @@ defmodule BurpeeTrainer.LevelsTest do
       assert Levels.landmark_history([]) == []
     end
 
+    test "returns empty when only one type has sessions (no co-week possible)" do
+      sessions = [
+        session(%{burpee_type: :six_count, burpee_count_actual: 100}),
+        session(%{burpee_type: :six_count, burpee_count_actual: 200})
+      ]
+
+      assert Levels.landmark_history(sessions) == []
+    end
+
     test "entries are sorted chronologically" do
       sessions = [
-        session(%{
-          id: 1,
-          burpee_type: :six_count,
-          burpee_count_actual: 100,
-          duration_sec_actual: 900,
-          inserted_at: ~U[2026-02-01 12:00:00Z]
-        }),
-        session(%{
-          id: 2,
-          burpee_type: :six_count,
-          burpee_count_actual: 50,
-          duration_sec_actual: 600,
-          inserted_at: ~U[2026-01-15 12:00:00Z]
-        })
+        session(%{id: 1, burpee_type: :six_count, burpee_count_actual: 100,
+                  inserted_at: ~U[2026-02-02 12:00:00Z]}),
+        session(%{id: 2, burpee_type: :navy_seal, burpee_count_actual: 40,
+                  inserted_at: ~U[2026-02-02 14:00:00Z]}),
+        session(%{id: 3, burpee_type: :six_count, burpee_count_actual: 50,
+                  inserted_at: ~U[2026-01-01 12:00:00Z]}),
+        session(%{id: 4, burpee_type: :navy_seal, burpee_count_actual: 20,
+                  inserted_at: ~U[2026-01-01 14:00:00Z]})
       ]
 
       history = Levels.landmark_history(sessions)
@@ -172,36 +203,34 @@ defmodule BurpeeTrainer.LevelsTest do
       assert dates == Enum.sort(dates)
     end
 
-    test "records only the first session that achieves a landmark" do
+    test "session_id is the later of the two co-week sessions" do
       sessions = [
-        session(%{
-          id: 1,
-          burpee_count_actual: 50,
-          duration_sec_actual: 600,
-          inserted_at: ~U[2026-01-01 12:00:00Z]
-        }),
-        session(%{
-          id: 2,
-          burpee_count_actual: 60,
-          duration_sec_actual: 600,
-          inserted_at: ~U[2026-02-01 12:00:00Z]
-        })
+        session(%{id: 1, burpee_type: :six_count, burpee_count_actual: 50,
+                  inserted_at: ~U[2026-01-01 10:00:00Z]}),
+        session(%{id: 2, burpee_type: :navy_seal, burpee_count_actual: 20,
+                  inserted_at: ~U[2026-01-01 14:00:00Z]})
       ]
 
       history = Levels.landmark_history(sessions)
-      entry = Enum.find(history, &(&1.level == :level_1b and &1.burpee_type == :six_count))
-      assert entry.session_id == 1
+      entry = Enum.find(history, &(&1.level == :level_1b))
+      assert entry != nil
+      assert entry.session_id == 2
     end
 
-    test "covers both burpee types" do
+    test "only levels reachable by both types in the same week are included" do
       sessions = [
-        session(%{burpee_type: :six_count, burpee_count_actual: 50}),
-        session(%{burpee_type: :navy_seal, burpee_count_actual: 20})
+        session(%{burpee_type: :six_count, burpee_count_actual: 50,
+                  inserted_at: ~U[2026-01-01 10:00:00Z]}),
+        session(%{burpee_type: :navy_seal, burpee_count_actual: 20,
+                  inserted_at: ~U[2026-01-01 14:00:00Z]})
       ]
 
-      types = sessions |> Levels.landmark_history() |> Enum.map(& &1.burpee_type) |> Enum.uniq()
-      assert :six_count in types
-      assert :navy_seal in types
+      history = Levels.landmark_history(sessions)
+      levels = Enum.map(history, & &1.level)
+      assert :level_1a in levels
+      assert :level_1b in levels
+      # 1c needs six_count ≥ 100 and navy_seal ≥ 40 — not met
+      refute :level_1c in levels
     end
   end
 end
