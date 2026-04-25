@@ -67,7 +67,7 @@ defmodule BurpeeTrainer.Workouts.Set do
   end
 
   defp apply_duration_min(changeset) do
-    duration_min = get_field(changeset, :duration_min)
+    duration_min = get_change(changeset, :duration_min)
     burpees = get_field(changeset, :burpee_count)
     sec_per_rep = get_field(changeset, :sec_per_rep)
 

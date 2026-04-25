@@ -220,7 +220,7 @@ Converts simple high-level inputs into a fully structured `%WorkoutPlan{}`.
   burpee_type,            -- atom: :six_count | :navy_seal
   burpee_count_total,     -- int: total reps e.g. 120
   sec_per_burpee,         -- float: time per rep e.g. 5.0
-  pacing_style,           -- atom: :even | :cluster
+  pacing_style,           -- atom: :even | :unbroken
   extra_rest,             -- nullable: %{after_block: int, rest_sec: int}
 }
 ```
@@ -235,8 +235,8 @@ rest_sec_total = duration_sec_total - work_sec_total
   Distribute reps into equal sets with consistent rest between each.
   Produces one block, repeat_count = set_count, one set per repetition.
 
-:cluster ->
-  Cluster reps into groups with micro-rest (3-5s) inside groups,
+:unbroken ->
+  unbroken reps into groups with micro-rest (3-5s) inside groups,
   longer rest between groups.
   set_size: six_count -> 8-15 reps, navy_seal -> 3-5 reps.
   Produces one block with multiple sets.
@@ -259,7 +259,7 @@ BurpeeTrainer.PlanWizard.validate/1
 ```
 
 ### Tests (ExUnit)
-Cover: even pacing totals, cluster pacing, extra rest block split,
+Cover: even pacing totals, unbroken pacing, extra rest block split,
 work time exceeding total duration returns error, zero burpees returns error.
 
 ---
@@ -445,7 +445,7 @@ Step 2  Burpee type       two large tap targets: [6-Count] [Navy Seal]
 Step 3  Total burpees     number input. Live hint: "X burpees/min".
                           Warn if work_sec > duration_sec.
 Step 4  Sec per burpee    +/- buttons, default 5s. Live: "Work Xm Ys · Rest Xm Ys"
-Step 5  Pacing style      [Even pacing] [Cluster sets]
+Step 5  Pacing style      [Even pacing] [unbroken sets]
 Step 6  Extra rest?       toggle off by default. If on: "After block _ , rest _ sec"
 ```
 

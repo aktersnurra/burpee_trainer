@@ -13,7 +13,7 @@ defmodule BurpeeTrainerWeb.Auth do
   import Plug.Conn
   import Phoenix.Controller
 
-  alias BurpeeTrainer.Accounts
+  alias BurpeeTrainer.{Accounts, Levels, Workouts}
 
   @session_key :user_id
 
@@ -110,7 +110,12 @@ defmodule BurpeeTrainerWeb.Auth do
         {:halt, socket}
 
       _ ->
-        {:cont, Phoenix.Component.assign(socket, :current_user, user)}
+        level = user |> Workouts.list_sessions() |> Levels.current_level()
+
+        {:cont,
+         socket
+         |> Phoenix.Component.assign(:current_user, user)
+         |> Phoenix.Component.assign(:current_level, level)}
     end
   end
 end

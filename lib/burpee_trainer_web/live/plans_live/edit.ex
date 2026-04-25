@@ -181,7 +181,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
       <.form
         for={@form}
         id="plan-form"

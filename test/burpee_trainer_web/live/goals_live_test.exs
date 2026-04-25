@@ -25,21 +25,50 @@ defmodule BurpeeTrainerWeb.GoalsLiveTest do
     {:ok, _view, html} = live(conn, ~p"/goals")
 
     assert html =~ "Next session"
-    assert html =~ "Build plan"
+    assert html =~ "Get style recommendation"
     assert html =~ "Log session"
     assert html =~ "Baseline: 50"
     assert html =~ "Target: 70"
     assert html =~ "weeks remaining"
   end
 
-  test "start_goal opens form and save creates a goal", %{conn: conn, user: user} do
+  test "start_goal shows level-up tab by default", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/goals")
+
+    html =
+      view
+      |> element("button[phx-click='start_goal'][phx-value-type='six_count']")
+      |> render_click()
+
+    assert html =~ "Level up"
+    assert html =~ "Custom"
+    refute has_element?(view, "form#goal-form-six_count")
+  end
+
+  test "switching to custom tab shows the goal form", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/goals")
 
     view
     |> element("button[phx-click='start_goal'][phx-value-type='six_count']")
     |> render_click()
 
+    view
+    |> element("button[phx-click='switch_goal_tab'][phx-value-tab='custom']")
+    |> render_click()
+
     assert has_element?(view, "form#goal-form-six_count")
+  end
+
+  test "custom tab form save creates a goal", %{conn: conn, user: user} do
+    {:ok, view, _html} = live(conn, ~p"/goals")
+
+    view
+    |> element("button[phx-click='start_goal'][phx-value-type='six_count']")
+    |> render_click()
+
+    view
+    |> element("button[phx-click='switch_goal_tab'][phx-value-tab='custom']")
+    |> render_click()
 
     today = Date.utc_today()
 
@@ -61,7 +90,6 @@ defmodule BurpeeTrainerWeb.GoalsLiveTest do
     assert html =~ "Goal created."
     assert html =~ "Baseline: 40"
     assert html =~ "Target: 80"
-
     assert [%{burpee_count_target: 80}] = Goals.list_active_goals(user)
   end
 

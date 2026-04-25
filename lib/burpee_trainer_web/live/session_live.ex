@@ -45,6 +45,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
          |> assign(:elapsed_total_sec, 0)
          |> assign(:preroll_total_sec, @preroll_sec)
          |> assign(:tick_ref, nil)
+         |> assign(:audio_refs, [])
+         |> assign(:mood, nil)
+         |> assign(:completion_tags, [])
          |> assign(:completion_form, nil)}
 
       _ ->
@@ -68,13 +71,22 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
-  def handle_event("start", _, socket) do
+  def handle_event("start", %{"mood" => mood_str}, socket) do
+    mood =
+      case Integer.parse(mood_str) do
+        {m, ""} when m in [-1, 0, 1] -> m
+        _ -> 0
+      end
+
     socket =
       socket
+      |> assign(:mood, mood)
       |> assign(:status, :preroll)
       |> assign(:remaining_sec, @preroll_sec)
+      |> cancel_audio_timers()
       |> schedule_tick()
-      |> push_preroll_event()
+      |> schedule_preroll_audio()
+      |> dispatch_event(%{kind: :lifecycle, payload: %{event: "preroll_start"}})
 
     {:noreply, socket}
   end
@@ -83,8 +95,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
     {:noreply,
      socket
      |> cancel_tick()
+     |> cancel_audio_timers()
      |> assign(:status, :paused)
-     |> push_event("burpee:audio_stop", %{})}
+     |> push_event("burpee:audio_stop", %{})
+     |> dispatch_event(%{kind: :lifecycle, payload: %{event: "paused"}})}
   end
 
   def handle_event("resume", _, socket) do
@@ -92,7 +106,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
      socket
      |> assign(:status, :running)
      |> schedule_tick()
-     |> push_event_for_current_event()}
+     |> schedule_audio_for_current()
+     |> dispatch_event(%{kind: :lifecycle, payload: %{event: "resumed"}})}
   end
 
   def handle_event("finish_early", _, socket) do
@@ -101,6 +116,22 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("discard", _, socket) do
     {:noreply, push_navigate(socket, to: ~p"/plans")}
+  end
+
+  def handle_event("set_mood", %{"mood" => mood_str}, socket) do
+    mood =
+      case Integer.parse(mood_str) do
+        {m, ""} when m in [-1, 0, 1] -> m
+        _ -> socket.assigns.mood
+      end
+
+    {:noreply, assign(socket, :mood, mood)}
+  end
+
+  def handle_event("toggle_tag", %{"tag" => tag}, socket) do
+    tags = socket.assigns.completion_tags
+    new_tags = if tag in tags, do: List.delete(tags, tag), else: [tag | tags]
+    {:noreply, assign(socket, :completion_tags, new_tags)}
   end
 
   def handle_event("validate_session", %{"workout_session" => params}, socket) do
@@ -114,7 +145,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("save_session", %{"workout_session" => params}, socket) do
-    %{current_user: user, plan: plan} = socket.assigns
+    %{current_user: user, plan: plan, mood: mood, completion_tags: tags} = socket.assigns
+
+    params =
+      params
+      |> Map.put("mood", mood)
+      |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
 
     case Workouts.create_session_from_plan(user, plan, params) do
       {:ok, _session} ->
@@ -137,11 +173,18 @@ defmodule BurpeeTrainerWeb.SessionLive do
     end
   end
 
+  def handle_info({:audio_beep, type}, socket) do
+    {:noreply, dispatch_event(socket, %{kind: :timeline, payload: %{type: type}})}
+  end
+
   defp tick(socket) do
     remaining = socket.assigns.remaining_sec - 1
     elapsed = socket.assigns.elapsed_total_sec + 1
 
-    socket = assign(socket, elapsed_total_sec: elapsed)
+    socket =
+      socket
+      |> assign(elapsed_total_sec: elapsed)
+      |> dispatch_event(%{kind: :tick, payload: %{remaining_sec: max(remaining, 0)}})
 
     if remaining <= 0 do
       advance_event(socket)
@@ -161,11 +204,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
       |> assign(:status, :running)
       |> assign(:remaining_sec, event_duration_sec(socket.assigns.timeline, 0))
       |> schedule_tick()
-      |> push_event_for_current_event()
+      |> dispatch_event(%{kind: :lifecycle, payload: %{event: "preroll_end"}})
+      |> schedule_audio_for_current()
     else
       socket
       |> assign(:remaining_sec, remaining)
       |> schedule_tick()
+      |> dispatch_event(%{kind: :tick, payload: %{remaining_sec: remaining}})
     end
   end
 
@@ -176,21 +221,23 @@ defmodule BurpeeTrainerWeb.SessionLive do
       complete_session(socket)
     else
       socket
-      |> cancel_tick()
       |> assign(:event_index, next_index)
       |> assign(:remaining_sec, event_duration_sec(socket.assigns.timeline, next_index))
       |> schedule_tick()
-      |> push_event_for_current_event()
+      |> dispatch_event(%{kind: :lifecycle, payload: %{event: "event_changed"}})
+      |> schedule_audio_for_current()
     end
   end
 
   defp complete_session(socket) do
     socket
     |> cancel_tick()
+    |> cancel_audio_timers()
     |> assign(:status, :completed)
     |> assign(:completion_form, build_completion_form(socket))
     |> push_event("burpee:audio_stop", %{})
     |> push_event("burpee:completed", %{})
+    |> dispatch_event(%{kind: :lifecycle, payload: %{event: "completed"}})
   end
 
   defp schedule_tick(socket) do
@@ -253,38 +300,92 @@ defmodule BurpeeTrainerWeb.SessionLive do
     completed + partial
   end
 
-  defp push_preroll_event(socket) do
-    push_event(socket, "burpee:event_changed", %{
-      type: "countdown",
-      remaining_sec: socket.assigns.remaining_sec,
-      sec_per_rep: nil,
-      burpee_count: nil
-    })
-  end
+  defp dispatch_event(socket, %{kind: :lifecycle, payload: payload}),
+    do: push_event(socket, "burpee:lifecycle", payload)
 
-  defp push_event_for_current_event(socket) do
-    %{timeline: timeline, event_index: index, remaining_sec: remaining} = socket.assigns
+  defp dispatch_event(socket, %{kind: :timeline, payload: payload}),
+    do: push_event(socket, "burpee:timeline", payload)
 
-    case Enum.at(timeline, index) do
-      nil ->
-        socket
+  defp dispatch_event(socket, %{kind: :tick, payload: payload}),
+    do: push_event(socket, "burpee:tick", payload)
 
-      event ->
-        push_event(socket, "burpee:event_changed", %{
-          type: Atom.to_string(event.type),
-          remaining_sec: remaining,
-          sec_per_rep: sec_per_rep(event),
-          burpee_count: event.burpee_count
-        })
+  defp schedule_audio_for_current(socket) do
+    socket = cancel_audio_timers(socket)
+
+    case Enum.at(socket.assigns.timeline, socket.assigns.event_index) do
+      nil -> socket
+      event -> schedule_event_audio(socket, event)
     end
   end
 
-  defp sec_per_rep(%{type: type, duration_sec: d, burpee_count: c})
-       when type in [:work_burpee, :warmup_burpee] and is_integer(c) and c > 0 do
-    d / c
+  defp schedule_event_audio(socket, %{type: t} = event)
+       when t in [:work_rest, :warmup_rest, :shave_rest] do
+    remaining = event_remaining_float(event, socket.assigns.remaining_sec)
+    audio_type = audio_type_for(t)
+
+    socket
+    |> maybe_schedule_audio(remaining - 2, audio_type)
+    |> maybe_schedule_audio(remaining - 1, audio_type)
   end
 
-  defp sec_per_rep(_), do: nil
+  defp schedule_event_audio(
+         socket,
+         %{type: t, duration_sec: d, burpee_count: c} = event
+       )
+       when t in [:work_burpee, :warmup_burpee] and is_integer(c) and c > 0 and is_number(d) and
+              d > 0 do
+    remaining = event_remaining_float(event, socket.assigns.remaining_sec)
+    sec_per_rep = d / c
+    elapsed = d - remaining
+    audio_type = audio_type_for(t)
+
+    Enum.reduce(0..(c - 1), socket, fn idx, acc ->
+      delay = idx * sec_per_rep - elapsed
+      maybe_schedule_audio(acc, delay, audio_type)
+    end)
+  end
+
+  defp schedule_event_audio(socket, _), do: socket
+
+  defp event_remaining_float(%{duration_sec: d}, remaining_sec) when is_number(d) do
+    cond do
+      remaining_sec >= round(d) -> d * 1.0
+      true -> remaining_sec * 1.0
+    end
+  end
+
+  defp schedule_preroll_audio(socket) do
+    remaining = socket.assigns.remaining_sec * 1.0
+
+    socket
+    |> maybe_schedule_audio(remaining - 2, "work_rest")
+    |> maybe_schedule_audio(remaining - 1, "work_rest")
+  end
+
+  defp maybe_schedule_audio(socket, delay, _type) when not is_number(delay), do: socket
+  defp maybe_schedule_audio(socket, delay, _type) when delay < 0, do: socket
+
+  defp maybe_schedule_audio(socket, delay, type) do
+    delay_ms = round(delay * 1000)
+
+    if delay_ms <= 0 do
+      dispatch_event(socket, %{kind: :timeline, payload: %{type: type}})
+    else
+      ref = Process.send_after(self(), {:audio_beep, type}, delay_ms)
+      assign(socket, :audio_refs, [ref | socket.assigns.audio_refs])
+    end
+  end
+
+  defp cancel_audio_timers(socket) do
+    Enum.each(socket.assigns.audio_refs, fn ref -> Process.cancel_timer(ref) end)
+    assign(socket, :audio_refs, [])
+  end
+
+  defp audio_type_for(:warmup_rest), do: "warmup_rest"
+  defp audio_type_for(:work_rest), do: "work_rest"
+  defp audio_type_for(:shave_rest), do: "work_rest"
+  defp audio_type_for(:warmup_burpee), do: "warmup_burpee"
+  defp audio_type_for(:work_burpee), do: "work_burpee"
 
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}
 
@@ -313,7 +414,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
       <div
         id="burpee-session"
         phx-hook="BurpeeHook"
@@ -345,6 +446,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
               summary={@summary}
               elapsed_total_sec={@elapsed_total_sec}
               form={@completion_form}
+              mood={@mood}
+              completion_tags={@completion_tags}
             />
           <% status when status in [:idle, :preroll, :running, :paused] -> %>
             <.session_runner
@@ -656,17 +759,28 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp tap_to_start_overlay(assigns) do
     ~H"""
-    <button
-      type="button"
-      phx-click="start"
-      class={[
-        "absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg",
-        "bg-base-100/85 text-center transition active:scale-[0.995] backdrop-blur-sm"
-      ]}
-    >
-      <span class="text-4xl font-semibold tracking-tight">Ready</span>
-      <span class="text-sm text-base-content/60">Tap anywhere to begin</span>
-    </button>
+    <div class={[
+      "absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-lg",
+      "bg-base-100/90 text-center backdrop-blur-sm"
+    ]}>
+      <span class="text-xl font-semibold tracking-tight">How do you feel?</span>
+      <div class="flex gap-3">
+        <%= for {emoji, label, value} <- [{"😮‍💨", "Tired", -1}, {"😐", "OK", 0}, {"💪", "Hyped", 1}] do %>
+          <button
+            type="button"
+            phx-click="start"
+            phx-value-mood={value}
+            class={[
+              "flex flex-col items-center gap-1.5 rounded-xl border border-base-300",
+              "px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
+            ]}
+          >
+            <span class="text-2xl">{emoji}</span>
+            <span>{label}</span>
+          </button>
+        <% end %>
+      </div>
+    </div>
     """
   end
 
@@ -674,8 +788,19 @@ defmodule BurpeeTrainerWeb.SessionLive do
   attr :summary, :map, required: true
   attr :elapsed_total_sec, :integer, required: true
   attr :form, :any, required: true
+  attr :mood, :integer, default: nil
+  attr :completion_tags, :list, default: []
+
+  @mood_options [{"😮‍💨", "Tired", -1}, {"😐", "OK", 0}, {"💪", "Hyped", 1}]
+  @tag_options ~w[tired great_energy bad_sleep sick travel hot]
 
   defp completion_panel(assigns) do
+    assigns =
+      assign(assigns,
+        mood_options: @mood_options,
+        tag_options: @tag_options
+      )
+
     ~H"""
     <section class="rounded-lg border border-base-300 bg-base-100 p-6 space-y-5">
       <div>
@@ -685,6 +810,50 @@ defmodule BurpeeTrainerWeb.SessionLive do
             round(@summary.duration_sec_total)
           )}. Elapsed: {Fmt.duration_sec(@elapsed_total_sec)}.
         </p>
+      </div>
+
+      <div class="space-y-1.5">
+        <p class="text-sm font-medium">Mood</p>
+        <div class="flex gap-2">
+          <%= for {emoji, label, value} <- @mood_options do %>
+            <button
+              type="button"
+              phx-click="set_mood"
+              phx-value-mood={value}
+              class={[
+                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition",
+                if(@mood == value,
+                  do: "border-primary bg-primary/10 font-medium",
+                  else: "border-base-300 hover:bg-base-200"
+                )
+              ]}
+            >
+              {emoji} {label}
+            </button>
+          <% end %>
+        </div>
+      </div>
+
+      <div class="space-y-1.5">
+        <p class="text-sm font-medium">Tags</p>
+        <div class="flex flex-wrap gap-2">
+          <%= for tag <- @tag_options do %>
+            <button
+              type="button"
+              phx-click="toggle_tag"
+              phx-value-tag={tag}
+              class={[
+                "rounded-full border px-3 py-1 text-xs transition",
+                if(tag in @completion_tags,
+                  do: "border-primary bg-primary/10 font-medium",
+                  else: "border-base-300 hover:bg-base-200"
+                )
+              ]}
+            >
+              {String.replace(tag, "_", " ")}
+            </button>
+          <% end %>
+        </div>
       </div>
 
       <.form

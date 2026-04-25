@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   """
   attr :flash, :map, required: true
   attr :current_user, :any, default: nil
+  attr :current_level, :atom, default: nil
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -30,8 +31,13 @@ defmodule BurpeeTrainerWeb.Layouts do
           </nav>
 
           <div class="flex items-center gap-3">
-            <span class="text-xs text-base-content/60 hidden sm:inline">
+            <span class="text-xs text-base-content/60 hidden sm:inline flex items-center gap-1.5">
               {@current_user.username}
+              <%= if @current_level do %>
+                <span class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                  {level_label(@current_level)}
+                </span>
+              <% end %>
             </span>
             <.form for={%{}} action={~p"/logout"} method="delete" class="inline">
               <button
@@ -55,6 +61,9 @@ defmodule BurpeeTrainerWeb.Layouts do
     <.flash_group flash={@flash} />
     """
   end
+
+  defp level_label(:graduated), do: "Grad"
+  defp level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
   attr :href, :string, required: true
   slot :inner_block, required: true

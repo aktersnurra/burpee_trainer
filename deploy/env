@@ -1,0 +1,7 @@
+# Copy to /etc/burpee_trainer/env and fill in values.
+# Permissions should be 600, owned by root or burpee_trainer.
+
+SECRET_KEY_BASE=
+PHX_HOST=burpee.example.com
+DATABASE_PATH=/var/lib/burpee_trainer/burpee_trainer.db
+POOL_SIZE=5

@@ -5,7 +5,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Goals, Progression, Workouts}
+  alias BurpeeTrainer.{Goals, Levels, Progression, Workouts}
   alias BurpeeTrainerWeb.Fmt
 
   @series_styles %{
@@ -19,11 +19,17 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     sessions = Workouts.list_sessions(user)
     active_goals = Goals.list_active_goals(user)
 
+    level_unlocks =
+      sessions
+      |> Levels.landmark_history()
+      |> Enum.group_by(& &1.session_id)
+
     {:ok,
      socket
      |> assign(:sessions, sessions)
      |> assign(:prs, pr_panel(sessions))
-     |> assign(:chart, chart_data(sessions, active_goals, user))}
+     |> assign(:chart, chart_data(sessions, active_goals, user))
+     |> assign(:level_unlocks, level_unlocks)}
   end
 
   defp pr_panel(sessions) do
@@ -142,7 +148,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
       <div class="space-y-8">
         <div class="flex items-center justify-between">
           <div>
@@ -197,8 +203,11 @@ defmodule BurpeeTrainerWeb.HistoryLive do
               </thead>
               <tbody class="divide-y divide-base-200">
                 <%= for session <- @sessions do %>
-                  <tr class="hover:bg-base-200/30">
-                    <td class="px-4 py-2">
+                  <tr class={[
+                    "hover:bg-base-200/30",
+                    Map.has_key?(@level_unlocks, session.id) && "bg-success/5"
+                  ]}>
+                    <td class="px-4 py-2 whitespace-nowrap">
                       {Calendar.strftime(session.inserted_at, "%Y-%m-%d")}
                     </td>
                     <td class="px-4 py-2">
@@ -213,7 +222,14 @@ defmodule BurpeeTrainerWeb.HistoryLive do
                       {Fmt.duration_sec(session.duration_sec_actual)}
                     </td>
                     <td class="px-4 py-2 text-base-content/60 truncate max-w-xs">
-                      {note_preview(session)}
+                      <div class="flex items-center gap-2">
+                        <%= for unlock <- Map.get(@level_unlocks, session.id, []) do %>
+                          <span class="inline-flex items-center rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success shrink-0">
+                            {level_label(unlock.burpee_type)} {history_level_label(unlock.level)}
+                          </span>
+                        <% end %>
+                        {note_preview(session)}
+                      </div>
                     </td>
                   </tr>
                 <% end %>
@@ -271,6 +287,12 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     </div>
     """
   end
+
+  defp level_label(:six_count), do: "6-count"
+  defp level_label(:navy_seal), do: "Navy SEAL"
+
+  defp history_level_label(:graduated), do: "Grad"
+  defp history_level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
   defp note_preview(session) do
     notes = [session.note_pre, session.note_post] |> Enum.reject(&(&1 in [nil, ""]))

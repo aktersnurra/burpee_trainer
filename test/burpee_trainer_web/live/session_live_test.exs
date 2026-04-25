@@ -13,15 +13,18 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
   defp tick(view), do: send(view.pid, :tick) |> then(fn _ -> render(view) end)
 
-  defp start(view), do: view |> element("button", "Ready") |> render_click()
+  # Click the "OK" mood button to start (mood = 0).
+  defp start(view), do: view |> element("button[phx-value-mood='0']") |> render_click()
 
-  test "idle state shows tap-to-start overlay and totals", %{conn: conn, user: user} do
+  test "idle state shows mood picker overlay and plan totals", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Grinder"})
     {:ok, _view, html} = live(conn, ~p"/session/#{plan.id}")
 
     assert html =~ "Grinder"
-    assert html =~ "Ready"
-    assert html =~ "Tap anywhere to begin"
+    assert html =~ "How do you feel?"
+    assert html =~ "Tired"
+    assert html =~ "OK"
+    assert html =~ "Hyped"
     assert html =~ "30"
   end
 
@@ -33,7 +36,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert html =~ "Get ready"
     assert html =~ "starts in"
-    assert_push_event(view, "burpee:event_changed", %{type: "countdown", remaining_sec: 5})
+    assert_push_event(view, "burpee:lifecycle", %{event: "preroll_start"})
   end
 
   test "preroll ticks down and then transitions to running", %{conn: conn, user: user} do
@@ -54,7 +57,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert html =~ "reps left"
     # First work event: 10 burpees, so the clock center shows "of 10".
     assert html =~ "of 10"
-    assert_push_event(view, "burpee:event_changed", %{type: "work_burpee"})
+    assert_push_event(view, "burpee:lifecycle", %{event: "preroll_end"})
+    assert_push_event(view, "burpee:timeline", %{type: "work_burpee"})
   end
 
   test "pause halts the timer and audio", %{conn: conn, user: user} do
@@ -81,6 +85,19 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert html =~ "Session complete"
     assert has_element?(view, "form#session-completion-form")
+  end
+
+  test "completion form shows mood buttons and tag toggles", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    start(view)
+    Enum.each(1..5, fn _ -> tick(view) end)
+    html = view |> element("button", "Finish early") |> render_click()
+
+    assert html =~ "Mood"
+    assert html =~ "Tags"
+    assert html =~ "great energy"
   end
 
   test "save_session creates a session and navigates to history", %{conn: conn, user: user} do
@@ -110,5 +127,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert session.duration_sec_actual == 95
     assert session.note_post == "brutal"
     assert session.plan_id == plan.id
+    # mood was set to 0 by start helper (phx-value-mood="0")
+    assert session.mood == 0
   end
 end

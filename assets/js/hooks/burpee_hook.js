@@ -1,39 +1,36 @@
 // Audio cues + screen-wake lock for the session runner.
 //
 // Server events:
-//   burpee:event_changed  — new timeline event (or preroll countdown)
-//                           began. For rest/countdown events, schedules
-//                           two short "warning" beeps at -2s and -1s so
-//                           the rep-1 beep of the next work event forms
-//                           a tight 3-beep countdown (-2, -1, 0). For
-//                           work events, one beep at the start of every
-//                           rep inside the remaining time.
-//   burpee:audio_stop     — cancel any scheduled beeps (pause).
-//   burpee:completed      — play the end-of-session fanfare.
+//   burpee:timeline   — new timeline event. Plays rep beep (work) or
+//                       lead beep (rest).
+//   burpee:audio_stop — cancel any scheduled beeps (pause).
+//   burpee:completed  — play the end-of-session fanfare.
 //
-// The Web Audio context is lazily created on first beep so the browser's
+// The Web Audio context is lazily created on first tap so the browser's
 // autoplay policy is satisfied by the user-initiated Start click.
 //
-// Screen Wake Lock is acquired on the first event and kept for the
-// lifetime of the mount; the browser re-drops it when the tab is
-// backgrounded, so we also re-acquire on visibilitychange.
+// Screen Wake Lock is acquired on the first timeline event and re-acquired
+// when the tab becomes visible again after being backgrounded.
 const BurpeeHook = {
   mounted() {
     this.ctx = null
-    this.timeouts = []
+    this.bus = null
+    this.scheduledOscs = []
     this.wakeLock = null
+
     this.onVisibility = () => this.maybeReacquireWakeLock()
     document.addEventListener("visibilitychange", this.onVisibility)
 
-    // Pre-warm the AudioContext on any click so that the first beep
-    // (scheduled 3s later) fires from a "running" context. Browsers
-    // only grant a running AC when it was created during a recent
-    // user gesture — waiting until the first leadBeep is too late.
     this.primeAudio = () => this.ensureRunningAudio()
-    document.addEventListener("click", this.primeAudio, {capture: true})
-    document.addEventListener("touchstart", this.primeAudio, {capture: true, passive: true})
+    document.addEventListener("click", this.primeAudio, { capture: true })
+    document.addEventListener("touchstart", this.primeAudio, {
+      capture: true,
+      passive: true
+    })
 
-    this.handleEvent("burpee:event_changed", (data) => this.onEventChanged(data))
+    this.handleEvent("burpee:timeline", (e) => this.onTimeline(e))
+    this.handleEvent("burpee:lifecycle", (e) => this.onLifecycle(e))
+    this.handleEvent("burpee:tick", (e) => this.onTick(e))
     this.handleEvent("burpee:audio_stop", () => this.stopAudio())
     this.handleEvent("burpee:completed", () => this.onCompleted())
   },
@@ -41,11 +38,15 @@ const BurpeeHook = {
   destroyed() {
     this.stopAudio()
     document.removeEventListener("visibilitychange", this.onVisibility)
-    document.removeEventListener("click", this.primeAudio, {capture: true})
-    document.removeEventListener("touchstart", this.primeAudio, {capture: true})
+    document.removeEventListener("click", this.primeAudio, { capture: true })
+    document.removeEventListener("touchstart", this.primeAudio, {
+      capture: true
+    })
     this.releaseWakeLock()
     if (this.ctx) this.ctx.close()
   },
+
+  // ---------------- AUDIO CORE ----------------
 
   audioContext() {
     if (!this.ctx) {
@@ -55,16 +56,11 @@ const BurpeeHook = {
     return this.ctx
   },
 
-  // Create/resume the AudioContext. Safe to call on every click;
-  // browsers are idempotent about resuming an already-running context.
   ensureRunningAudio() {
     const ctx = this.audioContext()
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {})
-    }
+    if (ctx.state === "suspended") ctx.resume().catch(() => {})
   },
 
-  // Shared master gain keeps peaks tame when partials stack.
   masterBus() {
     const ctx = this.audioContext()
     if (!this.bus) {
@@ -75,183 +71,130 @@ const BurpeeHook = {
     return this.bus
   },
 
-  // Single-partial tonal hit. Sine-only by default for a clean,
-  // mid-forward sound that cuts through without harshness.
-  //
-  // The 10ms lookahead (start + 0.01) guards against the audio thread
-  // picking up the schedule a sample or two late — if `now` is already
-  // in the past by the time hardware processes it, the attack transient
-  // can be clipped or swallowed. Most noticeable on the first beep of a
-  // set, where the main thread is also running the LiveView render.
-  tick({freq, durMs, gain, type = "sine", attackMs = 3, sweepTo = null}) {
+  // ---------------- TIMELINE ----------------
+
+  onTimeline(event) {
+    this.ensureRunningAudio()
+    this.acquireWakeLock()
+
     const ctx = this.audioContext()
-    const bus = this.masterBus()
-    const startAt = ctx.currentTime + 0.01
+    const t = ctx.currentTime + 0.05
+
+    if (event.type === "work_burpee" || event.type === "warmup_burpee") {
+      this.repBeepAt(t)
+    }
+    if (event.type === "work_rest" || event.type === "warmup_rest") {
+      this.leadBeepAt(t)
+    }
+  },
+
+  onLifecycle(_event) {},
+  onTick(_event) {},
+
+  // ---------------- SOUND PRIMITIVES ----------------
+
+  tickAt(startAt, { freq, durMs, gain, type = "sine", attackMs = 3 }) {
+    const ctx = this.audioContext()
     const dur = durMs / 1000
 
     const osc = ctx.createOscillator()
+    const g = ctx.createGain()
+
     osc.type = type
     osc.frequency.setValueAtTime(freq, startAt)
-    if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, startAt + dur)
-
-    const g = ctx.createGain()
     g.gain.setValueAtTime(0, startAt)
     g.gain.linearRampToValueAtTime(gain, startAt + attackMs / 1000)
     g.gain.exponentialRampToValueAtTime(0.0001, startAt + dur)
 
     osc.connect(g)
-    g.connect(bus)
+    g.connect(this.masterBus())
     osc.start(startAt)
-    osc.stop(startAt + dur + 0.02)
+    osc.stop(startAt + dur + 0.05)
+    this.trackOsc(osc)
   },
 
-  // Bell/chime via additive synthesis. Fundamental + harmonic partials
-  // with staggered decay = shimmering, musical "ding" — the signature
-  // sound of premium HIIT apps (Seven, Centr, Apple workout). Each
-  // partial has its own envelope so higher harmonics fade first,
-  // producing a natural bell-like decay tail.
-  chime({freq, durMs = 350, gain = 0.45}) {
+  chimeAt(startAt, { freq, durMs = 300, gain = 0.4 }) {
     const ctx = this.audioContext()
-    const bus = this.masterBus()
-    const startAt = ctx.currentTime + 0.01
     const dur = durMs / 1000
-
     const partials = [
-      {mult: 1.0, level: 1.0,  decay: dur},
-      {mult: 2.0, level: 0.45, decay: dur * 0.75},
-      {mult: 3.0, level: 0.22, decay: dur * 0.55},
-      {mult: 4.16, level: 0.12, decay: dur * 0.35}
+      { m: 1, g: 1.0, d: dur },
+      { m: 2, g: 0.4, d: dur * 0.7 },
+      { m: 3, g: 0.2, d: dur * 0.5 }
     ]
 
     const master = ctx.createGain()
     master.gain.value = gain
-    master.connect(bus)
+    master.connect(this.masterBus())
 
-    partials.forEach(({mult, level, decay}) => {
+    partials.forEach((p) => {
       const osc = ctx.createOscillator()
-      osc.type = "sine"
-      osc.frequency.setValueAtTime(freq * mult, startAt)
-
       const g = ctx.createGain()
+      osc.frequency.setValueAtTime(freq * p.m, startAt)
       g.gain.setValueAtTime(0, startAt)
-      g.gain.linearRampToValueAtTime(level, startAt + 0.003)
-      g.gain.exponentialRampToValueAtTime(0.0001, startAt + decay)
-
+      g.gain.linearRampToValueAtTime(p.g, startAt + 0.005)
+      g.gain.exponentialRampToValueAtTime(0.0001, startAt + p.d)
       osc.connect(g)
       g.connect(master)
       osc.start(startAt)
-      osc.stop(startAt + decay + 0.02)
+      osc.stop(startAt + p.d + 0.05)
+      this.trackOsc(osc)
     })
   },
 
-  // Countdown tick (-2s / -1s). Warm triangle at A5 — slightly brighter
-  // than a sine so it carries, but still soft enough to feel like a
-  // metronome, not an alarm.
-  leadBeep() {
-    this.tick({freq: 880, durMs: 100, gain: 0.55, type: "triangle"})
+  leadBeepAt(t) {
+    this.tickAt(t, { freq: 440, durMs: 150, gain: 0.6, type: "triangle" })
   },
 
-  // Rep beep — the GO tone. Built in three layers so it cuts through
-  // on phone speakers during heavy breathing:
-  //   1. High sine "ping" at 3.2 kHz — percussive attack transient,
-  //      the brightness that makes the beep pop out.
-  //   2. Bell chime at E6 (1318.5 Hz) — tonal identity, 4 partials
-  //      with staggered decay for a shimmering "ding".
-  //   3. Triangle reinforcement at E5 — body and weight so it's not
-  //      all high-end zing.
-  // Lead A5 → rep E6 is a perfect fifth — the handoff sounds musical.
-  repBeep() {
-    this.tick({freq: 3200, durMs: 25, gain: 0.55, type: "sine", attackMs: 1})
-    this.chime({freq: 1318.5, durMs: 320, gain: 0.75})
-    this.tick({freq: 659.25, durMs: 180, gain: 0.35, type: "triangle"})
+  repBeepAt(t) {
+    this.tickAt(t, { freq: 800, durMs: 40, gain: 0.7, type: "square", attackMs: 2 })
+    this.chimeAt(t, { freq: 659.25, durMs: 350, gain: 0.8 })
+    this.tickAt(t, { freq: 329.63, durMs: 200, gain: 0.4, type: "triangle" })
   },
 
-  schedule(delayMs, fn) {
-    this.timeouts.push(setTimeout(fn, delayMs))
-  },
-
-  stopAudio() {
-    this.timeouts.forEach(clearTimeout)
-    this.timeouts = []
-  },
-
-  onEventChanged(data) {
-    this.stopAudio()
-    this.ensureRunningAudio()
-    this.requestWakeLock()
-
-    const {type, remaining_sec, sec_per_rep, burpee_count} = data
-
-    const isLeadIn =
-      type === "work_rest" ||
-      type === "warmup_rest" ||
-      type === "shave_rest" ||
-      type === "countdown"
-
-    const isWork = type === "work_burpee" || type === "warmup_burpee"
-
-    if (isLeadIn) {
-      // -2s and -1s countdown beeps. The rep-1 "GO" beep is fired by
-      // the subsequent work event_changed handler below.
-      ;[2, 1].forEach((offset) => {
-        const delayMs = Math.max((remaining_sec - offset) * 1000, 0)
-        this.schedule(delayMs, () => this.leadBeep())
-      })
-    } else if (isWork && sec_per_rep && sec_per_rep > 0 && burpee_count > 0) {
-      const duration = burpee_count * sec_per_rep
-      const elapsed = duration - remaining_sec
-      const partial = elapsed % sec_per_rep
-      const firstDelaySec = partial === 0 ? 0 : sec_per_rep - partial
-
-      let t = firstDelaySec
-      if (t === 0) {
-        this.repBeep()
-        t = sec_per_rep
-      }
-
-      for (; t < remaining_sec; t += sec_per_rep) {
-        this.schedule(t * 1000, () => this.repBeep())
-      }
-    }
-  },
+  // ---------------- COMPLETION ----------------
 
   onCompleted() {
     this.stopAudio()
-    this.releaseWakeLock()
-    // Ascending C major triad — C5 (523.25) → E5 (659.25) → G5 (783.99)
-    // → high C6 (1046.5) sustain. Bell chimes give a "you did it"
-    // resolution without sounding cheesy.
-    this.chime({freq: 523.25, durMs: 280, gain: 0.45})
-    this.schedule(180, () => this.chime({freq: 659.25, durMs: 300, gain: 0.45}))
-    this.schedule(360, () => this.chime({freq: 783.99, durMs: 340, gain: 0.5}))
-    this.schedule(560, () => this.chime({freq: 1046.5, durMs: 900, gain: 0.55}))
+    const now = this.audioContext().currentTime
+    this.chimeAt(now,       { freq: 523.25, durMs: 250, gain: 0.4 })
+    this.chimeAt(now + 0.2, { freq: 659.25, durMs: 300, gain: 0.4 })
+    this.chimeAt(now + 0.4, { freq: 783.99, durMs: 350, gain: 0.5 })
+    this.chimeAt(now + 0.6, { freq: 1046.5, durMs: 900, gain: 0.5 })
   },
 
-  async requestWakeLock() {
-    if (!("wakeLock" in navigator) || this.wakeLock) return
+  // ---------------- UTIL ----------------
 
-    try {
-      this.wakeLock = await navigator.wakeLock.request("screen")
-      this.wakeLock.addEventListener("release", () => {
-        this.wakeLock = null
-      })
-    } catch (_err) {
-      // Permission denied or unsupported — silently continue without
-      // the wake lock rather than derailing the session.
+  trackOsc(osc) {
+    this.scheduledOscs.push(osc)
+    osc.addEventListener("ended", () => {
+      this.scheduledOscs = this.scheduledOscs.filter((o) => o !== osc)
+    })
+  },
+
+  stopAudio() {
+    if (!this.ctx) return
+    const now = this.ctx.currentTime
+    this.scheduledOscs.forEach((osc) => { try { osc.stop(now) } catch (_) {} })
+    this.scheduledOscs = []
+  },
+
+  acquireWakeLock() {
+    if (this.wakeLock) return
+    navigator.wakeLock?.request("screen").then((lock) => {
+      this.wakeLock = lock
+    }).catch(() => {})
+  },
+
+  maybeReacquireWakeLock() {
+    if (document.visibilityState === "visible") {
+      this.wakeLock = null
+      this.acquireWakeLock()
     }
   },
 
   releaseWakeLock() {
-    if (this.wakeLock) {
-      this.wakeLock.release().catch(() => {})
-      this.wakeLock = null
-    }
-  },
-
-  maybeReacquireWakeLock() {
-    if (document.visibilityState === "visible" && this.timeouts.length > 0) {
-      this.requestWakeLock()
-    }
+    this.wakeLock?.release?.().catch(() => {})
+    this.wakeLock = null
   }
 }
 

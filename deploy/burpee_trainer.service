@@ -1,0 +1,26 @@
+[Unit]
+Description=BurpeeTrainer Phoenix server
+After=network.target
+
+[Service]
+Type=exec
+User=burpee_trainer
+Group=burpee_trainer
+WorkingDirectory=/opt/burpee_trainer
+EnvironmentFile=/etc/burpee_trainer/env
+Environment=PHX_SERVER=true
+Environment=PORT=4000
+ExecStart=/opt/burpee_trainer/bin/burpee_trainer start
+ExecStop=/opt/burpee_trainer/bin/burpee_trainer stop
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Harden the service a bit
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/burpee_trainer /var/lib/burpee_trainer
+
+[Install]
+WantedBy=multi-user.target

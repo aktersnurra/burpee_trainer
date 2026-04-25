@@ -19,6 +19,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     field :rest_sec_warmup_before_main, :integer, default: 180
     field :shave_off_sec, :integer
     field :shave_off_block_count, :integer
+    field :style_name, :string
 
     belongs_to :user, User
 
@@ -47,7 +48,8 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       :rest_sec_warmup_between,
       :rest_sec_warmup_before_main,
       :shave_off_sec,
-      :shave_off_block_count
+      :shave_off_block_count,
+      :style_name
     ])
     |> validate_required([:name, :burpee_type])
     |> validate_length(:name, min: 1, max: 80)
