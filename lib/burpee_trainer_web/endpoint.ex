@@ -8,7 +8,11 @@ defmodule BurpeeTrainerWeb.Endpoint do
     store: :cookie,
     key: "_burpee_trainer_key",
     signing_salt: "LSPz1/8A",
-    same_site: "Lax"
+    same_site: "Lax",
+    http_only: true,
+    secure: true,
+    # 30 days — persists the cookie to disk so mobile browsers don't evict it
+    max_age: 30 * 24 * 60 * 60
   ]
 
   socket "/live", Phoenix.LiveView.Socket,
