@@ -133,6 +133,7 @@ defmodule BurpeeTrainer.PlanWizardTest do
 
     test "sec_per_rep == sec_per_burpee for all sets" do
       {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 10))
+
       for b <- plan.blocks, s <- b.sets do
         assert_in_delta s.sec_per_rep, s.sec_per_burpee, 0.001
       end
@@ -140,7 +141,11 @@ defmodule BurpeeTrainer.PlanWizardTest do
 
     test "partial last set when total is not evenly divisible" do
       # 102 reps / 10 per set = 10 full + 2 remainder
-      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, burpee_count_target: 102, reps_per_set: 10))
+      {:ok, plan} =
+        PlanWizard.generate(
+          input(pacing_style: :unbroken, burpee_count_target: 102, reps_per_set: 10)
+        )
+
       [block] = plan.blocks
       assert length(block.sets) == 11
       last_set = List.last(block.sets)
@@ -161,7 +166,11 @@ defmodule BurpeeTrainer.PlanWizardTest do
     end
 
     test "default reps_per_set is 5 for navy_seal" do
-      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, burpee_type: :navy_seal, sec_per_burpee: 9.0))
+      {:ok, plan} =
+        PlanWizard.generate(
+          input(pacing_style: :unbroken, burpee_type: :navy_seal, sec_per_burpee: 9.0)
+        )
+
       [block] = plan.blocks
       # 100 reps / 5 per set = 20 sets
       assert length(block.sets) == 20
@@ -172,9 +181,13 @@ defmodule BurpeeTrainer.PlanWizardTest do
       # at_min 10 = 600s — should land on boundary 5
       {:ok, plan} =
         PlanWizard.generate(
-          input(pacing_style: :unbroken, reps_per_set: 10,
-                additional_rests: [%{rest_sec: 30, target_min: 10}])
+          input(
+            pacing_style: :unbroken,
+            reps_per_set: 10,
+            additional_rests: [%{rest_sec: 30, target_min: 10}]
+          )
         )
+
       assert total_burpees(plan) == 100
     end
   end

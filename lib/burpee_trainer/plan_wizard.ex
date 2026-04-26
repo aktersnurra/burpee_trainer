@@ -114,6 +114,7 @@ defmodule BurpeeTrainer.PlanWizard do
     cond do
       base_cadence < input.sec_per_burpee ->
         work = round(input.burpee_count_target * input.sec_per_burpee)
+
         {:error,
          [
            "work time (#{work}s) exceeds target duration (#{target_sec}s) — " <>
@@ -156,7 +157,14 @@ defmodule BurpeeTrainer.PlanWizard do
 
       case find_even_splits(sorted_rests, shaved_cadence, input.burpee_count_target) do
         {:ok, split_points} ->
-          blocks = build_even_segments(input.burpee_count_target, input.sec_per_burpee, shaved_cadence, split_points)
+          blocks =
+            build_even_segments(
+              input.burpee_count_target,
+              input.sec_per_burpee,
+              shaved_cadence,
+              split_points
+            )
+
           {:ok, wrap_plan(input, :even, blocks)}
 
         {:error, _} = err ->
@@ -168,9 +176,11 @@ defmodule BurpeeTrainer.PlanWizard do
   # Find absolute rep-index split points for each rest, checking 30s tolerance.
   defp find_even_splits(sorted_rests, cadence, total_reps) do
     result =
-      Enum.reduce_while(sorted_rests, {[], 0}, fn %{rest_sec: rest_sec, target_min: target_min}, {acc, prev_split} ->
+      Enum.reduce_while(sorted_rests, {[], 0}, fn %{rest_sec: rest_sec, target_min: target_min},
+                                                  {acc, prev_split} ->
         target_sec = target_min * 60.0
         ideal = round(target_sec / cadence)
+
         # Must split at a new position after the previous one, leaving at least 1 rep for the last segment
         split_at = ideal |> max(prev_split + 1) |> min(total_reps - 1)
         actual_time = split_at * cadence
@@ -180,8 +190,13 @@ defmodule BurpeeTrainer.PlanWizard do
         else
           nearest_min = Float.round(actual_time / 60, 1)
           diff = round(abs(actual_time - target_sec))
-          {:halt, {:error, ["cannot place rest at min #{target_min} — nearest rep boundary is at " <>
-                            "min #{nearest_min} (#{diff}s away, max 30s). Adjust your rep count or pace."]}}
+
+          {:halt,
+           {:error,
+            [
+              "cannot place rest at min #{target_min} — nearest rep boundary is at " <>
+                "min #{nearest_min} (#{diff}s away, max 30s). Adjust your rep count or pace."
+            ]}}
         end
       end)
 
@@ -296,7 +311,9 @@ defmodule BurpeeTrainer.PlanWizard do
       case find_all_boundary_injections(boundaries, additional_rests) do
         {:ok, injections} ->
           new_sets = apply_injections(sets, injections)
-          {:ok, wrap_plan(input, :unbroken, [%Block{position: 1, repeat_count: 1, sets: new_sets}])}
+
+          {:ok,
+           wrap_plan(input, :unbroken, [%Block{position: 1, repeat_count: 1, sets: new_sets}])}
 
         {:error, _} = err ->
           err

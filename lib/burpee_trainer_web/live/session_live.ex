@@ -64,7 +64,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
         _ -> 0
       end
 
-    {:noreply, socket |> assign(:phase, :running) |> assign(:mood, mood) |> assign(:warmup_asked, true)}
+    {:noreply,
+     socket |> assign(:phase, :running) |> assign(:mood, mood) |> assign(:warmup_asked, true)}
   end
 
   def handle_event("session_complete", %{"main" => main, "warmup" => warmup}, socket) do
@@ -240,13 +241,20 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <div class="relative flex flex-col gap-5">
       <div class="flex items-center justify-between gap-3">
-        <span id="phase-badge" class="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium uppercase tracking-[0.06em] bg-base-200 text-base-content/70">
+        <span
+          id="phase-badge"
+          class="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium uppercase tracking-[0.06em] bg-base-200 text-base-content/70"
+        >
           Ready
         </span>
         <span id="set-label" class="truncate text-xs text-base-content/60"></span>
       </div>
 
-      <div id="ring-container" class="relative mx-auto flex aspect-square w-full max-w-[220px] items-center justify-center" phx-update="ignore">
+      <div
+        id="ring-container"
+        class="relative mx-auto flex aspect-square w-full max-w-[220px] items-center justify-center"
+        phx-update="ignore"
+      >
         <svg viewBox="0 0 240 240" class="h-full w-full -rotate-90">
           <circle cx="120" cy="120" r="107" fill="none" stroke-width="14" stroke="#1E2535" />
           <circle
@@ -263,7 +271,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
         </svg>
         <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
           <span id="clock-top" class="text-[13px] text-base-content/60"></span>
-          <span id="clock-primary" class="text-[46px] font-medium leading-none tabular-nums tracking-tight">—</span>
+          <span
+            id="clock-primary"
+            class="text-[46px] font-medium leading-none tabular-nums tracking-tight"
+          >
+            —
+          </span>
           <span id="clock-bottom" class="text-[13px] text-base-content/60"></span>
         </div>
       </div>
@@ -283,8 +296,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
           />
         </div>
         <div class="flex items-center justify-between text-[13px]">
-          <span>Time left: <span id="time-left" class="font-medium">{Fmt.duration_sec(round(@summary.duration_sec_total))}</span></span>
-          <span class="text-base-content/60">Workout {Fmt.duration_sec(round(@summary.duration_sec_total))}</span>
+          <span>
+            Time left:
+            <span id="time-left" class="font-medium">
+              {Fmt.duration_sec(round(@summary.duration_sec_total))}
+            </span>
+          </span>
+          <span class="text-base-content/60">
+            Workout {Fmt.duration_sec(round(@summary.duration_sec_total))}
+          </span>
         </div>
       </div>
 

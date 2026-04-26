@@ -59,7 +59,8 @@ defmodule BurpeeTrainer.Planner do
   Returns `[]` if no blocks/sets exist or if pace is 0.
   """
   @spec warmup_timeline(WorkoutPlan.t()) :: [Event.t()]
-  def warmup_timeline(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) and blocks != [] do
+  def warmup_timeline(%WorkoutPlan{blocks: blocks} = plan)
+      when is_list(blocks) and blocks != [] do
     first_block = blocks |> sort_by_position() |> List.first()
     first_set = first_block && first_block.sets |> sort_by_position() |> List.first()
 
@@ -75,10 +76,34 @@ defmodule BurpeeTrainer.Planner do
         dur = warmup_reps * sec_per_burpee
 
         [
-          %Event{type: :warmup_burpee, duration_sec: dur, burpee_count: warmup_reps, sec_per_burpee: sec_per_burpee, label: "Warmup Round 1"},
-          %Event{type: :warmup_rest, duration_sec: 120.0, burpee_count: nil, sec_per_burpee: nil, label: "Warmup Rest"},
-          %Event{type: :warmup_burpee, duration_sec: dur, burpee_count: warmup_reps, sec_per_burpee: sec_per_burpee, label: "Warmup Round 2"},
-          %Event{type: :warmup_rest, duration_sec: 180.0, burpee_count: nil, sec_per_burpee: nil, label: "Warmup Rest"}
+          %Event{
+            type: :warmup_burpee,
+            duration_sec: dur,
+            burpee_count: warmup_reps,
+            sec_per_burpee: sec_per_burpee,
+            label: "Warmup Round 1"
+          },
+          %Event{
+            type: :warmup_rest,
+            duration_sec: 120.0,
+            burpee_count: nil,
+            sec_per_burpee: nil,
+            label: "Warmup Rest"
+          },
+          %Event{
+            type: :warmup_burpee,
+            duration_sec: dur,
+            burpee_count: warmup_reps,
+            sec_per_burpee: sec_per_burpee,
+            label: "Warmup Round 2"
+          },
+          %Event{
+            type: :warmup_rest,
+            duration_sec: 180.0,
+            burpee_count: nil,
+            sec_per_burpee: nil,
+            label: "Warmup Rest"
+          }
         ]
       end
     end
@@ -324,7 +349,13 @@ defmodule BurpeeTrainer.Planner do
     if rest_sec > 0 and set_index <= last_set_index do
       [
         work_event,
-        %Event{type: :work_rest, duration_sec: rest_sec * 1.0, burpee_count: nil, sec_per_burpee: nil, label: "Rest"}
+        %Event{
+          type: :work_rest,
+          duration_sec: rest_sec * 1.0,
+          burpee_count: nil,
+          sec_per_burpee: nil,
+          label: "Rest"
+        }
       ]
     else
       [work_event]

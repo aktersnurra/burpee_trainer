@@ -13,12 +13,15 @@ defmodule BurpeeTrainerWeb.HistoryLive do
   }
 
   @preview_count 5
+  @goal_min 80.0
+  @week_preview 8
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
     sessions = Workouts.list_sessions(user)
     active_goals = Goals.list_active_goals(user)
+    weekly = Workouts.weekly_minutes(user)
 
     level_unlocks =
       sessions
@@ -29,15 +32,23 @@ defmodule BurpeeTrainerWeb.HistoryLive do
         {session_id, highest}
       end)
 
+    all_prs = %{
+      six_count: compute_prs(sessions, :six_count),
+      navy_seal: compute_prs(sessions, :navy_seal)
+    }
+
     {:ok,
      socket
      |> assign(:sessions, sessions)
-     |> assign(:prs, compute_prs(sessions, :six_count))
+     |> assign(:prs, all_prs[:six_count])
+     |> assign(:all_prs, all_prs)
      |> assign(:level_unlocks, level_unlocks)
      |> assign(:active_goals, active_goals)
+     |> assign(:weekly, weekly)
      |> assign(:chart_series, :six_count)
      |> assign(:chart_range, :month6)
      |> assign(:show_all, false)
+     |> assign(:show_all_weeks, false)
      |> push_chart(sessions, active_goals, :six_count, :month6)}
   end
 
@@ -48,8 +59,13 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     {:noreply,
      socket
      |> assign(:chart_series, series)
-     |> assign(:prs, compute_prs(socket.assigns.sessions, series))
-     |> push_chart(socket.assigns.sessions, socket.assigns.active_goals, series, socket.assigns.chart_range)}
+     |> assign(:prs, socket.assigns.all_prs[series])
+     |> push_chart(
+       socket.assigns.sessions,
+       socket.assigns.active_goals,
+       series,
+       socket.assigns.chart_range
+     )}
   end
 
   @impl true
@@ -59,12 +75,22 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     {:noreply,
      socket
      |> assign(:chart_range, range)
-     |> push_chart(socket.assigns.sessions, socket.assigns.active_goals, socket.assigns.chart_series, range)}
+     |> push_chart(
+       socket.assigns.sessions,
+       socket.assigns.active_goals,
+       socket.assigns.chart_series,
+       range
+     )}
   end
 
   @impl true
   def handle_event("toggle_all", _params, socket) do
     {:noreply, assign(socket, :show_all, !socket.assigns.show_all)}
+  end
+
+  @impl true
+  def handle_event("toggle_all_weeks", _params, socket) do
+    {:noreply, assign(socket, :show_all_weeks, !socket.assigns.show_all_weeks)}
   end
 
   defp push_chart(socket, sessions, active_goals, series, range) do
@@ -90,11 +116,14 @@ defmodule BurpeeTrainerWeb.HistoryLive do
 
   defp build_chart(sessions, active_goals, user, series_type, range) do
     filtered = filter_by_range(sessions, range)
-    datasets = [
-      build_main_dataset(series_type, filtered),
-      build_goal_dataset(series_type, active_goals),
-      build_trend_dataset(series_type, user, filtered)
-    ] |> Enum.reject(&is_nil/1)
+
+    datasets =
+      [
+        build_main_dataset(series_type, filtered),
+        build_goal_dataset(series_type, active_goals),
+        build_trend_dataset(series_type, user, filtered)
+      ]
+      |> Enum.reject(&is_nil/1)
 
     %{datasets: datasets}
   end
@@ -122,11 +151,14 @@ defmodule BurpeeTrainerWeb.HistoryLive do
 
   defp build_goal_dataset(type, active_goals) do
     case Enum.find(active_goals, &(&1.burpee_type == type)) do
-      nil -> nil
+      nil ->
+        nil
+
       goal ->
         colors = Map.fetch!(@series_colors, type)
+
         %{
-          label: "Goal",
+          label: "#{Fmt.burpee_type(type)} goal",
           data: [
             %{x: goal.date_baseline, y: goal.burpee_count_baseline},
             %{x: goal.date_target, y: goal.burpee_count_target}
@@ -141,14 +173,19 @@ defmodule BurpeeTrainerWeb.HistoryLive do
 
   defp build_trend_dataset(type, user, sessions) do
     typed = Enum.filter(sessions, &(&1.burpee_type == type))
+
     if length(typed) >= 2 do
       recent = Workouts.list_recent_sessions(user, type, 4)
+
       case Progression.project_trend(recent) do
-        [] -> nil
+        [] ->
+          nil
+
         points ->
           colors = Map.fetch!(@series_colors, type)
+
           %{
-            label: "Trend",
+            label: "#{Fmt.burpee_type(type)} trend",
             data: Enum.map(points, fn {date, count} -> %{x: date, y: count} end),
             borderColor: colors.solid,
             borderDash: [2, 2],
@@ -191,37 +228,60 @@ defmodule BurpeeTrainerWeb.HistoryLive do
         do: assigns.sessions,
         else: Enum.take(assigns.sessions, @preview_count)
 
-    assigns = assign(assigns, :visible_sessions, visible_sessions)
+    today = Date.utc_today()
+    current_week_start = Date.beginning_of_week(today, :monday)
+
+    visible_weeks =
+      if assigns.show_all_weeks,
+        do: assigns.weekly,
+        else: Enum.take(assigns.weekly, @week_preview)
+
+    assigns =
+      assigns
+      |> assign(:visible_sessions, visible_sessions)
+      |> assign(:visible_weeks, visible_weeks)
+      |> assign(:current_week_start, current_week_start)
+      |> assign(:goal_min, @goal_min)
 
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight text-base-content">History</h1>
-          <p class="mt-0.5 text-sm text-base-content/40">Your sessions over time.</p>
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight text-base-content">History</h1>
+            <p class="mt-0.5 text-sm text-base-content/40">Your sessions over time.</p>
+          </div>
+          <.link
+            navigate={~p"/log"}
+            class="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
+          >
+            + Log session
+          </.link>
         </div>
-        <.link
-          navigate={~p"/log"}
-          class="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
-        >
-          + Log session
-        </.link>
-      </div>
 
-      <%= if @sessions == [] do %>
-        <.empty_state />
-      <% else %>
-        <.stats_row prs={@prs} chart_series={@chart_series} />
-        <.chart_card chart={@chart} chart_series={@chart_series} chart_range={@chart_range} />
-        <.sessions_card
-          sessions={@visible_sessions}
-          all_sessions={@sessions}
-          level_unlocks={@level_unlocks}
-          show_all={@show_all}
+        <%= if @sessions == [] do %>
+          <.empty_state />
+        <% else %>
+          <%= for {type, prs} <- @all_prs, prs != nil do %>
+            <.stats_row prs={prs} series_type={type} />
+          <% end %>
+          <.chart_card chart={@chart} chart_series={@chart_series} chart_range={@chart_range} />
+          <.sessions_card
+            sessions={@visible_sessions}
+            all_sessions={@sessions}
+            level_unlocks={@level_unlocks}
+            show_all={@show_all}
+          />
+        <% end %>
+
+        <.weekly_progress_card
+          weekly={@visible_weeks}
+          all_weekly={@weekly}
+          show_all_weeks={@show_all_weeks}
+          current_week_start={@current_week_start}
+          goal_min={@goal_min}
         />
-      <% end %>
-    </div>
+      </div>
     </Layouts.app>
     """
   end
@@ -229,8 +289,10 @@ defmodule BurpeeTrainerWeb.HistoryLive do
   defp empty_state(assigns) do
     ~H"""
     <div class="rounded-[10px] border border-dashed border-[#1E2535] bg-base-200 p-12 text-center space-y-4">
-      <p class="text-sm text-base-content/40">No sessions yet.</p>
-      <p class="text-xs text-base-content/30">Run a plan or log a session to see your history here.</p>
+      <p class="text-sm text-base-content/40">No sessions recorded yet</p>
+      <p class="text-xs text-base-content/30">
+        Run a plan or log a session to see your history here.
+      </p>
       <.link
         navigate={~p"/log"}
         class="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
@@ -242,45 +304,50 @@ defmodule BurpeeTrainerWeb.HistoryLive do
   end
 
   attr :prs, :any, required: true
-  attr :chart_series, :atom, required: true
+  attr :series_type, :atom, required: true
 
   defp stats_row(assigns) do
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 overflow-hidden">
       <div class="px-5 py-2.5 border-b border-[#1E2535]">
         <span class="text-[11px] uppercase tracking-wide text-base-content/40">
-          {Fmt.burpee_type(@chart_series)} bests
+          {Fmt.burpee_type(@series_type)} PRs
         </span>
       </div>
       <div class="grid grid-cols-3 divide-x divide-[#1E2535]">
-      <%= if @prs do %>
-        <.stat_cell
-          icon="hero-arrow-trending-up"
-          label="Most burpees"
-          value={to_string(@prs.burpees_max.burpee_count_actual)}
-          sub={Calendar.strftime(@prs.burpees_max.inserted_at, "%b %-d, %Y")}
-        />
-        <.stat_cell
-          icon="hero-clock"
-          label="Longest session"
-          value={Fmt.duration_sec(@prs.duration_max.duration_sec_actual)}
-          sub={Calendar.strftime(@prs.duration_max.inserted_at, "%b %-d, %Y")}
-        />
-        <%= if @prs.rate_best do %>
+        <%= if @prs do %>
           <.stat_cell
-            icon="hero-bolt"
-            label="Best rate"
-            value={:erlang.float_to_binary(@prs.rate_best.burpee_count_actual / @prs.rate_best.duration_sec_actual * 60, decimals: 1)}
-            sub="burpees / min"
+            icon="hero-arrow-trending-up"
+            label="Most burpees"
+            value={to_string(@prs.burpees_max.burpee_count_actual)}
+            sub={Calendar.strftime(@prs.burpees_max.inserted_at, "%b %-d, %Y")}
           />
+          <.stat_cell
+            icon="hero-clock"
+            label="Longest session"
+            value={Fmt.duration_sec(@prs.duration_max.duration_sec_actual)}
+            sub={Calendar.strftime(@prs.duration_max.inserted_at, "%b %-d, %Y")}
+          />
+          <%= if @prs.rate_best do %>
+            <.stat_cell
+              icon="hero-bolt"
+              label="Best rate"
+              value={
+                :erlang.float_to_binary(
+                  @prs.rate_best.burpee_count_actual / @prs.rate_best.duration_sec_actual * 60,
+                  decimals: 1
+                )
+              }
+              sub="burpees / min"
+            />
+          <% else %>
+            <.stat_cell icon="hero-bolt" label="Best rate" value="—" sub="" />
+          <% end %>
         <% else %>
+          <.stat_cell icon="hero-arrow-trending-up" label="Most burpees" value="—" sub="" />
+          <.stat_cell icon="hero-clock" label="Longest session" value="—" sub="" />
           <.stat_cell icon="hero-bolt" label="Best rate" value="—" sub="" />
         <% end %>
-      <% else %>
-        <.stat_cell icon="hero-arrow-trending-up" label="Most burpees" value="—" sub="" />
-        <.stat_cell icon="hero-clock" label="Longest session" value="—" sub="" />
-        <.stat_cell icon="hero-bolt" label="Best rate" value="—" sub="" />
-      <% end %>
       </div>
     </div>
     """
@@ -401,7 +468,10 @@ defmodule BurpeeTrainerWeb.HistoryLive do
           class="flex items-center justify-between w-full px-5 py-3.5 border-t border-[#1E2535] text-sm text-base-content/40 hover:text-base-content/70 transition-colors"
         >
           <span>{if @show_all, do: "Show less", else: "View all sessions"}</span>
-          <.icon name="hero-chevron-right" class={["size-4 transition-transform", @show_all && "rotate-90"]} />
+          <.icon
+            name="hero-chevron-right"
+            class={["size-4 transition-transform", @show_all && "rotate-90"]}
+          />
         </button>
       <% end %>
     </div>
@@ -446,12 +516,121 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     """
   end
 
-  defp plan_label(%{style_name: s}) when not is_nil(s), do: s |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  attr :weekly, :list, required: true
+  attr :all_weekly, :list, required: true
+  attr :show_all_weeks, :boolean, required: true
+  attr :current_week_start, :any, required: true
+  attr :goal_min, :float, required: true
+
+  defp weekly_progress_card(assigns) do
+    ~H"""
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-[#1E2535]">
+        <h2 class="text-sm font-medium text-base-content">Weekly Progress</h2>
+        <span class="text-xs text-base-content/30">goal: {trunc(@goal_min)} min / week</span>
+      </div>
+
+      <%= if @all_weekly == [] do %>
+        <div class="px-5 py-8 text-center">
+          <p class="text-sm text-base-content/40">No sessions recorded yet</p>
+        </div>
+      <% else %>
+        <ul class="divide-y divide-[#1E2535]">
+          <%= for week <- @weekly do %>
+            <.week_row week={week} current_week_start={@current_week_start} goal_min={@goal_min} />
+          <% end %>
+        </ul>
+
+        <%= if length(@all_weekly) > 8 do %>
+          <button
+            phx-click="toggle_all_weeks"
+            class="flex items-center justify-between w-full px-5 py-3.5 border-t border-[#1E2535] text-sm text-base-content/40 hover:text-base-content/70 transition-colors"
+          >
+            <span>{if @show_all_weeks, do: "Show less", else: "Show all weeks"}</span>
+            <.icon
+              name="hero-chevron-right"
+              class={["size-4 transition-transform", @show_all_weeks && "rotate-90"]}
+            />
+          </button>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :week, :map, required: true
+  attr :current_week_start, :any, required: true
+  attr :goal_min, :float, required: true
+
+  defp week_row(assigns) do
+    pct = min(assigns.week.minutes / assigns.goal_min * 100, 100.0)
+    is_current = assigns.week.week_start == assigns.current_week_start
+    assigns = assign(assigns, pct: pct, is_current: is_current)
+
+    ~H"""
+    <li class="flex items-center gap-4 px-5 py-3">
+      <span class="text-xs text-base-content/40 tabular-nums w-12 shrink-0">
+        {Calendar.strftime(@week.week_start, "%b %-d")}
+      </span>
+
+      <div class="flex-1 h-[3px] rounded-full bg-[#1E2535] overflow-hidden">
+        <div
+          class={[
+            "h-full rounded-full",
+            @week.met_goal && "bg-success",
+            !@week.met_goal && @week.minutes > 0 && "bg-primary",
+            @week.minutes == 0 && "bg-transparent"
+          ]}
+          style={"width: #{@pct}%"}
+        >
+        </div>
+      </div>
+
+      <span class="text-xs text-base-content/40 tabular-nums w-16 text-right shrink-0">
+        {trunc(@week.minutes)} / {trunc(@goal_min)} min
+      </span>
+
+      <span class={[
+        "text-xs font-medium w-4 text-right shrink-0",
+        @is_current && "text-primary",
+        !@is_current && @week.met_goal && "text-success",
+        !@is_current && !@week.met_goal && @week.minutes > 0 && "text-error",
+        @week.minutes == 0 && "text-transparent"
+      ]}>
+        <%= cond do %>
+          <% @is_current -> %>
+            →
+          <% @week.met_goal -> %>
+            ✓
+          <% @week.minutes > 0 -> %>
+            ✗
+          <% true -> %>
+            ·
+        <% end %>
+      </span>
+    </li>
+    """
+  end
+
+  defp plan_label(%{style_name: s}) when not is_nil(s),
+    do: s |> to_string() |> String.replace("_", " ") |> String.capitalize()
+
   defp plan_label(_), do: nil
 
-  @level_order [:level_1a, :level_1b, :level_1c, :level_1d, :level_2, :level_3, :level_4, :graduated]
+  @level_order [
+    :level_1a,
+    :level_1b,
+    :level_1c,
+    :level_1d,
+    :level_2,
+    :level_3,
+    :level_4,
+    :graduated
+  ]
   defp history_level_index(level), do: Enum.find_index(@level_order, &(&1 == level)) || 0
 
   defp history_level_label(:graduated), do: "Grad"
-  defp history_level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
+
+  defp history_level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 end

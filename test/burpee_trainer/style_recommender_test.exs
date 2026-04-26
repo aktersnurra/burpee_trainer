@@ -106,7 +106,10 @@ defmodule BurpeeTrainer.StyleRecommenderTest do
 
     test "navy_seal context returns navy_seal archetypes only" do
       navy_rec = rec(%{burpee_type: :navy_seal})
-      suggestions = StyleRecommender.recommend(context(%{burpee_type: :navy_seal, progression_rec: navy_rec}))
+
+      suggestions =
+        StyleRecommender.recommend(context(%{burpee_type: :navy_seal, progression_rec: navy_rec}))
+
       for s <- suggestions do
         assert s.style_name in [:even_spaced, :front_loaded, :descending, :minute_on]
       end

@@ -168,7 +168,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
       {:error, reasons} ->
         # Keep existing blocks form; show solver error
-        existing_form = socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+        existing_form =
+          socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
 
         socket
         |> assign(:form, existing_form)
@@ -282,6 +283,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("pick_type", %{"type" => type}, socket)
       when type in ["six_count", "navy_seal"] do
     burpee_type = String.to_atom(type)
+
     plan_input =
       socket.assigns.plan_input
       |> Map.put(:burpee_type, burpee_type)
@@ -327,7 +329,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   def handle_event("adjust_reps_per_set", %{"delta" => delta_str}, socket) do
     delta = String.to_integer(delta_str)
-    current = socket.assigns.plan_input.reps_per_set || PlanWizard.default_reps_per_set(socket.assigns.plan_input.burpee_type)
+
+    current =
+      socket.assigns.plan_input.reps_per_set ||
+        PlanWizard.default_reps_per_set(socket.assigns.plan_input.burpee_type)
+
     new_val = max(1, current + delta)
     plan_input = Map.put(socket.assigns.plan_input, :reps_per_set, new_val)
 
@@ -373,7 +379,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   def handle_event("change_rest", %{"rest" => rest_params} = _params, socket) do
     idx = rest_params |> Map.get("index", "0") |> String.to_integer()
-    existing = Enum.at(socket.assigns.plan_input.additional_rests, idx, %{rest_sec: 30, target_min: 10})
+
+    existing =
+      Enum.at(socket.assigns.plan_input.additional_rests, idx, %{rest_sec: 30, target_min: 10})
 
     rest_sec =
       case Integer.parse(rest_params["rest_sec"] || "") do
@@ -417,6 +425,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     if source_block do
       next_pos = length(blocks) + 1
+
       new_block_attrs = %{
         "position" => next_pos,
         "repeat_count" => source_block.repeat_count,
@@ -443,7 +452,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       params = %{
         "workout_plan" => %{
           "blocks" => merged,
-          "blocks_sort" => Enum.map(0..(new_idx), &to_string/1)
+          "blocks_sort" => Enum.map(0..new_idx, &to_string/1)
         }
       }
 
@@ -621,20 +630,27 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         _ -> current.reps_per_set
       end
 
-    %{current | name: name, target_duration_min: target_duration_min,
-                burpee_count_target: burpee_count_target, sec_per_burpee: sec_per_burpee,
-                reps_per_set: reps_per_set}
+    %{
+      current
+      | name: name,
+        target_duration_min: target_duration_min,
+        burpee_count_target: burpee_count_target,
+        sec_per_burpee: sec_per_burpee,
+        reps_per_set: reps_per_set
+    }
   end
 
   defp format_sec(nil), do: nil
   defp format_sec(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2)
   defp format_sec(v) when is_integer(v), do: :erlang.float_to_binary(v * 1.0, decimals: 2)
+
   defp format_sec(v) when is_binary(v) do
     case Float.parse(v) do
       {f, _} -> :erlang.float_to_binary(f, decimals: 2)
       _ -> v
     end
   end
+
   defp format_sec(v), do: v
 
   defp pace_floor(:six_count), do: @sec_per_burpee_floor_six
@@ -642,10 +658,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp pace_floor(_), do: 1.0
 
   defp pace_floor_label(:six_count),
-    do: "Min: #{:erlang.float_to_binary(@sec_per_burpee_floor_six * 1.0, decimals: 2)}s (graduation pace)"
+    do:
+      "Min: #{:erlang.float_to_binary(@sec_per_burpee_floor_six * 1.0, decimals: 2)}s (graduation pace)"
 
   defp pace_floor_label(:navy_seal),
-    do: "Min: #{:erlang.float_to_binary(@sec_per_burpee_floor_navy * 1.0, decimals: 2)}s (graduation pace)"
+    do:
+      "Min: #{:erlang.float_to_binary(@sec_per_burpee_floor_navy * 1.0, decimals: 2)}s (graduation pace)"
 
   defp pace_floor_label(_), do: ""
 
@@ -737,7 +755,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     +
                   </button>
                 </div>
-                <p class="text-xs text-base-content/50">{pace_floor_label(@plan_input.burpee_type)}</p>
+                <p class="text-xs text-base-content/50">
+                  {pace_floor_label(@plan_input.burpee_type)}
+                </p>
               </div>
             </div>
           </form>
@@ -753,7 +773,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
                   if(@plan_input.burpee_type == :six_count,
                     do: "border-primary bg-primary/5",
-                    else: "border-base-300 hover:border-primary hover:bg-primary/5")
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
                 ]}
               >
                 <p class="font-semibold text-sm">6-Count</p>
@@ -766,7 +787,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
                   if(@plan_input.burpee_type == :navy_seal,
                     do: "border-primary bg-primary/5",
-                    else: "border-base-300 hover:border-primary hover:bg-primary/5")
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
                 ]}
               >
                 <p class="font-semibold text-sm">Navy SEAL</p>
@@ -785,11 +807,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
                   if(@plan_input.pacing_style == :even,
                     do: "border-primary bg-primary/5",
-                    else: "border-base-300 hover:border-primary hover:bg-primary/5")
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
                 ]}
               >
                 <p class="font-semibold text-sm">Even</p>
-                <p class="text-xs text-base-content/60 mt-1">Uniform cadence with rest between sets</p>
+                <p class="text-xs text-base-content/60 mt-1">
+                  Uniform cadence with rest between sets
+                </p>
               </button>
               <button
                 type="button"
@@ -799,7 +824,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
                   if(@plan_input.pacing_style == :unbroken,
                     do: "border-primary bg-primary/5",
-                    else: "border-base-300 hover:border-primary hover:bg-primary/5")
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
                 ]}
               >
                 <p class="font-semibold text-sm">Unbroken</p>
@@ -808,7 +834,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             </div>
           </div>
 
-          <%= if @plan_input.pacing_style == :unbroken do%>
+          <%= if @plan_input.pacing_style == :unbroken do %>
             <div class="space-y-2">
               <label class="text-sm font-medium">Reps per set</label>
               <div class="flex items-center gap-3">
@@ -838,64 +864,66 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 </button>
                 <span class="text-sm text-base-content/60">
                   → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
-                  <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do%>
+                  <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do %>
                     + 1 partial
-                  <% end%>
+                  <% end %>
                 </span>
               </div>
             </div>
-          <% end%>
+          <% end %>
         </section>
 
         <%!-- Layer 2 — Additional rests --%>
-          <section class="rounded-lg border border-base-300 bg-base-100 p-6 space-y-4">
-            <div class="flex items-center justify-between">
-              <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-                2. Additional rests
-              </h2>
+        <section class="rounded-lg border border-base-300 bg-base-100 p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+              2. Additional rests
+            </h2>
+            <button
+              type="button"
+              phx-click="add_rest"
+              class="rounded-md border border-base-300 px-3 py-1 text-sm hover:bg-base-200 transition"
+            >
+              + Add rest
+            </button>
+          </div>
+
+          <%= if @plan_input.additional_rests == [] do %>
+            <p class="text-sm text-base-content/50">
+              No additional rests. Add one to insert a rest pause at a specific minute.
+            </p>
+          <% end %>
+
+          <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
+            <form phx-change="change_rest" class="flex items-center gap-3 text-sm">
+              <input type="hidden" name="rest[index]" value={idx} />
+              <input
+                type="number"
+                name="rest[rest_sec]"
+                min="1"
+                value={rest.rest_sec}
+                class="w-20 rounded-md border border-base-300 px-2 py-1.5 text-sm"
+              />
+              <span class="text-base-content/60">seconds at min</span>
+              <input
+                type="number"
+                name="rest[target_min]"
+                min="1"
+                max={@plan_input.target_duration_min - 1}
+                value={rest.target_min}
+                class="w-20 rounded-md border border-base-300 px-2 py-1.5 text-sm"
+              />
               <button
                 type="button"
-                phx-click="add_rest"
-                class="rounded-md border border-base-300 px-3 py-1 text-sm hover:bg-base-200 transition"
+                phx-click="remove_rest"
+                phx-value-index={idx}
+                class="text-error hover:underline text-xs"
               >
-                + Add rest
+                × remove
               </button>
-            </div>
-
-            <%= if @plan_input.additional_rests == [] do%>
-              <p class="text-sm text-base-content/50">No additional rests. Add one to insert a rest pause at a specific minute.</p>
-            <% end%>
-
-            <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do%>
-              <form phx-change="change_rest" class="flex items-center gap-3 text-sm">
-                <input type="hidden" name="rest[index]" value={idx} />
-                <input
-                  type="number"
-                  name="rest[rest_sec]"
-                  min="1"
-                  value={rest.rest_sec}
-                  class="w-20 rounded-md border border-base-300 px-2 py-1.5 text-sm"
-                />
-                <span class="text-base-content/60">seconds at min</span>
-                <input
-                  type="number"
-                  name="rest[target_min]"
-                  min="1"
-                  max={@plan_input.target_duration_min - 1}
-                  value={rest.target_min}
-                  class="w-20 rounded-md border border-base-300 px-2 py-1.5 text-sm"
-                />
-                <button
-                  type="button"
-                  phx-click="remove_rest"
-                  phx-value-index={idx}
-                  class="text-error hover:underline text-xs"
-                >
-                  × remove
-                </button>
-              </form>
-            <% end%>
-          </section>
+            </form>
+          <% end %>
+        </section>
 
         <%!-- Layer 3 — Blocks --%>
         <section class="space-y-4">
@@ -903,11 +931,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             3. Blocks
           </h2>
 
-          <%= if @solver_error do%>
+          <%= if @solver_error do %>
             <div class="rounded-md bg-error/10 border border-error/30 px-3 py-2 text-sm text-error">
               {@solver_error}
             </div>
-          <% end%>
+          <% end %>
 
           <.derived_stats derived={@derived} plan_input={@plan_input} />
 
@@ -927,7 +955,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   "rounded-md px-6 py-2 text-sm font-medium text-primary-content transition",
                   if(@derived && @derived.both_ok,
                     do: "bg-primary hover:bg-primary/90",
-                    else: "bg-base-300 text-base-content/60 cursor-not-allowed")
+                    else: "bg-base-300 text-base-content/60 cursor-not-allowed"
+                  )
                 ]}
               >
                 Save plan
@@ -945,7 +974,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp derived_stats(assigns) do
     ~H"""
-    <%= if @derived do%>
+    <%= if @derived do %>
       <div class={[
         "rounded-lg border p-4 space-y-1 text-sm",
         if(@derived.both_ok, do: "border-success/40 bg-success/5", else: "border-error/40 bg-error/5")
@@ -975,7 +1004,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           </span>
         </div>
       </div>
-    <% end%>
+    <% end %>
     """
   end
 
@@ -1100,7 +1129,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </div>
             </.inputs_for>
 
-            <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"} value="" />
+            <input
+              type="hidden"
+              name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"}
+              value=""
+            />
             <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"} />
           </div>
         </div>

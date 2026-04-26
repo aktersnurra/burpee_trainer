@@ -52,11 +52,17 @@ defmodule BurpeeTrainer.LevelsTest do
     test "does not level up if thresholds met in different weeks" do
       sessions = [
         # week 2 of 2026
-        session(%{burpee_type: :six_count, burpee_count_actual: 50,
-                  inserted_at: ~U[2026-01-05 12:00:00Z]}),
+        session(%{
+          burpee_type: :six_count,
+          burpee_count_actual: 50,
+          inserted_at: ~U[2026-01-05 12:00:00Z]
+        }),
         # week 3 of 2026
-        session(%{burpee_type: :navy_seal, burpee_count_actual: 20,
-                  inserted_at: ~U[2026-01-12 12:00:00Z]})
+        session(%{
+          burpee_type: :navy_seal,
+          burpee_count_actual: 20,
+          inserted_at: ~U[2026-01-12 12:00:00Z]
+        })
       ]
 
       assert Levels.current_level(sessions) == :level_1a
@@ -65,13 +71,22 @@ defmodule BurpeeTrainer.LevelsTest do
     test "levels up once both types share a week, regardless of prior weeks" do
       sessions = [
         # six_count does 1b in week 2 alone
-        session(%{burpee_type: :six_count, burpee_count_actual: 50,
-                  inserted_at: ~U[2026-01-05 12:00:00Z]}),
+        session(%{
+          burpee_type: :six_count,
+          burpee_count_actual: 50,
+          inserted_at: ~U[2026-01-05 12:00:00Z]
+        }),
         # navy_seal joins in week 3 — co-week 1b achieved in week 3
-        session(%{burpee_type: :six_count, burpee_count_actual: 50,
-                  inserted_at: ~U[2026-01-12 10:00:00Z]}),
-        session(%{burpee_type: :navy_seal, burpee_count_actual: 20,
-                  inserted_at: ~U[2026-01-12 14:00:00Z]})
+        session(%{
+          burpee_type: :six_count,
+          burpee_count_actual: 50,
+          inserted_at: ~U[2026-01-12 10:00:00Z]
+        }),
+        session(%{
+          burpee_type: :navy_seal,
+          burpee_count_actual: 20,
+          inserted_at: ~U[2026-01-12 14:00:00Z]
+        })
       ]
 
       assert Levels.current_level(sessions) == :level_1b
@@ -188,14 +203,30 @@ defmodule BurpeeTrainer.LevelsTest do
 
     test "entries are sorted chronologically" do
       sessions = [
-        session(%{id: 1, burpee_type: :six_count, burpee_count_actual: 100,
-                  inserted_at: ~U[2026-02-02 12:00:00Z]}),
-        session(%{id: 2, burpee_type: :navy_seal, burpee_count_actual: 40,
-                  inserted_at: ~U[2026-02-02 14:00:00Z]}),
-        session(%{id: 3, burpee_type: :six_count, burpee_count_actual: 50,
-                  inserted_at: ~U[2026-01-01 12:00:00Z]}),
-        session(%{id: 4, burpee_type: :navy_seal, burpee_count_actual: 20,
-                  inserted_at: ~U[2026-01-01 14:00:00Z]})
+        session(%{
+          id: 1,
+          burpee_type: :six_count,
+          burpee_count_actual: 100,
+          inserted_at: ~U[2026-02-02 12:00:00Z]
+        }),
+        session(%{
+          id: 2,
+          burpee_type: :navy_seal,
+          burpee_count_actual: 40,
+          inserted_at: ~U[2026-02-02 14:00:00Z]
+        }),
+        session(%{
+          id: 3,
+          burpee_type: :six_count,
+          burpee_count_actual: 50,
+          inserted_at: ~U[2026-01-01 12:00:00Z]
+        }),
+        session(%{
+          id: 4,
+          burpee_type: :navy_seal,
+          burpee_count_actual: 20,
+          inserted_at: ~U[2026-01-01 14:00:00Z]
+        })
       ]
 
       history = Levels.landmark_history(sessions)
@@ -205,10 +236,18 @@ defmodule BurpeeTrainer.LevelsTest do
 
     test "session_id is the later of the two co-week sessions" do
       sessions = [
-        session(%{id: 1, burpee_type: :six_count, burpee_count_actual: 50,
-                  inserted_at: ~U[2026-01-01 10:00:00Z]}),
-        session(%{id: 2, burpee_type: :navy_seal, burpee_count_actual: 20,
-                  inserted_at: ~U[2026-01-01 14:00:00Z]})
+        session(%{
+          id: 1,
+          burpee_type: :six_count,
+          burpee_count_actual: 50,
+          inserted_at: ~U[2026-01-01 10:00:00Z]
+        }),
+        session(%{
+          id: 2,
+          burpee_type: :navy_seal,
+          burpee_count_actual: 20,
+          inserted_at: ~U[2026-01-01 14:00:00Z]
+        })
       ]
 
       history = Levels.landmark_history(sessions)
@@ -219,10 +258,16 @@ defmodule BurpeeTrainer.LevelsTest do
 
     test "only levels reachable by both types in the same week are included" do
       sessions = [
-        session(%{burpee_type: :six_count, burpee_count_actual: 50,
-                  inserted_at: ~U[2026-01-01 10:00:00Z]}),
-        session(%{burpee_type: :navy_seal, burpee_count_actual: 20,
-                  inserted_at: ~U[2026-01-01 14:00:00Z]})
+        session(%{
+          burpee_type: :six_count,
+          burpee_count_actual: 50,
+          inserted_at: ~U[2026-01-01 10:00:00Z]
+        }),
+        session(%{
+          burpee_type: :navy_seal,
+          burpee_count_actual: 20,
+          inserted_at: ~U[2026-01-01 14:00:00Z]
+        })
       ]
 
       history = Levels.landmark_history(sessions)

@@ -223,7 +223,11 @@ defmodule BurpeeTrainer.Workouts do
   Tagged "warmup" so it's distinguishable in history.
   """
   @spec create_warmup_session(User.t(), map) :: {:ok, WorkoutSession.t()} | {:error, any}
-  def create_warmup_session(%User{id: user_id}, %{burpee_type: bt, burpee_count_done: count, duration_sec: duration}) do
+  def create_warmup_session(%User{id: user_id}, %{
+        burpee_type: bt,
+        burpee_count_done: count,
+        duration_sec: duration
+      }) do
     attrs = %{
       "burpee_type" => Atom.to_string(bt),
       "burpee_count_actual" => count,

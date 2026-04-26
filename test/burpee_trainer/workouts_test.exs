@@ -77,7 +77,6 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert %{name: [_ | _]} = errors_on(changeset)
     end
 
-
     test "get_plan!/2 scopes by user" do
       alice = user_fixture()
       bob = user_fixture()
@@ -135,7 +134,6 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert [set] = block.sets
       assert set.burpee_count == 5
     end
-
 
     test "duplicate_plan/1 creates an independent copy with suffixed name" do
       user = user_fixture()

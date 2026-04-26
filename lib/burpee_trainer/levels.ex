@@ -18,15 +18,14 @@ defmodule BurpeeTrainer.Levels do
 
   @landmarks [
     %{level: :graduated, six_count: 325, navy_seal: 150},
-    %{level: :level_4,   six_count: 275, navy_seal: 120},
-    %{level: :level_3,   six_count: 250, navy_seal: 100},
-    %{level: :level_2,   six_count: 200, navy_seal:  80},
-    %{level: :level_1d,  six_count: 150, navy_seal:  60},
-    %{level: :level_1c,  six_count: 100, navy_seal:  40},
-    %{level: :level_1b,  six_count:  50, navy_seal:  20},
-    %{level: :level_1a,  six_count:   1, navy_seal:   1}
+    %{level: :level_4, six_count: 275, navy_seal: 120},
+    %{level: :level_3, six_count: 250, navy_seal: 100},
+    %{level: :level_2, six_count: 200, navy_seal: 80},
+    %{level: :level_1d, six_count: 150, navy_seal: 60},
+    %{level: :level_1c, six_count: 100, navy_seal: 40},
+    %{level: :level_1b, six_count: 50, navy_seal: 20},
+    %{level: :level_1a, six_count: 1, navy_seal: 1}
   ]
-
 
   @doc """
   Returns the highest level where both types have qualifying sessions in
@@ -34,9 +33,10 @@ defmodule BurpeeTrainer.Levels do
   """
   @spec current_level([map]) :: atom
   def current_level(sessions) do
-    found = Enum.find(@landmarks, fn lm ->
-      co_week_achieved?(sessions, lm.six_count, lm.navy_seal)
-    end)
+    found =
+      Enum.find(@landmarks, fn lm ->
+        co_week_achieved?(sessions, lm.six_count, lm.navy_seal)
+      end)
 
     if found, do: found.level, else: :level_1a
   end
@@ -69,7 +69,9 @@ defmodule BurpeeTrainer.Levels do
     idx = Enum.find_index(@landmarks, fn %{level: l} -> l == current end)
 
     case idx do
-      0 -> nil
+      0 ->
+        nil
+
       i ->
         next = Enum.at(@landmarks, i - 1)
         %{level: next.level, burpee_count_required: Map.get(next, burpee_type)}

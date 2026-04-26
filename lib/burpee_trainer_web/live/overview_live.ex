@@ -17,7 +17,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     today = Date.utc_today()
     current_week_start = Date.beginning_of_week(today, :monday)
 
-    this_week = Enum.find(weeks, %{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
+    this_week =
+      Enum.find(weeks, %{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
+
     completed_weeks = Enum.reject(weeks, &(&1.week_start == current_week_start))
 
     streak = compute_streak(completed_weeks)
@@ -64,7 +66,12 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
       <div class="space-y-4">
-        <.streak_card streak={@streak} this_week={@this_week} goal_min={@goal_min} current_level={@current_level} />
+        <.streak_card
+          streak={@streak}
+          this_week={@this_week}
+          goal_min={@goal_min}
+          current_level={@current_level}
+        />
         <.calendar_card calendar={@calendar} goal_min={@goal_min} />
         <.quick_actions />
       </div>
@@ -137,7 +144,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   defp level_label(:graduated), do: "Grad"
-  defp level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
+
+  defp level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
   attr :calendar, :list, required: true
   attr :goal_min, :float, required: true
@@ -195,7 +204,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
       <div class="flex items-center justify-between gap-1">
         <span class="text-[11px] font-medium text-base-content/60 tabular-nums">
-          <%= if @week.minutes > 0, do: "#{@min_str}m", else: "—" %>
+          {if @week.minutes > 0, do: "#{@min_str}m", else: "—"}
         </span>
         <span class={[
           "text-[10px] font-medium",
@@ -205,10 +214,14 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           @week.minutes == 0 && "text-transparent"
         ]}>
           <%= cond do %>
-            <% @week.is_current -> %>→
-            <% @week.met_goal -> %>✓
-            <% @week.minutes > 0 -> %>·
-            <% true -> %>·
+            <% @week.is_current -> %>
+              →
+            <% @week.met_goal -> %>
+              ✓
+            <% @week.minutes > 0 -> %>
+              ·
+            <% true -> %>
+              ·
           <% end %>
         </span>
       </div>

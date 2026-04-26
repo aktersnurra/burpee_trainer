@@ -33,6 +33,11 @@ defmodule BurpeeTrainerWeb.Layouts do
           </nav>
 
           <div class="flex items-center gap-3">
+            <%= if @current_user do %>
+              <span class="hidden sm:inline text-xs text-base-content/40">
+                Hi, {@current_user.username}
+              </span>
+            <% end %>
             <%= if @current_level do %>
               <span class="hidden sm:inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                 {level_label(@current_level)}
@@ -62,7 +67,9 @@ defmodule BurpeeTrainerWeb.Layouts do
   end
 
   defp level_label(:graduated), do: "Grad"
-  defp level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
+
+  defp level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
   attr :href, :string, required: true
   slot :inner_block, required: true
@@ -117,5 +124,4 @@ defmodule BurpeeTrainerWeb.Layouts do
     </div>
     """
   end
-
 end

@@ -67,8 +67,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "session_complete", %{
-      "main"   => %{"burpee_count_done" => 30, "duration_sec" => 90},
-      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+      "main" => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
     })
 
     html = render(view)
@@ -81,8 +81,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "session_complete", %{
-      "main"   => %{"burpee_count_done" => 28, "duration_sec" => 95},
-      "warmup" => %{"burpee_count_done" => 5,  "duration_sec" => 60}
+      "main" => %{"burpee_count_done" => 28, "duration_sec" => 95},
+      "warmup" => %{"burpee_count_done" => 5, "duration_sec" => 60}
     })
 
     html = render(view)
@@ -96,8 +96,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "session_complete", %{
-      "main"   => %{"burpee_count_done" => 30, "duration_sec" => 90},
-      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+      "main" => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
     })
 
     html = render(view)
@@ -111,17 +111,17 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "session_complete", %{
-      "main"   => %{"burpee_count_done" => 28, "duration_sec" => 95},
-      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+      "main" => %{"burpee_count_done" => 28, "duration_sec" => 95},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
     })
 
     params = %{
-      "burpee_type"          => "six_count",
+      "burpee_type" => "six_count",
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
-      "burpee_count_actual"  => "28",
-      "duration_sec_actual"  => "95",
-      "note_post"            => "brutal"
+      "burpee_count_actual" => "28",
+      "duration_sec_actual" => "95",
+      "note_post" => "brutal"
     }
 
     {:error, {:live_redirect, %{to: "/history"}}} =
@@ -142,16 +142,16 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "session_complete", %{
-      "main"   => %{"burpee_count_done" => 25, "duration_sec" => 80},
-      "warmup" => %{"burpee_count_done" => 5,  "duration_sec" => 60}
+      "main" => %{"burpee_count_done" => 25, "duration_sec" => 80},
+      "warmup" => %{"burpee_count_done" => 5, "duration_sec" => 60}
     })
 
     params = %{
-      "burpee_type"          => "six_count",
+      "burpee_type" => "six_count",
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
-      "burpee_count_actual"  => "25",
-      "duration_sec_actual"  => "80"
+      "burpee_count_actual" => "25",
+      "duration_sec_actual" => "80"
     }
 
     {:error, {:live_redirect, %{to: "/history"}}} =
@@ -178,16 +178,16 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "session_complete", %{
-      "main"   => %{"burpee_count_done" => 30, "duration_sec" => 90},
-      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+      "main" => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
     })
 
     params = %{
-      "burpee_type"          => "six_count",
+      "burpee_type" => "six_count",
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
-      "burpee_count_actual"  => "30",
-      "duration_sec_actual"  => "90"
+      "burpee_count_actual" => "30",
+      "duration_sec_actual" => "90"
     }
 
     {:error, {:live_redirect, %{to: "/history"}}} =

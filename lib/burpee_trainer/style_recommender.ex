@@ -37,7 +37,16 @@ defmodule BurpeeTrainer.StyleRecommender do
     ]
   }
 
-  @level_order [:level_1a, :level_1b, :level_1c, :level_1d, :level_2, :level_3, :level_4, :graduated]
+  @level_order [
+    :level_1a,
+    :level_1b,
+    :level_1c,
+    :level_1d,
+    :level_2,
+    :level_3,
+    :level_4,
+    :graduated
+  ]
 
   # Mood modifier deltas keyed by style_name.
   @mood_modifiers %{
@@ -94,6 +103,7 @@ defmodule BurpeeTrainer.StyleRecommender do
     eligible
     |> Enum.map(fn %{name: style_name} ->
       perf = Map.get(perf_by_style, Atom.to_string(style_name))
+
       score =
         style_recommender_bayesian_score(perf)
         |> style_recommender_apply_mood(style_name, mood)
@@ -165,11 +175,15 @@ defmodule BurpeeTrainer.StyleRecommender do
 
   defp style_recommender_rationale(:long_sets, mood, _bucket) do
     base = "Long sets build lactate threshold and mental endurance."
-    if mood == -1, do: base <> " Maybe ambitious today — consider starting conservatively.", else: base
+
+    if mood == -1,
+      do: base <> " Maybe ambitious today — consider starting conservatively.",
+      else: base
   end
 
   defp style_recommender_rationale(:burst, mood, bucket) do
     base = "Short explosive sets keep intensity high."
+
     cond do
       mood == -1 -> base <> " Good match for low energy — high output, manageable sets."
       bucket in ["evening", "night"] -> base <> " Well suited for later in the day."

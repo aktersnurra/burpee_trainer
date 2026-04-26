@@ -387,7 +387,12 @@ defmodule BurpeeTrainerWeb.GoalsLive do
 
       <%= cond do %>
         <% @form_type == @type -> %>
-          <.goal_new_panel type={@type} form={@form} goal_tab={@goal_tab} next_landmark={@next_landmark} />
+          <.goal_new_panel
+            type={@type}
+            form={@form}
+            goal_tab={@goal_tab}
+            next_landmark={@next_landmark}
+          />
         <% @goal -> %>
           <.active_goal type={@type} goal={@goal} rec={@rec} />
         <% true -> %>
@@ -430,7 +435,10 @@ defmodule BurpeeTrainerWeb.GoalsLive do
           phx-value-tab="level"
           class={[
             "flex-1 rounded-md px-3 py-1.5 font-medium transition",
-            if(@goal_tab == :level, do: "bg-base-100 shadow-sm", else: "text-base-content/60 hover:text-base-content")
+            if(@goal_tab == :level,
+              do: "bg-base-100 shadow-sm",
+              else: "text-base-content/60 hover:text-base-content"
+            )
           ]}
         >
           Level up
@@ -441,7 +449,10 @@ defmodule BurpeeTrainerWeb.GoalsLive do
           phx-value-tab="custom"
           class={[
             "flex-1 rounded-md px-3 py-1.5 font-medium transition",
-            if(@goal_tab == :custom, do: "bg-base-100 shadow-sm", else: "text-base-content/60 hover:text-base-content")
+            if(@goal_tab == :custom,
+              do: "bg-base-100 shadow-sm",
+              else: "text-base-content/60 hover:text-base-content"
+            )
           ]}
         >
           Custom
@@ -706,7 +717,9 @@ defmodule BurpeeTrainerWeb.GoalsLive do
   defp level_panel(assigns) do
     six_is_bottleneck = level_index(assigns.level_six) < level_index(assigns.level_navy)
     navy_is_bottleneck = level_index(assigns.level_navy) < level_index(assigns.level_six)
-    assigns = assign(assigns, six_bottleneck: six_is_bottleneck, navy_bottleneck: navy_is_bottleneck)
+
+    assigns =
+      assign(assigns, six_bottleneck: six_is_bottleneck, navy_bottleneck: navy_is_bottleneck)
 
     ~H"""
     <section class="rounded-lg border border-base-300 bg-base-100 p-5 space-y-3">
@@ -856,6 +869,7 @@ defmodule BurpeeTrainerWeb.GoalsLive do
   end
 
   defp format_level(:graduated), do: "Grad"
+
   defp format_level(level) do
     level
     |> Atom.to_string()
