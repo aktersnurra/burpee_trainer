@@ -1,17 +1,18 @@
 defmodule BurpeeTrainerWeb.HistoryLive do
   @moduledoc """
-  Session history — chart with per-type series and optional goal + trend
-  overlays, PR panel, and a sortable session table.
+  Session history — stat row, interactive chart, compact session feed.
   """
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Goals, Levels, Progression, Workouts}
   alias BurpeeTrainerWeb.Fmt
 
-  @series_styles %{
-    six_count: %{color: "rgb(59, 130, 246)", background: "rgba(59, 130, 246, 0.1)"},
-    navy_seal: %{color: "rgb(249, 115, 22)", background: "rgba(249, 115, 22, 0.1)"}
+  @series_colors %{
+    six_count: %{solid: "rgb(74, 158, 255)", faint: "rgba(74, 158, 255, 0.08)"},
+    navy_seal: %{solid: "rgb(249, 115, 22)", faint: "rgba(249, 115, 22, 0.08)"}
   }
+
+  @preview_count 5
 
   @impl true
   def mount(_params, _session, socket) do
@@ -24,29 +25,151 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       |> Levels.landmark_history()
       |> Enum.group_by(& &1.session_id)
       |> Map.new(fn {session_id, unlocks} ->
-        # Multiple levels may share the same completing session; show only the highest.
         highest = Enum.max_by(unlocks, &history_level_index(&1.level))
-        {session_id, [highest]}
+        {session_id, highest}
       end)
 
     {:ok,
      socket
      |> assign(:sessions, sessions)
-     |> assign(:prs, pr_panel(sessions))
-     |> assign(:chart, chart_data(sessions, active_goals, user))
-     |> assign(:level_unlocks, level_unlocks)}
+     |> assign(:prs, compute_prs(sessions, :six_count))
+     |> assign(:level_unlocks, level_unlocks)
+     |> assign(:active_goals, active_goals)
+     |> assign(:chart_series, :six_count)
+     |> assign(:chart_range, :month6)
+     |> assign(:show_all, false)
+     |> push_chart(sessions, active_goals, :six_count, :month6)}
   end
 
-  defp pr_panel(sessions) do
-    for type <- [:six_count, :navy_seal], into: %{} do
-      typed = Enum.filter(sessions, &(&1.burpee_type == type))
-      {type, pr_panel_for_type(typed)}
+  @impl true
+  def handle_event("set_series", %{"series" => series}, socket) do
+    series = String.to_existing_atom(series)
+
+    {:noreply,
+     socket
+     |> assign(:chart_series, series)
+     |> assign(:prs, compute_prs(socket.assigns.sessions, series))
+     |> push_chart(socket.assigns.sessions, socket.assigns.active_goals, series, socket.assigns.chart_range)}
+  end
+
+  @impl true
+  def handle_event("set_range", %{"range" => range}, socket) do
+    range = String.to_existing_atom(range)
+
+    {:noreply,
+     socket
+     |> assign(:chart_range, range)
+     |> push_chart(socket.assigns.sessions, socket.assigns.active_goals, socket.assigns.chart_series, range)}
+  end
+
+  @impl true
+  def handle_event("toggle_all", _params, socket) do
+    {:noreply, assign(socket, :show_all, !socket.assigns.show_all)}
+  end
+
+  defp push_chart(socket, sessions, active_goals, series, range) do
+    user = socket.assigns.current_user
+    chart = build_chart(sessions, active_goals, user, series, range)
+    assign(socket, :chart, chart)
+  end
+
+  defp filter_by_range(sessions, :all), do: sessions
+
+  defp filter_by_range(sessions, range) do
+    days =
+      case range do
+        :week4 -> 28
+        :month3 -> 90
+        :month6 -> 182
+        :year1 -> 365
+      end
+
+    cutoff = DateTime.add(DateTime.utc_now(), -days, :day)
+    Enum.filter(sessions, &(DateTime.compare(&1.inserted_at, cutoff) != :lt))
+  end
+
+  defp build_chart(sessions, active_goals, user, series_type, range) do
+    filtered = filter_by_range(sessions, range)
+    datasets = [
+      build_main_dataset(series_type, filtered),
+      build_goal_dataset(series_type, active_goals),
+      build_trend_dataset(series_type, user, filtered)
+    ] |> Enum.reject(&is_nil/1)
+
+    %{datasets: datasets}
+  end
+
+  defp build_main_dataset(type, sessions) do
+    points =
+      sessions
+      |> Enum.filter(&(&1.burpee_type == type))
+      |> Enum.sort_by(& &1.inserted_at, DateTime)
+      |> Enum.map(fn s -> %{x: DateTime.to_date(s.inserted_at), y: s.burpee_count_actual} end)
+
+    colors = Map.fetch!(@series_colors, type)
+
+    %{
+      label: Fmt.burpee_type(type),
+      data: points,
+      borderColor: colors.solid,
+      backgroundColor: colors.faint,
+      tension: 0.3,
+      pointRadius: 4,
+      pointBackgroundColor: colors.solid,
+      borderWidth: 2
+    }
+  end
+
+  defp build_goal_dataset(type, active_goals) do
+    case Enum.find(active_goals, &(&1.burpee_type == type)) do
+      nil -> nil
+      goal ->
+        colors = Map.fetch!(@series_colors, type)
+        %{
+          label: "Goal",
+          data: [
+            %{x: goal.date_baseline, y: goal.burpee_count_baseline},
+            %{x: goal.date_target, y: goal.burpee_count_target}
+          ],
+          borderColor: colors.solid,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          borderWidth: 1
+        }
     end
   end
 
-  defp pr_panel_for_type([]), do: nil
+  defp build_trend_dataset(type, user, sessions) do
+    typed = Enum.filter(sessions, &(&1.burpee_type == type))
+    if length(typed) >= 2 do
+      recent = Workouts.list_recent_sessions(user, type, 4)
+      case Progression.project_trend(recent) do
+        [] -> nil
+        points ->
+          colors = Map.fetch!(@series_colors, type)
+          %{
+            label: "Trend",
+            data: Enum.map(points, fn {date, count} -> %{x: date, y: count} end),
+            borderColor: colors.solid,
+            borderDash: [2, 2],
+            pointRadius: 0,
+            borderWidth: 1,
+            fill: false
+          }
+      end
+    end
+  end
 
-  defp pr_panel_for_type(sessions) do
+  defp compute_prs(sessions, type) do
+    typed =
+      sessions
+      |> Enum.filter(&(&1.burpee_type == type))
+      |> Enum.reject(&((&1.tags || "") =~ "warmup"))
+
+    if typed == [], do: nil, else: do_compute_prs(typed)
+  end
+
+  defp do_compute_prs(sessions) do
     burpees_max = Enum.max_by(sessions, & &1.burpee_count_actual)
     duration_max = Enum.max_by(sessions, & &1.duration_sec_actual)
 
@@ -58,260 +181,277 @@ defmodule BurpeeTrainerWeb.HistoryLive do
         rated -> Enum.max_by(rated, &(&1.burpee_count_actual / &1.duration_sec_actual))
       end
 
-    %{
-      burpees_max: burpees_max,
-      duration_max: duration_max,
-      rate_best: rate_best
-    }
-  end
-
-  defp chart_data(sessions, active_goals, user) do
-    datasets =
-      [:six_count, :navy_seal]
-      |> Enum.flat_map(fn type ->
-        [
-          build_series_dataset(type, sessions),
-          build_goal_dataset(type, active_goals),
-          build_trend_dataset(type, user, sessions)
-        ]
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    %{datasets: datasets}
-  end
-
-  defp build_series_dataset(type, sessions) do
-    points =
-      sessions
-      |> Enum.filter(&(&1.burpee_type == type))
-      |> Enum.sort_by(& &1.inserted_at, DateTime)
-      |> Enum.map(fn session ->
-        %{x: DateTime.to_date(session.inserted_at), y: session.burpee_count_actual}
-      end)
-
-    style = Map.fetch!(@series_styles, type)
-
-    %{
-      label: Fmt.burpee_type(type),
-      data: points,
-      borderColor: style.color,
-      backgroundColor: style.background,
-      tension: 0.2,
-      pointRadius: 4
-    }
-  end
-
-  defp build_goal_dataset(type, active_goals) do
-    case Enum.find(active_goals, &(&1.burpee_type == type)) do
-      nil ->
-        nil
-
-      goal ->
-        style = Map.fetch!(@series_styles, type)
-
-        %{
-          label: "#{Fmt.burpee_type(type)} goal",
-          data: [
-            %{x: goal.date_baseline, y: goal.burpee_count_baseline},
-            %{x: goal.date_target, y: goal.burpee_count_target}
-          ],
-          borderColor: style.color,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          borderWidth: 1
-        }
-    end
-  end
-
-  defp build_trend_dataset(type, user, sessions) do
-    typed = Enum.filter(sessions, &(&1.burpee_type == type))
-
-    if length(typed) >= 2 do
-      recent = Workouts.list_recent_sessions(user, type, 4)
-      projection = Progression.project_trend(recent)
-
-      case projection do
-        [] ->
-          nil
-
-        points ->
-          style = Map.fetch!(@series_styles, type)
-
-          %{
-            label: "#{Fmt.burpee_type(type)} trend",
-            data: Enum.map(points, fn {date, count} -> %{x: date, y: count} end),
-            borderColor: style.color,
-            borderDash: [2, 2],
-            pointRadius: 0,
-            borderWidth: 1,
-            fill: false
-          }
-      end
-    end
+    %{burpees_max: burpees_max, duration_max: duration_max, rate_best: rate_best}
   end
 
   @impl true
   def render(assigns) do
+    visible_sessions =
+      if assigns.show_all,
+        do: assigns.sessions,
+        else: Enum.take(assigns.sessions, @preview_count)
+
+    assigns = assign(assigns, :visible_sessions, visible_sessions)
+
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
-      <div class="space-y-8">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-2xl font-semibold tracking-tight">History</h1>
-            <p class="text-sm text-base-content/60">
-              Your sessions over time with goal + trend overlays.
-            </p>
-          </div>
-          <.link
-            navigate={~p"/log"}
-            class="rounded-md border border-base-300 px-4 py-2 text-sm hover:bg-base-200 transition"
-          >
-            Log a session
-          </.link>
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight text-base-content">History</h1>
+          <p class="mt-0.5 text-sm text-base-content/40">Your sessions over time.</p>
         </div>
-
-        <%= if @sessions == [] do %>
-          <div class="rounded-lg border border-dashed border-base-300 p-12 text-center space-y-1">
-            <p class="text-base-content/70">No sessions recorded yet.</p>
-            <p class="text-sm text-base-content/50">
-              Run a plan or log a free-form session to see it here.
-            </p>
-          </div>
-        <% else %>
-          <section class="rounded-lg border border-base-300 bg-base-100 p-5">
-            <div class="h-72">
-              <canvas
-                id="history-chart"
-                phx-hook="ChartHook"
-                phx-update="ignore"
-                data-chart={Jason.encode!(@chart)}
-              >
-              </canvas>
-            </div>
-          </section>
-
-          <section class="grid gap-4 sm:grid-cols-2">
-            <.pr_card title="6-count" pr={@prs[:six_count]} />
-            <.pr_card title="Navy SEAL" pr={@prs[:navy_seal]} />
-          </section>
-
-          <section class="rounded-lg border border-base-300 bg-base-100 overflow-hidden">
-            <table class="w-full text-sm">
-              <thead class="bg-base-200/50 text-xs uppercase tracking-wide text-base-content/60">
-                <tr>
-                  <th class="text-left px-4 py-2">Date</th>
-                  <th class="text-left px-4 py-2">Type</th>
-                  <th class="text-right px-4 py-2">Burpees</th>
-                  <th class="text-right px-4 py-2">Duration</th>
-                  <th class="text-left px-4 py-2">Notes</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-base-200">
-                <%= for session <- @sessions do %>
-                  <tr class={[
-                    "hover:bg-base-200/30",
-                    Map.has_key?(@level_unlocks, session.id) && "bg-success/5"
-                  ]}>
-                    <td class="px-4 py-2 whitespace-nowrap">
-                      {Calendar.strftime(session.inserted_at, "%Y-%m-%d")}
-                    </td>
-                    <td class="px-4 py-2">
-                      <span class="inline-flex items-center rounded-full bg-base-200 px-2 py-0.5 text-xs">
-                        {Fmt.burpee_type(session.burpee_type)}
-                      </span>
-                    </td>
-                    <td class="px-4 py-2 text-right font-medium">
-                      {session.burpee_count_actual}
-                    </td>
-                    <td class="px-4 py-2 text-right">
-                      {Fmt.duration_sec(session.duration_sec_actual)}
-                    </td>
-                    <td class="px-4 py-2 text-base-content/60 truncate max-w-xs">
-                      <div class="flex items-center gap-2">
-                        <%= for unlock <- Map.get(@level_unlocks, session.id, []) do %>
-                          <span class="inline-flex items-center rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success shrink-0">
-                            Level {history_level_label(unlock.level)}
-                          </span>
-                        <% end %>
-                        {note_preview(session)}
-                      </div>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </section>
-        <% end %>
+        <.link
+          navigate={~p"/log"}
+          class="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
+        >
+          + Log session
+        </.link>
       </div>
+
+      <%= if @sessions == [] do %>
+        <.empty_state />
+      <% else %>
+        <.stats_row prs={@prs} chart_series={@chart_series} />
+        <.chart_card chart={@chart} chart_series={@chart_series} chart_range={@chart_range} />
+        <.sessions_card
+          sessions={@visible_sessions}
+          all_sessions={@sessions}
+          level_unlocks={@level_unlocks}
+          show_all={@show_all}
+        />
+      <% end %>
+    </div>
     </Layouts.app>
     """
   end
 
-  attr :title, :string, required: true
-  attr :pr, :any, required: true
-
-  defp pr_card(assigns) do
+  defp empty_state(assigns) do
     ~H"""
-    <div class="rounded-lg border border-base-300 bg-base-100 p-5 space-y-3">
-      <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-        {@title} PRs
-      </h3>
+    <div class="rounded-[10px] border border-dashed border-[#1E2535] bg-base-200 p-12 text-center space-y-4">
+      <p class="text-sm text-base-content/40">No sessions yet.</p>
+      <p class="text-xs text-base-content/30">Run a plan or log a session to see your history here.</p>
+      <.link
+        navigate={~p"/log"}
+        class="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+      >
+        <.icon name="hero-plus" class="size-3.5" /> Log a session
+      </.link>
+    </div>
+    """
+  end
 
-      <%= if @pr do %>
-        <dl class="space-y-2 text-sm">
-          <div class="flex justify-between gap-4">
-            <dt class="text-base-content/60">Most burpees</dt>
-            <dd class="font-semibold">
-              {@pr.burpees_max.burpee_count_actual}
-              <span class="text-xs text-base-content/50 ml-1">
-                ({Calendar.strftime(@pr.burpees_max.inserted_at, "%Y-%m-%d")})
-              </span>
-            </dd>
-          </div>
-          <div class="flex justify-between gap-4">
-            <dt class="text-base-content/60">Longest session</dt>
-            <dd class="font-semibold">
-              {Fmt.duration_sec(@pr.duration_max.duration_sec_actual)}
-            </dd>
-          </div>
-          <%= if @pr.rate_best do %>
-            <div class="flex justify-between gap-4">
-              <dt class="text-base-content/60">Best rate</dt>
-              <dd class="font-semibold">
-                {:erlang.float_to_binary(
-                  @pr.rate_best.burpee_count_actual / @pr.rate_best.duration_sec_actual * 60,
-                  decimals: 1
-                )} burpees / min
-              </dd>
-            </div>
-          <% end %>
-        </dl>
+  attr :prs, :any, required: true
+  attr :chart_series, :atom, required: true
+
+  defp stats_row(assigns) do
+    ~H"""
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 overflow-hidden">
+      <div class="px-5 py-2.5 border-b border-[#1E2535]">
+        <span class="text-[11px] uppercase tracking-wide text-base-content/40">
+          {Fmt.burpee_type(@chart_series)} bests
+        </span>
+      </div>
+      <div class="grid grid-cols-3 divide-x divide-[#1E2535]">
+      <%= if @prs do %>
+        <.stat_cell
+          icon="hero-arrow-trending-up"
+          label="Most burpees"
+          value={to_string(@prs.burpees_max.burpee_count_actual)}
+          sub={Calendar.strftime(@prs.burpees_max.inserted_at, "%b %-d, %Y")}
+        />
+        <.stat_cell
+          icon="hero-clock"
+          label="Longest session"
+          value={Fmt.duration_sec(@prs.duration_max.duration_sec_actual)}
+          sub={Calendar.strftime(@prs.duration_max.inserted_at, "%b %-d, %Y")}
+        />
+        <%= if @prs.rate_best do %>
+          <.stat_cell
+            icon="hero-bolt"
+            label="Best rate"
+            value={:erlang.float_to_binary(@prs.rate_best.burpee_count_actual / @prs.rate_best.duration_sec_actual * 60, decimals: 1)}
+            sub="burpees / min"
+          />
+        <% else %>
+          <.stat_cell icon="hero-bolt" label="Best rate" value="—" sub="" />
+        <% end %>
       <% else %>
-        <p class="text-sm text-base-content/50">No sessions of this type yet.</p>
+        <.stat_cell icon="hero-arrow-trending-up" label="Most burpees" value="—" sub="" />
+        <.stat_cell icon="hero-clock" label="Longest session" value="—" sub="" />
+        <.stat_cell icon="hero-bolt" label="Best rate" value="—" sub="" />
+      <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  attr :icon, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :string, required: true
+  attr :sub, :string, required: true
+
+  defp stat_cell(assigns) do
+    ~H"""
+    <div class="p-5 flex flex-col gap-1 min-w-0">
+      <.icon name={@icon} class="size-4 text-primary shrink-0" />
+      <p class="mt-2 text-[11px] uppercase tracking-wide text-base-content/40">{@label}</p>
+      <p class="text-[26px] font-semibold leading-none tracking-tight text-base-content">{@value}</p>
+      <p class="text-[11px] text-base-content/30">{@sub}</p>
+    </div>
+    """
+  end
+
+  attr :chart, :map, required: true
+  attr :chart_series, :atom, required: true
+  attr :chart_range, :atom, required: true
+
+  defp chart_card(assigns) do
+    ~H"""
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-[#1E2535]">
+        <h2 class="text-sm font-medium text-base-content">Burpees over time</h2>
+        <div class="flex items-center gap-1">
+          <.series_btn series={:six_count} active={@chart_series == :six_count} label="6-count" />
+          <.series_btn series={:navy_seal} active={@chart_series == :navy_seal} label="Navy Seal" />
+        </div>
+      </div>
+
+      <div class="px-5 pt-4 pb-2 h-56">
+        <canvas
+          id="history-chart"
+          phx-hook="ChartHook"
+          data-chart={Jason.encode!(@chart)}
+        >
+        </canvas>
+      </div>
+
+      <div class="flex items-center justify-center gap-1 px-5 py-3 border-t border-[#1E2535]">
+        <.range_btn range={:week4} active={@chart_range == :week4} label="4W" />
+        <.range_btn range={:month3} active={@chart_range == :month3} label="3M" />
+        <.range_btn range={:month6} active={@chart_range == :month6} label="6M" />
+        <.range_btn range={:year1} active={@chart_range == :year1} label="1Y" />
+        <.range_btn range={:all} active={@chart_range == :all} label="All" />
+      </div>
+    </div>
+    """
+  end
+
+  attr :series, :atom, required: true
+  attr :active, :boolean, required: true
+  attr :label, :string, required: true
+
+  defp series_btn(assigns) do
+    ~H"""
+    <button
+      phx-click="set_series"
+      phx-value-series={@series}
+      class={[
+        "px-2.5 py-1 rounded-md text-xs transition-colors",
+        @active && "bg-primary/15 text-primary font-medium",
+        !@active && "text-base-content/40 hover:text-base-content/70"
+      ]}
+    >
+      {@label}
+    </button>
+    """
+  end
+
+  attr :range, :atom, required: true
+  attr :active, :boolean, required: true
+  attr :label, :string, required: true
+
+  defp range_btn(assigns) do
+    ~H"""
+    <button
+      phx-click="set_range"
+      phx-value-range={@range}
+      class={[
+        "px-3 py-1 rounded text-xs transition-colors",
+        @active && "bg-base-300 text-base-content font-medium",
+        !@active && "text-base-content/40 hover:text-base-content/60"
+      ]}
+    >
+      {@label}
+    </button>
+    """
+  end
+
+  attr :sessions, :list, required: true
+  attr :all_sessions, :list, required: true
+  attr :level_unlocks, :map, required: true
+  attr :show_all, :boolean, required: true
+
+  defp sessions_card(assigns) do
+    ~H"""
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-[#1E2535]">
+        <h2 class="text-sm font-medium text-base-content">Recent sessions</h2>
+      </div>
+
+      <ul class="divide-y divide-[#1E2535]">
+        <%= for session <- @sessions do %>
+          <.session_row session={session} unlock={Map.get(@level_unlocks, session.id)} />
+        <% end %>
+      </ul>
+
+      <%= if length(@all_sessions) > 5 do %>
+        <button
+          phx-click="toggle_all"
+          class="flex items-center justify-between w-full px-5 py-3.5 border-t border-[#1E2535] text-sm text-base-content/40 hover:text-base-content/70 transition-colors"
+        >
+          <span>{if @show_all, do: "Show less", else: "View all sessions"}</span>
+          <.icon name="hero-chevron-right" class={["size-4 transition-transform", @show_all && "rotate-90"]} />
+        </button>
       <% end %>
     </div>
     """
   end
+
+  attr :session, :map, required: true
+  attr :unlock, :any, required: true
+
+  defp session_row(assigns) do
+    ~H"""
+    <li class="flex items-center gap-4 px-5 py-3.5 hover:bg-base-300/50 transition-colors">
+      <div class="flex-1 min-w-0 space-y-0.5">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium text-base-content">
+            {Calendar.strftime(@session.inserted_at, "%b %-d, %Y")}
+          </span>
+          <%= if @unlock do %>
+            <span class="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              Level {history_level_label(@unlock.level)}
+            </span>
+          <% end %>
+        </div>
+        <p class="text-xs text-base-content/40">
+          {Fmt.burpee_type(@session.burpee_type)}
+          <%= if plan_label(@session) do %>
+            · {plan_label(@session)}
+          <% end %>
+        </p>
+      </div>
+
+      <div class="flex items-center gap-4 shrink-0">
+        <span class="text-sm font-medium text-base-content tabular-nums">
+          {@session.burpee_count_actual} burpees
+        </span>
+        <span class="text-sm text-base-content/40 tabular-nums">
+          {Fmt.duration_sec(@session.duration_sec_actual)}
+        </span>
+        <.icon name="hero-chevron-right" class="size-4 text-base-content/20" />
+      </div>
+    </li>
+    """
+  end
+
+  defp plan_label(%{style_name: s}) when not is_nil(s), do: s |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  defp plan_label(_), do: nil
 
   @level_order [:level_1a, :level_1b, :level_1c, :level_1d, :level_2, :level_3, :level_4, :graduated]
   defp history_level_index(level), do: Enum.find_index(@level_order, &(&1 == level)) || 0
 
   defp history_level_label(:graduated), do: "Grad"
   defp history_level_label(l), do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
-
-  defp note_preview(session) do
-    notes = [session.note_pre, session.note_post] |> Enum.reject(&(&1 in [nil, ""]))
-
-    case notes do
-      [] -> "—"
-      [single] -> truncate(single, 60)
-      [pre, post] -> truncate(pre <> " / " <> post, 60)
-    end
-  end
-
-  defp truncate(string, max) when byte_size(string) > max do
-    String.slice(string, 0, max - 1) <> "…"
-  end
-
-  defp truncate(string, _), do: string
 end

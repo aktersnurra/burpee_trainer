@@ -23,13 +23,11 @@ defmodule BurpeeTrainer.PlannerTest do
     base = %WorkoutPlan{
       name: "Test Plan",
       burpee_type: :six_count,
-      warmup_enabled: false,
-      warmup_reps: nil,
-      warmup_rounds: nil,
-      rest_sec_warmup_between: 120,
-      rest_sec_warmup_before_main: 180,
-      shave_off_sec: nil,
-      shave_off_block_count: nil,
+      target_duration_min: nil,
+      burpee_count_target: nil,
+      sec_per_burpee: nil,
+      pacing_style: nil,
+      additional_rests: "[]",
       blocks: blocks
     }
 
@@ -99,6 +97,12 @@ defmodule BurpeeTrainer.PlannerTest do
       assert third.burpee_count == 2
       assert fourth.label == "Block 2"
     end
+
+    test "to_timeline/1 never emits warmup events" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 0)])])
+      events = Planner.to_timeline(plan)
+      refute Enum.any?(events, &(&1.type in [:warmup_burpee, :warmup_rest]))
+    end
   end
 
   describe "to_timeline/1 — repeat_count > 1" do
@@ -107,11 +111,9 @@ defmodule BurpeeTrainer.PlannerTest do
 
       events = Planner.to_timeline(plan)
 
-      # 3 work + 3 rest = 6 events
       assert length(events) == 6
 
       labels = for %Event{type: :work_burpee, label: l} <- events, do: l
-
       assert labels == ["Block 1", "Block 1", "Block 1"]
     end
 
@@ -126,143 +128,78 @@ defmodule BurpeeTrainer.PlannerTest do
     end
   end
 
-  describe "to_timeline/1 — warmup" do
-    test "warmup disabled emits no warmup events" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 5, 4.0, 0)])],
-          %{warmup_enabled: false, warmup_reps: 3, warmup_rounds: 2}
-        )
-
-      events = Planner.to_timeline(plan)
-      refute Enum.any?(events, &(&1.type in [:warmup_burpee, :warmup_rest]))
-    end
-
-    test "warmup enabled emits rounds at first set pace with inter-round and final rests" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 5, 5.0, 0)])],
-          %{
-            warmup_enabled: true,
-            warmup_reps: 3,
-            warmup_rounds: 2,
-            rest_sec_warmup_between: 90,
-            rest_sec_warmup_before_main: 180
-          }
-        )
-
-      assert [
-               %Event{
-                 type: :warmup_burpee,
-                 burpee_count: 3,
-                 duration_sec: 15.0,
-                 label: "Warmup Round 1"
-               },
-               %Event{type: :warmup_rest, duration_sec: 90.0},
-               %Event{
-                 type: :warmup_burpee,
-                 burpee_count: 3,
-                 duration_sec: 15.0,
-                 label: "Warmup Round 2"
-               },
-               %Event{type: :warmup_rest, duration_sec: 180.0},
-               %Event{type: :work_burpee, label: "Block 1"}
-             ] = Planner.to_timeline(plan)
-    end
-
-    test "warmup with zero reps or zero rounds emits nothing" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 5, 4.0, 0)])],
-          %{warmup_enabled: true, warmup_reps: 0, warmup_rounds: 3}
-        )
-
-      events = Planner.to_timeline(plan)
-      refute Enum.any?(events, &(&1.type in [:warmup_burpee, :warmup_rest]))
-    end
-  end
-
-  describe "to_timeline/1 — shave-off" do
-    test "injects shave_rest after the Nth block with duration = shave_off_sec × total repetitions" do
-      # From SPEC example:
-      #   Block(repeat_count=3): [ Set(burpee_count=4, sec_per_rep=4.0, end_of_set_rest=36) ]
-      #   Block(repeat_count=1): [ Set(burpee_count=3, sec_per_rep=4.0, end_of_set_rest=0)  ]
-      #   shave_off_sec=8, shave_off_block_count=1
-      #   expected shave_rest duration = 8 × 3 = 24s
-      plan =
-        build_plan(
-          [
-            build_block(1, 3, [build_set(1, 4, 4.0, 36)]),
-            build_block(2, 1, [build_set(1, 3, 4.0, 0)])
-          ],
-          %{shave_off_sec: 8, shave_off_block_count: 1}
-        )
-
-      events = Planner.to_timeline(plan)
-      shave = Enum.find(events, &(&1.type == :shave_rest))
-
-      assert %Event{duration_sec: 24.0, label: "Shave-off Rest"} = shave
-    end
-
-    test "shave_rest is positioned between block N and block N+1" do
-      plan =
-        build_plan(
-          [
-            build_block(1, 2, [build_set(1, 4, 4.0, 30)]),
-            build_block(2, 1, [build_set(1, 3, 4.0, 0)])
-          ],
-          %{shave_off_sec: 5, shave_off_block_count: 1}
-        )
-
-      types = Planner.to_timeline(plan) |> Enum.map(& &1.type)
-
-      # block 1 rep 1: work, rest
-      # block 1 rep 2: work, rest
-      # shave_rest
-      # block 2: work
-      assert types == [
-               :work_burpee,
-               :work_rest,
-               :work_burpee,
-               :work_rest,
-               :shave_rest,
-               :work_burpee
-             ]
-    end
-
-    test "shave_off disabled (nil) emits no shave_rest" do
-      plan =
-        build_plan([
-          build_block(1, 2, [build_set(1, 4, 4.0, 30)]),
-          build_block(2, 1, [build_set(1, 3, 4.0, 0)])
-        ])
-
-      refute Enum.any?(Planner.to_timeline(plan), &(&1.type == :shave_rest))
-    end
-
-    test "shave_off_sec = 0 emits no shave_rest" do
-      plan =
-        build_plan(
-          [
-            build_block(1, 2, [build_set(1, 4, 4.0, 30)]),
-            build_block(2, 1, [build_set(1, 3, 4.0, 0)])
-          ],
-          %{shave_off_sec: 0, shave_off_block_count: 1}
-        )
-
-      refute Enum.any?(Planner.to_timeline(plan), &(&1.type == :shave_rest))
-    end
-  end
-
   describe "to_timeline/1 — edge cases" do
-    test "empty blocks list returns empty timeline (even with warmup enabled)" do
-      plan =
-        build_plan(
-          [],
-          %{warmup_enabled: true, warmup_reps: 3, warmup_rounds: 2}
-        )
+    test "empty blocks list returns empty timeline" do
+      assert Planner.to_timeline(build_plan([])) == []
+    end
+  end
 
-      assert Planner.to_timeline(plan) == []
+  describe "to_timeline/1 — sec_per_burpee field" do
+    test "work_burpee events have sec_per_burpee set" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 0)])])
+      [event] = Planner.to_timeline(plan)
+      assert event.sec_per_burpee == 4.0
+    end
+
+    test "work_rest events have sec_per_burpee nil" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 30), build_set(2, 5, 4.0, 0)])])
+      events = Planner.to_timeline(plan)
+      rest = Enum.find(events, &(&1.type == :work_rest))
+      assert rest.sec_per_burpee == nil
+    end
+  end
+
+  describe "warmup_timeline/1" do
+    test "returns empty list when plan has no blocks" do
+      assert Planner.warmup_timeline(build_plan([])) == []
+    end
+
+    test "returns two warmup rounds with rests" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
+                        %{sec_per_burpee: 5.0})
+
+      events = Planner.warmup_timeline(plan)
+      types = Enum.map(events, & &1.type)
+      assert types == [:warmup_burpee, :warmup_rest, :warmup_burpee, :warmup_rest]
+    end
+
+    test "warmup_burpee events have sec_per_burpee set, rest events have nil" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
+                        %{sec_per_burpee: 5.0})
+
+      events = Planner.warmup_timeline(plan)
+      work_events = Enum.filter(events, &(&1.type == :warmup_burpee))
+      rest_events = Enum.filter(events, &(&1.type == :warmup_rest))
+
+      assert Enum.all?(work_events, &(&1.sec_per_burpee == 5.0))
+      assert Enum.all?(rest_events, &(&1.sec_per_burpee == nil))
+    end
+
+    test "inter-round rest is 120s and final rest is 180s" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
+                        %{sec_per_burpee: 5.0})
+
+      [_, rest1, _, rest2] = Planner.warmup_timeline(plan)
+      assert rest1.duration_sec == 120.0
+      assert rest2.duration_sec == 180.0
+    end
+
+    test "warmup reps capped at first set burpee_count" do
+      # 10 reps in set but pace allows 60/5=12 per min → capped at 10
+      plan = build_plan([build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
+                        %{sec_per_burpee: 5.0})
+
+      [round1 | _] = Planner.warmup_timeline(plan)
+      assert round1.burpee_count == 10
+    end
+
+    test "warmup reps capped at reps achievable in 1 min" do
+      # first set has 100 reps but pace is 10s/rep → 6 per min
+      plan = build_plan([build_block(1, 1, [build_set(1, 100, 10.0, 0)])],
+                        %{sec_per_burpee: 10.0})
+
+      [round1 | _] = Planner.warmup_timeline(plan)
+      assert round1.burpee_count == 6
     end
   end
 
@@ -281,9 +218,6 @@ defmodule BurpeeTrainer.PlannerTest do
     end
 
     test "scales existing rests proportionally to hit a longer target" do
-      # two blocks with adjustable rest = 30s each (appears once per occurrence)
-      # work = 2 * (5 * 4.0) = 40s. one adjustable rest contributes 30s. last set rest = 0.
-      # current total = 40 + 30 = 70s. target = 100s → need +30s of rest.
       plan =
         build_plan([
           build_block(1, 1, [build_set(1, 5, 4.0, 30)]),
@@ -293,16 +227,12 @@ defmodule BurpeeTrainer.PlannerTest do
       assert {:ok, fitted} = Planner.fit_rest_to_duration(plan, 100)
       assert Planner.summary(fitted).duration_sec_total == 100.0
 
-      # the adjustable rest should now be 60s
       [fitted_block_one | _] = fitted.blocks
       [fitted_set | _] = fitted_block_one.sets
       assert fitted_set.end_of_set_rest == 60
     end
 
     test "scales existing rests proportionally to hit a shorter target" do
-      # current total = 40 + 60 = 100. target = 80 → new rest should scale to (60 * 40/60) ≈ 40
-      # wait, let me recompute: current_adjustable_rest = 60, delta = -20.
-      # scale = (60 - 20) / 60 = 2/3. new rest = 60 * 2/3 = 40.
       plan =
         build_plan([
           build_block(1, 1, [build_set(1, 5, 4.0, 60)]),
@@ -318,11 +248,6 @@ defmodule BurpeeTrainer.PlannerTest do
     end
 
     test "repeat_count weights the adjustable rest's contribution" do
-      # block 1: repeat=3, 1 set, rest=30 → contributes 3 * 30 = 90s total from that rest
-      # block 2: repeat=1, 1 set, rest=0 → last set
-      # work = 3 * (4*4.0) + 1 * (3*4.0) = 48 + 12 = 60s
-      # current total = 60 + 90 = 150. target = 180 → delta = +30 on adjustable total of 90.
-      # scale = 120/90 = 4/3. new rest = 30 * 4/3 = 40.
       plan =
         build_plan([
           build_block(1, 3, [build_set(1, 4, 4.0, 30)]),
@@ -338,10 +263,6 @@ defmodule BurpeeTrainer.PlannerTest do
     end
 
     test "distributes evenly when all adjustable rests are zero" do
-      # block 1: repeat=2, 1 set → that set's rest occurs 2 times → 2 adjustable slots
-      # block 2: 1 set = final set of final block → NOT adjustable
-      # work = 2*(4*4.0) + 1*(4*4.0) = 48s. target = 78 → +30s total rest.
-      # 2 slots, 30/2 = 15s each → rest = 15 on the block-1 set.
       plan =
         build_plan([
           build_block(1, 2, [build_set(1, 4, 4.0, 0)]),
@@ -352,7 +273,6 @@ defmodule BurpeeTrainer.PlannerTest do
 
       [block_one, block_two] = fitted.blocks
       assert hd(block_one.sets).end_of_set_rest == 15
-      # block 2's only set is the final set of the final block → rest stays 0
       assert hd(block_two.sets).end_of_set_rest == 0
       assert Planner.summary(fitted).duration_sec_total == 78.0
     end
@@ -363,7 +283,6 @@ defmodule BurpeeTrainer.PlannerTest do
     end
 
     test "returns {:error, :target_too_short} when target is below irreducible duration" do
-      # work = 100s irreducible. adjustable rest = 20s. target below 100s is impossible.
       plan =
         build_plan([
           build_block(1, 1, [build_set(1, 25, 4.0, 20)]),
@@ -371,31 +290,6 @@ defmodule BurpeeTrainer.PlannerTest do
         ])
 
       assert {:error, :target_too_short} = Planner.fit_rest_to_duration(plan, 50)
-    end
-
-    test "does not modify warmup rests or shave-off rest" do
-      plan =
-        build_plan(
-          [
-            build_block(1, 1, [build_set(1, 4, 4.0, 20)]),
-            build_block(2, 1, [build_set(1, 4, 4.0, 0)])
-          ],
-          %{
-            warmup_enabled: true,
-            warmup_reps: 3,
-            warmup_rounds: 1,
-            rest_sec_warmup_before_main: 60,
-            shave_off_sec: 5,
-            shave_off_block_count: 1
-          }
-        )
-
-      current_total = Planner.summary(plan).duration_sec_total
-      assert {:ok, fitted} = Planner.fit_rest_to_duration(plan, current_total + 40)
-
-      assert fitted.rest_sec_warmup_before_main == 60
-      assert fitted.shave_off_sec == 5
-      assert fitted.warmup_reps == 3
     end
 
     test "final set of the final block retains its zero rest" do
@@ -417,21 +311,9 @@ defmodule BurpeeTrainer.PlannerTest do
   end
 
   describe "summary/1" do
-    test "totals count main sets only; warmup is excluded from both burpees and duration" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 10, 4.0, 0)])],
-          %{
-            warmup_enabled: true,
-            warmup_reps: 5,
-            warmup_rounds: 1,
-            rest_sec_warmup_before_main: 60
-          }
-        )
-
+    test "totals work burpees only from main blocks" do
+      plan = build_plan([build_block(1, 1, [build_set(1, 10, 4.0, 0)])])
       summary = Planner.summary(plan)
-
-      # Only main work sets count: 10 * 4.0 = 40s. Warmup intentionally omitted.
       assert summary.burpee_count_total == 10
       assert summary.duration_sec_total == 40.0
     end
@@ -447,7 +329,6 @@ defmodule BurpeeTrainer.PlannerTest do
 
       assert [block_one, block_two] = summary.blocks
 
-      # Block 1 × 3: 4 reps × 1 set × 3 = 12 burpees, work = 4*4.0*3 = 48, rest = 36*3 = 108
       assert block_one.position == 1
       assert block_one.repeat_count == 3
       assert block_one.burpee_count_total == 12

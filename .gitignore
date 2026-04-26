@@ -40,3 +40,14 @@ npm-debug.log
 *.db-*
 
 /deploy/env*
+
+# Claude Code working files
+/.claude/
+PLAN.md
+REFACTOR_PLANNING.md
+SESSION_REFACTOR.md
+SESSION_SUMMARY.md
+SPEC_FEAT_UI.md
+
+# Mock/scratch images
+/mock/

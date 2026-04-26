@@ -51,15 +51,20 @@ id
 user_id
 name
 burpee_type                   -- enum: six_count | navy_seal
-warmup_enabled                -- bool (true means warmup is active)
-warmup_reps                   -- int, manually set
-warmup_rounds                 -- int, manually set
-rest_sec_warmup_between       -- int, default 120
-rest_sec_warmup_before_main   -- int, default 180
-shave_off_sec                 -- int, nullable
-shave_off_block_count         -- int, nullable
+target_duration_min           -- int: user's target duration in minutes
+burpee_count_target           -- int: total reps required (exact, enforced on save)
+sec_per_burpee                -- float: pace (validated against physical limits)
+pacing_style                  -- atom: :even | :unbroken
+additional_rests              -- stored as JSON array in SQLite:
+                              -- [%{rest_sec: int, target_min: int}, ...]
+                              -- only valid when pacing_style == :even
 has_many blocks (ordered by position)
 ```
+
+> Warmup is NOT stored on the plan. It is generated on session start from the plan's
+> `sec_per_burpee` and `burpee_type`. See LIVE SESSION section.
+
+> Shave-off is NOT a user-facing concept. The solver handles rest distribution internally.
 
 ### Block
 ```
@@ -210,56 +215,96 @@ graduated state, zero sessions.
 ## PLAN WIZARD MODULE
 
 Pure Elixir module `BurpeeTrainer.PlanWizard`. No Ecto dependency.
-Converts simple high-level inputs into a fully structured `%WorkoutPlan{}`.
+Solver that converts `%PlanInput{}` into a fully structured `%WorkoutPlan{}`.
 
-### Input struct
+### Physical pace limits (hard constraints)
+
+Derived from the graduation landmark: maximum possible reps in 20 min.
+
+```
+six_count:  sec_per_burpee >= 1200 / 325 ≈ 3.70s  (floor, rounded up to 2dp)
+navy_seal:  sec_per_burpee >= 1200 / 150 = 8.00s
+```
+
+Enforced at input time — not on save. The pace input shows the floor value and blocks
+progression if violated.
+
+### Physical floor constants
 ```elixir
-%WizardInput{
-  duration_sec_total,     -- int: total workout time e.g. 1200
-  burpee_type,            -- atom: :six_count | :navy_seal
-  burpee_count_total,     -- int: total reps e.g. 120
-  sec_per_burpee,         -- float: time per rep e.g. 5.0
-  pacing_style,           -- atom: :even | :cluster
-  extra_rest,             -- nullable: %{after_block: int, rest_sec: int}
+@sec_per_burpee_floor %{
+  six_count:  Float.ceil(1200 / 325, 2),   # 3.70
+  navy_seal:  1200 / 150                   # 8.00
 }
 ```
 
-### Generation logic
-
-```
-work_sec_total = burpee_count_total * sec_per_burpee
-rest_sec_total = duration_sec_total - work_sec_total
-
-:even ->
-  Distribute reps into equal sets with consistent rest between each.
-  Produces one block, repeat_count = set_count, one set per repetition.
-
-:cluster ->
-  Cluster reps into groups with micro-rest (3-5s) inside groups,
-  longer rest between groups.
-  set_size: six_count -> 8-15 reps, navy_seal -> 3-5 reps.
-  Produces one block with multiple sets.
-
-extra_rest ->
-  Split into two blocks at after_block boundary.
-  Last set of block N gets rest_sec_after_set = extra_rest.rest_sec.
-  Remaining rest budget redistributed across other sets.
+### Input struct
+```elixir
+%PlanInput{
+  name,
+  burpee_type,           -- :six_count | :navy_seal
+  target_duration_min,   -- int: user's target (validated within ±5s on save)
+  burpee_count_target,   -- int: exact rep count (exact match enforced on save)
+  sec_per_burpee,        -- float: must be >= physical floor for burpee_type
+  pacing_style,          -- :even | :unbroken
+  additional_rests,      -- [%{rest_sec: int, target_min: int}]
+                         -- only valid when pacing_style == :even
+}
 ```
 
-Output is `%WorkoutPlan{}` with all blocks/sets populated, unsaved, ready for editor review.
+### Solver logic — `BurpeeTrainer.PlanWizard.generate/1`
+
+```
+Step 1: Validate physical pace limit. Return {:error, :pace_too_fast} if violated.
+
+Step 2: Generate base block structure from pacing_style:
+
+  :unbroken ->
+    One block, one set: burpee_count = burpee_count_target, sec_per_burpee = sec_per_burpee.
+    rest_sec_after_set = 0.
+    No additional rests permitted (error if provided).
+
+  :even ->
+    Distribute burpee_count_target into equal sets.
+    Compute rest_sec_after_set such that total duration approximates target_duration_min.
+    Produces one block with repeat_count = set_count, one set per repetition.
+
+Step 3: Inject additional rests (even pacing only):
+
+  For each %{rest_sec, target_min} in additional_rests:
+    target_sec = target_min * 60
+    Find the nearest natural block boundary in the generated timeline to target_sec.
+    "Nearest boundary" = the end of the set whose cumulative end time is
+    closest to target_sec (either before or after).
+
+    If nearest boundary is within 30s of target_sec:
+      Split blocks at that boundary.
+      Insert a zero-rep rest block of rest_sec at the split point.
+    Else:
+      Return {:error, {:rest_unplaceable, target_min}}
+
+Step 4: Return {:ok, %WorkoutPlan{}} with all blocks and sets populated.
+        Duration is derived — not stored separately.
+```
 
 ### Public API
 ```elixir
 BurpeeTrainer.PlanWizard.generate/1
-# %WizardInput{} -> {:ok, %WorkoutPlan{}} | {:error, reason}
+# %PlanInput{} -> {:ok, %WorkoutPlan{}} | {:error, reason}
 
-BurpeeTrainer.PlanWizard.validate/1
-# %WizardInput{} -> :ok | {:error, [reason]}
+BurpeeTrainer.PlanWizard.validate_pace/2
+# burpee_type, sec_per_burpee -> :ok | {:error, :pace_too_fast, floor_value}
 ```
 
 ### Tests (ExUnit)
-Cover: even pacing totals, cluster pacing, extra rest block split,
-work time exceeding total duration returns error, zero burpees returns error.
+Cover:
+- even pacing: total reps match exactly, duration within ±5s of target
+- unbroken: one block, one set, correct rep count
+- pace at exactly the floor: accepted
+- pace below floor: rejected with :pace_too_fast
+- rest placed at nearest boundary within 30s: accepted, block split correctly
+- rest with no boundary within 30s: rejected with :rest_unplaceable
+- additional rest with unbroken pacing: rejected
+- rest_unplaceable error includes which rest caused the failure
 
 ---
 
@@ -270,30 +315,52 @@ Pure Elixir module `BurpeeTrainer.Planner`. No Ecto dependency.
 ### Event struct
 ```elixir
 %Event{
-  type:         :warmup_burpee | :warmup_rest | :work_burpee | :work_rest | :shave_rest,
-  duration_sec: float,
-  burpee_count: integer | nil,
-  label:        string
+  type:           :warmup_burpee | :warmup_rest | :work_burpee | :work_rest | :rest_block,
+  duration_sec:   float,
+  burpee_count:   integer | nil,
+  sec_per_burpee: float | nil,
+  label:          string
 }
 ```
 
+> `:rest_block` is the event type for injected additional rests (zero-rep blocks).
+> There is no `:shave_rest` type — shave-off is no longer a user-facing concept.
+
 ### Timeline logic
 
-1. **Warmup** (if `warmup_enabled`): emit rounds, inter-round rest, pre-main rest.
-2. **Main**: expand each block by `repeat_count`, emit sets as work+rest pairs.
-3. **Shave-off**: after blocks 1..N, inject `:shave_rest` of `shave_off_sec * repetitions`.
+`to_timeline/1` expands the plan into a flat list of events (warmup NOT included):
+1. **Main**: expand each block by `repeat_count`, emit sets as work+rest pairs.
+2. `:rest_block` events are emitted for zero-rep blocks (injected additional rests).
+
+Warmup is handled separately via `warmup_timeline/1` — prepended at session start if user opts in.
+
+### Warmup generation — `warmup_timeline/1`
+
+Fixed algorithm, no user configuration:
+```
+Round 1: min(burpee_count_per_set_in_block_1, reps_in_1_min_at_pace) reps
+Rest:    120s (hardcoded)
+Round 2: same rep count as round 1
+Rest:    180s (hardcoded)
+→ main workout begins
+```
 
 ### Public API
 ```elixir
-BurpeeTrainer.Planner.to_timeline/1   # %WorkoutPlan{} -> [%Event{}]
-BurpeeTrainer.Planner.summary/1       # %WorkoutPlan{} -> %{burpee_count_total, duration_sec_total, blocks: [...]}
+BurpeeTrainer.Planner.to_timeline/1
+# %WorkoutPlan{} -> [%Event{}]   (main workout only, no warmup)
+
+BurpeeTrainer.Planner.warmup_timeline/1
+# %WorkoutPlan{} -> [%Event{}]   (warmup events only, prepend to main if user opts in)
+
+BurpeeTrainer.Planner.summary/1
+# %WorkoutPlan{} -> %{burpee_count_total, duration_sec_total, blocks: [...]}
 ```
 
-Helpers: `build_timeline/1`, `build_timeline_warmup/1`, `build_timeline_block/2`,
-`build_timeline_shave_rest/2`.
+Helpers: `build_timeline/1`, `build_timeline_block/2`.
 
 ### Tests (ExUnit)
-Cover: plan expansion, shave-off accumulation, warmup generation, zero-rest edge cases,
+Cover: plan expansion, warmup generation, rest_block events, zero-rest edge cases,
 repeat_count > 1, empty block list.
 
 ---
@@ -391,19 +458,82 @@ mood/time modifiers, top 3 returned.
 
 ## LIVE SESSION
 
-### State machine
+### Architecture — client-driven execution
+
+The server computes the timeline once on mount and pushes it to the client. The client
+(`SessionHook`) owns the clock, state machine, beeps, and all UI updates. The server is
+idle during the workout and only involved at save time.
+
 ```
-idle -> warmup_burpee -> warmup_rest -> work_burpee -> work_rest -> shave_rest -> done
+Server: on mount, computes timeline once, pushes to client, then goes idle
+Client (SessionHook): owns clock, state machine, beeps, and UI updates
+  → on completion: pushes final state to server
+Server: receives completion, shows save modal
 ```
 
-### Display
-Phase label, burpees remaining in set, countdown, overall progress bar, pause button.
+### SessionLive — on mount
+```elixir
+def mount(%{"plan_id" => plan_id}, session, socket) do
+  plan     = Workouts.get_plan(plan_id)
+  timeline = Planner.to_timeline(plan)
 
-### JS Hooks
+  {:ok, push_event(socket, "session_ready", %{
+    timeline: serialize_timeline(timeline)
+  })}
+end
+```
 
-`BurpeeHook` — Web Audio API:
-- Rep beep: 880hz, 80ms, square. Client metronome at `sec_per_burpee * 1000` ms.
-- Rest-ending beep: 440hz, 400ms, sine. Server push when 5s remain in rest.
+### SessionLive — handles from client
+```elixir
+def handle_event("warmup_requested", _, socket) do
+  warmup = Planner.warmup_timeline(socket.assigns.plan)
+  {:noreply, push_event(socket, "warmup_ready", %{warmup: serialize_timeline(warmup)})}
+end
+
+def handle_event("session_complete", %{"main" => main, "warmup" => warmup}, socket) do
+  # Show completion modal pre-filled with actual values
+end
+```
+
+### What is NOT in SessionLive
+- No `:timer.send_interval`
+- No `handle_info(:tick)`
+- No `phase_elapsed_sec` assign
+- No server-side phase transition logic
+- No `push_event("warn_rest_ending")`
+- No `push_event("start_metronome")` / `"stop_metronome"` / `"pause_metronome"`
+
+### State machine (client-side phases)
+```
+idle → warmup_burpee → warmup_rest → work_burpee → work_rest → rest_block → done
+```
+
+`rest_block` is for injected additional rest blocks (replaces the old `shave_rest`).
+
+### SessionHook (session_hook.js)
+
+Full client-side session runtime. Renamed from `burpee_hook.js`.
+
+**Clock:** `performance.now()` + `requestAnimationFrame`. Not `setInterval` — avoids drift and
+tab throttling.
+
+**State machine:** walks the flat timeline array using elapsed time.
+
+**Beeps (Web Audio API):**
+- Rep beep: 880hz, 80ms, square. Fires at each rep boundary within a work phase.
+- Rest-ending beep: 440hz, 400ms, sine. Fires when 5s remain in any rest phase.
+
+**Pause/resume:** shifts `startTime` forward by pause duration so elapsed stays correct.
+
+**Warmup flow:**
+1. Show warmup prompt on tap-to-start screen.
+2. If Yes: `pushEvent("warmup_requested")` → server responds with `warmup_ready` → prepend to timeline.
+3. If Skip: start immediately with main timeline.
+
+**On completion:** `pushEvent("session_complete", {main: {...}, warmup: {...}})`.
+
+**UI updates:** direct DOM manipulation for high-frequency values (clock, rep counter)
+to avoid unnecessary LiveView diffs.
 
 ### Mood input
 Tap-to-start overlay: 😮‍💨 Tired (-1) / 😐 OK (0) / 💪 Hyped (+1).
@@ -416,57 +546,145 @@ On save: `Workouts.save_session/2` computes all derived fields, upserts `StylePe
 
 ---
 
-## PLANS PAGE — `/plans`
+## PLANS PAGE — `/plans` and `/plans/new`, `/plans/:id/edit`
 
-Two entry points into plan creation:
+### Plan list — `/plans`
 
 ```
-[ Quick Generate ]   [ Build Manual ]
-
 Saved Plans
 [ Plan ] [ Plan ] [ Plan ] ...
+[ + New Plan ]
 ```
 
-### Quick generator wizard (primary path)
+### Three-layer editor — `/plans/new` and `/plans/:id/edit`
 
-Six steps, one per screen, forward/back navigation:
+One page, three stacked sections (no separate wizard step flow):
 
 ```
-Step 1  Total time        slider/input, default 20 min, range 5-60 min
-Step 2  Burpee type       two large tap targets: [6-Count] [Navy Seal]
-Step 3  Total burpees     number input. Live hint: "X burpees/min".
-                          Warn if work_sec > duration_sec.
-Step 4  Sec per burpee    +/- buttons, default 5s. Live: "Work Xm Ys · Rest Xm Ys"
-Step 5  Pacing style      [Even pacing] [Cluster sets]
-Step 6  Extra rest?       toggle off by default. If on: "After block _ , rest _ sec"
+┌─────────────────────────────────────┐
+│  1. BASICS                          │
+│  name, style, target duration,      │
+│  total reps, sec/rep, pacing        │
+├─────────────────────────────────────┤
+│  2. ADDITIONAL RESTS  (even only)   │
+│  + Add rest                         │
+│  Rest 1: 30s at min 10              │
+│  Rest 2: 60s at min 18              │
+├─────────────────────────────────────┤
+│  3. BLOCKS                          │
+│  [auto-generated, editable]         │
+│  Live derived duration shown here   │
+└─────────────────────────────────────┘
+                              [ Save ]
 ```
 
-Generate -> `PlanWizard.generate/1` -> opens full editor pre-populated.
-Validation error -> inline message, stay on relevant step.
+### Layer 1 — Basics
 
-### Full plan editor (advanced / post-wizard review)
+Fields:
+```
+name              text input
+style             two tap targets: [6-Count] [Navy Seal]
+target_duration   number input (minutes). Label: "Target duration"
+total_reps        number input. Label: "Total burpees"
+sec_per_burpee    number input with +/- buttons.
+                  Floor shown below input: "Min: 3.7s (graduation pace)"
+                  Immediate error if below floor — cannot leave field.
+pacing            two tap targets: [Even] [Unbroken]
+                  If Unbroken selected: hide Layer 2 entirely.
+```
 
-- Header: name, burpee_type.
-- Warmup (collapsible): `warmup_reps`, `warmup_rounds`, `rest_sec_warmup_between`,
-  `rest_sec_warmup_before_main`.
-- Shave-off (collapsible): `shave_off_sec`, `shave_off_block_count`, live summary text.
-- Block builder: add/remove/reorder, repeat_count, sets with burpee_count/sec_per_burpee/
-  rest_sec_after_set.
-- Live summary sidebar via `Planner.summary/1`.
-- Save button.
+On any change to Basics fields: re-run `PlanWizard.generate/1` and update Layer 3
+(blocks) automatically. Layer 3 reflects the freshly generated structure.
+
+### Layer 2 — Additional rests (even pacing only, hidden for unbroken)
+
+```
+[ + Add rest ]
+
+Each rest entry:
+  [__] seconds at min [__]   [× remove]
+```
+
+On any change: re-run `PlanWizard.generate/1` and update Layer 3.
+If solver returns `{:error, {:rest_unplaceable, target_min}}`:
+  Show inline error: "No block boundary within 30s of min Y. Adjust reps or pace."
+  Layer 3 shows last valid state.
+
+### Layer 3 — Blocks (auto-generated, user-editable)
+
+Pre-filled from solver output. User can tweak any field.
+Live derived duration shown at top of this section:
+```
+Derived duration: 19m 45s  (target: 20m ±5s)
+Total burpees:    120       (required: 120)
+```
+
+Color coding:
+- Green: both constraints satisfied
+- Amber: duration within ±5s, reps exact
+- Red: constraint violated (show which one)
+
+### Save validation
+
+```
+1. burpee_count from all sets == burpee_count_target          (exact)
+2. |derived_duration_sec - target_duration_min * 60| <= 5     (±5s)
+3. sec_per_burpee >= floor for burpee_type                    (hard)
+```
+
+On failure, show specific error messages. Save is blocked until all three pass.
+
+---
+
+## OVERVIEW PAGE — `/`
+
+New root route. Landing page after login.
+
+### Layout (top to bottom)
+
+```
+[1] Weekly streak — current streak count + this week's progress bar
+[2] Weekly calendar — last 12 weeks as a grid, goal-met highlighted
+[3] Quick actions — two buttons: Run a plan, Log session
+```
+
+Weekly goal: 80 min/week.
+
+Assigns:
+```elixir
+weekly_minutes:  [%{week_start, minutes, met_goal}]   # last 12 weeks, newest first
+streak:          integer                               # consecutive met-goal weeks
+this_week:       %{minutes, met_goal}                 # current week in progress
+```
 
 ---
 
 ## HISTORY PAGE — `/history`
 
-Chart: x=date, y=`burpee_count_actual`, series per type (blue/orange).
-Dots shaped by `time_of_day_bucket`: morning=filled circle, afternoon=filled square,
-evening=open circle, night=open square.
-Overlays: goal line, trend line (dotted), landmark reference lines.
+Three sections, top to bottom:
 
-PR panel: best burpees, longest session, best rate, best rate by time-of-day bucket.
+```
+[1] Stats row — three PRs in one horizontal card (most burpees, longest session, best rate)
+[2] Chart section — "Burpees over time" with series selector and time range tabs
+[3] Recent sessions list — compact rows, "View all" expands in-place
+```
 
-Session table: date, time-of-day badge, type badge, burpees, duration, mood, tags, notes.
+### Chart
+
+Chart.js via CDN. Series selector: `:six_count` | `:navy_seal`.
+Time range tabs: 4W / 3M / 6M (default) / 1Y / All.
+Goal line (dashed), trend line (dotted), main series line.
+
+Assigns: `chart_series`, `chart_range`, `show_all_sessions`.
+
+### Session list
+
+Show 5 most recent by default. "View all sessions" expands to full list (toggle, no navigation).
+Level unlock badge inline if session unlocked a level.
+
+### Empty state
+
+Single centered card when no sessions exist, with "Log a session" CTA.
 
 ---
 
@@ -515,21 +733,9 @@ Full-width `<video>` element. Controls visible (native browser controls).
 `src="/videos/#{video.filename}"` — routed through `VideoController` for auth check.
 
 When video ends (`ended` DOM event), `VideoHook` sends `"video_ended"` to LiveView.
-LiveView responds by sliding up a log form at the bottom of the page:
-
-```
-burpee_type      -- pre-filled from video.burpee_type, not editable
-duration_sec_actual  -- pre-filled from video.duration_sec, editable
-burpee_count_actual  -- empty, required
-mood             -- picker: 😮‍💨 / 😐 / 💪
-tags             -- multi-select
-note_post        -- text, optional
-```
+LiveView responds by sliding up a log form at the bottom of the page.
 
 Save → `Workouts.save_session/2` with `plan_id = null`, `style_name = null`.
-Same derived field computation as all other session saves.
-
-User can also tap "Log session" manually before video ends (in case they stop early).
 
 ### Auth — X-Accel-Redirect
 
@@ -552,25 +758,7 @@ defmodule BurpeeTrainerWeb.VideoController do
 end
 ```
 
-### Nginx
-```nginx
-location /videos/ {
-    proxy_pass http://localhost:4000;
-}
-
-location /protected-videos/ {
-    internal;
-    alias /var/lib/burpee_trainer/videos/;
-    mp4;
-    mp4_buffer_size     1m;
-    mp4_max_buffer_size 5m;
-    add_header Accept-Ranges bytes;
-}
-```
-
 ### VideoHook (video_hook.js)
-
-Minimal — just listens for the `ended` event and notifies LiveView:
 
 ```javascript
 VideoHook = {
@@ -580,7 +768,26 @@ VideoHook = {
 }
 ```
 
-No play/pause sync needed. No metronome. No server-driven events.
+---
+
+## UI — SCANDINAVIAN DARK DESIGN
+
+> Full UI spec in `SPEC_FEAT_UI.md`. Summary of key decisions:
+
+- Cool dark palette. Blacks have a blue-gray tint.
+- One accent color: electric blue (`#4A9EFF`) everywhere. Orange (`#F97316`) is data-only (chart).
+- No shadows, no gradients. Flat surfaces separated by subtle borders.
+- System fonts only. No custom web fonts.
+- Top nav bar only. No bottom tab bar.
+- Nav: `BurpeeTrainer` (wordmark, links to `/`) · `Plans` · `Log` · `History` · `Goals`
+
+### Phase colors (session runner)
+```
+work:    #4A9EFF blue   (replaces green)
+warmup:  #F59E0B amber
+rest:    #6B8FA8 steel blue
+done:    #8B77DB soft purple
+```
 
 ---
 
@@ -594,8 +801,8 @@ lib/
     goals.ex               # Goals CRUD
     videos.ex              # WorkoutVideo CRUD
     levels.ex              # Pure: level derivation
-    plan_wizard.ex         # Pure: WizardInput -> WorkoutPlan
-    planner.ex             # Pure: plan -> timeline + summary
+    plan_wizard.ex         # Pure: PlanInput -> WorkoutPlan (solver)
+    planner.ex             # Pure: plan -> timeline + warmup_timeline + summary
     progression.ex         # Pure: goal + sessions -> recommendation
     style_recommender.ex   # Pure: context -> top 3 StyleSuggestion
     style_generator.ex     # Pure: archetype + recommendation -> WorkoutPlan
@@ -603,23 +810,27 @@ lib/
     controllers/
       video_controller.ex  # X-Accel-Redirect auth
     live/
-      session_live.ex
-      planner_live.ex      # wizard + full editor
-      history_live.ex
-      goals_live.ex
-      log_live.ex
-      video_index_live.ex  # /videos — grid of video cards
-      video_player_live.ex # /videos/:id — player + post-video log form
+      overview_live.ex     # / — weekly streak, calendar, quick actions
+      session_live.ex      # /session/:plan_id
+      plans_live/
+        index.ex           # /plans — list
+        edit.ex            # /plans/new and /plans/:id/edit — three-layer editor
+      history_live.ex      # /history
+      goals_live.ex        # /goals
+      log_live.ex          # /log
     components/
 priv/
   repo/migrations/
 assets/
   js/
     hooks/
-      burpee_hook.js
-      chart_hook.js
+      session_hook.js      # client-driven session runtime (clock, state machine, beeps)
+      chart_hook.js        # Chart.js integration for history page
       video_hook.js        # fires video_ended event to LiveView on video completion
 ```
+
+> `burpee_hook.js` is renamed to `session_hook.js`. The hook is registered as `SessionHook`.
+> There is no longer a separate `BurpeeHook`.
 
 ---
 

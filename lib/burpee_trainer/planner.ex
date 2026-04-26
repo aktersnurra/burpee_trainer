@@ -6,14 +6,12 @@ defmodule BurpeeTrainer.Planner do
   No Ecto, no side effects. All inputs are plain structs, all outputs
   are plain data — fully unit-testable.
 
-  Inter-block rest note: blocks are connected via the trailing
-  `end_of_set_rest` of the final set in the preceding block. There is
-  no separate inter-block rest field — this is by design.
+  Inter-block rest: blocks are connected via the `end_of_set_rest` of the
+  final set of the preceding block. There is no separate inter-block rest
+  field — this is by design.
 
-  Shave-off note: when `shave_off_sec`/`shave_off_block_count` are set,
-  each repetition of blocks 1..N has `shave_off_sec` subtracted from
-  its last set's `end_of_set_rest`. The accumulated saved seconds are
-  emitted as a single `:shave_rest` event between block N and N+1.
+  Warmup is decoupled from plans. Call `warmup_timeline/1` separately and
+  prepend to the main timeline if the user opts in.
   """
 
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
@@ -23,32 +21,70 @@ defmodule BurpeeTrainer.Planner do
     A single timed event in a workout timeline.
 
     `type` is one of `:warmup_burpee`, `:warmup_rest`, `:work_burpee`,
-    `:work_rest`, `:shave_rest`. `burpee_count` is `nil` for rest events.
+    `:work_rest`, `:rest_block`. `burpee_count` is `nil` for rest events.
     """
 
     @enforce_keys [:type, :duration_sec, :label]
-    defstruct [:type, :duration_sec, :burpee_count, :label]
+    defstruct [:type, :duration_sec, :burpee_count, :sec_per_burpee, :label]
 
     @type kind ::
             :warmup_burpee
             | :warmup_rest
             | :work_burpee
             | :work_rest
-            | :shave_rest
+            | :rest_block
 
     @type t :: %__MODULE__{
             type: kind,
             duration_sec: float,
             burpee_count: integer | nil,
+            sec_per_burpee: float | nil,
             label: String.t()
           }
   end
 
   @doc """
-  Produces the full ordered event timeline for a plan.
+  Produces the full ordered event timeline for a plan (main work only,
+  no warmup). Call `warmup_timeline/1` and prepend if the user opts in.
   """
   @spec to_timeline(WorkoutPlan.t()) :: [Event.t()]
-  def to_timeline(%WorkoutPlan{} = plan), do: build_timeline(plan)
+  def to_timeline(%WorkoutPlan{} = plan), do: build_timeline_main(plan)
+
+  @doc """
+  Generates a two-round warmup timeline for a plan. The warmup rep count
+  is the smaller of: the first set's burpee_count, and reps achievable in
+  one minute at the plan's pace. Hardcoded rests: 120s between rounds,
+  180s before main workout.
+
+  Returns `[]` if no blocks/sets exist or if pace is 0.
+  """
+  @spec warmup_timeline(WorkoutPlan.t()) :: [Event.t()]
+  def warmup_timeline(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) and blocks != [] do
+    first_block = blocks |> sort_by_position() |> List.first()
+    first_set = first_block && first_block.sets |> sort_by_position() |> List.first()
+
+    if is_nil(first_set) or first_set.sec_per_burpee <= 0 do
+      []
+    else
+      sec_per_burpee = plan.sec_per_burpee || first_set.sec_per_burpee
+      warmup_reps = min(first_set.burpee_count, trunc(60.0 / sec_per_burpee))
+
+      if warmup_reps <= 0 do
+        []
+      else
+        dur = warmup_reps * sec_per_burpee
+
+        [
+          %Event{type: :warmup_burpee, duration_sec: dur, burpee_count: warmup_reps, sec_per_burpee: sec_per_burpee, label: "Warmup Round 1"},
+          %Event{type: :warmup_rest, duration_sec: 120.0, burpee_count: nil, sec_per_burpee: nil, label: "Warmup Rest"},
+          %Event{type: :warmup_burpee, duration_sec: dur, burpee_count: warmup_reps, sec_per_burpee: sec_per_burpee, label: "Warmup Round 2"},
+          %Event{type: :warmup_rest, duration_sec: 180.0, burpee_count: nil, sec_per_burpee: nil, label: "Warmup Rest"}
+        ]
+      end
+    end
+  end
+
+  def warmup_timeline(_), do: []
 
   @doc """
   Distribute rest time across adjustable sets so the plan's total
@@ -56,9 +92,6 @@ defmodule BurpeeTrainer.Planner do
 
   "Adjustable" = `end_of_set_rest` on any set EXCEPT the final set of
   the final block (that rest is enforced to 0 elsewhere).
-
-  Warmup rests and shave-off rest are left untouched — they have
-  distinct meaning.
 
   Distribution strategy:
   - If the sum of adjustable rests is currently > 0: scale
@@ -112,8 +145,6 @@ defmodule BurpeeTrainer.Planner do
     end
   end
 
-  # Adjustable sets are identified by {block.position, set.position}. All
-  # sets are adjustable EXCEPT the final set of the final block.
   defp fit_rest_adjustable_keys([]), do: MapSet.new()
 
   defp fit_rest_adjustable_keys(blocks) do
@@ -192,8 +223,8 @@ defmodule BurpeeTrainer.Planner do
   Shape:
 
       %{
-        burpee_count_total: integer,  # work burpees only, excludes warmup
-        duration_sec_total: float,    # entire timeline, includes warmup and shave
+        burpee_count_total: integer,
+        duration_sec_total: float,
         blocks: [%{
           position: integer,
           repeat_count: integer,
@@ -205,7 +236,7 @@ defmodule BurpeeTrainer.Planner do
   """
   @spec summary(WorkoutPlan.t()) :: map
   def summary(%WorkoutPlan{} = plan) do
-    timeline = build_timeline(plan)
+    timeline = build_timeline_main(plan)
 
     burpee_count_total =
       timeline
@@ -234,8 +265,6 @@ defmodule BurpeeTrainer.Planner do
     }
   end
 
-  # --- summary helpers ---
-
   defp summary_block(%Block{} = block) do
     sets = sort_by_position(block.sets)
     repeat_count = block.repeat_count
@@ -259,171 +288,51 @@ defmodule BurpeeTrainer.Planner do
     }
   end
 
-  # --- timeline construction ---
-
-  defp build_timeline(%WorkoutPlan{blocks: blocks}) when blocks in [nil, []], do: []
-
-  defp build_timeline(%WorkoutPlan{} = plan) do
-    build_timeline_warmup(plan) ++ build_timeline_main(plan)
-  end
-
-  defp build_timeline_warmup(%WorkoutPlan{warmup_enabled: enabled}) when enabled in [false, nil],
-    do: []
-
-  defp build_timeline_warmup(%WorkoutPlan{warmup_rounds: rounds, warmup_reps: reps})
-       when is_nil(rounds) or is_nil(reps) or rounds <= 0 or reps <= 0,
-       do: []
-
-  defp build_timeline_warmup(%WorkoutPlan{} = plan) do
-    sec_per_rep = build_timeline_warmup_pace(plan)
-    rounds = plan.warmup_rounds
-    reps = plan.warmup_reps
-
-    Enum.flat_map(1..rounds, fn round ->
-      build_timeline_warmup_round(plan, round, rounds, reps, sec_per_rep)
-    end)
-  end
-
-  defp build_timeline_warmup_round(plan, round, total_rounds, reps, sec_per_rep) do
-    burpee_event = %Event{
-      type: :warmup_burpee,
-      duration_sec: reps * sec_per_rep,
-      burpee_count: reps,
-      label: "Warmup Round #{round}"
-    }
-
-    rest_duration =
-      if round < total_rounds do
-        plan.rest_sec_warmup_between || 0
-      else
-        plan.rest_sec_warmup_before_main || 0
-      end
-
-    if rest_duration > 0 do
-      [
-        burpee_event,
-        %Event{
-          type: :warmup_rest,
-          duration_sec: rest_duration * 1.0,
-          burpee_count: nil,
-          label: "Warmup Rest"
-        }
-      ]
-    else
-      [burpee_event]
-    end
-  end
-
-  defp build_timeline_warmup_pace(%WorkoutPlan{blocks: blocks}) do
-    first_block = blocks |> sort_by_position() |> List.first()
-    first_set = first_block.sets |> sort_by_position() |> List.first()
-    first_set.sec_per_rep
-  end
+  defp build_timeline_main(%WorkoutPlan{blocks: blocks}) when blocks in [nil, []], do: []
 
   defp build_timeline_main(%WorkoutPlan{} = plan) do
-    blocks = sort_by_position(plan.blocks)
-    shave_sec = shave_sec_effective(plan)
-    shave_n = plan.shave_off_block_count || 0
-
-    blocks
-    |> Enum.with_index(1)
-    |> Enum.flat_map(fn {block, index} ->
-      shave = if index <= shave_n, do: shave_sec, else: 0
-      build_timeline_block(block, shave) ++ build_timeline_shave_rest(plan, blocks, index)
-    end)
+    plan.blocks
+    |> sort_by_position()
+    |> Enum.flat_map(&build_timeline_block/1)
   end
 
-  defp shave_sec_effective(%WorkoutPlan{shave_off_sec: sec, shave_off_block_count: n})
-       when is_integer(sec) and sec > 0 and is_integer(n) and n > 0,
-       do: sec
-
-  defp shave_sec_effective(_), do: 0
-
-  defp build_timeline_block(%Block{repeat_count: repeat_count}, _shave) when repeat_count <= 0,
+  defp build_timeline_block(%Block{repeat_count: repeat_count}) when repeat_count <= 0,
     do: []
 
-  defp build_timeline_block(%Block{} = block, shave_sec) do
+  defp build_timeline_block(%Block{} = block) do
     sets = sort_by_position(block.sets)
     last_set_index = length(sets)
 
     for round <- 1..block.repeat_count,
         {set, set_index} <- Enum.with_index(sets, 1),
-        event <- build_timeline_block_set(block, round, set, set_index, last_set_index, shave_sec) do
+        event <- build_timeline_set(block, round, set, set_index, last_set_index) do
       event
     end
   end
 
-  defp build_timeline_block_set(
-         %Block{} = block,
-         round,
-         %Set{} = set,
-         set_index,
-         last_set_index,
-         shave_sec
-       ) do
+  defp build_timeline_set(%Block{} = block, round, %Set{} = set, set_index, last_set_index) do
     work_event = %Event{
       type: :work_burpee,
       duration_sec: set.burpee_count * set.sec_per_rep,
       burpee_count: set.burpee_count,
-      label: build_timeline_block_set_label(block, round, set_index)
+      sec_per_burpee: set.sec_per_rep,
+      label: build_set_label(block, round, set_index)
     }
 
-    rest_sec =
-      if set_index == last_set_index,
-        do: max(set.end_of_set_rest - shave_sec, 0),
-        else: set.end_of_set_rest
+    rest_sec = set.end_of_set_rest
 
-    if rest_sec > 0 do
+    if rest_sec > 0 and set_index <= last_set_index do
       [
         work_event,
-        %Event{
-          type: :work_rest,
-          duration_sec: rest_sec * 1.0,
-          burpee_count: nil,
-          label: "Rest"
-        }
+        %Event{type: :work_rest, duration_sec: rest_sec * 1.0, burpee_count: nil, sec_per_burpee: nil, label: "Rest"}
       ]
     else
       [work_event]
     end
   end
 
-  defp build_timeline_block_set_label(%Block{position: block_pos}, _round, _set_index) do
+  defp build_set_label(%Block{position: block_pos}, _round, _set_index) do
     "Block #{block_pos}"
-  end
-
-  defp build_timeline_shave_rest(%WorkoutPlan{shave_off_sec: shave_sec}, _blocks, _index)
-       when is_nil(shave_sec) or shave_sec <= 0,
-       do: []
-
-  defp build_timeline_shave_rest(%WorkoutPlan{shave_off_block_count: shave_n}, _blocks, _index)
-       when is_nil(shave_n) or shave_n <= 0,
-       do: []
-
-  defp build_timeline_shave_rest(%WorkoutPlan{shave_off_block_count: shave_n}, _blocks, index)
-       when index != shave_n,
-       do: []
-
-  defp build_timeline_shave_rest(%WorkoutPlan{} = plan, blocks, _index) do
-    total_repetitions =
-      blocks
-      |> Enum.take(plan.shave_off_block_count)
-      |> Enum.reduce(0, fn block, acc -> acc + block.repeat_count end)
-
-    duration = plan.shave_off_sec * total_repetitions
-
-    if duration > 0 do
-      [
-        %Event{
-          type: :shave_rest,
-          duration_sec: duration * 1.0,
-          burpee_count: nil,
-          label: "Shave-off Rest"
-        }
-      ]
-    else
-      []
-    end
   end
 
   defp sort_by_position(nil), do: []

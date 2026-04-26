@@ -1,343 +1,396 @@
 defmodule BurpeeTrainer.PlanWizard do
   @moduledoc """
-  Pure functional plan generator. Converts a `WizardInput` into a
-  fully-structured `%WorkoutPlan{}` ready for editor review (unsaved).
+  Solver that converts a `%PlanInput{}` into a `%WorkoutPlan{}`.
 
-  No Ecto, no side effects. All inputs are plain data, all outputs are
-  plain structs.
+  No Ecto, no side effects.
 
-  Two pacing styles:
-    `:even`     — equal sets, uniform cadence (all rest absorbed into
-                  sec_per_rep); repeat_count optimisation when sets divide
-                  cleanly.
-    `:unbroken` — large sets with micro-rests between them and a longer
-                  rest every `sets_per_group` sets.
+  Pacing styles:
+    :even     — uniform cadence throughout. sec_per_rep = target_duration / total_reps.
+                Rest is absorbed into the inter-rep gap; end_of_set_rest is always 0.
+                With additional rests: cadence is uniformly shaved by
+                total_rest_sec / total_reps so the total time is unchanged.
+                Each rest is injected at the nearest rep boundary (within 30s).
 
-  `extra_rest` inserts a longer pause at the workout boundary closest to
-  `at_sec` seconds in. The planner shaves the cadence (even) or reduces
-  end-of-set rests (unbroken) to keep the total within `duration_sec_total`.
-  Returns `{:error, reasons}` if the shave would breach the floor
-  (cadence can never go below `sec_per_burpee`).
+    :unbroken — user-specified reps_per_set. Reps within a set are done
+                continuously at sec_per_burpee (no inter-rep gap). Remaining
+                time is distributed as end_of_set_rest between sets.
+                Additional rests are injected at the nearest set boundary
+                (within 30s).
+
+  Physical pace floors (graduation landmark, max reps in 20 min):
+    six_count:  sec_per_burpee >= 3.70s
+    navy_seal:  sec_per_burpee >= 8.00s
   """
 
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
 
-  defmodule WizardInput do
+  defmodule PlanInput do
     @moduledoc false
     @enforce_keys [
-      :duration_sec_total,
+      :name,
       :burpee_type,
-      :burpee_count_total,
+      :target_duration_min,
+      :burpee_count_target,
       :sec_per_burpee,
       :pacing_style
     ]
     defstruct [
-      :duration_sec_total,
+      :name,
       :burpee_type,
-      :burpee_count_total,
+      :target_duration_min,
+      :burpee_count_target,
       :sec_per_burpee,
       :pacing_style,
-      # %{at_sec: integer, rest_sec: integer} | nil
-      extra_rest: nil
+      # :unbroken only — reps per set before resting; nil = use type default
+      reps_per_set: nil,
+      additional_rests: []
     ]
   end
 
+  @sec_per_burpee_floor %{
+    six_count: Float.ceil(1200 / 325, 2),
+    navy_seal: 1200 / 150
+  }
+
+  @default_reps_per_set %{six_count: 10, navy_seal: 5}
+
   @doc """
-  Generate a `%WorkoutPlan{}` from a `%WizardInput{}`.
-  Returns `{:ok, plan}` or `{:error, [reason_string]}`.
+  Validate pace against the physical floor for the given burpee type.
+  Returns `:ok` or `{:error, :pace_too_fast, floor_value}`.
   """
-  @spec generate(WizardInput.t()) ::
-          {:ok, WorkoutPlan.t()} | {:error, [String.t()]}
-  def generate(%WizardInput{} = input) do
-    case validate(input) do
-      :ok -> build_plan(input)
-      {:error, _} = err -> err
+  @spec validate_pace(atom, float) :: :ok | {:error, :pace_too_fast, float}
+  def validate_pace(burpee_type, sec_per_burpee) do
+    case Map.get(@sec_per_burpee_floor, burpee_type) do
+      nil -> :ok
+      floor when sec_per_burpee >= floor -> :ok
+      floor -> {:error, :pace_too_fast, floor}
     end
   end
 
-  @doc """
-  Validate a `%WizardInput{}`.
-  Returns `:ok` or `{:error, [reason_string]}`.
-  """
-  @spec validate(WizardInput.t()) :: :ok | {:error, [String.t()]}
-  def validate(%WizardInput{} = input) do
-    errors =
-      []
-      |> validate_wizard_positive(:burpee_count_total, input.burpee_count_total)
-      |> validate_wizard_positive(:duration_sec_total, input.duration_sec_total)
-      |> validate_wizard_positive(:sec_per_burpee, input.sec_per_burpee)
-      |> validate_wizard_work_fits(input)
+  @doc "Default reps-per-set for a given burpee type (:six_count or :navy_seal)."
+  def default_reps_per_set(burpee_type), do: Map.get(@default_reps_per_set, burpee_type, 10)
 
-    if errors == [], do: :ok, else: {:error, Enum.reverse(errors)}
+  @doc """
+  Generate a `%WorkoutPlan{}` from a `%PlanInput{}`.
+  Returns `{:ok, plan}` or `{:error, [reason_string]}`.
+  """
+  @spec generate(PlanInput.t()) :: {:ok, WorkoutPlan.t()} | {:error, [String.t()]}
+  def generate(%PlanInput{} = input) do
+    with :ok <- check_pace(input) do
+      case input.pacing_style do
+        :even -> build_even(input)
+        :unbroken -> build_unbroken(input)
+      end
+    end
   end
 
   # ---------------------------------------------------------------------------
   # Private
   # ---------------------------------------------------------------------------
 
-  defp validate_wizard_positive(errors, _field, v) when is_number(v) and v > 0, do: errors
+  defp check_pace(%{burpee_type: t, sec_per_burpee: s}) do
+    case validate_pace(t, s) do
+      :ok ->
+        :ok
 
-  defp validate_wizard_positive(errors, field, _v),
-    do: ["#{field} must be positive" | errors]
-
-  defp validate_wizard_work_fits(errors, %{
-         burpee_count_total: n,
-         sec_per_burpee: s,
-         duration_sec_total: d
-       })
-       when is_number(n) and is_number(s) and is_number(d) do
-    work = n * s
-
-    if work > d,
-      do: ["work time (#{round(work)}s) exceeds total duration (#{d}s)" | errors],
-      else: errors
-  end
-
-  defp validate_wizard_work_fits(errors, _input), do: errors
-
-  defp build_plan(input) do
-    with {:ok, blocks} <- build_plan_blocks(input) do
-      {:ok,
-       %WorkoutPlan{
-         name: build_plan_name(input),
-         burpee_type: input.burpee_type,
-         warmup_enabled: false,
-         rest_sec_warmup_between: 120,
-         rest_sec_warmup_before_main: 180,
-         blocks: blocks
-       }}
+      {:error, :pace_too_fast, floor} ->
+        {:error,
+         [
+           "pace #{:erlang.float_to_binary(s * 1.0, decimals: 2)}s/rep is below the " <>
+             "minimum #{:erlang.float_to_binary(floor * 1.0, decimals: 2)}s/rep for #{t} " <>
+             "(graduation pace floor)"
+         ]}
     end
   end
 
-  defp build_plan_blocks(%{pacing_style: :even} = input), do: build_plan_even(input)
-  defp build_plan_blocks(%{pacing_style: :unbroken} = input), do: build_plan_unbroken(input)
-
   # ---------------------------------------------------------------------------
-  # Even pacing
+  # Even pacing — uniform inter-rep cadence, no end-of-set rest
   # ---------------------------------------------------------------------------
 
-  # Rest is absorbed entirely into sec_per_rep (cadence = duration / count).
-  # When extra_rest is set, the planner shaves the cadence to make room.
-  # Error if the shave would push cadence below sec_per_burpee.
-  defp build_plan_even(input) do
-    target_set_size = if input.burpee_type == :six_count, do: 10, else: 5
-    set_count = max(1, round(input.burpee_count_total / target_set_size))
-    base_reps = div(input.burpee_count_total, set_count)
-    extras = rem(input.burpee_count_total, set_count)
-    base_cadence = input.duration_sec_total / input.burpee_count_total
+  defp build_even(input) do
+    target_sec = input.target_duration_min * 60
+    base_cadence = target_sec / input.burpee_count_target
 
-    with {:ok, after_block, extra_rest_total} <-
-           build_plan_even_resolve_extra(input.extra_rest, set_count, extras, base_cadence, base_reps) do
-      sec_per_rep = (input.duration_sec_total - extra_rest_total) / input.burpee_count_total
-
-      if sec_per_rep < input.sec_per_burpee do
-        max_shave = round((base_cadence - input.sec_per_burpee) * input.burpee_count_total)
-
+    cond do
+      base_cadence < input.sec_per_burpee ->
+        work = round(input.burpee_count_target * input.sec_per_burpee)
         {:error,
          [
-           "extra rest (#{extra_rest_total}s) exceeds available shave — " <>
-             "floor is #{input.sec_per_burpee}s/rep, max shave is #{max_shave}s"
+           "work time (#{work}s) exceeds target duration (#{target_sec}s) — " <>
+             "reduce reps or increase target duration"
          ]}
-      else
-        blocks =
-          if extras == 0 do
-            [
-              %Block{
-                position: 1,
-                repeat_count: set_count,
-                sets: [build_plan_set(1, base_reps, input.sec_per_burpee, sec_per_rep, 0)]
-              }
-            ]
-          else
-            sets =
-              for i <- 0..(set_count - 1) do
-                reps = if i < extras, do: base_reps + 1, else: base_reps
-                build_plan_set(i + 1, reps, input.sec_per_burpee, sec_per_rep, 0)
-              end
 
-            [%Block{position: 1, repeat_count: 1, sets: sets}]
-          end
+      input.additional_rests == [] ->
+        set = %Set{
+          position: 1,
+          burpee_count: input.burpee_count_target,
+          sec_per_rep: base_cadence,
+          sec_per_burpee: input.sec_per_burpee,
+          end_of_set_rest: 0
+        }
 
-        {:ok, split_blocks(blocks, after_block, input.extra_rest)}
+        {:ok, wrap_plan(input, :even, [%Block{position: 1, repeat_count: 1, sets: [set]}])}
+
+      true ->
+        build_even_with_rests(input, base_cadence)
+    end
+  end
+
+  # Even + additional rests: shave the cadence uniformly by total_rest/total_reps,
+  # then inject rests at rep boundaries closest to each target_min.
+  defp build_even_with_rests(input, base_cadence) do
+    total_rest_sec = Enum.sum(for r <- input.additional_rests, do: r.rest_sec)
+    shaved_cadence = base_cadence - total_rest_sec / input.burpee_count_target
+
+    if shaved_cadence < input.sec_per_burpee do
+      max_rest = Float.round((base_cadence - input.sec_per_burpee) * input.burpee_count_target, 1)
+
+      {:error,
+       [
+         "total additional rest (#{total_rest_sec}s) requires cadence below " <>
+           "#{:erlang.float_to_binary(input.sec_per_burpee * 1.0, decimals: 2)}s/rep floor — " <>
+           "max #{max_rest}s additional rest for this pace and rep count"
+       ]}
+    else
+      sorted_rests = Enum.sort_by(input.additional_rests, & &1.target_min)
+
+      case find_even_splits(sorted_rests, shaved_cadence, input.burpee_count_target) do
+        {:ok, split_points} ->
+          blocks = build_even_segments(input.burpee_count_target, input.sec_per_burpee, shaved_cadence, split_points)
+          {:ok, wrap_plan(input, :even, blocks)}
+
+        {:error, _} = err ->
+          err
       end
     end
   end
 
-  # Derives the split point (after_block) from at_sec and the total extra
-  # rest cost so the cadence can be adjusted before blocks are built.
-  defp build_plan_even_resolve_extra(nil, _set_count, _extras, _cadence, _base_reps) do
-    {:ok, nil, 0}
-  end
+  # Find absolute rep-index split points for each rest, checking 30s tolerance.
+  defp find_even_splits(sorted_rests, cadence, total_reps) do
+    result =
+      Enum.reduce_while(sorted_rests, {[], 0}, fn %{rest_sec: rest_sec, target_min: target_min}, {acc, prev_split} ->
+        target_sec = target_min * 60.0
+        ideal = round(target_sec / cadence)
+        # Must split at a new position after the previous one, leaving at least 1 rep for the last segment
+        split_at = ideal |> max(prev_split + 1) |> min(total_reps - 1)
+        actual_time = split_at * cadence
 
-  defp build_plan_even_resolve_extra(
-         %{at_sec: at_sec, rest_sec: rest_sec},
-         set_count,
-         0,
-         base_cadence,
-         base_reps
-       ) do
-    # Repeating block: each repeat takes base_reps * base_cadence seconds.
-    time_per_repeat = base_reps * base_cadence
-    after_block = max(1, min(round(at_sec / time_per_repeat), set_count - 1))
-    {:ok, after_block, after_block * rest_sec}
-  end
-
-  defp build_plan_even_resolve_extra(
-         %{at_sec: at_sec, rest_sec: rest_sec},
-         set_count,
-         extras,
-         base_cadence,
-         base_reps
-       ) do
-    # Multi-set block: find the set boundary closest to at_sec.
-    cumulative = build_plan_even_cumulative_times(extras, base_reps, set_count, base_cadence)
-    after_block = build_plan_even_nearest_boundary(cumulative, at_sec, set_count)
-    # Fires exactly once (repeat_count = 1 for this branch).
-    {:ok, after_block, rest_sec}
-  end
-
-  defp build_plan_even_cumulative_times(extras, base_reps, set_count, base_cadence) do
-    {times, _} =
-      Enum.map_reduce(0..(set_count - 2), 0.0, fn i, acc ->
-        reps = if i < extras, do: base_reps + 1, else: base_reps
-        t = acc + reps * base_cadence
-        {t, t}
+        if abs(actual_time - target_sec) <= 30 do
+          {:cont, {[{split_at, rest_sec} | acc], split_at}}
+        else
+          nearest_min = Float.round(actual_time / 60, 1)
+          diff = round(abs(actual_time - target_sec))
+          {:halt, {:error, ["cannot place rest at min #{target_min} — nearest rep boundary is at " <>
+                            "min #{nearest_min} (#{diff}s away, max 30s). Adjust your rep count or pace."]}}
+        end
       end)
 
-    times
-  end
-
-  defp build_plan_even_nearest_boundary([], _at_sec, _set_count), do: 1
-
-  defp build_plan_even_nearest_boundary(cumulative, at_sec, set_count) do
-    {_t, idx} =
-      cumulative
-      |> Enum.with_index()
-      |> Enum.min_by(fn {t, _} -> abs(t - at_sec) end)
-
-    max(1, min(idx + 1, set_count - 1))
-  end
-
-  # ---------------------------------------------------------------------------
-  # Unbroken pacing
-  # ---------------------------------------------------------------------------
-
-  # Large sets with micro-rests between them and longer rests at group
-  # boundaries. When extra_rest is set, the available group-boundary rest
-  # is reduced (effective_duration = duration - rest_sec). Error if this
-  # drives the boundary rests below the micro-rest floor.
-  defp build_plan_unbroken(input) do
-    {min_size, max_size} = if input.burpee_type == :six_count, do: {8, 15}, else: {3, 5}
-    target_size = div(min_size + max_size, 2)
-    micro_rest_sec = 4
-    sets_per_group = 3
-
-    set_count = max(1, round(input.burpee_count_total / target_size))
-    group_count = max(1, ceil(set_count / sets_per_group))
-    work_sec = input.burpee_count_total * input.sec_per_burpee
-    intra_rest_total = micro_rest_sec * max(0, set_count - group_count)
-
-    extra_sec = if input.extra_rest, do: input.extra_rest.rest_sec, else: 0
-    effective_duration = input.duration_sec_total - extra_sec
-    min_rest_needed = intra_rest_total + group_count * micro_rest_sec
-
-    if effective_duration - work_sec < min_rest_needed do
-      max_shave = round(input.duration_sec_total - work_sec - min_rest_needed)
-
-      {:error,
-       [
-         "extra rest (#{extra_sec}s) exceeds available rest budget — " <>
-           "max shave is #{max(0, max_shave)}s"
-       ]}
-    else
-      remaining_rest = max(0.0, effective_duration - work_sec - intra_rest_total)
-      longer_rest = max(micro_rest_sec, round(remaining_rest / group_count))
-
-      base_reps = div(input.burpee_count_total, set_count)
-      extras = rem(input.burpee_count_total, set_count)
-
-      sets =
-        for i <- 0..(set_count - 1) do
-          reps = if i < extras, do: base_reps + 1, else: base_reps
-          is_group_boundary = rem(i + 1, sets_per_group) == 0 or i == set_count - 1
-          rest = if is_group_boundary, do: longer_rest, else: micro_rest_sec
-          build_plan_set(i + 1, reps, input.sec_per_burpee, input.sec_per_burpee, rest)
-        end
-
-      blocks = [%Block{position: 1, repeat_count: 1, sets: sets}]
-      {:ok, split_blocks(blocks, build_plan_unbroken_split_at(sets, input.extra_rest), input.extra_rest)}
+    case result do
+      {:error, _} = err -> err
+      {splits, _} -> {:ok, Enum.reverse(splits)}
     end
   end
 
-  # Find the set boundary (1-indexed) closest to at_sec.
-  defp build_plan_unbroken_split_at(_sets, nil), do: nil
+  # Build one block per segment. All blocks use the same shaved cadence.
+  defp build_even_segments(total_reps, sec_per_burpee, cadence, split_points) do
+    # split_points: [{abs_split_rep, rest_sec}, ...] — absolute rep index after which to rest
+    # append a sentinel for the final segment (no trailing rest)
+    all_splits = split_points ++ [{total_reps, 0}]
 
-  defp build_plan_unbroken_split_at(sets, %{at_sec: at_sec}) do
+    {blocks, _, _} =
+      Enum.reduce(all_splits, {[], 0, 1}, fn {split_at, rest_sec}, {blocks, prev, pos} ->
+        reps = split_at - prev
+
+        set = %Set{
+          position: 1,
+          burpee_count: reps,
+          sec_per_rep: cadence,
+          sec_per_burpee: sec_per_burpee,
+          end_of_set_rest: rest_sec
+        }
+
+        block = %Block{position: pos, repeat_count: 1, sets: [set]}
+        {[block | blocks], split_at, pos + 1}
+      end)
+
+    Enum.reverse(blocks)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Unbroken pacing — user-specified reps per set, rest fills remaining time
+  # ---------------------------------------------------------------------------
+
+  defp build_unbroken(input) do
+    reps_per_set = input.reps_per_set || default_reps_per_set(input.burpee_type)
+
+    if not is_integer(reps_per_set) or reps_per_set <= 0 do
+      {:error, ["reps per set must be a positive integer"]}
+    else
+      actual_set_size = min(reps_per_set, input.burpee_count_target)
+      build_unbroken_sets(input, actual_set_size)
+    end
+  end
+
+  defp build_unbroken_sets(input, set_size) do
+    target_sec = input.target_duration_min * 60
+    total_work = input.burpee_count_target * input.sec_per_burpee
+    total_add_rest = Enum.sum(for r <- input.additional_rests, do: r.rest_sec)
+    total_between_rest = target_sec - total_work - total_add_rest
+
+    cond do
+      total_work > target_sec ->
+        {:error,
+         [
+           "work time (#{round(total_work)}s) exceeds target duration (#{target_sec}s) — " <>
+             "reduce reps or increase target duration"
+         ]}
+
+      total_between_rest < 0 ->
+        {:error,
+         [
+           "work (#{round(total_work)}s) + additional rests (#{round(total_add_rest)}s) " <>
+             "exceeds target duration (#{target_sec}s)"
+         ]}
+
+      true ->
+        full_sets = div(input.burpee_count_target, set_size)
+        remainder = rem(input.burpee_count_target, set_size)
+        set_count = if remainder > 0, do: full_sets + 1, else: full_sets
+        rest_per_gap = if set_count > 1, do: total_between_rest / (set_count - 1), else: 0.0
+
+        sets =
+          for i <- 0..(set_count - 1) do
+            is_last = i == set_count - 1
+            reps = if is_last and remainder > 0, do: remainder, else: set_size
+
+            %Set{
+              position: i + 1,
+              burpee_count: reps,
+              sec_per_rep: input.sec_per_burpee,
+              sec_per_burpee: input.sec_per_burpee,
+              end_of_set_rest: if(is_last, do: 0, else: round(rest_per_gap))
+            }
+          end
+
+        inject_unbroken_rests(sets, input.additional_rests, input)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Rest injection for unbroken (set boundaries)
+  # ---------------------------------------------------------------------------
+
+  defp inject_unbroken_rests(sets, [], input) do
+    {:ok, wrap_plan(input, :unbroken, [%Block{position: 1, repeat_count: 1, sets: sets}])}
+  end
+
+  defp inject_unbroken_rests(sets, additional_rests, input) do
     set_count = length(sets)
 
     if set_count <= 1 do
-      nil
+      [%{target_min: t} | _] = additional_rests
+      {:error, ["cannot place rest at min #{t} — only one set generated, adjust reps per set"]}
     else
-      cumulative =
-        sets
-        |> Enum.scan(0.0, fn s, acc -> acc + s.burpee_count * s.sec_per_rep + s.end_of_set_rest end)
-        |> Enum.drop(-1)
+      boundaries = build_set_boundaries(sets)
 
-      {_t, idx} =
-        cumulative
-        |> Enum.with_index()
-        |> Enum.min_by(fn {t, _} -> abs(t - at_sec) end)
+      case find_all_boundary_injections(boundaries, additional_rests) do
+        {:ok, injections} ->
+          new_sets = apply_injections(sets, injections)
+          {:ok, wrap_plan(input, :unbroken, [%Block{position: 1, repeat_count: 1, sets: new_sets}])}
 
-      max(1, min(idx + 1, set_count - 1))
+        {:error, _} = err ->
+          err
+      end
     end
   end
 
+  defp build_set_boundaries(sets) do
+    {times, _} =
+      Enum.map_reduce(sets, 0.0, fn set, acc ->
+        t = acc + set.burpee_count * set.sec_per_rep + set.end_of_set_rest
+        {t, t}
+      end)
+
+    Enum.take(times, length(sets) - 1)
+  end
+
+  defp find_all_boundary_injections(boundaries, additional_rests) do
+    Enum.reduce_while(additional_rests, {:ok, []}, fn
+      %{rest_sec: rest_sec, target_min: target_min}, {:ok, acc} ->
+        target_sec = target_min * 60.0
+
+        case find_nearest_boundary(boundaries, target_sec, target_min) do
+          {:ok, idx} -> {:cont, {:ok, [{idx, rest_sec} | acc]}}
+          {:error, _} = err -> {:halt, err}
+        end
+    end)
+  end
+
+  defp find_nearest_boundary([], _target_sec, target_min) do
+    {:error, ["no boundaries available for rest at min #{target_min}"]}
+  end
+
+  defp find_nearest_boundary(boundaries, target_sec, target_min) do
+    {nearest_time, nearest_idx} =
+      boundaries
+      |> Enum.with_index()
+      |> Enum.min_by(fn {t, _} -> abs(t - target_sec) end)
+
+    if abs(nearest_time - target_sec) <= 30 do
+      {:ok, nearest_idx}
+    else
+      nearest_min = Float.round(nearest_time / 60, 1)
+      diff = round(abs(nearest_time - target_sec))
+
+      {:error,
+       [
+         "cannot place rest at min #{target_min} — nearest set boundary is at " <>
+           "min #{nearest_min} (#{diff}s away, max 30s). Adjust your reps per set."
+       ]}
+    end
+  end
+
+  defp apply_injections(sets, injections) do
+    injection_map =
+      Enum.reduce(injections, %{}, fn {idx, rest_sec}, acc ->
+        Map.update(acc, idx, rest_sec, &(&1 + rest_sec))
+      end)
+
+    sets
+    |> Enum.with_index()
+    |> Enum.map(fn {set, i} ->
+      case Map.fetch(injection_map, i) do
+        {:ok, extra} -> %{set | end_of_set_rest: set.end_of_set_rest + extra}
+        :error -> set
+      end
+    end)
+  end
+
   # ---------------------------------------------------------------------------
-  # Block splitting (shared)
+  # Shared helpers
   # ---------------------------------------------------------------------------
 
-  defp split_blocks(blocks, nil, _extra_rest), do: blocks
-  defp split_blocks(blocks, _after_block, nil), do: blocks
-
-  defp split_blocks([block | rest_blocks], after_block, %{rest_sec: rest_sec})
-       when block.repeat_count > 1 do
-    n = max(1, min(after_block, block.repeat_count - 1))
-    block1 = %{block | position: 1, repeat_count: n, sets: boost_last_rest(block.sets, rest_sec)}
-    block2 = %{block | position: 2, repeat_count: block.repeat_count - n}
-    [block1, block2 | rest_blocks]
-  end
-
-  defp split_blocks([block | rest_blocks], after_block, %{rest_sec: rest_sec})
-       when block.repeat_count == 1 and length(block.sets) > 1 do
-    n = max(1, min(after_block, length(block.sets) - 1))
-    {sets1, sets2} = Enum.split(block.sets, n)
-    block1 = %{block | position: 1, sets: boost_last_rest(sets1, rest_sec)}
-
-    block2 = %{
-      block
-      | position: 2,
-        sets: Enum.with_index(sets2, 1) |> Enum.map(fn {s, i} -> %{s | position: i} end)
-    }
-
-    [block1, block2 | rest_blocks]
-  end
-
-  defp split_blocks(blocks, _after_block, _extra_rest), do: blocks
-
-  defp boost_last_rest(sets, rest_sec) do
-    List.update_at(sets, -1, fn s -> %{s | end_of_set_rest: s.end_of_set_rest + rest_sec} end)
-  end
-
-  defp build_plan_set(position, burpee_count, sec_per_burpee, sec_per_rep, end_of_set_rest) do
-    %Set{
-      position: position,
-      burpee_count: burpee_count,
-      sec_per_rep: sec_per_rep,
-      sec_per_burpee: sec_per_burpee,
-      end_of_set_rest: end_of_set_rest
+  defp wrap_plan(input, style, blocks) do
+    %WorkoutPlan{
+      name: input.name,
+      burpee_type: input.burpee_type,
+      target_duration_min: input.target_duration_min,
+      burpee_count_target: input.burpee_count_target,
+      sec_per_burpee: input.sec_per_burpee,
+      pacing_style: style,
+      additional_rests: encode_rests(input.additional_rests),
+      blocks: blocks
     }
   end
 
-  defp build_plan_name(%{pacing_style: :even}), do: "Even pacing plan"
-  defp build_plan_name(%{pacing_style: :unbroken}), do: "Unbroken sets plan"
+  defp encode_rests([]), do: "[]"
+
+  defp encode_rests(rests) do
+    items =
+      Enum.map(rests, fn %{rest_sec: r, target_min: t} ->
+        "{\"rest_sec\":#{r},\"target_min\":#{t}}"
+      end)
+
+    "[" <> Enum.join(items, ",") <> "]"
+  end
 end

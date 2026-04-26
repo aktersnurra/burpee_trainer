@@ -10,9 +10,9 @@ const ChartHook = {
 
   updated() {
     if (!this.chart) return
-    const data = this.readData()
-    this.chart.data = data
-    this.chart.update()
+    this.chart.data = this.readData()
+    this.chart.resize()
+    this.chart.update("none")
   },
 
   destroyed() {
@@ -35,13 +35,33 @@ const ChartHook = {
         responsive: true,
         maintainAspectRatio: false,
         parsing: {xAxisKey: "x", yAxisKey: "y"},
+        animation: false,
         scales: {
-          x: {type: "time", time: {unit: "day", tooltipFormat: "PP"}},
-          y: {beginAtZero: true, title: {display: true, text: "Burpees"}}
+          x: {
+            type: "time",
+            time: {unit: "day", tooltipFormat: "PP"},
+            grid: {color: "rgba(255,255,255,0.04)"},
+            ticks: {color: "#596170", font: {size: 11}}
+          },
+          y: {
+            beginAtZero: true,
+            grid: {color: "rgba(255,255,255,0.04)"},
+            ticks: {color: "#596170", font: {size: 11}}
+          }
         },
         plugins: {
-          legend: {position: "top"},
-          tooltip: {mode: "nearest", intersect: false}
+          legend: {display: false},
+          tooltip: {
+            mode: "nearest",
+            intersect: false,
+            backgroundColor: "#181C26",
+            borderColor: "#1E2535",
+            borderWidth: 1,
+            titleColor: "#E2E8F4",
+            bodyColor: "#9BA8BF",
+            padding: 10,
+            cornerRadius: 6
+          }
         }
       }
     })

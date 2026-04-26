@@ -11,110 +11,117 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  defp tick(view), do: send(view.pid, :tick) |> then(fn _ -> render(view) end)
-
-  # Click the "OK" mood button to start (mood = 0).
-  defp start(view), do: view |> element("button[phx-value-mood='0']") |> render_click()
-
-  test "idle state shows mood picker overlay and plan totals", %{conn: conn, user: user} do
+  test "idle state shows warmup prompt", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Grinder"})
     {:ok, _view, html} = live(conn, ~p"/session/#{plan.id}")
 
     assert html =~ "Grinder"
-    assert html =~ "How do you feel?"
-    assert html =~ "Tired"
-    assert html =~ "OK"
-    assert html =~ "Hyped"
-    assert html =~ "30"
+    assert html =~ "Do you want a warmup?"
+    assert html =~ "Yes"
+    assert html =~ "Skip"
   end
 
-  test "start enters preroll and pushes a countdown cue", %{conn: conn, user: user} do
+  test "mount pushes session_ready with serialized timeline", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    html = start(view)
+    assert_push_event(view, "session_ready", %{timeline: timeline})
+    assert is_list(timeline)
+    assert length(timeline) > 0
 
-    assert html =~ "Get ready"
-    assert html =~ "starts in"
-    assert_push_event(view, "burpee:lifecycle", %{event: "preroll_start"})
+    first = hd(timeline)
+    assert Map.has_key?(first, :type)
+    assert Map.has_key?(first, :duration_sec)
+    assert Map.has_key?(first, :burpee_count)
+    assert Map.has_key?(first, :sec_per_burpee)
+    assert Map.has_key?(first, :label)
   end
 
-  test "preroll ticks down and then transitions to running", %{conn: conn, user: user} do
+  test "warmup_requested returns warmup_ready event", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    start(view)
-    assert render(view) =~ "Get ready"
+    render_hook(view, "warmup_requested", %{})
 
-    _ = tick(view)
-    assert render(view) =~ "Get ready"
+    assert_push_event(view, "warmup_ready", %{warmup: warmup})
+    assert is_list(warmup)
+    assert length(warmup) > 0
+    types = Enum.map(warmup, & &1.type)
+    assert "warmup_burpee" in types
+    assert "warmup_rest" in types
+  end
 
-    # Drain the remaining 4 preroll ticks; the 5th tick transitions to running.
-    Enum.each(1..4, fn _ -> tick(view) end)
+  test "session_started transitions phase to running", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_started", %{"mood" => "0"})
 
     html = render(view)
-    assert html =~ "Work"
-    assert html =~ "reps left"
-    # First work event: 10 burpees, so the clock center shows "of 10".
-    assert html =~ "of 10"
-    assert_push_event(view, "burpee:lifecycle", %{event: "preroll_end"})
-    assert_push_event(view, "burpee:timeline", %{type: "work_burpee"})
+    refute html =~ "Do you want a warmup?"
+    refute html =~ "How do you feel?"
   end
 
-  test "pause halts the timer and audio", %{conn: conn, user: user} do
+  test "session_complete transitions to done and shows completion form", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    start(view)
-    # Advance past preroll
-    Enum.each(1..5, fn _ -> tick(view) end)
+    render_hook(view, "session_complete", %{
+      "main"   => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+    })
 
-    html = view |> element("button", "Pause") |> render_click()
-
-    assert html =~ "Resume"
-    assert_push_event(view, "burpee:audio_stop", %{})
-  end
-
-  test "finish_early shows completion form", %{conn: conn, user: user} do
-    plan = plan_fixture(user)
-    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    start(view)
-    Enum.each(1..5, fn _ -> tick(view) end)
-    html = view |> element("button", "Finish early") |> render_click()
-
+    html = render(view)
     assert html =~ "Session complete"
     assert has_element?(view, "form#session-completion-form")
   end
 
-  test "completion form shows mood buttons and tag toggles", %{conn: conn, user: user} do
+  test "session_complete pre-fills form with main counts only", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    start(view)
-    Enum.each(1..5, fn _ -> tick(view) end)
-    html = view |> element("button", "Finish early") |> render_click()
+    render_hook(view, "session_complete", %{
+      "main"   => %{"burpee_count_done" => 28, "duration_sec" => 95},
+      "warmup" => %{"burpee_count_done" => 5,  "duration_sec" => 60}
+    })
 
+    html = render(view)
+    # Completion form should show main counts, not warmup + main
+    assert html =~ "28"
+    assert html =~ "95"
+  end
+
+  test "completion form shows mood and tag options", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main"   => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+    })
+
+    html = render(view)
     assert html =~ "Mood"
     assert html =~ "Tags"
     assert html =~ "great energy"
   end
 
-  test "save_session creates a session and navigates to history", %{conn: conn, user: user} do
+  test "save_session creates session and navigates to history", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    start(view)
-    Enum.each(1..5, fn _ -> tick(view) end)
-    view |> element("button", "Finish early") |> render_click()
+    render_hook(view, "session_complete", %{
+      "main"   => %{"burpee_count_done" => 28, "duration_sec" => 95},
+      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+    })
 
     params = %{
-      "burpee_type" => "six_count",
+      "burpee_type"          => "six_count",
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
-      "burpee_count_actual" => "28",
-      "duration_sec_actual" => "95",
-      "note_post" => "brutal"
+      "burpee_count_actual"  => "28",
+      "duration_sec_actual"  => "95",
+      "note_post"            => "brutal"
     }
 
     {:error, {:live_redirect, %{to: "/history"}}} =
@@ -122,12 +129,74 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       |> form("#session-completion-form", workout_session: params)
       |> render_submit()
 
-    assert [session] = Workouts.list_sessions(user)
-    assert session.burpee_count_actual == 28
-    assert session.duration_sec_actual == 95
-    assert session.note_post == "brutal"
-    assert session.plan_id == plan.id
-    # mood was set to 0 by start helper (phx-value-mood="0")
-    assert session.mood == 0
+    sessions = Workouts.list_sessions(user)
+    main = Enum.find(sessions, fn s -> s.burpee_count_actual == 28 end)
+    assert main
+    assert main.duration_sec_actual == 95
+    assert main.note_post == "brutal"
+    assert main.plan_id == plan.id
+  end
+
+  test "save_session with warmup saves a separate warmup session", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main"   => %{"burpee_count_done" => 25, "duration_sec" => 80},
+      "warmup" => %{"burpee_count_done" => 5,  "duration_sec" => 60}
+    })
+
+    params = %{
+      "burpee_type"          => "six_count",
+      "burpee_count_planned" => "30",
+      "duration_sec_planned" => "90",
+      "burpee_count_actual"  => "25",
+      "duration_sec_actual"  => "80"
+    }
+
+    {:error, {:live_redirect, %{to: "/history"}}} =
+      view
+      |> form("#session-completion-form", workout_session: params)
+      |> render_submit()
+
+    sessions = Workouts.list_sessions(user)
+    assert length(sessions) == 2
+
+    warmup_session = Enum.find(sessions, fn s -> s.tags == "warmup" end)
+    assert warmup_session
+    assert warmup_session.burpee_count_actual == 5
+    assert warmup_session.plan_id == nil
+
+    main_session = Enum.find(sessions, fn s -> s.tags != "warmup" end)
+    assert main_session
+    assert main_session.burpee_count_actual == 25
+    assert main_session.plan_id == plan.id
+  end
+
+  test "save_session with no warmup saves only main session", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main"   => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0,  "duration_sec" => 0}
+    })
+
+    params = %{
+      "burpee_type"          => "six_count",
+      "burpee_count_planned" => "30",
+      "duration_sec_planned" => "90",
+      "burpee_count_actual"  => "30",
+      "duration_sec_actual"  => "90"
+    }
+
+    {:error, {:live_redirect, %{to: "/history"}}} =
+      view
+      |> form("#session-completion-form", workout_session: params)
+      |> render_submit()
+
+    sessions = Workouts.list_sessions(user)
+    assert length(sessions) == 1
+    refute hd(sessions).tags == "warmup"
   end
 end

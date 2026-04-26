@@ -51,50 +51,30 @@ defmodule BurpeeTrainerWeb.PlansLiveTest do
   end
 
   describe "/plans/new" do
-    test "mounts with a default block + sets and renders the summary sidebar", %{conn: conn} do
+    test "mounts with basics, blocks, and derived stats", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/plans/new")
 
       assert html =~ "New plan"
+      assert html =~ "Basics"
       assert html =~ "Block 1"
-      assert html =~ "Summary"
+      assert html =~ "Derived duration"
     end
 
-    test "validates name is required", %{conn: conn} do
-      {:ok, view, _} = live(conn, ~p"/plans/new")
-
-      html =
-        view
-        |> form("#plan-form", workout_plan: %{"name" => ""})
-        |> render_change()
-
-      assert html =~ "can&#39;t be blank" or html =~ "can't be blank"
-    end
-
-    test "saves a valid plan and navigates to edit", %{conn: conn, user: user} do
+    test "saves a valid plan via blocks form and navigates to edit", %{conn: conn, user: user} do
       {:ok, view, _} = live(conn, ~p"/plans/new")
 
       params = %{
-        "name" => "Built in test",
-        "burpee_type" => "six_count",
-        "warmup_enabled" => "false",
         "blocks" => %{
           "0" => %{
             "position" => "1",
-            "repeat_count" => "2",
+            "repeat_count" => "1",
             "sets" => %{
               "0" => %{
                 "position" => "1",
-                "burpee_count" => "5",
-                "sec_per_rep" => "6.0",
-                "sec_per_burpee" => "3.0",
-                "duration_min" => "1"
-              },
-              "1" => %{
-                "position" => "2",
-                "burpee_count" => "5",
-                "sec_per_rep" => "6.0",
-                "sec_per_burpee" => "3.0",
-                "duration_min" => "1"
+                "burpee_count" => "100",
+                "sec_per_rep" => "12.0",
+                "sec_per_burpee" => "5.0",
+                "end_of_set_rest" => "0"
               }
             }
           }
@@ -107,22 +87,24 @@ defmodule BurpeeTrainerWeb.PlansLiveTest do
              |> follow_redirect(conn)
 
       assert [plan] = Workouts.list_plans(user)
-      assert plan.name == "Built in test"
       assert plan.burpee_type == :six_count
     end
   end
 
   describe "/plans/:id/edit" do
-    test "edits an existing plan and updates persist", %{conn: conn, user: user} do
+    test "shows existing plan name and blocks", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Old name"})
-      {:ok, view, html} = live(conn, ~p"/plans/#{plan.id}/edit")
+      {:ok, _view, html} = live(conn, ~p"/plans/#{plan.id}/edit")
 
       assert html =~ "Old name"
+      assert html =~ "Block 1"
+    end
+
+    test "saving blocks form persists changes", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "Old name"})
+      {:ok, view, _html} = live(conn, ~p"/plans/#{plan.id}/edit")
 
       params = %{
-        "name" => "Renamed",
-        "burpee_type" => "six_count",
-        "warmup_enabled" => "false",
         "blocks" => %{
           "0" => %{
             "position" => "1",
@@ -132,8 +114,8 @@ defmodule BurpeeTrainerWeb.PlansLiveTest do
                 "position" => "1",
                 "burpee_count" => "7",
                 "sec_per_rep" => "6.0",
-                "sec_per_burpee" => "3.0",
-                "duration_min" => "1"
+                "sec_per_burpee" => "5.0",
+                "end_of_set_rest" => "0"
               }
             }
           }
@@ -144,7 +126,10 @@ defmodule BurpeeTrainerWeb.PlansLiveTest do
       |> form("#plan-form", workout_plan: params)
       |> render_submit()
 
-      assert Workouts.get_plan!(user, plan.id).name == "Renamed"
+      loaded = Workouts.get_plan!(user, plan.id)
+      [block] = loaded.blocks
+      set = Enum.find(block.sets, &(&1.position == 1))
+      assert set.burpee_count == 7
     end
 
     test "cannot edit a plan belonging to another user", %{conn: conn, user: _user} do

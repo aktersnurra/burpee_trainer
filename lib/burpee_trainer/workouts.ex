@@ -93,13 +93,12 @@ defmodule BurpeeTrainer.Workouts do
     attrs = %{
       "name" => source.name <> " (copy)",
       "burpee_type" => source.burpee_type,
-      "warmup_enabled" => source.warmup_enabled,
-      "warmup_reps" => source.warmup_reps,
-      "warmup_rounds" => source.warmup_rounds,
-      "rest_sec_warmup_between" => source.rest_sec_warmup_between,
-      "rest_sec_warmup_before_main" => source.rest_sec_warmup_before_main,
-      "shave_off_sec" => source.shave_off_sec,
-      "shave_off_block_count" => source.shave_off_block_count,
+      "target_duration_min" => source.target_duration_min,
+      "burpee_count_target" => source.burpee_count_target,
+      "sec_per_burpee" => source.sec_per_burpee,
+      "pacing_style" => source.pacing_style,
+      "additional_rests" => source.additional_rests,
+      "style_name" => source.style_name,
       "blocks" => duplicate_plan_blocks(source.blocks)
     }
 
@@ -155,6 +154,32 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Return per-ISO-week training minutes for a user, excluding warmup sessions.
+  Weeks are Mon–Sun. Result is sorted descending by `week_start`.
+  """
+  @spec weekly_minutes(User.t()) :: [%{week_start: Date.t(), minutes: float, met_goal: bool}]
+  def weekly_minutes(%User{id: user_id}) do
+    sessions =
+      Repo.all(
+        from s in WorkoutSession,
+          where:
+            s.user_id == ^user_id and
+              (is_nil(s.tags) or s.tags != "warmup"),
+          select: %{inserted_at: s.inserted_at, duration_sec_actual: s.duration_sec_actual}
+      )
+
+    sessions
+    |> Enum.group_by(fn %{inserted_at: dt} ->
+      dt |> DateTime.to_date() |> Date.beginning_of_week(:monday)
+    end)
+    |> Enum.map(fn {week_start, rows} ->
+      minutes = Enum.sum_by(rows, & &1.duration_sec_actual) / 60.0
+      %{week_start: week_start, minutes: minutes, met_goal: minutes >= 79.0}
+    end)
+    |> Enum.sort_by(& &1.week_start, {:desc, Date})
+  end
+
+  @doc """
   List the last `count` sessions of a given type for a user, most
   recent first. Used by the progression trend calculation.
   """
@@ -191,6 +216,27 @@ defmodule BurpeeTrainer.Workouts do
       error ->
         error
     end
+  end
+
+  @doc """
+  Save a warmup session silently (no UI shown). `plan_id` is nil.
+  Tagged "warmup" so it's distinguishable in history.
+  """
+  @spec create_warmup_session(User.t(), map) :: {:ok, WorkoutSession.t()} | {:error, any}
+  def create_warmup_session(%User{id: user_id}, %{burpee_type: bt, burpee_count_done: count, duration_sec: duration}) do
+    attrs = %{
+      "burpee_type" => Atom.to_string(bt),
+      "burpee_count_actual" => count,
+      "duration_sec_actual" => duration,
+      "burpee_count_planned" => count,
+      "duration_sec_planned" => duration,
+      "tags" => "warmup"
+    }
+
+    %WorkoutSession{user_id: user_id}
+    |> WorkoutSession.free_form_changeset(attrs)
+    |> with_derived_session_fields(user_id)
+    |> Repo.insert()
   end
 
   @doc """
@@ -242,11 +288,11 @@ defmodule BurpeeTrainer.Workouts do
       "name" => plan.name,
       "burpee_type" => Atom.to_string(plan.burpee_type),
       "style_name" => plan.style_name,
-      "warmup_enabled" => plan.warmup_enabled,
-      "rest_sec_warmup_between" => plan.rest_sec_warmup_between,
-      "rest_sec_warmup_before_main" => plan.rest_sec_warmup_before_main,
-      "shave_off_sec" => plan.shave_off_sec,
-      "shave_off_block_count" => plan.shave_off_block_count,
+      "target_duration_min" => plan.target_duration_min,
+      "burpee_count_target" => plan.burpee_count_target,
+      "sec_per_burpee" => plan.sec_per_burpee,
+      "pacing_style" => plan.pacing_style,
+      "additional_rests" => plan.additional_rests,
       "blocks" => save_generated_plan_blocks(plan.blocks)
     }
 

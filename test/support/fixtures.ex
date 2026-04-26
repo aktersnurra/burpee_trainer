@@ -35,9 +35,6 @@ defmodule BurpeeTrainer.Fixtures do
     defaults = %{
       "name" => "Test plan",
       "burpee_type" => "six_count",
-      "warmup_enabled" => false,
-      "shave_off_sec" => 0,
-      "shave_off_block_count" => 0,
       "blocks" => [
         %{
           "position" => 1,

@@ -117,9 +117,6 @@ defmodule BurpeeTrainer.StyleGenerator do
       name: style_generator_plan_name(style_name),
       style_name: Atom.to_string(style_name),
       burpee_type: rec.burpee_type,
-      warmup_enabled: false,
-      rest_sec_warmup_between: 120,
-      rest_sec_warmup_before_main: 180,
       blocks: [%Block{position: 1, repeat_count: 1, sets: sets}]
     }
   end

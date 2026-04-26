@@ -77,34 +77,6 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert %{name: [_ | _]} = errors_on(changeset)
     end
 
-    test "create_plan/2 requires warmup reps and rounds when warmup_enabled is true" do
-      user = user_fixture()
-
-      assert {:error, changeset} =
-               Workouts.create_plan(user, %{
-                 "name" => "Warmup missing",
-                 "burpee_type" => "six_count",
-                 "warmup_enabled" => true,
-                 "blocks" => [
-                   %{
-                     "position" => 1,
-                     "repeat_count" => 1,
-                     "sets" => [
-                       %{
-                         "position" => 1,
-                         "burpee_count" => 5,
-                         "sec_per_rep" => 6.0,
-                         "sec_per_burpee" => 3.0,
-                         "end_of_set_rest" => 0
-                       }
-                     ]
-                   }
-                 ]
-               })
-
-      errors = errors_on(changeset)
-      assert errors[:warmup_reps] && errors[:warmup_rounds]
-    end
 
     test "get_plan!/2 scopes by user" do
       alice = user_fixture()
@@ -164,49 +136,6 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert set.burpee_count == 5
     end
 
-    test "create_plan/2 rejects shave-off larger than available end-of-set rest" do
-      user = user_fixture()
-
-      assert {:error, changeset} =
-               Workouts.create_plan(user, %{
-                 "name" => "Too greedy",
-                 "burpee_type" => "six_count",
-                 "warmup_enabled" => false,
-                 "shave_off_sec" => 10,
-                 "shave_off_block_count" => 1,
-                 "blocks" => [
-                   %{
-                     "position" => 1,
-                     "repeat_count" => 1,
-                     "sets" => [
-                       %{
-                         "position" => 1,
-                         "burpee_count" => 5,
-                         "sec_per_rep" => 3.0,
-                         "sec_per_burpee" => 3.0,
-                         "end_of_set_rest" => 5
-                       }
-                     ]
-                   },
-                   %{
-                     "position" => 2,
-                     "repeat_count" => 1,
-                     "sets" => [
-                       %{
-                         "position" => 1,
-                         "burpee_count" => 5,
-                         "sec_per_rep" => 3.0,
-                         "sec_per_burpee" => 3.0,
-                         "end_of_set_rest" => 0
-                       }
-                     ]
-                   }
-                 ]
-               })
-
-      assert %{shave_off_sec: [msg | _]} = errors_on(changeset)
-      assert msg =~ "not enough rest"
-    end
 
     test "duplicate_plan/1 creates an independent copy with suffixed name" do
       user = user_fixture()
@@ -285,6 +214,84 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       user_ids = Enum.map(Workouts.list_sessions(alice), & &1.user_id) |> Enum.uniq()
       assert user_ids == [alice.id]
+    end
+  end
+
+  describe "weekly_minutes/1" do
+    test "returns empty list when user has no sessions" do
+      user = user_fixture()
+      assert Workouts.weekly_minutes(user) == []
+    end
+
+    test "groups sessions into correct ISO weeks" do
+      user = user_fixture()
+
+      # Week of 2026-04-20 (Mon) — 30 min total
+      free_form_session_fixture(user, %{
+        "duration_sec_actual" => 1800,
+        "inserted_at" => ~U[2026-04-21 10:00:00Z]
+      })
+
+      # Same week — another 30 min → total 60 min
+      free_form_session_fixture(user, %{
+        "duration_sec_actual" => 1800,
+        "inserted_at" => ~U[2026-04-23 10:00:00Z]
+      })
+
+      # Week of 2026-04-27 (Mon) — 90 min total
+      free_form_session_fixture(user, %{
+        "duration_sec_actual" => 5400,
+        "inserted_at" => ~U[2026-04-28 10:00:00Z]
+      })
+
+      weeks = Workouts.weekly_minutes(user)
+      assert length(weeks) == 2
+
+      [w1, w2] = weeks
+      assert w1.week_start == ~D[2026-04-27]
+      assert_in_delta w1.minutes, 90.0, 0.1
+      assert w1.met_goal == true
+
+      assert w2.week_start == ~D[2026-04-20]
+      assert_in_delta w2.minutes, 60.0, 0.1
+      assert w2.met_goal == false
+    end
+
+    test "excludes warmup-tagged sessions" do
+      user = user_fixture()
+
+      # 90 min main session
+      free_form_session_fixture(user, %{"duration_sec_actual" => 5400})
+
+      # warmup session — must not count
+      {:ok, _} =
+        Workouts.create_warmup_session(user, %{
+          burpee_type: :six_count,
+          burpee_count_done: 5,
+          duration_sec: 3600
+        })
+
+      [week] = Workouts.weekly_minutes(user)
+      assert_in_delta week.minutes, 90.0, 0.1
+    end
+
+    test "met_goal is true at exactly 80 min" do
+      user = user_fixture()
+      free_form_session_fixture(user, %{"duration_sec_actual" => 4800})
+
+      [week] = Workouts.weekly_minutes(user)
+      assert week.met_goal == true
+    end
+
+    test "scopes to user — other users' sessions not included" do
+      alice = user_fixture()
+      bob = user_fixture()
+
+      free_form_session_fixture(alice, %{"duration_sec_actual" => 5400})
+      free_form_session_fixture(bob, %{"duration_sec_actual" => 5400})
+
+      assert length(Workouts.weekly_minutes(alice)) == 1
+      assert length(Workouts.weekly_minutes(bob)) == 1
     end
   end
 end

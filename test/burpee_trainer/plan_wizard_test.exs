@@ -2,69 +2,59 @@ defmodule BurpeeTrainer.PlanWizardTest do
   use ExUnit.Case, async: true
 
   alias BurpeeTrainer.PlanWizard
-  alias BurpeeTrainer.PlanWizard.WizardInput
+  alias BurpeeTrainer.PlanWizard.PlanInput
 
   defp input(overrides \\ %{}) do
-    base = %WizardInput{
-      duration_sec_total: 1200,
+    base = %PlanInput{
+      name: "Test plan",
       burpee_type: :six_count,
-      burpee_count_total: 100,
+      target_duration_min: 20,
+      burpee_count_target: 100,
       sec_per_burpee: 5.0,
-      pacing_style: :even
+      pacing_style: :even,
+      reps_per_set: nil
     }
 
-    Map.merge(base, overrides)
+    struct!(base, overrides)
   end
 
   defp total_burpees(plan) do
+    Enum.sum(for b <- plan.blocks, s <- b.sets, do: s.burpee_count * b.repeat_count)
+  end
+
+  defp total_duration(plan) do
     Enum.sum(
-      for b <- plan.blocks, s <- b.sets, do: s.burpee_count * b.repeat_count
+      for b <- plan.blocks,
+          s <- b.sets,
+          do: (s.burpee_count * s.sec_per_rep + s.end_of_set_rest) * b.repeat_count
     )
   end
 
-  defp total_work_sec(plan) do
-    Enum.sum(
-      for b <- plan.blocks, s <- b.sets, do: s.burpee_count * s.sec_per_rep * b.repeat_count
-    )
-  end
-
   # ---------------------------------------------------------------------------
-  # validate/1
+  # validate_pace/2
   # ---------------------------------------------------------------------------
 
-  describe "validate/1" do
-    test "returns :ok for valid input" do
-      assert PlanWizard.validate(input()) == :ok
+  describe "validate_pace/2" do
+    test "accepts pace at exactly the floor for six_count" do
+      floor = Float.ceil(1200 / 325, 2)
+      assert PlanWizard.validate_pace(:six_count, floor) == :ok
     end
 
-    test "error when work_sec exceeds total duration" do
-      {:error, reasons} = PlanWizard.validate(input(%{sec_per_burpee: 15.0}))
-      assert Enum.any?(reasons, &String.contains?(&1, "exceeds"))
+    test "accepts pace at exactly the floor for navy_seal" do
+      assert PlanWizard.validate_pace(:navy_seal, 8.0) == :ok
     end
 
-    test "error when burpee_count_total is zero" do
-      {:error, reasons} = PlanWizard.validate(input(%{burpee_count_total: 0}))
-      assert Enum.any?(reasons, &String.contains?(&1, "burpee_count_total"))
+    test "rejects pace below floor for six_count" do
+      assert {:error, :pace_too_fast, _floor} = PlanWizard.validate_pace(:six_count, 1.0)
     end
 
-    test "error when burpee_count_total is negative" do
-      {:error, reasons} = PlanWizard.validate(input(%{burpee_count_total: -5}))
-      assert Enum.any?(reasons, &String.contains?(&1, "burpee_count_total"))
-    end
-
-    test "error when duration_sec_total is zero" do
-      {:error, reasons} = PlanWizard.validate(input(%{duration_sec_total: 0}))
-      assert Enum.any?(reasons, &String.contains?(&1, "duration_sec_total"))
-    end
-
-    test "multiple errors are collected" do
-      {:error, reasons} = PlanWizard.validate(input(%{burpee_count_total: 0, duration_sec_total: 0}))
-      assert length(reasons) >= 2
+    test "rejects pace below floor for navy_seal" do
+      assert {:error, :pace_too_fast, 8.0} = PlanWizard.validate_pace(:navy_seal, 7.9)
     end
   end
 
   # ---------------------------------------------------------------------------
-  # generate/1 — even pacing
+  # generate/1 — even pacing (uniform inter-rep cadence)
   # ---------------------------------------------------------------------------
 
   describe "generate/1 — even pacing" do
@@ -73,38 +63,42 @@ defmodule BurpeeTrainer.PlanWizardTest do
       assert total_burpees(plan) == 100
     end
 
-    test "uses repeat_count optimisation for clean divisor (100 / 10 = 10)" do
-      {:ok, plan} = PlanWizard.generate(input(%{burpee_count_total: 100}))
+    test "produces a single set with all reps and no trailing rest" do
+      {:ok, plan} = PlanWizard.generate(input())
       assert length(plan.blocks) == 1
       [block] = plan.blocks
       assert length(block.sets) == 1
-      assert block.repeat_count == 10
-      assert hd(block.sets).burpee_count == 10
+      [set] = block.sets
+      assert set.burpee_count == 100
+      assert set.end_of_set_rest == 0
     end
 
-    test "falls back to multiple sets when not evenly divisible" do
-      {:ok, plan} = PlanWizard.generate(input(%{burpee_count_total: 17}))
-      assert total_burpees(plan) == 17
-    end
-
-    test "work time does not exceed total duration" do
+    test "sec_per_rep is uniform cadence (target_duration / total_reps)" do
       {:ok, plan} = PlanWizard.generate(input())
-      assert total_work_sec(plan) <= 1200
+      [set] = hd(plan.blocks).sets
+      expected_cadence = 20 * 60 / 100
+      assert_in_delta set.sec_per_rep, expected_cadence, 0.001
     end
 
-    test "sec_per_burpee satisfies sec_per_burpee <= sec_per_rep" do
+    test "sec_per_rep > sec_per_burpee (rest absorbed into cadence)" do
       {:ok, plan} = PlanWizard.generate(input())
-      for b <- plan.blocks, s <- b.sets do
-        assert s.sec_per_burpee <= s.sec_per_rep
-      end
+      [set] = hd(plan.blocks).sets
+      assert set.sec_per_rep > set.sec_per_burpee
     end
 
-    test "navy_seal uses smaller default set size" do
-      {:ok, plan} = PlanWizard.generate(input(%{burpee_type: :navy_seal}))
-      [block] = plan.blocks
-      # target_set_size = 5, so 100 / 5 = 20 sets
-      assert block.repeat_count == 20
-      assert hd(block.sets).burpee_count == 5
+    test "duration equals target exactly" do
+      {:ok, plan} = PlanWizard.generate(input())
+      assert_in_delta total_duration(plan), 20 * 60, 0.001
+    end
+
+    test "error when pace is below six_count floor" do
+      assert {:error, [msg]} = PlanWizard.generate(input(sec_per_burpee: 1.0))
+      assert String.contains?(msg, "floor")
+    end
+
+    test "error when work time exceeds target duration" do
+      assert {:error, [msg]} = PlanWizard.generate(input(sec_per_burpee: 20.0))
+      assert String.contains?(msg, "exceeds")
     end
   end
 
@@ -113,126 +107,118 @@ defmodule BurpeeTrainer.PlanWizardTest do
   # ---------------------------------------------------------------------------
 
   describe "generate/1 — unbroken pacing" do
+    test "produces multiple sets of reps_per_set with rest between them" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 10))
+      [block] = plan.blocks
+      # 100 reps / 10 per set = 10 sets
+      assert length(block.sets) == 10
+      assert Enum.all?(block.sets |> Enum.take(9), fn s -> s.burpee_count == 10 end)
+    end
+
     test "total burpee count matches input" do
-      {:ok, plan} = PlanWizard.generate(input(%{pacing_style: :unbroken}))
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 10))
       assert total_burpees(plan) == 100
     end
 
-    test "produces one block with repeat_count 1" do
-      {:ok, plan} = PlanWizard.generate(input(%{pacing_style: :unbroken}))
-      assert length(plan.blocks) == 1
-      assert hd(plan.blocks).repeat_count == 1
+    test "duration is within ±5s of target" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 10))
+      assert abs(total_duration(plan) - 1200) <= 5
     end
 
-    test "intra-group sets have micro rest (4s)" do
-      {:ok, plan} = PlanWizard.generate(input(%{pacing_style: :unbroken}))
+    test "last set has no trailing rest" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 10))
+      last_set = plan.blocks |> hd() |> Map.get(:sets) |> List.last()
+      assert last_set.end_of_set_rest == 0
+    end
+
+    test "sec_per_rep == sec_per_burpee for all sets" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 10))
+      for b <- plan.blocks, s <- b.sets do
+        assert_in_delta s.sec_per_rep, s.sec_per_burpee, 0.001
+      end
+    end
+
+    test "partial last set when total is not evenly divisible" do
+      # 102 reps / 10 per set = 10 full + 2 remainder
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, burpee_count_target: 102, reps_per_set: 10))
       [block] = plan.blocks
-      # At least one non-boundary set should have the micro rest
-      assert Enum.any?(block.sets, fn s -> s.end_of_set_rest == 4 end)
+      assert length(block.sets) == 11
+      last_set = List.last(block.sets)
+      assert last_set.burpee_count == 2
     end
 
-    test "group-boundary sets have longer rest than micro rest" do
-      {:ok, plan} = PlanWizard.generate(input(%{pacing_style: :unbroken}))
+    test "reps_per_set larger than total produces one set" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, reps_per_set: 200))
       [block] = plan.blocks
-      assert Enum.any?(block.sets, fn s -> s.end_of_set_rest > 4 end)
+      assert length(block.sets) == 1
+      assert hd(block.sets).burpee_count == 100
     end
 
-    test "work time does not exceed total duration" do
-      {:ok, plan} = PlanWizard.generate(input(%{pacing_style: :unbroken}))
-      assert total_work_sec(plan) <= 1200
+    test "default reps_per_set is 10 for six_count" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken))
+      [block] = plan.blocks
+      assert length(block.sets) == 10
+    end
+
+    test "default reps_per_set is 5 for navy_seal" do
+      {:ok, plan} = PlanWizard.generate(input(pacing_style: :unbroken, burpee_type: :navy_seal, sec_per_burpee: 9.0))
+      [block] = plan.blocks
+      # 100 reps / 5 per set = 20 sets
+      assert length(block.sets) == 20
+    end
+
+    test "additional rests supported for unbroken" do
+      # 10 sets of 10 reps, each set boundary at ~120s intervals
+      # at_min 10 = 600s — should land on boundary 5
+      {:ok, plan} =
+        PlanWizard.generate(
+          input(pacing_style: :unbroken, reps_per_set: 10,
+                additional_rests: [%{rest_sec: 30, target_min: 10}])
+        )
+      assert total_burpees(plan) == 100
     end
   end
 
   # ---------------------------------------------------------------------------
-  # generate/1 — extra rest
+  # generate/1 — additional rests (even pacing)
   # ---------------------------------------------------------------------------
 
-  # at_sec: 600 = 5 * time_per_repeat (10 reps * 12s cadence = 120s/repeat)
-  # → after_block = 5, same split as the old after_block: 5 test
-  describe "generate/1 — extra rest (even pacing)" do
-    test "splits a repeating block into two at the closest boundary" do
-      extra = %{at_sec: 600, rest_sec: 120}
-      {:ok, plan} = PlanWizard.generate(input(%{extra_rest: extra}))
-      assert length(plan.blocks) == 2
-      [b1, b2] = plan.blocks
-      assert b1.repeat_count == 5
-      assert b2.repeat_count == 5
-    end
+  describe "generate/1 — additional rests (even pacing)" do
+    test "rest injected at target minute, total burpees unchanged" do
+      {:ok, plan} =
+        PlanWizard.generate(input(additional_rests: [%{rest_sec: 30, target_min: 10}]))
 
-    test "last set of block 1 gets the extra rest" do
-      extra = %{at_sec: 600, rest_sec: 120}
-      {:ok, plan} = PlanWizard.generate(input(%{extra_rest: extra}))
-      [first | _] = plan.blocks
-      last_set = List.last(first.sets)
-      assert last_set.end_of_set_rest == 120
-    end
-
-    test "total burpee count unchanged after split" do
-      extra = %{at_sec: 600, rest_sec: 120}
-      {:ok, plan} = PlanWizard.generate(input(%{extra_rest: extra}))
       assert total_burpees(plan) == 100
     end
 
-    test "total duration stays within target" do
-      extra = %{at_sec: 600, rest_sec: 120}
-      {:ok, plan} = PlanWizard.generate(input(%{extra_rest: extra}))
+    test "total duration equals target (rest compensated by shaved cadence)" do
+      {:ok, plan} =
+        PlanWizard.generate(input(additional_rests: [%{rest_sec: 30, target_min: 10}]))
 
-      total =
-        Enum.sum(
-          for b <- plan.blocks, s <- b.sets,
-              do: (s.burpee_count * s.sec_per_rep + s.end_of_set_rest) * b.repeat_count
-        )
-
-      assert_in_delta total, 1200.0, 1.0
+      assert_in_delta total_duration(plan), 20 * 60, 0.1
     end
 
-    test "error when extra rest would push cadence below sec_per_burpee floor" do
-      # sec_per_burpee=11, base_cadence=12; after_block=5 → shave=600s, floor violated
-      extra = %{at_sec: 600, rest_sec: 120}
-      assert {:error, [msg]} = PlanWizard.generate(input(%{sec_per_burpee: 11.0, extra_rest: extra}))
+    test "splits into two blocks around the rest point" do
+      {:ok, plan} =
+        PlanWizard.generate(input(additional_rests: [%{rest_sec: 30, target_min: 10}]))
+
+      assert length(plan.blocks) == 2
+    end
+
+    test "last set of last block has no trailing rest" do
+      {:ok, plan} =
+        PlanWizard.generate(input(additional_rests: [%{rest_sec: 30, target_min: 10}]))
+
+      last_set = plan.blocks |> List.last() |> Map.get(:sets) |> List.last()
+      assert last_set.end_of_set_rest == 0
+    end
+
+    test "error when total additional rest exceeds cadence floor budget" do
+      # base_cadence = 1200/100 = 12s. sec_per_burpee = 5s. budget = (12-5)*100 = 700s.
+      assert {:error, [msg]} =
+               PlanWizard.generate(input(additional_rests: [%{rest_sec: 800, target_min: 10}]))
+
       assert String.contains?(msg, "floor")
     end
-  end
-
-  describe "generate/1 — extra rest (unbroken pacing)" do
-    test "total duration stays within target" do
-      extra = %{at_sec: 600, rest_sec: 30}
-
-      {:ok, plan} =
-        PlanWizard.generate(input(%{pacing_style: :unbroken, extra_rest: extra}))
-
-      total =
-        Enum.sum(
-          for b <- plan.blocks, s <- b.sets,
-              do: (s.burpee_count * s.sec_per_rep + s.end_of_set_rest) * b.repeat_count
-        )
-
-      assert_in_delta total, 1200.0, 2.0
-    end
-
-    test "splits into two blocks" do
-      extra = %{at_sec: 600, rest_sec: 30}
-      {:ok, plan} = PlanWizard.generate(input(%{pacing_style: :unbroken, extra_rest: extra}))
-      assert length(plan.blocks) == 2
-    end
-
-    test "error when extra rest exceeds available rest budget" do
-      # Large extra_rest that exhausts the entire rest budget
-      extra = %{at_sec: 600, rest_sec: 800}
-      assert {:error, [msg]} = PlanWizard.generate(input(%{pacing_style: :unbroken, extra_rest: extra}))
-      assert String.contains?(msg, "budget")
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # error cases
-  # ---------------------------------------------------------------------------
-
-  test "generate returns error for zero burpees" do
-    assert {:error, _} = PlanWizard.generate(input(%{burpee_count_total: 0}))
-  end
-
-  test "generate returns error when work exceeds duration" do
-    assert {:error, _} = PlanWizard.generate(input(%{sec_per_burpee: 20.0}))
   end
 end

@@ -18,12 +18,14 @@ defmodule BurpeeTrainerWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="border-b border-base-300 bg-base-100">
-      <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 flex h-14 items-center gap-6">
-        <a href="/" class="font-semibold tracking-tight">BurpeeTrainer</a>
+    <header class="border-b border-[#1E2535] bg-base-100">
+      <div class="mx-auto max-w-2xl px-4 sm:px-6 flex h-[52px] items-center gap-6">
+        <.link navigate={~p"/"} class="text-[15px] font-semibold tracking-tight text-base-content">
+          BurpeeTrainer
+        </.link>
 
         <%= if @current_user do %>
-          <nav class="flex-1 flex items-center gap-1 text-sm">
+          <nav class="flex-1 flex items-center gap-0 text-sm">
             <.nav_link href={~p"/plans"}>Plans</.nav_link>
             <.nav_link href={~p"/log"}>Log</.nav_link>
             <.nav_link href={~p"/history"}>History</.nav_link>
@@ -31,20 +33,17 @@ defmodule BurpeeTrainerWeb.Layouts do
           </nav>
 
           <div class="flex items-center gap-3">
-            <span class="text-xs text-base-content/60 hidden sm:inline flex items-center gap-1.5">
-              {@current_user.username}
-              <%= if @current_level do %>
-                <span class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                  {level_label(@current_level)}
-                </span>
-              <% end %>
-            </span>
+            <%= if @current_level do %>
+              <span class="hidden sm:inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                {level_label(@current_level)}
+              </span>
+            <% end %>
             <.form for={%{}} action={~p"/logout"} method="delete" class="inline">
               <button
                 type="submit"
-                class="text-sm px-3 py-1.5 rounded-md border border-base-300 hover:bg-base-200 transition"
+                class="text-xs px-3 py-1.5 rounded-md border border-[#1E2535] text-base-content/50 hover:text-base-content hover:border-base-content/20 transition-colors"
               >
-                Log out
+                Out
               </button>
             </.form>
           </div>
@@ -54,7 +53,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       </div>
     </header>
 
-    <main class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+    <main class="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       {render_slot(@inner_block)}
     </main>
 
@@ -72,7 +71,8 @@ defmodule BurpeeTrainerWeb.Layouts do
     ~H"""
     <.link
       navigate={@href}
-      class="px-3 py-1.5 rounded-md text-base-content/70 hover:text-base-content hover:bg-base-200 transition"
+      class="px-3 py-[14px] text-sm text-base-content/50 hover:text-base-content transition-colors border-b-2 border-transparent [&.active]:border-primary [&.active]:text-base-content"
+      data-active-class="active"
     >
       {render_slot(@inner_block)}
     </.link>

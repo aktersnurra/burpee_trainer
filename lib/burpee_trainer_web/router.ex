@@ -37,10 +37,9 @@ defmodule BurpeeTrainerWeb.Router do
   scope "/", BurpeeTrainerWeb do
     pipe_through [:browser, :require_auth]
 
-    get "/", PageController, :home
-
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
+      live "/", OverviewLive
       live "/plans", PlansLive.Index, :index
       live "/plans/new", PlansLive.Edit, :new
       live "/plans/:id/edit", PlansLive.Edit, :edit
