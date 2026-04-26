@@ -37,6 +37,8 @@ defmodule BurpeeTrainerWeb.Router do
   scope "/", BurpeeTrainerWeb do
     pipe_through [:browser, :require_auth]
 
+    get "/videos/stream/:filename", VideoController, :stream
+
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
       live "/", OverviewLive
@@ -49,6 +51,9 @@ defmodule BurpeeTrainerWeb.Router do
       live "/log", LogLive
       live "/history", HistoryLive
       live "/goals", GoalsLive
+
+      live "/videos", VideoLive.Index
+      live "/videos/:id", VideoLive.Show
     end
   end
 

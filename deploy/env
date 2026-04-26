@@ -5,3 +5,4 @@ SECRET_KEY_BASE=
 PHX_HOST=burpee.gustafrydholm.xyz
 DATABASE_PATH=/var/lib/burpee_trainer/burpee_trainer.db
 POOL_SIZE=5
+ELIXIR_ERL_OPTIONS="+fnu"

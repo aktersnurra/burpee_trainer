@@ -30,12 +30,13 @@ defmodule BurpeeTrainerWeb.Layouts do
             <.nav_link href={~p"/log"}>Log</.nav_link>
             <.nav_link href={~p"/history"}>History</.nav_link>
             <.nav_link href={~p"/goals"}>Goals</.nav_link>
+            <.nav_link href={~p"/videos"}>Videos</.nav_link>
           </nav>
 
           <div class="flex items-center gap-3">
             <%= if @current_user do %>
               <span class="hidden sm:inline text-xs text-base-content/40">
-                Hi, {@current_user.username}
+                {@current_user.username}
               </span>
             <% end %>
             <%= if @current_level do %>
