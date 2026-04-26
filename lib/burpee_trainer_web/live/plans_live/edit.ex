@@ -407,6 +407,117 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # Events — Layer 3
   # ---------------------------------------------------------------------------
 
+  def handle_event("copy_block", %{"index" => idx_str}, socket) do
+    idx = String.to_integer(idx_str)
+    changeset = socket.assigns.form.source
+    plan = Ecto.Changeset.apply_changes(changeset)
+
+    blocks = Enum.sort_by(plan.blocks, & &1.position)
+    source_block = Enum.at(blocks, idx)
+
+    if source_block do
+      next_pos = length(blocks) + 1
+      new_block_attrs = %{
+        "position" => next_pos,
+        "repeat_count" => source_block.repeat_count,
+        "sets" =>
+          source_block.sets
+          |> Enum.sort_by(& &1.position)
+          |> Enum.with_index()
+          |> Map.new(fn {set, si} ->
+            {to_string(si),
+             %{
+               "position" => set.position,
+               "burpee_count" => set.burpee_count,
+               "sec_per_rep" => set.sec_per_rep,
+               "sec_per_burpee" => set.sec_per_burpee,
+               "end_of_set_rest" => set.end_of_set_rest
+             }}
+          end)
+      }
+
+      new_blocks_attrs = blocks_to_attrs(blocks)
+      new_idx = map_size(new_blocks_attrs)
+      merged = Map.put(new_blocks_attrs, to_string(new_idx), new_block_attrs)
+
+      params = %{
+        "workout_plan" => %{
+          "blocks" => merged,
+          "blocks_sort" => Enum.map(0..(new_idx), &to_string/1)
+        }
+      }
+
+      handle_event("validate", params, socket)
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("copy_set", %{"block_index" => bi_str, "set_index" => si_str}, socket) do
+    bi = String.to_integer(bi_str)
+    si = String.to_integer(si_str)
+    changeset = socket.assigns.form.source
+    plan = Ecto.Changeset.apply_changes(changeset)
+
+    blocks = Enum.sort_by(plan.blocks, & &1.position)
+    block = Enum.at(blocks, bi)
+
+    if block do
+      sets = Enum.sort_by(block.sets, & &1.position)
+      source_set = Enum.at(sets, si)
+
+      if source_set do
+        new_set_attrs = %{
+          "position" => length(sets) + 1,
+          "burpee_count" => source_set.burpee_count,
+          "sec_per_rep" => source_set.sec_per_rep,
+          "sec_per_burpee" => source_set.sec_per_burpee,
+          "end_of_set_rest" => source_set.end_of_set_rest
+        }
+
+        existing_sets =
+          sets
+          |> Enum.with_index()
+          |> Map.new(fn {set, idx} ->
+            {to_string(idx),
+             %{
+               "position" => set.position,
+               "burpee_count" => set.burpee_count,
+               "sec_per_rep" => set.sec_per_rep,
+               "sec_per_burpee" => set.sec_per_burpee,
+               "end_of_set_rest" => set.end_of_set_rest
+             }}
+          end)
+
+        new_si = map_size(existing_sets)
+        merged_sets = Map.put(existing_sets, to_string(new_si), new_set_attrs)
+
+        existing_blocks = blocks_to_attrs(blocks)
+
+        updated_block =
+          Map.merge(existing_blocks[to_string(bi)], %{
+            "sets" => merged_sets,
+            "sets_sort" => Enum.map(0..new_si, &to_string/1)
+          })
+
+        merged_blocks = Map.put(existing_blocks, to_string(bi), updated_block)
+
+        params = %{
+          "workout_plan" => %{
+            "blocks" => merged_blocks,
+            "blocks_sort" => Enum.map(0..(length(blocks) - 1), &to_string/1)
+          }
+        }
+
+        handle_event("validate", params, socket)
+      else
+        {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("validate", %{"workout_plan" => params}, socket) do
     base_plan = socket.assigns.plan || %WorkoutPlan{}
 
@@ -514,6 +625,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 burpee_count_target: burpee_count_target, sec_per_burpee: sec_per_burpee,
                 reps_per_set: reps_per_set}
   end
+
+  defp format_sec(nil), do: nil
+  defp format_sec(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2)
+  defp format_sec(v) when is_integer(v), do: :erlang.float_to_binary(v * 1.0, decimals: 2)
+  defp format_sec(v) when is_binary(v) do
+    case Float.parse(v) do
+      {f, _} -> :erlang.float_to_binary(f, decimals: 2)
+      _ -> v
+    end
+  end
+  defp format_sec(v), do: v
 
   defp pace_floor(:six_count), do: @sec_per_burpee_floor_six
   defp pace_floor(:navy_seal), do: @sec_per_burpee_floor_navy
@@ -877,15 +999,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
           <div class="flex items-center justify-between">
             <h3 class="text-base font-semibold">Block {block_f.index + 1}</h3>
-            <label class="cursor-pointer text-xs text-error hover:underline">
-              Remove block
-              <input
-                type="checkbox"
-                name="workout_plan[blocks_drop][]"
-                value={block_f.index}
-                class="hidden"
-              />
-            </label>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                phx-click="copy_block"
+                phx-value-index={block_f.index}
+                class="text-xs text-primary hover:underline"
+              >
+                Copy block
+              </button>
+              <label class="cursor-pointer text-xs text-error hover:underline">
+                Remove block
+                <input
+                  type="checkbox"
+                  name="workout_plan[blocks_drop][]"
+                  value={block_f.index}
+                  class="hidden"
+                />
+              </label>
+            </div>
           </div>
 
           <input
@@ -922,21 +1054,23 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   value={set_f.index + 1}
                 />
 
-                <div class="grid gap-3 sm:grid-cols-5 items-end">
+                <div class="grid gap-3 sm:grid-cols-6 items-end">
                   <.input field={set_f[:burpee_count]} type="number" label="Burpees" min="0" />
                   <.input
                     field={set_f[:sec_per_rep]}
                     type="number"
                     label="sec/rep"
-                    step="0.1"
+                    step="0.01"
                     min="0"
+                    value={format_sec(set_f[:sec_per_rep].value)}
                   />
                   <.input
                     field={set_f[:sec_per_burpee]}
                     type="number"
                     label="sec/burpee"
-                    step="0.1"
+                    step="0.01"
                     min="0"
+                    value={format_sec(set_f[:sec_per_burpee].value)}
                   />
                   <.input
                     field={set_f[:end_of_set_rest]}
@@ -944,6 +1078,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     label="Rest (sec)"
                     min="0"
                   />
+                  <button
+                    type="button"
+                    phx-click="copy_set"
+                    phx-value-block_index={block_f.index}
+                    phx-value-set_index={set_f.index}
+                    class="text-xs text-primary hover:underline pb-3"
+                  >
+                    Copy
+                  </button>
                   <label class="cursor-pointer text-xs text-error hover:underline pb-3">
                     Remove
                     <input
@@ -957,11 +1100,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </div>
             </.inputs_for>
 
+            <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"} value="" />
             <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"} />
           </div>
         </div>
       </.inputs_for>
 
+      <input type="hidden" name="workout_plan[blocks_sort][]" value="" />
       <input type="hidden" name="workout_plan[blocks_drop][]" />
     </div>
     """
