@@ -121,7 +121,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:videos}>
       <div class="space-y-6">
         <div class="flex items-center gap-3">
           <.link

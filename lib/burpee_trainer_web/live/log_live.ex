@@ -126,7 +126,7 @@ defmodule BurpeeTrainerWeb.LogLive do
     assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:log}>
       <div class="max-w-xl mx-auto space-y-6">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Log session</h1>

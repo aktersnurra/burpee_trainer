@@ -14,73 +14,136 @@ defmodule BurpeeTrainerWeb.Layouts do
   attr :flash, :map, required: true
   attr :current_user, :any, default: nil
   attr :current_level, :atom, default: nil
+  attr :current_page, :atom, default: nil
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <header class="border-b border-[#1E2535] bg-base-100">
-      <div class="mx-auto max-w-2xl px-4 sm:px-6 flex h-[52px] items-center gap-6">
-        <.link navigate={~p"/"} class="text-[15px] font-semibold tracking-tight text-base-content">
-          BurpeeTrainer
+    <%= if @current_user do %>
+      <%!-- Desktop top nav — hidden on mobile --%>
+      <nav class="hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b border-[#141B26] bg-[#0D1017]">
+        <.nav_icon navigate={~p"/"} title="Home" active={@current_page == :home}>
+          <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
+          <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
+        </.nav_icon>
+
+        <.nav_icon navigate={~p"/plans"} title="Plans" active={@current_page == :plans}>
+          <.icon name="hero-rectangle-stack-solid" class={if @current_page == :plans, do: "", else: "hidden"} />
+          <.icon name="hero-rectangle-stack" class={if @current_page == :plans, do: "hidden", else: ""} />
+        </.nav_icon>
+
+        <.nav_icon navigate={~p"/log"} title="Log" active={@current_page == :log}>
+          <.icon name="hero-pencil-square-solid" class={if @current_page == :log, do: "", else: "hidden"} />
+          <.icon name="hero-pencil-square" class={if @current_page == :log, do: "hidden", else: ""} />
+        </.nav_icon>
+
+        <.nav_icon navigate={~p"/history"} title="History" active={@current_page == :history}>
+          <.icon name="hero-chart-bar-solid" class={if @current_page == :history, do: "", else: "hidden"} />
+          <.icon name="hero-chart-bar" class={if @current_page == :history, do: "hidden", else: ""} />
+        </.nav_icon>
+
+        <.nav_icon navigate={~p"/goals"} title="Goals" active={@current_page == :goals}>
+          <.icon name="hero-flag-solid" class={if @current_page == :goals, do: "", else: "hidden"} />
+          <.icon name="hero-flag" class={if @current_page == :goals, do: "hidden", else: ""} />
+        </.nav_icon>
+
+        <.nav_icon navigate={~p"/videos"} title="Videos" active={@current_page == :videos}>
+          <.icon name="hero-play-circle-solid" class={if @current_page == :videos, do: "", else: "hidden"} />
+          <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
+        </.nav_icon>
+
+        <div class="w-px h-4 bg-[#141B26] mx-1" />
+
+        <.link
+          href={~p"/logout"}
+          method="delete"
+          title="Sign out"
+          class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded transition-colors text-[#3A4A5E] hover:text-[#C8D8F0] hover:bg-[#141B26]"
+        >
+          <.icon name="hero-arrow-left-start-on-rectangle" />
         </.link>
+      </nav>
 
-        <%= if @current_user do %>
-          <nav class="flex-1 flex items-center gap-0 text-sm">
-            <.nav_link href={~p"/plans"}>Plans</.nav_link>
-            <.nav_link href={~p"/log"}>Log</.nav_link>
-            <.nav_link href={~p"/history"}>History</.nav_link>
-            <.nav_link href={~p"/goals"}>Goals</.nav_link>
-            <.nav_link href={~p"/videos"}>Videos</.nav_link>
-          </nav>
+      <%!-- Mobile bottom tab bar --%>
+      <nav class="fixed bottom-0 inset-x-0 sm:hidden flex items-center justify-around bg-[#0D1017] border-t border-[#141B26] pb-safe">
+        <.bottom_tab navigate={~p"/"} active={@current_page == :home}>
+          <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
+          <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
+        </.bottom_tab>
 
-          <div class="flex items-center gap-3">
-            <%= if @current_user do %>
-              <span class="hidden sm:inline text-xs text-base-content/40">
-                {@current_user.username}
-              </span>
-            <% end %>
-            <%= if @current_level do %>
-              <span class="hidden sm:inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                {level_label(@current_level)}
-              </span>
-            <% end %>
-            <.form for={%{}} action={~p"/logout"} method="delete" class="inline">
-              <button
-                type="submit"
-                class="text-xs px-3 py-1.5 rounded-md border border-[#1E2535] text-base-content/50 hover:text-base-content hover:border-base-content/20 transition-colors"
-              >
-                Out
-              </button>
-            </.form>
-          </div>
-        <% else %>
-          <div class="flex-1" />
-        <% end %>
-      </div>
-    </header>
+        <.bottom_tab navigate={~p"/plans"} active={@current_page == :plans}>
+          <.icon name="hero-rectangle-stack-solid" class={if @current_page == :plans, do: "", else: "hidden"} />
+          <.icon name="hero-rectangle-stack" class={if @current_page == :plans, do: "hidden", else: ""} />
+        </.bottom_tab>
+
+        <.bottom_tab navigate={~p"/log"} active={@current_page == :log}>
+          <.icon name="hero-pencil-square-solid" class={if @current_page == :log, do: "", else: "hidden"} />
+          <.icon name="hero-pencil-square" class={if @current_page == :log, do: "hidden", else: ""} />
+        </.bottom_tab>
+
+        <.bottom_tab navigate={~p"/history"} active={@current_page == :history}>
+          <.icon name="hero-chart-bar-solid" class={if @current_page == :history, do: "", else: "hidden"} />
+          <.icon name="hero-chart-bar" class={if @current_page == :history, do: "hidden", else: ""} />
+        </.bottom_tab>
+
+        <.bottom_tab navigate={~p"/goals"} active={@current_page == :goals}>
+          <.icon name="hero-flag-solid" class={if @current_page == :goals, do: "", else: "hidden"} />
+          <.icon name="hero-flag" class={if @current_page == :goals, do: "hidden", else: ""} />
+        </.bottom_tab>
+
+        <.bottom_tab navigate={~p"/videos"} active={@current_page == :videos}>
+          <.icon name="hero-play-circle-solid" class={if @current_page == :videos, do: "", else: "hidden"} />
+          <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
+        </.bottom_tab>
+      </nav>
+    <% end %>
 
     <main class="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       {render_slot(@inner_block)}
     </main>
 
+    <%= if @current_user do %>
+      <div class="sm:hidden h-16" />
+    <% end %>
+
     <.flash_group flash={@flash} />
     """
   end
 
-  defp level_label(:graduated), do: "Grad"
-
-  defp level_label(l),
-    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
-
-  attr :href, :string, required: true
+  attr :navigate, :string, required: true
+  attr :title, :string, required: true
+  attr :active, :boolean, required: true
   slot :inner_block, required: true
 
-  defp nav_link(assigns) do
+  defp nav_icon(assigns) do
     ~H"""
     <.link
-      navigate={@href}
-      class="px-3 py-[14px] text-sm text-base-content/50 hover:text-base-content transition-colors border-b-2 border-transparent [&.active]:border-primary [&.active]:text-base-content"
-      data-active-class="active"
+      navigate={@navigate}
+      title={@title}
+      class={[
+        "inline-flex items-center justify-center w-9 h-9 shrink-0 rounded transition-colors",
+        @active && "text-[#C8D8F0] bg-[#141B26]",
+        !@active && "text-[#3A4A5E] hover:text-[#6B8FA8] hover:bg-[#141B26]"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
+  attr :navigate, :string, required: true
+  attr :active, :boolean, required: true
+  slot :inner_block, required: true
+
+  defp bottom_tab(assigns) do
+    ~H"""
+    <.link
+      navigate={@navigate}
+      class={[
+        "inline-flex items-center justify-center w-14 h-14 shrink-0 transition-colors",
+        @active && "text-[#4A9EFF]",
+        !@active && "text-[#3A4A5E]"
+      ]}
     >
       {render_slot(@inner_block)}
     </.link>

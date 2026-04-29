@@ -14,6 +14,18 @@
 //   session_ready     — initial main timeline
 //   warmup_ready      — warmup timeline prepended on Yes
 
+const CX = 140, CY = 140, R = 107;
+const CIRC = 2 * Math.PI * R;
+const GAP_DEG = 3.5;
+const NS = "http://www.w3.org/2000/svg";
+const COL = {
+  done: "#4A9EFF",
+  doneBg: "#1A2D4A",
+  current: "#FFFFFF",
+  currentBg: "#1E2535",
+  upcoming: "#141B26",
+};
+
 const SessionHook = {
   mounted() {
     this.ctx = null;
@@ -28,12 +40,25 @@ const SessionHook = {
     this.paused = false;
     this.pauseTime = null;
     this.rafId = null;
+    this.countdownPaused = false;
+    this.countdownCount = null;
+    this.countdownTimeoutId = null;
 
     this.lastRepIndex = -1;
     this.lastRestCount = null;
     this.warmupBurpeeCount = 0;
     this.mainBurpeeCount = 0;
     this.warmupEndSec = 0; // elapsed time when warmup phase ends
+
+    this.rings = [];
+    this.doneReps = 0;
+    this.totalReps = 0;
+    this.downTimeout = null;
+    this.lastDisplayed = -1;
+    this.lastEventType = null;
+    this.lastBurpeeCount = 0;
+    this.restRingEl = null;
+    this.countdownRingEl = null;
 
     this.hiddenAt = null; // track when tab went hidden for pause accounting
 
@@ -83,12 +108,12 @@ const SessionHook = {
     this.el.addEventListener("click", (e) => {
       const warmupYes = e.target.closest("#warmup-yes-btn");
       const warmupSkip = e.target.closest("#warmup-skip-btn");
-      const pauseBtn = e.target.closest("#pause-btn");
+      const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
 
       if (warmupYes) this.onWarmupYes();
       if (warmupSkip) this.onWarmupSkip();
-      if (pauseBtn) this.togglePause();
+      if (ringContainer && (this.startTime !== null || this.countdownCount !== null)) this.togglePause();
       if (finishEarly) this.onFinishEarly();
     });
   },
@@ -174,72 +199,79 @@ const SessionHook = {
     const overlay = this.el.querySelector("#start-overlay");
     if (overlay) overlay.remove();
 
-    const ring = this.el.querySelector("#progress-ring");
-    const circ = 2 * Math.PI * 107;
-
-    // Prime ring to full instantly before the first tick so there's no flash from empty.
-    if (ring) {
-      ring.style.transition = "none";
-      ring.style.strokeDasharray = circ.toFixed(4);
-      ring.style.strokeDashoffset = "0";
-      ring.style.stroke = this.countdownColor(5);
+    // Build a single amber ring in #ring-svg for the countdown
+    const svgEl = this.el.querySelector("#ring-svg");
+    if (svgEl) {
+      while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+      const cdRing = document.createElementNS(NS, "circle");
+      cdRing.setAttribute("cx", CX);
+      cdRing.setAttribute("cy", CY);
+      cdRing.setAttribute("r", R);
+      cdRing.setAttribute("fill", "none");
+      cdRing.setAttribute("stroke-width", "16");
+      cdRing.setAttribute("stroke-linecap", "round");
+      cdRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+      cdRing.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+      cdRing.setAttribute("stroke-dashoffset", "0");
+      cdRing.setAttribute("stroke", this.countdownColor(5));
+      svgEl.appendChild(cdRing);
+      this.countdownRingEl = cdRing;
     }
 
-    const clockTop = this.el.querySelector("#clock-top");
-    const clockPrimary = this.el.querySelector("#clock-primary");
-    const clockBottom = this.el.querySelector("#clock-bottom");
-
-    if (clockTop) {
-      clockTop.textContent = "get ready";
-    }
-    if (clockBottom) {
-      clockBottom.textContent = "";
-    }
+    const countEl = this.el.querySelector("#count");
+    if (countEl) countEl.style.visibility = "";
 
     const showCount = (n, animate) => {
       const color = this.countdownColor(n);
 
-      if (clockPrimary) {
-        clockPrimary.textContent = n;
-        clockPrimary.style.color = color;
-        clockPrimary.classList.remove("countdown-pop");
-        void clockPrimary.offsetWidth;
-        clockPrimary.classList.add("countdown-pop");
+      if (countEl) {
+        countEl.textContent = n;
+        countEl.style.color = color;
+        countEl.classList.remove("countdown-pop");
+        void countEl.offsetWidth;
+        countEl.classList.add("countdown-pop");
       }
 
-      if (ring) {
+      if (this.countdownRingEl) {
         const remaining = n / 5;
-        ring.style.transition = animate
+        this.countdownRingEl.style.transition = animate
           ? "stroke-dashoffset 0.8s ease-out, stroke 0.3s"
           : "none";
-        ring.style.strokeDasharray = circ.toFixed(4);
-        ring.style.strokeDashoffset = (circ * (1 - remaining)).toFixed(4);
-        ring.style.stroke = color;
+        this.countdownRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+        this.countdownRingEl.setAttribute(
+          "stroke-dashoffset",
+          (CIRC * (1 - remaining)).toFixed(4),
+        );
+        this.countdownRingEl.setAttribute("stroke", color);
       }
+    };
+
+    this.countdownShowCount = showCount;
+
+    const scheduleNext = (n) => {
+      this.countdownCount = n;
+      this.countdownTimeoutId = setTimeout(() => {
+        if (this.countdownPaused) return;
+        if (n >= 1) {
+          showCount(n, true);
+          this.leadBeepAt(this.audioContext().currentTime + 0.02);
+          scheduleNext(n - 1);
+        } else {
+          this.countdownCount = null;
+          this.countdownTimeoutId = null;
+          if (countEl) {
+            countEl.style.color = "#C8D8F0";
+            countEl.textContent = "—";
+          }
+          this.beginSession();
+        }
+      }, 1000);
     };
 
     // Render 5 with no transition — ring stays full, no animation flash.
     showCount(5, false);
     this.leadBeepAt(this.audioContext().currentTime + 0.02);
-
-    let count = 4;
-    const tick = () => {
-      if (count >= 1) {
-        showCount(count, true);
-        this.leadBeepAt(this.audioContext().currentTime + 0.02);
-        count--;
-        setTimeout(tick, 1000);
-      } else {
-        if (clockPrimary) {
-          clockPrimary.style.color = "";
-        }
-        if (clockTop) {
-          clockTop.textContent = "";
-        }
-        this.beginSession();
-      }
-    };
-    setTimeout(tick, 1000);
+    scheduleNext(4);
   },
 
   beginSession() {
@@ -248,11 +280,24 @@ const SessionHook = {
       .filter((e) => e.type === "warmup_burpee" || e.type === "warmup_rest")
       .reduce((s, e) => s + e.duration_sec, 0);
 
-    // Enable pause / finish-early buttons
-    const pauseBtn = this.el.querySelector("#pause-btn");
     const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
-    if (pauseBtn) pauseBtn.removeAttribute("disabled");
     if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
+
+    // Clear countdown ring; build segmented ring for the first event
+    this.countdownRingEl = null;
+    this.lastEventType = null;
+    this.lastBurpeeCount = 0;
+
+    const firstEvent = this.timeline[0];
+    const isFirstWork =
+      firstEvent &&
+      (firstEvent.type === "work_burpee" || firstEvent.type === "warmup_burpee");
+    if (isFirstWork) {
+      this.buildRings(firstEvent.burpee_count);
+      this.triggerDown(firstEvent.burpee_count);
+      this.lastEventType = firstEvent.type;
+      this.lastBurpeeCount = firstEvent.burpee_count;
+    }
 
     this.startTime = performance.now();
     this.rafId = requestAnimationFrame(() => this.tick());
@@ -297,11 +342,63 @@ const SessionHook = {
   // ---------------------------------------------------------------------------
 
   togglePause() {
+    if (this.countdownCount !== null) {
+      if (this.countdownPaused) {
+        this.resumeCountdown();
+      } else {
+        this.pauseCountdown();
+      }
+      return;
+    }
     if (this.paused) {
       this.resume();
     } else {
       this.pause();
     }
+  },
+
+  pauseCountdown() {
+    this.countdownPaused = true;
+    if (this.countdownTimeoutId) {
+      clearTimeout(this.countdownTimeoutId);
+      this.countdownTimeoutId = null;
+    }
+    this.stopAudio();
+    this.updatePauseBtn(true);
+  },
+
+  resumeCountdown() {
+    this.countdownPaused = false;
+    this.updatePauseBtn(false);
+
+    const n = this.countdownCount;
+    if (n === null) return;
+
+    const scheduleNext = (n) => {
+      this.countdownCount = n;
+      this.countdownTimeoutId = setTimeout(() => {
+        if (this.countdownPaused) return;
+        if (n >= 1) {
+          this.countdownShowCount(n, true);
+          this.leadBeepAt(this.audioContext().currentTime + 0.02);
+          scheduleNext(n - 1);
+        } else {
+          this.countdownCount = null;
+          this.countdownTimeoutId = null;
+          const countEl = this.el.querySelector("#count");
+          if (countEl) {
+            countEl.style.color = "#C8D8F0";
+            countEl.textContent = "—";
+          }
+          this.beginSession();
+        }
+      }, 1000);
+    };
+
+    // Show the current number immediately, then continue
+    this.countdownShowCount(n, false);
+    this.leadBeepAt(this.audioContext().currentTime + 0.02);
+    scheduleNext(n - 1);
   },
 
   pause() {
@@ -323,11 +420,21 @@ const SessionHook = {
   },
 
   updatePauseBtn(paused) {
-    const btn = this.el.querySelector("#pause-btn");
-    if (!btn) return;
-    btn.innerHTML = paused
-      ? `<svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path d="M6 4l10 6-10 6V4z"/></svg><span>Resume</span>`
-      : `<svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><rect x="5" y="4" width="3" height="12" rx="0.5"/><rect x="12" y="4" width="3" height="12" rx="0.5"/></svg><span>Pause</span>`;
+    const pauseIcon = this.el.querySelector("#pause-icon");
+    const countEl = this.el.querySelector("#count");
+    const downEl = this.el.querySelector("#down-word");
+    const ringContainer = this.el.querySelector("#ring-container");
+
+    if (paused) {
+      if (countEl) countEl.style.visibility = "hidden";
+      if (downEl) downEl.style.display = "none";
+      if (pauseIcon) pauseIcon.style.display = "";
+      if (ringContainer) ringContainer.style.opacity = "0.6";
+    } else {
+      if (pauseIcon) pauseIcon.style.display = "none";
+      if (ringContainer) ringContainer.style.opacity = "";
+      if (countEl) countEl.style.visibility = "";
+    }
   },
 
   onFinishEarly() {
@@ -348,18 +455,13 @@ const SessionHook = {
     // Rep beep: fire once per rep boundary within a burpee phase
     if (event.type === "work_burpee" || event.type === "warmup_burpee") {
       const secPerRep =
-        event.sec_per_burpee || event.duration_sec / (event.burpee_count || 1);
+        event.sec_per_rep ||
+        event.sec_per_burpee ||
+        event.duration_sec / (event.burpee_count || 1);
       const repIndex = Math.floor(phase_elapsed / secPerRep);
       if (repIndex !== this.lastRepIndex) {
         this.lastRepIndex = repIndex;
         this.repBeepAt(this.audioContext().currentTime + 0.02);
-
-        // Track per-type rep counts
-        if (event.type === "warmup_burpee") {
-          this.warmupBurpeeCount++;
-        } else {
-          this.mainBurpeeCount++;
-        }
       }
     } else {
       this.lastRepIndex = -1;
@@ -415,21 +517,7 @@ const SessionHook = {
       event.type === "rest_block";
     const isWarning = isRest && phase_remaining <= 5;
 
-    // Phase color (inline style — Tailwind JIT can't detect dynamic class strings)
     const color = this.phaseColor(event.type, isWarning);
-
-    // Ring — fills based on current phase progress (not whole workout)
-    const ring = this.el.querySelector("#progress-ring");
-    if (ring) {
-      const circ = 2 * Math.PI * 107;
-      const phasePct =
-        event.duration_sec > 0 ? phase_elapsed / event.duration_sec : 0;
-      const offset = circ * (1 - Math.min(phasePct, 1));
-      ring.style.strokeDasharray = circ.toFixed(4);
-      ring.style.strokeDashoffset = offset.toFixed(4);
-      ring.style.stroke = color;
-      ring.style.transition = "stroke 0.4s";
-    }
 
     // Overall progress bar color
     if (fill) fill.style.backgroundColor = isWarning ? "#F59E0B" : color;
@@ -448,37 +536,222 @@ const SessionHook = {
     const setLabel = this.el.querySelector("#set-label");
     if (setLabel) setLabel.textContent = event.label || "";
 
-    // Clock center
-    const clockTop = this.el.querySelector("#clock-top");
-    const clockPrimary = this.el.querySelector("#clock-primary");
-    const clockBottom = this.el.querySelector("#clock-bottom");
-
     if (isWork) {
-      const secPerRep =
-        event.sec_per_burpee || event.duration_sec / (event.burpee_count || 1);
-      const repsLeft = Math.max(
-        Math.ceil((event.duration_sec - phase_elapsed) / secPerRep),
-        0,
-      );
-      if (clockTop) clockTop.textContent = "reps left";
-      if (clockPrimary) {
-        clockPrimary.textContent = repsLeft;
-        clockPrimary.style.color = "";
+      // Rebuild segments when entering a new work event
+      if (
+        event.type !== this.lastEventType ||
+        event.burpee_count !== this.lastBurpeeCount
+      ) {
+        this.buildRings(event.burpee_count);
+        this.triggerDown(event.burpee_count);
+        this.lastEventType = event.type;
+        this.lastBurpeeCount = event.burpee_count;
       }
-      if (clockBottom) clockBottom.textContent = "of " + event.burpee_count;
-    } else if (isRest) {
-      if (clockTop) clockTop.textContent = "rest";
-      if (clockPrimary) {
-        clockPrimary.textContent = this.formatTime(phase_remaining);
-        // Yellow countdown when ≤5s remain
-        clockPrimary.style.color = isWarning ? "#F59E0B" : "";
-      }
-      if (clockBottom) clockBottom.textContent = "";
-    }
 
-    // Burpee counter (main only)
-    const repsDone = this.el.querySelector("#reps-done");
-    if (repsDone) repsDone.textContent = this.mainBurpeeCount;
+      const secPerRep =
+        event.sec_per_rep ||
+        event.sec_per_burpee ||
+        event.duration_sec / (event.burpee_count || 1);
+      const repIndex = Math.floor(phase_elapsed / secPerRep);
+      const repElapsed = phase_elapsed - repIndex * secPerRep;
+      const repProgress = repElapsed / secPerRep;
+
+      // Falling edge — rep completed
+      if (repIndex > this.doneReps) {
+        this.triggerFlash();
+        this.doneReps = repIndex;
+        if (event.type === "warmup_burpee") {
+          this.warmupBurpeeCount++;
+          this.updateTotalCounter(this.warmupBurpeeCount + this.mainBurpeeCount);
+        } else {
+          this.mainBurpeeCount++;
+          this.updateTotalCounter(this.mainBurpeeCount);
+        }
+        this.triggerDown(Math.max(this.totalReps - this.doneReps, 0));
+      }
+
+      this.updateRings(repProgress);
+    } else if (isRest) {
+      // Build a single continuous arc for rest phases
+      if (event.type !== this.lastEventType) {
+        const svgEl = this.el.querySelector("#ring-svg");
+        if (svgEl) {
+          while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+          const restRing = document.createElementNS(NS, "circle");
+          restRing.setAttribute("cx", CX);
+          restRing.setAttribute("cy", CY);
+          restRing.setAttribute("r", R);
+          restRing.setAttribute("fill", "none");
+          restRing.setAttribute("stroke-width", "16");
+          restRing.setAttribute("stroke-linecap", "round");
+          restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+          svgEl.appendChild(restRing);
+          this.restRingEl = restRing;
+        }
+        this.rings = [];
+        this.lastEventType = event.type;
+        this.lastBurpeeCount = 0;
+      }
+
+      const phasePct =
+        event.duration_sec > 0 ? phase_elapsed / event.duration_sec : 0;
+      const offset = CIRC * (1 - Math.min(phasePct, 1));
+      const rColor = isWarning ? "#F59E0B" : "#6B8FA8";
+      if (this.restRingEl) {
+        this.restRingEl.setAttribute("stroke", rColor);
+        this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+        this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
+      }
+
+      const countEl = this.el.querySelector("#count");
+      if (countEl) {
+        countEl.style.visibility = "";
+        countEl.textContent = this.formatTime(phase_remaining);
+        countEl.style.color = isWarning ? "#F59E0B" : "#C8D8F0";
+      }
+      const downEl = this.el.querySelector("#down-word");
+      if (downEl) downEl.style.display = "none";
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Segmented ring
+  // ---------------------------------------------------------------------------
+
+  buildRings(n) {
+    this.totalReps = n;
+    this.doneReps = 0;
+    this.lastDisplayed = -1;
+    const svgEl = this.el.querySelector("#ring-svg");
+    if (!svgEl) return;
+    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+    this.rings = [];
+
+    const segDeg = 360 / n;
+    const arcDeg = segDeg - GAP_DEG;
+    const arcLen = (arcDeg / 360) * CIRC;
+    const gapLen = (GAP_DEG / 360) * CIRC;
+    const period = arcLen + gapLen;
+
+    const bg = document.createElementNS(NS, "circle");
+    bg.setAttribute("cx", CX);
+    bg.setAttribute("cy", CY);
+    bg.setAttribute("r", R);
+    bg.setAttribute("fill", "none");
+    bg.setAttribute("stroke", "#0D1017");
+    bg.setAttribute("stroke-width", "18");
+    bg.setAttribute(
+      "stroke-dasharray",
+      `${arcLen.toFixed(3)} ${gapLen.toFixed(3)}`,
+    );
+    bg.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+    svgEl.appendChild(bg);
+
+    for (let i = 0; i < n; i++) {
+      const baseOffset = -(i * period);
+
+      const track = document.createElementNS(NS, "circle");
+      track.setAttribute("cx", CX);
+      track.setAttribute("cy", CY);
+      track.setAttribute("r", R);
+      track.setAttribute("fill", "none");
+      track.setAttribute("stroke", COL.upcoming);
+      track.setAttribute("stroke-width", "16");
+      track.setAttribute(
+        "stroke-dasharray",
+        `${arcLen.toFixed(3)} ${(CIRC - arcLen).toFixed(3)}`,
+      );
+      track.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
+      track.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+
+      const fill = document.createElementNS(NS, "circle");
+      fill.setAttribute("cx", CX);
+      fill.setAttribute("cy", CY);
+      fill.setAttribute("r", R);
+      fill.setAttribute("fill", "none");
+      fill.setAttribute("stroke", COL.upcoming);
+      fill.setAttribute("stroke-width", "16");
+      fill.setAttribute("stroke-dasharray", `0 ${CIRC.toFixed(3)}`);
+      fill.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
+      fill.setAttribute("stroke-linecap", "butt");
+      fill.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+
+      svgEl.appendChild(track);
+      svgEl.appendChild(fill);
+      this.rings.push({ track, fill, arcLen, baseOffset });
+    }
+  },
+
+  updateRings(repProgress) {
+    for (let i = 0; i < this.totalReps; i++) {
+      const { track, fill, arcLen, baseOffset } = this.rings[i];
+      if (i < this.doneReps) {
+        track.setAttribute("stroke", COL.doneBg);
+        fill.setAttribute("stroke", COL.done);
+        fill.setAttribute(
+          "stroke-dasharray",
+          `${arcLen.toFixed(3)} ${(CIRC - arcLen).toFixed(3)}`,
+        );
+        fill.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
+      } else if (i === this.doneReps && this.doneReps < this.totalReps) {
+        const filledLen = arcLen * Math.min(repProgress, 1);
+        track.setAttribute("stroke", COL.currentBg);
+        fill.setAttribute("stroke", COL.current);
+        fill.setAttribute(
+          "stroke-dasharray",
+          `${filledLen.toFixed(3)} ${(CIRC - filledLen).toFixed(3)}`,
+        );
+        fill.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
+      } else {
+        track.setAttribute("stroke", COL.upcoming);
+        fill.setAttribute("stroke", COL.upcoming);
+        fill.setAttribute("stroke-dasharray", `0 ${CIRC.toFixed(3)}`);
+      }
+    }
+  },
+
+  triggerDown(repsLeft) {
+    if (this.downTimeout) clearTimeout(this.downTimeout);
+    const countEl = this.el.querySelector("#count");
+    const downEl = this.el.querySelector("#down-word");
+    if (!countEl || !downEl) return;
+
+    // Hard cut: hide count, show "Down" instantly
+    countEl.style.visibility = "hidden";
+    downEl.style.display = "";
+
+    this.downTimeout = setTimeout(() => {
+      this.downTimeout = null;
+      // Hard cut: hide "Down", show new count
+      downEl.style.display = "none";
+      countEl.textContent = repsLeft;
+      countEl.style.color = "#C8D8F0";
+      countEl.style.visibility = "";
+      this.lastDisplayed = repsLeft;
+    }, 350);
+  },
+
+  triggerFlash() {
+    const flashEl = this.el.querySelector("#flash-circle");
+    if (!flashEl) return;
+    flashEl.style.transition = "none";
+    flashEl.setAttribute("opacity", "0.5");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        flashEl.style.transition = "opacity 0.2s ease-out";
+        flashEl.setAttribute("opacity", "0");
+      }),
+    );
+  },
+
+  updateTotalCounter(n) {
+    const el = this.el.querySelector("#total-done");
+    if (!el) return;
+    el.textContent = n;
+    el.style.color = "#FFFFFF";
+    setTimeout(() => {
+      el.style.color = "";
+    }, 160);
   },
 
   // ---------------------------------------------------------------------------

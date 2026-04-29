@@ -284,7 +284,7 @@ defmodule BurpeeTrainerWeb.GoalsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:goals}>
       <div class="space-y-8">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Goals</h1>

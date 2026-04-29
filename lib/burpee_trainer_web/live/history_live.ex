@@ -244,7 +244,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       |> assign(:goal_min, @goal_min)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:history}>
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <div>

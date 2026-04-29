@@ -26,7 +26,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:videos}>
       <div class="space-y-6">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Videos</h1>

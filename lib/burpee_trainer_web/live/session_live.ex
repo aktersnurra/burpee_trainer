@@ -252,39 +252,57 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
       <div
         id="ring-container"
-        class="relative mx-auto flex aspect-square w-full max-w-[220px] items-center justify-center"
+        class="relative mx-auto w-[280px] h-[280px] cursor-pointer select-none"
         phx-update="ignore"
       >
-        <svg viewBox="0 0 240 240" class="h-full w-full -rotate-90">
-          <circle cx="120" cy="120" r="107" fill="none" stroke-width="14" stroke="#1E2535" />
+        <svg id="ring-svg" viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px]"></svg>
+
+        <svg viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px] pointer-events-none">
           <circle
-            id="progress-ring"
-            cx="120"
-            cy="120"
+            id="flash-circle"
+            cx="140"
+            cy="140"
             r="107"
             fill="none"
-            stroke-width="14"
-            stroke-linecap="round"
-            stroke="#1E2535"
-            style="stroke-dasharray: 672.3008; stroke-dashoffset: 672.3008;"
+            stroke="white"
+            stroke-width="18"
+            opacity="0"
+            transform="rotate(-90 140 140)"
           />
         </svg>
-        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span id="clock-top" class="text-[13px] text-base-content/60"></span>
+
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span
-            id="clock-primary"
-            class="text-[46px] font-medium leading-none tabular-nums tracking-tight"
+            id="count"
+            class="text-[72px] font-light leading-none tracking-[-0.03em] tabular-nums"
+            style="color: #C8D8F0;"
+          >—</span>
+          <span
+            id="down-word"
+            class="absolute text-[28px] font-mono font-medium tracking-[0.12em] uppercase text-white pointer-events-none"
+            style="display: none;"
+          >Down</span>
+          <svg
+            id="pause-icon"
+            viewBox="0 0 48 48"
+            fill="currentColor"
+            class="absolute h-16 w-16"
+            style="display: none; color: #C8D8F0; opacity: 0.85;"
           >
-            —
-          </span>
-          <span id="clock-bottom" class="text-[13px] text-base-content/60"></span>
+            <rect x="10" y="8" width="10" height="32" rx="2" />
+            <rect x="28" y="8" width="10" height="32" rx="2" />
+          </svg>
         </div>
       </div>
 
-      <div class="flex items-baseline justify-center gap-2">
-        <span id="reps-done" class="text-[36px] font-medium leading-none tabular-nums">0</span>
-        <span class="text-xl text-base-content/60 tabular-nums">/ {@summary.burpee_count_total}</span>
-        <span class="text-[13px] text-base-content/50">burpees</span>
+      <div class="flex items-baseline justify-center gap-[6px]">
+        <span
+          id="total-done"
+          class="text-[32px] font-light leading-none tabular-nums"
+          style="color: #C8D8F0; transition: color 0.12s;"
+        >0</span>
+        <span class="text-[16px]" style="color: #2A3A50;">/</span>
+        <span id="total-plan" class="text-[16px]" style="color: #2A3A50;">{@summary.burpee_count_total}</span>
       </div>
 
       <div class="flex flex-col gap-1">
@@ -295,34 +313,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
             style="width: 0%; background-color: #1E2535;"
           />
         </div>
-        <div class="flex items-center justify-between text-[13px]">
-          <span>
-            Time left:
-            <span id="time-left" class="font-medium">
-              {Fmt.duration_sec(round(@summary.duration_sec_total))}
-            </span>
-          </span>
-          <span class="text-base-content/60">
-            Workout {Fmt.duration_sec(round(@summary.duration_sec_total))}
-          </span>
+        <div class="text-center text-[13px] text-base-content/50">
+          <span id="time-left">{Fmt.duration_sec(round(@summary.duration_sec_total))}</span>
         </div>
       </div>
-
-      <button
-        id="pause-btn"
-        type="button"
-        class={[
-          "flex h-12 w-full items-center justify-center gap-3 rounded-md border border-base-300 text-sm font-medium transition",
-          "active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-        ]}
-        disabled
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-          <rect x="5" y="4" width="3" height="12" rx="0.5" />
-          <rect x="12" y="4" width="3" height="12" rx="0.5" />
-        </svg>
-        <span>Pause</span>
-      </button>
 
       <button
         id="finish-early-btn"
