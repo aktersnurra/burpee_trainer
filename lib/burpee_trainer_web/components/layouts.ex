@@ -95,6 +95,15 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-play-circle-solid" class={if @current_page == :videos, do: "", else: "hidden"} />
           <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
         </.bottom_tab>
+
+        <.link
+          href={~p"/logout"}
+          method="delete"
+          title="Sign out"
+          class="inline-flex items-center justify-center w-14 h-14 shrink-0 transition-colors text-[#3A4A5E] hover:text-[#C8D8F0]"
+        >
+          <.icon name="hero-arrow-left-start-on-rectangle" />
+        </.link>
       </nav>
     <% end %>
 

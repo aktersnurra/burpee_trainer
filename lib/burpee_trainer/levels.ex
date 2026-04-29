@@ -42,6 +42,24 @@ defmodule BurpeeTrainer.Levels do
   end
 
   @doc """
+  Returns the level tag for a plan given its total rep count and burpee type.
+  Filters to landmarks where count >= threshold, then picks the one with the
+  highest threshold. Returns `:level_1a` when count is below all thresholds.
+  """
+  @spec level_for_count(atom, integer) :: atom
+  def level_for_count(burpee_type, count) when is_integer(count) do
+    @landmarks
+    |> Enum.filter(fn lm -> count >= Map.get(lm, burpee_type) end)
+    |> Enum.max_by(fn lm -> Map.get(lm, burpee_type) end, fn -> nil end)
+    |> case do
+      nil -> :level_1a
+      lm -> lm.level
+    end
+  end
+
+  def level_for_count(_burpee_type, _), do: :level_1a
+
+  @doc """
   Returns the highest landmark level achieved for a given burpee type,
   ignoring the co-week requirement. Returns `:level_1a` with no sessions.
   """

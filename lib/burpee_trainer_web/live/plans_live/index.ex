@@ -5,7 +5,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Planner, Workouts}
+  alias BurpeeTrainer.{Levels, Planner, Workouts}
   alias BurpeeTrainerWeb.Fmt
 
   @impl true
@@ -34,7 +34,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
 
   defp assign_plans(socket) do
     plans = Workouts.list_plans(socket.assigns.current_user)
-    cards = Enum.map(plans, fn plan -> {plan, Planner.summary(plan)} end)
+    cards =
+      Enum.map(plans, fn plan ->
+        summary = Planner.summary(plan)
+        level_tag = Levels.level_for_count(plan.burpee_type, summary.burpee_count_total)
+        {plan, summary, level_tag}
+      end)
     assign(socket, :cards, cards)
   end
 
@@ -63,12 +68,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
           </div>
         <% else %>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <%= for {plan, summary} <- @cards do %>
+            <%= for {plan, summary, level_tag} <- @cards do %>
               <div class="rounded-lg border border-base-300 bg-base-100 p-5 space-y-4 flex flex-col">
                 <div class="space-y-1">
                   <h2 class="text-lg font-semibold tracking-tight">{plan.name}</h2>
-                  <div class="inline-flex items-center rounded-full bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
-                    {Fmt.burpee_type(plan.burpee_type)}
+                  <div class="flex flex-wrap gap-1.5">
+                    <span class="inline-flex items-center rounded-full bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
+                      {Fmt.burpee_type(plan.burpee_type)}
+                    </span>
+                    <span class={"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium #{Fmt.level_color(level_tag)}"}>
+                      {Fmt.level(level_tag)}
+                    </span>
                   </div>
                 </div>
 
