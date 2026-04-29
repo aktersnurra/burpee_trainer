@@ -4,7 +4,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.Videos
+  alias BurpeeTrainer.{Levels, Videos}
+  alias BurpeeTrainerWeb.Fmt
 
   @impl true
   def mount(_params, _session, socket) do
@@ -72,12 +73,19 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
               >
                 <div class="flex items-start justify-between gap-2">
                   <p class="font-medium text-base-content leading-snug">{video.name}</p>
-                  <span class={[
-                    "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-                    burpee_badge_class(video.burpee_type)
-                  ]}>
-                    {burpee_label(video.burpee_type)}
-                  </span>
+                  <div class="shrink-0 flex gap-1.5">
+                    <span class={[
+                      "rounded-full px-2 py-0.5 text-xs font-medium",
+                      burpee_badge_class(video.burpee_type)
+                    ]}>
+                      {burpee_label(video.burpee_type)}
+                    </span>
+                    <%= if video.burpee_count do %>
+                      <span class={"rounded-full px-2 py-0.5 text-xs font-medium #{Fmt.level_color(Levels.level_for_count(video.burpee_type, video.burpee_count))}"}>
+                        {Fmt.level(Levels.level_for_count(video.burpee_type, video.burpee_count))}
+                      </span>
+                    <% end %>
+                  </div>
                 </div>
                 <p class="text-sm text-base-content/50">
                   {format_duration(video.duration_sec)}

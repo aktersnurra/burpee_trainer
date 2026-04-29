@@ -19,11 +19,18 @@ defmodule Mix.Tasks.BurpeeTrainer.AddVideo do
         _ -> Mix.raise("DURATION_SEC must be a positive integer, got: #{duration_sec_str}")
       end
 
+    burpee_count =
+      case Regex.run(~r/(?:6c|ns)_(\d+)/, filename, capture: :all_but_first) do
+        [n] -> String.to_integer(n)
+        _ -> nil
+      end
+
     case BurpeeTrainer.Videos.create_video(%{
            name: name,
            filename: filename,
            burpee_type: burpee_type,
-           duration_sec: duration_sec
+           duration_sec: duration_sec,
+           burpee_count: burpee_count
          }) do
       {:ok, video} ->
         Mix.shell().info("Added video ##{video.id}: #{video.name} (#{video.filename})")
