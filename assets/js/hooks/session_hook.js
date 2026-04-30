@@ -43,6 +43,8 @@ const SessionHook = {
     this.countdownPaused = false;
     this.countdownCount = null;
     this.countdownTimeoutId = null;
+    this.countdownStepStarted = null; // performance.now() when the current step began
+    this.countdownStepElapsed = 0;    // ms elapsed in the current step when paused
 
     this.lastRepIndex = -1;
     this.lastRestCount = null;
@@ -152,20 +154,26 @@ const SessionHook = {
     const overlay = this.el.querySelector("#start-overlay");
     if (!overlay) return;
 
+    const moodIcons = {
+      "-1": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.318A4.486 4.486 0 0 0 12.016 15a4.486 4.486 0 0 0-3.198 1.318M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" /></svg>`,
+      "0": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`,
+      "1": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" /></svg>`,
+    };
+
     // Patch the overlay in-place — delegation on the hook root catches the clicks.
     overlay.innerHTML = `
       <span class="text-xl font-semibold tracking-tight">How do you feel?</span>
       <div class="flex gap-3">
         ${[
-          ["😮‍💨", "Tired", "-1"],
-          ["😐", "OK", "0"],
-          ["💪", "Hyped", "1"],
+          ["Tired", "-1"],
+          ["OK", "0"],
+          ["Hyped", "1"],
         ]
           .map(
-            ([emoji, label, val]) => `
+            ([label, val]) => `
           <button type="button" data-mood="${val}"
             class="flex flex-col items-center gap-1.5 rounded-xl border border-[#1E2535] px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-[#181C26]">
-            <span class="text-2xl">${emoji}</span>
+            ${moodIcons[val]}
             <span>${label}</span>
           </button>
         `,
@@ -248,27 +256,32 @@ const SessionHook = {
 
     this.countdownShowCount = showCount;
 
-    const scheduleNext = (n) => {
-      this.countdownCount = n;
+    // scheduleNext: show `n` after `delayMs`, then continue.
+    // countdownCount tracks the number currently *visible* on screen.
+    const scheduleNext = (n, delayMs = 1000) => {
+      this.countdownStepStarted = performance.now();
       this.countdownTimeoutId = setTimeout(() => {
         if (this.countdownPaused) return;
         if (n >= 1) {
+          this.countdownCount = n;
           showCount(n, true);
           this.leadBeepAt(this.audioContext().currentTime + 0.02);
           scheduleNext(n - 1);
         } else {
           this.countdownCount = null;
           this.countdownTimeoutId = null;
+          this.countdownStepStarted = null;
           if (countEl) {
             countEl.style.color = "#C8D8F0";
             countEl.textContent = "—";
           }
           this.beginSession();
         }
-      }, 1000);
+      }, delayMs);
     };
 
     // Render 5 with no transition — ring stays full, no animation flash.
+    this.countdownCount = 5;
     showCount(5, false);
     this.leadBeepAt(this.audioContext().currentTime + 0.02);
     scheduleNext(4);
@@ -363,6 +376,10 @@ const SessionHook = {
       clearTimeout(this.countdownTimeoutId);
       this.countdownTimeoutId = null;
     }
+    // Record how much of the current 1-second step has already elapsed.
+    this.countdownStepElapsed = this.countdownStepStarted !== null
+      ? performance.now() - this.countdownStepStarted
+      : 0;
     this.stopAudio();
     this.updatePauseBtn(true);
   },
@@ -374,17 +391,19 @@ const SessionHook = {
     const n = this.countdownCount;
     if (n === null) return;
 
-    const scheduleNext = (n) => {
-      this.countdownCount = n;
+    const scheduleNext = (n, delayMs = 1000) => {
+      this.countdownStepStarted = performance.now();
       this.countdownTimeoutId = setTimeout(() => {
         if (this.countdownPaused) return;
         if (n >= 1) {
+          this.countdownCount = n;
           this.countdownShowCount(n, true);
           this.leadBeepAt(this.audioContext().currentTime + 0.02);
           scheduleNext(n - 1);
         } else {
           this.countdownCount = null;
           this.countdownTimeoutId = null;
+          this.countdownStepStarted = null;
           const countEl = this.el.querySelector("#count");
           if (countEl) {
             countEl.style.color = "#C8D8F0";
@@ -392,13 +411,14 @@ const SessionHook = {
           }
           this.beginSession();
         }
-      }, 1000);
+      }, delayMs);
     };
 
-    // Show the current number immediately, then continue
+    // Show the current number and wait only the remaining portion of its second.
     this.countdownShowCount(n, false);
-    this.leadBeepAt(this.audioContext().currentTime + 0.02);
-    scheduleNext(n - 1);
+    const elapsed = this.countdownStepElapsed || 0;
+    const remaining = Math.max(1000 - elapsed, 0);
+    scheduleNext(n - 1, remaining);
   },
 
   pause() {

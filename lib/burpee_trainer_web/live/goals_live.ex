@@ -778,7 +778,7 @@ defmodule BurpeeTrainerWeb.GoalsLive do
   attr :rec_type, :atom, default: nil
   attr :rec_suggestions, :list, default: []
 
-  @rec_mood_options [{"😮‍💨", "Tired", -1}, {"😐", "OK", 0}, {"💪", "Hyped", 1}]
+  @rec_mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
 
   defp recommendation_panel(assigns) do
     assigns = assign(assigns, mood_options: @rec_mood_options)
@@ -802,14 +802,14 @@ defmodule BurpeeTrainerWeb.GoalsLive do
         <div class="space-y-2">
           <p class="text-sm text-base-content/70">How do you feel right now?</p>
           <div class="flex gap-3">
-            <%= for {emoji, label, value} <- @mood_options do %>
+            <%= for {icon, label, value} <- @mood_options do %>
               <button
                 type="button"
                 phx-click="pick_rec_mood"
                 phx-value-mood={value}
                 class="flex flex-col items-center gap-1.5 rounded-xl border border-base-300 px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
               >
-                <span class="text-2xl">{emoji}</span>
+                <.icon name={icon} class="size-6" />
                 <span>{label}</span>
               </button>
             <% end %>

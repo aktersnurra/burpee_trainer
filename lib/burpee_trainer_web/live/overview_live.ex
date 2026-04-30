@@ -109,7 +109,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         <div class="flex items-center justify-between">
           <span class="text-xs text-base-content/40 uppercase tracking-wide">This week</span>
           <%= if @this_week.met_goal do %>
-            <span class="text-xs font-medium text-success">Goal met ✓</span>
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-success">Goal met <.icon name="hero-check" class="size-3" /></span>
           <% else %>
             <span class="text-xs text-base-content/40">
               {@min_done |> :erlang.float_to_binary(decimals: 0)} / {trunc(@goal_min)} min
@@ -215,9 +215,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         ]}>
           <%= cond do %>
             <% @week.is_current -> %>
-              →
+              <.icon name="hero-arrow-right" class="size-2.5" />
             <% @week.met_goal -> %>
-              ✓
+              <.icon name="hero-check" class="size-2.5" />
             <% @week.minutes > 0 -> %>
               ·
             <% true -> %>

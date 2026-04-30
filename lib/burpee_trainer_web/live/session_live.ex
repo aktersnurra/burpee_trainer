@@ -359,7 +359,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               "px-6 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
             ]}
           >
-            <span class="text-2xl">🔥</span>
+            <.icon name="hero-sparkles" class="size-6" />
             <span>Yes</span>
           </button>
           <button
@@ -370,14 +370,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
               "px-6 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
             ]}
           >
-            <span class="text-2xl">⚡</span>
+            <.icon name="hero-bolt" class="size-6" />
             <span>Skip</span>
           </button>
         </div>
       <% else %>
         <span class="text-xl font-semibold tracking-tight">How do you feel?</span>
         <div class="flex gap-3">
-          <%= for {emoji, label, value} <- [{"😮‍💨", "Tired", -1}, {"😐", "OK", 0}, {"💪", "Hyped", 1}] do %>
+          <%= for {icon, label, value} <- [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}] do %>
             <button
               type="button"
               phx-click="session_started"
@@ -387,7 +387,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 "px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
               ]}
             >
-              <span class="text-2xl">{emoji}</span>
+              <.icon name={icon} class="size-6" />
               <span>{label}</span>
             </button>
           <% end %>
@@ -403,7 +403,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   attr :mood, :integer, default: nil
   attr :completion_tags, :list, default: []
 
-  @mood_options [{"😮‍💨", "Tired", -1}, {"😐", "OK", 0}, {"💪", "Hyped", 1}]
+  @mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
   @tag_options ~w[tired great_energy bad_sleep sick travel hot]
 
   defp completion_panel(assigns) do
@@ -427,7 +427,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       <div class="space-y-1.5">
         <p class="text-sm font-medium">Mood</p>
         <div class="flex gap-2">
-          <%= for {emoji, label, value} <- @mood_options do %>
+          <%= for {icon, label, value} <- @mood_options do %>
             <button
               type="button"
               phx-click="set_mood"
@@ -440,7 +440,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 )
               ]}
             >
-              {emoji} {label}
+              <.icon name={icon} class="size-4" /> {label}
             </button>
           <% end %>
         </div>

@@ -65,7 +65,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       </nav>
 
       <%!-- Mobile bottom tab bar --%>
-      <nav class="fixed bottom-0 inset-x-0 sm:hidden flex items-center justify-around bg-[#0D1017] border-t border-[#141B26] pb-safe">
+      <nav class="fixed bottom-0 inset-x-0 z-50 sm:hidden flex items-center justify-around bg-[#0D1017] border-t border-[#141B26] pb-safe">
         <.bottom_tab navigate={~p"/"} active={@current_page == :home}>
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />

@@ -10,7 +10,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign_plans(socket)}
+    {:ok, socket |> assign_plans() |> assign(:filter_level, nil)}
   end
 
   @impl true
@@ -24,6 +24,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not duplicate plan.")}
     end
+  end
+
+  def handle_event("filter", %{"level" => level}, socket) do
+    level_atom = if level == "", do: nil, else: String.to_existing_atom(level)
+    {:noreply, assign(socket, :filter_level, level_atom)}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
@@ -61,6 +66,34 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
           </.link>
         </div>
 
+        <%
+          all_levels = Enum.map(@cards, fn {_, _, level_tag} -> level_tag end) |> Enum.uniq() |> Enum.sort()
+          visible = if @filter_level, do: Enum.filter(@cards, fn {_, _, lt} -> lt == @filter_level end), else: @cards
+        %>
+
+        <%= if all_levels != [] do %>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              phx-click="filter"
+              phx-value-level=""
+              class={"rounded-full px-3 py-1 text-xs font-medium transition border #{if is_nil(@filter_level), do: "bg-base-content text-base-100 border-base-content", else: "border-base-300 text-base-content/60 hover:bg-base-200"}"}
+            >
+              All
+            </button>
+            <%= for level <- all_levels do %>
+              <button
+                type="button"
+                phx-click="filter"
+                phx-value-level={level}
+                class={"rounded-full px-3 py-1 text-xs font-medium transition border #{if @filter_level == level, do: Fmt.level_color(level) <> " border-transparent", else: "border-base-300 text-base-content/60 hover:bg-base-200"}"}
+              >
+                {Fmt.level(level)}
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+
         <%= if @cards == [] do %>
           <div class="rounded-lg border border-dashed border-base-300 p-12 text-center space-y-2">
             <p class="text-base-content/70">No plans yet.</p>
@@ -68,7 +101,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
           </div>
         <% else %>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <%= for {plan, summary, level_tag} <- @cards do %>
+            <%= for {plan, summary, level_tag} <- visible do %>
               <div class="rounded-lg border border-base-300 bg-base-100 p-5 space-y-4 flex flex-col">
                 <div class="space-y-1">
                   <h2 class="text-lg font-semibold tracking-tight">{plan.name}</h2>

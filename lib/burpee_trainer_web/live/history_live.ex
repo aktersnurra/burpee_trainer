@@ -591,7 +591,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       </span>
 
       <span class={[
-        "text-xs font-medium w-4 text-right shrink-0",
+        "inline-flex items-center justify-end w-4 shrink-0",
         @is_current && "text-primary",
         !@is_current && @week.met_goal && "text-success",
         !@is_current && !@week.met_goal && @week.minutes > 0 && "text-error",
@@ -599,11 +599,11 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       ]}>
         <%= cond do %>
           <% @is_current -> %>
-            →
+            <.icon name="hero-arrow-right" class="size-3" />
           <% @week.met_goal -> %>
-            ✓
+            <.icon name="hero-check" class="size-3" />
           <% @week.minutes > 0 -> %>
-            ✗
+            <.icon name="hero-x-mark" class="size-3" />
           <% true -> %>
             ·
         <% end %>

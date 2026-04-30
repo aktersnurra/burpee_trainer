@@ -9,7 +9,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, filter: :all, videos: Videos.list_videos())}
+    {:ok, assign(socket, filter: :all, videos: Videos.list_videos(), filter_level: nil)}
   end
 
   @impl true
@@ -21,7 +21,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
         _ -> {:all, Videos.list_videos()}
       end
 
-    {:noreply, assign(socket, filter: filter, videos: videos)}
+    {:noreply, assign(socket, filter: filter, videos: videos, filter_level: nil)}
+  end
+
+  def handle_event("filter_level", %{"level" => level}, socket) do
+    level_atom = if level == "", do: nil, else: String.to_existing_atom(level)
+    {:noreply, assign(socket, :filter_level, level_atom)}
   end
 
   @impl true
@@ -60,13 +65,55 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
           </button>
         </div>
 
-        <%= if @videos == [] do %>
+        <%
+          all_levels =
+            @videos
+            |> Enum.filter(& &1.burpee_count)
+            |> Enum.map(&Levels.level_for_count(&1.burpee_type, &1.burpee_count))
+            |> Enum.uniq()
+            |> Enum.sort()
+
+          visible =
+            if @filter_level do
+              Enum.filter(@videos, fn v ->
+                v.burpee_count &&
+                  Levels.level_for_count(v.burpee_type, v.burpee_count) == @filter_level
+              end)
+            else
+              @videos
+            end
+        %>
+
+        <%= if all_levels != [] do %>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              phx-click="filter_level"
+              phx-value-level=""
+              class={"rounded-full px-3 py-1 text-xs font-medium transition border #{if is_nil(@filter_level), do: "bg-base-content text-base-100 border-base-content", else: "border-base-300 text-base-content/60 hover:bg-base-200"}"}
+            >
+              All levels
+            </button>
+            <%= for level <- all_levels do %>
+              <button
+                type="button"
+                phx-click="filter_level"
+                phx-value-level={level}
+                class={"rounded-full px-3 py-1 text-xs font-medium transition border #{if @filter_level == level, do: Fmt.level_color(level) <> " border-transparent", else: "border-base-300 text-base-content/60 hover:bg-base-200"}"}
+              >
+                {Fmt.level(level)}
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+
+        <%= if visible == [] do %>
           <div class="rounded-lg border border-base-300 bg-base-100 p-10 text-center">
             <p class="text-base-content/50 text-sm">No videos yet.</p>
           </div>
         <% else %>
           <div class="grid gap-4 sm:grid-cols-2">
-            <%= for video <- @videos do %>
+            <%= for video <- visible do %>
               <.link
                 navigate={~p"/videos/#{video.id}"}
                 class="group rounded-lg border border-base-300 bg-base-100 p-5 flex flex-col gap-2 hover:border-primary/40 transition-colors"

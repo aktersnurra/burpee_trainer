@@ -9,7 +9,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
 
-  @mood_options [{"😮‍💨", "Tired", -1}, {"😐", "OK", 0}, {"💪", "Hyped", 1}]
+  @mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
   @tag_options ~w[tired great_energy bad_sleep sick travel hot]
 
   @impl true
@@ -198,7 +198,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
               <div class="space-y-1.5">
                 <p class="text-sm font-medium">Mood</p>
                 <div class="flex gap-2">
-                  <%= for {emoji, label, value} <- @mood_options do %>
+                  <%= for {icon, label, value} <- @mood_options do %>
                     <button
                       type="button"
                       phx-click="set_mood"
@@ -211,7 +211,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
                         )
                       ]}
                     >
-                      {emoji} {label}
+                      <.icon name={icon} class="size-4" /> {label}
                     </button>
                   <% end %>
                 </div>
