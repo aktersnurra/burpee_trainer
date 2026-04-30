@@ -549,7 +549,6 @@ defmodule BurpeeTrainerWeb.GoalsLive do
         <h3 class="text-xs font-semibold uppercase tracking-wide text-base-content/60">
           Next session
         </h3>
-        <p class="text-sm">{@rec.rationale}</p>
         <dl class="grid grid-cols-3 gap-3 pt-1">
           <div>
             <dt class="text-xs text-base-content/60">Burpees</dt>
@@ -566,21 +565,16 @@ defmodule BurpeeTrainerWeb.GoalsLive do
             </dd>
           </div>
         </dl>
-        <div class="flex gap-2 pt-2">
+        <div class="pt-2">
           <button
             type="button"
             phx-click="get_recommendation"
             phx-value-type={Atom.to_string(@type)}
-            class="flex-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
+            title="Get style recommendation"
+            class="inline-flex items-center justify-center w-full rounded-md bg-primary py-2 text-primary-content hover:bg-primary/90 transition"
           >
-            Get style recommendation
+            <.icon name="hero-sparkles" class="size-4" />
           </button>
-          <.link
-            navigate={~p"/log"}
-            class="rounded-md border border-base-300 bg-base-100 px-3 py-1.5 text-sm hover:bg-base-200 transition"
-          >
-            Log session
-          </.link>
         </div>
       </div>
 
@@ -841,17 +835,19 @@ defmodule BurpeeTrainerWeb.GoalsLive do
                   type="button"
                   phx-click="use_suggestion"
                   phx-value-style={Atom.to_string(name)}
-                  class="flex-1 rounded-md border border-base-300 bg-base-100 px-3 py-1.5 text-xs font-medium hover:bg-base-200 transition"
+                  title="Open in editor"
+                  class="flex-1 inline-flex items-center justify-center h-9 rounded-md border border-base-300 bg-base-100 hover:bg-base-200 transition"
                 >
-                  Use this (editor)
+                  <.icon name="hero-pencil-square" class="size-4" />
                 </button>
                 <button
                   type="button"
                   phx-click="run_suggestion"
                   phx-value-style={Atom.to_string(name)}
-                  class="flex-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition"
+                  title="Run directly"
+                  class="flex-1 inline-flex items-center justify-center h-9 rounded-md bg-primary text-primary-content hover:bg-primary/90 transition"
                 >
-                  Run directly
+                  <.icon name="hero-play" class="size-4" />
                 </button>
               </div>
             </div>

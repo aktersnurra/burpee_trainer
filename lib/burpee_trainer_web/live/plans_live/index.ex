@@ -95,35 +95,39 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
 
                 <div class="flex-1" />
 
-                <div class="flex flex-wrap gap-2 pt-2">
+                <div class="flex gap-2 pt-2">
                   <.link
                     navigate={~p"/session/#{plan.id}"}
-                    class="flex-1 text-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
+                    title="Run"
+                    class="flex-1 inline-flex items-center justify-center rounded-md bg-primary py-1.5 text-primary-content hover:bg-primary/90 transition"
                   >
-                    Run
+                    <.icon name="hero-play" class="size-4" />
                   </.link>
                   <.link
                     navigate={~p"/plans/#{plan.id}/edit"}
-                    class="flex-1 text-center rounded-md border border-base-300 px-3 py-1.5 text-sm hover:bg-base-200 transition"
+                    title="Edit"
+                    class="inline-flex items-center justify-center w-9 rounded-md border border-base-300 py-1.5 hover:bg-base-200 transition"
                   >
-                    Edit
+                    <.icon name="hero-pencil-square" class="size-4" />
                   </.link>
                   <button
                     type="button"
                     phx-click="duplicate"
                     phx-value-id={plan.id}
-                    class="rounded-md border border-base-300 px-3 py-1.5 text-sm hover:bg-base-200 transition"
+                    title="Duplicate"
+                    class="inline-flex items-center justify-center w-9 rounded-md border border-base-300 py-1.5 hover:bg-base-200 transition"
                   >
-                    Duplicate
+                    <.icon name="hero-document-duplicate" class="size-4" />
                   </button>
                   <button
                     type="button"
                     phx-click="delete"
                     phx-value-id={plan.id}
+                    title="Delete"
                     data-confirm={"Delete '#{plan.name}'? This cannot be undone."}
-                    class="rounded-md border border-error/40 px-3 py-1.5 text-sm text-error hover:bg-error/10 transition"
+                    class="inline-flex items-center justify-center w-9 rounded-md border border-error/40 py-1.5 text-error hover:bg-error/10 transition"
                   >
-                    Delete
+                    <.icon name="hero-trash" class="size-4" />
                   </button>
                 </div>
               </div>
