@@ -105,4 +105,14 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Hide scrollbar on mobile while keeping scroll functionality */
+@media (max-width: 768px) {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* This file is for your main application CSS */
