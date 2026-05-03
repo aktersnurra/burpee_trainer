@@ -284,7 +284,12 @@ defmodule BurpeeTrainerWeb.GoalsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:goals}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:goals}
+    >
       <div class="space-y-8">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Goals</h1>
@@ -778,7 +783,11 @@ defmodule BurpeeTrainerWeb.GoalsLive do
   attr :rec_type, :atom, default: nil
   attr :rec_suggestions, :list, default: []
 
-  @rec_mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
+  @rec_mood_options [
+    {"hero-face-frown", "Tired", -1},
+    {"hero-minus-circle", "OK", 0},
+    {"hero-bolt", "Hyped", 1}
+  ]
 
   defp recommendation_panel(assigns) do
     assigns = assign(assigns, mood_options: @rec_mood_options)

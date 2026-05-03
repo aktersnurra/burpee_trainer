@@ -276,12 +276,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
             id="count"
             class="text-[72px] font-light leading-none tracking-[-0.03em] tabular-nums"
             style="color: #C8D8F0;"
-          >—</span>
+          >
+            —
+          </span>
           <span
             id="down-word"
             class="absolute text-[28px] font-mono font-medium tracking-[0.12em] uppercase text-white pointer-events-none"
             style="display: none;"
-          >Down</span>
+          >
+            Down
+          </span>
           <svg
             id="pause-icon"
             viewBox="0 0 48 48"
@@ -300,9 +304,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
           id="total-done"
           class="text-[32px] font-light leading-none tabular-nums"
           style="color: #C8D8F0; transition: color 0.12s;"
-        >0</span>
+        >
+          0
+        </span>
         <span class="text-[16px]" style="color: #2A3A50;">/</span>
-        <span id="total-plan" class="text-[16px]" style="color: #2A3A50;">{@summary.burpee_count_total}</span>
+        <span id="total-plan" class="text-[16px]" style="color: #2A3A50;">
+          {@summary.burpee_count_total}
+        </span>
       </div>
 
       <div class="flex flex-col gap-1">
@@ -403,7 +411,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
   attr :mood, :integer, default: nil
   attr :completion_tags, :list, default: []
 
-  @mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
+  @mood_options [
+    {"hero-face-frown", "Tired", -1},
+    {"hero-minus-circle", "OK", 0},
+    {"hero-bolt", "Hyped", 1}
+  ]
   @tag_options ~w[tired great_energy bad_sleep sick travel hot]
 
   defp completion_panel(assigns) do

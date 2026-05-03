@@ -28,17 +28,29 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.nav_icon>
 
         <.nav_icon navigate={~p"/plans"} title="Plans" active={@current_page == :plans}>
-          <.icon name="hero-rectangle-stack-solid" class={if @current_page == :plans, do: "", else: "hidden"} />
-          <.icon name="hero-rectangle-stack" class={if @current_page == :plans, do: "hidden", else: ""} />
+          <.icon
+            name="hero-rectangle-stack-solid"
+            class={if @current_page == :plans, do: "", else: "hidden"}
+          />
+          <.icon
+            name="hero-rectangle-stack"
+            class={if @current_page == :plans, do: "hidden", else: ""}
+          />
         </.nav_icon>
 
         <.nav_icon navigate={~p"/log"} title="Log" active={@current_page == :log}>
-          <.icon name="hero-pencil-square-solid" class={if @current_page == :log, do: "", else: "hidden"} />
+          <.icon
+            name="hero-pencil-square-solid"
+            class={if @current_page == :log, do: "", else: "hidden"}
+          />
           <.icon name="hero-pencil-square" class={if @current_page == :log, do: "hidden", else: ""} />
         </.nav_icon>
 
         <.nav_icon navigate={~p"/history"} title="History" active={@current_page == :history}>
-          <.icon name="hero-chart-bar-solid" class={if @current_page == :history, do: "", else: "hidden"} />
+          <.icon
+            name="hero-chart-bar-solid"
+            class={if @current_page == :history, do: "", else: "hidden"}
+          />
           <.icon name="hero-chart-bar" class={if @current_page == :history, do: "hidden", else: ""} />
         </.nav_icon>
 
@@ -48,7 +60,10 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.nav_icon>
 
         <.nav_icon navigate={~p"/videos"} title="Videos" active={@current_page == :videos}>
-          <.icon name="hero-play-circle-solid" class={if @current_page == :videos, do: "", else: "hidden"} />
+          <.icon
+            name="hero-play-circle-solid"
+            class={if @current_page == :videos, do: "", else: "hidden"}
+          />
           <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
         </.nav_icon>
 
@@ -72,17 +87,29 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.bottom_tab>
 
         <.bottom_tab navigate={~p"/plans"} active={@current_page == :plans}>
-          <.icon name="hero-rectangle-stack-solid" class={if @current_page == :plans, do: "", else: "hidden"} />
-          <.icon name="hero-rectangle-stack" class={if @current_page == :plans, do: "hidden", else: ""} />
+          <.icon
+            name="hero-rectangle-stack-solid"
+            class={if @current_page == :plans, do: "", else: "hidden"}
+          />
+          <.icon
+            name="hero-rectangle-stack"
+            class={if @current_page == :plans, do: "hidden", else: ""}
+          />
         </.bottom_tab>
 
         <.bottom_tab navigate={~p"/log"} active={@current_page == :log}>
-          <.icon name="hero-pencil-square-solid" class={if @current_page == :log, do: "", else: "hidden"} />
+          <.icon
+            name="hero-pencil-square-solid"
+            class={if @current_page == :log, do: "", else: "hidden"}
+          />
           <.icon name="hero-pencil-square" class={if @current_page == :log, do: "hidden", else: ""} />
         </.bottom_tab>
 
         <.bottom_tab navigate={~p"/history"} active={@current_page == :history}>
-          <.icon name="hero-chart-bar-solid" class={if @current_page == :history, do: "", else: "hidden"} />
+          <.icon
+            name="hero-chart-bar-solid"
+            class={if @current_page == :history, do: "", else: "hidden"}
+          />
           <.icon name="hero-chart-bar" class={if @current_page == :history, do: "hidden", else: ""} />
         </.bottom_tab>
 
@@ -92,7 +119,10 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.bottom_tab>
 
         <.bottom_tab navigate={~p"/videos"} active={@current_page == :videos}>
-          <.icon name="hero-play-circle-solid" class={if @current_page == :videos, do: "", else: "hidden"} />
+          <.icon
+            name="hero-play-circle-solid"
+            class={if @current_page == :videos, do: "", else: "hidden"}
+          />
           <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
         </.bottom_tab>
 

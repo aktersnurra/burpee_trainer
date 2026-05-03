@@ -49,6 +49,15 @@ defmodule BurpeeTrainer.LevelsTest do
       assert Levels.current_level(sessions) == :level_1a
     end
 
+    test "sessions over 1200s do not qualify even with enough reps" do
+      sessions = [
+        session(%{burpee_type: :six_count, burpee_count_actual: 325, duration_sec_actual: 1201}),
+        session(%{burpee_type: :navy_seal, burpee_count_actual: 150, duration_sec_actual: 1201})
+      ]
+
+      assert Levels.current_level(sessions) == :level_1a
+    end
+
     test "does not level up if thresholds met in different weeks" do
       sessions = [
         # week 2 of 2026

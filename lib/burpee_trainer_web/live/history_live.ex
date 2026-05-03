@@ -37,11 +37,14 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       navy_seal: compute_prs(sessions, :navy_seal)
     }
 
+    streaks = compute_streaks(weekly)
+
     {:ok,
      socket
      |> assign(:sessions, sessions)
      |> assign(:prs, all_prs[:six_count])
      |> assign(:all_prs, all_prs)
+     |> assign(:streaks, streaks)
      |> assign(:level_unlocks, level_unlocks)
      |> assign(:active_goals, active_goals)
      |> assign(:weekly, weekly)
@@ -197,6 +200,25 @@ defmodule BurpeeTrainerWeb.HistoryLive do
     end
   end
 
+  defp compute_streaks(weekly) do
+    # weekly is sorted descending; streak = consecutive met_goal weeks
+    asc = Enum.reverse(weekly)
+
+    longest =
+      asc
+      |> Enum.chunk_by(& &1.met_goal)
+      |> Enum.filter(&hd(&1).met_goal)
+      |> Enum.map(&length/1)
+      |> Enum.max(fn -> 0 end)
+
+    current =
+      weekly
+      |> Enum.take_while(& &1.met_goal)
+      |> length()
+
+    %{longest: longest, current: current}
+  end
+
   defp compute_prs(sessions, type) do
     typed =
       sessions
@@ -207,18 +229,23 @@ defmodule BurpeeTrainerWeb.HistoryLive do
   end
 
   defp do_compute_prs(sessions) do
-    burpees_max = Enum.max_by(sessions, & &1.burpee_count_actual)
-    duration_max = Enum.max_by(sessions, & &1.duration_sec_actual)
+    qualifying = Enum.filter(sessions, &(&1.duration_sec_actual <= 1200))
+
+    burpees_max =
+      case qualifying do
+        [] -> nil
+        q -> Enum.max_by(q, & &1.burpee_count_actual)
+      end
 
     rate_best =
-      sessions
+      qualifying
       |> Enum.filter(&(&1.duration_sec_actual > 0))
       |> case do
         [] -> nil
         rated -> Enum.max_by(rated, &(&1.burpee_count_actual / &1.duration_sec_actual))
       end
 
-    %{burpees_max: burpees_max, duration_max: duration_max, rate_best: rate_best}
+    %{burpees_max: burpees_max, rate_best: rate_best}
   end
 
   @impl true
@@ -244,7 +271,12 @@ defmodule BurpeeTrainerWeb.HistoryLive do
       |> assign(:goal_min, @goal_min)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:history}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:history}
+    >
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <div>
@@ -262,9 +294,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
         <%= if @sessions == [] do %>
           <.empty_state />
         <% else %>
-          <%= for {type, prs} <- @all_prs, prs != nil do %>
-            <.stats_row prs={prs} series_type={type} />
-          <% end %>
+          <.stats_row prs={@prs} series_type={@chart_series} streaks={@streaks} />
           <.chart_card chart={@chart} chart_series={@chart_series} chart_range={@chart_range} />
           <.sessions_card
             sessions={@visible_sessions}
@@ -305,6 +335,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
 
   attr :prs, :any, required: true
   attr :series_type, :atom, required: true
+  attr :streaks, :map, required: true
 
   defp stats_row(assigns) do
     ~H"""
@@ -319,14 +350,20 @@ defmodule BurpeeTrainerWeb.HistoryLive do
           <.stat_cell
             icon="hero-arrow-trending-up"
             label="Most burpees"
-            value={to_string(@prs.burpees_max.burpee_count_actual)}
-            sub={Calendar.strftime(@prs.burpees_max.inserted_at, "%b %-d, %Y")}
+            value={
+              if @prs.burpees_max, do: to_string(@prs.burpees_max.burpee_count_actual), else: "—"
+            }
+            sub={
+              if @prs.burpees_max,
+                do: Calendar.strftime(@prs.burpees_max.inserted_at, "%b %-d, %Y"),
+                else: ""
+            }
           />
           <.stat_cell
-            icon="hero-clock"
-            label="Longest session"
-            value={Fmt.duration_sec(@prs.duration_max.duration_sec_actual)}
-            sub={Calendar.strftime(@prs.duration_max.inserted_at, "%b %-d, %Y")}
+            icon="hero-fire"
+            label="Streak"
+            value={"#{@streaks.longest} wks"}
+            sub={"current: #{@streaks.current} wks"}
           />
           <%= if @prs.rate_best do %>
             <.stat_cell
@@ -345,7 +382,7 @@ defmodule BurpeeTrainerWeb.HistoryLive do
           <% end %>
         <% else %>
           <.stat_cell icon="hero-arrow-trending-up" label="Most burpees" value="—" sub="" />
-          <.stat_cell icon="hero-clock" label="Longest session" value="—" sub="" />
+          <.stat_cell icon="hero-fire" label="Streak" value="—" sub="" />
           <.stat_cell icon="hero-bolt" label="Best rate" value="—" sub="" />
         <% end %>
       </div>

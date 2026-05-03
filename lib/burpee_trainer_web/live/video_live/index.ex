@@ -32,7 +32,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:videos}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:videos}
+    >
       <div class="space-y-6">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Videos</h1>
@@ -65,24 +70,22 @@ defmodule BurpeeTrainerWeb.VideoLive.Index do
           </button>
         </div>
 
-        <%
-          all_levels =
-            @videos
-            |> Enum.filter(& &1.burpee_count)
-            |> Enum.map(&Levels.level_for_count(&1.burpee_type, &1.burpee_count))
-            |> Enum.uniq()
-            |> Enum.sort()
+        <% all_levels =
+          @videos
+          |> Enum.filter(& &1.burpee_count)
+          |> Enum.map(&Levels.level_for_count(&1.burpee_type, &1.burpee_count))
+          |> Enum.uniq()
+          |> Enum.sort()
 
-          visible =
-            if @filter_level do
-              Enum.filter(@videos, fn v ->
-                v.burpee_count &&
-                  Levels.level_for_count(v.burpee_type, v.burpee_count) == @filter_level
-              end)
-            else
-              @videos
-            end
-        %>
+        visible =
+          if @filter_level do
+            Enum.filter(@videos, fn v ->
+              v.burpee_count &&
+                Levels.level_for_count(v.burpee_type, v.burpee_count) == @filter_level
+            end)
+          else
+            @videos
+          end %>
 
         <%= if all_levels != [] do %>
           <div class="flex flex-wrap gap-2">

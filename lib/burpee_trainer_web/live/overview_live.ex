@@ -64,7 +64,12 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:home}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:home}
+    >
       <div class="space-y-4">
         <.streak_card
           streak={@streak}
@@ -109,7 +114,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         <div class="flex items-center justify-between">
           <span class="text-xs text-base-content/40 uppercase tracking-wide">This week</span>
           <%= if @this_week.met_goal do %>
-            <span class="inline-flex items-center gap-1 text-xs font-medium text-success">Goal met <.icon name="hero-check" class="size-3" /></span>
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-success">
+              Goal met <.icon name="hero-check" class="size-3" />
+            </span>
           <% else %>
             <span class="text-xs text-base-content/40">
               {@min_done |> :erlang.float_to_binary(decimals: 0)} / {trunc(@goal_min)} min

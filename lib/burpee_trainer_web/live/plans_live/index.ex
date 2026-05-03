@@ -39,19 +39,26 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
 
   defp assign_plans(socket) do
     plans = Workouts.list_plans(socket.assigns.current_user)
+
     cards =
       Enum.map(plans, fn plan ->
         summary = Planner.summary(plan)
         level_tag = Levels.level_for_count(plan.burpee_type, summary.burpee_count_total)
         {plan, summary, level_tag}
       end)
+
     assign(socket, :cards, cards)
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:plans}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:plans}
+    >
       <div class="space-y-6">
         <div class="flex items-center justify-between">
           <div>
@@ -66,10 +73,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
           </.link>
         </div>
 
-        <%
-          all_levels = Enum.map(@cards, fn {_, _, level_tag} -> level_tag end) |> Enum.uniq() |> Enum.sort()
-          visible = if @filter_level, do: Enum.filter(@cards, fn {_, _, lt} -> lt == @filter_level end), else: @cards
-        %>
+        <% all_levels =
+          Enum.map(@cards, fn {_, _, level_tag} -> level_tag end) |> Enum.uniq() |> Enum.sort()
+
+        visible =
+          if @filter_level,
+            do: Enum.filter(@cards, fn {_, _, lt} -> lt == @filter_level end),
+            else: @cards %>
 
         <%= if all_levels != [] do %>
           <div class="flex flex-wrap gap-2">

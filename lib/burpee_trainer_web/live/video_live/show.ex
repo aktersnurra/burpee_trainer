@@ -9,7 +9,11 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
 
-  @mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
+  @mood_options [
+    {"hero-face-frown", "Tired", -1},
+    {"hero-minus-circle", "OK", 0},
+    {"hero-bolt", "Hyped", 1}
+  ]
   @tag_options ~w[tired great_energy bad_sleep sick travel hot]
 
   @impl true
@@ -121,7 +125,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:videos}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:videos}
+    >
       <div class="space-y-6">
         <div class="flex items-center gap-3">
           <.link

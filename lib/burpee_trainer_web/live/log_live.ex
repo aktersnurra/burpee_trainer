@@ -9,7 +9,11 @@ defmodule BurpeeTrainerWeb.LogLive do
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
 
-  @mood_options [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}]
+  @mood_options [
+    {"hero-face-frown", "Tired", -1},
+    {"hero-minus-circle", "OK", 0},
+    {"hero-bolt", "Hyped", 1}
+  ]
   @tag_options ~w[tired great_energy bad_sleep sick travel hot]
 
   @impl true
@@ -126,7 +130,12 @@ defmodule BurpeeTrainerWeb.LogLive do
     assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level} current_page={:log}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_page={:log}
+    >
       <div class="max-w-xl mx-auto space-y-6">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Log session</h1>
