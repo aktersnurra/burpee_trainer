@@ -749,7 +749,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     step="0.1"
                     min={pace_floor(@plan_input.burpee_type)}
                     value={:erlang.float_to_binary(@plan_input.sec_per_burpee * 1.0, decimals: 2)}
-                    class="w-24 rounded-md border border-base-300 px-2 py-1.5 text-sm text-center"
+                    readonly
+                    tabindex="-1"
+                    class="w-24 rounded-md border border-base-300 px-2 py-1.5 text-sm text-center bg-base-100 focus:outline-none"
                   />
                   <button
                     type="button"
@@ -856,8 +858,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   name="reps_per_set"
                   min="1"
                   value={@plan_input.reps_per_set}
-                  phx-change="change_basics"
-                  class="w-20 rounded-md border border-base-300 px-2 py-2 text-sm text-center font-semibold"
+                  readonly
+                  tabindex="-1"
+                  class="w-20 rounded-md border border-base-300 px-2 py-2 text-sm text-center font-semibold bg-base-100 focus:outline-none"
                 />
                 <button
                   type="button"
