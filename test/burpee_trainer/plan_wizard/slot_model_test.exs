@@ -88,4 +88,71 @@ defmodule BurpeeTrainer.PlanWizard.SlotModelTest do
       assert SlotModel.rest_budget(m) == -200.0
     end
   end
+
+  describe "ideal_rests/1" do
+    test ":even style with fatigue_factor=0.0 distributes uniformly" do
+      input = %BurpeeTrainer.PlanWizard.PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 10,
+        burpee_count_target: 5,
+        sec_per_burpee: 4.0,
+        pacing_style: :even,
+        fatigue_factor: 0.0
+      }
+
+      model = BurpeeTrainer.PlanWizard.SlotModel.new(input, nil)
+      ideals = BurpeeTrainer.PlanWizard.SlotModel.ideal_rests(model)
+      [first | rest] = ideals
+
+      Enum.each(rest, fn r -> assert_in_delta r, first, 1.0e-6 end)
+
+      assert_in_delta Enum.sum(ideals),
+                      BurpeeTrainer.PlanWizard.SlotModel.rest_budget(model),
+                      1.0e-6
+    end
+
+    test ":even style with fatigue_factor=1.0 biases later slots" do
+      input = %BurpeeTrainer.PlanWizard.PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 10,
+        burpee_count_target: 5,
+        sec_per_burpee: 4.0,
+        pacing_style: :even,
+        fatigue_factor: 1.0
+      }
+
+      model = BurpeeTrainer.PlanWizard.SlotModel.new(input, nil)
+      ideals = BurpeeTrainer.PlanWizard.SlotModel.ideal_rests(model)
+
+      pairs = Enum.zip(ideals, tl(ideals))
+      Enum.each(pairs, fn {a, b} -> assert b > a end)
+
+      assert_in_delta Enum.sum(ideals),
+                      BurpeeTrainer.PlanWizard.SlotModel.rest_budget(model),
+                      1.0e-6
+    end
+
+    test ":unbroken style: zero-weight slots stay zero under fatigue" do
+      input = %BurpeeTrainer.PlanWizard.PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 10,
+        burpee_count_target: 10,
+        sec_per_burpee: 4.0,
+        pacing_style: :unbroken,
+        reps_per_set: 5,
+        fatigue_factor: 1.0
+      }
+
+      model = BurpeeTrainer.PlanWizard.SlotModel.new(input, 5)
+      ideals = BurpeeTrainer.PlanWizard.SlotModel.ideal_rests(model)
+
+      Enum.with_index(ideals, 1)
+      |> Enum.each(fn {v, i} ->
+        if i == 5, do: assert(v > 0), else: assert_in_delta(v, 0.0, 1.0e-6)
+      end)
+    end
+  end
 end

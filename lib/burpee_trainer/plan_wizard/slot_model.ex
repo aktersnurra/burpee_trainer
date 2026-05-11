@@ -42,7 +42,8 @@ defmodule BurpeeTrainer.PlanWizard.SlotModel do
     :weights,
     :additional_rests_input,
     reservations: [],
-    slot_rests: nil
+    slot_rests: nil,
+    fatigue_factor: 0.0
   ]
 
   @type t :: %__MODULE__{
@@ -54,7 +55,8 @@ defmodule BurpeeTrainer.PlanWizard.SlotModel do
           weights: [float],
           reservations: [%{slot: pos_integer, rest_sec: number, target_min: number}],
           slot_rests: [float] | nil,
-          additional_rests_input: [PlanInput.additional_rest()]
+          additional_rests_input: [PlanInput.additional_rest()],
+          fatigue_factor: float
         }
 
   @doc """
@@ -71,7 +73,8 @@ defmodule BurpeeTrainer.PlanWizard.SlotModel do
       style: input.pacing_style,
       reps_per_set: reps_per_set,
       weights: Styles.weight_vector(input.pacing_style, input.burpee_count_target, reps_per_set),
-      additional_rests_input: input.additional_rests || []
+      additional_rests_input: input.additional_rests || [],
+      fatigue_factor: input.fatigue_factor || 0.0
     }
   end
 
@@ -98,5 +101,37 @@ defmodule BurpeeTrainer.PlanWizard.SlotModel do
   @spec rest_budget(t) :: float
   def rest_budget(%__MODULE__{} = m) do
     m.target_duration_sec - work_sec(m) - additional_rest_total(m)
+  end
+
+  @doc """
+  Fatigue-adjusted ideal rest distribution across slots. Returns a list of
+  length `total_reps - 1`. Zero-weight slots stay zero. Non-zero slots sum
+  to `rest_budget(model)`.
+
+  Formula:
+    fatigue_weight[i]  = 1 + fatigue_factor * (i / (N - 1))
+    combined_weight[i] = base_weight[i] * fatigue_weight[i]
+    ideal_rest[i]      = budget * combined_weight[i] / Σ combined_weight
+  """
+  @spec ideal_rests(t) :: [float]
+  def ideal_rests(%__MODULE__{total_reps: n} = _m) when n <= 1, do: []
+
+  def ideal_rests(%__MODULE__{} = m) do
+    n = m.total_reps
+    f = m.fatigue_factor || 0.0
+    budget = rest_budget(m)
+
+    combined =
+      m.weights
+      |> Enum.with_index(1)
+      |> Enum.map(fn {w, i} -> w * (1.0 + f * (i / (n - 1))) end)
+
+    total = Enum.sum(combined)
+
+    if total == 0.0 do
+      List.duplicate(0.0, length(m.weights))
+    else
+      Enum.map(combined, fn c -> budget * c / total end)
+    end
   end
 end
