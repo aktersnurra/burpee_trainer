@@ -1,0 +1,4 @@
+presolve = on
+time_limit = 5
+mip_rel_gap = 1.0e-6
+write_solution_style = 1

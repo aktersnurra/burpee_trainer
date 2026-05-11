@@ -17,7 +17,7 @@ defmodule BurpeeTrainer.PlanWizard.Lp do
     n = model.total_reps
     slot_count = n - 1
     ideal = SlotModel.ideal_rests(model)
-    budget = SlotModel.rest_budget(model)
+    total_rest = model.target_duration_sec - model.total_reps * model.sec_per_burpee
     big_m = max(model.target_duration_sec * 1.0, 1.0)
 
     reservations =
@@ -46,7 +46,7 @@ defmodule BurpeeTrainer.PlanWizard.Lp do
     d_vars = for res <- reservations, do: continuous("d_#{res.k}")
 
     constraints =
-      [total_duration_row(slot_count, budget)] ++
+      [total_duration_row(slot_count, total_rest)] ++
         zero_weight_rows(model) ++
         deviation_rows(slot_count, ideal) ++
         assignment_rows(reservations, allowed) ++
