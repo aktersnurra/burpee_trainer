@@ -44,15 +44,18 @@ defmodule BurpeeTrainer.PlanWizard.Solver do
     end
   end
 
-  defp infeasibility_message(%PlanInput{additional_rests: [_ | _] = rests, pacing_style: style}) do
+  defp infeasibility_message(
+         %PlanInput{additional_rests: [_ | _] = rests, pacing_style: style} = input
+       ) do
     %{target_min: t} = Enum.max_by(rests, & &1.target_min)
+    {nearest_min, diff_sec} = nearest_slot_diff(input, t)
 
     case style do
       :even ->
-        Errors.cannot_place_rest_out_of_tolerance_even(t, t, Errors.placement_tolerance_sec())
+        Errors.cannot_place_rest_out_of_tolerance_even(t, nearest_min, diff_sec)
 
       :unbroken ->
-        Errors.cannot_place_rest_out_of_tolerance_unbroken(t, t, Errors.placement_tolerance_sec())
+        Errors.cannot_place_rest_out_of_tolerance_unbroken(t, nearest_min, diff_sec)
     end
   end
 
@@ -60,6 +63,17 @@ defmodule BurpeeTrainer.PlanWizard.Solver do
     work_sec = input.burpee_count_target * input.sec_per_burpee
     target_sec = input.target_duration_min * 60
     Errors.work_exceeds_target(work_sec, target_sec)
+  end
+
+  # Best-effort nearest-slot estimate using a uniform-cadence projection: rep i
+  # ends at `i * (target / total_reps)`. Good enough for diagnostics; the LP's
+  # actual projection respects fatigue bias but adds complexity here.
+  defp nearest_slot_diff(%PlanInput{} = input, target_min) do
+    target_sec = target_min * 60
+    cadence = input.target_duration_min * 60 / input.burpee_count_target
+    slot = round(target_sec / cadence) |> max(1) |> min(input.burpee_count_target - 1)
+    nearest_sec = slot * cadence
+    {Float.round(nearest_sec / 60, 1), round(abs(nearest_sec - target_sec))}
   end
 
   defp fill_solution(%SlotModel{} = model, r) do

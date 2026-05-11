@@ -55,3 +55,6 @@ SPEC_FEAT_UI.md
 /deploy/SERVER_SETUP.md
 
 /videos/
+
+# HiGHS solver log (written to CWD when --log_file is not specified)
+Highs.log

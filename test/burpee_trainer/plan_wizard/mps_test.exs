@@ -72,7 +72,9 @@ defmodule BurpeeTrainer.PlanWizard.MpsTest do
       File.write!(path, text)
 
       try do
-        {output, exit_code} = System.cmd("highs", [path], stderr_to_stdout: true)
+        {output, exit_code} =
+          System.cmd("highs", [path], stderr_to_stdout: true, cd: System.tmp_dir!())
+
         assert exit_code == 0, "highs failed: #{output}"
       after
         File.rm(path)

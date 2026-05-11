@@ -24,19 +24,22 @@ defmodule BurpeeTrainer.PlanWizard.Highs do
   def solve(%Problem{} = problem) do
     mps = Mps.serialize(problem)
     base = "burpee_#{:erlang.unique_integer([:positive])}"
-    mps_path = Path.join(System.tmp_dir!(), "#{base}.mps")
-    sol_path = Path.join(System.tmp_dir!(), "#{base}.sol")
+    tmp = System.tmp_dir!()
+    mps_path = Path.join(tmp, "#{base}.mps")
+    sol_path = Path.join(tmp, "#{base}.sol")
 
     try do
       File.write!(mps_path, mps)
-      run_highs(mps_path, sol_path, problem)
+      # HiGHS writes a log file to its CWD by default; cd into the temp dir
+      # so the log lives there and gets cleaned up with everything else.
+      run_highs(mps_path, sol_path, tmp, problem)
     after
       File.rm(mps_path)
       File.rm(sol_path)
     end
   end
 
-  defp run_highs(mps_path, sol_path, problem) do
+  defp run_highs(mps_path, sol_path, cwd, problem) do
     bin = Application.get_env(:burpee_trainer, :highs_path, "highs")
     options_path = Application.app_dir(:burpee_trainer, ["priv", @options_file])
 
@@ -48,7 +51,7 @@ defmodule BurpeeTrainer.PlanWizard.Highs do
       options_path
     ]
 
-    case System.cmd(bin, args, stderr_to_stdout: true) do
+    case System.cmd(bin, args, stderr_to_stdout: true, cd: cwd) do
       {output, 0} ->
         parse_solution(sol_path, output, problem)
 
