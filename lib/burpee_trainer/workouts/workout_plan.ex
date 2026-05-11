@@ -19,6 +19,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     field :pacing_style, Ecto.Enum, values: @pacing_styles
     field :additional_rests, :string, default: "[]"
     field :style_name, :string
+    field :fatigue_factor, :float, default: 0.0
 
     belongs_to :user, User
 
@@ -42,13 +43,18 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       :sec_per_burpee,
       :pacing_style,
       :additional_rests,
-      :style_name
+      :style_name,
+      :fatigue_factor
     ])
     |> validate_required([:name, :burpee_type])
     |> validate_length(:name, min: 1, max: 80)
     |> validate_number(:target_duration_min, greater_than: 0)
     |> validate_number(:burpee_count_target, greater_than: 0)
     |> validate_number(:sec_per_burpee, greater_than: 0)
+    |> validate_number(:fatigue_factor,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 1.0
+    )
     |> cast_assoc(:blocks,
       with: &Block.changeset/2,
       sort_param: :blocks_sort,
