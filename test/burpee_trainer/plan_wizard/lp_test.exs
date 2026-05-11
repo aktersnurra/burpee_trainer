@@ -62,4 +62,94 @@ defmodule BurpeeTrainer.PlanWizard.LpTest do
       end)
     end
   end
+
+  describe "build/1 — with reservations" do
+    test ":even style: one reservation produces x, y, d vars and linkage rows" do
+      input = %PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 10,
+        burpee_count_target: 10,
+        sec_per_burpee: 12.0,
+        pacing_style: :even,
+        additional_rests: [%{rest_sec: 60, target_min: 5}]
+      }
+
+      model = SlotModel.new(input, nil)
+      problem = Lp.build(model)
+
+      x_vars = Enum.filter(problem.variables, &String.starts_with?(&1.name, "x_"))
+      y_vars = Enum.filter(problem.variables, &String.starts_with?(&1.name, "y_"))
+      d_vars = Enum.filter(problem.variables, &String.starts_with?(&1.name, "d_"))
+
+      assert length(d_vars) == 1
+      assert length(x_vars) == length(y_vars)
+      assert length(x_vars) >= 1
+
+      Enum.each(x_vars, fn v -> assert v.type == :binary end)
+
+      assert Enum.any?(problem.constraints, fn c ->
+               c.name == "ASSIGN_1" and c.comparator == :eq and c.rhs == 1.0
+             end)
+
+      assert Enum.any?(problem.constraints, fn c ->
+               c.name == "TOL_1" and c.comparator == :leq and c.rhs == 30.0
+             end)
+
+      assert Enum.any?(problem.constraints, &(&1.name == "PERR_POS_1"))
+      assert Enum.any?(problem.constraints, &(&1.name == "PERR_NEG_1"))
+
+      assert Enum.any?(problem.objective_terms, fn {n, c} -> n == "d_1" and c == 1.0 end)
+    end
+
+    test ":even style: ordering constraint for two reservations" do
+      input = %PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 20,
+        burpee_count_target: 20,
+        sec_per_burpee: 12.0,
+        pacing_style: :even,
+        additional_rests: [
+          %{rest_sec: 60, target_min: 7},
+          %{rest_sec: 60, target_min: 14}
+        ]
+      }
+
+      model = SlotModel.new(input, nil)
+      problem = Lp.build(model)
+
+      assert Enum.any?(problem.constraints, fn c ->
+               c.name == "ORDER_1" and c.comparator == :geq and c.rhs == 1.0
+             end)
+    end
+
+    test ":unbroken style: AllowedSlots restricted to set boundaries" do
+      input = %PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 20,
+        burpee_count_target: 20,
+        sec_per_burpee: 12.0,
+        pacing_style: :unbroken,
+        reps_per_set: 5,
+        additional_rests: [%{rest_sec: 60, target_min: 10}]
+      }
+
+      model = SlotModel.new(input, 5)
+      problem = Lp.build(model)
+
+      x_indices =
+        problem.variables
+        |> Enum.filter(&String.starts_with?(&1.name, "x_1_"))
+        |> Enum.map(fn %{name: name} ->
+          ["x", "1", i] = String.split(name, "_")
+          String.to_integer(i)
+        end)
+        |> Enum.sort()
+
+      assert Enum.all?(x_indices, fn i -> rem(i, 5) == 0 end)
+      assert Enum.member?(x_indices, 10)
+    end
+  end
 end
