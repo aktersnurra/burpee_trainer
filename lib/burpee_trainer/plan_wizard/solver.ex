@@ -22,9 +22,20 @@ defmodule BurpeeTrainer.PlanWizard.Solver do
   def solve(%PlanInput{} = input, reps_per_set \\ nil) do
     with :ok <- PaceFloor.check_input(input),
          model = SlotModel.new(input, reps_per_set),
-         problem = Lp.build(model),
-         {:ok, %{r: r}} <- run_solver(problem, input) do
+         {:ok, r} <- maybe_solve(model, input) do
       {:ok, fill_solution(model, r)}
+    end
+  end
+
+  # n ≤ 1 has no inter-rep slots — skip the LP entirely.
+  defp maybe_solve(%SlotModel{total_reps: n}, _input) when n <= 1, do: {:ok, []}
+
+  defp maybe_solve(%SlotModel{} = model, input) do
+    problem = Lp.build(model)
+
+    case run_solver(problem, input) do
+      {:ok, %{r: r}} -> {:ok, r}
+      {:error, _} = err -> err
     end
   end
 

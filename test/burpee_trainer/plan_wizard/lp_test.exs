@@ -3,6 +3,26 @@ defmodule BurpeeTrainer.PlanWizard.LpTest do
 
   alias BurpeeTrainer.PlanWizard.{Lp, PlanInput, SlotModel}
 
+  describe "build/1 — degenerate cases" do
+    test "1-rep workout produces an empty feasible problem" do
+      input = %PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 1,
+        burpee_count_target: 1,
+        sec_per_burpee: 4.0,
+        pacing_style: :even
+      }
+
+      model = SlotModel.new(input, nil)
+      problem = Lp.build(model)
+
+      assert problem.variables == []
+      assert problem.constraints == []
+      assert problem.objective_terms == []
+    end
+  end
+
   describe "build/1 — no reservations" do
     test ":even style produces r_i vars, e_i vars, total-duration equality, deviation rows" do
       input = %PlanInput{

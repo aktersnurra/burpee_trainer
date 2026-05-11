@@ -13,6 +13,18 @@ defmodule BurpeeTrainer.PlanWizard.Lp do
   @epsilon 1.0e-3
 
   @spec build(SlotModel.t()) :: Problem.t()
+  def build(%SlotModel{total_reps: n}) when n <= 1 do
+    # Degenerate: 0 or 1 reps means no inter-rep slots and no rest decisions
+    # to make. Return an empty feasible problem; the solver will produce an
+    # empty `r` vector and Apply will collapse to a one-set workout.
+    %Problem{
+      objective_sense: :minimize,
+      objective_terms: [],
+      variables: [],
+      constraints: []
+    }
+  end
+
   def build(%SlotModel{} = model) do
     n = model.total_reps
     slot_count = n - 1
