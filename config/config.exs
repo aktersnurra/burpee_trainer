@@ -11,6 +11,8 @@ config :burpee_trainer,
   ecto_repos: [BurpeeTrainer.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :burpee_trainer, :highs_path, "highs"
+
 # Configure the endpoint
 config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
   url: [host: "localhost"],
