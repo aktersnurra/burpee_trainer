@@ -22,7 +22,8 @@ defmodule BurpeeTrainer.PlanWizard.PlanInput do
     :sec_per_burpee,
     :pacing_style,
     reps_per_set: nil,
-    additional_rests: []
+    additional_rests: [],
+    fatigue_factor: 0.0
   ]
 
   @type burpee_type :: :six_count | :navy_seal
@@ -37,6 +38,7 @@ defmodule BurpeeTrainer.PlanWizard.PlanInput do
           sec_per_burpee: number,
           pacing_style: pacing_style,
           reps_per_set: pos_integer | nil,
-          additional_rests: [additional_rest]
+          additional_rests: [additional_rest],
+          fatigue_factor: float
         }
 end
