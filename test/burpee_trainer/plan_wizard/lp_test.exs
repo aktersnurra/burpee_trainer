@@ -1,0 +1,65 @@
+defmodule BurpeeTrainer.PlanWizard.LpTest do
+  use ExUnit.Case, async: true
+
+  alias BurpeeTrainer.PlanWizard.{Lp, PlanInput, SlotModel}
+
+  describe "build/1 — no reservations" do
+    test ":even style produces r_i vars, e_i vars, total-duration equality, deviation rows" do
+      input = %PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 10,
+        burpee_count_target: 5,
+        sec_per_burpee: 4.0,
+        pacing_style: :even
+      }
+
+      model = SlotModel.new(input, nil)
+      problem = Lp.build(model)
+
+      r_vars = Enum.filter(problem.variables, &String.starts_with?(&1.name, "r_"))
+      e_vars = Enum.filter(problem.variables, &String.starts_with?(&1.name, "e_"))
+      assert length(r_vars) == 4
+      assert length(e_vars) == 4
+      Enum.each(r_vars, fn v -> assert v.type == :continuous and v.lower == 0.0 end)
+
+      total_row = Enum.find(problem.constraints, &(&1.name == "TOTAL_DUR"))
+      assert total_row.comparator == :eq
+      assert_in_delta total_row.rhs, 600.0 - 5 * 4.0, 1.0e-6
+
+      assert MapSet.new(Enum.map(total_row.terms, &elem(&1, 0))) ==
+               MapSet.new(["r_1", "r_2", "r_3", "r_4"])
+
+      dev_rows = Enum.filter(problem.constraints, &String.starts_with?(&1.name, "DEV_"))
+      assert length(dev_rows) == 8
+
+      assert problem.objective_sense == :minimize
+      obj_vars = MapSet.new(Enum.map(problem.objective_terms, &elem(&1, 0)))
+      assert obj_vars == MapSet.new(["e_1", "e_2", "e_3", "e_4"])
+    end
+
+    test ":unbroken style produces zero-rest equality rows for intra-set slots" do
+      input = %PlanInput{
+        name: "t",
+        burpee_type: :six_count,
+        target_duration_min: 10,
+        burpee_count_target: 10,
+        sec_per_burpee: 4.0,
+        pacing_style: :unbroken,
+        reps_per_set: 5
+      }
+
+      model = SlotModel.new(input, 5)
+      problem = Lp.build(model)
+
+      zero_rows = Enum.filter(problem.constraints, &String.starts_with?(&1.name, "ZERO_SLOT_"))
+      assert length(zero_rows) == 8
+
+      Enum.each(zero_rows, fn row ->
+        assert row.comparator == :eq
+        assert row.rhs == 0.0
+        assert length(row.terms) == 1
+      end)
+    end
+  end
+end
