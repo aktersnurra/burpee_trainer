@@ -10052,3 +10052,3223 @@ Objective value     :  2.0000000802e-09
 P-D objective error :  1.0902390067e-16
 HiGHS run time      :          0.00
 Writing the solution to /tmp/burpee_3972.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_259.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_259 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_259
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_259.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_260.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_260 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_260
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0218528878111
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.21
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_260.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_324.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_324 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_324
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_324.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_323.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_323 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_323
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0213219074074
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.20
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_323.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_388.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_388 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_388
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_388.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_387.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_387 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_387
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_387.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_451.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_451 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_451
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_451.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_1865.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_1865 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_1865
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_1865.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_1929.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_1929 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_1929
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0250943297817
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.11
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_1929.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_1993.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_1993 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_1993
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0212618715156
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.20
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_1993.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_452.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_452 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_452
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_452.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2057.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_2057 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_2057
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_2057.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_516.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_516 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_516
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0249348865448
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.11
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_516.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2121.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_2121 has 294 rows; 202 cols; 596 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+01, 7e+02]
+Presolving model
+21 rows, 20 cols, 50 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+21 rows, 20 cols, 50 nonzeros 0s
+Presolve reductions: rows 21(-273); columns 20(-182); nonzeros 50(-546) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 11(1380) 0.0s
+         10     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_2121
+Model status        : Optimal
+Simplex   iterations: 10
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_2121.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2185.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_2185 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_2185
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000494527675021
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_2185.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2249.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_2249 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_2249
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_2249.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2313.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_2313 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_2313
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0288509367793
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_2313.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2377.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_2377 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_2377
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000798348407694
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_2377.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_2.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_2 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_2
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.021096586161
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.21
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_2.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_66.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_66 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_66
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000846233952481
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_66.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_130.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_130 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_130
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0273681634356
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_130.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_194.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_194 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_194
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0245441409057
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.11
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_194.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_258.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_258 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_258
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0241460204075
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.10
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_258.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_322.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_322 has 294 rows; 202 cols; 596 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+01, 7e+02]
+Presolving model
+21 rows, 20 cols, 50 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+21 rows, 20 cols, 50 nonzeros 0s
+Presolve reductions: rows 21(-273); columns 20(-182); nonzeros 50(-546) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 11(1380) 0.0s
+         10     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_322
+Model status        : Optimal
+Simplex   iterations: 10
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_322.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_266.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_266 has 9 rows; 8 cols; 20 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [1e+02, 6e+02]
+Presolving model
+9 rows, 8 cols, 20 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+9 rows, 8 cols, 20 nonzeros 0s
+Presolve reductions: rows 9(-0); columns 8(-0); nonzeros 20(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 5(1160) 0.0s
+          4     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Model name          : burpee_266
+Model status        : Optimal
+Simplex   iterations: 4
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_266.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+LP mps_round_trip_4418 has 9 rows; 8 cols; 20 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [1e+02, 6e+02]
+Presolving model
+9 rows, 8 cols, 20 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1000.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1000.00s)
+9 rows, 8 cols, 20 nonzeros 0s
+Presolve reductions: rows 9(-0); columns 8(-0); nonzeros 20(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 5(1160) 0.0s
+          4     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Model name          : mps_round_trip_4418
+Model status        : Optimal
+Simplex   iterations: 4
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4482.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_4482 has 64 rows; 41 cols; 146 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+11 rows, 7 cols, 20 nonzeros 0s
+7 rows, 5 cols, 14 nonzeros 0s
+6 rows, 4 cols, 12 nonzeros 0s
+2 rows, 2 cols, 4 nonzeros 0s
+Presolve reductions: rows 2(-62); columns 2(-39); nonzeros 4(-142) 
+
+Solving MIP model with:
+   2 rows
+   2 cols (0 binary, 0 integer, 0 implied int., 2 continuous, 0 domain fixed)
+   4 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.54              Large        0      0      0         0     0.0s
+ T       0       0         0 100.00%   0.54            0.54               0.00%        0      0      0         1     0.0s
+         1       0         1 100.00%   0.54            0.54               0.00%        0      0      0         1     0.0s
+
+Solving report
+  Model             burpee_4482
+  Status            Optimal
+  Primal bound      0.54
+  Dual bound        0.54
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000273314815139
+  Solution status   feasible
+                    0.54 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     1
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_4482.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_264.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_264 has 23 rows; 19 cols; 48 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e+00]
+  Bound   [0e+00, 0e+00]
+  RHS     [6e-02, 5e+02]
+Presolving model
+Problem status detected on presolve: Infeasible
+Model name          : burpee_264
+Model status        : Infeasible
+Objective value     :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_264.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_263.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_263 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_263
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_263.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4546.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_4546 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_517.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_517 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_4546
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0306162098947
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.13
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_4546.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4610.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_4610 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_4610
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_4610.sol
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_517
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0285335130875
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_517.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_581.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_581 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_328.sol"
+Set option mip_rel_gap to 1e-06
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+LP burpee_328 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_328
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_328.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_392.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_392 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_392
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_392.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_456.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_456 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_456
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000477269118133
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_456.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_520.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_520 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_581
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0270993162957
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_581.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_584.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_584 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_584
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_584.sol
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_648.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_648 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_520
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0263229447546
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.11
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_520.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4674.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_4674 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_4674
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_4674.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4738.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_4738 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_648
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0270801172821
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_648.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4802.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_4802 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_4802
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_4802.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4866.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_4866 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_4866
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_4866.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4930.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_4930 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_4930
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_4930.sol
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_4994.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_4994 has 279 rows; 198 cols; 575 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [2e+01, 3e+02]
+Presolving model
+39 rows, 38 cols, 95 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+39 rows, 38 cols, 95 nonzeros 0s
+Presolve reductions: rows 39(-240); columns 38(-160); nonzeros 95(-480) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 20(600) 0.0s
+         28     6.0000000593e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_4994
+Model status        : Optimal
+Simplex   iterations: 28
+Objective value     :  6.0000000595e-09
+P-D objective error :  1.6653378919e-19
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_4994.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5058.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_5058 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_4738
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.023390819014
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.22
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_4738.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5122.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_5122 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_5058
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0270837742371
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_5058.sol
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5186.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5186 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_5186
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5186.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5250.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5250 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_5250
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5250.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5314.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5314 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_5314
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5314.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5378.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5378 has 294 rows; 202 cols; 596 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+01, 7e+02]
+Presolving model
+21 rows, 20 cols, 50 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+21 rows, 20 cols, 50 nonzeros 0s
+Presolve reductions: rows 21(-273); columns 20(-182); nonzeros 50(-546) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 11(1380) 0.0s
+         10     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_5378
+Model status        : Optimal
+Simplex   iterations: 10
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5378.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5442.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5442 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_5442
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5442.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_712.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_712 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_712
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_712.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_776.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_776 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_776
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000750184684728
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_776.sol
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_5122
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0231561990204
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.22
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_5122.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5506.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5506 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_5506
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5506.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5570.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5570 has 294 rows; 202 cols; 596 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+01, 7e+02]
+Presolving model
+21 rows, 20 cols, 50 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+21 rows, 20 cols, 50 nonzeros 0s
+Presolve reductions: rows 21(-273); columns 20(-182); nonzeros 50(-546) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 11(1380) 0.0s
+         10     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_5570
+Model status        : Optimal
+Simplex   iterations: 10
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5570.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5634.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_5634 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_5634
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000453191196619
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_5634.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5698.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_5698 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_5698
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0260617162709
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_5698.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5762.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5762 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_5762
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5762.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5826.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_5826 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_5826
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_5826.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5890.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_5890 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_5890
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0255524852907
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.11
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_5890.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_5954.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_5954 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_5954
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0252123275288
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.11
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_5954.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6018.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_6018 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_6018
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0216660046342
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.21
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_6018.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6082.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_6082 has 294 rows; 202 cols; 596 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+01, 7e+02]
+Presolving model
+21 rows, 20 cols, 50 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+21 rows, 20 cols, 50 nonzeros 0s
+Presolve reductions: rows 21(-273); columns 20(-182); nonzeros 50(-546) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 11(1380) 0.0s
+         10     0.0000000000e+00 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_6082
+Model status        : Optimal
+Simplex   iterations: 10
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_6082.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6146.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_6146 has 199 rows; 198 cols; 495 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [7e+00, 7e+02]
+Presolving model
+199 rows, 198 cols, 495 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+199 rows, 198 cols, 495 nonzeros 0s
+Presolve reductions: rows 199(-0); columns 198(-0); nonzeros 495(-0) - Not reduced
+Problem not reduced by presolve: solving the LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 100(1400) 0.0s
+        149     6.9999993389e-09 Pr: 0(0) 0.0s
+
+Model name          : burpee_6146
+Model status        : Optimal
+Simplex   iterations: 149
+Objective value     :  6.9999998384e-09
+P-D objective error :  4.9958647648e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_6146.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6210.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_6210 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_6210
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_6210.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6274.sol"
+Set option mip_rel_gap to 1e-06
+LP burpee_6274 has 289 rows; 198 cols; 585 nonzeros
+Coefficient ranges:
+  Matrix  [1e+00, 1e+00]
+  Cost    [1e-03, 1e-03]
+  Bound   [0e+00, 0e+00]
+  RHS     [8e+01, 7e+02]
+Presolving model
+19 rows, 18 cols, 45 nonzeros 0s
+Dependent equations search running on 1 equations with time limit of 1.00s
+Dependent equations search removed 0 rows and 0 nonzeros in 0.00s (limit = 1.00s)
+19 rows, 18 cols, 45 nonzeros 0s
+Presolve reductions: rows 19(-270); columns 18(-180); nonzeros 45(-540) 
+Solving the presolved LP
+Using dual simplex solver
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 10(1400) 0.0s
+         13     1.9999999712e-09 Pr: 0(0) 0.0s
+
+Performed postsolve
+Solving the original LP from the solution after postsolve
+
+Model name          : burpee_6274
+Model status        : Optimal
+Simplex   iterations: 13
+Objective value     :  2.0000000802e-09
+P-D objective error :  1.0902390067e-16
+HiGHS run time      :          0.00
+Writing the solution to /tmp/burpee_6274.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6338.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 5
+MIP burpee_6338 has 228 rows; 209 cols; 1058 nonzeros; 5 integer variables (5 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+227 rows, 209 cols, 1057 nonzeros 0s
+226 rows, 208 cols, 1064 nonzeros 0s
+Presolve reductions: rows 226(-2); columns 208(-1); nonzeros 1064(+6) 
+
+Solving MIP model with:
+   226 rows
+   208 cols (4 binary, 0 integer, 0 implied int., 204 continuous, 0 domain fixed)
+   1064 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.029999977     0.040303031       25.56%        0      0      0       123     0.0s
+ L       0       0         0   0.00%   0.029999977     0.040303031       25.56%      402      9      0       138     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+ T       0       0         0   0.00%   0.029999977     0.029999977        0.00%      402      6      2       377     0.1s
+         1       0         1 100.00%   0.029999977     0.029999977        0.00%      402      6      2       417     0.1s
+
+Solving report
+  Model             burpee_6338
+  Status            Optimal
+  Primal bound      0.029999977
+  Dual bound        0.029999977
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0274831137203
+  Solution status   feasible
+                    0.029999977 (objective)
+                    0 (bound viol.)
+                    2.9531932455e-14 (int. viol.)
+                    0 (row viol.)
+  Timing            0.12
+  Max sub-MIP depth 1
+  Nodes             1
+  Repair LPs        0
+  LP iterations     417
+                    33 (strong br.)
+                    15 (separation)
+                    239 (heuristics)
+Writing the solution to /tmp/burpee_6338.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6402.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 10
+MIP burpee_6402 has 258 rows; 220 cols; 1631 nonzeros; 10 integer variables (10 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+256 rows, 220 cols, 1629 nonzeros 0s
+253 rows, 218 cols, 1633 nonzeros 0s
+Presolve reductions: rows 253(-5); columns 218(-2); nonzeros 1633(+2) 
+
+Solving MIP model with:
+   253 rows
+   218 cols (8 binary, 0 integer, 0 implied int., 210 continuous, 0 domain fixed)
+   1633 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   0.090000016     0.113838384       20.94%        0      0      0       130     0.0s
+ L       0       0         0   0.00%   0.090000016     0.091515152        1.66%      851     20      0       168     0.1s
+
+Symmetry detection completed in 0.0s
+No symmetry present
+
+         5       0         3 100.00%   0.091515152     0.091515152        0.00%      861     10     16      1162     0.2s
+
+Solving report
+  Model             burpee_6402
+  Status            Optimal
+  Primal bound      0.091515152
+  Dual bound        0.091515152
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.0215536971285
+  Solution status   feasible
+                    0.091515152 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.21
+  Max sub-MIP depth 2
+  Nodes             5
+  Repair LPs        0
+  LP iterations     1162
+                    361 (strong br.)
+                    38 (separation)
+                    408 (heuristics)
+Writing the solution to /tmp/burpee_6402.sol
+Running HiGHS 1.14.0 (git hash: dcc25308d8): Copyright (c) 2026 under MIT licence terms
+Command line parsed using CLI11 2.5.0: Copyright (c) 2017-2025 University of Cincinnati
+Set option presolve to "on"
+Set option time_limit to 5
+Set option write_solution_style to 1
+Set option solution_file to "/tmp/burpee_6466.sol"
+Set option mip_rel_gap to 1e-06
+Number of BV entries in BOUNDS section is 1
+MIP burpee_6466 has 298 rows; 201 cols; 700 nonzeros; 1 integer variables (1 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 1e+03]
+  Cost    [1e-03, 1e+00]
+  Bound   [1e+00, 1e+00]
+  RHS     [1e+00, 1e+03]
+Presolving model
+23 rows, 19 cols, 56 nonzeros 0s
+20 rows, 18 cols, 49 nonzeros 0s
+Presolve reductions: rows 20(-278); columns 18(-183); nonzeros 49(-651) 
+
+Solving MIP model with:
+   20 rows
+   18 cols (0 binary, 0 integer, 0 implied int., 18 continuous, 0 domain fixed)
+   49 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ J       0       0         0   0.00%   -inf            30.95222222        Large        0      0      0         0     0.0s
+ T       0       0         0   0.00%   0.044444444     0.118888892       62.62%        0      0      0        16     0.0s
+         1       0         1 100.00%   0.118888892     0.118888892        0.00%        0      0      0        16     0.0s
+
+Solving report
+  Model             burpee_6466
+  Status            Optimal
+  Primal bound      0.118888892
+  Dual bound        0.118888892
+  Gap               0% (tolerance: 0.0001%)
+  P-D integral      0.000489737868326
+  Solution status   feasible
+                    0.118888892 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            0.01
+  Max sub-MIP depth 0
+  Nodes             1
+  Repair LPs        0
+  LP iterations     16
+                    0 (strong br.)
+                    0 (separation)
+                    0 (heuristics)
+Writing the solution to /tmp/burpee_6466.sol

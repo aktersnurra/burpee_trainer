@@ -156,6 +156,7 @@ defmodule BurpeeTrainer.PlanWizard.Apply do
       sec_per_burpee: input.sec_per_burpee,
       pacing_style: input.pacing_style,
       additional_rests: encode_rests(input.additional_rests || []),
+      fatigue_factor: input.fatigue_factor || 0.0,
       blocks: blocks
     }
   end
