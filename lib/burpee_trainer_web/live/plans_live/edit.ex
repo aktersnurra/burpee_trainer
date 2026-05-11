@@ -68,6 +68,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       burpee_count_target: 100,
       sec_per_burpee: 5.0,
       pacing_style: :even,
+      fatigue_factor: 0.0,
       reps_per_set: PlanWizard.default_reps_per_set(:six_count),
       additional_rests: []
     }
@@ -94,6 +95,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       burpee_count_target: plan.burpee_count_target || 100,
       sec_per_burpee: plan.sec_per_burpee || 5.0,
       pacing_style: plan.pacing_style || :even,
+      fatigue_factor: plan.fatigue_factor || 0.0,
       reps_per_set: reps_per_set,
       additional_rests: rests
     }
@@ -153,6 +155,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       burpee_count_target: plan_input.burpee_count_target,
       sec_per_burpee: plan_input.sec_per_burpee,
       pacing_style: plan_input.pacing_style,
+      fatigue_factor: plan_input.fatigue_factor || 0.0,
       reps_per_set: plan_input.reps_per_set,
       additional_rests: plan_input.additional_rests
     }
@@ -185,6 +188,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "burpee_count_target" => plan.burpee_count_target,
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
+      "fatigue_factor" => plan.fatigue_factor || 0.0,
       "additional_rests" => plan.additional_rests,
       "blocks" => blocks_to_attrs(plan.blocks)
     }
@@ -301,6 +305,24 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("pick_pacing", %{"style" => style}, socket)
       when style in ["even", "unbroken"] do
     plan_input = Map.put(socket.assigns.plan_input, :pacing_style, String.to_atom(style))
+
+    socket =
+      socket
+      |> assign(:plan_input, plan_input)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("set_fatigue_factor", %{"factor" => v}, socket) do
+    factor =
+      case Float.parse(v) do
+        {f, _} when f >= 0.0 and f <= 1.0 -> f
+        _ -> 0.0
+      end
+
+    plan_input = Map.put(socket.assigns.plan_input, :fatigue_factor, factor)
 
     socket =
       socket
@@ -594,6 +616,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "burpee_count_target" => plan_input.burpee_count_target,
       "sec_per_burpee" => plan_input.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan_input.pacing_style),
+      "fatigue_factor" => plan_input.fatigue_factor || 0.0,
       "additional_rests" =>
         Jason.encode!(
           Enum.map(plan_input.additional_rests, fn %{rest_sec: r, target_min: t} ->
@@ -839,6 +862,55 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 <p class="text-xs text-base-content/60 mt-1">Sets of N reps, rest between</p>
               </button>
             </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-sm font-medium">Fatigue bias</label>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                phx-click="set_fatigue_factor"
+                phx-value-factor="0.0"
+                class={[
+                  "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
+                  if(@plan_input.fatigue_factor == 0.0,
+                    do: "border-primary bg-primary/5",
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
+                ]}
+              >
+                <p class="font-semibold text-sm">None</p>
+              </button>
+              <button
+                type="button"
+                phx-click="set_fatigue_factor"
+                phx-value-factor="0.5"
+                class={[
+                  "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
+                  if(@plan_input.fatigue_factor == 0.5,
+                    do: "border-primary bg-primary/5",
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
+                ]}
+              >
+                <p class="font-semibold text-sm">Mild</p>
+              </button>
+              <button
+                type="button"
+                phx-click="set_fatigue_factor"
+                phx-value-factor="1.0"
+                class={[
+                  "rounded-xl border-2 p-4 text-center transition active:scale-[0.97]",
+                  if(@plan_input.fatigue_factor == 1.0,
+                    do: "border-primary bg-primary/5",
+                    else: "border-base-300 hover:border-primary hover:bg-primary/5"
+                  )
+                ]}
+              >
+                <p class="font-semibold text-sm">Strong</p>
+              </button>
+            </div>
+            <p class="text-xs text-base-content/60">Bias rest periods toward later in the workout.</p>
           </div>
 
           <%= if @plan_input.pacing_style == :unbroken do %>
