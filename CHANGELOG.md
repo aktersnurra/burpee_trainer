@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-11 — MILP plan wizard
+
+- Replaced the bespoke constraint-solver pipeline (`Reservation`, `Constraints/*`) with a MILP model serialized to MPS and solved by HiGHS.
+- New modules: `PlanWizard.Lp`, `PlanWizard.Lp.Problem`, `PlanWizard.Mps`, `PlanWizard.Highs`.
+- Added `fatigue_factor` field to `WorkoutPlan` and `PlanInput`. Biases rest distribution toward later slots in the workout via a linear weight ramp applied to the soft objective. Three-stop control (None / Mild / Strong) in the plan edit form. Default `0.0` preserves existing behavior.
+- HiGHS CLI is now a runtime dependency; see README for build/install instructions.
+- Deleted: `Reservation`, `Constraints.MinimizePlacementError`, `Constraints.MinimizeRestDeviation`, `Constraints.RestNonNegative`, `Constraints.TotalDuration`, `Constraints.ValidPlacement`. `Constraints.PaceFloor` retained as the pre-LP feasibility gate.
+
 ## 2026-05-09 — Constraint-solver refactor (FEAT_CONTRAINED_SOLVER)
 
 Replaced the procedural `:even` / `:unbroken` branching in
