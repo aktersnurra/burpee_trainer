@@ -1,0 +1,111 @@
+<h2>Workout card design</h2>
+<p class="subtitle">Both plans and videos will use one shared card. Which layout feels right for this app's dark, minimal aesthetic?</p>
+
+<div class="cards">
+
+  <!-- Option A: Compact row with inline metadata -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0D1017;border:1px solid #1E2535;border-radius:10px;padding:14px 16px;font-family:system-ui;color:#C8D8F0;font-size:13px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:#3A4A5E;font-size:11px;">▣</span>
+            <span style="font-weight:600;font-size:14px;">Level 2 Grind</span>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <span style="background:#1E2535;border-radius:20px;padding:2px 8px;font-size:10px;color:#8BA3C0;">6-Count</span>
+            <span style="background:#4A9EFF18;border-radius:20px;padding:2px 8px;font-size:10px;color:#4A9EFF;">L2</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:24px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:9px;color:#3A4A5E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Burpees</div>
+            <div style="font-size:18px;font-weight:600;">150</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:#3A4A5E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Duration</div>
+            <div style="font-size:18px;font-weight:600;">19:57</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;background:#4A9EFF;border-radius:6px;padding:8px;text-align:center;font-weight:600;font-size:13px;color:#fff;">▶ Start</div>
+          <div style="background:#1E2535;border-radius:6px;padding:8px 12px;font-size:13px;color:#3A4A5E;">⋯</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Source icon in title row</h3>
+      <p>Small glyph (▣ plan / ▶ video) sits left of the title. Chips top-right. Stats big, actions at bottom.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Source badge as corner accent -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0D1017;border:1px solid #1E2535;border-radius:10px;padding:14px 16px;font-family:system-ui;color:#C8D8F0;font-size:13px;position:relative;">
+        <div style="position:absolute;top:0;right:0;background:#4A9EFF18;border-radius:0 10px 0 6px;padding:3px 8px;font-size:9px;color:#4A9EFF;font-weight:600;letter-spacing:.06em;">PLAN</div>
+        <div style="margin-bottom:8px;padding-right:48px;">
+          <div style="font-weight:600;font-size:15px;margin-bottom:4px;">Level 2 Grind</div>
+          <div style="display:flex;gap:4px;">
+            <span style="background:#1E2535;border-radius:20px;padding:2px 8px;font-size:10px;color:#8BA3C0;">6-Count</span>
+            <span style="background:#4A9EFF18;border-radius:20px;padding:2px 8px;font-size:10px;color:#4A9EFF;">L2</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:24px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:9px;color:#3A4A5E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Burpees</div>
+            <div style="font-size:18px;font-weight:600;">150</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:#3A4A5E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Duration</div>
+            <div style="font-size:18px;font-weight:600;">19:57</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;background:#4A9EFF;border-radius:6px;padding:8px;text-align:center;font-weight:600;font-size:13px;color:#fff;">▶ Start</div>
+          <div style="background:#1E2535;border-radius:6px;padding:8px 12px;font-size:13px;color:#3A4A5E;">⋯</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Corner badge</h3>
+      <p>"PLAN" or "VIDEO" pill anchored to the top-right corner. Clean title area, source is visible but secondary.</p>
+    </div>
+  </div>
+
+  <!-- Option C: No explicit source marker — rely on overflow menu context -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0D1017;border:1px solid #1E2535;border-radius:10px;padding:14px 16px;font-family:system-ui;color:#C8D8F0;font-size:13px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">
+          <div style="font-weight:600;font-size:15px;">Level 2 Grind</div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <span style="background:#1E2535;border-radius:20px;padding:2px 8px;font-size:10px;color:#8BA3C0;">6-Count</span>
+            <span style="background:#4A9EFF18;border-radius:20px;padding:2px 8px;font-size:10px;color:#4A9EFF;">L2</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:24px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:9px;color:#3A4A5E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Burpees</div>
+            <div style="font-size:18px;font-weight:600;">150</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:#3A4A5E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Duration</div>
+            <div style="font-size:18px;font-weight:600;">19:57</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;background:#4A9EFF;border-radius:6px;padding:8px;text-align:center;font-weight:600;font-size:13px;color:#fff;">▶ Start</div>
+          <div style="background:#1E2535;border-radius:6px;padding:8px 12px;font-size:13px;color:#3A4A5E;">⋯</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — No source marker</h3>
+      <p>Source is implicit from the active filter. When "All" is selected, the overflow menu contents differ — that's enough signal. No redundant badge.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Note: video cards omit the "Burpees" stat row when burpee_count is unknown. All three options handle this the same way.</p>

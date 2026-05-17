@@ -1,0 +1,204 @@
+<h2>Workouts page layout</h2>
+<p class="subtitle">Full page mockup — mobile view. Two approaches to the filter area. Click to pick one.</p>
+
+<div class="split">
+
+  <div class="mockup" style="cursor:pointer;" data-choice="a" onclick="toggleSelect(this)">
+    <div class="mockup-header">A — Stacked filters (spec approach)</div>
+    <div class="mockup-body" style="padding:0;overflow:hidden;">
+      <div style="background:#0D1017;font-family:system-ui;color:#C8D8F0;font-size:12px;min-height:520px;position:relative;">
+
+        <!-- Page header -->
+        <div style="padding:20px 16px 12px;">
+          <div style="font-size:20px;font-weight:700;margin-bottom:2px;">Workouts</div>
+          <div style="font-size:12px;color:#3A4A5E;">Pick something to do.</div>
+        </div>
+
+        <!-- Source filter -->
+        <div style="padding:0 16px 10px;display:flex;gap:6px;">
+          <div style="background:#C8D8F0;color:#0D1017;border-radius:20px;padding:4px 14px;font-size:11px;font-weight:600;">All</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 14px;font-size:11px;color:#3A4A5E;">Mine</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 14px;font-size:11px;color:#3A4A5E;">Videos</div>
+        </div>
+
+        <!-- Type filter -->
+        <div style="padding:0 16px 6px;display:flex;gap:6px;">
+          <div style="background:#C8D8F0;color:#0D1017;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:600;">All</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:3px 10px;font-size:10px;color:#3A4A5E;">6-Count</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:3px 10px;font-size:10px;color:#3A4A5E;">Navy SEAL</div>
+        </div>
+
+        <!-- Level filter -->
+        <div style="padding:0 16px 12px;display:flex;gap:6px;flex-wrap:wrap;">
+          <div style="background:#C8D8F0;color:#0D1017;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:600;">All levels</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:3px 10px;font-size:10px;color:#3A4A5E;">L1</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:3px 10px;font-size:10px;color:#3A4A5E;">L2</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:3px 10px;font-size:10px;color:#3A4A5E;">L3</div>
+        </div>
+
+        <!-- Cards -->
+        <div style="padding:0 16px;display:flex;flex-direction:column;gap:8px;">
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-weight:600;font-size:13px;">Level 2 Grind</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 6px;font-size:9px;color:#8BA3C0;">6-Count</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 6px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-bottom:8px;">
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Burpees</div><div style="font-weight:600;">150</div></div>
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Duration</div><div style="font-weight:600;">19:57</div></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:6px 10px;font-size:11px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-weight:600;font-size:13px;">10 Week Challenge Ep. 4</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 6px;font-size:9px;color:#8BA3C0;">Navy SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 6px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-bottom:8px;">
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Duration</div><div style="font-weight:600;">22:00</div></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:6px 10px;font-size:11px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAB -->
+        <div style="position:absolute;bottom:58px;right:16px;background:#4A9EFF;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:300;">+</div>
+
+        <!-- Bottom nav -->
+        <div style="position:absolute;bottom:0;left:0;right:0;background:#0D1017;border-top:1px solid #1E2535;display:flex;justify-content:space-around;padding:8px 0 6px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#3A4A5E;">
+            <div style="font-size:16px;">⌂</div>
+            <div style="font-size:9px;">Home</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#4A9EFF;">
+            <div style="font-size:16px;">▣</div>
+            <div style="font-size:9px;font-weight:600;">Workouts</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#3A4A5E;">
+            <div style="font-size:16px;">◈</div>
+            <div style="font-size:9px;">Stats</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup" style="cursor:pointer;" data-choice="b" onclick="toggleSelect(this)">
+    <div class="mockup-header">B — Collapsed secondary filters</div>
+    <div class="mockup-body" style="padding:0;overflow:hidden;">
+      <div style="background:#0D1017;font-family:system-ui;color:#C8D8F0;font-size:12px;min-height:520px;position:relative;">
+
+        <!-- Page header -->
+        <div style="padding:20px 16px 12px;">
+          <div style="font-size:20px;font-weight:700;margin-bottom:2px;">Workouts</div>
+          <div style="font-size:12px;color:#3A4A5E;">Pick something to do.</div>
+        </div>
+
+        <!-- Source filter + inline filter icon -->
+        <div style="padding:0 16px 12px;display:flex;gap:6px;align-items:center;">
+          <div style="background:#C8D8F0;color:#0D1017;border-radius:20px;padding:4px 14px;font-size:11px;font-weight:600;">All</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 14px;font-size:11px;color:#3A4A5E;">Mine</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 14px;font-size:11px;color:#3A4A5E;">Videos</div>
+          <div style="margin-left:auto;border:1px solid #1E2535;border-radius:8px;padding:4px 10px;font-size:10px;color:#3A4A5E;">⊟ Filter</div>
+        </div>
+
+        <!-- Active filter chips (shown when filters applied) -->
+        <div style="padding:0 16px 10px;display:flex;gap:4px;">
+          <div style="background:#4A9EFF18;border:1px solid #4A9EFF40;border-radius:20px;padding:2px 8px;font-size:10px;color:#4A9EFF;">L2 ×</div>
+        </div>
+
+        <!-- Cards -->
+        <div style="padding:0 16px;display:flex;flex-direction:column;gap:8px;">
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-weight:600;font-size:13px;">Level 2 Grind</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 6px;font-size:9px;color:#8BA3C0;">6-Count</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 6px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-bottom:8px;">
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Burpees</div><div style="font-weight:600;">150</div></div>
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Duration</div><div style="font-weight:600;">19:57</div></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:6px 10px;font-size:11px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-weight:600;font-size:13px;">10 Week Challenge Ep. 4</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 6px;font-size:9px;color:#8BA3C0;">Navy SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 6px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-bottom:8px;">
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Duration</div><div style="font-weight:600;">22:00</div></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:6px 10px;font-size:11px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-weight:600;font-size:13px;">Navy SEAL Basics</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 6px;font-size:9px;color:#8BA3C0;">Navy SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 6px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-bottom:8px;">
+              <div><div style="font-size:8px;color:#3A4A5E;text-transform:uppercase;">Duration</div><div style="font-weight:600;">15:30</div></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:6px 10px;font-size:11px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAB -->
+        <div style="position:absolute;bottom:58px;right:16px;background:#4A9EFF;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:300;">+</div>
+
+        <!-- Bottom nav -->
+        <div style="position:absolute;bottom:0;left:0;right:0;background:#0D1017;border-top:1px solid #1E2535;display:flex;justify-content:space-around;padding:8px 0 6px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#3A4A5E;">
+            <div style="font-size:16px;">⌂</div>
+            <div style="font-size:9px;">Home</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#4A9EFF;">
+            <div style="font-size:16px;">▣</div>
+            <div style="font-size:9px;font-weight:600;">Workouts</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#3A4A5E;">
+            <div style="font-size:16px;">◈</div>
+            <div style="font-size:9px;">Stats</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px;">
+  <strong>A</strong> always shows all three filter rows (source + type + level). <strong>B</strong> keeps source pills visible, collapses type/level behind a "Filter" button — active filters show as dismissible chips. B gains more card real-estate; A is simpler to implement.
+</p>

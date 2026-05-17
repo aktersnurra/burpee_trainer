@@ -1,0 +1,134 @@
+<h2>Filter layout patterns</h2>
+<p class="subtitle">Two approaches used in production apps — both fit your filter count without scrolling.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0D1017;font-family:system-ui;color:#C8D8F0;font-size:12px;border-radius:8px;padding:16px 14px 14px;">
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Workouts</div>
+        <div style="font-size:11px;color:#3A4A5E;margin-bottom:14px;">Pick something to do.</div>
+
+        <!-- Single strip with dividers -->
+        <div style="display:flex;align-items:center;gap:0;background:#0D1017;border:1px solid #1E2535;border-radius:22px;padding:4px 6px;margin-bottom:14px;overflow:hidden;">
+          <!-- Source group -->
+          <div style="display:flex;gap:3px;">
+            <div style="border-radius:16px;padding:3px 10px;font-size:10px;color:#3A4A5E;white-space:nowrap;">Mine</div>
+            <div style="background:#C8D8F0;color:#0D1017;border-radius:16px;padding:3px 10px;font-size:10px;font-weight:600;white-space:nowrap;">Videos</div>
+          </div>
+          <!-- Divider -->
+          <div style="width:1px;height:16px;background:#1E2535;margin:0 6px;flex-shrink:0;"></div>
+          <!-- Type group -->
+          <div style="display:flex;gap:3px;">
+            <div style="border-radius:16px;padding:3px 10px;font-size:10px;color:#3A4A5E;white-space:nowrap;">6-Count</div>
+            <div style="background:#C8D8F0;color:#0D1017;border-radius:16px;padding:3px 10px;font-size:10px;font-weight:600;white-space:nowrap;">SEAL</div>
+          </div>
+          <!-- Divider -->
+          <div style="width:1px;height:16px;background:#1E2535;margin:0 6px;flex-shrink:0;"></div>
+          <!-- Level group -->
+          <div style="display:flex;gap:3px;">
+            <div style="border-radius:16px;padding:3px 10px;font-size:10px;color:#3A4A5E;">L1</div>
+            <div style="border-radius:16px;padding:3px 10px;font-size:10px;color:#3A4A5E;">L2</div>
+            <div style="border-radius:16px;padding:3px 10px;font-size:10px;color:#3A4A5E;">L3</div>
+          </div>
+        </div>
+
+        <!-- Cards -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:11px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <div style="font-weight:600;font-size:12px;">10 Week Challenge Ep. 4</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 5px;font-size:9px;color:#8BA3C0;">SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 5px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:#3A4A5E;margin-bottom:8px;">22:00</div>
+            <div style="display:flex;gap:5px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:5px;text-align:center;font-size:10px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:5px 9px;font-size:10px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:11px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <div style="font-weight:600;font-size:12px;">Navy SEAL Basics</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 5px;font-size:9px;color:#8BA3C0;">SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 5px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:#3A4A5E;margin-bottom:8px;">15:30</div>
+            <div style="display:flex;gap:5px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:5px;text-align:center;font-size:10px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:5px 9px;font-size:10px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Single strip with dividers</h3>
+      <p>All filters in one pill-bar. Vertical dividers separate Source / Type / Level groups. Everything visible at once, no stacking.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0D1017;font-family:system-ui;color:#C8D8F0;font-size:12px;border-radius:8px;padding:16px 14px 14px;">
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Workouts</div>
+        <div style="font-size:11px;color:#3A4A5E;margin-bottom:14px;">Pick something to do.</div>
+
+        <!-- Horizontally scrollable strip, no grouping, all same weight -->
+        <div style="display:flex;gap:5px;margin-bottom:14px;overflow:hidden;">
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 11px;font-size:10px;color:#3A4A5E;white-space:nowrap;flex-shrink:0;">Mine</div>
+          <div style="background:#C8D8F0;color:#0D1017;border-radius:20px;padding:4px 11px;font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0;">Videos</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 11px;font-size:10px;color:#3A4A5E;white-space:nowrap;flex-shrink:0;">6-Count</div>
+          <div style="background:#C8D8F0;color:#0D1017;border-radius:20px;padding:4px 11px;font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0;">SEAL</div>
+          <div style="border:1px solid #1E2535;border-radius:20px;padding:4px 11px;font-size:10px;color:#3A4A5E;white-space:nowrap;flex-shrink:0;">L1</div>
+          <div style="background:#1E2535;border-radius:20px;padding:4px 11px;font-size:10px;color:#3A4A5E;white-space:nowrap;flex-shrink:0;">L2 →</div>
+        </div>
+
+        <!-- Cards -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:11px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <div style="font-weight:600;font-size:12px;">10 Week Challenge Ep. 4</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 5px;font-size:9px;color:#8BA3C0;">SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 5px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:#3A4A5E;margin-bottom:8px;">22:00</div>
+            <div style="display:flex;gap:5px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:5px;text-align:center;font-size:10px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:5px 9px;font-size:10px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+          <div style="background:#111827;border:1px solid #1E2535;border-radius:10px;padding:11px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <div style="font-weight:600;font-size:12px;">Navy SEAL Basics</div>
+              <div style="display:flex;gap:3px;">
+                <span style="background:#1E2535;border-radius:20px;padding:1px 5px;font-size:9px;color:#8BA3C0;">SEAL</span>
+                <span style="background:#4A9EFF18;border-radius:20px;padding:1px 5px;font-size:9px;color:#4A9EFF;">L2</span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:#3A4A5E;margin-bottom:8px;">15:30</div>
+            <div style="display:flex;gap:5px;">
+              <div style="flex:1;background:#4A9EFF;border-radius:5px;padding:5px;text-align:center;font-size:10px;color:#fff;font-weight:600;">▶ Start</div>
+              <div style="background:#1E2535;border-radius:5px;padding:5px 9px;font-size:10px;color:#3A4A5E;">⋯</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Flat scrollable strip</h3>
+      <p>One row, no grouping, scroll right to reveal L2/L3. Familiar YouTube/Instagram pattern. Groups are implied by order, not visual separation. L3 is cut off to hint at scroll.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px;">
+  Your total filter count (2 + 2 + 3 = 7 pills) fits without scrolling on most phones in option A. Option B needs a scroll but gains simplicity.
+</p>
