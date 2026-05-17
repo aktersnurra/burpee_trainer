@@ -41,7 +41,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:warmup_burpee_count, 0)
           |> assign(:warmup_duration_sec, 0)
 
-        {:ok, push_event(socket, "session_ready", %{timeline: serialize_timeline(timeline)})}
+        block_count = length(plan.blocks)
+
+        {:ok,
+         push_event(socket, "session_ready", %{
+           timeline: serialize_timeline(timeline),
+           block_count: block_count
+         })}
 
       _ ->
         {:ok,
@@ -182,21 +188,24 @@ defmodule BurpeeTrainerWeb.SessionLive do
         phx-hook="SessionHook"
         class="mx-auto flex w-full max-w-[420px] flex-col gap-5"
       >
-        <div class="flex items-baseline justify-between gap-3">
-          <div class="min-w-0">
-            <h1 class="truncate text-xl font-semibold tracking-tight">{@plan.name}</h1>
-            <p class="truncate text-xs text-base-content/60">
-              {Fmt.burpee_type(@plan.burpee_type)} · {@summary.burpee_count_total} burpees · {Fmt.duration_sec(
-                round(@summary.duration_sec_total)
-              )}
-            </p>
-          </div>
+        <div class="flex items-center justify-between">
           <.link
             navigate={~p"/plans"}
-            class="shrink-0 text-xs text-base-content/60 hover:text-base-content"
+            class="flex items-center justify-center w-8 h-8 rounded transition-colors"
+            style="color: #6B8FA8;"
           >
-            ← Plans
+            <.icon name="hero-chevron-left" />
           </.link>
+          <span id="block-info" class="text-xs" style="color: #6B8FA8; opacity: 0.6;"></span>
+          <button
+            id="finish-early-btn"
+            type="button"
+            class="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:cursor-not-allowed"
+            style="color: #6B8FA8; opacity: 0.4;"
+            disabled
+          >
+            <.icon name="hero-flag" />
+          </button>
         </div>
 
         <%= case @phase do %>
@@ -240,16 +249,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp session_runner(assigns) do
     ~H"""
     <div class="relative flex flex-col gap-5">
-      <div class="flex items-center justify-between gap-3">
-        <span
-          id="phase-badge"
-          class="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium uppercase tracking-[0.06em] bg-base-200 text-base-content/70"
-        >
-          Ready
-        </span>
-        <span id="set-label" class="truncate text-xs text-base-content/60"></span>
-      </div>
-
       <div
         id="ring-container"
         class="relative mx-auto w-[280px] h-[280px] cursor-pointer select-none"
@@ -325,18 +324,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <span id="time-left">{Fmt.duration_sec(round(@summary.duration_sec_total))}</span>
         </div>
       </div>
-
-      <button
-        id="finish-early-btn"
-        type="button"
-        class={[
-          "self-center text-xs text-base-content/50 underline hover:text-base-content",
-          "disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
-        ]}
-        disabled
-      >
-        Finish early
-      </button>
 
       <%= if @phase == :idle do %>
         <.tap_to_start_overlay warmup_asked={@warmup_asked} />

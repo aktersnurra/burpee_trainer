@@ -15,7 +15,6 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user, %{"name" => "Grinder"})
     {:ok, _view, html} = live(conn, ~p"/session/#{plan.id}")
 
-    assert html =~ "Grinder"
     assert html =~ "Do you want a warmup?"
     assert html =~ "Yes"
     assert html =~ "Skip"

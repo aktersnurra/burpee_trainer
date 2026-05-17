@@ -16,15 +16,7 @@
 
 const CX = 140, CY = 140, R = 107;
 const CIRC = 2 * Math.PI * R;
-const GAP_DEG = 3.5;
 const NS = "http://www.w3.org/2000/svg";
-const COL = {
-  done: "#4A9EFF",
-  doneBg: "#1A2D4A",
-  current: "#FFFFFF",
-  currentBg: "#1E2535",
-  upcoming: "#141B26",
-};
 
 const SessionHook = {
   mounted() {
@@ -52,7 +44,7 @@ const SessionHook = {
     this.mainBurpeeCount = 0;
     this.warmupEndSec = 0; // elapsed time when warmup phase ends
 
-    this.rings = [];
+    this.workRingEl = null;
     this.doneReps = 0;
     this.totalReps = 0;
     this.downTimeout = null;
@@ -95,8 +87,11 @@ const SessionHook = {
       passive: true,
     });
 
-    this.handleEvent("session_ready", ({ timeline }) => {
+    this.blockCount = 0;
+
+    this.handleEvent("session_ready", ({ timeline, block_count }) => {
       this.mainTimeline = timeline;
+      this.blockCount = block_count || 0;
       this.showWarmupPrompt();
     });
 
@@ -122,6 +117,8 @@ const SessionHook = {
 
   destroyed() {
     if (this.rafId) cancelAnimationFrame(this.rafId);
+    if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
+    if (this.downTimeout) clearTimeout(this.downTimeout);
     this.stopAudio();
     document.removeEventListener("visibilitychange", this.onVisibility);
     document.removeEventListener("click", this.primeAudio, { capture: true });
@@ -296,7 +293,7 @@ const SessionHook = {
     const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
     if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
 
-    // Clear countdown ring; build segmented ring for the first event
+    // Clear countdown ring; build work ring for the first event
     this.countdownRingEl = null;
     this.lastEventType = null;
     this.lastBurpeeCount = 0;
@@ -306,7 +303,7 @@ const SessionHook = {
       firstEvent &&
       (firstEvent.type === "work_burpee" || firstEvent.type === "warmup_burpee");
     if (isFirstWork) {
-      this.buildRings(firstEvent.burpee_count);
+      this.buildWorkRing(firstEvent.type, firstEvent.burpee_count);
       this.triggerDown(firstEvent.burpee_count);
       this.lastEventType = firstEvent.type;
       this.lastBurpeeCount = firstEvent.burpee_count;
@@ -542,27 +539,24 @@ const SessionHook = {
     // Overall progress bar color
     if (fill) fill.style.backgroundColor = isWarning ? "#F59E0B" : color;
 
-    // Phase badge
-    const badge = this.el.querySelector("#phase-badge");
-    if (badge) {
-      const { bg, text } = this.phaseBadgeStyle(event.type, isWarning);
-      badge.textContent = this.phaseLabel(event.type);
-      badge.style.backgroundColor = bg;
-      badge.style.color = text;
-      badge.className =
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium uppercase tracking-[0.06em]";
+    // Block info header — parse block number from label ("Block N")
+    const blockInfo = this.el.querySelector("#block-info");
+    if (blockInfo && event.label) {
+      const match = event.label.match(/Block (\d+)/);
+      if (match && this.blockCount > 0) {
+        blockInfo.textContent = `Block ${match[1]} of ${this.blockCount}`;
+      } else {
+        blockInfo.textContent = "";
+      }
     }
 
-    const setLabel = this.el.querySelector("#set-label");
-    if (setLabel) setLabel.textContent = event.label || "";
-
     if (isWork) {
-      // Rebuild segments when entering a new work event
+      // Rebuild ring when entering a new work event
       if (
         event.type !== this.lastEventType ||
         event.burpee_count !== this.lastBurpeeCount
       ) {
-        this.buildRings(event.burpee_count);
+        this.buildWorkRing(event.type, event.burpee_count);
         this.triggerDown(event.burpee_count);
         this.lastEventType = event.type;
         this.lastBurpeeCount = event.burpee_count;
@@ -590,7 +584,7 @@ const SessionHook = {
         this.triggerDown(Math.max(this.totalReps - this.doneReps, 0));
       }
 
-      this.updateRings(repProgress);
+      this.updateWorkRing(repProgress, color);
     } else if (isRest) {
       // Build a single continuous arc for rest phases
       if (event.type !== this.lastEventType) {
@@ -608,7 +602,6 @@ const SessionHook = {
           svgEl.appendChild(restRing);
           this.restRingEl = restRing;
         }
-        this.rings = [];
         this.lastEventType = event.type;
         this.lastBurpeeCount = 0;
       }
@@ -635,99 +628,37 @@ const SessionHook = {
   },
 
   // ---------------------------------------------------------------------------
-  // Segmented ring
+  // Work ring — single arc that fills continuously per rep, resets each rep
   // ---------------------------------------------------------------------------
 
-  buildRings(n) {
-    this.totalReps = n;
+  buildWorkRing(eventType, burpeeCount) {
+    this.totalReps = burpeeCount;
     this.doneReps = 0;
     this.lastDisplayed = -1;
     const svgEl = this.el.querySelector("#ring-svg");
     if (!svgEl) return;
     while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-    this.rings = [];
 
-    const segDeg = 360 / n;
-    const arcDeg = segDeg - GAP_DEG;
-    const arcLen = (arcDeg / 360) * CIRC;
-    const gapLen = (GAP_DEG / 360) * CIRC;
-    const period = arcLen + gapLen;
-
-    const bg = document.createElementNS(NS, "circle");
-    bg.setAttribute("cx", CX);
-    bg.setAttribute("cy", CY);
-    bg.setAttribute("r", R);
-    bg.setAttribute("fill", "none");
-    bg.setAttribute("stroke", "#0D1017");
-    bg.setAttribute("stroke-width", "18");
-    bg.setAttribute(
-      "stroke-dasharray",
-      `${arcLen.toFixed(3)} ${gapLen.toFixed(3)}`,
-    );
-    bg.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-    svgEl.appendChild(bg);
-
-    for (let i = 0; i < n; i++) {
-      const baseOffset = -(i * period);
-
-      const track = document.createElementNS(NS, "circle");
-      track.setAttribute("cx", CX);
-      track.setAttribute("cy", CY);
-      track.setAttribute("r", R);
-      track.setAttribute("fill", "none");
-      track.setAttribute("stroke", COL.upcoming);
-      track.setAttribute("stroke-width", "16");
-      track.setAttribute(
-        "stroke-dasharray",
-        `${arcLen.toFixed(3)} ${(CIRC - arcLen).toFixed(3)}`,
-      );
-      track.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
-      track.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-
-      const fill = document.createElementNS(NS, "circle");
-      fill.setAttribute("cx", CX);
-      fill.setAttribute("cy", CY);
-      fill.setAttribute("r", R);
-      fill.setAttribute("fill", "none");
-      fill.setAttribute("stroke", COL.upcoming);
-      fill.setAttribute("stroke-width", "16");
-      fill.setAttribute("stroke-dasharray", `0 ${CIRC.toFixed(3)}`);
-      fill.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
-      fill.setAttribute("stroke-linecap", "butt");
-      fill.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-
-      svgEl.appendChild(track);
-      svgEl.appendChild(fill);
-      this.rings.push({ track, fill, arcLen, baseOffset });
-    }
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", CX);
+    ring.setAttribute("cy", CY);
+    ring.setAttribute("r", R);
+    ring.setAttribute("fill", "none");
+    ring.setAttribute("stroke-width", "16");
+    ring.setAttribute("stroke-linecap", "round");
+    ring.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+    ring.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+    ring.setAttribute("stroke-dashoffset", CIRC.toFixed(4));
+    svgEl.appendChild(ring);
+    this.workRingEl = ring;
   },
 
-  updateRings(repProgress) {
-    for (let i = 0; i < this.totalReps; i++) {
-      const { track, fill, arcLen, baseOffset } = this.rings[i];
-      if (i < this.doneReps) {
-        track.setAttribute("stroke", COL.doneBg);
-        fill.setAttribute("stroke", COL.done);
-        fill.setAttribute(
-          "stroke-dasharray",
-          `${arcLen.toFixed(3)} ${(CIRC - arcLen).toFixed(3)}`,
-        );
-        fill.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
-      } else if (i === this.doneReps && this.doneReps < this.totalReps) {
-        const filledLen = arcLen * Math.min(repProgress, 1);
-        track.setAttribute("stroke", COL.currentBg);
-        fill.setAttribute("stroke", COL.current);
-        fill.setAttribute(
-          "stroke-dasharray",
-          `${filledLen.toFixed(3)} ${(CIRC - filledLen).toFixed(3)}`,
-        );
-        fill.setAttribute("stroke-dashoffset", baseOffset.toFixed(3));
-      } else {
-        track.setAttribute("stroke", COL.upcoming);
-        fill.setAttribute("stroke", COL.upcoming);
-        fill.setAttribute("stroke-dasharray", `0 ${CIRC.toFixed(3)}`);
-      }
-    }
+  updateWorkRing(repProgress, color) {
+    if (!this.workRingEl) return;
+    const offset = CIRC * (1 - Math.min(repProgress, 1));
+    this.workRingEl.setAttribute("stroke", color);
+    this.workRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+    this.workRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
   },
 
   triggerDown(repsLeft) {
@@ -949,17 +880,6 @@ const SessionHook = {
     return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${r}`;
   },
 
-  phaseLabel(type) {
-    const labels = {
-      work_burpee: "Work",
-      warmup_burpee: "Warmup",
-      work_rest: "Rest",
-      warmup_rest: "Warmup rest",
-      rest_block: "Rest",
-    };
-    return labels[type] || "Ready";
-  },
-
   // Returns the accent color for the current phase (ring, progress bar fill).
   phaseColor(type, isWarning) {
     if (isWarning) return "#F59E0B";
@@ -973,18 +893,7 @@ const SessionHook = {
     return colors[type] || "#1E2535";
   },
 
-  // Returns {bg, text} for the phase badge.
-  phaseBadgeStyle(type, isWarning) {
-    if (isWarning) return { bg: "#2D1F08", text: "#F59E0B" };
-    const styles = {
-      work_burpee: { bg: "#1A2D4A", text: "#4A9EFF" },
-      warmup_burpee: { bg: "#2D1F08", text: "#F59E0B" },
-      work_rest: { bg: "#141E28", text: "#6B8FA8" },
-      warmup_rest: { bg: "#141E28", text: "#6B8FA8" },
-      rest_block: { bg: "#141E28", text: "#6B8FA8" },
-    };
-    return styles[type] || { bg: "#11141C", text: "#9BA8BF" };
-  },
+
 };
 
 export default SessionHook;
