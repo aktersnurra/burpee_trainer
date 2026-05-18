@@ -27,14 +27,14 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
         </.nav_icon>
 
-        <.nav_icon navigate={~p"/workouts"} title="Plans" active={@current_page == :plans}>
+        <.nav_icon navigate={~p"/workouts"} title="Plans" active={@current_page == :workouts}>
           <.icon
             name="hero-rectangle-stack-solid"
-            class={if @current_page == :plans, do: "", else: "hidden"}
+            class={if @current_page == :workouts, do: "", else: "hidden"}
           />
           <.icon
             name="hero-rectangle-stack"
-            class={if @current_page == :plans, do: "hidden", else: ""}
+            class={if @current_page == :workouts, do: "hidden", else: ""}
           />
         </.nav_icon>
 
@@ -86,14 +86,14 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
         </.bottom_tab>
 
-        <.bottom_tab navigate={~p"/workouts"} active={@current_page == :plans}>
+        <.bottom_tab navigate={~p"/workouts"} active={@current_page == :workouts}>
           <.icon
             name="hero-rectangle-stack-solid"
-            class={if @current_page == :plans, do: "", else: "hidden"}
+            class={if @current_page == :workouts, do: "", else: "hidden"}
           />
           <.icon
             name="hero-rectangle-stack"
-            class={if @current_page == :plans, do: "hidden", else: ""}
+            class={if @current_page == :workouts, do: "hidden", else: ""}
           />
         </.bottom_tab>
 
