@@ -39,20 +39,23 @@ defmodule BurpeeTrainerWeb.Router do
 
     get "/videos/stream/:filename", VideoController, :stream
 
+    get "/plans", RedirectController, :plans
+    get "/videos", RedirectController, :videos
+    get "/log", RedirectController, :log
+    get "/history", RedirectController, :history
+    get "/goals", RedirectController, :goals
+
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
       live "/", OverviewLive
-      live "/plans", PlansLive.Index, :index
-      live "/plans/new", PlansLive.Edit, :new
-      live "/plans/:id/edit", PlansLive.Edit, :edit
+      live "/workouts", WorkoutsLive, :index
+      live "/workouts/new", PlansLive.Edit, :new
+      live "/workouts/:id/edit", PlansLive.Edit, :edit
 
       live "/session/:plan_id", SessionLive
 
-      live "/log", LogLive
-      live "/history", HistoryLive
-      live "/goals", GoalsLive
+      live "/stats", StatsLive
 
-      live "/videos", VideoLive.Index
       live "/videos/:id", VideoLive.Show
     end
   end

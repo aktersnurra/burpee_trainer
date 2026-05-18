@@ -53,7 +53,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         {:ok,
          socket
          |> put_flash(:error, "Plan not found.")
-         |> push_navigate(to: ~p"/plans")}
+         |> push_navigate(to: ~p"/workouts")}
     end
   end
 
@@ -145,7 +145,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("discard", _, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/plans")}
+    {:noreply, push_navigate(socket, to: ~p"/workouts")}
   end
 
   defp serialize_timeline(events) do
@@ -190,7 +190,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       >
         <div class="flex items-center justify-between">
           <.link
-            navigate={~p"/plans"}
+            navigate={~p"/workouts"}
             class="flex items-center justify-center w-8 h-8 rounded transition-colors"
             style="color: #6B8FA8;"
           >

@@ -576,7 +576,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         {:noreply,
          socket
          |> put_flash(:info, "Plan created.")
-         |> push_navigate(to: ~p"/plans/#{plan.id}/edit")}
+         |> push_navigate(to: ~p"/workouts/#{plan.id}/edit")}
 
       {:error, changeset} ->
         {:noreply,
@@ -707,7 +707,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         <div class="flex items-center justify-between">
           <h1 class="text-2xl font-semibold tracking-tight">{@page_title}</h1>
           <.link
-            navigate={~p"/plans"}
+            navigate={~p"/workouts"}
             class="rounded-md border border-base-300 px-4 py-2 text-sm hover:bg-base-200 transition"
           >
             Cancel

@@ -224,7 +224,7 @@ defmodule BurpeeTrainerWeb.GoalsLive do
     if suggestion do
       case Workouts.save_generated_plan(socket.assigns.current_user, suggestion.plan) do
         {:ok, plan} ->
-          {:noreply, push_navigate(socket, to: ~p"/plans/#{plan.id}/edit")}
+          {:noreply, push_navigate(socket, to: ~p"/workouts/#{plan.id}/edit")}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Could not save plan.")}

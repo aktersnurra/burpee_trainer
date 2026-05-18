@@ -66,7 +66,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
             <p class="text-sm text-base-content/60">Workouts you've built, ready to run.</p>
           </div>
           <.link
-            navigate={~p"/plans/new"}
+            navigate={~p"/workouts/new"}
             class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
           >
             New plan
@@ -147,7 +147,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Index do
                     <.icon name="hero-play" class="size-4" />
                   </.link>
                   <.link
-                    navigate={~p"/plans/#{plan.id}/edit"}
+                    navigate={~p"/workouts/#{plan.id}/edit"}
                     title="Edit"
                     class="inline-flex items-center justify-center w-9 rounded-md border border-base-300 py-1.5 hover:bg-base-200 transition"
                   >

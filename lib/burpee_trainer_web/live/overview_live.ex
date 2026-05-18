@@ -240,7 +240,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div class="space-y-2">
       <.link
-        navigate={~p"/plans"}
+        navigate={~p"/workouts"}
         class="flex items-center justify-center gap-2 w-full h-12 rounded-lg bg-primary text-primary-content text-sm font-medium hover:bg-primary/90 transition-colors"
       >
         <.icon name="hero-play" class="size-4" /> Run a plan

@@ -27,7 +27,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
         </.nav_icon>
 
-        <.nav_icon navigate={~p"/plans"} title="Plans" active={@current_page == :plans}>
+        <.nav_icon navigate={~p"/workouts"} title="Plans" active={@current_page == :plans}>
           <.icon
             name="hero-rectangle-stack-solid"
             class={if @current_page == :plans, do: "", else: "hidden"}
@@ -86,7 +86,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
         </.bottom_tab>
 
-        <.bottom_tab navigate={~p"/plans"} active={@current_page == :plans}>
+        <.bottom_tab navigate={~p"/workouts"} active={@current_page == :plans}>
           <.icon
             name="hero-rectangle-stack-solid"
             class={if @current_page == :plans, do: "", else: "hidden"}
