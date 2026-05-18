@@ -49,9 +49,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   def handle_event("delete", %{"id" => id}, socket) do
     plan = Workouts.get_plan!(socket.assigns.current_user, String.to_integer(id))
-    {:ok, _} = Workouts.delete_plan(plan)
-    items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
-    {:noreply, socket |> put_flash(:info, "Plan deleted.") |> assign(:items, items)}
+
+    case Workouts.delete_plan(plan) do
+      {:ok, _} ->
+        items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
+        {:noreply, socket |> put_flash(:info, "Plan deleted.") |> assign(:items, items)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not delete plan.")}
+    end
   end
 
   defp toggle_filter(filters, key, value) do
@@ -120,6 +126,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             active={@filters[:burpee_type] == :navy_seal}
           />
           <div class="w-px h-4 bg-base-300 mx-1.5 shrink-0" />
+          <%!-- Level pills show the three milestone groups users progress through --%>
           <.filter_pill
             label="L1"
             value_key="level"
