@@ -572,11 +572,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp save_plan(socket, :new, params) do
     case Workouts.create_plan(socket.assigns.current_user, params) do
-      {:ok, plan} ->
+      {:ok, _plan} ->
         {:noreply,
          socket
          |> put_flash(:info, "Plan created.")
-         |> push_navigate(to: ~p"/workouts/#{plan.id}/edit")}
+         |> push_navigate(to: ~p"/workouts")}
 
       {:error, changeset} ->
         {:noreply,
@@ -588,17 +588,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp save_plan(socket, :edit, params) do
     case Workouts.update_plan(socket.assigns.plan, params) do
-      {:ok, plan} ->
-        loaded = Workouts.preload_plan(plan)
-        plan_input = plan_input_from_plan(loaded)
-
+      {:ok, _plan} ->
         {:noreply,
          socket
-         |> assign(:plan, preload_duration_min(loaded))
-         |> assign(:plan_input, plan_input)
          |> put_flash(:info, "Plan saved.")
-         |> build_form_from_plan()
-         |> assign_derived()}
+         |> push_navigate(to: ~p"/workouts")}
 
       {:error, changeset} ->
         {:noreply,

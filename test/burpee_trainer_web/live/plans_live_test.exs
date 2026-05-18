@@ -87,6 +87,7 @@ defmodule BurpeeTrainerWeb.PlansLiveTest do
       view
       |> form("#plan-form", workout_plan: params)
       |> render_submit()
+      |> follow_redirect(conn)
 
       loaded = Workouts.get_plan!(user, plan.id)
       [block] = loaded.blocks
