@@ -8,7 +8,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, filters: %{}, items: [])}
+    {:ok, assign(socket, filters: %{}, items: [], open_menu_id: nil)}
   end
 
   @impl true
@@ -34,13 +34,27 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     {:noreply, push_patch(socket, to: build_path(filters))}
   end
 
+  def handle_event("toggle_menu", %{"id" => id}, socket) do
+    open = if socket.assigns.open_menu_id == id, do: nil, else: id
+    {:noreply, assign(socket, :open_menu_id, open)}
+  end
+
+  def handle_event("close_menu", _, socket) do
+    {:noreply, assign(socket, :open_menu_id, nil)}
+  end
+
   def handle_event("duplicate", %{"id" => id}, socket) do
     plan = Workouts.get_plan!(socket.assigns.current_user, String.to_integer(id))
 
     case Workouts.duplicate_plan(plan) do
       {:ok, _copy} ->
         items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
-        {:noreply, socket |> put_flash(:info, "Plan duplicated.") |> assign(:items, items)}
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Plan duplicated.")
+         |> assign(:items, items)
+         |> assign(:open_menu_id, nil)}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Could not duplicate plan.")}
@@ -53,7 +67,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     case Workouts.delete_plan(plan) do
       {:ok, _} ->
         items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
-        {:noreply, socket |> put_flash(:info, "Plan deleted.") |> assign(:items, items)}
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Plan deleted.")
+         |> assign(:items, items)
+         |> assign(:open_menu_id, nil)}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Could not delete plan.")}
@@ -159,7 +178,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         <% else %>
           <div class="space-y-2">
             <%= for item <- @items do %>
-              <.workout_card item={item} />
+              <.workout_card
+                item={item}
+                open_menu={@open_menu_id == to_string(item.id) <> to_string(item.kind)}
+              />
             <% end %>
           </div>
         <% end %>
@@ -204,47 +226,89 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
   end
 
   attr :item, WorkoutItem, required: true
+  attr :open_menu, :boolean, required: true
 
   defp workout_card(assigns) do
-    ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3">
-      <div class="flex items-start justify-between gap-3">
-        <%!-- Left: content --%>
-        <div class="min-w-0 space-y-1">
-          <p class="font-semibold text-sm leading-snug truncate">{@item.title}</p>
-          <p class="text-xs text-base-content/50 tabular-nums">
-            <%= if @item.burpee_count do %>
-              {@item.burpee_count} burpees · {Fmt.duration_sec(@item.duration_sec)}
-            <% else %>
-              {Fmt.duration_sec(@item.duration_sec)}
-            <% end %>
-            <%= if @item.level do %>
-              · {Fmt.level(@item.level)}
-            <% end %>
-          </p>
-          <p class="text-xs text-base-content/30">{Fmt.burpee_type(@item.burpee_type)}</p>
-        </div>
+    menu_id = to_string(assigns.item.id) <> to_string(assigns.item.kind)
+    assigns = assign(assigns, :menu_id, menu_id)
 
-        <%!-- Right: actions --%>
-        <div class="flex items-center gap-1 shrink-0">
-          <%= if @item.kind == :plan && @item.edit_path do %>
-            <.link
-              navigate={@item.edit_path}
-              class="p-1.5 text-base-content/30 hover:text-base-content/70 transition rounded"
-              title="Edit / more"
-            >
-              <.icon name="hero-ellipsis-horizontal" class="size-4" />
-            </.link>
+    ~H"""
+    <div class="relative">
+      <%!-- Entire card is a link to start --%>
+      <.link
+        navigate={@item.start_path}
+        class="block rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3 hover:border-[#2E3A4E] transition-colors"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 space-y-1">
+            <p class="font-semibold text-sm leading-snug truncate">{@item.title}</p>
+            <p class="text-xs text-base-content/50 tabular-nums">
+              <%= if @item.burpee_count do %>
+                {@item.burpee_count} burpees · {Fmt.duration_sec(@item.duration_sec)}
+              <% else %>
+                {Fmt.duration_sec(@item.duration_sec)}
+              <% end %>
+            </p>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs text-base-content/30">{Fmt.burpee_type(@item.burpee_type)}</span>
+              <%= if @item.level do %>
+                <span class="text-base-content/20 text-xs">·</span>
+                <span class="text-xs text-base-content/30">{Fmt.level(@item.level)}</span>
+              <% end %>
+            </div>
+          </div>
+          <%!-- Spacer to leave room for the ⋯ button which floats above --%>
+          <%= if @item.kind == :plan do %>
+            <div class="w-6 shrink-0" />
           <% end %>
-          <.link
-            navigate={@item.start_path}
-            class="p-1.5 text-[#4A9EFF] hover:text-[#4A9EFF]/80 transition rounded"
-            aria-label={"Start #{@item.title}"}
-          >
-            <.icon name="hero-play-circle" class="size-6" />
-          </.link>
         </div>
-      </div>
+      </.link>
+
+      <%!-- ⋯ overflow button — sits above the link in z-order --%>
+      <%= if @item.kind == :plan do %>
+        <div class="absolute top-3 right-3">
+          <button
+            type="button"
+            phx-click="toggle_menu"
+            phx-value-id={@menu_id}
+            class="p-1 text-base-content/30 hover:text-base-content/60 transition rounded"
+            aria-label="More options"
+          >
+            <.icon name="hero-ellipsis-horizontal" class="size-4" />
+          </button>
+
+          <%= if @open_menu do %>
+            <div
+              phx-click-away="close_menu"
+              class="absolute right-0 top-7 z-50 min-w-[140px] rounded-lg border border-[#1E2535] bg-[#0D1017] py-1 shadow-xl"
+            >
+              <.link
+                navigate={@item.edit_path}
+                class="flex items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit
+              </.link>
+              <button
+                type="button"
+                phx-click="duplicate"
+                phx-value-id={@item.id}
+                class="flex w-full items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
+              >
+                <.icon name="hero-document-duplicate" class="size-4" /> Clone
+              </button>
+              <button
+                type="button"
+                phx-click="delete"
+                phx-value-id={@item.id}
+                data-confirm={"Delete '#{@item.title}'? This cannot be undone."}
+                class="flex w-full items-center gap-2 px-3 py-2 text-sm text-error/80 hover:text-error hover:bg-[#141B26] transition-colors"
+              >
+                <.icon name="hero-trash" class="size-4" /> Delete
+              </button>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
     </div>
     """
   end

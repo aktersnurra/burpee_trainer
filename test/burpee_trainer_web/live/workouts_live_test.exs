@@ -99,11 +99,16 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert conn |> get("/plans") |> redirected_to() == "/workouts"
     end
 
-    test "plan card shows edit link (⋯)", %{conn: conn, user: user} do
+    test "plan card ⋯ menu shows edit, clone, delete options", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "My Plan"})
-      {:ok, _view, html} = live(conn, ~p"/workouts")
+      {:ok, view, _html} = live(conn, ~p"/workouts")
+
+      view |> element("button[phx-click='toggle_menu']") |> render_click()
+      html = render(view)
 
       assert html =~ "/workouts/#{plan.id}/edit"
+      assert html =~ "Clone"
+      assert html =~ "Delete"
     end
 
     test "video card has no edit link", %{conn: conn} do
