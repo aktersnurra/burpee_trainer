@@ -125,6 +125,24 @@ defmodule BurpeeTrainer.Fixtures do
     goal
   end
 
+  @doc """
+  Build a video. No user scoping — videos are global.
+  """
+  def video_fixture(attrs \\ %{}) do
+    n = System.unique_integer([:positive])
+
+    defaults = %{
+      name: "Test Video #{n}",
+      filename: "video_#{n}.mp4",
+      burpee_type: :six_count,
+      duration_sec: 1200,
+      burpee_count: nil
+    }
+
+    {:ok, video} = BurpeeTrainer.Videos.create_video(Map.merge(defaults, attrs))
+    video
+  end
+
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn
       {k, v} when is_atom(k) -> {Atom.to_string(k), v}
