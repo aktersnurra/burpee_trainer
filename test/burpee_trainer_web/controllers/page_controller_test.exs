@@ -12,7 +12,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     user = user_fixture(%{"username" => "alice"})
     conn = conn |> init_test_session(%{user_id: user.id}) |> get(~p"/")
     html = html_response(conn, 200)
-    assert html =~ "alice"
-    assert html =~ "Plans"
+    assert html =~ "Home"
+    assert html =~ "Workouts"
   end
 end

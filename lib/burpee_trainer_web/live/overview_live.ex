@@ -71,6 +71,17 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       current_page={:home}
     >
       <div class="space-y-4">
+        <div class="flex items-center justify-between mb-4 sm:hidden">
+          <h1 class="text-xl font-semibold">Home</h1>
+          <.link
+            href={~p"/logout"}
+            method="delete"
+            title="Sign out"
+            class="text-[#3A4A5E] hover:text-[#C8D8F0] transition-colors"
+          >
+            <.icon name="hero-arrow-left-start-on-rectangle" class="size-5" />
+          </.link>
+        </div>
         <.streak_card
           streak={@streak}
           this_week={@this_week}
