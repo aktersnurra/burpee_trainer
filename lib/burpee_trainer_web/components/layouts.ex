@@ -27,7 +27,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
         </.nav_icon>
 
-        <.nav_icon navigate={~p"/workouts"} title="Plans" active={@current_page == :workouts}>
+        <.nav_icon navigate={~p"/workouts"} title="Workouts" active={@current_page == :workouts}>
           <.icon
             name="hero-rectangle-stack-solid"
             class={if @current_page == :workouts, do: "", else: "hidden"}
@@ -38,33 +38,12 @@ defmodule BurpeeTrainerWeb.Layouts do
           />
         </.nav_icon>
 
-        <.nav_icon navigate={~p"/log"} title="Log" active={@current_page == :log}>
-          <.icon
-            name="hero-pencil-square-solid"
-            class={if @current_page == :log, do: "", else: "hidden"}
-          />
-          <.icon name="hero-pencil-square" class={if @current_page == :log, do: "hidden", else: ""} />
-        </.nav_icon>
-
-        <.nav_icon navigate={~p"/history"} title="History" active={@current_page == :history}>
+        <.nav_icon navigate={~p"/stats"} title="Stats" active={@current_page == :stats}>
           <.icon
             name="hero-chart-bar-solid"
-            class={if @current_page == :history, do: "", else: "hidden"}
+            class={if @current_page == :stats, do: "", else: "hidden"}
           />
-          <.icon name="hero-chart-bar" class={if @current_page == :history, do: "hidden", else: ""} />
-        </.nav_icon>
-
-        <.nav_icon navigate={~p"/goals"} title="Goals" active={@current_page == :goals}>
-          <.icon name="hero-flag-solid" class={if @current_page == :goals, do: "", else: "hidden"} />
-          <.icon name="hero-flag" class={if @current_page == :goals, do: "hidden", else: ""} />
-        </.nav_icon>
-
-        <.nav_icon navigate={~p"/videos"} title="Videos" active={@current_page == :videos}>
-          <.icon
-            name="hero-play-circle-solid"
-            class={if @current_page == :videos, do: "", else: "hidden"}
-          />
-          <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
+          <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
         </.nav_icon>
 
         <div class="w-px h-4 bg-[#141B26] mx-1" />
@@ -81,12 +60,12 @@ defmodule BurpeeTrainerWeb.Layouts do
 
       <%!-- Mobile bottom tab bar --%>
       <nav class="fixed bottom-0 inset-x-0 z-50 sm:hidden flex items-center justify-around bg-[#0D1017] border-t border-[#141B26] pb-safe">
-        <.bottom_tab navigate={~p"/"} active={@current_page == :home}>
+        <.bottom_tab navigate={~p"/"} active={@current_page == :home} label="Home">
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
         </.bottom_tab>
 
-        <.bottom_tab navigate={~p"/workouts"} active={@current_page == :workouts}>
+        <.bottom_tab navigate={~p"/workouts"} active={@current_page == :workouts} label="Workouts">
           <.icon
             name="hero-rectangle-stack-solid"
             class={if @current_page == :workouts, do: "", else: "hidden"}
@@ -97,43 +76,13 @@ defmodule BurpeeTrainerWeb.Layouts do
           />
         </.bottom_tab>
 
-        <.bottom_tab navigate={~p"/log"} active={@current_page == :log}>
-          <.icon
-            name="hero-pencil-square-solid"
-            class={if @current_page == :log, do: "", else: "hidden"}
-          />
-          <.icon name="hero-pencil-square" class={if @current_page == :log, do: "hidden", else: ""} />
-        </.bottom_tab>
-
-        <.bottom_tab navigate={~p"/history"} active={@current_page == :history}>
+        <.bottom_tab navigate={~p"/stats"} active={@current_page == :stats} label="Stats">
           <.icon
             name="hero-chart-bar-solid"
-            class={if @current_page == :history, do: "", else: "hidden"}
+            class={if @current_page == :stats, do: "", else: "hidden"}
           />
-          <.icon name="hero-chart-bar" class={if @current_page == :history, do: "hidden", else: ""} />
+          <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
         </.bottom_tab>
-
-        <.bottom_tab navigate={~p"/goals"} active={@current_page == :goals}>
-          <.icon name="hero-flag-solid" class={if @current_page == :goals, do: "", else: "hidden"} />
-          <.icon name="hero-flag" class={if @current_page == :goals, do: "hidden", else: ""} />
-        </.bottom_tab>
-
-        <.bottom_tab navigate={~p"/videos"} active={@current_page == :videos}>
-          <.icon
-            name="hero-play-circle-solid"
-            class={if @current_page == :videos, do: "", else: "hidden"}
-          />
-          <.icon name="hero-play-circle" class={if @current_page == :videos, do: "hidden", else: ""} />
-        </.bottom_tab>
-
-        <.link
-          href={~p"/logout"}
-          method="delete"
-          title="Sign out"
-          class="inline-flex items-center justify-center w-14 h-14 shrink-0 transition-colors text-[#3A4A5E] hover:text-[#C8D8F0]"
-        >
-          <.icon name="hero-arrow-left-start-on-rectangle" />
-        </.link>
       </nav>
     <% end %>
 
@@ -160,18 +109,20 @@ defmodule BurpeeTrainerWeb.Layouts do
       navigate={@navigate}
       title={@title}
       class={[
-        "inline-flex items-center justify-center w-9 h-9 shrink-0 rounded transition-colors",
+        "inline-flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded transition-colors",
         @active && "text-[#C8D8F0] bg-[#141B26]",
         !@active && "text-[#3A4A5E] hover:text-[#6B8FA8] hover:bg-[#141B26]"
       ]}
     >
       {render_slot(@inner_block)}
+      <span class="text-[10px]">{@title}</span>
     </.link>
     """
   end
 
   attr :navigate, :string, required: true
   attr :active, :boolean, required: true
+  attr :label, :string, required: true
   slot :inner_block, required: true
 
   defp bottom_tab(assigns) do
@@ -179,12 +130,13 @@ defmodule BurpeeTrainerWeb.Layouts do
     <.link
       navigate={@navigate}
       class={[
-        "inline-flex items-center justify-center w-14 h-14 shrink-0 transition-colors",
+        "inline-flex flex-col items-center justify-center gap-0.5 w-16 h-14 shrink-0 transition-colors",
         @active && "text-[#4A9EFF]",
         !@active && "text-[#3A4A5E]"
       ]}
     >
       {render_slot(@inner_block)}
+      <span class="text-[10px] font-medium">{@label}</span>
     </.link>
     """
   end
