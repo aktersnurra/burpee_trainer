@@ -99,27 +99,18 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert conn |> get("/plans") |> redirected_to() == "/workouts"
     end
 
-    test "plan duplicate action works", %{conn: conn, user: user} do
-      plan = plan_fixture(user, %{"name" => "Original"})
-      {:ok, view, _} = live(conn, ~p"/workouts")
+    test "plan card shows edit link (⋯)", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "My Plan"})
+      {:ok, _view, html} = live(conn, ~p"/workouts")
 
-      view
-      |> element("button[phx-click='duplicate'][phx-value-id='#{plan.id}']")
-      |> render_click()
-
-      assert render(view) =~ "Original (copy)"
+      assert html =~ "/workouts/#{plan.id}/edit"
     end
 
-    test "plan delete action removes plan", %{conn: conn, user: user} do
-      plan = plan_fixture(user, %{"name" => "Doomed"})
-      {:ok, view, _} = live(conn, ~p"/workouts")
+    test "video card has no edit link", %{conn: conn} do
+      _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 600})
+      {:ok, _view, html} = live(conn, ~p"/workouts")
 
-      view
-      |> element("button[phx-click='delete'][phx-value-id='#{plan.id}']")
-      |> render_click()
-
-      refute render(view) =~ "Doomed"
-      assert Workouts.list_plans(user) == []
+      refute html =~ ~r"/workouts/\d+/edit"
     end
   end
 end

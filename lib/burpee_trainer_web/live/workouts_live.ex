@@ -88,18 +88,32 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     if params == %{}, do: "/workouts", else: "/workouts?" <> URI.encode_query(params)
   end
 
+  # Level pill labels in display order (highest to lowest)
+  @level_pills [
+    {:graduated, "Grad"},
+    {:level_4, "L4"},
+    {:level_3, "L3"},
+    {:level_2, "L2"},
+    {:level_1d, "1D"},
+    {:level_1c, "1C"},
+    {:level_1b, "1B"},
+    {:level_1a, "1A"}
+  ]
+
   @impl true
   def render(assigns) do
+    assigns = assign(assigns, :level_pills, @level_pills)
+
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
-      <div class="space-y-5">
+      <div class="space-y-4">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Workouts</h1>
           <p class="text-sm text-base-content/60">Pick something to do.</p>
         </div>
 
-        <%!-- Filter pill-bar --%>
-        <div class="flex items-center bg-base-200 border border-base-300 rounded-full px-1.5 py-1 w-fit overflow-x-auto">
+        <%!-- Source filter row --%>
+        <div class="flex gap-2">
           <.filter_pill
             label="Mine"
             value_key="source"
@@ -112,7 +126,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             value="videos"
             active={@filters[:source] == :videos}
           />
-          <div class="w-px h-4 bg-base-300 mx-1.5 shrink-0" />
+        </div>
+
+        <%!-- Type + level filter row (scrollable on small screens) --%>
+        <div class="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
           <.filter_pill
             label="6-Count"
             value_key="burpee_type"
@@ -125,33 +142,22 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             value="navy_seal"
             active={@filters[:burpee_type] == :navy_seal}
           />
-          <div class="w-px h-4 bg-base-300 mx-1.5 shrink-0" />
-          <%!-- Level pills show the three milestone groups users progress through --%>
-          <.filter_pill
-            label="L1"
-            value_key="level"
-            value="level_1a"
-            active={@filters[:level] == :level_1a}
-          />
-          <.filter_pill
-            label="L2"
-            value_key="level"
-            value="level_2"
-            active={@filters[:level] == :level_2}
-          />
-          <.filter_pill
-            label="L3"
-            value_key="level"
-            value="level_3"
-            active={@filters[:level] == :level_3}
-          />
+          <div class="w-px h-5 bg-[#1E2535] self-center shrink-0 mx-0.5" />
+          <%= for {level_atom, label} <- @level_pills do %>
+            <.filter_pill
+              label={label}
+              value_key="level"
+              value={Atom.to_string(level_atom)}
+              active={@filters[:level] == level_atom}
+            />
+          <% end %>
         </div>
 
         <%!-- List or empty state --%>
         <%= if @items == [] do %>
           <.empty_state filters={@filters} />
         <% else %>
-          <div class="space-y-3">
+          <div class="space-y-2">
             <%= for item <- @items do %>
               <.workout_card item={item} />
             <% end %>
@@ -159,14 +165,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         <% end %>
       </div>
 
-      <%!-- FAB --%>
-      <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-8 z-40">
+      <%!-- FAB — subtle, smaller --%>
+      <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-6 z-40">
         <.link
           navigate={~p"/workouts/new"}
-          class="w-12 h-12 rounded-full bg-primary text-primary-content shadow-lg flex items-center justify-center hover:bg-primary/90 transition"
+          class="w-10 h-10 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
           aria-label="New plan"
         >
-          <.icon name="hero-plus" class="size-6" />
+          <.icon name="hero-plus" class="size-5" />
         </.link>
       </div>
     </Layouts.app>
@@ -187,9 +193,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       phx-value-burpee_type={if @value_key == "burpee_type", do: @value}
       phx-value-level={if @value_key == "level", do: @value}
       class={[
-        "rounded-full px-3 py-1 text-xs font-medium transition whitespace-nowrap",
-        @active && "bg-base-content text-base-100",
-        !@active && "text-base-content/50 hover:text-base-content"
+        "rounded-full px-3 py-1 text-xs font-medium transition whitespace-nowrap shrink-0",
+        @active && "bg-[#1E2535] text-base-content",
+        !@active && "text-base-content/40 hover:text-base-content/70"
       ]}
     >
       {@label}
@@ -201,62 +207,43 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   defp workout_card(assigns) do
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4 space-y-3">
-      <div class="flex items-start justify-between gap-2">
-        <span class="font-semibold text-base leading-snug">{@item.title}</span>
-        <div class="flex gap-1.5 shrink-0 flex-wrap justify-end">
-          <span class="inline-flex items-center rounded-full bg-base-300 px-2 py-0.5 text-xs text-base-content/70">
-            {Fmt.burpee_type(@item.burpee_type)}
-          </span>
-          <%= if @item.level do %>
-            <span class={"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium #{Fmt.level_color(@item.level)}"}>
-              {Fmt.level(@item.level)}
-            </span>
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3">
+      <div class="flex items-start justify-between gap-3">
+        <%!-- Left: content --%>
+        <div class="min-w-0 space-y-1">
+          <p class="font-semibold text-sm leading-snug truncate">{@item.title}</p>
+          <p class="text-xs text-base-content/50 tabular-nums">
+            <%= if @item.burpee_count do %>
+              {@item.burpee_count} burpees · {Fmt.duration_sec(@item.duration_sec)}
+            <% else %>
+              {Fmt.duration_sec(@item.duration_sec)}
+            <% end %>
+            <%= if @item.level do %>
+              · {Fmt.level(@item.level)}
+            <% end %>
+          </p>
+          <p class="text-xs text-base-content/30">{Fmt.burpee_type(@item.burpee_type)}</p>
+        </div>
+
+        <%!-- Right: actions --%>
+        <div class="flex items-center gap-1 shrink-0">
+          <%= if @item.kind == :plan && @item.edit_path do %>
+            <.link
+              navigate={@item.edit_path}
+              class="p-1.5 text-base-content/30 hover:text-base-content/70 transition rounded"
+              title="Edit / more"
+            >
+              <.icon name="hero-ellipsis-horizontal" class="size-4" />
+            </.link>
           <% end %>
-        </div>
-      </div>
-
-      <dl class="flex gap-5 text-sm">
-        <%= if @item.burpee_count do %>
-          <div>
-            <dt class="text-xs text-base-content/40 uppercase tracking-wide">Burpees</dt>
-            <dd class="font-semibold tabular-nums">{@item.burpee_count}</dd>
-          </div>
-        <% end %>
-        <div>
-          <dt class="text-xs text-base-content/40 uppercase tracking-wide">Duration</dt>
-          <dd class="font-semibold tabular-nums">{Fmt.duration_sec(@item.duration_sec)}</dd>
-        </div>
-      </dl>
-
-      <div class="flex gap-2">
-        <.link
-          navigate={@item.start_path}
-          class="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-primary py-2 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
-        >
-          <.icon name="hero-play" class="size-4" /> Start
-        </.link>
-        <%= if @item.kind == :plan do %>
-          <button
-            type="button"
-            phx-click="duplicate"
-            phx-value-id={@item.id}
-            title="Duplicate"
-            class="inline-flex items-center justify-center w-9 rounded-md border border-base-300 py-2 hover:bg-base-300 transition"
+          <.link
+            navigate={@item.start_path}
+            class="p-1.5 text-[#4A9EFF] hover:text-[#4A9EFF]/80 transition rounded"
+            aria-label={"Start #{@item.title}"}
           >
-            <.icon name="hero-document-duplicate" class="size-4" />
-          </button>
-          <button
-            type="button"
-            phx-click="delete"
-            phx-value-id={@item.id}
-            title="Delete"
-            data-confirm={"Delete '#{@item.title}'? This cannot be undone."}
-            class="inline-flex items-center justify-center w-9 rounded-md border border-error/40 py-2 text-error hover:bg-error/10 transition"
-          >
-            <.icon name="hero-trash" class="size-4" />
-          </button>
-        <% end %>
+            <.icon name="hero-play-circle" class="size-6" />
+          </.link>
+        </div>
       </div>
     </div>
     """
