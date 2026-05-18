@@ -36,9 +36,9 @@ defmodule BurpeeTrainer.WorkoutFeed do
 
     plans =
       if source in [:all, :mine] do
-        user
-        |> Workouts.list_plans()
-        |> Enum.map(&plan_to_item(user, &1))
+        plans_list = Workouts.list_plans(user)
+        last_used_map = load_last_used(user.id, Enum.map(plans_list, & &1.id))
+        Enum.map(plans_list, &plan_to_item(&1, Map.get(last_used_map, &1.id)))
       else
         []
       end
@@ -60,10 +60,9 @@ defmodule BurpeeTrainer.WorkoutFeed do
   # Private — conversion
   # ---------------------------------------------------------------------------
 
-  defp plan_to_item(user, plan) do
+  defp plan_to_item(plan, last_used) do
     %{burpee_count_total: count, duration_sec_total: duration} = Planner.summary(plan)
     level = Levels.level_for_count(plan.burpee_type, count)
-    last_used = last_used_at(user, plan.id)
 
     %WorkoutItem{
       kind: :plan,
@@ -74,7 +73,7 @@ defmodule BurpeeTrainer.WorkoutFeed do
       burpee_count: count,
       duration_sec: round(duration),
       start_path: "/session/#{plan.id}",
-      edit_path: "/plans/#{plan.id}/edit",
+      edit_path: "/workouts/#{plan.id}/edit",
       last_used_at: last_used,
       inserted_at: plan.inserted_at
     }
@@ -156,13 +155,15 @@ defmodule BurpeeTrainer.WorkoutFeed do
   # Private — DB helpers
   # ---------------------------------------------------------------------------
 
-  defp last_used_at(%User{id: user_id}, plan_id) do
-    Repo.one(
+  defp load_last_used(_user_id, []), do: %{}
+
+  defp load_last_used(user_id, plan_ids) do
+    Repo.all(
       from s in WorkoutSession,
-        where: s.user_id == ^user_id and s.plan_id == ^plan_id,
-        order_by: [desc: s.inserted_at],
-        limit: 1,
-        select: s.inserted_at
+        where: s.user_id == ^user_id and s.plan_id in ^plan_ids,
+        group_by: s.plan_id,
+        select: {s.plan_id, max(s.inserted_at)}
     )
+    |> Map.new()
   end
 end
