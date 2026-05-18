@@ -27,6 +27,10 @@ defmodule BurpeeTrainer.Levels do
     %{level: :level_1a, six_count: 1, navy_seal: 1}
   ]
 
+  @doc "All valid level atoms, ordered from highest to lowest."
+  @spec all_levels() :: [atom]
+  def all_levels, do: Enum.map(@landmarks, & &1.level)
+
   @doc """
   Returns the highest level where both types have qualifying sessions in
   the same ISO week. Returns `:level_1a` when no co-week pair exists.

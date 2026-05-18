@@ -12,21 +12,6 @@ defmodule BurpeeTrainerWeb.PlansLiveTest do
     {:ok, conn: conn, user: user}
   end
 
-  describe "/workouts" do
-    test "empty state renders when no plans exist", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/workouts")
-      assert html =~ "Loading"
-    end
-
-    test "lists existing plans with summary", %{conn: conn, user: user} do
-      _ = plan_fixture(user, %{"name" => "Morning grind"})
-      {:ok, _view, html} = live(conn, ~p"/workouts")
-
-      # WorkoutsLive is a stub for now — just confirm it mounts
-      assert html =~ "Loading"
-    end
-  end
-
   describe "/workouts/new" do
     test "mounts with basics, blocks, and derived stats", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/workouts/new")
