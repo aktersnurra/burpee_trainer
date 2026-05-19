@@ -3,7 +3,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   alias BurpeeTrainer.{Goals, Streak, Workouts}
   alias BurpeeTrainer.Streak.State
-  alias BurpeeTrainerWeb.{Fmt, Layouts}
+  alias BurpeeTrainerWeb.Fmt
 
   @session_preview 10
 
@@ -55,6 +55,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
     {:noreply,
      socket
      |> assign(:log_modal_open, false)
+     |> assign(:show_all_sessions, false)
+     |> assign(:all_sessions, nil)
      |> assign(:streak, Streak.compute(user, today))
      |> assign(:sessions, Workouts.list_sessions_recent(user, @session_preview))
      |> assign(:weekly_data, Workouts.weekly_minutes(user))}
@@ -101,6 +103,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <div
             class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6"
             phx-click-away="close_log_modal"
+            phx-click.stop
           >
             <.live_component
               module={BurpeeTrainerWeb.LogFormComponent}
