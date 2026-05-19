@@ -216,21 +216,21 @@ defmodule BurpeeTrainer.WorkoutsTest do
   end
 
   describe "last_session_for_type/2" do
-    test "returns most recent session with non-nil counts for the given type" do
+    test "returns most recent qualifying session (20 min ± 10 sec, positive burpees)" do
       user = user_fixture()
 
       _old =
         free_form_session_fixture(user, %{
           "burpee_type" => "six_count",
           "burpee_count_actual" => 10,
-          "duration_sec_actual" => 60
+          "duration_sec_actual" => 1190
         })
 
       recent =
         free_form_session_fixture(user, %{
           "burpee_type" => "six_count",
           "burpee_count_actual" => 25,
-          "duration_sec_actual" => 100
+          "duration_sec_actual" => 1210
         })
 
       result = Workouts.last_session_for_type(user, :six_count)
@@ -244,39 +244,67 @@ defmodule BurpeeTrainer.WorkoutsTest do
         free_form_session_fixture(user, %{
           "burpee_type" => "navy_seal",
           "burpee_count_actual" => 20,
-          "duration_sec_actual" => 80
+          "duration_sec_actual" => 1200
         })
 
       assert Workouts.last_session_for_type(user, :six_count) == nil
     end
 
-    test "does not return sessions with nil or zero burpee_count_actual" do
+    test "does not return sessions outside 20 min ± 10 sec window" do
       user = user_fixture()
-      plan = plan_fixture(user)
 
-      _zero_session =
+      _too_short =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 1189
+        })
+
+      _too_long =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 1211
+        })
+
+      assert Workouts.last_session_for_type(user, :six_count) == nil
+    end
+
+    test "returns session within 20 min ± 10 sec window" do
+      user = user_fixture()
+
+      s =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 1200
+        })
+
+      assert Workouts.last_session_for_type(user, :six_count).id == s.id
+    end
+
+    test "does not return sessions with zero burpee_count_actual" do
+      user = user_fixture()
+
+      _zero =
         free_form_session_fixture(user, %{
           "burpee_type" => "six_count",
           "burpee_count_actual" => 0,
-          "duration_sec_actual" => 60
+          "duration_sec_actual" => 1200
         })
 
-      valid_session =
-        session_from_plan_fixture(user, plan, %{
-          "burpee_count_actual" => 30,
-          "duration_sec_actual" => 118
-        })
-
-      # Should return the valid session, not the zero-burpee one
-      result = Workouts.last_session_for_type(user, :six_count)
-      assert result.id == valid_session.id
-      assert result.burpee_count_actual == 30
+      assert Workouts.last_session_for_type(user, :six_count) == nil
     end
 
     test "does not return sessions from another user" do
       user1 = user_fixture()
       user2 = user_fixture()
-      _s = free_form_session_fixture(user1, %{"burpee_type" => "six_count"})
+
+      _s =
+        free_form_session_fixture(user1, %{
+          "burpee_type" => "six_count",
+          "duration_sec_actual" => 1200
+        })
 
       assert Workouts.last_session_for_type(user2, :six_count) == nil
     end
@@ -357,6 +385,111 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert length(Workouts.weekly_minutes(alice)) == 1
       assert length(Workouts.weekly_minutes(bob)) == 1
+    end
+  end
+
+  describe "weekly_volume/1" do
+    test "returns empty list when user has no sessions" do
+      user = user_fixture()
+      assert Workouts.weekly_volume(user) == []
+    end
+
+    test "aggregates reps by type within the same week" do
+      user = user_fixture()
+
+      free_form_session_fixture(user, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 30,
+        "inserted_at" => ~U[2026-04-21 10:00:00Z]
+      })
+
+      free_form_session_fixture(user, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 20,
+        "inserted_at" => ~U[2026-04-23 10:00:00Z]
+      })
+
+      free_form_session_fixture(user, %{
+        "burpee_type" => "navy_seal",
+        "burpee_count_actual" => 15,
+        "inserted_at" => ~U[2026-04-22 10:00:00Z]
+      })
+
+      [week] = Workouts.weekly_volume(user)
+      assert week.week_start == ~D[2026-04-20]
+      assert week.six_count_reps == 50
+      assert week.navy_seal_reps == 15
+    end
+
+    test "separates sessions into different weeks" do
+      user = user_fixture()
+
+      free_form_session_fixture(user, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 40,
+        "inserted_at" => ~U[2026-04-21 10:00:00Z]
+      })
+
+      free_form_session_fixture(user, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 50,
+        "inserted_at" => ~U[2026-04-28 10:00:00Z]
+      })
+
+      [w1, w2] = Workouts.weekly_volume(user)
+      assert w1.week_start == ~D[2026-04-27]
+      assert w1.six_count_reps == 50
+      assert w2.week_start == ~D[2026-04-20]
+      assert w2.six_count_reps == 40
+    end
+
+    test "treats nil burpee_count_actual as 0" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      session_from_plan_fixture(user, plan)
+
+      [week] = Workouts.weekly_volume(user)
+      assert week.six_count_reps == 30
+      assert week.navy_seal_reps == 0
+    end
+
+    test "excludes warmup-tagged sessions" do
+      user = user_fixture()
+
+      free_form_session_fixture(user, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 40
+      })
+
+      {:ok, _} =
+        Workouts.create_warmup_session(user, %{
+          burpee_type: :six_count,
+          burpee_count_done: 5,
+          duration_sec: 600
+        })
+
+      [week] = Workouts.weekly_volume(user)
+      assert week.six_count_reps == 40
+    end
+
+    test "scopes to user — other users' sessions not included" do
+      alice = user_fixture()
+      bob = user_fixture()
+
+      free_form_session_fixture(alice, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 30
+      })
+
+      free_form_session_fixture(bob, %{"burpee_type" => "navy_seal", "burpee_count_actual" => 20})
+
+      [alice_week] = Workouts.weekly_volume(alice)
+      assert alice_week.six_count_reps == 30
+      assert alice_week.navy_seal_reps == 0
+
+      [bob_week] = Workouts.weekly_volume(bob)
+      assert bob_week.navy_seal_reps == 20
+      assert bob_week.six_count_reps == 0
     end
   end
 end

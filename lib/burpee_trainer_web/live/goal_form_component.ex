@@ -34,27 +34,40 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
     burpee_type = socket.assigns.burpee_type
     today = Date.utc_today()
 
-    burpee_count_target = String.to_integer(params["burpee_count_target"] || "0")
+    raw_count = String.trim(params["burpee_count_target"] || "")
 
-    duration_sec_target =
-      round(burpee_count_target * session.duration_sec_actual / session.burpee_count_actual)
+    case Integer.parse(raw_count) do
+      {burpee_count_target, ""} when burpee_count_target > 0 ->
+        duration_sec_target =
+          round(burpee_count_target * session.duration_sec_actual / session.burpee_count_actual)
 
-    full_attrs = %{
-      "burpee_type" => to_string(burpee_type),
-      "burpee_count_target" => burpee_count_target,
-      "duration_sec_target" => duration_sec_target,
-      "date_target" => params["date_target"],
-      "burpee_count_baseline" => session.burpee_count_actual,
-      "duration_sec_baseline" => session.duration_sec_actual,
-      "date_baseline" => Date.to_iso8601(today)
-    }
+        full_attrs = %{
+          "burpee_type" => to_string(burpee_type),
+          "burpee_count_target" => burpee_count_target,
+          "duration_sec_target" => duration_sec_target,
+          "date_target" => params["date_target"],
+          "burpee_count_baseline" => session.burpee_count_actual,
+          "duration_sec_baseline" => session.duration_sec_actual,
+          "date_baseline" => Date.to_iso8601(today)
+        }
 
-    case Goals.create_goal(user, full_attrs) do
-      {:ok, _goal} ->
-        send(self(), socket.assigns.on_save)
-        {:noreply, socket}
+        case Goals.create_goal(user, full_attrs) do
+          {:ok, _goal} ->
+            send(self(), socket.assigns.on_save)
+            {:noreply, socket}
 
-      {:error, changeset} ->
+          {:error, changeset} ->
+            {:noreply, assign(socket, :form, to_form(changeset))}
+        end
+
+      _ ->
+        changeset =
+          Goals.change_goal(%Goals.Goal{}, %{"burpee_count_target" => raw_count})
+          |> Ecto.Changeset.add_error(
+            :burpee_count_target,
+            "must be a whole number greater than 0"
+          )
+
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
   end
@@ -66,11 +79,20 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
   def render(assigns) do
     ~H"""
     <div>
-      <h2 class="text-lg font-semibold mb-5">Set {@type_label} goal</h2>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-semibold">Set {@type_label} goal</h2>
+        <button
+          type="button"
+          phx-click="close_goal_modal"
+          class="text-base-content/40 hover:text-base-content/70 transition"
+        >
+          <.icon name="hero-x-mark" class="size-5" />
+        </button>
+      </div>
 
       <%= if @baseline_session == nil do %>
         <p class="text-sm text-base-content/50">
-          Log at least one {@type_label} session before setting a goal.
+          Log at least one {@type_label} session of 20+ minutes before setting a goal.
         </p>
       <% else %>
         <.form
@@ -82,9 +104,10 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
         >
           <.input
             field={@form[:burpee_count_target]}
-            type="number"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
             label="Target burpees"
-            min={@baseline_session.burpee_count_actual + 1}
           />
           <.input
             field={@form[:date_target]}

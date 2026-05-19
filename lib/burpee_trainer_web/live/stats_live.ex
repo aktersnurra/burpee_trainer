@@ -127,13 +127,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <div
           id="log-modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
-          phx-click="close_log_modal"
         >
-          <div
-            class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6"
-            phx-click-away="close_log_modal"
-            phx-click.stop
-          >
+          <div class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6">
             <.live_component
               module={BurpeeTrainerWeb.LogFormComponent}
               id="log-form"
@@ -149,13 +144,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <div
           id="goal-modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
-          phx-click="close_goal_modal"
         >
-          <div
-            class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6"
-            phx-click-away="close_goal_modal"
-            phx-click.stop
-          >
+          <div class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6">
             <.live_component
               module={BurpeeTrainerWeb.GoalFormComponent}
               id="goal-form"
@@ -264,6 +254,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <p class="text-xs text-base-content/50">
             by {Calendar.strftime(@goal.date_target, "%-d %b")}
           </p>
+          <button
+            type="button"
+            phx-click="open_goal_modal"
+            phx-value-type={@burpee_type}
+            class="text-xs text-base-content/30 hover:text-primary transition"
+          >
+            Replace
+          </button>
         </div>
       <% else %>
         <div class="space-y-2">

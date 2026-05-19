@@ -84,6 +84,9 @@
   --color-base-border: #1E2535;
 }
 
+/* Dark color-scheme on the root so browser date/time pickers use dark chrome */
+:root { color-scheme: dark; }
+
 /* Subtle pulse for the clock ring when 5s remain in a rest. */
 @keyframes burpee-ring-pulse {
   0%, 100% { transform: scale(1); }

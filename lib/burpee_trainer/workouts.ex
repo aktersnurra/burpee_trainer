@@ -180,6 +180,48 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Weekly burpee rep totals by type for a user. Last 12 weeks, most recent first.
+  Each entry has :week_start (Date), :six_count_reps (integer), :navy_seal_reps (integer).
+  Warmup sessions are excluded.
+  """
+  @spec weekly_volume(User.t()) :: [
+          %{week_start: Date.t(), six_count_reps: integer, navy_seal_reps: integer}
+        ]
+  def weekly_volume(%User{id: user_id}) do
+    sessions =
+      Repo.all(
+        from s in WorkoutSession,
+          where:
+            s.user_id == ^user_id and
+              (is_nil(s.tags) or s.tags != "warmup"),
+          select: %{
+            inserted_at: s.inserted_at,
+            burpee_type: s.burpee_type,
+            burpee_count_actual: s.burpee_count_actual
+          }
+      )
+
+    sessions
+    |> Enum.group_by(fn %{inserted_at: dt} ->
+      dt |> DateTime.to_date() |> Date.beginning_of_week(:monday)
+    end)
+    |> Enum.map(fn {week_start, rows} ->
+      six_count_reps =
+        rows
+        |> Enum.filter(&(&1.burpee_type == :six_count))
+        |> Enum.sum_by(&(&1.burpee_count_actual || 0))
+
+      navy_seal_reps =
+        rows
+        |> Enum.filter(&(&1.burpee_type == :navy_seal))
+        |> Enum.sum_by(&(&1.burpee_count_actual || 0))
+
+      %{week_start: week_start, six_count_reps: six_count_reps, navy_seal_reps: navy_seal_reps}
+    end)
+    |> Enum.sort_by(& &1.week_start, {:desc, Date})
+  end
+
+  @doc """
   Return the most recent `limit` sessions for a user, preloading the
   associated plan (for plan name display). Most recent first.
   """
@@ -252,8 +294,8 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Most recent session for a user + burpee type that has usable baseline data
-  (both burpee_count_actual and duration_sec_actual are non-nil and positive).
+  Most recent session for a user + burpee type that has usable baseline data:
+  burpee_count_actual > 0 and duration_sec_actual between 1190 and 1210 (20 min ± 10 sec).
   """
   @spec last_session_for_type(User.t(), atom) :: WorkoutSession.t() | nil
   def last_session_for_type(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
@@ -263,7 +305,8 @@ defmodule BurpeeTrainer.Workouts do
           s.user_id == ^user_id and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
-            not is_nil(s.duration_sec_actual),
+            s.duration_sec_actual >= 1190 and
+            s.duration_sec_actual <= 1210,
         order_by: [desc: s.inserted_at],
         limit: 1
     )

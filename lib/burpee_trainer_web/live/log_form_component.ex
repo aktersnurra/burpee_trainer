@@ -73,7 +73,16 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
   def render(assigns) do
     ~H"""
     <div>
-      <h2 class="text-lg font-semibold mb-5">Log session</h2>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-semibold">Log session</h2>
+        <button
+          type="button"
+          phx-click="close_log_modal"
+          class="text-base-content/40 hover:text-base-content/70 transition"
+        >
+          <.icon name="hero-x-mark" class="size-5" />
+        </button>
+      </div>
 
       <.form
         for={@form}
