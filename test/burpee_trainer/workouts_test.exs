@@ -585,4 +585,98 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert Workouts.list_sessions_for_chart(user2, :six_count) == []
     end
   end
+
+  describe "best_qualifying_session_since/3" do
+    test "returns nil when no sessions exist" do
+      user = user_fixture()
+      assert Workouts.best_qualifying_session_since(user, :six_count, ~D[2026-01-01]) == nil
+    end
+
+    test "returns the session with the highest burpee_count_actual since the given date" do
+      user = user_fixture()
+
+      _lower =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 200,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-04-10 10:00:00Z]
+        })
+
+      best =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 280,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-04-17 10:00:00Z]
+        })
+
+      result = Workouts.best_qualifying_session_since(user, :six_count, ~D[2026-04-01])
+      assert result.id == best.id
+    end
+
+    test "excludes sessions before the given date" do
+      user = user_fixture()
+
+      _old =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 300,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-03-01 10:00:00Z]
+        })
+
+      assert Workouts.best_qualifying_session_since(user, :six_count, ~D[2026-04-01]) == nil
+    end
+
+    test "excludes sessions outside the 20-min ±10 sec window" do
+      user = user_fixture()
+
+      _short =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 300,
+          "duration_sec_actual" => 600,
+          "inserted_at" => ~U[2026-04-10 10:00:00Z]
+        })
+
+      _long =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 300,
+          "duration_sec_actual" => 2400,
+          "inserted_at" => ~U[2026-04-10 10:00:00Z]
+        })
+
+      assert Workouts.best_qualifying_session_since(user, :six_count, ~D[2026-04-01]) == nil
+    end
+
+    test "only returns sessions for the given burpee_type" do
+      user = user_fixture()
+
+      _seal =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "navy_seal",
+          "burpee_count_actual" => 150,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-04-10 10:00:00Z]
+        })
+
+      assert Workouts.best_qualifying_session_since(user, :six_count, ~D[2026-04-01]) == nil
+    end
+
+    test "does not return sessions from another user" do
+      user1 = user_fixture()
+      user2 = user_fixture()
+
+      free_form_session_fixture(user1, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 250,
+        "duration_sec_actual" => 1200,
+        "inserted_at" => ~U[2026-04-10 10:00:00Z]
+      })
+
+      assert Workouts.best_qualifying_session_since(user2, :six_count, ~D[2026-04-01]) == nil
+    end
+  end
 end

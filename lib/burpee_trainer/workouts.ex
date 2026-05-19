@@ -313,6 +313,28 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Best qualifying session (highest burpee_count_actual) for a user + burpee type
+  since a given date. Qualifying = duration_sec_actual in [1190, 1210] and
+  burpee_count_actual > 0. Returns nil if no qualifying sessions exist.
+  """
+  @spec best_qualifying_session_since(User.t(), atom, Date.t()) :: WorkoutSession.t() | nil
+  def best_qualifying_session_since(%User{id: user_id}, burpee_type, since)
+      when is_atom(burpee_type) do
+    Repo.one(
+      from s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and
+            s.burpee_type == ^burpee_type and
+            s.burpee_count_actual > 0 and
+            s.duration_sec_actual >= 1190 and
+            s.duration_sec_actual <= 1210 and
+            fragment("date(?)", s.inserted_at) >= ^since,
+        order_by: [desc: s.burpee_count_actual],
+        limit: 1
+    )
+  end
+
+  @doc """
   All sessions for a user + burpee type suitable for progress charting:
   burpee_count_actual > 0 and duration_sec_actual > 0, ordered oldest first.
   """

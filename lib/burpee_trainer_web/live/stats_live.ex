@@ -98,9 +98,19 @@ defmodule BurpeeTrainerWeb.StatsLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
       <div class="space-y-5 pb-20">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">Stats</h1>
-          <p class="text-sm text-base-content/60">How you're tracking.</p>
+        <div class="flex items-start justify-between">
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight">Stats</h1>
+            <p class="text-sm text-base-content/60">How you're tracking.</p>
+          </div>
+          <%= if @current_level do %>
+            <div class="text-right leading-tight">
+              <p class="text-[10px] font-medium uppercase tracking-widest text-base-content/40">
+                Level
+              </p>
+              <p class="text-2xl font-semibold text-base-content">{level_label(@current_level)}</p>
+            </div>
+          <% end %>
         </div>
 
         <.streak_card streak={@streak} today={@today} />
@@ -178,7 +188,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
       <div class="flex items-end justify-between">
         <div class="tabular-nums leading-none">
-          <span class="text-7xl font-semibold tracking-tight">
+          <span class="text-8xl font-bold tracking-tight">
             {trunc(@streak.current_week_minutes)}
           </span>
           <span class="text-base-content/50 text-base ml-2">/ 80 min</span>
@@ -206,17 +216,21 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
       <div class="flex justify-between">
         <%= for day <- @week_days do %>
-          <div class="flex flex-col items-center gap-0.5">
-            <span class="text-[10px] text-base-content/30">
+          <div class="flex flex-col items-center gap-1">
+            <span class={[
+              "text-[10px] font-medium",
+              day == @today && "text-primary",
+              day != @today && "text-base-content/50"
+            ]}>
               {Calendar.strftime(day, "%a") |> String.slice(0, 1)}
             </span>
             <div class={[
-              "w-4 h-4 rounded-full",
-              day in @streak.days_active_this_week && "bg-primary",
+              "rounded-full",
+              day in @streak.days_active_this_week && "w-4 h-4 bg-primary",
               day == @today && day not in @streak.days_active_this_week &&
-                "ring-2 ring-primary ring-offset-1 ring-offset-base-200 bg-transparent",
-              day > @today && "bg-[#1E2535]",
-              day < @today && day not in @streak.days_active_this_week && "bg-[#1E2535]"
+                "w-4 h-4 ring-2 ring-primary ring-offset-2 ring-offset-base-200 bg-transparent",
+              day > @today && "w-3 h-3 bg-[#1E2535]",
+              day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-[#1E2535]"
             ]} />
           </div>
         <% end %>
@@ -292,13 +306,13 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp sessions_section(assigns) do
     ~H"""
-    <div class="space-y-3">
-      <h2 class="text-base font-semibold text-base-content">Sessions</h2>
+    <div>
+      <h2 class="text-base font-semibold text-base-content mb-2">Sessions</h2>
 
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
-        <div class="space-y-2">
+        <div class="rounded-[10px] border border-[#1E2535] bg-base-200 divide-y divide-[#1E2535] px-4">
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
@@ -307,7 +321,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <%= if @has_more do %>
           <button
             phx-click="load_more_sessions"
-            class="w-full py-2 text-xs text-base-content/40 hover:text-base-content/70 transition"
+            class="w-full pt-3 text-xs text-base-content/40 hover:text-base-content/70 transition text-center"
           >
             Load more
           </button>
@@ -320,28 +334,33 @@ defmodule BurpeeTrainerWeb.StatsLive do
   attr :session, :any, required: true
 
   defp session_row(assigns) do
+    today = Date.utc_today()
+    date = DateTime.to_date(assigns.session.inserted_at)
+
+    date_str =
+      if date.year == today.year,
+        do: Calendar.strftime(date, "%-d %b"),
+        else: Calendar.strftime(date, "%-d %b %Y")
+
+    assigns = assign(assigns, :date_str, date_str)
+
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0 space-y-0.5">
-          <p class="text-sm font-semibold leading-snug tabular-nums">
-            <%= if @session.burpee_count_actual do %>
-              {@session.burpee_count_actual} burpees · {Fmt.duration_sec(@session.duration_sec_actual)}
-            <% else %>
-              {Fmt.duration_sec(@session.duration_sec_actual)}
-            <% end %>
-          </p>
-          <p class="text-xs text-base-content/40">
-            {Fmt.burpee_type(@session.burpee_type)}
-            <%= if @session.plan do %>
-              <span class="text-base-content/20 mx-1">·</span>{@session.plan.name}
-            <% end %>
-          </p>
-        </div>
-        <span class="text-xs text-base-content/30 shrink-0 pt-0.5">
-          {Calendar.strftime(DateTime.to_date(@session.inserted_at), "%-d %b")}
+    <div class="flex items-center justify-between gap-4 py-2.5">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="text-sm font-semibold tabular-nums w-10 shrink-0">
+          {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
         </span>
+        <span class="text-sm text-base-content/70 shrink-0">
+          {Fmt.burpee_type(@session.burpee_type)}
+        </span>
+        <span class="text-sm text-base-content/40 tabular-nums shrink-0">
+          {Fmt.duration_sec(@session.duration_sec_actual)}
+        </span>
+        <%= if @session.plan do %>
+          <span class="text-xs text-base-content/25 truncate">{@session.plan.name}</span>
+        <% end %>
       </div>
+      <span class="text-xs text-base-content/30 shrink-0">{@date_str}</span>
     </div>
     """
   end
@@ -362,16 +381,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <h2 class="text-base font-semibold text-base-content">Trends</h2>
       <.weekly_minutes_chart weekly_data={@weekly_data} />
       <.progress_chart
-        sessions={@six_count_sessions}
-        label="6-Count progress"
-        color="#4A9EFF"
-        goal={@six_goal}
-      />
-      <.progress_chart
-        sessions={@navy_seal_sessions}
-        label="Navy SEAL progress"
-        color="#F97316"
-        goal={@seal_goal}
+        six_count_sessions={@six_count_sessions}
+        navy_seal_sessions={@navy_seal_sessions}
+        six_goal={@six_goal}
+        seal_goal={@seal_goal}
       />
     </div>
     """
@@ -442,58 +455,98 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :sessions, :list, required: true
-  attr :label, :string, required: true
-  attr :color, :string, required: true
-  attr :goal, :any, required: true
+  attr :six_count_sessions, :list, required: true
+  attr :navy_seal_sessions, :list, required: true
+  attr :six_goal, :any, required: true
+  attr :seal_goal, :any, required: true
 
   defp progress_chart(assigns) do
-    points =
-      Enum.map(assigns.sessions, fn s ->
-        normalized = round(s.burpee_count_actual / s.duration_sec_actual * 1200)
-        date = DateTime.to_date(s.inserted_at)
-        %{date: date, reps: normalized}
+    to_points = fn sessions ->
+      Enum.map(sessions, fn s ->
+        {_y, w} = :calendar.iso_week_number(Date.to_erl(DateTime.to_date(s.inserted_at)))
+        %{reps: round(s.burpee_count_actual / s.duration_sec_actual * 1200.0), iso_week: w}
       end)
+    end
 
-    target = if assigns.goal, do: assigns.goal.burpee_count_target, else: nil
-    all_vals = Enum.map(points, & &1.reps) ++ if(target, do: [target], else: [])
-    max_val = if all_vals == [], do: 1, else: Enum.max(all_vals)
-    n = length(points)
+    six_points = to_points.(assigns.six_count_sessions)
+    seal_points = to_points.(assigns.navy_seal_sessions)
+    six_target = assigns.six_goal && assigns.six_goal.burpee_count_target
+    seal_target = assigns.seal_goal && assigns.seal_goal.burpee_count_target
 
-    y_axis_w = 24
-    chart_w = 300
-    top_pad = 8
-    plot_h = 60
-    bot_pad = 16
+    all_vals =
+      Enum.map(six_points, & &1.reps) ++
+        Enum.map(seal_points, & &1.reps) ++
+        Enum.reject([six_target, seal_target], &is_nil/1)
+
+    # Y-axis ceiling is the highest target; if no goals, fall back to actual data max
+    targets = Enum.reject([six_target, seal_target], &is_nil/1)
+
+    max_val =
+      cond do
+        targets != [] -> Enum.max(targets)
+        all_vals != [] -> Enum.max(all_vals)
+        true -> 1
+      end
+
+    # Meaningful y-axis ticks: targets + 0, sorted desc
+    y_ticks =
+      [six_target, seal_target, 0]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.sort(:desc)
+
+    y_axis_w = 32
+    chart_w = 320
+    top_pad = 12
+    plot_h = 90
+    bot_pad = 20
     total_h = top_pad + plot_h + bot_pad
-    step = if n > 1, do: (chart_w - y_axis_w) / (n - 1), else: chart_w - y_axis_w
 
-    to_x = fn i -> y_axis_w + i * step end
-    to_y = fn v -> top_pad + plot_h - v / max_val * plot_h end
+    to_y = fn v -> top_pad + plot_h - v / (max_val * 1.0) * plot_h end
 
-    indexed = Enum.with_index(points)
+    # Build per-series x coords: use all sessions merged and sorted by week for shared x-axis
+    all_weeks =
+      (Enum.map(six_points, & &1.iso_week) ++ Enum.map(seal_points, & &1.iso_week))
+      |> Enum.uniq()
+      |> Enum.sort()
 
-    polyline =
-      Enum.map_join(indexed, " ", fn {p, i} ->
-        "#{Float.round(to_x.(i * 1.0), 1)},#{Float.round(to_y.(p.reps * 1.0), 1)}"
+    n_weeks = length(all_weeks)
+    week_index = all_weeks |> Enum.with_index() |> Map.new()
+
+    step =
+      if n_weeks > 1, do: (chart_w - y_axis_w) / (n_weeks - 1), else: (chart_w - y_axis_w) * 1.0
+
+    to_x = fn week -> y_axis_w + Map.fetch!(week_index, week) * step end
+
+    build_polyline = fn points ->
+      Enum.map_join(points, " ", fn p ->
+        "#{Float.round(to_x.(p.iso_week), 1)},#{Float.round(to_y.(p.reps * 1.0), 1)}"
+      end)
+    end
+
+    six_polyline = build_polyline.(six_points)
+    seal_polyline = build_polyline.(seal_points)
+
+    x_label_weeks =
+      Enum.filter(all_weeks, fn w ->
+        i = Map.fetch!(week_index, w)
+        i == 0 or i == n_weeks - 1 or (n_weeks > 4 and rem(i, 3) == 0)
       end)
 
-    x_labels =
-      Enum.filter(indexed, fn {_p, i} ->
-        i == 0 or i == n - 1 or (n > 4 and rem(i, 3) == 0)
-      end)
-
-    target_y = if target, do: to_y.(target * 1.0), else: nil
+    all_empty = six_points == [] and seal_points == []
 
     assigns =
       assign(assigns,
-        points: points,
-        indexed: indexed,
-        polyline: polyline,
-        x_labels: x_labels,
-        target_y: target_y,
-        target: target,
+        six_points: six_points,
+        seal_points: seal_points,
+        six_target: six_target,
+        seal_target: seal_target,
+        six_polyline: six_polyline,
+        seal_polyline: seal_polyline,
+        x_label_weeks: x_label_weeks,
+        y_ticks: y_ticks,
         max_val: max_val,
+        all_empty: all_empty,
         to_x: to_x,
         to_y: to_y,
         top_pad: top_pad,
@@ -504,71 +557,137 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4">
-      <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">{@label}</p>
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-5">
+      <div class="flex items-start justify-between mb-1">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">Progress</p>
+          <p class="text-[10px] text-base-content/30 mt-0.5">Normalized reps / 20 min</p>
+        </div>
+        <div class="flex items-center gap-3 pt-0.5">
+          <span class="flex items-center gap-1 text-[10px] text-base-content/50">
+            <span class="inline-block w-2 h-2 rounded-full bg-[#4A9EFF]"></span>6-Count
+          </span>
+          <span class="flex items-center gap-1 text-[10px] text-base-content/50">
+            <span class="inline-block w-2 h-2 rounded-full bg-[#F97316]"></span>Navy SEAL
+          </span>
+        </div>
+      </div>
 
-      <%= if @points == [] do %>
-        <p class="text-xs text-base-content/30">No sessions yet.</p>
+      <%= if @all_empty do %>
+        <p class="text-xs text-base-content/30 mt-4">No sessions yet.</p>
       <% else %>
-        <svg viewBox={"0 0 #{@chart_w} #{@total_h}"} class="w-full overflow-visible" aria-hidden="true">
-          <%!-- y-axis labels --%>
-          <text x={@y_axis_w - 3} y={@top_pad + 4} text-anchor="end" font-size="7" fill="#3A4A5E">{@max_val}</text>
-          <text x={@y_axis_w - 3} y={@top_pad + @plot_h} text-anchor="end" font-size="7" fill="#3A4A5E">0</text>
-
-          <%!-- zero baseline --%>
-          <line
-            x1={@y_axis_w}
-            y1={@top_pad + @plot_h}
-            x2={@chart_w}
-            y2={@top_pad + @plot_h}
-            stroke="#1E2535"
-            stroke-width="0.5"
-          />
-
-          <%!-- target line --%>
-          <%= if @target_y do %>
-            <line
-              x1={@y_axis_w}
-              y1={@target_y}
-              x2={@chart_w}
-              y2={@target_y}
-              stroke={@color}
-              stroke-width="0.5"
-              stroke-dasharray="3,3"
-              opacity="0.5"
-            />
-            <text x={@chart_w} y={@target_y - 2} text-anchor="end" font-size="6" fill={@color} opacity="0.7">{@target}</text>
+        <svg
+          viewBox={"0 0 #{@chart_w} #{@total_h}"}
+          class="w-full mt-3 overflow-visible"
+          aria-hidden="true"
+        >
+          <%!-- gridlines + y-axis labels --%>
+          <%= for tick <- @y_ticks do %>
+            <% gy = @to_y.(tick * 1.0) %>
+            <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#1E2535" stroke-width="0.5" />
+            <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#3A4A5E">
+              {tick}
+            </text>
           <% end %>
 
-          <%!-- line --%>
-          <%= if length(@indexed) > 1 do %>
+          <%!-- 6-Count target line --%>
+          <%= if @six_target do %>
+            <% ty = @to_y.(@six_target * 1.0) %>
+            <line
+              x1={@y_axis_w}
+              y1={ty}
+              x2={@chart_w}
+              y2={ty}
+              stroke="#4A9EFF"
+              stroke-width="0.75"
+              stroke-dasharray="4,3"
+              opacity="0.35"
+            />
+            <text
+              x={@chart_w}
+              y={ty - 3}
+              text-anchor="end"
+              font-size="7"
+              fill="#4A9EFF"
+              opacity="0.55"
+            >
+              Target {@six_target}
+            </text>
+          <% end %>
+
+          <%!-- Navy SEAL target line --%>
+          <%= if @seal_target do %>
+            <% ty = @to_y.(@seal_target * 1.0) %>
+            <line
+              x1={@y_axis_w}
+              y1={ty}
+              x2={@chart_w}
+              y2={ty}
+              stroke="#F97316"
+              stroke-width="0.75"
+              stroke-dasharray="4,3"
+              opacity="0.35"
+            />
+            <text
+              x={@chart_w}
+              y={ty - 3}
+              text-anchor="end"
+              font-size="7"
+              fill="#F97316"
+              opacity="0.55"
+            >
+              Target {@seal_target}
+            </text>
+          <% end %>
+
+          <%!-- 6-Count line + dots --%>
+          <%= if length(@six_points) > 1 do %>
             <polyline
-              points={@polyline}
+              points={@six_polyline}
               fill="none"
-              stroke={@color}
+              stroke="#4A9EFF"
               stroke-width="1.5"
               stroke-linejoin="round"
             />
           <% end %>
-
-          <%!-- dots --%>
-          <%= for {p, i} <- @indexed do %>
-            <circle cx={@to_x.(i * 1.0)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill={@color} />
+          <%= for p <- @six_points do %>
+            <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#4A9EFF" />
           <% end %>
 
-          <%!-- x-axis date labels --%>
-          <%= for {p, i} <- @x_labels do %>
+          <%!-- Navy SEAL line + dots --%>
+          <%= if length(@seal_points) > 1 do %>
+            <polyline
+              points={@seal_polyline}
+              fill="none"
+              stroke="#F97316"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+            />
+          <% end %>
+          <%= for p <- @seal_points do %>
+            <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#F97316" />
+          <% end %>
+
+          <%!-- x-axis week labels --%>
+          <%= for w <- @x_label_weeks do %>
             <text
-              x={@to_x.(i * 1.0)}
-              y={@top_pad + @plot_h + 12}
+              x={@to_x.(w)}
+              y={@top_pad + @plot_h + 14}
               text-anchor="middle"
-              font-size="6"
+              font-size="8"
               fill="#3A4A5E"
-            >{Calendar.strftime(p.date, "%-d %b")}</text>
+            >
+              W{w}
+            </text>
           <% end %>
         </svg>
       <% end %>
     </div>
     """
   end
+
+  defp level_label(:graduated), do: "Grad"
+
+  defp level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 end
