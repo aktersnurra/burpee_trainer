@@ -224,6 +224,34 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Cursor-based paginated sessions. Returns `{sessions, has_more?}`.
+
+  Pass `before: datetime` to fetch the page older than that cursor.
+  Fetches `limit + 1` rows to determine if another page exists.
+  """
+  @spec list_sessions_page(User.t(), pos_integer(), keyword()) ::
+          {[WorkoutSession.t()], boolean()}
+  def list_sessions_page(%User{id: user_id}, limit, opts \\ []) do
+    before_dt = Keyword.get(opts, :before)
+
+    query =
+      from s in WorkoutSession,
+        where: s.user_id == ^user_id,
+        order_by: [desc: s.inserted_at],
+        limit: ^(limit + 1),
+        preload: :plan
+
+    query =
+      if before_dt,
+        do: where(query, [s], s.inserted_at < ^before_dt),
+        else: query
+
+    rows = Repo.all(query)
+    has_more = length(rows) > limit
+    {Enum.take(rows, limit), has_more}
+  end
+
+  @doc """
   List the last `count` sessions of a given type for a user, most
   recent first. Used by the progression trend calculation.
   """

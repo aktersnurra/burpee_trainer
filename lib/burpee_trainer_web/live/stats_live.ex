@@ -5,22 +5,21 @@ defmodule BurpeeTrainerWeb.StatsLive do
   alias BurpeeTrainer.Streak.State
   alias BurpeeTrainerWeb.Fmt
 
-  @session_preview_weeks 2
+  @page_size 20
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
     today = Date.utc_today()
-    since = Date.add(today, -@session_preview_weeks * 7)
+    {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
 
     {:ok,
      socket
      |> assign(:streak, Streak.compute(user, today))
      |> assign(:today, today)
      |> assign(:goals, Goals.list_active_goals(user))
-     |> assign(:sessions, Workouts.list_sessions_since(user, since))
-     |> assign(:show_all_sessions, false)
-     |> assign(:all_sessions, nil)
+     |> assign(:sessions, sessions)
+     |> assign(:sessions_has_more, has_more)
      |> assign(:show_more_trends, false)
      |> assign(:log_modal_open, false)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))}
@@ -35,13 +34,15 @@ defmodule BurpeeTrainerWeb.StatsLive do
     {:noreply, assign(socket, :log_modal_open, false)}
   end
 
-  def handle_event("show_all_sessions", _, socket) do
-    all = Workouts.list_sessions_all(socket.assigns.current_user)
-    {:noreply, assign(socket, show_all_sessions: true, all_sessions: all)}
-  end
+  def handle_event("load_more_sessions", _, socket) do
+    user = socket.assigns.current_user
+    cursor = socket.assigns.sessions |> List.last() |> Map.get(:inserted_at)
+    {new_sessions, has_more} = Workouts.list_sessions_page(user, @page_size, before: cursor)
 
-  def handle_event("show_less_sessions", _, socket) do
-    {:noreply, assign(socket, show_all_sessions: false)}
+    {:noreply,
+     socket
+     |> update(:sessions, &(&1 ++ new_sessions))
+     |> assign(:sessions_has_more, has_more)}
   end
 
   def handle_event("toggle_trends", _, socket) do
@@ -52,17 +53,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
   def handle_info(:session_saved, socket) do
     user = socket.assigns.current_user
     today = socket.assigns.today
+    {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
 
     {:noreply,
      socket
      |> assign(:log_modal_open, false)
-     |> assign(:show_all_sessions, false)
-     |> assign(:all_sessions, nil)
      |> assign(:streak, Streak.compute(user, today))
-     |> assign(
-       :sessions,
-       Workouts.list_sessions_since(user, Date.add(today, -@session_preview_weeks * 7))
-     )
+     |> assign(:sessions, sessions)
+     |> assign(:sessions_has_more, has_more)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))}
   end
 
@@ -79,10 +77,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <.streak_card streak={@streak} today={@today} />
         <.goals_section goals={@goals} />
         <.trends_section weekly_data={@weekly_data} show_more={@show_more_trends} />
-        <.sessions_section
-          sessions={if @show_all_sessions, do: @all_sessions, else: @sessions}
-          show_all={@show_all_sessions}
-        />
+        <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
       </div>
 
       <%!-- FAB --%>
@@ -227,32 +222,30 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   attr :sessions, :list, required: true
-  attr :show_all, :boolean, required: true
+  attr :has_more, :boolean, required: true
 
   defp sessions_section(assigns) do
     ~H"""
     <div class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">Sessions</h2>
-        <%= if @show_all do %>
-          <button phx-click="show_less_sessions" class="text-xs text-primary hover:underline">
-            Show less
-          </button>
-        <% else %>
-          <button phx-click="show_all_sessions" class="text-xs text-primary hover:underline">
-            Show all
-          </button>
-        <% end %>
-      </div>
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">Sessions</h2>
 
-      <%= if @sessions == [] || @sessions == nil do %>
+      <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
         <div class="space-y-2">
-          <%= for session <- (@sessions || []) do %>
+          <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
         </div>
+
+        <%= if @has_more do %>
+          <button
+            phx-click="load_more_sessions"
+            class="w-full py-2 text-xs text-base-content/40 hover:text-base-content/70 transition"
+          >
+            Load more
+          </button>
+        <% end %>
       <% end %>
     </div>
     """

@@ -56,12 +56,20 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       assert html =~ "My Plan"
     end
 
-    test "Show all expands session list", %{conn: conn, user: user} do
+    test "Load more button appears when more sessions exist", %{conn: conn, user: user} do
       plan = plan_fixture(user)
-      for _ <- 1..12, do: session_from_plan_fixture(user, plan)
+      for _ <- 1..21, do: session_from_plan_fixture(user, plan)
+      {:ok, _view, html} = live(conn, ~p"/stats")
+      assert html =~ "Load more"
+    end
+
+    test "Load more appends next page of sessions", %{conn: conn, user: user} do
+      plan = plan_fixture(user)
+      for _ <- 1..21, do: session_from_plan_fixture(user, plan)
       {:ok, view, _html} = live(conn, ~p"/stats")
-      view |> element("button", "Show all") |> render_click()
-      assert render(view) =~ "Show less"
+      view |> element("button[phx-click='load_more_sessions']") |> render_click()
+      # After loading more, the extra session is visible and no more pages
+      refute render(view) =~ "Load more"
     end
 
     test "FAB opens log modal", %{conn: conn} do
