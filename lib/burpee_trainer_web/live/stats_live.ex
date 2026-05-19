@@ -20,12 +20,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:goals, Goals.list_active_goals(user))
      |> assign(:sessions, sessions)
      |> assign(:sessions_has_more, has_more)
-     |> assign(:show_more_trends, false)
      |> assign(:log_modal_open, false)
      |> assign(:goal_modal_type, nil)
      |> assign(:goal_baseline_session, nil)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))
-     |> assign(:volume_data, Workouts.weekly_volume(user))}
+     |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
+     |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))}
   end
 
   @impl true
@@ -46,10 +46,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
      socket
      |> update(:sessions, &(&1 ++ new_sessions))
      |> assign(:sessions_has_more, has_more)}
-  end
-
-  def handle_event("toggle_trends", _, socket) do
-    {:noreply, update(socket, :show_more_trends, &(!&1))}
   end
 
   def handle_event("open_goal_modal", %{"type" => type_str}, socket) do
@@ -83,7 +79,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:sessions, sessions)
      |> assign(:sessions_has_more, has_more)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))
-     |> assign(:volume_data, Workouts.weekly_volume(user))}
+     |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
+     |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))}
   end
 
   def handle_info(:goal_saved, socket) do
@@ -110,8 +107,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <.goals_section goals={@goals} />
         <.trends_section
           weekly_data={@weekly_data}
-          volume_data={@volume_data}
-          show_more={@show_more_trends}
+          six_count_sessions={@six_count_sessions}
+          navy_seal_sessions={@navy_seal_sessions}
+          goals={@goals}
         />
         <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
       </div>
@@ -349,24 +347,32 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   attr :weekly_data, :list, required: true
-  attr :volume_data, :list, required: true
-  attr :show_more, :boolean, required: true
+  attr :six_count_sessions, :list, required: true
+  attr :navy_seal_sessions, :list, required: true
+  attr :goals, :list, required: true
 
   defp trends_section(assigns) do
+    assigns =
+      assigns
+      |> assign(:six_goal, Enum.find(assigns.goals, &(&1.burpee_type == :six_count)))
+      |> assign(:seal_goal, Enum.find(assigns.goals, &(&1.burpee_type == :navy_seal)))
+
     ~H"""
     <div class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h2 class="text-base font-semibold text-base-content">Trends</h2>
-        <button phx-click="toggle_trends" class="text-xs text-primary hover:underline">
-          {if @show_more, do: "Show less", else: "Show more"}
-        </button>
-      </div>
-
+      <h2 class="text-base font-semibold text-base-content">Trends</h2>
       <.weekly_minutes_chart weekly_data={@weekly_data} />
-
-      <%= if @show_more do %>
-        <.volume_chart volume_data={@volume_data} />
-      <% end %>
+      <.progress_chart
+        sessions={@six_count_sessions}
+        label="6-Count progress"
+        color="#4A9EFF"
+        goal={@six_goal}
+      />
+      <.progress_chart
+        sessions={@navy_seal_sessions}
+        label="Navy SEAL progress"
+        color="#F97316"
+        goal={@seal_goal}
+      />
     </div>
     """
   end
@@ -436,94 +442,78 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :volume_data, :list, required: true
+  attr :sessions, :list, required: true
+  attr :label, :string, required: true
+  attr :color, :string, required: true
+  attr :goal, :any, required: true
 
-  defp volume_chart(assigns) do
-    raw_weeks = assigns.volume_data |> Enum.take(12) |> Enum.reverse()
-    all_empty = Enum.all?(raw_weeks, &(&1.six_count_reps == 0 and &1.navy_seal_reps == 0))
-    n = length(raw_weeks)
+  defp progress_chart(assigns) do
+    points =
+      Enum.map(assigns.sessions, fn s ->
+        normalized = round(s.burpee_count_actual / s.duration_sec_actual * 1200)
+        date = DateTime.to_date(s.inserted_at)
+        %{date: date, reps: normalized}
+      end)
 
-    # Layout constants
+    target = if assigns.goal, do: assigns.goal.burpee_count_target, else: nil
+    all_vals = Enum.map(points, & &1.reps) ++ if(target, do: [target], else: [])
+    max_val = if all_vals == [], do: 1, else: Enum.max(all_vals)
+    n = length(points)
+
     y_axis_w = 24
     chart_w = 300
-    plot_w = chart_w - y_axis_w
     top_pad = 8
-    bot_pad = 18
-    plot_h = 70
-    step = if n > 1, do: plot_w / (n - 1), else: plot_w
-
-    max_val =
-      raw_weeks |> Enum.flat_map(&[&1.six_count_reps, &1.navy_seal_reps]) |> Enum.max(fn -> 1 end)
+    plot_h = 60
+    bot_pad = 16
+    total_h = top_pad + plot_h + bot_pad
+    step = if n > 1, do: (chart_w - y_axis_w) / (n - 1), else: chart_w - y_axis_w
 
     to_x = fn i -> y_axis_w + i * step end
     to_y = fn v -> top_pad + plot_h - v / max_val * plot_h end
 
-    # Build polyline point strings and dot lists for each series
-    series = [
-      %{key: :six_count_reps, color: "#4A9EFF", marker: :circle, label: "6-Count"},
-      %{key: :navy_seal_reps, color: "#F97316", marker: :square, label: "Navy SEAL"}
-    ]
+    indexed = Enum.with_index(points)
 
-    series_data =
-      Enum.map(series, fn s ->
-        points =
-          Enum.with_index(raw_weeks, fn w, i ->
-            {to_x.(i * 1.0), to_y.(Map.get(w, s.key) * 1.0)}
-          end)
-
-        polyline =
-          Enum.map_join(points, " ", fn {x, y} -> "#{Float.round(x, 1)},#{Float.round(y, 1)}" end)
-
-        Map.merge(s, %{points: points, polyline: polyline})
+    polyline =
+      Enum.map_join(indexed, " ", fn {p, i} ->
+        "#{Float.round(to_x.(i * 1.0), 1)},#{Float.round(to_y.(p.reps * 1.0), 1)}"
       end)
 
-    # Week labels — show ~every 3rd
-    week_labels =
-      Enum.with_index(raw_weeks, fn week, i ->
-        {_y, w} = :calendar.iso_week_number(Date.to_erl(week.week_start))
-        show = n <= 4 or i == 0 or rem(i, 3) == 0 or i == n - 1
-        %{i: i, iso_week: w, show: show}
+    x_labels =
+      Enum.filter(indexed, fn {_p, i} ->
+        i == 0 or i == n - 1 or (n > 4 and rem(i, 3) == 0)
       end)
+
+    target_y = if target, do: to_y.(target * 1.0), else: nil
 
     assigns =
       assign(assigns,
-        all_empty: all_empty,
-        series_data: series_data,
-        week_labels: week_labels,
+        points: points,
+        indexed: indexed,
+        polyline: polyline,
+        x_labels: x_labels,
+        target_y: target_y,
+        target: target,
         max_val: max_val,
         to_x: to_x,
+        to_y: to_y,
         top_pad: top_pad,
-        bot_pad: bot_pad,
         plot_h: plot_h,
+        total_h: total_h,
         chart_w: chart_w,
         y_axis_w: y_axis_w
       )
 
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4">
-      <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">Weekly volume (reps)</p>
+      <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">{@label}</p>
 
-      <%= if @all_empty do %>
+      <%= if @points == [] do %>
         <p class="text-xs text-base-content/30">No sessions yet.</p>
       <% else %>
-        <svg
-          viewBox={"0 0 #{@chart_w} #{@top_pad + @plot_h + @bot_pad}"}
-          class="w-full overflow-visible"
-          aria-hidden="true"
-        >
+        <svg viewBox={"0 0 #{@chart_w} #{@total_h}"} class="w-full overflow-visible" aria-hidden="true">
           <%!-- y-axis labels --%>
-          <text x={@y_axis_w - 3} y={@top_pad + 4} text-anchor="end" font-size="7" fill="#3A4A5E">
-            {@max_val}
-          </text>
-          <text
-            x={@y_axis_w - 3}
-            y={@top_pad + @plot_h}
-            text-anchor="end"
-            font-size="7"
-            fill="#3A4A5E"
-          >
-            0
-          </text>
+          <text x={@y_axis_w - 3} y={@top_pad + 4} text-anchor="end" font-size="7" fill="#3A4A5E">{@max_val}</text>
+          <text x={@y_axis_w - 3} y={@top_pad + @plot_h} text-anchor="end" font-size="7" fill="#3A4A5E">0</text>
 
           <%!-- zero baseline --%>
           <line
@@ -535,38 +525,47 @@ defmodule BurpeeTrainerWeb.StatsLive do
             stroke-width="0.5"
           />
 
-          <%!-- series lines + dots --%>
-          <%= for s <- @series_data do %>
+          <%!-- target line --%>
+          <%= if @target_y do %>
+            <line
+              x1={@y_axis_w}
+              y1={@target_y}
+              x2={@chart_w}
+              y2={@target_y}
+              stroke={@color}
+              stroke-width="0.5"
+              stroke-dasharray="3,3"
+              opacity="0.5"
+            />
+            <text x={@chart_w} y={@target_y - 2} text-anchor="end" font-size="6" fill={@color} opacity="0.7">{@target}</text>
+          <% end %>
+
+          <%!-- line --%>
+          <%= if length(@indexed) > 1 do %>
             <polyline
-              points={s.polyline}
+              points={@polyline}
               fill="none"
-              stroke={s.color}
+              stroke={@color}
               stroke-width="1.5"
               stroke-linejoin="round"
             />
-            <%= for {x, y} <- s.points do %>
-              <%= if s.marker == :circle do %>
-                <circle cx={x} cy={y} r="2.5" fill={s.color} />
-              <% else %>
-                <rect x={x - 2.5} y={y - 2.5} width="5" height="5" fill={s.color} />
-              <% end %>
-            <% end %>
-            <%!-- inline end-of-line label --%>
-            <% {lx, ly} = List.last(s.points) %>
-            <text x={lx + 4} y={ly + 3} font-size="6" fill={s.color}>{s.label}</text>
           <% end %>
 
-          <%!-- x-axis week labels --%>
-          <%= for wl <- @week_labels, wl.show do %>
+          <%!-- dots --%>
+          <%= for {_p, i} <- @indexed do %>
+            <% pt = Enum.at(@points, i) %>
+            <circle cx={@to_x.(i * 1.0)} cy={@to_y.(pt.reps * 1.0)} r="2.5" fill={@color} />
+          <% end %>
+
+          <%!-- x-axis date labels --%>
+          <%= for {p, i} <- @x_labels do %>
             <text
-              x={@to_x.(wl.i * 1.0)}
+              x={@to_x.(i * 1.0)}
               y={@top_pad + @plot_h + 12}
               text-anchor="middle"
               font-size="6"
               fill="#3A4A5E"
-            >
-              W{wl.iso_week}
-            </text>
+            >{Calendar.strftime(p.date, "%-d %b")}</text>
           <% end %>
         </svg>
       <% end %>
