@@ -78,4 +78,55 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       assert render(view) =~ "Log session"
     end
   end
+
+  describe "goal creation modal" do
+    test "Set goal button opens modal", %{conn: conn, user: user} do
+      _session = free_form_session_fixture(user, %{"burpee_type" => "six_count"})
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-value-type='six_count']") |> render_click()
+      assert render(view) =~ "Set 6-Count goal"
+    end
+
+    test "modal shows no-session state when user has no sessions for type", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-value-type='six_count']") |> render_click()
+      assert render(view) =~ "Log at least one 6-Count session"
+    end
+
+    test "modal shows form when baseline session exists", %{conn: conn, user: user} do
+      _session = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 30, "duration_sec_actual" => 120})
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-value-type='six_count']") |> render_click()
+      assert render(view) =~ "Target burpees"
+      assert render(view) =~ "Baseline: 30 burpees"
+    end
+
+    test "saving goal closes modal and updates goal slot", %{conn: conn, user: user} do
+      _session = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 30, "duration_sec_actual" => 120})
+      today = Date.utc_today()
+
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-value-type='six_count']") |> render_click()
+
+      view
+      |> form("#goal-form-goal-form", %{
+        "goal" => %{
+          "burpee_count_target" => "60",
+          "date_target" => Date.to_iso8601(Date.add(today, 30))
+        }
+      })
+      |> render_submit()
+
+      html = render(view)
+      refute html =~ "Set 6-Count goal"
+      assert html =~ "60 burpees"
+    end
+
+    test "navy seal goal slot opens modal for navy_seal type", %{conn: conn, user: user} do
+      _session = free_form_session_fixture(user, %{"burpee_type" => "navy_seal", "burpee_count_actual" => 20, "duration_sec_actual" => 100})
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-value-type='navy_seal']") |> render_click()
+      assert render(view) =~ "Set Navy SEAL goal"
+    end
+  end
 end
