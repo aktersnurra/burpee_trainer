@@ -94,7 +94,13 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
     end
 
     test "modal shows form when baseline session exists", %{conn: conn, user: user} do
-      _session = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 30, "duration_sec_actual" => 120})
+      _session =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 120
+        })
+
       {:ok, view, _html} = live(conn, ~p"/stats")
       view |> element("button[phx-value-type='six_count']") |> render_click()
       assert render(view) =~ "Target burpees"
@@ -102,7 +108,13 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
     end
 
     test "saving goal closes modal and updates goal slot", %{conn: conn, user: user} do
-      _session = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 30, "duration_sec_actual" => 120})
+      _session =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 120
+        })
+
       today = Date.utc_today()
 
       {:ok, view, _html} = live(conn, ~p"/stats")
@@ -123,7 +135,13 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
     end
 
     test "navy seal goal slot opens modal for navy_seal type", %{conn: conn, user: user} do
-      _session = free_form_session_fixture(user, %{"burpee_type" => "navy_seal", "burpee_count_actual" => 20, "duration_sec_actual" => 100})
+      _session =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "navy_seal",
+          "burpee_count_actual" => 20,
+          "duration_sec_actual" => 100
+        })
+
       {:ok, view, _html} = live(conn, ~p"/stats")
       view |> element("button[phx-value-type='navy_seal']") |> render_click()
       assert render(view) =~ "Set Navy SEAL goal"

@@ -9,8 +9,8 @@ defmodule BurpeeTrainer.WorkoutFeedTest do
   describe "list/2" do
     test "returns plans and videos as WorkoutItems" do
       user = user_fixture()
-      plan = plan_fixture(user, %{"name" => "My Plan", "burpee_type" => "six_count"})
-      video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 1200})
+      _plan = plan_fixture(user, %{"name" => "My Plan", "burpee_type" => "six_count"})
+      _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 1200})
 
       items = WorkoutFeed.list(user)
 

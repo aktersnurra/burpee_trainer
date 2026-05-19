@@ -4,8 +4,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.Workouts
-
   setup %{conn: conn} do
     user = user_fixture()
     conn = init_test_session(conn, %{user_id: user.id})
