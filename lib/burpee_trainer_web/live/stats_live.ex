@@ -24,7 +24,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:log_modal_open, false)
      |> assign(:goal_modal_type, nil)
      |> assign(:goal_baseline_session, nil)
-     |> assign(:weekly_data, Workouts.weekly_minutes(user))}
+     |> assign(:weekly_data, Workouts.weekly_minutes(user))
+     |> assign(:volume_data, Workouts.weekly_volume(user))}
   end
 
   @impl true
@@ -81,7 +82,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:streak, Streak.compute(user, today))
      |> assign(:sessions, sessions)
      |> assign(:sessions_has_more, has_more)
-     |> assign(:weekly_data, Workouts.weekly_minutes(user))}
+     |> assign(:weekly_data, Workouts.weekly_minutes(user))
+     |> assign(:volume_data, Workouts.weekly_volume(user))}
   end
 
   def handle_info(:goal_saved, socket) do
@@ -106,7 +108,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
         <.streak_card streak={@streak} today={@today} />
         <.goals_section goals={@goals} />
-        <.trends_section weekly_data={@weekly_data} show_more={@show_more_trends} />
+        <.trends_section weekly_data={@weekly_data} volume_data={@volume_data} show_more={@show_more_trends} />
         <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
       </div>
 
@@ -341,6 +343,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   attr :weekly_data, :list, required: true
+  attr :volume_data, :list, required: true
   attr :show_more, :boolean, required: true
 
   defp trends_section(assigns) do
@@ -356,7 +359,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <.weekly_minutes_chart weekly_data={@weekly_data} />
 
       <%= if @show_more do %>
-        <.volume_chart weekly_data={@weekly_data} />
+        <.volume_chart volume_data={@volume_data} />
       <% end %>
     </div>
     """
@@ -397,14 +400,100 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :weekly_data, :list, required: true
+  attr :volume_data, :list, required: true
 
   defp volume_chart(assigns) do
+    chart_weeks = assigns.volume_data |> Enum.take(12) |> Enum.reverse()
+    all_empty = Enum.all?(chart_weeks, &(&1.six_count_reps == 0 and &1.navy_seal_reps == 0))
+    assigns = assign(assigns, chart_weeks: chart_weeks, all_empty: all_empty)
+
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4">
-      <p class="text-xs text-base-content/40 mb-2 uppercase tracking-wide">Volume over time</p>
-      <p class="text-xs text-base-content/30 italic">Per-type breakdown coming in a follow-up.</p>
+      <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">Weekly volume (reps)</p>
+
+      <%= if @all_empty do %>
+        <p class="text-xs text-base-content/30">No sessions yet.</p>
+      <% else %>
+        <% bar_w = 18
+           gap = 7
+           max_total =
+             @chart_weeks
+             |> Enum.map(&(&1.six_count_reps + &1.navy_seal_reps))
+             |> Enum.max(fn -> 1 end)
+           scale = fn reps -> max(reps / max_total * 70, 0) end %>
+        <svg viewBox="0 0 300 80" class="w-full" aria-hidden="true">
+          <%= for {week, i} <- Enum.with_index(@chart_weeks) do %>
+            <% x = i * (bar_w + gap)
+               h_seal = scale.(week.navy_seal_reps)
+               h_six = scale.(week.six_count_reps)
+               y_seal = 75 - h_seal
+               y_six = y_seal - h_six %>
+            <%= if h_seal > 0 do %>
+              <rect x={x} y={y_seal} width={bar_w} height={h_seal} fill="#F97316" rx="2" />
+            <% end %>
+            <%= if h_six > 0 do %>
+              <rect x={x} y={y_six} width={bar_w} height={h_six} fill="#4A9EFF" rx="2" />
+            <% end %>
+          <% end %>
+
+          <%= for {color, key} <- [{"#4A9EFF", :six_count_reps}, {"#F97316", :navy_seal_reps}] do %>
+            <% points =
+                 @chart_weeks
+                 |> Enum.with_index()
+                 |> Enum.map(fn {w, i} -> {i * 1.0, Map.get(w, key) * 1.0} end)
+               has_data = Enum.any?(points, fn {_, y} -> y > 0 end) %>
+            <%= if has_data do %>
+              <% {slope, intercept} = linear_trend(points)
+                 n = length(@chart_weeks)
+                 x1_idx = (n - 1) * 1.0
+                 y0_raw = slope * 0.0 + intercept
+                 y1_raw = slope * x1_idx + intercept
+                 to_svg_y = fn reps -> 75 - max(reps / max_total * 70, 0) end
+                 sx0 = bar_w / 2
+                 sy0 = to_svg_y.(y0_raw)
+                 sx1 = x1_idx * (bar_w + gap) + bar_w / 2
+                 sy1 = to_svg_y.(y1_raw) %>
+              <line
+                x1={sx0}
+                y1={sy0}
+                x2={sx1}
+                y2={sy1}
+                stroke={color}
+                stroke-width="1"
+                stroke-dasharray="3,3"
+                opacity="0.6"
+              />
+            <% end %>
+          <% end %>
+        </svg>
+
+        <div class="flex gap-4 mt-2">
+          <span class="text-xs text-base-content/40 flex items-center gap-1">
+            <span style="color:#4A9EFF">●</span> 6-Count
+          </span>
+          <span class="text-xs text-base-content/40 flex items-center gap-1">
+            <span style="color:#F97316">●</span> Navy SEAL
+          </span>
+        </div>
+      <% end %>
     </div>
     """
+  end
+
+  defp linear_trend(points) do
+    n = length(points)
+    sum_x = Enum.sum_by(points, fn {x, _} -> x end)
+    sum_y = Enum.sum_by(points, fn {_, y} -> y end)
+    sum_xy = Enum.sum_by(points, fn {x, y} -> x * y end)
+    sum_xx = Enum.sum_by(points, fn {x, _} -> x * x end)
+    denom = n * sum_xx - sum_x * sum_x
+
+    if denom == 0.0 do
+      {0.0, if(n > 0, do: sum_y / n, else: 0.0)}
+    else
+      slope = (n * sum_xy - sum_x * sum_y) / denom
+      intercept = (sum_y - slope * sum_x) / n
+      {slope, intercept}
+    end
   end
 end
