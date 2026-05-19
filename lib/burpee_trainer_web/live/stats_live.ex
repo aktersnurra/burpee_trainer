@@ -22,6 +22,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:sessions_has_more, has_more)
      |> assign(:show_more_trends, false)
      |> assign(:log_modal_open, false)
+     |> assign(:goal_modal_type, nil)
+     |> assign(:goal_baseline_session, nil)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))}
   end
 
@@ -49,6 +51,24 @@ defmodule BurpeeTrainerWeb.StatsLive do
     {:noreply, update(socket, :show_more_trends, &(!&1))}
   end
 
+  def handle_event("open_goal_modal", %{"type" => type_str}, socket) do
+    user = socket.assigns.current_user
+    burpee_type = String.to_existing_atom(type_str)
+    baseline = Workouts.last_session_for_type(user, burpee_type)
+
+    {:noreply,
+     socket
+     |> assign(:goal_modal_type, burpee_type)
+     |> assign(:goal_baseline_session, baseline)}
+  end
+
+  def handle_event("close_goal_modal", _, socket) do
+    {:noreply,
+     socket
+     |> assign(:goal_modal_type, nil)
+     |> assign(:goal_baseline_session, nil)}
+  end
+
   @impl true
   def handle_info(:session_saved, socket) do
     user = socket.assigns.current_user
@@ -62,6 +82,16 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:sessions, sessions)
      |> assign(:sessions_has_more, has_more)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))}
+  end
+
+  def handle_info(:goal_saved, socket) do
+    user = socket.assigns.current_user
+
+    {:noreply,
+     socket
+     |> assign(:goal_modal_type, nil)
+     |> assign(:goal_baseline_session, nil)
+     |> assign(:goals, Goals.list_active_goals(user))}
   end
 
   @impl true
@@ -109,6 +139,30 @@ defmodule BurpeeTrainerWeb.StatsLive do
               id="log-form"
               current_user={@current_user}
               on_save={:session_saved}
+            />
+          </div>
+        </div>
+      <% end %>
+
+      <%!-- Goal modal --%>
+      <%= if @goal_modal_type do %>
+        <div
+          id="goal-modal"
+          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+          phx-click="close_goal_modal"
+        >
+          <div
+            class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6"
+            phx-click-away="close_goal_modal"
+            phx-click.stop
+          >
+            <.live_component
+              module={BurpeeTrainerWeb.GoalFormComponent}
+              id="goal-form"
+              current_user={@current_user}
+              burpee_type={@goal_modal_type}
+              baseline_session={@goal_baseline_session}
+              on_save={:goal_saved}
             />
           </div>
         </div>
@@ -214,7 +268,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <% else %>
         <div class="space-y-2">
           <p class="text-xs text-base-content/50">No goal set</p>
-          <.link navigate={~p"/stats"} class="text-xs text-primary hover:underline">Set goal</.link>
+          <button
+            type="button"
+            phx-click="open_goal_modal"
+            phx-value-type={@burpee_type}
+            class="text-xs text-primary hover:underline"
+          >
+            Set goal
+          </button>
         </div>
       <% end %>
     </div>
