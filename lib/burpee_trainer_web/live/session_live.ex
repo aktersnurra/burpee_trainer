@@ -137,7 +137,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         {:noreply,
          socket
          |> put_flash(:info, "Session saved.")
-         |> push_navigate(to: ~p"/history")}
+         |> push_navigate(to: ~p"/stats")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :completion_form, to_form(changeset))}

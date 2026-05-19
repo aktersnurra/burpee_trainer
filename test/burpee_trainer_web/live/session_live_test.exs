@@ -123,7 +123,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "note_post" => "brutal"
     }
 
-    {:error, {:live_redirect, %{to: "/history"}}} =
+    {:error, {:live_redirect, %{to: "/stats"}}} =
       view
       |> form("#session-completion-form", workout_session: params)
       |> render_submit()
@@ -153,7 +153,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "duration_sec_actual" => "80"
     }
 
-    {:error, {:live_redirect, %{to: "/history"}}} =
+    {:error, {:live_redirect, %{to: "/stats"}}} =
       view
       |> form("#session-completion-form", workout_session: params)
       |> render_submit()
@@ -189,7 +189,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "duration_sec_actual" => "90"
     }
 
-    {:error, {:live_redirect, %{to: "/history"}}} =
+    {:error, {:live_redirect, %{to: "/stats"}}} =
       view
       |> form("#session-completion-form", workout_session: params)
       |> render_submit()

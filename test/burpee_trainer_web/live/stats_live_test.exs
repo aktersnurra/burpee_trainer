@@ -69,17 +69,5 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       view |> element("button[phx-click='open_log_modal']") |> render_click()
       assert render(view) =~ "Log session"
     end
-
-    test "old /history route redirects to /stats", %{conn: conn} do
-      assert conn |> get("/history") |> redirected_to() == "/stats"
-    end
-
-    test "old /goals route redirects to /stats", %{conn: conn} do
-      assert conn |> get("/goals") |> redirected_to() == "/stats"
-    end
-
-    test "old /log route redirects to /stats", %{conn: conn} do
-      assert conn |> get("/log") |> redirected_to() == "/stats"
-    end
   end
 end

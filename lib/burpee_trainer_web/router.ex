@@ -39,12 +39,6 @@ defmodule BurpeeTrainerWeb.Router do
 
     get "/videos/stream/:filename", VideoController, :stream
 
-    get "/plans", RedirectController, :plans
-    get "/videos", RedirectController, :videos
-    get "/log", RedirectController, :log
-    get "/history", RedirectController, :history
-    get "/goals", RedirectController, :goals
-
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
       live "/", OverviewLive

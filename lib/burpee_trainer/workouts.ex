@@ -208,6 +208,22 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Return sessions for a user since a given date (inclusive), with plan preloaded.
+  Most recent first.
+  """
+  @spec list_sessions_since(User.t(), Date.t()) :: [WorkoutSession.t()]
+  def list_sessions_since(%User{id: user_id}, since) do
+    since_dt = DateTime.new!(since, ~T[00:00:00], "Etc/UTC")
+
+    Repo.all(
+      from s in WorkoutSession,
+        where: s.user_id == ^user_id and s.inserted_at >= ^since_dt,
+        order_by: [desc: s.inserted_at],
+        preload: :plan
+    )
+  end
+
+  @doc """
   List the last `count` sessions of a given type for a user, most
   recent first. Used by the progression trend calculation.
   """

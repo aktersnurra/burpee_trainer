@@ -5,19 +5,20 @@ defmodule BurpeeTrainerWeb.StatsLive do
   alias BurpeeTrainer.Streak.State
   alias BurpeeTrainerWeb.Fmt
 
-  @session_preview 10
+  @session_preview_weeks 2
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
     today = Date.utc_today()
+    since = Date.add(today, -@session_preview_weeks * 7)
 
     {:ok,
      socket
      |> assign(:streak, Streak.compute(user, today))
      |> assign(:today, today)
      |> assign(:goals, Goals.list_active_goals(user))
-     |> assign(:sessions, Workouts.list_sessions_recent(user, @session_preview))
+     |> assign(:sessions, Workouts.list_sessions_since(user, since))
      |> assign(:show_all_sessions, false)
      |> assign(:all_sessions, nil)
      |> assign(:show_more_trends, false)
@@ -58,7 +59,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:show_all_sessions, false)
      |> assign(:all_sessions, nil)
      |> assign(:streak, Streak.compute(user, today))
-     |> assign(:sessions, Workouts.list_sessions_recent(user, @session_preview))
+     |> assign(
+       :sessions,
+       Workouts.list_sessions_since(user, Date.add(today, -@session_preview_weeks * 7))
+     )
      |> assign(:weekly_data, Workouts.weekly_minutes(user))}
   end
 
@@ -74,11 +78,11 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
         <.streak_card streak={@streak} today={@today} />
         <.goals_section goals={@goals} />
+        <.trends_section weekly_data={@weekly_data} show_more={@show_more_trends} />
         <.sessions_section
           sessions={if @show_all_sessions, do: @all_sessions, else: @sessions}
           show_all={@show_all_sessions}
         />
-        <.trends_section weekly_data={@weekly_data} show_more={@show_more_trends} />
       </div>
 
       <%!-- FAB --%>
@@ -215,7 +219,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <% else %>
         <div class="space-y-2">
           <p class="text-xs text-base-content/50">No goal set</p>
-          <.link navigate={~p"/goals"} class="text-xs text-primary hover:underline">Set goal</.link>
+          <.link navigate={~p"/stats"} class="text-xs text-primary hover:underline">Set goal</.link>
         </div>
       <% end %>
     </div>

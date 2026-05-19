@@ -257,7 +257,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         <.icon name="hero-play" class="size-4" /> Run a plan
       </.link>
       <.link
-        navigate={~p"/log"}
+        navigate={~p"/stats"}
         class="flex items-center justify-center gap-2 w-full h-12 rounded-lg border border-[#1E2535] text-base-content/60 text-sm hover:text-base-content hover:border-base-content/20 transition-colors"
       >
         <.icon name="hero-plus" class="size-4" /> Log a session

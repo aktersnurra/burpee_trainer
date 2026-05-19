@@ -82,7 +82,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         {:noreply,
          socket
          |> put_flash(:info, "Session logged.")
-         |> push_navigate(to: ~p"/history")}
+         |> push_navigate(to: ~p"/stats")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, form: to_form(changeset), duration_min: duration_min)}
@@ -134,7 +134,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       <div class="space-y-6">
         <div class="flex items-center gap-3">
           <.link
-            navigate={~p"/videos"}
+            navigate={~p"/workouts"}
             class="text-sm text-base-content/50 hover:text-base-content transition-colors"
           >
             ← Videos
@@ -253,7 +253,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
               <div class="flex justify-end gap-2 pt-2">
                 <.link
-                  navigate={~p"/videos"}
+                  navigate={~p"/workouts"}
                   class="rounded-md border border-base-300 px-4 py-2 text-sm hover:bg-base-200 transition"
                 >
                   Skip

@@ -95,10 +95,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert_patch(view, "/workouts?source=mine")
     end
 
-    test "old /plans route redirects to /workouts", %{conn: conn} do
-      assert conn |> get("/plans") |> redirected_to() == "/workouts"
-    end
-
     test "plan card ⋯ menu shows edit, clone, delete options", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "My Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts")

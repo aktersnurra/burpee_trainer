@@ -8,14 +8,26 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, filters: %{}, items: [], open_menu_id: nil)}
+    {:ok, assign(socket, filters: %{}, items: [], open_menu_id: nil, available_levels: [])}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
     filters = decode_filters(params)
-    items = WorkoutFeed.list(socket.assigns.current_user, filters)
-    {:noreply, assign(socket, filters: filters, items: items)}
+    # Load without level filter to compute which levels actually exist
+    items_unfiltered = WorkoutFeed.list(socket.assigns.current_user, Map.delete(filters, :level))
+
+    available_levels =
+      items_unfiltered |> Enum.map(& &1.level) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    items =
+      if Map.has_key?(filters, :level) do
+        Enum.filter(items_unfiltered, &(&1.level == filters.level))
+      else
+        items_unfiltered
+      end
+
+    {:noreply, assign(socket, filters: filters, items: items, available_levels: available_levels)}
   end
 
   @impl true
@@ -107,21 +119,36 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     if params == %{}, do: "/workouts", else: "/workouts?" <> URI.encode_query(params)
   end
 
-  # Level pill labels in display order (highest to lowest)
-  @level_pills [
-    {:graduated, "Grad"},
-    {:level_4, "L4"},
-    {:level_3, "L3"},
-    {:level_2, "L2"},
-    {:level_1d, "1D"},
-    {:level_1c, "1C"},
-    {:level_1b, "1B"},
-    {:level_1a, "1A"}
+  # Ordered ascending for filter pills (1A first, Grad last)
+  @level_order [
+    :level_1a,
+    :level_1b,
+    :level_1c,
+    :level_1d,
+    :level_2,
+    :level_3,
+    :level_4,
+    :graduated
   ]
+  @level_labels %{
+    graduated: "Grad",
+    level_4: "L4",
+    level_3: "L3",
+    level_2: "L2",
+    level_1d: "1D",
+    level_1c: "1C",
+    level_1b: "1B",
+    level_1a: "1A"
+  }
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :level_pills, @level_pills)
+    level_pills =
+      @level_order
+      |> Enum.filter(&(&1 in assigns.available_levels))
+      |> Enum.map(&{&1, @level_labels[&1]})
+
+    assigns = assign(assigns, :level_pills, level_pills)
 
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
