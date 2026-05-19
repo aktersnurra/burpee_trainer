@@ -253,7 +253,7 @@ defmodule BurpeeTrainer.Workouts do
 
   @doc """
   Most recent session for a user + burpee type that has usable baseline data
-  (both burpee_count_actual and duration_sec_actual are non-nil).
+  (both burpee_count_actual and duration_sec_actual are non-nil and positive).
   """
   @spec last_session_for_type(User.t(), atom) :: WorkoutSession.t() | nil
   def last_session_for_type(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
@@ -262,7 +262,7 @@ defmodule BurpeeTrainer.Workouts do
         where:
           s.user_id == ^user_id and
             s.burpee_type == ^burpee_type and
-            not is_nil(s.burpee_count_actual) and
+            s.burpee_count_actual > 0 and
             not is_nil(s.duration_sec_actual),
         order_by: [desc: s.inserted_at],
         limit: 1

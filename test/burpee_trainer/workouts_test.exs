@@ -218,8 +218,20 @@ defmodule BurpeeTrainer.WorkoutsTest do
   describe "last_session_for_type/2" do
     test "returns most recent session with non-nil counts for the given type" do
       user = user_fixture()
-      _old = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 10, "duration_sec_actual" => 60})
-      recent = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 25, "duration_sec_actual" => 100})
+
+      _old =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 10,
+          "duration_sec_actual" => 60
+        })
+
+      recent =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 25,
+          "duration_sec_actual" => 100
+        })
 
       result = Workouts.last_session_for_type(user, :six_count)
       assert result.id == recent.id
@@ -227,18 +239,38 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
     test "returns nil when no sessions exist for the type" do
       user = user_fixture()
-      _other = free_form_session_fixture(user, %{"burpee_type" => "navy_seal", "burpee_count_actual" => 20, "duration_sec_actual" => 80})
+
+      _other =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "navy_seal",
+          "burpee_count_actual" => 20,
+          "duration_sec_actual" => 80
+        })
 
       assert Workouts.last_session_for_type(user, :six_count) == nil
     end
 
-    test "does not return sessions with nil burpee_count_actual" do
+    test "does not return sessions with nil or zero burpee_count_actual" do
       user = user_fixture()
       plan = plan_fixture(user)
-      _plan_session = session_from_plan_fixture(user, plan)
 
+      _zero_session =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 0,
+          "duration_sec_actual" => 60
+        })
+
+      valid_session =
+        session_from_plan_fixture(user, plan, %{
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 118
+        })
+
+      # Should return the valid session, not the zero-burpee one
       result = Workouts.last_session_for_type(user, :six_count)
-      if result, do: assert(result.burpee_count_actual != nil and result.duration_sec_actual != nil)
+      assert result.id == valid_session.id
+      assert result.burpee_count_actual == 30
     end
 
     test "does not return sessions from another user" do
