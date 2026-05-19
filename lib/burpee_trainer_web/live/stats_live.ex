@@ -255,27 +255,28 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp session_row(assigns) do
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3 space-y-1">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-base-content/40">
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0 space-y-1">
+          <p class="text-sm font-semibold leading-snug truncate">
+            <%= if @session.plan do %>
+              {@session.plan.name}
+            <% else %>
+              <span class="text-base-content/50">Logged manually</span>
+            <% end %>
+          </p>
+          <p class="text-xs text-base-content/50 tabular-nums">
+            <%= if @session.burpee_count_actual do %>
+              {@session.burpee_count_actual} burpees ·
+            <% end %>
+            {Fmt.duration_sec(@session.duration_sec_actual)}
+          </p>
+          <p class="text-xs text-base-content/30">{Fmt.burpee_type(@session.burpee_type)}</p>
+        </div>
+        <span class="text-xs text-base-content/30 shrink-0 pt-0.5">
           {Calendar.strftime(DateTime.to_date(@session.inserted_at), "%-d %b")}
         </span>
-        <div class="flex gap-3 tabular-nums text-xs text-base-content/50">
-          <%= if @session.duration_sec_actual do %>
-            <span>{Fmt.duration_sec(@session.duration_sec_actual)}</span>
-          <% end %>
-          <%= if @session.burpee_count_actual do %>
-            <span>{@session.burpee_count_actual} burpees</span>
-          <% end %>
-        </div>
       </div>
-      <p class="text-sm font-medium">
-        <%= if @session.plan do %>
-          {@session.plan.name}
-        <% else %>
-          <span class="text-base-content/40">Logged manually</span>
-        <% end %>
-      </p>
     </div>
     """
   end
