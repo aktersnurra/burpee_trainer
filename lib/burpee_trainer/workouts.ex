@@ -313,6 +313,23 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  All sessions for a user + burpee type suitable for progress charting:
+  burpee_count_actual > 0 and duration_sec_actual > 0, ordered oldest first.
+  """
+  @spec list_sessions_for_chart(User.t(), atom) :: [WorkoutSession.t()]
+  def list_sessions_for_chart(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
+    Repo.all(
+      from s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and
+            s.burpee_type == ^burpee_type and
+            s.burpee_count_actual > 0 and
+            s.duration_sec_actual > 0,
+        order_by: [asc: s.inserted_at]
+    )
+  end
+
+  @doc """
   List the last `count` sessions of a given type for a user, most
   recent first. Used by the progression trend calculation.
   """

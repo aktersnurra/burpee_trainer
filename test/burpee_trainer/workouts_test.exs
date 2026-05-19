@@ -492,4 +492,97 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert bob_week.six_count_reps == 0
     end
   end
+
+  describe "list_sessions_for_chart/2" do
+    test "returns empty list when user has no sessions" do
+      user = user_fixture()
+      assert Workouts.list_sessions_for_chart(user, :six_count) == []
+    end
+
+    test "returns sessions with positive burpee_count_actual and duration_sec_actual, oldest first" do
+      user = user_fixture()
+
+      s1 =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 200,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-04-01 10:00:00Z]
+        })
+
+      s2 =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 250,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-04-08 10:00:00Z]
+        })
+
+      result = Workouts.list_sessions_for_chart(user, :six_count)
+      assert length(result) == 2
+      assert Enum.at(result, 0).id == s1.id
+      assert Enum.at(result, 1).id == s2.id
+    end
+
+    test "excludes sessions with nil or zero burpee_count_actual" do
+      user = user_fixture()
+
+      _zero =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 0,
+          "duration_sec_actual" => 1200
+        })
+
+      assert Workouts.list_sessions_for_chart(user, :six_count) == []
+    end
+
+    test "excludes sessions with nil or zero duration_sec_actual" do
+      user = user_fixture()
+
+      _zero_dur =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 200,
+          "duration_sec_actual" => 0
+        })
+
+      assert Workouts.list_sessions_for_chart(user, :six_count) == []
+    end
+
+    test "only returns sessions for the given burpee_type" do
+      user = user_fixture()
+
+      _six =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 200,
+          "duration_sec_actual" => 1200
+        })
+
+      _seal =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "navy_seal",
+          "burpee_count_actual" => 100,
+          "duration_sec_actual" => 1200
+        })
+
+      six_results = Workouts.list_sessions_for_chart(user, :six_count)
+      assert length(six_results) == 1
+      assert hd(six_results).burpee_type == :six_count
+    end
+
+    test "does not return sessions from another user" do
+      user1 = user_fixture()
+      user2 = user_fixture()
+
+      free_form_session_fixture(user1, %{
+        "burpee_type" => "six_count",
+        "burpee_count_actual" => 200,
+        "duration_sec_actual" => 1200
+      })
+
+      assert Workouts.list_sessions_for_chart(user2, :six_count) == []
+    end
+  end
 end
