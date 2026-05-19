@@ -180,6 +180,34 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Return the most recent `limit` sessions for a user, preloading the
+  associated plan (for plan name display). Most recent first.
+  """
+  @spec list_sessions_recent(User.t(), pos_integer()) :: [WorkoutSession.t()]
+  def list_sessions_recent(%User{id: user_id}, limit \\ 10) do
+    Repo.all(
+      from s in WorkoutSession,
+        where: s.user_id == ^user_id,
+        order_by: [desc: s.inserted_at],
+        limit: ^limit,
+        preload: :plan
+    )
+  end
+
+  @doc """
+  Return all sessions for a user with plan preloaded, most recent first.
+  """
+  @spec list_sessions_all(User.t()) :: [WorkoutSession.t()]
+  def list_sessions_all(%User{id: user_id}) do
+    Repo.all(
+      from s in WorkoutSession,
+        where: s.user_id == ^user_id,
+        order_by: [desc: s.inserted_at],
+        preload: :plan
+    )
+  end
+
+  @doc """
   List the last `count` sessions of a given type for a user, most
   recent first. Used by the progression trend calculation.
   """

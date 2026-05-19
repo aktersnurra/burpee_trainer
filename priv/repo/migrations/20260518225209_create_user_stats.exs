@@ -8,7 +8,7 @@ defmodule BurpeeTrainer.Repo.Migrations.CreateUserStats do
       # ISO date string, nullable
       add :previous_best_ended_on, :string
 
-      timestamps(updated_at: true, inserted_at: false)
+      timestamps(inserted_at: false)
     end
   end
 end
