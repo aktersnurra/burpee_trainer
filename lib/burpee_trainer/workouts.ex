@@ -252,6 +252,24 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Most recent session for a user + burpee type that has usable baseline data
+  (both burpee_count_actual and duration_sec_actual are non-nil).
+  """
+  @spec last_session_for_type(User.t(), atom) :: WorkoutSession.t() | nil
+  def last_session_for_type(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
+    Repo.one(
+      from s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and
+            s.burpee_type == ^burpee_type and
+            not is_nil(s.burpee_count_actual) and
+            not is_nil(s.duration_sec_actual),
+        order_by: [desc: s.inserted_at],
+        limit: 1
+    )
+  end
+
+  @doc """
   List the last `count` sessions of a given type for a user, most
   recent first. Used by the progression trend calculation.
   """

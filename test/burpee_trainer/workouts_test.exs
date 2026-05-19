@@ -215,6 +215,41 @@ defmodule BurpeeTrainer.WorkoutsTest do
     end
   end
 
+  describe "last_session_for_type/2" do
+    test "returns most recent session with non-nil counts for the given type" do
+      user = user_fixture()
+      _old = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 10, "duration_sec_actual" => 60})
+      recent = free_form_session_fixture(user, %{"burpee_type" => "six_count", "burpee_count_actual" => 25, "duration_sec_actual" => 100})
+
+      result = Workouts.last_session_for_type(user, :six_count)
+      assert result.id == recent.id
+    end
+
+    test "returns nil when no sessions exist for the type" do
+      user = user_fixture()
+      _other = free_form_session_fixture(user, %{"burpee_type" => "navy_seal", "burpee_count_actual" => 20, "duration_sec_actual" => 80})
+
+      assert Workouts.last_session_for_type(user, :six_count) == nil
+    end
+
+    test "does not return sessions with nil burpee_count_actual" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      _plan_session = session_from_plan_fixture(user, plan)
+
+      result = Workouts.last_session_for_type(user, :six_count)
+      if result, do: assert(result.burpee_count_actual != nil and result.duration_sec_actual != nil)
+    end
+
+    test "does not return sessions from another user" do
+      user1 = user_fixture()
+      user2 = user_fixture()
+      _s = free_form_session_fixture(user1, %{"burpee_type" => "six_count"})
+
+      assert Workouts.last_session_for_type(user2, :six_count) == nil
+    end
+  end
+
   describe "weekly_minutes/1" do
     test "returns empty list when user has no sessions" do
       user = user_fixture()
