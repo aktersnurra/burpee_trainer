@@ -552,9 +552,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <% end %>
 
           <%!-- dots --%>
-          <%= for {_p, i} <- @indexed do %>
-            <% pt = Enum.at(@points, i) %>
-            <circle cx={@to_x.(i * 1.0)} cy={@to_y.(pt.reps * 1.0)} r="2.5" fill={@color} />
+          <%= for {p, i} <- @indexed do %>
+            <circle cx={@to_x.(i * 1.0)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill={@color} />
           <% end %>
 
           <%!-- x-axis date labels --%>
