@@ -18,14 +18,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:streak, Streak.compute(user, today))
      |> assign(:today, today)
      |> assign(:goals, Goals.list_active_goals(user))
-     |> then(fn socket ->
-       goals = socket.assigns.goals
-       six_goal = Enum.find(goals, &(&1.burpee_type == :six_count))
-       seal_goal = Enum.find(goals, &(&1.burpee_type == :navy_seal))
-       socket
-       |> assign(:six_progress, six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline))
-       |> assign(:seal_progress, seal_goal && Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline))
-     end)
+     |> then(&compute_goal_progress(&1, user, &1.assigns.goals))
      |> assign(:sessions, sessions)
      |> assign(:sessions_has_more, has_more)
      |> assign(:log_modal_open, false)
@@ -89,14 +82,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:weekly_data, Workouts.weekly_minutes(user))
      |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
      |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
-     |> then(fn socket ->
-       goals = socket.assigns.goals
-       six_goal = Enum.find(goals, &(&1.burpee_type == :six_count))
-       seal_goal = Enum.find(goals, &(&1.burpee_type == :navy_seal))
-       socket
-       |> assign(:six_progress, six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline))
-       |> assign(:seal_progress, seal_goal && Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline))
-     end)}
+     |> then(&compute_goal_progress(&1, user, &1.assigns.goals))}
   end
 
   def handle_info(:goal_saved, socket) do
@@ -108,13 +94,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:goal_modal_type, nil)
      |> assign(:goal_baseline_session, nil)
      |> assign(:goals, goals)
-     |> then(fn socket ->
-       six_goal = Enum.find(goals, &(&1.burpee_type == :six_count))
-       seal_goal = Enum.find(goals, &(&1.burpee_type == :navy_seal))
-       socket
-       |> assign(:six_progress, six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline))
-       |> assign(:seal_progress, seal_goal && Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline))
-     end)}
+     |> compute_goal_progress(user, goals)}
   end
 
   @impl true
@@ -769,4 +749,13 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp level_label(l),
     do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
+
+  defp compute_goal_progress(socket, user, goals) do
+    six_goal = Enum.find(goals, &(&1.burpee_type == :six_count))
+    seal_goal = Enum.find(goals, &(&1.burpee_type == :navy_seal))
+
+    socket
+    |> assign(:six_progress, six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline))
+    |> assign(:seal_progress, seal_goal && Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline))
+  end
 end
