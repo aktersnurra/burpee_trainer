@@ -146,7 +146,7 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
 
       html = render(view)
       refute html =~ "Set 6-Count goal"
-      assert html =~ "60 burpees"
+      assert html =~ "/ 60"
     end
 
     test "navy seal goal slot opens modal for navy_seal type", %{conn: conn, user: user} do
