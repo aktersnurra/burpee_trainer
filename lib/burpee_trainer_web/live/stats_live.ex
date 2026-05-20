@@ -277,7 +277,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     current_reps =
       if assigns.progress do
-        round(assigns.progress.burpee_count_actual / assigns.progress.duration_sec_actual * 1200.0)
+        round(
+          assigns.progress.burpee_count_actual / assigns.progress.duration_sec_actual * 1200.0
+        )
       else
         0
       end
@@ -324,9 +326,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <div class="flex items-center justify-between">
             <p class="text-[10px] text-base-content/40">
               <%= cond do %>
-                <% @days_left > 0 -> %>{@days_left}d left
-                <% @days_left == 0 -> %>Today
-                <% true -> %>Overdue
+                <% @days_left > 0 -> %>
+                  {@days_left}d left
+                <% @days_left == 0 -> %>
+                  Today
+                <% true -> %>
+                  Overdue
               <% end %>
             </p>
             <%= if @current_reps == 0 do %>
@@ -755,7 +760,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
     seal_goal = Enum.find(goals, &(&1.burpee_type == :navy_seal))
 
     socket
-    |> assign(:six_progress, six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline))
-    |> assign(:seal_progress, seal_goal && Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline))
+    |> assign(
+      :six_progress,
+      six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline)
+    )
+    |> assign(
+      :seal_progress,
+      seal_goal &&
+        Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline)
+    )
   end
 end
