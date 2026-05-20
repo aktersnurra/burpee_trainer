@@ -1,0 +1,12 @@
+# nuc/apps/burpee/config
+# Sourced by deploy scripts. No secrets — safe to commit.
+
+JAIL="burpee"
+APP="burpee_trainer"
+MODULE="BurpeeTrainer"
+PORT="4000"
+VIDEO_PORT="4002"
+JAIL_IP="172.16.0.2"
+HOST_DEPLOY_DIR="/jails/${JAIL}/opt/${JAIL}"
+JAIL_DEPLOY_DIR="/opt/${JAIL}"
+PHX_HOST="burpee.gustafrydholm.xyz"

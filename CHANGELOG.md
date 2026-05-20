@@ -70,3 +70,43 @@ Legacy private helpers in `plan_wizard.ex`: `build_even`,
 DP conflict solver, replacing `Planner.fit_rest_to_duration/2`, StreamData
 property tests, new pacing styles (`:pyramid`, `:tabata`), soft-constraint
 penalty wiring into solver decisions, fatigue model.
+
+---
+
+## UI Polish — Stats, Workouts, Plan Editor (2026-05-21)
+
+### Stats screen
+
+- Removed "How you're tracking." subtitle; level badge moved into streak card header
+- Goal cards: state leads (number/achieved), type label demoted to tertiary
+- "Goal reached" card: trophy icon, achieved target shown as `N burpees`, completion date
+- "Trends" section header added; "Sessions" floating header removed
+- Weekly minutes chart: fixed viewBox (always 300px wide), 12 slots always rendered, sparse data fills from right, 120 label removed, "80" label on LHS beside dashed target line
+- Progress chart: gridline y-axis labels removed for target values; target numbers anchored to right end of dashed lines, color-matched to series
+- `Fmt.burpee_type/1`: "6-count" → "6-Count" for consistent casing with "Navy SEAL"
+
+### Workouts screen
+
+- "Pick something to do." subtitle removed
+- Level filter pill labels: "1A/1B/1C/1D" → "L1A/L1B/L1C/L1D" for consistency with "L2/L3/L4"
+
+### Plan editor (`/workouts/new`, `/workouts/:id/edit`)
+
+- Single input card with `divide-y` hairlines replacing three separate cards (Basics, Additional rests, Advanced)
+- Plan name is the page title — inline editable input, updates on change
+- Fatigue bias moved behind `▸ Advanced` disclosure (collapsed by default)
+- Additional rests: compact inline row, trash icon instead of "× remove"
+- Solution card wraps blocks + save button; solution header shows `✓ Solution · 20:01 · 150 burpees`
+- Block actions (Duplicate, Remove) moved to `⋯` overflow menu
+- Set rows: dense single-line format with `Reps | Rest [s]` column headers; `sec/rep` and `sec/burpee` hidden (submitted as hidden inputs, defaulting to plan-level pace for new sets)
+- Uniform sets collapsed to summary line ("10 × 15 reps · 29s rest") with "Edit sets" affordance
+- Footer row shows live `duration · burpees` status beside Save button
+- Stale solver error cleared on manual block edits
+- Picker pattern unified: Burpee type, Pacing, Fatigue bias all use same pill-strip component
+- Cancel demoted to plain text link
+- Section numbers dropped from headers
+- Native number input spinners hidden globally via CSS
+
+### Tests
+
+- 261 tests, 0 failures throughout

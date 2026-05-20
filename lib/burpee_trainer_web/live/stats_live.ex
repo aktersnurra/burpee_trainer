@@ -73,18 +73,23 @@ defmodule BurpeeTrainerWeb.StatsLive do
     today = socket.assigns.today
     {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
 
+    # Find goals just achieved and tag the achieving session in the DB
     newly_achieved =
       socket.assigns.goals
       |> Enum.filter(&(&1.status == :active))
-      |> Enum.filter(fn goal ->
+      |> Enum.flat_map(fn goal ->
         best = Workouts.best_qualifying_session(user, goal.burpee_type)
 
-        best &&
-          round(best.burpee_count_actual / best.duration_sec_actual * 1200.0) >=
-            goal.burpee_count_target
+        if best &&
+             round(best.burpee_count_actual / best.duration_sec_actual * 1200.0) >=
+               goal.burpee_count_target do
+          Goals.mark_achieved(goal)
+          Workouts.tag_session_as_goal_reached(best, goal.id)
+          [goal]
+        else
+          []
+        end
       end)
-
-    Enum.each(newly_achieved, &Goals.mark_achieved/1)
 
     goals = Goals.list_current_goals(user)
 
@@ -126,30 +131,23 @@ defmodule BurpeeTrainerWeb.StatsLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
       <div class="space-y-5 pb-20">
-        <div class="flex items-start justify-between">
-          <div>
-            <h1 class="text-2xl font-semibold tracking-tight">Stats</h1>
-            <p class="text-sm text-base-content/60">How you're tracking.</p>
-          </div>
-          <%= if @current_level do %>
-            <div class="text-right leading-tight">
-              <p class="text-[10px] font-medium uppercase tracking-widest text-base-content/40">
-                Level
-              </p>
-              <p class="text-2xl font-semibold text-base-content">{level_label(@current_level)}</p>
-            </div>
-          <% end %>
-        </div>
+        <h1 class="text-2xl font-semibold tracking-tight">Stats</h1>
 
-        <.streak_card streak={@streak} today={@today} />
-        <.goals_section goals={@goals} six_progress={@six_progress} seal_progress={@seal_progress} />
+        <.streak_card streak={@streak} today={@today} current_level={@current_level} />
+        <.goals_section
+          goals={@goals}
+          six_progress={@six_progress}
+          seal_progress={@seal_progress}
+          six_has_sessions={@six_count_sessions != []}
+          seal_has_sessions={@navy_seal_sessions != []}
+        />
         <.trends_section
           weekly_data={@weekly_data}
           six_count_sessions={@six_count_sessions}
           navy_seal_sessions={@navy_seal_sessions}
           goals={@goals}
         />
-        <.sessions_section sessions={@sessions} has_more={@sessions_has_more} goals={@goals} />
+        <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
       </div>
 
       <%!-- FAB --%>
@@ -205,6 +203,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   attr :streak, State, required: true
   attr :today, Date, required: true
+  attr :current_level, :atom, default: nil
 
   defp streak_card(assigns) do
     week_start = Date.beginning_of_week(assigns.today, :monday)
@@ -212,7 +211,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-5 space-y-4">
-      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">THIS WEEK</p>
+      <div class="flex items-center justify-between">
+        <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">THIS WEEK</p>
+        <%= if @current_level do %>
+          <p class="text-xs font-semibold text-base-content/40">
+            Level <span class="text-base-content/70">{level_label(@current_level)}</span>
+          </p>
+        <% end %>
+      </div>
 
       <div class="flex items-end justify-between">
         <div class="tabular-nums leading-none">
@@ -276,6 +282,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
   attr :goals, :list, required: true
   attr :six_progress, :any, required: true
   attr :seal_progress, :any, required: true
+  attr :six_has_sessions, :boolean, required: true
+  attr :seal_has_sessions, :boolean, required: true
 
   defp goals_section(assigns) do
     assigns =
@@ -285,8 +293,20 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="grid grid-cols-2 gap-3">
-      <.goal_slot burpee_type={:six_count} label="6-COUNT" goal={@six} progress={@six_progress} />
-      <.goal_slot burpee_type={:navy_seal} label="NAVY SEAL" goal={@seal} progress={@seal_progress} />
+      <.goal_slot
+        burpee_type={:six_count}
+        label="6-COUNT"
+        goal={@six}
+        progress={@six_progress}
+        has_sessions={@six_has_sessions}
+      />
+      <.goal_slot
+        burpee_type={:navy_seal}
+        label="NAVY SEAL"
+        goal={@seal}
+        progress={@seal_progress}
+        has_sessions={@seal_has_sessions}
+      />
     </div>
     """
   end
@@ -295,6 +315,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
   attr :label, :string, required: true
   attr :goal, :any, required: true
   attr :progress, :any, required: true
+  attr :has_sessions, :boolean, required: true
 
   defp goal_slot(assigns) do
     today = Date.utc_today()
@@ -331,16 +352,21 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4 space-y-3">
-      <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/60">{@label}</p>
-
       <%= cond do %>
         <% @goal && @goal.status == :achieved -> %>
           <div class="space-y-2">
             <div class="flex items-center gap-2 text-primary">
-              <.icon name="hero-check-circle" class="size-4 shrink-0" />
+              <.icon name="hero-trophy" class="size-4 shrink-0" />
               <span class="text-sm font-semibold">Goal reached</span>
             </div>
-            <p class="text-xs text-base-content/40">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/30">
+              {@label}
+            </p>
+            <p class="text-sm font-semibold tabular-nums">
+              {@goal.burpee_count_target}
+              <span class="text-xs font-normal text-base-content/40 ml-0.5">burpees</span>
+            </p>
+            <p class="text-[10px] text-base-content/30">
               {Calendar.strftime(DateTime.to_date(@goal.updated_at), "%-d %b %Y")}
             </p>
             <button
@@ -354,11 +380,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
           </div>
         <% @goal && @goal.status == :active -> %>
           <div class="space-y-2">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/30">
+              {@label}
+            </p>
             <div class="flex items-baseline justify-between">
               <div class="tabular-nums">
                 <span class="text-lg font-semibold">{@current_reps}</span>
                 <span class="text-xs text-base-content/40 ml-1">
-                  / {@goal.burpee_count_target} burpees
+                  / {@goal.burpee_count_target}
                 </span>
               </div>
               <%= if @weekly_pace && @days_left > 0 do %>
@@ -377,7 +406,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <p class="text-[10px] text-base-content/30">Log a 20-min session to track progress</p>
             <% end %>
 
-            <p class="text-[10px] text-base-content/40">
+            <p class="text-[10px] text-base-content/30">
               by {Calendar.strftime(@goal.date_target, "%-d %b")}
               <%= cond do %>
                 <% @days_left > 0 -> %>
@@ -400,15 +429,23 @@ defmodule BurpeeTrainerWeb.StatsLive do
           </div>
         <% true -> %>
           <div class="space-y-2">
-            <p class="text-xs text-base-content/50">No goal set</p>
-            <button
-              type="button"
-              phx-click="open_goal_modal"
-              phx-value-type={@burpee_type}
-              class="text-xs text-primary hover:underline"
-            >
-              Set goal
-            </button>
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/30">
+              {@label}
+            </p>
+            <%= if @has_sessions do %>
+              <p class="text-xs text-base-content/40">No goal set</p>
+              <button
+                type="button"
+                phx-click="open_goal_modal"
+                phx-value-type={@burpee_type}
+                class="text-xs text-primary hover:underline"
+              >
+                Set goal
+              </button>
+            <% else %>
+              <p class="text-xs text-base-content/40">No sessions yet</p>
+              <p class="text-[10px] text-base-content/30">Log a session to set a goal</p>
+            <% end %>
           </div>
       <% end %>
     </div>
@@ -417,26 +454,16 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   attr :sessions, :list, required: true
   attr :has_more, :boolean, required: true
-  attr :goals, :list, required: true
 
   defp sessions_section(assigns) do
-    achieved_map =
-      assigns.goals
-      |> Enum.filter(&(&1.status == :achieved))
-      |> Map.new(fn g -> {g.burpee_type, DateTime.to_date(g.updated_at)} end)
-
-    assigns = assign(assigns, :achieved_map, achieved_map)
-
     ~H"""
     <div>
-      <h2 class="text-base font-semibold text-base-content mb-2">Sessions</h2>
-
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
         <div class="rounded-[10px] border border-[#1E2535] bg-base-200 divide-y divide-[#1E2535] px-4">
           <%= for session <- @sessions do %>
-            <.session_row session={session} achieved_map={@achieved_map} />
+            <.session_row session={session} />
           <% end %>
         </div>
 
@@ -454,7 +481,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   attr :session, :any, required: true
-  attr :achieved_map, :map, required: true
 
   defp session_row(assigns) do
     today = Date.utc_today()
@@ -465,8 +491,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         do: Calendar.strftime(date, "%-d %b"),
         else: Calendar.strftime(date, "%-d %b %Y")
 
-    goal_reached = Map.get(assigns.achieved_map, assigns.session.burpee_type) == date
-    assigns = assign(assigns, date_str: date_str, goal_reached: goal_reached)
+    assigns = assign(assigns, date_str: date_str)
 
     ~H"""
     <div class="flex items-center justify-between gap-4 py-2.5">
@@ -480,7 +505,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <span class="text-sm text-base-content/40 tabular-nums shrink-0">
           {Fmt.duration_sec(@session.duration_sec_actual)}
         </span>
-        <%= if @goal_reached do %>
+        <%= if @session.goal do %>
           <span class="flex items-center gap-1 text-[10px] text-primary shrink-0">
             <.icon name="hero-trophy" class="size-3" /> Goal reached
           </span>
@@ -507,7 +532,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="space-y-3">
-      <h2 class="text-base font-semibold text-base-content">Trends</h2>
+      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">Trends</p>
       <.weekly_minutes_chart weekly_data={@weekly_data} />
       <.progress_chart
         six_count_sessions={@six_count_sessions}
@@ -522,62 +547,82 @@ defmodule BurpeeTrainerWeb.StatsLive do
   attr :weekly_data, :list, required: true
 
   defp weekly_minutes_chart(assigns) do
-    chart_weeks = assigns.weekly_data |> Enum.take(12) |> Enum.reverse()
+    # Always show 12 slots; pad with empty weeks at the start if less data
+    raw_weeks =
+      assigns.weekly_data
+      |> Enum.take(12)
+      |> Enum.reverse()
 
-    chart_weeks_with_labels =
-      Enum.with_index(chart_weeks, fn week, i ->
-        {_y, w} = :calendar.iso_week_number(Date.to_erl(week.week_start))
-        show_label = i == 0 or rem(i, 4) == 0 or i == length(chart_weeks) - 1
-        Map.merge(week, %{index: i, iso_week: w, show_label: show_label})
-      end)
+    n_slots = 12
+    n_data = length(raw_weeks)
+    n_empty = n_slots - n_data
 
-    assigns = assign(assigns, :chart_weeks, chart_weeks_with_labels)
+    # Build index-labelled list: empty slots first, then real data
+    chart_weeks =
+      List.duplicate(%{minutes: 0, met_goal: false, iso_week: nil}, n_empty) ++
+        Enum.map(raw_weeks, fn week ->
+          {_y, w} = :calendar.iso_week_number(Date.to_erl(week.week_start))
+          Map.put(week, :iso_week, w)
+        end)
+
+    chart_w = 300
+    y_axis_w = 20
+    plot_w = chart_w - y_axis_w
+    slot_w = plot_w / n_slots
+    bar_w = max(slot_w * 0.6, 2)
+    max_m = 120
+    target_y = 75 - 80 / max_m * 70
+
+    assigns =
+      assign(assigns,
+        chart_weeks: Enum.with_index(chart_weeks),
+        chart_w: chart_w,
+        y_axis_w: y_axis_w,
+        slot_w: slot_w,
+        bar_w: bar_w,
+        max_m: max_m,
+        target_y: target_y
+      )
 
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4">
       <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">Weekly minutes</p>
-      <% bar_w = 18
-      gap = 7
-      chart_w = 300
-      y_axis_w = 16
-
-      max_m = 120
-      target_y = 75 - 80 / max_m * 70 %>
-      <svg viewBox={"0 0 #{chart_w} 96"} class="w-full" aria-hidden="true">
-        <%!-- y-axis labels --%>
-        <text x={y_axis_w - 2} y="10" text-anchor="end" font-size="7" fill="#3A4A5E">120</text>
-        <text x={y_axis_w - 2} y={76 - 80 / max_m * 70} text-anchor="end" font-size="7" fill="#3A4A5E">
-          80
-        </text>
-        <text x={y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#3A4A5E">0</text>
+      <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
+        <%!-- y-axis: 0 only --%>
+        <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#3A4A5E">0</text>
 
         <%!-- bars --%>
-        <%= for week <- @chart_weeks do %>
-          <% x = y_axis_w + week.index * (bar_w + gap)
-          height = max(min(week.minutes / max_m * 70, 70), 1)
+        <%= for {week, i} <- @chart_weeks do %>
+          <% cx = @y_axis_w + (i + 0.5) * @slot_w
+          x = cx - @bar_w / 2
+          height = max(min(week.minutes / @max_m * 70, 70), if(week.minutes > 0, do: 1, else: 0))
           y = 75 - height
           color = if week.met_goal, do: "#4A9EFF", else: "#2A3A4E" %>
-          <rect x={x} y={y} width={bar_w} height={height} fill={color} rx="2" />
+          <%= if height > 0 do %>
+            <rect x={x} y={y} width={@bar_w} height={height} fill={color} rx="2" />
+          <% end %>
         <% end %>
 
-        <%!-- 80 min target line + label --%>
+        <%!-- 80 min target line — label on lhs --%>
+        <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#3A4A5E">
+          80
+        </text>
         <line
-          x1={y_axis_w}
-          y1={target_y}
-          x2={chart_w}
-          y2={target_y}
+          x1={@y_axis_w}
+          y1={@target_y}
+          x2={@chart_w}
+          y2={@target_y}
           stroke="#3A4A5E"
           stroke-width="0.5"
           stroke-dasharray="3,3"
         />
-        <text x={chart_w} y={target_y - 2} text-anchor="end" font-size="6" fill="#3A4A5E">
-          80 min
-        </text>
 
-        <%!-- x-axis week labels --%>
-        <%= for week <- @chart_weeks, week.show_label do %>
-          <% x = y_axis_w + week.index * (bar_w + gap) + bar_w / 2 %>
-          <text x={x} y="90" text-anchor="middle" font-size="6" fill="#3A4A5E">W{week.iso_week}</text>
+        <%!-- x-axis: label data weeks only --%>
+        <%= for {week, i} <- @chart_weeks, week.iso_week != nil do %>
+          <% cx = @y_axis_w + (i + 0.5) * @slot_w %>
+          <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#3A4A5E">
+            W{week.iso_week}
+          </text>
         <% end %>
       </svg>
     </div>
@@ -710,8 +755,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
           class="w-full mt-3 overflow-visible"
           aria-hidden="true"
         >
-          <%!-- gridlines + y-axis labels --%>
-          <%= for tick <- @y_ticks do %>
+          <%!-- gridlines — only for 0 tick, targets get their own labels --%>
+          <%= for tick <- @y_ticks, tick == 0 do %>
             <% gy = @to_y.(tick * 1.0) %>
             <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#1E2535" stroke-width="0.5" />
             <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#3A4A5E">
@@ -719,7 +764,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             </text>
           <% end %>
 
-          <%!-- 6-Count target line --%>
+          <%!-- 6-Count target line — label anchored to right end of line --%>
           <%= if @six_target do %>
             <% ty = @to_y.(@six_target * 1.0) %>
             <line
@@ -730,21 +775,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
               stroke="#4A9EFF"
               stroke-width="0.75"
               stroke-dasharray="4,3"
-              opacity="0.35"
+              opacity="0.4"
             />
-            <text
-              x={@chart_w}
-              y={ty - 3}
-              text-anchor="end"
-              font-size="7"
-              fill="#4A9EFF"
-              opacity="0.55"
-            >
-              Target {@six_target}
+            <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#4A9EFF" opacity="0.7">
+              {@six_target}
             </text>
           <% end %>
 
-          <%!-- Navy SEAL target line --%>
+          <%!-- Navy SEAL target line — label anchored to right end of line --%>
           <%= if @seal_target do %>
             <% ty = @to_y.(@seal_target * 1.0) %>
             <line
@@ -755,17 +793,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
               stroke="#F97316"
               stroke-width="0.75"
               stroke-dasharray="4,3"
-              opacity="0.35"
+              opacity="0.4"
             />
-            <text
-              x={@chart_w}
-              y={ty - 3}
-              text-anchor="end"
-              font-size="7"
-              fill="#F97316"
-              opacity="0.55"
-            >
-              Target {@seal_target}
+            <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#F97316" opacity="0.7">
+              {@seal_target}
             </text>
           <% end %>
 

@@ -30,9 +30,9 @@ defmodule BurpeeTrainerWeb.Fmt do
   Human-readable label for a burpee_type enum.
   """
   @spec burpee_type(atom | String.t() | nil) :: String.t()
-  def burpee_type(:six_count), do: "6-count"
+  def burpee_type(:six_count), do: "6-Count"
   def burpee_type(:navy_seal), do: "Navy SEAL"
-  def burpee_type("six_count"), do: "6-count"
+  def burpee_type("six_count"), do: "6-Count"
   def burpee_type("navy_seal"), do: "Navy SEAL"
   def burpee_type(_), do: "—"
 

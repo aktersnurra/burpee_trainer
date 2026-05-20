@@ -18,22 +18,30 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
 
   @impl true
   def update(assigns, socket) do
-    {:ok, socket |> assign(assigns)}
+    {:ok, assign(socket, assigns)}
   end
 
   defp build_form(socket) do
+    today = Date.utc_today()
     changeset = Workouts.change_free_form_session(%WorkoutSession{})
 
     assign(socket,
       form: to_form(changeset),
       mood: 0,
       log_tags: [],
+      burpee_type: :six_count,
+      log_date: today,
       mood_options: @mood_options,
       tag_options: @tag_options
     )
   end
 
   @impl true
+  def handle_event("set_type", %{"type" => type_str}, socket) do
+    burpee_type = String.to_existing_atom(type_str)
+    {:noreply, assign(socket, :burpee_type, burpee_type)}
+  end
+
   def handle_event("set_mood", %{"mood" => mood_str}, socket) do
     mood =
       case Integer.parse(mood_str) do
@@ -50,14 +58,44 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
     {:noreply, assign(socket, :log_tags, new_tags)}
   end
 
+  def handle_event("validate", %{"workout_session" => params}, socket) do
+    log_date =
+      case Date.from_iso8601(params["log_date"] || "") do
+        {:ok, d} -> d
+        _ -> socket.assigns.log_date
+      end
+
+    changeset =
+      %WorkoutSession{}
+      |> Workouts.change_free_form_session(params)
+      |> Map.put(:action, :validate)
+
+    {:noreply, socket |> assign(:form, to_form(changeset)) |> assign(:log_date, log_date)}
+  end
+
   def handle_event("save", %{"workout_session" => params}, socket) do
     user = socket.assigns.current_user
     tags_str = socket.assigns.log_tags |> Enum.sort() |> Enum.join(",")
 
+    duration_sec =
+      case Integer.parse(params["duration_sec_actual"] || "") do
+        {min, ""} -> to_string(min * 60)
+        _ -> params["duration_sec_actual"]
+      end
+
+    log_date =
+      case Date.from_iso8601(params["log_date"] || "") do
+        {:ok, d} -> d
+        _ -> socket.assigns.log_date
+      end
+
     full_params =
       params
+      |> Map.put("burpee_type", to_string(socket.assigns.burpee_type))
       |> Map.put("mood", to_string(socket.assigns.mood))
       |> Map.put("tags", tags_str)
+      |> Map.put("duration_sec_actual", duration_sec)
+      |> Map.put("inserted_at", DateTime.new!(log_date, ~T[12:00:00], "Etc/UTC"))
 
     case Workouts.create_free_form_session(user, full_params) do
       {:ok, _session} ->
@@ -84,31 +122,66 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
         </button>
       </div>
 
+      <%!-- Burpee type pills (outside form — socket assign) --%>
+      <div class="mb-4">
+        <p class="text-sm font-medium mb-2">Type</p>
+        <div class="flex gap-2">
+          <%= for {label, val} <- [{"6-Count", :six_count}, {"Navy SEAL", :navy_seal}] do %>
+            <button
+              type="button"
+              phx-click="set_type"
+              phx-value-type={val}
+              phx-target={@myself}
+              class={[
+                "flex-1 rounded-full px-4 py-2 text-sm font-medium border transition",
+                @burpee_type == val && "border-primary bg-primary/10 text-primary",
+                @burpee_type != val &&
+                  "border-[#1E2535] text-base-content/50 hover:text-base-content/80"
+              ]}
+            >
+              {label}
+            </button>
+          <% end %>
+        </div>
+      </div>
+
+      <%!-- Date — inside form so validate captures it without resetting --%>
+
       <.form
         for={@form}
         id={"log-form-#{@id}"}
         phx-submit="save"
+        phx-change="validate"
         phx-target={@myself}
         class="space-y-4"
       >
         <.input
-          field={@form[:burpee_type]}
-          type="select"
-          label="Burpee type"
-          options={[{"6-Count", "six_count"}, {"Navy SEAL", "navy_seal"}]}
-        />
-        <.input
           field={@form[:burpee_count_actual]}
-          type="number"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
           label="Burpees done"
-          min="0"
         />
         <.input
           field={@form[:duration_sec_actual]}
-          type="number"
-          label="Duration (seconds)"
-          min="0"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          label="Duration (minutes)"
         />
+
+        <div class="fieldset mb-2">
+          <label>
+            <span class="label mb-1">Date</span>
+            <input
+              type="date"
+              name="workout_session[log_date]"
+              value={Date.to_iso8601(@log_date)}
+              max={Date.to_iso8601(Date.utc_today())}
+              class="w-full input"
+            />
+          </label>
+        </div>
 
         <div>
           <p class="text-sm font-medium mb-2">How did it feel?</p>

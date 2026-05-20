@@ -56,6 +56,7 @@ defmodule BurpeeTrainer.Goals.Goal do
     |> validate_number(:burpee_count_baseline, greater_than_or_equal_to: 0)
     |> validate_number(:duration_sec_baseline, greater_than_or_equal_to: 0)
     |> validate_date_target_after_baseline()
+    |> validate_burpee_count_ceiling()
     |> unique_constraint([:user_id, :burpee_type],
       name: :goals_active_user_type_index,
       message: "an active goal already exists for this burpee type"
@@ -67,6 +68,24 @@ defmodule BurpeeTrainer.Goals.Goal do
   """
   def status_changeset(goal, status) when status in @statuses do
     change(goal, status: status)
+  end
+
+  @ceilings %{six_count: 325, navy_seal: 150}
+
+  defp validate_burpee_count_ceiling(changeset) do
+    burpee_type = get_field(changeset, :burpee_type)
+    target = get_field(changeset, :burpee_count_target)
+    ceiling = burpee_type && Map.get(@ceilings, burpee_type)
+
+    if ceiling && target && target > ceiling do
+      add_error(
+        changeset,
+        :burpee_count_target,
+        "cannot exceed #{ceiling} for #{burpee_type |> Atom.to_string() |> String.replace("_", " ")}"
+      )
+    else
+      changeset
+    end
   end
 
   defp validate_date_target_after_baseline(changeset) do

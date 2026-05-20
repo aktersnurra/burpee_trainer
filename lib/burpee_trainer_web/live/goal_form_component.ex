@@ -14,17 +14,20 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
      socket
      |> assign(assigns)
      |> assign(:form, nil)
-     |> assign(:type_label, type_label(burpee_type))}
+     |> assign(:type_label, type_label(burpee_type))
+     |> assign(:ceiling, ceiling(burpee_type))}
   end
 
   def update(%{baseline_session: _session, burpee_type: burpee_type} = assigns, socket) do
     changeset = Goals.change_goal(%Goals.Goal{})
+    ceiling = ceiling(burpee_type)
 
     {:ok,
      socket
      |> assign(assigns)
      |> assign(:form, to_form(changeset))
-     |> assign(:type_label, type_label(burpee_type))}
+     |> assign(:type_label, type_label(burpee_type))
+     |> assign(:ceiling, ceiling)}
   end
 
   @impl true
@@ -57,16 +60,18 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
             {:noreply, socket}
 
           {:error, changeset} ->
-            {:noreply, assign(socket, :form, to_form(changeset))}
+            {:noreply, assign(socket, :form, to_form(Map.put(changeset, :action, :validate)))}
         end
 
       _ ->
         changeset =
-          Goals.change_goal(%Goals.Goal{}, %{"burpee_count_target" => raw_count})
+          %Goals.Goal{}
+          |> Goals.change_goal(%{"burpee_count_target" => raw_count})
           |> Ecto.Changeset.add_error(
             :burpee_count_target,
             "must be a whole number greater than 0"
           )
+          |> Map.put(:action, :validate)
 
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
@@ -74,6 +79,9 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
 
   defp type_label(:six_count), do: "6-Count"
   defp type_label(:navy_seal), do: "Navy SEAL"
+
+  defp ceiling(:six_count), do: 325
+  defp ceiling(:navy_seal), do: 150
 
   @impl true
   def render(assigns) do
@@ -107,7 +115,7 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
             type="text"
             inputmode="numeric"
             pattern="[0-9]*"
-            label="Target burpees"
+            label={"Target burpees (max #{@ceiling})"}
           />
           <.input
             field={@form[:date_target]}

@@ -12,18 +12,6 @@ defmodule BurpeeTrainer.Goals do
   alias BurpeeTrainer.Repo
 
   @doc """
-  All goals for a user (active, achieved, abandoned), newest first.
-  """
-  @spec list_goals(User.t()) :: [Goal.t()]
-  def list_goals(%User{id: user_id}) do
-    Repo.all(
-      from goal in Goal,
-        where: goal.user_id == ^user_id,
-        order_by: [desc: goal.inserted_at]
-    )
-  end
-
-  @doc """
   Active goals for a user, one per `burpee_type` at most.
   """
   @spec list_active_goals(User.t()) :: [Goal.t()]

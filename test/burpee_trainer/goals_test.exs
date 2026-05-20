@@ -74,19 +74,6 @@ defmodule BurpeeTrainer.GoalsTest do
       assert Enum.map(actives, & &1.burpee_type) |> Enum.sort() == [:navy_seal, :six_count]
     end
 
-    test "list_goals/1 returns both active and abandoned, scoped per user" do
-      user = user_fixture()
-      other = user_fixture()
-
-      _ = goal_fixture(user, %{"burpee_type" => "six_count"})
-      _ = goal_fixture(user, %{"burpee_type" => "six_count"})
-      _ = goal_fixture(other, %{"burpee_type" => "six_count"})
-
-      all = Goals.list_goals(user)
-      assert length(all) == 2
-      assert Enum.all?(all, &(&1.user_id == user.id))
-    end
-
     test "get_goal!/2 scopes by user" do
       alice = user_fixture()
       bob = user_fixture()

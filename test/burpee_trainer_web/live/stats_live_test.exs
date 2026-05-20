@@ -26,7 +26,16 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       assert html =~ "NAVY SEAL"
     end
 
-    test "empty goal slot shows Set goal link", %{conn: conn} do
+    test "empty goal slot shows No sessions yet when no sessions exist", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stats")
+      assert html =~ "No sessions yet"
+    end
+
+    test "empty goal slot shows Set goal when sessions exist but no goal", %{
+      conn: conn,
+      user: user
+    } do
+      free_form_session_fixture(user, %{"burpee_type" => "six_count"})
       {:ok, _view, html} = live(conn, ~p"/stats")
       assert html =~ "Set goal"
     end
@@ -37,7 +46,7 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       {:ok, _goal} =
         Goals.create_goal(user, %{
           "burpee_type" => "six_count",
-          "burpee_count_target" => 500,
+          "burpee_count_target" => 300,
           "duration_sec_target" => 1200,
           "date_target" => Date.add(today, 30),
           "burpee_count_baseline" => 0,
@@ -46,7 +55,7 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
         })
 
       {:ok, _view, html} = live(conn, ~p"/stats")
-      assert html =~ "500"
+      assert html =~ "300"
     end
 
     test "shows recent session plan name", %{conn: conn, user: user} do

@@ -135,10 +135,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     level_4: "L4",
     level_3: "L3",
     level_2: "L2",
-    level_1d: "1D",
-    level_1c: "1C",
-    level_1b: "1B",
-    level_1a: "1A"
+    level_1d: "L1D",
+    level_1c: "L1C",
+    level_1b: "L1B",
+    level_1a: "L1A"
   }
 
   @impl true
@@ -155,7 +155,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       <div class="space-y-4">
         <div>
           <h1 class="text-2xl font-semibold tracking-tight">Workouts</h1>
-          <p class="text-sm text-base-content/60">Pick something to do.</p>
         </div>
 
         <%!-- Source filter row --%>

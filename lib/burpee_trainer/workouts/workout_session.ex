@@ -3,6 +3,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Goals.Goal
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @burpee_types [:six_count, :navy_seal]
@@ -31,6 +32,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
 
     belongs_to :user, User
     belongs_to :plan, WorkoutPlan
+    belongs_to :goal, Goal
 
     timestamps(type: :utc_datetime)
   end

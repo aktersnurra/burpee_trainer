@@ -19,7 +19,6 @@ defmodule BurpeeTrainer.Repo.Migrations.CreateGoals do
     create index(:goals, [:user_id])
     create index(:goals, [:user_id, :burpee_type])
 
-    # Partial unique index: at most one active goal per (user_id, burpee_type).
     create unique_index(:goals, [:user_id, :burpee_type],
              where: "status = 'active'",
              name: :goals_active_user_type_index

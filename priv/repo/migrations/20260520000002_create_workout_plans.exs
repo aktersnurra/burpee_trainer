@@ -6,13 +6,13 @@ defmodule BurpeeTrainer.Repo.Migrations.CreateWorkoutPlans do
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :name, :string, null: false
       add :burpee_type, :string, null: false
-      add :warmup_enabled, :boolean, null: false, default: false
-      add :warmup_reps, :integer
-      add :warmup_rounds, :integer
-      add :rest_sec_warmup_between, :integer, null: false, default: 120
-      add :rest_sec_warmup_before_main, :integer, null: false, default: 180
-      add :shave_off_sec, :integer
-      add :shave_off_block_count, :integer
+      add :style_name, :string
+      add :target_duration_min, :integer
+      add :burpee_count_target, :integer
+      add :sec_per_burpee, :float
+      add :pacing_style, :string
+      add :additional_rests, :text
+      add :fatigue_factor, :float, null: false, default: 0.0
 
       timestamps(type: :utc_datetime)
     end
@@ -34,8 +34,9 @@ defmodule BurpeeTrainer.Repo.Migrations.CreateWorkoutPlans do
       add :block_id, references(:blocks, on_delete: :delete_all), null: false
       add :position, :integer, null: false
       add :burpee_count, :integer, null: false
-      add :sec_per_burpee, :float, null: false
-      add :rest_sec_after_set, :integer, null: false, default: 0
+      add :sec_per_rep, :float, null: false
+      add :sec_per_burpee, :float, null: false, default: 3.0
+      add :end_of_set_rest, :integer, null: false, default: 0
 
       timestamps(type: :utc_datetime)
     end

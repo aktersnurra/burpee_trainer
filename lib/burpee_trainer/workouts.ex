@@ -180,92 +180,6 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Weekly burpee rep totals by type for a user. Last 12 weeks, most recent first.
-  Each entry has :week_start (Date), :six_count_reps (integer), :navy_seal_reps (integer).
-  Warmup sessions are excluded.
-  """
-  @spec weekly_volume(User.t()) :: [
-          %{week_start: Date.t(), six_count_reps: integer, navy_seal_reps: integer}
-        ]
-  def weekly_volume(%User{id: user_id}) do
-    sessions =
-      Repo.all(
-        from s in WorkoutSession,
-          where:
-            s.user_id == ^user_id and
-              (is_nil(s.tags) or s.tags != "warmup"),
-          select: %{
-            inserted_at: s.inserted_at,
-            burpee_type: s.burpee_type,
-            burpee_count_actual: s.burpee_count_actual
-          }
-      )
-
-    sessions
-    |> Enum.group_by(fn %{inserted_at: dt} ->
-      dt |> DateTime.to_date() |> Date.beginning_of_week(:monday)
-    end)
-    |> Enum.map(fn {week_start, rows} ->
-      six_count_reps =
-        rows
-        |> Enum.filter(&(&1.burpee_type == :six_count))
-        |> Enum.sum_by(&(&1.burpee_count_actual || 0))
-
-      navy_seal_reps =
-        rows
-        |> Enum.filter(&(&1.burpee_type == :navy_seal))
-        |> Enum.sum_by(&(&1.burpee_count_actual || 0))
-
-      %{week_start: week_start, six_count_reps: six_count_reps, navy_seal_reps: navy_seal_reps}
-    end)
-    |> Enum.sort_by(& &1.week_start, {:desc, Date})
-  end
-
-  @doc """
-  Return the most recent `limit` sessions for a user, preloading the
-  associated plan (for plan name display). Most recent first.
-  """
-  @spec list_sessions_recent(User.t(), pos_integer()) :: [WorkoutSession.t()]
-  def list_sessions_recent(%User{id: user_id}, limit \\ 10) do
-    Repo.all(
-      from s in WorkoutSession,
-        where: s.user_id == ^user_id,
-        order_by: [desc: s.inserted_at],
-        limit: ^limit,
-        preload: :plan
-    )
-  end
-
-  @doc """
-  Return all sessions for a user with plan preloaded, most recent first.
-  """
-  @spec list_sessions_all(User.t()) :: [WorkoutSession.t()]
-  def list_sessions_all(%User{id: user_id}) do
-    Repo.all(
-      from s in WorkoutSession,
-        where: s.user_id == ^user_id,
-        order_by: [desc: s.inserted_at],
-        preload: :plan
-    )
-  end
-
-  @doc """
-  Return sessions for a user since a given date (inclusive), with plan preloaded.
-  Most recent first.
-  """
-  @spec list_sessions_since(User.t(), Date.t()) :: [WorkoutSession.t()]
-  def list_sessions_since(%User{id: user_id}, since) do
-    since_dt = DateTime.new!(since, ~T[00:00:00], "Etc/UTC")
-
-    Repo.all(
-      from s in WorkoutSession,
-        where: s.user_id == ^user_id and s.inserted_at >= ^since_dt,
-        order_by: [desc: s.inserted_at],
-        preload: :plan
-    )
-  end
-
-  @doc """
   Cursor-based paginated sessions. Returns `{sessions, has_more?}`.
 
   Pass `before: datetime` to fetch the page older than that cursor.
@@ -281,7 +195,7 @@ defmodule BurpeeTrainer.Workouts do
         where: s.user_id == ^user_id,
         order_by: [desc: s.inserted_at],
         limit: ^(limit + 1),
-        preload: :plan
+        preload: [:plan, :goal]
 
     query =
       if before_dt,
@@ -350,18 +264,14 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  List the last `count` sessions of a given type for a user, most
-  recent first. Used by the progression trend calculation.
+  Tags a session as the one that achieved a goal by setting its goal_id.
   """
-  @spec list_recent_sessions(User.t(), atom, pos_integer) :: [WorkoutSession.t()]
-  def list_recent_sessions(%User{id: user_id}, burpee_type, count)
-      when is_atom(burpee_type) and is_integer(count) and count > 0 do
-    Repo.all(
-      from session in WorkoutSession,
-        where: session.user_id == ^user_id and session.burpee_type == ^burpee_type,
-        order_by: [desc: session.inserted_at],
-        limit: ^count
-    )
+  @spec tag_session_as_goal_reached(WorkoutSession.t(), integer) ::
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
+  def tag_session_as_goal_reached(%WorkoutSession{} = session, goal_id) do
+    session
+    |> Ecto.Changeset.change(goal_id: goal_id)
+    |> Repo.update()
   end
 
   @doc """
