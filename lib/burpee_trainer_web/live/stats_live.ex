@@ -17,7 +17,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
      socket
      |> assign(:streak, Streak.compute(user, today))
      |> assign(:today, today)
-     |> assign(:goals, Goals.list_active_goals(user))
+     |> assign(:goals, Goals.list_current_goals(user))
      |> then(&compute_goal_progress(&1, user, &1.assigns.goals))
      |> assign(:sessions, sessions)
      |> assign(:sessions_has_more, has_more)
@@ -73,21 +73,45 @@ defmodule BurpeeTrainerWeb.StatsLive do
     today = socket.assigns.today
     {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
 
-    {:noreply,
-     socket
-     |> assign(:log_modal_open, false)
-     |> assign(:streak, Streak.compute(user, today))
-     |> assign(:sessions, sessions)
-     |> assign(:sessions_has_more, has_more)
-     |> assign(:weekly_data, Workouts.weekly_minutes(user))
-     |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
-     |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
-     |> then(&compute_goal_progress(&1, user, &1.assigns.goals))}
+    newly_achieved =
+      socket.assigns.goals
+      |> Enum.filter(&(&1.status == :active))
+      |> Enum.filter(fn goal ->
+        best = Workouts.best_qualifying_session(user, goal.burpee_type)
+
+        best &&
+          round(best.burpee_count_actual / best.duration_sec_actual * 1200.0) >=
+            goal.burpee_count_target
+      end)
+
+    Enum.each(newly_achieved, &Goals.mark_achieved/1)
+
+    goals = Goals.list_current_goals(user)
+
+    socket =
+      socket
+      |> assign(:log_modal_open, false)
+      |> assign(:streak, Streak.compute(user, today))
+      |> assign(:sessions, sessions)
+      |> assign(:sessions_has_more, has_more)
+      |> assign(:weekly_data, Workouts.weekly_minutes(user))
+      |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
+      |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
+      |> assign(:goals, goals)
+      |> compute_goal_progress(user, goals)
+
+    socket =
+      Enum.reduce(newly_achieved, socket, fn goal, acc ->
+        type_label = if goal.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
+        put_flash(acc, :info, "#{type_label} goal reached!")
+      end)
+
+    {:noreply, socket}
   end
 
   def handle_info(:goal_saved, socket) do
     user = socket.assigns.current_user
-    goals = Goals.list_active_goals(user)
+    goals = Goals.list_current_goals(user)
 
     {:noreply,
      socket
@@ -125,7 +149,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           navy_seal_sessions={@navy_seal_sessions}
           goals={@goals}
         />
-        <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
+        <.sessions_section sessions={@sessions} has_more={@sessions_has_more} goals={@goals} />
       </div>
 
       <%!-- FAB --%>
@@ -277,89 +301,110 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     current_reps =
       if assigns.progress do
-        round(
-          assigns.progress.burpee_count_actual / assigns.progress.duration_sec_actual * 1200.0
-        )
+        round(assigns.progress.burpee_count_actual / assigns.progress.duration_sec_actual * 1200.0)
       else
         0
       end
 
-    pct =
-      if assigns.goal do
-        min(round(current_reps / assigns.goal.burpee_count_target * 100), 100)
+    {pct, days_left, weekly_pace} =
+      if assigns.goal && assigns.goal.status == :active do
+        target = assigns.goal.burpee_count_target
+        pct = min(round(current_reps / target * 100), 100)
+        days = Date.diff(assigns.goal.date_target, today)
+        weeks_remaining = max(ceil(days / 7), 1)
+        reps_needed = max(target - current_reps, 0)
+        pace = ceil(reps_needed / weeks_remaining)
+        {pct, days, pace}
       else
-        0
-      end
-
-    days_left =
-      if assigns.goal do
-        Date.diff(assigns.goal.date_target, today)
-      else
-        nil
+        {100, nil, nil}
       end
 
     assigns =
       assign(assigns,
         current_reps: current_reps,
         pct: pct,
-        days_left: days_left
+        days_left: days_left,
+        weekly_pace: weekly_pace
       )
 
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4 space-y-3">
-      <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/40">{@label}</p>
+      <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/60">{@label}</p>
 
-      <%= if @goal do %>
-        <div class="space-y-2">
-          <div class="tabular-nums">
-            <span class="text-lg font-semibold">{@current_reps}</span>
-            <span class="text-xs text-base-content/40 ml-1">/ {@goal.burpee_count_target}</span>
+      <%= cond do %>
+        <% @goal && @goal.status == :achieved -> %>
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 text-primary">
+              <.icon name="hero-check-circle" class="size-4 shrink-0" />
+              <span class="text-sm font-semibold">Goal reached</span>
+            </div>
+            <p class="text-xs text-base-content/40">
+              {Calendar.strftime(DateTime.to_date(@goal.updated_at), "%-d %b %Y")}
+            </p>
+            <button
+              type="button"
+              phx-click="open_goal_modal"
+              phx-value-type={@burpee_type}
+              class="text-xs text-primary hover:underline"
+            >
+              Set new goal
+            </button>
           </div>
 
-          <div class="h-1.5 rounded-full bg-[#1E2535] overflow-hidden">
-            <div
-              class="h-full rounded-full bg-primary transition-all duration-500"
-              style={"width: #{@pct}%"}
-            />
-          </div>
+        <% @goal && @goal.status == :active -> %>
+          <div class="space-y-2">
+            <div class="flex items-baseline justify-between">
+              <div class="tabular-nums">
+                <span class="text-lg font-semibold">{@current_reps}</span>
+                <span class="text-xs text-base-content/40 ml-1">/ {@goal.burpee_count_target} burpees</span>
+              </div>
+              <%= if @weekly_pace && @days_left > 0 do %>
+                <span class="text-[10px] text-base-content/40 tabular-nums">~{@weekly_pace}/wk</span>
+              <% end %>
+            </div>
 
-          <div class="flex items-center justify-between">
+            <div class="h-1.5 rounded-full bg-[#1E2535] overflow-hidden">
+              <div
+                class="h-full rounded-full bg-primary transition-all duration-500"
+                style={"width: #{@pct}%"}
+              />
+            </div>
+
+            <%= if @current_reps == 0 do %>
+              <p class="text-[10px] text-base-content/30">Log a 20-min session to track progress</p>
+            <% end %>
+
             <p class="text-[10px] text-base-content/40">
+              by {Calendar.strftime(@goal.date_target, "%-d %b")}
               <%= cond do %>
-                <% @days_left > 0 -> %>
-                  {@days_left}d left
-                <% @days_left == 0 -> %>
-                  Today
-                <% true -> %>
-                  Overdue
+                <% @days_left > 0 -> %> · {@days_left}d left
+                <% @days_left == 0 -> %> · Today
+                <% true -> %> · Overdue
               <% end %>
             </p>
-            <%= if @current_reps == 0 do %>
-              <p class="text-[10px] text-base-content/30">No 20-min session yet</p>
-            <% end %>
+
+            <button
+              type="button"
+              phx-click="open_goal_modal"
+              phx-value-type={@burpee_type}
+              class="text-[10px] text-base-content/30 hover:text-primary transition"
+            >
+              Update goal
+            </button>
           </div>
 
-          <button
-            type="button"
-            phx-click="open_goal_modal"
-            phx-value-type={@burpee_type}
-            class="text-[10px] text-base-content/30 hover:text-primary transition"
-          >
-            Update goal
-          </button>
-        </div>
-      <% else %>
-        <div class="space-y-2">
-          <p class="text-xs text-base-content/50">No goal set</p>
-          <button
-            type="button"
-            phx-click="open_goal_modal"
-            phx-value-type={@burpee_type}
-            class="text-xs text-primary hover:underline"
-          >
-            Set goal
-          </button>
-        </div>
+        <% true -> %>
+          <div class="space-y-2">
+            <p class="text-xs text-base-content/50">No goal set</p>
+            <button
+              type="button"
+              phx-click="open_goal_modal"
+              phx-value-type={@burpee_type}
+              class="text-xs text-primary hover:underline"
+            >
+              Set goal
+            </button>
+          </div>
       <% end %>
     </div>
     """
@@ -367,8 +412,16 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   attr :sessions, :list, required: true
   attr :has_more, :boolean, required: true
+  attr :goals, :list, required: true
 
   defp sessions_section(assigns) do
+    achieved_map =
+      assigns.goals
+      |> Enum.filter(&(&1.status == :achieved))
+      |> Map.new(fn g -> {g.burpee_type, DateTime.to_date(g.updated_at)} end)
+
+    assigns = assign(assigns, :achieved_map, achieved_map)
+
     ~H"""
     <div>
       <h2 class="text-base font-semibold text-base-content mb-2">Sessions</h2>
@@ -378,7 +431,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <% else %>
         <div class="rounded-[10px] border border-[#1E2535] bg-base-200 divide-y divide-[#1E2535] px-4">
           <%= for session <- @sessions do %>
-            <.session_row session={session} />
+            <.session_row session={session} achieved_map={@achieved_map} />
           <% end %>
         </div>
 
@@ -396,6 +449,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   attr :session, :any, required: true
+  attr :achieved_map, :map, required: true
 
   defp session_row(assigns) do
     today = Date.utc_today()
@@ -406,20 +460,23 @@ defmodule BurpeeTrainerWeb.StatsLive do
         do: Calendar.strftime(date, "%-d %b"),
         else: Calendar.strftime(date, "%-d %b %Y")
 
-    assigns = assign(assigns, :date_str, date_str)
+    goal_reached = Map.get(assigns.achieved_map, assigns.session.burpee_type) == date
+    assigns = assign(assigns, date_str: date_str, goal_reached: goal_reached)
 
     ~H"""
     <div class="flex items-center justify-between gap-4 py-2.5">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-sm font-semibold tabular-nums w-10 shrink-0">
-          {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
+          <%= if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—" %>
         </span>
-        <span class="text-sm text-base-content/70 shrink-0">
-          {Fmt.burpee_type(@session.burpee_type)}
-        </span>
-        <span class="text-sm text-base-content/40 tabular-nums shrink-0">
-          {Fmt.duration_sec(@session.duration_sec_actual)}
-        </span>
+        <span class="text-sm text-base-content/70 shrink-0">{Fmt.burpee_type(@session.burpee_type)}</span>
+        <span class="text-sm text-base-content/40 tabular-nums shrink-0">{Fmt.duration_sec(@session.duration_sec_actual)}</span>
+        <%= if @goal_reached do %>
+          <span class="flex items-center gap-1 text-[10px] text-primary shrink-0">
+            <.icon name="hero-trophy" class="size-3" />
+            Goal reached
+          </span>
+        <% end %>
         <%= if @session.plan do %>
           <span class="text-xs text-base-content/25 truncate">{@session.plan.name}</span>
         <% end %>
