@@ -348,32 +348,32 @@ defmodule BurpeeTrainerWeb.SessionLive do
       id="start-overlay"
       class={[
         "absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-lg",
-        "bg-base-100/90 text-center backdrop-blur-sm"
+        "bg-base-100/95 text-center backdrop-blur-sm"
       ]}
     >
       <%= if not @warmup_asked do %>
-        <span class="text-xl font-semibold tracking-tight">Do you want a warmup?</span>
+        <span class="text-xl font-semibold tracking-tight">Warmup?</span>
         <div class="flex gap-3">
           <button
             type="button"
             id="warmup-yes-btn"
             class={[
-              "flex flex-col items-center gap-1.5 rounded-xl border border-base-300",
-              "px-6 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
+              "flex flex-col items-center gap-1.5 rounded-xl border border-[#1E2535]",
+              "px-8 py-4 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
             ]}
           >
-            <.icon name="hero-sparkles" class="size-6" />
+            <.icon name="hero-sparkles" class="size-6 text-primary" />
             <span>Yes</span>
           </button>
           <button
             type="button"
             id="warmup-skip-btn"
             class={[
-              "flex flex-col items-center gap-1.5 rounded-xl border border-base-300",
-              "px-6 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
+              "flex flex-col items-center gap-1.5 rounded-xl border border-[#1E2535]",
+              "px-8 py-4 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
             ]}
           >
-            <.icon name="hero-bolt" class="size-6" />
+            <.icon name="hero-forward" class="size-6 text-base-content/50" />
             <span>Skip</span>
           </button>
         </div>
@@ -386,8 +386,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
               phx-click="session_started"
               phx-value-mood={value}
               class={[
-                "flex flex-col items-center gap-1.5 rounded-xl border border-base-300",
-                "px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
+                "flex flex-col items-center gap-1.5 rounded-xl border border-[#1E2535]",
+                "px-6 py-4 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
               ]}
             >
               <.icon name={icon} class="size-6" />
