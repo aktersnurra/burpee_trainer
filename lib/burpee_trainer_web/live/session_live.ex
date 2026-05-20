@@ -110,7 +110,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
     changeset =
       socket.assigns.plan
       |> blank_session()
-      |> WorkoutSession.from_plan_changeset(params)
+      |> WorkoutSession.from_plan_changeset(coerce_duration(params))
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, :completion_form, to_form(changeset))}
@@ -127,12 +127,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
       })
     end
 
-    params =
+    session_params =
       params
+      |> coerce_duration()
       |> Map.put("mood", mood)
       |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
 
-    case Workouts.create_session_from_plan(user, plan, params) do
+    case Workouts.create_session_from_plan(user, plan, session_params) do
       {:ok, _session} ->
         {:noreply,
          socket
@@ -161,6 +162,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}
+
+  defp coerce_duration(params) do
+    case Float.parse(Map.get(params, "duration_min", "")) do
+      {min, _} when min >= 0 -> Map.put(params, "duration_sec_actual", round(min * 60))
+      _ -> params
+    end
+  end
 
   defp build_completion_form(socket, burpee_count_done, duration_sec_actual) do
     %{plan: plan, summary: summary} = socket.assigns
@@ -413,56 +421,39 @@ defmodule BurpeeTrainerWeb.SessionLive do
       )
 
     ~H"""
-    <section class="rounded-lg border border-base-300 bg-base-100 p-6 space-y-5">
+    <section class="rounded-[10px] border border-[#1E2535] bg-base-200 p-5 space-y-5">
       <div>
         <h2 class="text-lg font-semibold tracking-tight">Session complete</h2>
-        <p class="text-sm text-base-content/60">
-          Log what you actually did. Planned: {@summary.burpee_count_total} burpees in {Fmt.duration_sec(
-            round(@summary.duration_sec_total)
-          )}.
+        <p class="text-sm text-base-content/40 mt-1">
+          Planned <span class="text-base-content/70 tabular-nums">{@summary.burpee_count_total}</span>
+          burpees ·
+          <span class="text-base-content/70 tabular-nums">
+            {Fmt.duration_sec(round(@summary.duration_sec_total))}
+          </span>
         </p>
       </div>
 
       <div class="space-y-1.5">
-        <p class="text-sm font-medium">Mood</p>
-        <div class="flex gap-2">
+        <p class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">Mood</p>
+        <div class="inline-flex rounded-lg border border-[#1E2535] overflow-hidden">
           <%= for {icon, label, value} <- @mood_options do %>
             <button
               type="button"
               phx-click="set_mood"
               phx-value-mood={value}
               class={[
-                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition",
+                "flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition",
                 if(@mood == value,
-                  do: "border-primary bg-primary/10 font-medium",
-                  else: "border-base-300 hover:bg-base-200"
+                  do: "bg-primary/15 text-primary",
+                  else: "text-base-content/50 hover:text-base-content hover:bg-base-300"
                 )
               ]}
             >
               <.icon name={icon} class="size-4" /> {label}
             </button>
-          <% end %>
-        </div>
-      </div>
-
-      <div class="space-y-1.5">
-        <p class="text-sm font-medium">Tags</p>
-        <div class="flex flex-wrap gap-2">
-          <%= for tag <- @tag_options do %>
-            <button
-              type="button"
-              phx-click="toggle_tag"
-              phx-value-tag={tag}
-              class={[
-                "rounded-full border px-3 py-1 text-xs transition",
-                if(tag in @completion_tags,
-                  do: "border-primary bg-primary/10 font-medium",
-                  else: "border-base-300 hover:bg-base-200"
-                )
-              ]}
-            >
-              {String.replace(tag, "_", " ")}
-            </button>
+            <%= if value != 1 do %>
+              <div class="w-px bg-[#1E2535]" />
+            <% end %>
           <% end %>
         </div>
       </div>
@@ -475,22 +466,40 @@ defmodule BurpeeTrainerWeb.SessionLive do
         class="space-y-4"
       >
         <div class="grid gap-3 sm:grid-cols-2">
-          <.input
-            field={@form[:burpee_count_actual]}
-            type="number"
-            label="Burpees done"
-            min="0"
-          />
-          <.input
-            field={@form[:duration_sec_actual]}
-            type="number"
-            label="Duration (sec)"
-            min="0"
-          />
+          <div class="space-y-1">
+            <label class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">
+              Burpees done
+            </label>
+            <input
+              type="number"
+              name={@form[:burpee_count_actual].name}
+              value={@form[:burpee_count_actual].value}
+              min="0"
+              inputmode="numeric"
+              class="w-full rounded-md border border-[#1E2535] bg-base-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">
+              Duration (min)
+            </label>
+            <input
+              type="number"
+              name="workout_session[duration_min]"
+              value={
+                if v = @form[:duration_sec_actual].value,
+                  do: Float.round(v / 60, 1),
+                  else: ""
+              }
+              min="0"
+              step="0.1"
+              inputmode="decimal"
+              class="w-full rounded-md border border-[#1E2535] bg-base-300 px-3 py-2 text-sm"
+            />
+          </div>
         </div>
 
-        <.input field={@form[:note_pre]} type="textarea" label="Pre-session note" rows="2" />
-        <.input field={@form[:note_post]} type="textarea" label="How did it go?" rows="3" />
+        <.input field={@form[:note_post]} type="textarea" label="How did it go?" rows="2" />
 
         <div class="hidden">
           <.input field={@form[:burpee_type]} type="text" />
@@ -498,18 +507,18 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <.input field={@form[:duration_sec_planned]} type="number" />
         </div>
 
-        <div class="flex justify-end gap-2">
+        <div class="flex items-center justify-between">
           <button
             type="button"
             phx-click="discard"
             data-confirm="Discard this session without saving?"
-            class="rounded-md border border-base-300 px-4 py-2 text-sm hover:bg-base-200 transition"
+            class="text-sm text-base-content/40 hover:text-base-content/70 transition"
           >
             Discard
           </button>
           <button
             type="submit"
-            class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
+            class="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
           >
             Save session
           </button>

@@ -101,8 +101,6 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     html = render(view)
     assert html =~ "Mood"
-    assert html =~ "Tags"
-    assert html =~ "great energy"
   end
 
   test "save_session creates session and navigates to history", %{conn: conn, user: user} do
@@ -119,7 +117,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
       "burpee_count_actual" => "28",
-      "duration_sec_actual" => "95",
+      "duration_min" => "1.6",
       "note_post" => "brutal"
     }
 
@@ -131,7 +129,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     sessions = Workouts.list_sessions(user)
     main = Enum.find(sessions, fn s -> s.burpee_count_actual == 28 end)
     assert main
-    assert main.duration_sec_actual == 95
+    assert main.duration_sec_actual == round(1.6 * 60)
     assert main.note_post == "brutal"
     assert main.plan_id == plan.id
   end
@@ -150,7 +148,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
       "burpee_count_actual" => "25",
-      "duration_sec_actual" => "80"
+      "duration_min" => "1.34"
     }
 
     {:error, {:live_redirect, %{to: "/stats"}}} =
@@ -186,7 +184,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "burpee_count_planned" => "30",
       "duration_sec_planned" => "90",
       "burpee_count_actual" => "30",
-      "duration_sec_actual" => "90"
+      "duration_min" => "1.5"
     }
 
     {:error, {:live_redirect, %{to: "/stats"}}} =
