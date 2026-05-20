@@ -301,7 +301,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     current_reps =
       if assigns.progress do
-        round(assigns.progress.burpee_count_actual / assigns.progress.duration_sec_actual * 1200.0)
+        round(
+          assigns.progress.burpee_count_actual / assigns.progress.duration_sec_actual * 1200.0
+        )
       else
         0
       end
@@ -350,13 +352,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
               Set new goal
             </button>
           </div>
-
         <% @goal && @goal.status == :active -> %>
           <div class="space-y-2">
             <div class="flex items-baseline justify-between">
               <div class="tabular-nums">
                 <span class="text-lg font-semibold">{@current_reps}</span>
-                <span class="text-xs text-base-content/40 ml-1">/ {@goal.burpee_count_target} burpees</span>
+                <span class="text-xs text-base-content/40 ml-1">
+                  / {@goal.burpee_count_target} burpees
+                </span>
               </div>
               <%= if @weekly_pace && @days_left > 0 do %>
                 <span class="text-[10px] text-base-content/40 tabular-nums">~{@weekly_pace}/wk</span>
@@ -377,9 +380,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
             <p class="text-[10px] text-base-content/40">
               by {Calendar.strftime(@goal.date_target, "%-d %b")}
               <%= cond do %>
-                <% @days_left > 0 -> %> · {@days_left}d left
-                <% @days_left == 0 -> %> · Today
-                <% true -> %> · Overdue
+                <% @days_left > 0 -> %>
+                  · {@days_left}d left
+                <% @days_left == 0 -> %>
+                  · Today
+                <% true -> %>
+                  · Overdue
               <% end %>
             </p>
 
@@ -392,7 +398,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
               Update goal
             </button>
           </div>
-
         <% true -> %>
           <div class="space-y-2">
             <p class="text-xs text-base-content/50">No goal set</p>
@@ -467,14 +472,17 @@ defmodule BurpeeTrainerWeb.StatsLive do
     <div class="flex items-center justify-between gap-4 py-2.5">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-sm font-semibold tabular-nums w-10 shrink-0">
-          <%= if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—" %>
+          {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
         </span>
-        <span class="text-sm text-base-content/70 shrink-0">{Fmt.burpee_type(@session.burpee_type)}</span>
-        <span class="text-sm text-base-content/40 tabular-nums shrink-0">{Fmt.duration_sec(@session.duration_sec_actual)}</span>
+        <span class="text-sm text-base-content/70 shrink-0">
+          {Fmt.burpee_type(@session.burpee_type)}
+        </span>
+        <span class="text-sm text-base-content/40 tabular-nums shrink-0">
+          {Fmt.duration_sec(@session.duration_sec_actual)}
+        </span>
         <%= if @goal_reached do %>
           <span class="flex items-center gap-1 text-[10px] text-primary shrink-0">
-            <.icon name="hero-trophy" class="size-3" />
-            Goal reached
+            <.icon name="hero-trophy" class="size-3" /> Goal reached
           </span>
         <% end %>
         <%= if @session.plan do %>
