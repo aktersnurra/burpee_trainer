@@ -760,14 +760,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     seal_goal = Enum.find(goals, &(&1.burpee_type == :navy_seal))
 
     socket
-    |> assign(
-      :six_progress,
-      six_goal && Workouts.best_qualifying_session_since(user, :six_count, six_goal.date_baseline)
-    )
-    |> assign(
-      :seal_progress,
-      seal_goal &&
-        Workouts.best_qualifying_session_since(user, :navy_seal, seal_goal.date_baseline)
-    )
+    |> assign(:six_progress, six_goal && Workouts.best_qualifying_session(user, :six_count))
+    |> assign(:seal_progress, seal_goal && Workouts.best_qualifying_session(user, :navy_seal))
   end
 end
