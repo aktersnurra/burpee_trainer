@@ -35,6 +35,19 @@ defmodule BurpeeTrainer.Goals do
   end
 
   @doc """
+  Active and achieved goals for a user (excludes abandoned).
+  Used to display both in-progress and completed goal cards.
+  """
+  @spec list_current_goals(User.t()) :: [Goal.t()]
+  def list_current_goals(%User{id: user_id}) do
+    Repo.all(
+      from goal in Goal,
+        where: goal.user_id == ^user_id and goal.status in [:active, :achieved],
+        order_by: [desc: goal.updated_at]
+    )
+  end
+
+  @doc """
   Fetch the (single) active goal for a `(user, burpee_type)` pair, or
   nil if none exists.
   """

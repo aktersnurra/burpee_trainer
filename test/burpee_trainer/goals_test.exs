@@ -97,6 +97,36 @@ defmodule BurpeeTrainer.GoalsTest do
     end
   end
 
+  describe "list_current_goals/1" do
+    test "returns active goals" do
+      user = user_fixture()
+      goal = goal_fixture(user)
+      results = Goals.list_current_goals(user)
+      assert Enum.any?(results, &(&1.id == goal.id))
+    end
+
+    test "returns achieved goals" do
+      user = user_fixture()
+      {:ok, goal} = Goals.mark_achieved(goal_fixture(user))
+      results = Goals.list_current_goals(user)
+      assert Enum.any?(results, &(&1.id == goal.id))
+    end
+
+    test "does not return abandoned goals" do
+      user = user_fixture()
+      {:ok, goal} = Goals.abandon_goal(goal_fixture(user))
+      results = Goals.list_current_goals(user)
+      refute Enum.any?(results, &(&1.id == goal.id))
+    end
+
+    test "does not return goals from another user" do
+      user1 = user_fixture()
+      user2 = user_fixture()
+      _goal = goal_fixture(user1)
+      assert Goals.list_current_goals(user2) == []
+    end
+  end
+
   describe "transitions" do
     test "abandon_goal/1 sets status to :abandoned" do
       user = user_fixture()
