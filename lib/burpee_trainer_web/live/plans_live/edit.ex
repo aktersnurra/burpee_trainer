@@ -56,8 +56,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:manual_edit, false)
   end
 
-  defp load_plan(socket, _params) do
-    plan_input = default_plan_input()
+  defp load_plan(socket, params) do
+    plan_input = default_plan_input() |> apply_coach_params(params)
 
     socket
     |> assign(:plan, nil)
@@ -67,6 +67,30 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:solver_solution, nil)
     |> assign(:manual_edit, false)
   end
+
+  defp apply_coach_params(plan_input, params) do
+    plan_input
+    |> maybe_put_count(params)
+    |> maybe_put_pace(params)
+  end
+
+  defp maybe_put_count(plan_input, %{"count" => count_str}) do
+    case Integer.parse(count_str) do
+      {n, ""} when n > 0 -> %{plan_input | burpee_count_target: n}
+      _ -> plan_input
+    end
+  end
+
+  defp maybe_put_count(plan_input, _), do: plan_input
+
+  defp maybe_put_pace(plan_input, %{"pace" => pace_str}) do
+    case Float.parse(pace_str) do
+      {f, _} when f > 0 -> %{plan_input | sec_per_burpee_override: f}
+      _ -> plan_input
+    end
+  end
+
+  defp maybe_put_pace(plan_input, _), do: plan_input
 
   defp default_plan_input do
     %{
