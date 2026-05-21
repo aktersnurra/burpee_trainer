@@ -597,19 +597,22 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp merge_basics(params, plan_input) do
-    Map.merge(params, %{
-      "name" => plan_input.name,
-      "burpee_type" => Atom.to_string(plan_input.burpee_type),
-      "target_duration_min" => plan_input.target_duration_min,
-      "burpee_count_target" => plan_input.burpee_count_target,
-      "pacing_style" => Atom.to_string(plan_input.pacing_style),
-      "additional_rests" =>
-        Jason.encode!(
-          Enum.map(plan_input.additional_rests, fn %{rest_sec: r, target_min: t} ->
-            %{"rest_sec" => r, "target_min" => t}
-          end)
-        )
-    })
+    Map.merge(
+      %{
+        "name" => plan_input.name,
+        "burpee_type" => Atom.to_string(plan_input.burpee_type),
+        "target_duration_min" => plan_input.target_duration_min,
+        "burpee_count_target" => plan_input.burpee_count_target,
+        "pacing_style" => Atom.to_string(plan_input.pacing_style),
+        "additional_rests" =>
+          Jason.encode!(
+            Enum.map(plan_input.additional_rests, fn %{rest_sec: r, target_min: t} ->
+              %{"rest_sec" => r, "target_min" => t}
+            end)
+          )
+      },
+      params
+    )
   end
 
   defp parse_basics(params, current) do
@@ -1144,10 +1147,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums">{first.burpee_count}</span>
                   <span> reps</span>
                   <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>
-                    <span> ·  {format_sec(first.sec_per_rep)}s/rep</span>
+                    <span> ·   {format_sec(first.sec_per_rep)}s/rep</span>
                   <% end %>
                   <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·  {first.end_of_set_rest}s rest</span>
+                    <span> ·   {first.end_of_set_rest}s rest</span>
                   <% end %>
                 </span>
                 <button
