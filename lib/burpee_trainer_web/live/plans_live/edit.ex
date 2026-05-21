@@ -961,7 +961,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         <%!-- Layer 3 — Solution card --%>
         <section class="rounded-[10px] border border-[#1E2535] bg-base-200">
           <%!-- Solution header --%>
-          <div class="flex items-center gap-3 px-5 py-4 border-b border-[#1E2535]">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4 border-b border-[#1E2535]">
             <%= if @solver_error do %>
               <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
               <span class="text-xs font-semibold uppercase tracking-wide text-error">Error</span>
@@ -1193,9 +1193,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     Edit sets
                   </button>
                 <% else %>
-                  <span class="w-14 text-xs text-base-content/30 text-center">Reps</span>
-                  <span class="w-14 text-xs text-base-content/30 text-center">Cadence</span>
-                  <span class="w-14 text-xs text-base-content/30 text-center">Rest [s]</span>
+                  <span class="w-12 text-xs text-base-content/30 text-center">Reps</span>
+                  <span class="w-12 text-xs text-base-content/30 text-center">Cadence</span>
+                  <span class="w-12 text-xs text-base-content/30 text-center">Rest [s]</span>
                   <div class="ml-auto flex items-center gap-3">
                     <%= if uniform && length(sets) > 1 do %>
                       <button
@@ -1257,10 +1257,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
               <%= if @manual_edit do %>
                 <div class={[
-                  "flex items-center gap-3 py-1 border-b border-[#1E2535] last:border-0",
+                  "flex items-center gap-2 py-1 border-b border-[#1E2535] last:border-0",
                   hide_row && "hidden"
                 ]}>
-                  <span class="text-xs text-base-content/30 tabular-nums w-6 shrink-0 text-right">
+                  <span class="text-xs text-base-content/30 tabular-nums w-5 shrink-0 text-right">
                     {set_f.index + 1}
                   </span>
                   <input
@@ -1268,7 +1268,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                     value={set_f[:burpee_count].value}
                     min="0"
-                    class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
+                    class="w-12 rounded border border-[#1E2535] bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
                   />
                   <input
                     type="number"
@@ -1276,14 +1276,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
                     value={format_sec(set_f[:sec_per_rep].value)}
                     min="0.1"
-                    class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
+                    class="w-12 rounded border border-[#1E2535] bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
                   />
                   <input
                     type="number"
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
                     value={set_f[:end_of_set_rest].value}
                     min="0"
-                    class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
+                    class="w-12 rounded border border-[#1E2535] bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
                   />
                   <div class="ml-auto flex items-center gap-2">
                     <button
