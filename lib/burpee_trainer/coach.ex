@@ -14,7 +14,7 @@ defmodule BurpeeTrainer.Coach do
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Coach.{Arm, Sampler}
   alias BurpeeTrainer.Repo
-  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.WorkoutSession
 
   @min_sessions 5
 
@@ -42,12 +42,9 @@ defmodule BurpeeTrainer.Coach do
     sessions =
       Repo.all(
         from s in WorkoutSession,
-          join: p in WorkoutPlan,
-          on: p.id == s.plan_id,
           where:
             s.user_id == ^user_id and
               s.burpee_type == ^type_str and
-              not is_nil(s.plan_id) and
               s.burpee_count_actual > 0 and
               s.duration_sec_actual > 0 and
               (is_nil(s.tags) or s.tags != "warmup"),
