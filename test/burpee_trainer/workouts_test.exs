@@ -618,6 +618,7 @@ defmodule BurpeeTrainer.WorkoutsTest do
         from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session1.id),
         set: [inserted_at: ~U[2026-01-01 10:00:00Z]]
       )
+
       BurpeeTrainer.Repo.update_all(
         from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session2.id),
         set: [inserted_at: ~U[2026-01-02 10:00:00Z]]

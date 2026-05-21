@@ -104,27 +104,33 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     assigns = assign(assigns, min_done: min_done, goal: goal, day_dots: day_dots)
 
     ~H"""
-    <div class="space-y-2 px-1">
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-base-content/60">
-          <span class={if @this_week.met_goal, do: "text-primary font-medium", else: "text-base-content font-medium"}>
+    <div class="space-y-3 px-1">
+      <%!-- Row 1: headline minutes + day strip --%>
+      <div class="flex items-end justify-between">
+        <div class="flex items-baseline gap-1.5">
+          <span class={[
+            "text-4xl font-bold leading-none tabular-nums",
+            @this_week.met_goal && "text-primary",
+            !@this_week.met_goal && "text-base-content"
+          ]}>
             {@min_done}
           </span>
-          <span class="text-base-content/30"> / {@goal} min</span>
-        </span>
-        <div class="flex items-center gap-2">
+          <span class="text-sm text-base-content/40">/ {@goal} min</span>
+        </div>
+        <div class="flex items-end gap-3">
           <%= for dot <- @day_dots do %>
-            <div class="flex flex-col items-center gap-0.5">
+            <div class="flex flex-col items-center gap-1">
               <div class={[
                 "w-1.5 h-1.5 rounded-full",
                 dot.trained && "bg-primary",
-                !dot.trained && dot.is_today && "border border-primary/60 bg-transparent",
+                !dot.trained && dot.is_today && "border border-primary bg-transparent",
                 !dot.trained && !dot.is_today && "bg-[#1E2535]"
               ]} />
               <span class={[
-                "text-[9px] uppercase",
-                dot.is_today && "text-primary/70",
-                !dot.is_today && "text-base-content/20"
+                "text-[11px] font-medium uppercase",
+                dot.trained && "text-primary",
+                !dot.trained && dot.is_today && "text-base-content/80",
+                !dot.trained && !dot.is_today && "text-base-content/25"
               ]}>
                 {dot.label}
               </span>
@@ -132,8 +138,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           <% end %>
         </div>
       </div>
+      <%!-- Row 2: streak + level chip --%>
       <div class="flex items-center justify-between">
-        <span class="text-xs text-base-content/40">
+        <span class="text-xs text-base-content/50">
           <%= if @streak > 0 do %>
             {@streak} {if @streak == 1, do: "week", else: "weeks"} streak
           <% else %>
@@ -141,8 +148,13 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           <% end %>
         </span>
         <%= if @current_level do %>
-          <span class="text-xs font-semibold tracking-widest text-primary uppercase">
-            {level_label(@current_level)}
+          <span class="flex items-baseline gap-1">
+            <span class="text-[10px] font-medium text-base-content/40 uppercase tracking-wide">
+              Level
+            </span>
+            <span class="text-xs font-bold text-primary uppercase tracking-widest">
+              {level_label(@current_level)}
+            </span>
           </span>
         <% end %>
       </div>
@@ -154,14 +166,26 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   defp workout_card(%{last_plan: nil} = assigns) do
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-4">
-      <p class="text-sm text-base-content/50">No plans yet.</p>
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5">
+      <div class="space-y-1">
+        <p class="text-sm text-base-content/50">Start your first workout</p>
+        <p class="text-lg font-semibold leading-snug">Create a plan to begin</p>
+        <p class="text-sm text-base-content/40">Set your burpee type, reps, and duration</p>
+      </div>
       <.link
         navigate={~p"/workouts/new"}
-        class="flex items-center justify-center gap-2 w-full h-12 rounded-lg bg-primary text-primary-content text-sm font-medium hover:bg-primary/90 transition-colors"
+        class="flex items-center justify-center gap-2 w-full h-14 rounded-lg bg-primary text-primary-content text-base font-semibold hover:bg-primary/90 transition-colors"
       >
-        <.icon name="hero-plus" class="size-4" /> Create a plan
+        <.icon name="hero-plus" class="size-5" /> Create a plan
       </.link>
+      <div class="text-center">
+        <.link
+          navigate={~p"/workouts"}
+          class="text-sm text-base-content/50 hover:text-base-content/80 transition underline-offset-2 hover:underline"
+        >
+          Browse workouts →
+        </.link>
+      </div>
     </div>
     """
   end
@@ -173,9 +197,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5">
       <div class="space-y-1">
-        <p class="text-xs text-base-content/40 uppercase tracking-wide font-medium">
-          Pick up where you left off
-        </p>
+        <p class="text-sm text-base-content/50">Pick up where you left off</p>
         <p class="text-lg font-semibold leading-snug">{@last_plan.name}</p>
         <p class="text-sm text-base-content/50">
           {@last_plan.burpee_count_target} {@type_label}
@@ -192,7 +214,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       <div class="text-center">
         <.link
           navigate={~p"/workouts"}
-          class="text-xs text-base-content/30 hover:text-base-content/60 transition"
+          class="text-sm text-base-content/50 hover:text-base-content/80 transition underline-offset-2 hover:underline"
         >
           Pick another workout →
         </.link>
@@ -202,6 +224,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   defp level_label(:graduated), do: "Grad"
+
   defp level_label(l),
     do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
