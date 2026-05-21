@@ -977,6 +977,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
                 </strong>
               </span>
+              <%= if @plan_input.pacing_style == :even do %>
+                <% rest_per_rep = @plan_input.target_duration_min * 60 / @plan_input.burpee_count_target - @solver_solution.sec_per_burpee %>
+                <%= if rest_per_rep > 0.05 do %>
+                  <span>
+                    Rest/rep:
+                    <strong class="text-base-content">
+                      {:erlang.float_to_binary(rest_per_rep * 1.0, decimals: 2)}s
+                    </strong>
+                  </span>
+                <% end %>
+              <% end %>
               <span>
                 Sets:
                 <strong class="text-base-content">
