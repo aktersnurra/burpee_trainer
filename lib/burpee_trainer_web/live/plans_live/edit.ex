@@ -788,7 +788,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) *
                       1.0,
                     decimals: 1
-                  )}s/rep · solver finds optimal pace
+                  )}s · solver finds optimal pace
                 </p>
               </div>
             </div>
@@ -1222,8 +1222,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums font-medium text-base-content">{set.burpee_count}</span>
                   <span> reps</span>
                   <%= if set.sec_per_rep && set.sec_per_rep > 0 do %>
+                    <% cadence_label =
+                      if set.sec_per_burpee && set.sec_per_rep - set.sec_per_burpee > 0.1,
+                        do: "cadence",
+                        else: "pace" %>
                     <span class="text-base-content/30"> · </span>
-                    <span class="tabular-nums">{format_sec(set.sec_per_rep)}s cadence</span>
+                    <span class="tabular-nums">{format_sec(set.sec_per_rep)}s {cadence_label}</span>
                   <% end %>
                   <%= if set.end_of_set_rest && set.end_of_set_rest != 0 do %>
                     <span class="text-base-content/30"> · </span>
