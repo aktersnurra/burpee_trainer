@@ -10,6 +10,7 @@ defmodule BurpeeTrainer.PlanSolver do
   Users never input a pace.
   """
 
+  alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Milp.Highs
   alias BurpeeTrainer.PlanSolver.{Apply, Input, Lp, Solution}
 
@@ -44,6 +45,21 @@ defmodule BurpeeTrainer.PlanSolver do
   def default_reps_per_set(type), do: Map.get(@default_reps_per_set, type, 10)
 
   @doc """
+  Effective LP lower bound for pace: tightest of user-level ceiling and
+  workout-intensity ceiling derived from rep count. Override takes precedence.
+  """
+  @spec effective_ceiling(Input.t()) :: float
+  def effective_ceiling(%Input{sec_per_burpee_override: override}) when is_float(override),
+    do: override
+
+  def effective_ceiling(%Input{} = input) do
+    user_ceiling = sustainable_ceiling(input.burpee_type, input.level)
+    workout_level = Levels.level_for_count(input.burpee_type, input.burpee_count_target)
+    workout_ceiling = sustainable_ceiling(input.burpee_type, workout_level)
+    min(user_ceiling, workout_ceiling)
+  end
+
+  @doc """
   Generate a `%Solution{}` from a `%PlanSolver.Input{}`.
   Returns `{:ok, solution}` or `{:error, [reason_string]}`.
   """
@@ -68,7 +84,7 @@ defmodule BurpeeTrainer.PlanSolver do
   end
 
   defp preflight_check(%Input{} = input) do
-    ceiling = sustainable_ceiling(input.burpee_type, input.level)
+    ceiling = effective_ceiling(input)
     min_work = input.burpee_count_target * ceiling
     target_sec = input.target_duration_min * 60.0
     add_rest = Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2))
@@ -102,8 +118,7 @@ defmodule BurpeeTrainer.PlanSolver do
         {:ok, p, r, reservations}
 
       {:ok, %{p: nil}} ->
-        ceiling = sustainable_ceiling(input.burpee_type, input.level)
-        {:ok, ceiling, [], []}
+        {:ok, effective_ceiling(input), [], []}
 
       {:error, :infeasible} ->
         {:error, [infeasibility_message(input)]}
@@ -167,7 +182,7 @@ defmodule BurpeeTrainer.PlanSolver do
       set_size: set_size,
       set_count: set_count,
       rest_sec: max(rest_sec, 0.0),
-      duration_sec: n * p + max(rest_sec, 0.0) * (set_count - 1) + add_rest,
+      duration_sec: target_sec,
       plan: plan
     }
   end

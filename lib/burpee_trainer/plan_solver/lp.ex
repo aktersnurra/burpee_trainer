@@ -8,6 +8,7 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
   plus a small deviation regularizer.
   """
 
+  alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Milp.Problem
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.PlanSolver.Input
@@ -15,12 +16,11 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
   @alpha 0.6
   @epsilon 1.0e-3
   @placement_tolerance_sec 30.0
-  @max_pace 30.0
 
   @spec build(Input.t(), pos_integer | nil) :: Problem.t()
   def build(%Input{} = input, reps_per_set) do
     n = input.burpee_count_target
-    ceiling = PlanSolver.sustainable_ceiling(input.burpee_type, input.level)
+    ceiling = effective_ceiling(input)
     target_sec = input.target_duration_min * 60.0
     add_rest_total = Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2))
     budget_const = target_sec - add_rest_total
@@ -39,7 +39,7 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
         &allowed_slots(&1, n, weights, input.pacing_style, ceiling, target_sec)
       )
 
-    p_var = %{name: "p", type: :continuous, lower: ceiling, upper: @max_pace}
+    p_var = %{name: "p", type: :continuous, lower: ceiling, upper: ceiling}
     r_vars = for i <- 1..slot_count//1, do: continuous("r_#{i}")
     e_vars = for i <- 1..slot_count//1, do: continuous("e_#{i}")
 
@@ -65,7 +65,8 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
         rest_linkage_rows(reservations, allowed, big_m) ++
         y_linearization_rows(reservations, allowed, big_m) ++
         placement_error_rows(reservations, allowed) ++
-        tolerance_rows(reservations)
+        tolerance_rows(reservations) ++
+        pace_pin_row(input.sec_per_burpee_override)
 
     objective_terms =
       [{"p", -@alpha}] ++
@@ -78,6 +79,25 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
       variables: [p_var] ++ r_vars ++ e_vars ++ x_vars ++ y_vars ++ d_vars,
       constraints: constraints
     }
+  end
+
+  # Effective lower bound for p: tightest of user-level ceiling and workout-intensity ceiling.
+  # The workout ceiling is also used as the p upper bound so the solver doesn't push pace
+  # toward @max_pace, which would consume the rest budget. Override pins p exactly.
+  defp effective_ceiling(%Input{sec_per_burpee_override: override}) when is_float(override),
+    do: override
+
+  defp effective_ceiling(%Input{} = input) do
+    user_ceiling = PlanSolver.sustainable_ceiling(input.burpee_type, input.level)
+    workout_level = Levels.level_for_count(input.burpee_type, input.burpee_count_target)
+    workout_ceiling = PlanSolver.sustainable_ceiling(input.burpee_type, workout_level)
+    min(user_ceiling, workout_ceiling)
+  end
+
+  defp pace_pin_row(nil), do: []
+
+  defp pace_pin_row(override) when is_float(override) do
+    [%{name: "PACE_PIN", terms: [{"p", 1.0}], comparator: :eq, rhs: override}]
   end
 
   defp weight_vector(:even, n, _reps_per_set) when n > 1, do: List.duplicate(1.0, n - 1)

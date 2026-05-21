@@ -2,6 +2,10 @@ defmodule BurpeeTrainer.PlanSolver.Input do
   @moduledoc """
   Input to `BurpeeTrainer.PlanSolver.solve/1`. No `sec_per_burpee` —
   the solver finds the optimal pace from the level ceiling.
+
+  `sec_per_burpee_override` pins the pace exactly when set. The effective
+  LP lower bound is the minimum of the user-level ceiling and the workout-
+  intensity ceiling derived from `burpee_count_target`.
   """
 
   @enforce_keys [
@@ -20,7 +24,8 @@ defmodule BurpeeTrainer.PlanSolver.Input do
     :pacing_style,
     :level,
     reps_per_set: nil,
-    additional_rests: []
+    additional_rests: [],
+    sec_per_burpee_override: nil
   ]
 
   @type burpee_type :: :six_count | :navy_seal
@@ -44,6 +49,7 @@ defmodule BurpeeTrainer.PlanSolver.Input do
           pacing_style: pacing_style,
           level: level,
           reps_per_set: pos_integer | nil,
-          additional_rests: [additional_rest]
+          additional_rests: [additional_rest],
+          sec_per_burpee_override: float | nil
         }
 end

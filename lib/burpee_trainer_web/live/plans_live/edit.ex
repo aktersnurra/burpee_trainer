@@ -73,7 +73,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       burpee_count_target: 100,
       pacing_style: :even,
       reps_per_set: PlanSolver.default_reps_per_set(:six_count),
-      additional_rests: []
+      additional_rests: [],
+      sec_per_burpee_override: nil
     }
   end
 
@@ -96,7 +97,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       burpee_count_target: plan.burpee_count_target || 100,
       pacing_style: plan.pacing_style || :even,
       reps_per_set: infer_reps_per_set(plan),
-      additional_rests: rests
+      additional_rests: rests,
+      sec_per_burpee_override: nil
     }
   end
 
@@ -156,7 +158,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       pacing_style: plan_input.pacing_style,
       level: level,
       reps_per_set: plan_input.reps_per_set,
-      additional_rests: plan_input.additional_rests
+      additional_rests: plan_input.additional_rests,
+      sec_per_burpee_override: plan_input.sec_per_burpee_override
     }
 
     case PlanSolver.solve(solver_input) do
@@ -373,6 +376,24 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       end)
 
     plan_input = Map.put(socket.assigns.plan_input, :additional_rests, rests)
+
+    socket =
+      socket
+      |> assign(:plan_input, plan_input)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("set_pace_override", %{"pace" => pace_str}, socket) do
+    override =
+      case Float.parse(pace_str) do
+        {f, _} when f > 0 -> f
+        _ -> nil
+      end
+
+    plan_input = Map.put(socket.assigns.plan_input, :sec_per_burpee_override, override)
 
     socket =
       socket
@@ -851,6 +872,55 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </form>
             <% end %>
           </div>
+
+          <%!-- Pace override --%>
+          <div class="px-5 pb-5">
+            <div class="flex items-center gap-3">
+              <label class="text-xs text-base-content/50 shrink-0">Pace override</label>
+              <input
+                type="number"
+                step="0.1"
+                min="1"
+                placeholder={
+                  :erlang.float_to_binary(
+                    PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
+                      name: "",
+                      burpee_type: @plan_input.burpee_type,
+                      target_duration_min: @plan_input.target_duration_min,
+                      burpee_count_target: @plan_input.burpee_count_target,
+                      pacing_style: @plan_input.pacing_style,
+                      level: @level
+                    }) * 1.0,
+                    decimals: 1
+                  )
+                }
+                value={
+                  if @plan_input.sec_per_burpee_override,
+                    do:
+                      :erlang.float_to_binary(
+                        @plan_input.sec_per_burpee_override * 1.0,
+                        decimals: 1
+                      ),
+                    else: ""
+                }
+                phx-blur="set_pace_override"
+                phx-value-pace={@plan_input.sec_per_burpee_override || ""}
+                name="sec_per_burpee_override"
+                class="w-20 rounded-md border border-[#1E2535] bg-base-300 px-2 py-1.5 text-sm text-center"
+              />
+              <span class="text-xs text-base-content/40">s/rep — leave blank for auto</span>
+              <%= if @plan_input.sec_per_burpee_override do %>
+                <button
+                  type="button"
+                  phx-click="set_pace_override"
+                  phx-value-pace=""
+                  class="text-xs text-base-content/30 hover:text-base-content/70 transition"
+                >
+                  clear
+                </button>
+              <% end %>
+            </div>
+          </div>
         </section>
 
         <%!-- Layer 3 — Solution card --%>
@@ -1063,7 +1133,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums">{first.burpee_count}</span>
                   <span> reps</span>
                   <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·    {first.end_of_set_rest}s rest</span>
+                    <span> ·     {first.end_of_set_rest}s rest</span>
                   <% end %>
                 </span>
                 <button

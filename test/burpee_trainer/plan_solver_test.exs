@@ -106,6 +106,39 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert is_binary(msg)
   end
 
+  test "workout-level ceiling used when tighter: 200 reps at level_1d gets level_2 pace" do
+    # 200 six_count reps = level_2 landmark → ceiling 5.0s
+    # level_1d ceiling = 5.5s; workout ceiling (5.0) is tighter
+    # solver should find p >= 5.0, and there should be meaningful rest
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          burpee_count_target: 200,
+          target_duration_min: 20,
+          level: :level_1d,
+          pacing_style: :unbroken,
+          reps_per_set: 5
+        })
+      )
+
+    assert sol.sec_per_burpee >= 5.0 - 1.0e-4
+    # With p=5.0: work=1000s, budget=1200s → 200s rest across 39 gaps ≈ 5s/gap
+    assert sol.rest_sec > 0
+  end
+
+  test "pace override pins the solver to the given pace" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          burpee_count_target: 50,
+          target_duration_min: 10,
+          sec_per_burpee_override: 7.0
+        })
+      )
+
+    assert_in_delta sol.sec_per_burpee, 7.0, 1.0e-3
+  end
+
   test "additional_rests places rest within 30s of target" do
     inp =
       input(%{

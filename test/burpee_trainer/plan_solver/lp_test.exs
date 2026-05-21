@@ -26,9 +26,46 @@ defmodule BurpeeTrainer.PlanSolver.LpTest do
       p_var = Enum.find(problem.variables, &(&1.name == "p"))
       assert p_var != nil
       assert p_var.type == :continuous
-      # level_1c ceiling is 6.0
+      # level_1c ceiling is 6.0; 5 reps is level_1a territory so workout ceiling
+      # doesn't tighten further — effective lower = 6.0
       assert_in_delta p_var.lower, 6.0, 1.0e-9
-      assert p_var.upper == :pos_inf or p_var.upper >= 6.0
+      assert_in_delta p_var.upper, 6.0, 1.0e-9
+    end
+
+    test "p lower bound is workout ceiling when it is tighter than user level ceiling" do
+      # 200 reps in 20 min → level_2 (six_count landmark: 200 reps)
+      # level_2 ceiling = 5.0s, which is tighter than level_1d ceiling = 5.5s
+      input =
+        base_input(%{
+          burpee_count_target: 200,
+          target_duration_min: 20,
+          level: :level_1d
+        })
+
+      problem = Lp.build(input, nil)
+      p_var = Enum.find(problem.variables, &(&1.name == "p"))
+      # workout ceiling (5.0) < user ceiling (5.5) → lower bound = 5.0
+      assert_in_delta p_var.lower, 5.0, 1.0e-9
+    end
+
+    test "p lower bound is user ceiling when workout ceiling is looser" do
+      # 5 reps in 10 min → level_1a territory, ceiling 8.0 (looser than user level_1c = 6.0)
+      problem = Lp.build(base_input(), nil)
+      p_var = Enum.find(problem.variables, &(&1.name == "p"))
+      # user ceiling (6.0) < workout ceiling (8.0) → lower bound = 6.0
+      assert_in_delta p_var.lower, 6.0, 1.0e-9
+    end
+
+    test "pace override pins p as equality constraint" do
+      input = base_input(%{sec_per_burpee_override: 7.5})
+      problem = Lp.build(input, nil)
+
+      pin_row = Enum.find(problem.constraints, &(&1.name == "PACE_PIN"))
+      assert pin_row != nil
+      assert pin_row.comparator == :eq
+      assert_in_delta pin_row.rhs, 7.5, 1.0e-9
+      assert length(pin_row.terms) == 1
+      assert elem(hd(pin_row.terms), 0) == "p"
     end
 
     test "TOTAL_DUR row has both p and r_i terms" do
