@@ -9,6 +9,7 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
   """
 
   alias BurpeeTrainer.Milp.Problem
+  alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.PlanSolver.Input
 
   @alpha 0.6
@@ -16,21 +17,10 @@ defmodule BurpeeTrainer.PlanSolver.Lp do
   @placement_tolerance_sec 30.0
   @max_pace 30.0
 
-  @sustainable_ceiling %{
-    level_1a: 8.0,
-    level_1b: 7.0,
-    level_1c: 6.0,
-    level_1d: 5.5,
-    level_2: 5.0,
-    level_3: 4.5,
-    level_4: 4.0,
-    graduated: 3.70
-  }
-
   @spec build(Input.t(), pos_integer | nil) :: Problem.t()
   def build(%Input{} = input, reps_per_set) do
     n = input.burpee_count_target
-    ceiling = Map.get(@sustainable_ceiling, input.level, 8.0)
+    ceiling = PlanSolver.sustainable_ceiling(input.burpee_type, input.level)
     target_sec = input.target_duration_min * 60.0
     add_rest_total = Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2))
     budget_const = target_sec - add_rest_total

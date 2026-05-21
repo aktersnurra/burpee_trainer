@@ -732,7 +732,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 </p>
                 <p class="text-xs text-base-content/30">
                   Min pace: {:erlang.float_to_binary(
-                    BurpeeTrainer.PlanSolver.sustainable_ceiling(@level) * 1.0, decimals: 1)}s/rep — solver finds optimal pace
+                    BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) *
+                      1.0,
+                    decimals: 1
+                  )}s/rep — solver finds optimal pace
                 </p>
               </div>
             </div>
@@ -1060,7 +1063,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums">{first.burpee_count}</span>
                   <span> reps</span>
                   <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·   {first.end_of_set_rest}s rest</span>
+                    <span> ·    {first.end_of_set_rest}s rest</span>
                   <% end %>
                 </span>
                 <button

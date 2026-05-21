@@ -6,7 +6,7 @@ defmodule BurpeeTrainer.PlanSolver do
   user level), finds the optimal pace and rest distribution via a joint MILP
   and returns a `%PlanSolver.Solution{}` wrapping the `%WorkoutPlan{}`.
 
-  `sec_per_burpee` is solver-chosen, bounded below by `sustainable_ceiling/1`.
+  `sec_per_burpee` is solver-chosen, bounded below by `sustainable_ceiling/2`.
   Users never input a pace.
   """
 
@@ -14,21 +14,30 @@ defmodule BurpeeTrainer.PlanSolver do
   alias BurpeeTrainer.PlanSolver.{Apply, Input, Lp, Solution}
 
   @sustainable_ceiling %{
-    level_1a: 8.0,
-    level_1b: 7.0,
-    level_1c: 6.0,
-    level_1d: 5.5,
-    level_2: 5.0,
-    level_3: 4.5,
-    level_4: 4.0,
-    graduated: 3.70
+    {:six_count, :level_1a} => 8.0,
+    {:six_count, :level_1b} => 7.0,
+    {:six_count, :level_1c} => 6.0,
+    {:six_count, :level_1d} => 5.5,
+    {:six_count, :level_2} => 5.0,
+    {:six_count, :level_3} => 4.5,
+    {:six_count, :level_4} => 4.0,
+    {:six_count, :graduated} => 3.70,
+    {:navy_seal, :level_1a} => 22.0,
+    {:navy_seal, :level_1b} => 18.0,
+    {:navy_seal, :level_1c} => 15.0,
+    {:navy_seal, :level_1d} => 12.0,
+    {:navy_seal, :level_2} => 10.5,
+    {:navy_seal, :level_3} => 9.5,
+    {:navy_seal, :level_4} => 9.0,
+    {:navy_seal, :graduated} => 8.0
   }
 
   @default_reps_per_set %{six_count: 10, navy_seal: 5}
 
-  @doc "Level-derived sustainable pace ceiling (sec/rep). Solver will not go faster."
-  @spec sustainable_ceiling(atom) :: float
-  def sustainable_ceiling(level), do: Map.get(@sustainable_ceiling, level, 8.0)
+  @doc "Type- and level-derived sustainable pace ceiling (sec/rep). Solver will not go faster."
+  @spec sustainable_ceiling(atom, atom) :: float
+  def sustainable_ceiling(burpee_type, level),
+    do: Map.get(@sustainable_ceiling, {burpee_type, level}, 8.0)
 
   @doc "Default reps-per-set for a given burpee type."
   @spec default_reps_per_set(atom) :: pos_integer
@@ -59,7 +68,7 @@ defmodule BurpeeTrainer.PlanSolver do
   end
 
   defp preflight_check(%Input{} = input) do
-    ceiling = sustainable_ceiling(input.level)
+    ceiling = sustainable_ceiling(input.burpee_type, input.level)
     min_work = input.burpee_count_target * ceiling
     target_sec = input.target_duration_min * 60.0
     add_rest = Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2))
@@ -93,7 +102,7 @@ defmodule BurpeeTrainer.PlanSolver do
         {:ok, p, r, reservations}
 
       {:ok, %{p: nil}} ->
-        ceiling = sustainable_ceiling(input.level)
+        ceiling = sustainable_ceiling(input.burpee_type, input.level)
         {:ok, ceiling, [], []}
 
       {:error, :infeasible} ->
