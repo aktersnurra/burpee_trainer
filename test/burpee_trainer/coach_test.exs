@@ -10,14 +10,17 @@ defmodule BurpeeTrainer.CoachTest do
 
   defp make_sessions(user, plan, count) do
     for i <- 1..count do
-      session = session_from_plan_fixture(user, plan, %{
-        "burpee_count_actual" => 150,
-        "duration_sec_actual" => 900
-      })
+      session =
+        session_from_plan_fixture(user, plan, %{
+          "burpee_count_actual" => 150,
+          "duration_sec_actual" => 900
+        })
+
       Repo.update_all(
         from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session.id),
         set: [inserted_at: DateTime.add(DateTime.utc_now(), -i * 3600, :second)]
       )
+
       session
     end
   end
@@ -46,12 +49,30 @@ defmodule BurpeeTrainer.CoachTest do
 
       # 3 warmup sessions + 2 real = only 2 real, should return nil
       for i <- 1..3 do
-        s = session_from_plan_fixture(user, plan, %{"tags" => "warmup", "burpee_count_actual" => 150, "duration_sec_actual" => 900})
-        Repo.update_all(from(sess in BurpeeTrainer.Workouts.WorkoutSession, where: sess.id == ^s.id), set: [inserted_at: DateTime.add(DateTime.utc_now(), -i * 3600, :second)])
+        s =
+          session_from_plan_fixture(user, plan, %{
+            "tags" => "warmup",
+            "burpee_count_actual" => 150,
+            "duration_sec_actual" => 900
+          })
+
+        Repo.update_all(
+          from(sess in BurpeeTrainer.Workouts.WorkoutSession, where: sess.id == ^s.id),
+          set: [inserted_at: DateTime.add(DateTime.utc_now(), -i * 3600, :second)]
+        )
       end
+
       for i <- 1..2 do
-        s = session_from_plan_fixture(user, plan, %{"burpee_count_actual" => 150, "duration_sec_actual" => 900})
-        Repo.update_all(from(sess in BurpeeTrainer.Workouts.WorkoutSession, where: sess.id == ^s.id), set: [inserted_at: DateTime.add(DateTime.utc_now(), -(i + 10) * 3600, :second)])
+        s =
+          session_from_plan_fixture(user, plan, %{
+            "burpee_count_actual" => 150,
+            "duration_sec_actual" => 900
+          })
+
+        Repo.update_all(
+          from(sess in BurpeeTrainer.Workouts.WorkoutSession, where: sess.id == ^s.id),
+          set: [inserted_at: DateTime.add(DateTime.utc_now(), -(i + 10) * 3600, :second)]
+        )
       end
 
       assert Coach.baseline(user, :six_count) == nil
@@ -94,6 +115,7 @@ defmodule BurpeeTrainer.CoachTest do
   describe "update_arms/2" do
     test "does not crash when session has no plan_id" do
       user = user_fixture()
+
       session = %BurpeeTrainer.Workouts.WorkoutSession{
         user_id: user.id,
         burpee_type: :six_count,
@@ -103,6 +125,7 @@ defmodule BurpeeTrainer.CoachTest do
         plan_id: nil,
         tags: nil
       }
+
       assert Coach.update_arms(user, session) == :ok
     end
 
@@ -114,15 +137,20 @@ defmodule BurpeeTrainer.CoachTest do
       # Ensure arms are created
       Coach.suggest(user, :six_count)
 
-      session = session_from_plan_fixture(user, plan, %{
-        "burpee_count_planned" => 150,
-        "burpee_count_actual" => 150,
-        "duration_sec_actual" => 900
-      })
+      session =
+        session_from_plan_fixture(user, plan, %{
+          "burpee_count_planned" => 150,
+          "burpee_count_actual" => 150,
+          "duration_sec_actual" => 900
+        })
 
-      before_arms = Repo.all(from a in Arm, where: a.user_id == ^user.id and a.burpee_type == "six_count")
+      before_arms =
+        Repo.all(from a in Arm, where: a.user_id == ^user.id and a.burpee_type == "six_count")
+
       Coach.update_arms(user, session)
-      after_arms = Repo.all(from a in Arm, where: a.user_id == ^user.id and a.burpee_type == "six_count")
+
+      after_arms =
+        Repo.all(from a in Arm, where: a.user_id == ^user.id and a.burpee_type == "six_count")
 
       # At least one arm's alpha or beta changed
       changes = Enum.zip(before_arms, after_arms)

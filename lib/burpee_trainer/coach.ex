@@ -124,7 +124,8 @@ defmodule BurpeeTrainer.Coach do
       sec_per_burpee: pace,
       rest_sec: round(base.rest_sec),
       dimension: :pace,
-      rationale: "Push intensity — #{direction} than your recent pace of #{Float.round(base.sec_per_burpee, 1)}s/rep"
+      rationale:
+        "Push intensity — #{direction} than your recent pace of #{Float.round(base.sec_per_burpee, 1)}s/rep"
     }
   end
 
@@ -227,7 +228,11 @@ defmodule BurpeeTrainer.Coach do
 
     Enum.find(arms, fn arm ->
       suggestion = apply_arm(base, arm.dimension, arm.step)
-      count_ok = abs(actual_count - suggestion.burpee_count) <= max(1, round(suggestion.burpee_count * 0.1))
+
+      count_ok =
+        abs(actual_count - suggestion.burpee_count) <=
+          max(1, round(suggestion.burpee_count * 0.1))
+
       pace_ok = abs(actual_pace - suggestion.sec_per_burpee) <= 0.5
       count_ok and pace_ok
     end)

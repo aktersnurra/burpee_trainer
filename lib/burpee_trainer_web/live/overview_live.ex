@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   """
   use BurpeeTrainerWeb, :live_view
 
+  alias BurpeeTrainer.Coach
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainerWeb.Layouts
 
@@ -22,6 +23,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
     trained_days = Workouts.this_week_trained_days(user)
     last_plan = Workouts.last_run_plan(user)
+    coach_suggestion = Coach.suggest(user, :six_count)
 
     {:ok,
      socket
@@ -30,7 +32,8 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      |> assign(:last_plan, last_plan)
      |> assign(:goal_min, @goal_min)
      |> assign(:today, today)
-     |> assign(:week_start, current_week_start)}
+     |> assign(:week_start, current_week_start)
+     |> assign(:coach_suggestion, coach_suggestion)}
   end
 
   @impl true
@@ -50,6 +53,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           week_start={@week_start}
           goal_min={@goal_min}
         />
+        <.coach_suggestion suggestion={@coach_suggestion} />
         <.workout_card last_plan={@last_plan} />
         <div class="text-center">
           <.link
@@ -179,6 +183,46 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           Pick another workout →
         </.link>
       </div>
+    </div>
+    """
+  end
+
+  attr :suggestion, :any, default: nil
+
+  defp coach_suggestion(%{suggestion: nil} = assigns), do: ~H""
+
+  defp coach_suggestion(assigns) do
+    ~H"""
+    <div class="rounded-[10px] border border-primary/20 bg-primary/5 p-4 space-y-3">
+      <div class="space-y-0.5">
+        <p class="text-xs text-primary/70 font-medium uppercase tracking-wide">Coach</p>
+        <p class="text-sm font-semibold">
+          <%= case @suggestion.dimension do %>
+            <% :reps -> %>
+              Push volume
+            <% :pace -> %>
+              Push intensity
+            <% :rest -> %>
+              Push density
+            <% :baseline -> %>
+              Confirm your level
+          <% end %>
+        </p>
+        <p class="text-xs text-base-content/50">{@suggestion.rationale}</p>
+      </div>
+      <div class="flex items-center gap-4 text-xs text-base-content/60">
+        <span><strong class="text-base-content">{@suggestion.burpee_count}</strong> reps</span>
+        <span><strong class="text-base-content">{@suggestion.sec_per_burpee}s</strong> pace</span>
+        <%= if @suggestion.rest_sec > 0 do %>
+          <span><strong class="text-base-content">{@suggestion.rest_sec}s</strong> rest</span>
+        <% end %>
+      </div>
+      <.link
+        navigate={"/workouts/new?count=#{@suggestion.burpee_count}&pace=#{@suggestion.sec_per_burpee}&rest=#{@suggestion.rest_sec}"}
+        class="text-sm text-primary hover:text-primary/80 transition font-medium"
+      >
+        Try it →
+      </.link>
     </div>
     """
   end

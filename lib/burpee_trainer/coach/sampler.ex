@@ -27,6 +27,7 @@ defmodule BurpeeTrainer.Coach.Sampler do
   # an integer in practice.
   defp gamma_sample(k) do
     n = max(1, round(k))
+
     Enum.reduce(1..n, 0.0, fn _, acc ->
       acc - :math.log(max(:rand.uniform(), 1.0e-15))
     end)
