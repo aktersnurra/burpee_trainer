@@ -33,6 +33,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
      |> assign(:expanded_blocks, MapSet.new())
      |> assign(:open_block_menu, nil)
      |> assign(:level, level)
+     |> assign(:manual_edit, false)
      |> load_plan(params)
      |> build_form_from_plan()
      |> assign_derived()}
@@ -52,6 +53,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:page_title, "Edit plan")
     |> assign(:solver_error, nil)
     |> assign(:solver_solution, nil)
+    |> assign(:manual_edit, false)
   end
 
   defp load_plan(socket, _params) do
@@ -63,6 +65,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:page_title, "New plan")
     |> assign(:solver_error, nil)
     |> assign(:solver_solution, nil)
+    |> assign(:manual_edit, false)
   end
 
   defp default_plan_input do
@@ -171,6 +174,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         |> assign(:form, to_form(changeset))
         |> assign(:solver_error, nil)
         |> assign(:solver_solution, solution)
+        |> assign(:manual_edit, false)
 
       {:error, reasons} ->
         existing_form =
@@ -272,6 +276,28 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp can_summarize?(_), do: false
+
+  defp block_time_ranges(blocks, plan_input) do
+    _target_sec = plan_input.target_duration_min * 60.0
+
+    {ranges, _acc} =
+      blocks
+      |> Enum.sort_by(& &1.position)
+      |> Enum.map_reduce(0.0, fn block, elapsed ->
+        sets = Enum.sort_by(block.sets || [], & &1.position)
+        repeat = block.repeat_count || 1
+
+        block_sec =
+          Enum.reduce(sets, 0.0, fn s, acc ->
+            acc + (s.burpee_count || 0) * (s.sec_per_rep || 0.0) + (s.end_of_set_rest || 0)
+          end) * repeat
+
+        range = {elapsed, elapsed + block_sec}
+        {range, elapsed + block_sec}
+      end)
+
+    ranges
+  end
 
   # ---------------------------------------------------------------------------
   # Events — Layer 1 & 2
@@ -407,6 +433,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # ---------------------------------------------------------------------------
   # Events — Layer 3
   # ---------------------------------------------------------------------------
+
+  def handle_event("enable_manual_edit", _, socket) do
+    {:noreply, assign(socket, :manual_edit, true)}
+  end
 
   def handle_event("copy_block", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
@@ -749,17 +779,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   class="w-full rounded-md border border-[#1E2535] bg-base-300 px-3 py-2 text-sm"
                 />
               </div>
-              <div class="space-y-1">
-                <label class="text-xs text-base-content/50">Your level</label>
-                <p class="text-sm font-medium">
+              <div class="space-y-0.5">
+                <p class="text-sm font-semibold text-base-content">
                   {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
                 </p>
-                <p class="text-xs text-base-content/30">
-                  Min pace: {:erlang.float_to_binary(
-                    BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) *
-                      1.0,
-                    decimals: 1
-                  )}s/rep — solver finds optimal pace
+                <p class="text-xs text-base-content/60">
+                  Min pace {:erlang.float_to_binary(BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) * 1.0, decimals: 1)}s/rep · solver finds optimal pace
                 </p>
               </div>
             </div>
@@ -876,61 +901,62 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             <% end %>
           </div>
 
-          <%!-- Pace override --%>
-          <div class="px-5 pb-5">
-            <form phx-submit="set_pace_override" class="flex items-center gap-3">
-              <label class="text-xs text-base-content/50 shrink-0">Pace override</label>
-              <input
-                type="number"
-                step="0.1"
-                min="1"
-                name="pace"
-                placeholder={
-                  :erlang.float_to_binary(
-                    PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
-                      name: "",
-                      burpee_type: @plan_input.burpee_type,
-                      target_duration_min: @plan_input.target_duration_min,
-                      burpee_count_target: @plan_input.burpee_count_target,
-                      pacing_style: @plan_input.pacing_style,
-                      level: @level
-                    }) * 1.0,
-                    decimals: 1
-                  )
-                }
-                value={
-                  if @plan_input.sec_per_burpee_override,
-                    do:
+          <%!-- Advanced (pace override) --%>
+          <div class="px-5 pb-4">
+            <details class="group">
+              <summary class="cursor-pointer text-xs text-base-content/30 hover:text-base-content/60 transition list-none flex items-center gap-1">
+                <.icon name="hero-chevron-right" class="size-3 group-open:rotate-90 transition-transform" />
+                Advanced
+              </summary>
+              <div class="mt-3">
+                <form phx-submit="set_pace_override" class="flex items-center gap-3">
+                  <label class="text-xs text-base-content/50 shrink-0">Pace override</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    name="pace"
+                    placeholder={
                       :erlang.float_to_binary(
-                        @plan_input.sec_per_burpee_override * 1.0,
+                        PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
+                          name: "",
+                          burpee_type: @plan_input.burpee_type,
+                          target_duration_min: @plan_input.target_duration_min,
+                          burpee_count_target: @plan_input.burpee_count_target,
+                          pacing_style: @plan_input.pacing_style,
+                          level: @level
+                        }) * 1.0,
                         decimals: 1
-                      ),
-                    else: ""
-                }
-                class="w-20 rounded-md border border-[#1E2535] bg-base-300 px-2 py-1.5 text-sm text-center"
-              />
-              <span class="text-xs text-base-content/40">s/rep — press Enter to apply</span>
-              <%= if @plan_input.sec_per_burpee_override do %>
-                <button
-                  type="button"
-                  phx-click="set_pace_override"
-                  phx-value-pace=""
-                  class="text-xs text-base-content/30 hover:text-base-content/70 transition"
-                >
-                  clear
-                </button>
-              <% end %>
-            </form>
+                      )
+                    }
+                    value={
+                      if @plan_input.sec_per_burpee_override,
+                        do: :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0, decimals: 1),
+                        else: ""
+                    }
+                    class="w-20 rounded-md border border-[#1E2535] bg-base-300 px-2 py-1.5 text-sm text-center"
+                  />
+                  <span class="text-xs text-base-content/40">s/rep — Enter to apply</span>
+                  <%= if @plan_input.sec_per_burpee_override do %>
+                    <button
+                      type="button"
+                      phx-click="set_pace_override"
+                      phx-value-pace=""
+                      class="text-xs text-base-content/30 hover:text-base-content/70 transition"
+                    >
+                      clear
+                    </button>
+                  <% end %>
+                </form>
+              </div>
+            </details>
           </div>
         </section>
 
         <%!-- Layer 3 — Solution card --%>
         <section class="rounded-[10px] border border-[#1E2535] bg-base-200">
           <%!-- Solution header --%>
-          <div class={[
-            "flex items-center gap-3 px-5 py-4 border-b border-[#1E2535]",
-            if(@derived && @derived.both_ok, do: "", else: "")
-          ]}>
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-[#1E2535]">
             <%= if @solver_error do %>
               <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
               <span class="text-xs font-semibold uppercase tracking-wide text-error">Error</span>
@@ -939,72 +965,43 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               <%= if @derived do %>
                 <%= if @derived.both_ok do %>
                   <.icon name="hero-check-circle" class="size-4 text-primary shrink-0" />
-                  <span class="text-xs font-semibold uppercase tracking-wide text-primary">
-                    Solution
-                  </span>
+                  <span class="text-xs font-semibold uppercase tracking-wide text-primary">Solution</span>
                 <% else %>
                   <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
-                  <span class="text-xs font-semibold uppercase tracking-wide text-error">
-                    Invalid
-                  </span>
+                  <span class="text-xs font-semibold uppercase tracking-wide text-error">Invalid</span>
                 <% end %>
                 <span class="text-sm text-base-content/60 ml-1">
-                  <span class={
-                    if(@derived.duration_ok,
-                      do: "text-base-content font-medium",
-                      else: "text-error font-medium"
-                    )
-                  }>
+                  <span class={if @derived.duration_ok, do: "text-base-content font-medium", else: "text-error font-medium"}>
                     {Fmt.duration_sec(round(@derived.duration_sec))}
                   </span>
                   <span class="text-base-content/30"> · </span>
-                  <span class={
-                    if(@derived.count_ok,
-                      do: "text-base-content font-medium",
-                      else: "text-error font-medium"
-                    )
-                  }>
+                  <span class={if @derived.count_ok, do: "text-base-content font-medium", else: "text-error font-medium"}>
                     {@derived.burpee_count}
                   </span>
                   <span class="text-base-content/50"> burpees</span>
+                  <%= if @solver_solution && !@manual_edit do %>
+                    <span class="text-base-content/30"> · </span>
+                    <span class="text-base-content/70">
+                      {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                    </span>
+                  <% end %>
                 </span>
+                <div class="ml-auto flex items-center gap-3">
+                  <%= if @manual_edit do %>
+                    <span class="text-xs text-base-content/40 italic">Solver output overridden</span>
+                  <% else %>
+                    <button
+                      type="button"
+                      phx-click="enable_manual_edit"
+                      class="text-xs text-base-content/30 hover:text-base-content/70 transition"
+                    >
+                      Edit manually
+                    </button>
+                  <% end %>
+                </div>
               <% end %>
             <% end %>
           </div>
-
-          <%= if @solver_solution do %>
-            <div class="px-5 py-3 border-b border-[#1E2535] text-xs text-base-content/50 flex gap-6 flex-wrap">
-              <span>
-                Pace:
-                <strong class="text-base-content">
-                  {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
-                </strong>
-              </span>
-              <%= if @plan_input.pacing_style == :even do %>
-                <% rest_per_rep =
-                  @plan_input.target_duration_min * 60 / @plan_input.burpee_count_target -
-                    @solver_solution.sec_per_burpee %>
-                <%= if rest_per_rep > 0.05 do %>
-                  <span>
-                    Rest/rep:
-                    <strong class="text-base-content">
-                      {:erlang.float_to_binary(rest_per_rep * 1.0, decimals: 2)}s
-                    </strong>
-                  </span>
-                <% end %>
-              <% end %>
-              <span>
-                Sets:
-                <strong class="text-base-content">
-                  {@solver_solution.set_count} × {@solver_solution.set_size}
-                </strong>
-              </span>
-              <span>
-                Rest/set:
-                <strong class="text-base-content">{round(@solver_solution.rest_sec)}s</strong>
-              </span>
-            </div>
-          <% end %>
 
           <%!-- Blocks form --%>
           <.form
@@ -1019,13 +1016,19 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               expanded_blocks={@expanded_blocks}
               open_block_menu={@open_block_menu}
               plan_input={@plan_input}
+              manual_edit={@manual_edit}
+              block_time_ranges={block_time_ranges(Ecto.Changeset.apply_changes(@form.source).blocks, @plan_input)}
             />
 
             <div class="border-t border-[#1E2535] pt-4 flex items-center justify-between">
-              <label class="cursor-pointer rounded-md border border-[#1E2535] px-3 py-1.5 text-sm text-base-content/60 hover:bg-base-300 transition">
-                + Add block
-                <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
-              </label>
+              <%= if @manual_edit do %>
+                <label class="cursor-pointer rounded-md border border-[#1E2535] px-3 py-1.5 text-sm text-base-content/60 hover:bg-base-300 transition">
+                  + Add block
+                  <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
+                </label>
+              <% else %>
+                <div />
+              <% end %>
               <div class="flex items-center gap-4">
                 <%= if @derived do %>
                   <span class="text-sm tabular-nums text-base-content/50">
@@ -1064,6 +1067,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr :expanded_blocks, :any, required: true
   attr :open_block_menu, :any, required: true
   attr :plan_input, :map, required: true
+  attr :manual_edit, :boolean, required: true
+  attr :block_time_ranges, :list, required: true
 
   defp blocks_editor(assigns) do
     ~H"""
@@ -1071,30 +1076,39 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       <.inputs_for :let={block_f} field={@form[:blocks]}>
         <% expanded = MapSet.member?(@expanded_blocks, block_f.index)
         sets = Ecto.Changeset.apply_changes(block_f.source).sets |> Enum.sort_by(& &1.position)
-        uniform = sets_uniform?(sets) %>
-        <div class="border-t border-[#1E2535] pt-4 space-y-3">
+        uniform = sets_uniform?(sets)
+        repeat = block_f[:repeat_count].value || 1
+        {range_start, range_end} = Enum.at(@block_time_ranges, block_f.index, {0.0, 0.0}) %>
+
+        <div class="border-t border-[#1E2535] pt-4 space-y-2">
           <input type="hidden" name="workout_plan[blocks_sort][]" value={block_f.index} />
-          <input
-            type="hidden"
-            name={"workout_plan[blocks][#{block_f.index}][position]"}
-            value={block_f.index + 1}
-          />
+          <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][position]"} value={block_f.index + 1} />
 
           <%!-- Block header --%>
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-base-content/80">
-              Block {block_f.index + 1}
-            </h3>
-            <div class="relative">
-              <button
-                type="button"
-                phx-click="toggle_block_menu"
-                phx-value-index={block_f.index}
-                class="p-1 text-base-content/30 hover:text-base-content/70 transition rounded"
-                aria-label="Block options"
-              >
-                <.icon name="hero-ellipsis-horizontal" class="size-4" />
-              </button>
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-semibold text-base-content/80">
+                Block {block_f.index + 1}
+                <%= if repeat && repeat > 1 do %>
+                  <span class="font-normal text-base-content/40">× {repeat}</span>
+                <% end %>
+              </h3>
+              <span class="text-xs text-base-content/30">
+                {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
+              </span>
+            </div>
+            <div class="relative flex items-center gap-3">
+              <%= if @manual_edit do %>
+                <button
+                  type="button"
+                  phx-click="toggle_block_menu"
+                  phx-value-index={block_f.index}
+                  class="p-1 text-base-content/30 hover:text-base-content/70 transition rounded"
+                  aria-label="Block options"
+                >
+                  <.icon name="hero-ellipsis-horizontal" class="size-4" />
+                </button>
+              <% end %>
               <%= if @open_block_menu == block_f.index do %>
                 <div
                   phx-click-away="close_block_menu"
@@ -1110,161 +1124,107 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   </button>
                   <label class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-error/70 hover:text-error hover:bg-[#141B26] transition-colors">
                     <.icon name="hero-trash" class="size-4" /> Remove
-                    <input
-                      type="checkbox"
-                      name="workout_plan[blocks_drop][]"
-                      value={block_f.index}
-                      class="hidden"
-                    />
+                    <input type="checkbox" name="workout_plan[blocks_drop][]" value={block_f.index} class="hidden" />
                   </label>
                 </div>
               <% end %>
             </div>
           </div>
 
-          <%!-- Repeat count — narrow inline --%>
-          <div class="flex items-center gap-2">
-            <label class="text-xs text-base-content/40 shrink-0">Repeats</label>
-            <input
-              type="number"
-              name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
-              min="1"
-              value={block_f[:repeat_count].value}
-              class="w-16 rounded-md border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center"
-            />
-          </div>
-
-          <%!-- Sets section --%>
-          <div class="space-y-2">
-            <%!-- Column headers + actions on one row --%>
-            <div class="flex items-center gap-3">
-              <span class="w-6 shrink-0" />
-              <%= if uniform && !expanded && length(sets) > 1 do %>
-                <%!-- Collapsed: show summary instead of column headers --%>
-                <% first = List.first(sets) %>
-                <span class="text-xs text-base-content/40 flex-1">
-                  <span class="tabular-nums">{length(sets)} ×</span>
-                  <span class="tabular-nums">{first.burpee_count}</span>
-                  <span> reps</span>
-                  <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>
-                    <span> ·   {format_sec(first.sec_per_rep)}s/rep</span>
-                  <% end %>
-                  <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·   {first.end_of_set_rest}s rest</span>
-                  <% end %>
-                </span>
-                <button
-                  type="button"
-                  phx-click="toggle_block_expand"
-                  phx-value-index={block_f.index}
-                  class="text-xs text-primary hover:underline ml-auto"
-                >
-                  Edit sets
-                </button>
-              <% else %>
-                <span class="w-14 text-xs text-base-content/30 text-center">Reps</span>
-                <span class="w-14 text-xs text-base-content/30 text-center">s/rep</span>
-                <span class="w-14 text-xs text-base-content/30 text-center">Rest [s]</span>
-                <div class="ml-auto flex items-center gap-3">
-                  <%= if uniform && length(sets) > 1 do %>
-                    <button
-                      type="button"
-                      phx-click="toggle_block_expand"
-                      phx-value-index={block_f.index}
-                      class="text-xs text-base-content/40 hover:text-base-content transition"
-                    >
-                      Collapse
-                    </button>
-                  <% end %>
-                  <label class="cursor-pointer rounded-md border border-[#1E2535] px-3 py-1 text-xs hover:bg-base-300 transition">
-                    + Add set
-                    <input
-                      type="checkbox"
-                      name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"}
-                      class="hidden"
-                    />
-                  </label>
-                </div>
-              <% end %>
+          <%!-- Repeat count — only when manual_edit --%>
+          <%= if @manual_edit do %>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-base-content/40 shrink-0">Repeats</label>
+              <input
+                type="number"
+                name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
+                min="1"
+                value={block_f[:repeat_count].value}
+                class="w-16 rounded-md border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center"
+              />
             </div>
+          <% else %>
+            <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][repeat_count]"} value={block_f[:repeat_count].value} />
+          <% end %>
 
-            <%!-- Full set rows — always rendered for form submission, hidden when collapsed --%>
-            <.inputs_for :let={set_f} field={block_f[:sets]}>
-              <% hide_row = uniform && !expanded && length(sets) > 1 %>
-              <input
-                type="hidden"
-                name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"}
-                value={set_f.index}
-              />
-              <input
-                type="hidden"
-                name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][position]"}
-                value={set_f.index + 1}
-              />
-              <div class={[
-                "flex items-center gap-3 py-1 border-b border-[#1E2535] last:border-0",
-                hide_row && "hidden"
-              ]}>
-                <input
-                  type="hidden"
-                  name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_burpee]"}
-                  value={format_sec(set_f[:sec_per_burpee].value)}
-                />
-                <span class="text-xs text-base-content/30 tabular-nums w-6 shrink-0 text-right">
-                  {set_f.index + 1}
-                </span>
-                <input
-                  type="number"
-                  name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
-                  value={set_f[:burpee_count].value}
-                  min="0"
-                  class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
-                />
-                <input
-                  type="number"
-                  step="0.1"
-                  name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
-                  value={format_sec(set_f[:sec_per_rep].value)}
-                  min="0.1"
-                  class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
-                />
-                <input
-                  type="number"
-                  name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
-                  value={set_f[:end_of_set_rest].value}
-                  min="0"
-                  class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
-                />
-                <div class="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    phx-click="copy_set"
-                    phx-value-block_index={block_f.index}
-                    phx-value-set_index={set_f.index}
-                    class="text-base-content/30 hover:text-primary transition"
-                    aria-label="Copy set"
-                  >
-                    <.icon name="hero-document-duplicate" class="size-3.5" />
-                  </button>
-                  <label class="cursor-pointer text-base-content/30 hover:text-error transition">
-                    <.icon name="hero-trash" class="size-3.5" />
-                    <input
-                      type="checkbox"
-                      name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"}
-                      value={set_f.index}
-                      class="hidden"
-                    />
-                  </label>
-                </div>
+          <%!-- Sets --%>
+          <div class="space-y-1">
+            <%= if @manual_edit do %>
+              <%!-- Editable mode: column headers + input rows --%>
+              <div class="flex items-center gap-3 mb-1">
+                <span class="w-6 shrink-0" />
+                <%= if uniform && !expanded && length(sets) > 1 do %>
+                  <% first = List.first(sets) %>
+                  <span class="text-xs text-base-content/40 flex-1">
+                    {length(sets)} × {first.burpee_count} reps
+                    <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>· {format_sec(first.sec_per_rep)}s/rep<% end %>
+                    <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>· {first.end_of_set_rest}s rest<% end %>
+                  </span>
+                  <button type="button" phx-click="toggle_block_expand" phx-value-index={block_f.index} class="text-xs text-primary hover:underline ml-auto">Edit sets</button>
+                <% else %>
+                  <span class="w-14 text-xs text-base-content/30 text-center">Reps</span>
+                  <span class="w-14 text-xs text-base-content/30 text-center">s/rep</span>
+                  <span class="w-14 text-xs text-base-content/30 text-center">Rest [s]</span>
+                  <div class="ml-auto flex items-center gap-3">
+                    <%= if uniform && length(sets) > 1 do %>
+                      <button type="button" phx-click="toggle_block_expand" phx-value-index={block_f.index} class="text-xs text-base-content/40 hover:text-base-content transition">Collapse</button>
+                    <% end %>
+                  </div>
+                <% end %>
               </div>
+            <% end %>
+
+            <.inputs_for :let={set_f} field={block_f[:sets]}>
+              <% hide_row = @manual_edit && uniform && !expanded && length(sets) > 1 %>
+              <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"} value={set_f.index} />
+              <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][position]"} value={set_f.index + 1} />
+              <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_burpee]"} value={format_sec(set_f[:sec_per_burpee].value)} />
+
+              <%= if @manual_edit do %>
+                <div class={["flex items-center gap-3 py-1 border-b border-[#1E2535] last:border-0", hide_row && "hidden"]}>
+                  <span class="text-xs text-base-content/30 tabular-nums w-6 shrink-0 text-right">{set_f.index + 1}</span>
+                  <input type="number" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"} value={set_f[:burpee_count].value} min="0" class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums" />
+                  <input type="number" step="0.1" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"} value={format_sec(set_f[:sec_per_rep].value)} min="0.1" class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums" />
+                  <input type="number" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"} value={set_f[:end_of_set_rest].value} min="0" class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums" />
+                  <div class="ml-auto flex items-center gap-2">
+                    <button type="button" phx-click="copy_set" phx-value-block_index={block_f.index} phx-value-set_index={set_f.index} class="text-base-content/30 hover:text-primary transition" aria-label="Copy set">
+                      <.icon name="hero-document-duplicate" class="size-3.5" />
+                    </button>
+                    <label class="cursor-pointer text-base-content/30 hover:text-error transition">
+                      <.icon name="hero-trash" class="size-3.5" />
+                      <input type="checkbox" name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"} value={set_f.index} class="hidden" />
+                    </label>
+                  </div>
+                </div>
+              <% else %>
+                <%!-- Read-only: hidden fields to preserve values + visible compact line --%>
+                <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"} value={set_f[:burpee_count].value} />
+                <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"} value={format_sec(set_f[:sec_per_rep].value)} />
+                <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"} value={set_f[:end_of_set_rest].value} />
+                <p class="text-sm text-base-content/70">
+                  <span class="tabular-nums font-medium text-base-content">{set_f[:burpee_count].value}</span> reps
+                  <%= if set_f[:sec_per_rep].value && set_f[:sec_per_rep].value != "" do %>
+                    <span class="text-base-content/30"> · </span>
+                    <span class="tabular-nums">{format_sec(set_f[:sec_per_rep].value)}s/rep</span>
+                  <% end %>
+                  <%= if set_f[:end_of_set_rest].value && set_f[:end_of_set_rest].value != 0 && set_f[:end_of_set_rest].value != "0" do %>
+                    <span class="text-base-content/30"> · </span>
+                    <span class="tabular-nums">{set_f[:end_of_set_rest].value}s rest after</span>
+                  <% end %>
+                </p>
+              <% end %>
             </.inputs_for>
 
-            <input
-              type="hidden"
-              name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"}
-              value=""
-            />
+            <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"} value="" />
             <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"} />
+
+            <%!-- Add set: only in manual_edit, at bottom --%>
+            <%= if @manual_edit do %>
+              <label class="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs text-base-content/30 hover:text-primary transition">
+                + Add set
+                <input type="checkbox" name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"} class="hidden" />
+              </label>
+            <% end %>
           </div>
         </div>
       </.inputs_for>
