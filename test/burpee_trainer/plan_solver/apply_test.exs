@@ -53,7 +53,12 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
     sets = Enum.flat_map(plan.blocks, & &1.sets)
-    duration = Enum.reduce(sets, 0.0, fn s, acc -> acc + s.burpee_count * s.sec_per_rep + s.end_of_set_rest end)
+
+    duration =
+      Enum.reduce(sets, 0.0, fn s, acc ->
+        acc + s.burpee_count * s.sec_per_rep + s.end_of_set_rest
+      end)
+
     assert_in_delta duration, target_sec, 1.0
   end
 
@@ -67,6 +72,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
       level: :level_1c,
       additional_rests: [%{rest_sec: 60, target_min: 5}]
     }
+
     p = 6.0
     r = List.duplicate(0.0, 9)
     reservations = [%{slot: 5, rest_sec: 60.0, target_min: 5}]
