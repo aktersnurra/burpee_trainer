@@ -3,7 +3,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   Three-layer plan editor.
 
   Layer 1 — Basics: name, burpee type, target duration, total reps,
-    sec/burpee, pacing style. Any change re-runs PlanWizard and regenerates
+    pacing style. Any change re-runs PlanSolver and regenerates
     Layer 3.
 
   Layer 2 — Additional rests: each entry places a rest at the nearest set
@@ -16,23 +16,23 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Planner, Workouts}
-  alias BurpeeTrainer.PlanWizard
-  alias BurpeeTrainer.PlanWizard.PlanInput
+  alias BurpeeTrainer.{Levels, Planner, Workouts}
+  alias BurpeeTrainer.PlanSolver
+  alias BurpeeTrainer.PlanSolver.Input
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
 
-  @sec_per_burpee_floor_six Float.ceil(1200 / 325, 2)
-  @sec_per_burpee_floor_navy 1200 / 150
-
   @impl true
   def mount(params, _session, socket) do
+    sessions = Workouts.list_sessions(socket.assigns.current_user)
+    level = Levels.current_level(sessions)
+
     {:ok,
      socket
      |> assign(:live_action, socket.assigns.live_action)
      |> assign(:expanded_blocks, MapSet.new())
      |> assign(:open_block_menu, nil)
-     |> assign(:advanced_open, false)
+     |> assign(:level, level)
      |> load_plan(params)
      |> build_form_from_plan()
      |> assign_derived()}
@@ -51,6 +51,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:plan_input, plan_input)
     |> assign(:page_title, "Edit plan")
     |> assign(:solver_error, nil)
+    |> assign(:solver_solution, nil)
   end
 
   defp load_plan(socket, _params) do
@@ -61,6 +62,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:plan_input, plan_input)
     |> assign(:page_title, "New plan")
     |> assign(:solver_error, nil)
+    |> assign(:solver_solution, nil)
   end
 
   defp default_plan_input do
@@ -69,10 +71,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       burpee_type: :six_count,
       target_duration_min: 20,
       burpee_count_target: 100,
-      sec_per_burpee: 5.0,
       pacing_style: :even,
-      fatigue_factor: 0.0,
-      reps_per_set: PlanWizard.default_reps_per_set(:six_count),
+      reps_per_set: PlanSolver.default_reps_per_set(:six_count),
       additional_rests: []
     }
   end
@@ -89,17 +89,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           []
       end
 
-    reps_per_set = infer_reps_per_set(plan)
-
     %{
       name: plan.name,
       burpee_type: plan.burpee_type,
       target_duration_min: plan.target_duration_min || 20,
       burpee_count_target: plan.burpee_count_target || 100,
-      sec_per_burpee: plan.sec_per_burpee || 5.0,
       pacing_style: plan.pacing_style || :even,
-      fatigue_factor: plan.fatigue_factor || 0.0,
-      reps_per_set: reps_per_set,
+      reps_per_set: infer_reps_per_set(plan),
       additional_rests: rests
     }
   end
@@ -114,7 +110,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         block -> block.sets |> Enum.sort_by(& &1.position) |> List.first()
       end
 
-    (first_set && first_set.burpee_count) || PlanWizard.default_reps_per_set(plan.burpee_type)
+    (first_set && first_set.burpee_count) || PlanSolver.default_reps_per_set(plan.burpee_type)
   end
 
   defp preload_duration_min(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) do
@@ -150,36 +146,37 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # Re-run the solver from plan_input and rebuild the blocks form.
   defp regenerate(socket) do
     plan_input = socket.assigns.plan_input
+    level = socket.assigns.level
 
-    wizard_input = %PlanInput{
+    solver_input = %Input{
       name: plan_input.name,
       burpee_type: plan_input.burpee_type,
       target_duration_min: plan_input.target_duration_min,
       burpee_count_target: plan_input.burpee_count_target,
-      sec_per_burpee: plan_input.sec_per_burpee,
       pacing_style: plan_input.pacing_style,
-      fatigue_factor: plan_input.fatigue_factor || 0.0,
+      level: level,
       reps_per_set: plan_input.reps_per_set,
       additional_rests: plan_input.additional_rests
     }
 
-    case PlanWizard.generate(wizard_input) do
-      {:ok, generated_plan} ->
+    case PlanSolver.solve(solver_input) do
+      {:ok, solution} ->
         base = socket.assigns.plan || %WorkoutPlan{}
-        changeset = Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(generated_plan))
+        changeset = Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(solution.plan))
 
         socket
         |> assign(:form, to_form(changeset))
         |> assign(:solver_error, nil)
+        |> assign(:solver_solution, solution)
 
       {:error, reasons} ->
-        # Keep existing blocks form; show solver error
         existing_form =
           socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
 
         socket
         |> assign(:form, existing_form)
         |> assign(:solver_error, Enum.join(reasons, "; "))
+        |> assign(:solver_solution, nil)
     end
   end
 
@@ -191,7 +188,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "burpee_count_target" => plan.burpee_count_target,
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
-      "fatigue_factor" => plan.fatigue_factor || 0.0,
       "additional_rests" => plan.additional_rests,
       "blocks" => blocks_to_attrs(plan.blocks)
     }
@@ -298,7 +294,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     plan_input =
       socket.assigns.plan_input
       |> Map.put(:burpee_type, burpee_type)
-      |> Map.put(:reps_per_set, PlanWizard.default_reps_per_set(burpee_type))
+      |> Map.put(:reps_per_set, PlanSolver.default_reps_per_set(burpee_type))
 
     socket =
       socket
@@ -312,24 +308,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("pick_pacing", %{"style" => style}, socket)
       when style in ["even", "unbroken"] do
     plan_input = Map.put(socket.assigns.plan_input, :pacing_style, String.to_atom(style))
-
-    socket =
-      socket
-      |> assign(:plan_input, plan_input)
-      |> regenerate()
-      |> assign_derived()
-
-    {:noreply, socket}
-  end
-
-  def handle_event("set_fatigue_factor", %{"factor" => v}, socket) do
-    factor =
-      case Float.parse(v) do
-        {f, _} when f >= 0.0 and f <= 1.0 -> f
-        _ -> 0.0
-      end
-
-    plan_input = Map.put(socket.assigns.plan_input, :fatigue_factor, factor)
 
     socket =
       socket
@@ -521,10 +499,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
-  def handle_event("toggle_advanced", _, socket) do
-    {:noreply, assign(socket, :advanced_open, !socket.assigns.advanced_open)}
-  end
-
   def handle_event("toggle_block_menu", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
     open = if socket.assigns.open_block_menu == idx, do: nil, else: idx
@@ -607,9 +581,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "burpee_type" => Atom.to_string(plan_input.burpee_type),
       "target_duration_min" => plan_input.target_duration_min,
       "burpee_count_target" => plan_input.burpee_count_target,
-      "sec_per_burpee" => plan_input.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan_input.pacing_style),
-      "fatigue_factor" => plan_input.fatigue_factor || 0.0,
       "additional_rests" =>
         Jason.encode!(
           Enum.map(plan_input.additional_rests, fn %{rest_sec: r, target_min: t} ->
@@ -634,26 +606,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         _ -> current.burpee_count_target
       end
 
-    sec_per_burpee =
-      case Float.parse(Map.get(params, "sec_per_burpee", "")) do
-        {f, ""} when f > 0 -> f
-        _ -> current.sec_per_burpee
-      end
-
     reps_per_set =
       case Integer.parse(Map.get(params, "reps_per_set", "")) do
         {n, ""} when n > 0 -> n
         _ -> current.reps_per_set
       end
 
-    %{
-      current
-      | name: name,
-        target_duration_min: target_duration_min,
-        burpee_count_target: burpee_count_target,
-        sec_per_burpee: sec_per_burpee,
-        reps_per_set: reps_per_set
-    }
+    %{current | name: name, target_duration_min: target_duration_min,
+                burpee_count_target: burpee_count_target, reps_per_set: reps_per_set}
   end
 
   defp format_sec(nil), do: nil
@@ -668,20 +628,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp format_sec(v), do: v
-
-  defp pace_floor(:six_count), do: @sec_per_burpee_floor_six
-  defp pace_floor(:navy_seal), do: @sec_per_burpee_floor_navy
-  defp pace_floor(_), do: 1.0
-
-  defp pace_floor_label(:six_count),
-    do:
-      "Min: #{:erlang.float_to_binary(@sec_per_burpee_floor_six * 1.0, decimals: 2)}s (graduation pace)"
-
-  defp pace_floor_label(:navy_seal),
-    do:
-      "Min: #{:erlang.float_to_binary(@sec_per_burpee_floor_navy * 1.0, decimals: 2)}s (graduation pace)"
-
-  defp pace_floor_label(_), do: ""
 
   # ---------------------------------------------------------------------------
   # Render
@@ -775,17 +721,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 />
               </div>
               <div class="space-y-1">
-                <label class="text-xs text-base-content/50">Sec per burpee</label>
-                <input
-                  type="number"
-                  name="sec_per_burpee"
-                  step="0.1"
-                  min={pace_floor(@plan_input.burpee_type)}
-                  value={:erlang.float_to_binary(@plan_input.sec_per_burpee * 1.0, decimals: 2)}
-                  class="w-full rounded-md border border-[#1E2535] bg-base-300 px-3 py-2 text-sm"
-                />
+                <label class="text-xs text-base-content/50">Your level</label>
+                <p class="text-sm font-medium">
+                  {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
+                </p>
                 <p class="text-xs text-base-content/30">
-                  {pace_floor_label(@plan_input.burpee_type)}
+                  Min pace: {:erlang.float_to_binary(BurpeeTrainer.PlanSolver.sustainable_ceiling(@level) * 1.0, decimals: 1)}s/rep — solver finds optimal pace
                 </p>
               </div>
             </div>
@@ -902,72 +843,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             <% end %>
           </div>
 
-          <%!-- Advanced disclosure --%>
-          <div class="p-5">
-            <button
-              type="button"
-              phx-click="toggle_advanced"
-              class="flex items-center gap-1.5 text-xs text-base-content/40 hover:text-base-content/70 transition"
-            >
-              <.icon
-                name={if @advanced_open, do: "hero-chevron-down", else: "hero-chevron-right"}
-                class="size-3.5"
-              /> Advanced
-            </button>
-            <%= if @advanced_open do %>
-              <div class="mt-4 space-y-2">
-                <div class="inline-flex rounded-lg border border-[#1E2535] overflow-hidden">
-                  <button
-                    type="button"
-                    phx-click="set_fatigue_factor"
-                    phx-value-factor="0.0"
-                    class={[
-                      "px-4 py-1.5 text-sm font-medium transition",
-                      if(@plan_input.fatigue_factor == 0.0,
-                        do: "bg-primary/15 text-primary",
-                        else: "text-base-content/50 hover:text-base-content hover:bg-base-300"
-                      )
-                    ]}
-                  >
-                    No fatigue
-                  </button>
-                  <div class="w-px bg-[#1E2535]" />
-                  <button
-                    type="button"
-                    phx-click="set_fatigue_factor"
-                    phx-value-factor="0.5"
-                    class={[
-                      "px-4 py-1.5 text-sm font-medium transition",
-                      if(@plan_input.fatigue_factor == 0.5,
-                        do: "bg-primary/15 text-primary",
-                        else: "text-base-content/50 hover:text-base-content hover:bg-base-300"
-                      )
-                    ]}
-                  >
-                    Mild
-                  </button>
-                  <div class="w-px bg-[#1E2535]" />
-                  <button
-                    type="button"
-                    phx-click="set_fatigue_factor"
-                    phx-value-factor="1.0"
-                    class={[
-                      "px-4 py-1.5 text-sm font-medium transition",
-                      if(@plan_input.fatigue_factor == 1.0,
-                        do: "bg-primary/15 text-primary",
-                        else: "text-base-content/50 hover:text-base-content hover:bg-base-300"
-                      )
-                    ]}
-                  >
-                    Strong
-                  </button>
-                </div>
-                <p class="text-xs text-base-content/30">
-                  Bias rest periods toward later in the workout.
-                </p>
-              </div>
-            <% end %>
-          </div>
         </section>
 
         <%!-- Layer 3 — Solution card --%>
@@ -1017,6 +892,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               <% end %>
             <% end %>
           </div>
+
+          <%= if @solver_solution do %>
+            <div class="px-5 py-3 border-b border-[#1E2535] text-xs text-base-content/50 flex gap-6 flex-wrap">
+              <span>Pace: <strong class="text-base-content">{:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep</strong></span>
+              <span>Sets: <strong class="text-base-content">{@solver_solution.set_count} × {@solver_solution.set_size}</strong></span>
+              <span>Rest/set: <strong class="text-base-content">{round(@solver_solution.rest_sec)}s</strong></span>
+            </div>
+          <% end %>
 
           <%!-- Blocks form --%>
           <.form
@@ -1216,12 +1099,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 <input
                   type="hidden"
                   name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
-                  value={format_sec(set_f[:sec_per_rep].value || @plan_input.sec_per_burpee)}
+                  value={format_sec(set_f[:sec_per_rep].value)}
                 />
                 <input
                   type="hidden"
                   name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_burpee]"}
-                  value={format_sec(set_f[:sec_per_burpee].value || @plan_input.sec_per_burpee)}
+                  value={format_sec(set_f[:sec_per_burpee].value)}
                 />
                 <span class="text-xs text-base-content/30 tabular-nums w-6 shrink-0 text-right">
                   {set_f.index + 1}
