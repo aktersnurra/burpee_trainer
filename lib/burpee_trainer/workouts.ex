@@ -180,6 +180,32 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Returns a MapSet of dates (Mon–Sun of the current ISO week) on which the
+  user completed at least one non-warmup session.
+  """
+  @spec this_week_trained_days(User.t()) :: MapSet.t()
+  def this_week_trained_days(%User{id: user_id}) do
+    today = Date.utc_today()
+    week_start = Date.beginning_of_week(today, :monday)
+    week_end = Date.add(week_start, 6)
+
+    week_start_dt = DateTime.new!(week_start, ~T[00:00:00], "Etc/UTC")
+    week_end_dt = DateTime.new!(week_end, ~T[23:59:59], "Etc/UTC")
+
+    Repo.all(
+      from s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and
+            (is_nil(s.tags) or s.tags != "warmup") and
+            s.inserted_at >= ^week_start_dt and
+            s.inserted_at <= ^week_end_dt,
+        select: s.inserted_at
+    )
+    |> Enum.map(&DateTime.to_date/1)
+    |> MapSet.new()
+  end
+
+  @doc """
   Cursor-based paginated sessions. Returns `{sessions, has_more?}`.
 
   Pass `before: datetime` to fetch the page older than that cursor.

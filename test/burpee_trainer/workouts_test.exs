@@ -541,4 +541,63 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert Workouts.best_qualifying_session(user2, :six_count) == nil
     end
   end
+
+  describe "this_week_trained_days/1" do
+    setup do
+      {:ok, user: user_fixture()}
+    end
+
+    test "returns date of a session completed this week", %{user: user} do
+      today = Date.utc_today()
+      week_start = Date.beginning_of_week(today, :monday)
+
+      plan = plan_fixture(user)
+      session = session_from_plan_fixture(user, plan)
+
+      BurpeeTrainer.Repo.update_all(
+        from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session.id),
+        set: [inserted_at: DateTime.new!(week_start, ~T[10:00:00], "Etc/UTC")]
+      )
+
+      days = Workouts.this_week_trained_days(user)
+      assert MapSet.member?(days, week_start)
+      assert MapSet.size(days) == 1
+    end
+
+    test "ignores warmup sessions", %{user: user} do
+      today = Date.utc_today()
+      week_start = Date.beginning_of_week(today, :monday)
+
+      plan = plan_fixture(user)
+      session = session_from_plan_fixture(user, plan, %{"tags" => "warmup"})
+
+      BurpeeTrainer.Repo.update_all(
+        from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session.id),
+        set: [inserted_at: DateTime.new!(week_start, ~T[10:00:00], "Etc/UTC")]
+      )
+
+      days = Workouts.this_week_trained_days(user)
+      assert MapSet.size(days) == 0
+    end
+
+    test "ignores sessions from previous weeks", %{user: user} do
+      today = Date.utc_today()
+      last_week = Date.add(Date.beginning_of_week(today, :monday), -7)
+
+      plan = plan_fixture(user)
+      session = session_from_plan_fixture(user, plan)
+
+      BurpeeTrainer.Repo.update_all(
+        from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session.id),
+        set: [inserted_at: DateTime.new!(last_week, ~T[10:00:00], "Etc/UTC")]
+      )
+
+      days = Workouts.this_week_trained_days(user)
+      assert MapSet.size(days) == 0
+    end
+
+    test "returns empty MapSet when no sessions exist", %{user: user} do
+      assert Workouts.this_week_trained_days(user) == MapSet.new()
+    end
+  end
 end
