@@ -20,6 +20,23 @@ defmodule BurpeeTrainer.Milp.HighsTest do
     assert_in_delta obj, -10.0, 1.0e-3
   end
 
+  test "extracts named variable p from solution" do
+    # minimize -p subject to p <= 10, p >= 5
+    problem = %Problem{
+      objective_sense: :minimize,
+      objective_terms: [{"p", -1.0}],
+      variables: [%{name: "p", type: :continuous, lower: 5.0, upper: 10.0}],
+      constraints: [
+        %{name: "C1", terms: [{"p", 1.0}], comparator: :leq, rhs: 10.0}
+      ]
+    }
+
+    assert {:ok, %{r: [], p: p, objective: obj}} = Highs.solve(problem)
+    assert is_float(p)
+    assert p >= 5.0 - 1.0e-6
+    assert_in_delta obj, -10.0, 1.0e-3
+  end
+
   test "returns :infeasible for contradictory constraints" do
     problem = %Problem{
       objective_sense: :minimize,

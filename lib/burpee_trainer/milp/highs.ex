@@ -6,7 +6,7 @@ defmodule BurpeeTrainer.Milp.Highs do
     1. Serialize the problem to MPS.
     2. Write to a uniquely-named temp file.
     3. Run `highs <mps> --solution_file <sol>`.
-    4. Parse the solution file for status, objective, and `r_*` values.
+    4. Parse the solution file for status, objective, `r_*` values, and `p` (if present).
     5. Clean up temp files.
 
   Configurable binary path via `:burpee_trainer, :highs_path` (default
