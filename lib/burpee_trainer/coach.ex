@@ -75,9 +75,17 @@ defmodule BurpeeTrainer.Coach do
   end
 
   @doc """
-  Run Thompson sampling and return the best arm's suggestion, or nil if
-  fewer than #{@min_sessions} baseline sessions exist.
+  Returns one suggestion per burpee type for which the user has enough history.
+  Order matches `Arm.burpee_types()` (six_count first, navy_seal second).
   """
+  @spec suggest_all(User.t()) :: [map]
+  def suggest_all(%User{} = user) do
+    Arm.burpee_types()
+    |> Enum.map(&suggest(user, String.to_existing_atom(&1)))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  @doc "Returns the best arm suggestion for a single burpee type, or nil if insufficient history."
   @spec suggest(User.t(), atom) :: map | nil
   def suggest(%User{} = user, burpee_type) do
     base = baseline(user, burpee_type)
@@ -89,7 +97,7 @@ defmodule BurpeeTrainer.Coach do
     arms = ensure_arms(user_id, type_str)
     best_idx = Sampler.best_arm(arms)
     best = Enum.at(arms, best_idx)
-    apply_arm(base, best.dimension, best.step)
+    Map.put(apply_arm(base, best.dimension, best.step), :burpee_type, burpee_type)
   end
 
   defp apply_arm(base, "baseline", _step) do

@@ -21,6 +21,8 @@ defmodule BurpeeTrainer.Coach.Arm do
 
   @type t :: %__MODULE__{}
 
+  def burpee_types, do: @burpee_types
+
   def changeset(arm, attrs) do
     arm
     |> cast(attrs, [:user_id, :burpee_type, :dimension, :step, :alpha, :beta])

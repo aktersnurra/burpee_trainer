@@ -23,7 +23,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
     trained_days = Workouts.this_week_trained_days(user)
     last_plan = Workouts.last_run_plan(user)
-    coach_suggestion = Coach.suggest(user, :six_count)
+    coach_suggestions = Coach.suggest_all(user)
 
     {:ok,
      socket
@@ -33,7 +33,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      |> assign(:goal_min, @goal_min)
      |> assign(:today, today)
      |> assign(:week_start, current_week_start)
-     |> assign(:coach_suggestion, coach_suggestion)}
+     |> assign(:coach_suggestions, coach_suggestions)}
   end
 
   @impl true
@@ -53,7 +53,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           week_start={@week_start}
           goal_min={@goal_min}
         />
-        <.coach_suggestion suggestion={@coach_suggestion} />
+        <%= for suggestion <- @coach_suggestions do %>
+          <.coach_suggestion suggestion={suggestion} />
+        <% end %>
         <.workout_card last_plan={@last_plan} />
         <div class="text-center">
           <.link
@@ -195,7 +197,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div class="rounded-[10px] border border-primary/20 bg-primary/5 p-4 space-y-3">
       <div class="space-y-0.5">
-        <p class="text-xs text-primary/70 font-medium uppercase tracking-wide">Coach</p>
+        <p class="text-xs text-primary/70 font-medium uppercase tracking-wide">
+          Coach · {if @suggestion.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"}
+        </p>
         <p class="text-sm font-semibold">
           <%= case @suggestion.dimension do %>
             <% :reps -> %>
