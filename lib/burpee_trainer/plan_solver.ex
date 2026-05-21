@@ -109,6 +109,10 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
+  defp run_lp(%Input{burpee_count_target: n} = input, _reps_per_set) when n <= 1 do
+    {:ok, effective_ceiling(input), [], []}
+  end
+
   defp run_lp(%Input{} = input, reps_per_set) do
     problem = Lp.build(input, reps_per_set)
 

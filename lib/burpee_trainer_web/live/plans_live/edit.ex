@@ -875,12 +875,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
           <%!-- Pace override --%>
           <div class="px-5 pb-5">
-            <div class="flex items-center gap-3">
+            <form phx-submit="set_pace_override" class="flex items-center gap-3">
               <label class="text-xs text-base-content/50 shrink-0">Pace override</label>
               <input
                 type="number"
                 step="0.1"
                 min="1"
+                name="pace"
                 placeholder={
                   :erlang.float_to_binary(
                     PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
@@ -903,12 +904,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                       ),
                     else: ""
                 }
-                phx-blur="set_pace_override"
-                phx-value-pace={@plan_input.sec_per_burpee_override || ""}
-                name="sec_per_burpee_override"
                 class="w-20 rounded-md border border-[#1E2535] bg-base-300 px-2 py-1.5 text-sm text-center"
               />
-              <span class="text-xs text-base-content/40">s/rep — leave blank for auto</span>
+              <span class="text-xs text-base-content/40">s/rep — press Enter to apply</span>
               <%= if @plan_input.sec_per_burpee_override do %>
                 <button
                   type="button"
@@ -919,7 +917,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   clear
                 </button>
               <% end %>
-            </div>
+            </form>
           </div>
         </section>
 
@@ -1133,7 +1131,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums">{first.burpee_count}</span>
                   <span> reps</span>
                   <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·     {first.end_of_set_rest}s rest</span>
+                    <span> ·      {first.end_of_set_rest}s rest</span>
                   <% end %>
                 </span>
                 <button
