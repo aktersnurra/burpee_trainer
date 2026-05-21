@@ -863,16 +863,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               <button
                 type="button"
                 phx-click="add_rest"
-                class="text-xs text-primary hover:underline transition"
+                class="text-base-content/40 hover:text-primary transition leading-none"
+                aria-label="Add rest"
               >
-                + Add rest
+                +
               </button>
             </div>
-            <%= if @plan_input.additional_rests == [] do %>
-              <p class="text-xs text-base-content/30">
-                None — tap + Add rest to insert a pause at a specific minute.
-              </p>
-            <% end %>
             <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
               <form phx-change="change_rest" class="flex items-center gap-2 text-sm">
                 <input type="hidden" name="rest[index]" value={idx} />
@@ -906,7 +902,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           </div>
 
           <%!-- Advanced (pace override) --%>
-          <div class="px-5 pb-4">
+          <div class="px-5 pb-5">
             <details class="group">
               <summary class="cursor-pointer text-xs text-base-content/30 hover:text-base-content/60 transition list-none flex items-center gap-1">
                 <.icon
@@ -914,7 +910,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   class="size-3 group-open:rotate-90 transition-transform"
                 /> Advanced
               </summary>
-              <div class="mt-3">
+              <div class="mt-3 pl-4 border-l border-[#1E2535]">
                 <form phx-submit="set_pace_override" class="flex items-center gap-3">
                   <label class="text-xs text-base-content/50 shrink-0">Pace override</label>
                   <input
@@ -1003,7 +999,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <%= if @solver_solution && !@manual_edit do %>
                     <span class="text-base-content/30"> · </span>
                     <span class="text-base-content/70">
-                      {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                      {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s pace
                     </span>
                   <% end %>
                 </span>
@@ -1053,18 +1049,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 <div />
               <% end %>
               <div class="flex items-center gap-4">
-                <%= if @derived do %>
-                  <span class="text-sm tabular-nums text-base-content/50">
-                    <span class={if @derived.duration_ok, do: "text-base-content", else: "text-error"}>
-                      {Fmt.duration_sec(round(@derived.duration_sec))}
-                    </span>
-                    <span> · </span>
-                    <span class={if @derived.count_ok, do: "text-base-content", else: "text-error"}>
-                      {@derived.burpee_count}
-                    </span>
-                    <span class="text-base-content/30"> burpees</span>
-                  </span>
-                <% end %>
                 <button
                   type="submit"
                   class={[
@@ -1210,7 +1194,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   </button>
                 <% else %>
                   <span class="w-14 text-xs text-base-content/30 text-center">Reps</span>
-                  <span class="w-14 text-xs text-base-content/30 text-center">s/rep</span>
+                  <span class="w-14 text-xs text-base-content/30 text-center">Cadence</span>
                   <span class="w-14 text-xs text-base-content/30 text-center">Rest [s]</span>
                   <div class="ml-auto flex items-center gap-3">
                     <%= if uniform && length(sets) > 1 do %>
@@ -1239,7 +1223,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span> reps</span>
                   <%= if set.sec_per_rep && set.sec_per_rep > 0 do %>
                     <span class="text-base-content/30"> · </span>
-                    <span class="tabular-nums">{format_sec(set.sec_per_rep)}s/rep</span>
+                    <span class="tabular-nums">{format_sec(set.sec_per_rep)}s cadence</span>
                   <% end %>
                   <%= if set.end_of_set_rest && set.end_of_set_rest != 0 do %>
                     <span class="text-base-content/30"> · </span>
