@@ -7,6 +7,7 @@ defmodule BurpeeTrainer.Workouts do
   import Ecto.Query
 
   alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Coach
   alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Workouts.{Block, StylePerformance, WorkoutPlan, WorkoutSession}
@@ -343,6 +344,7 @@ defmodule BurpeeTrainer.Workouts do
     case Repo.insert(changeset) do
       {:ok, session} ->
         maybe_upsert_style_performance(session, user_id)
+        Task.start(fn -> Coach.update_arms(%User{id: user_id}, session) end)
         {:ok, session}
 
       error ->
