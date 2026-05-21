@@ -612,8 +612,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         _ -> current.reps_per_set
       end
 
-    %{current | name: name, target_duration_min: target_duration_min,
-                burpee_count_target: burpee_count_target, reps_per_set: reps_per_set}
+    %{
+      current
+      | name: name,
+        target_duration_min: target_duration_min,
+        burpee_count_target: burpee_count_target,
+        reps_per_set: reps_per_set
+    }
   end
 
   defp format_sec(nil), do: nil
@@ -726,7 +731,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
                 </p>
                 <p class="text-xs text-base-content/30">
-                  Min pace: {:erlang.float_to_binary(BurpeeTrainer.PlanSolver.sustainable_ceiling(@level) * 1.0, decimals: 1)}s/rep — solver finds optimal pace
+                  Min pace: {:erlang.float_to_binary(
+                    BurpeeTrainer.PlanSolver.sustainable_ceiling(@level) * 1.0, decimals: 1)}s/rep — solver finds optimal pace
                 </p>
               </div>
             </div>
@@ -842,7 +848,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </form>
             <% end %>
           </div>
-
         </section>
 
         <%!-- Layer 3 — Solution card --%>
@@ -895,9 +900,22 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
           <%= if @solver_solution do %>
             <div class="px-5 py-3 border-b border-[#1E2535] text-xs text-base-content/50 flex gap-6 flex-wrap">
-              <span>Pace: <strong class="text-base-content">{:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep</strong></span>
-              <span>Sets: <strong class="text-base-content">{@solver_solution.set_count} × {@solver_solution.set_size}</strong></span>
-              <span>Rest/set: <strong class="text-base-content">{round(@solver_solution.rest_sec)}s</strong></span>
+              <span>
+                Pace:
+                <strong class="text-base-content">
+                  {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                </strong>
+              </span>
+              <span>
+                Sets:
+                <strong class="text-base-content">
+                  {@solver_solution.set_count} × {@solver_solution.set_size}
+                </strong>
+              </span>
+              <span>
+                Rest/set:
+                <strong class="text-base-content">{round(@solver_solution.rest_sec)}s</strong>
+              </span>
             </div>
           <% end %>
 
@@ -1042,7 +1060,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums">{first.burpee_count}</span>
                   <span> reps</span>
                   <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·  {first.end_of_set_rest}s rest</span>
+                    <span> ·   {first.end_of_set_rest}s rest</span>
                   <% end %>
                 </span>
                 <button

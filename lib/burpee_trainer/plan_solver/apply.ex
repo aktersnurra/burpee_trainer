@@ -2,8 +2,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   @moduledoc """
   Collapses a solved pace `p` and reservation list into a `%WorkoutPlan{}`.
 
-  Signature differs from `PlanWizard.Apply`: `p` (solved pace, float) is
-  passed as a separate argument rather than read from the input struct.
+  `p` (solved pace, float) is passed as a separate argument.
   `fatigue_factor` is hardcoded to 0.0.
   """
 
