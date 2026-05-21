@@ -978,7 +978,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 </strong>
               </span>
               <%= if @plan_input.pacing_style == :even do %>
-                <% rest_per_rep = @plan_input.target_duration_min * 60 / @plan_input.burpee_count_target - @solver_solution.sec_per_burpee %>
+                <% rest_per_rep =
+                  @plan_input.target_duration_min * 60 / @plan_input.burpee_count_target -
+                    @solver_solution.sec_per_burpee %>
                 <%= if rest_per_rep > 0.05 do %>
                   <span>
                     Rest/rep:
@@ -1141,8 +1143,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   <span class="tabular-nums">{length(sets)} ×</span>
                   <span class="tabular-nums">{first.burpee_count}</span>
                   <span> reps</span>
+                  <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>
+                    <span> ·  {format_sec(first.sec_per_rep)}s/rep</span>
+                  <% end %>
                   <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                    <span> ·      {first.end_of_set_rest}s rest</span>
+                    <span> ·  {first.end_of_set_rest}s rest</span>
                   <% end %>
                 </span>
                 <button
@@ -1155,6 +1160,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 </button>
               <% else %>
                 <span class="w-14 text-xs text-base-content/30 text-center">Reps</span>
+                <span class="w-14 text-xs text-base-content/30 text-center">s/rep</span>
                 <span class="w-14 text-xs text-base-content/30 text-center">Rest [s]</span>
                 <div class="ml-auto flex items-center gap-3">
                   <%= if uniform && length(sets) > 1 do %>
@@ -1198,11 +1204,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               ]}>
                 <input
                   type="hidden"
-                  name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
-                  value={format_sec(set_f[:sec_per_rep].value)}
-                />
-                <input
-                  type="hidden"
                   name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_burpee]"}
                   value={format_sec(set_f[:sec_per_burpee].value)}
                 />
@@ -1214,6 +1215,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                   value={set_f[:burpee_count].value}
                   min="0"
+                  class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
+                  value={format_sec(set_f[:sec_per_rep].value)}
+                  min="0.1"
                   class="w-14 rounded border border-[#1E2535] bg-base-300 px-2 py-1 text-sm text-center tabular-nums"
                 />
                 <input
