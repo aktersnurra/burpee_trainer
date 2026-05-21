@@ -600,4 +600,49 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert Workouts.this_week_trained_days(user) == MapSet.new()
     end
   end
+
+  describe "last_run_plan/1" do
+    setup do
+      {:ok, user: user_fixture()}
+    end
+
+    test "returns plan from the most recent non-warmup session", %{user: user} do
+      plan1 = plan_fixture(user, %{name: "Plan A"})
+      plan2 = plan_fixture(user, %{name: "Plan B"})
+
+      session1 = session_from_plan_fixture(user, plan1)
+      session2 = session_from_plan_fixture(user, plan2)
+
+      # Make session1 older
+      BurpeeTrainer.Repo.update_all(
+        from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session1.id),
+        set: [inserted_at: ~U[2026-01-01 10:00:00Z]]
+      )
+      BurpeeTrainer.Repo.update_all(
+        from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session2.id),
+        set: [inserted_at: ~U[2026-01-02 10:00:00Z]]
+      )
+
+      result = Workouts.last_run_plan(user)
+      assert result.id == plan2.id
+      assert result.name == "Plan B"
+      assert is_list(result.blocks)
+    end
+
+    test "returns nil when no sessions with a plan exist", %{user: user} do
+      assert Workouts.last_run_plan(user) == nil
+    end
+
+    test "ignores warmup sessions", %{user: user} do
+      plan = plan_fixture(user)
+      session = session_from_plan_fixture(user, plan, %{"tags" => "warmup"})
+
+      BurpeeTrainer.Repo.update_all(
+        from(s in BurpeeTrainer.Workouts.WorkoutSession, where: s.id == ^session.id),
+        set: [inserted_at: ~U[2026-01-02 10:00:00Z]]
+      )
+
+      assert Workouts.last_run_plan(user) == nil
+    end
+  end
 end

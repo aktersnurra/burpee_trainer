@@ -206,6 +206,32 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Returns the `%WorkoutPlan{}` (blocks preloaded) from the most recent
+  non-warmup session that has a plan_id, or `nil` if none exists.
+  """
+  @spec last_run_plan(User.t()) :: WorkoutPlan.t() | nil
+  def last_run_plan(%User{id: user_id}) do
+    result =
+      Repo.one(
+        from s in WorkoutSession,
+          join: p in WorkoutPlan,
+          on: p.id == s.plan_id,
+          where:
+            s.user_id == ^user_id and
+              not is_nil(s.plan_id) and
+              (is_nil(s.tags) or s.tags != "warmup"),
+          order_by: [desc: s.inserted_at],
+          limit: 1,
+          select: p
+      )
+
+    case result do
+      nil -> nil
+      plan -> Repo.preload(plan, :blocks)
+    end
+  end
+
+  @doc """
   Cursor-based paginated sessions. Returns `{sessions, has_more?}`.
 
   Pass `before: datetime` to fetch the page older than that cursor.
