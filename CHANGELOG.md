@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-05-21 — PlanSolver: joint MILP with solver-chosen pace
+
+- Replaced `BurpeeTrainer.PlanWizard` with `BurpeeTrainer.PlanSolver`.
+- `sec_per_burpee` is no longer a user input. The solver finds the optimal pace bounded below by `PlanSolver.sustainable_ceiling/1` (level-derived: level_1a=8.0s down to graduated=3.70s).
+- Extended LP formulation: `p` (pace) is a free variable in the same problem as rest distribution, finding the true joint optimum rather than two sequential optima.
+- New shared LP infrastructure: `BurpeeTrainer.Milp.{Problem, Mps, Highs}` — reusable for future ScheduleSolver.
+- UI: Layer 1 shows level + min pace hint instead of sec/burpee input. Layer 3 shows solver-chosen pace, set structure, and rest as a read-only summary.
+- Deleted: `BurpeeTrainer.PlanWizard` and all sub-modules.
+
 ## 2026-05-11 — MILP plan wizard
 
 - Replaced the bespoke constraint-solver pipeline (`Reservation`, `Constraints/*`) with a MILP model serialized to MPS and solved by HiGHS.
