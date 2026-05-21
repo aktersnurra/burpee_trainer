@@ -1,13 +1,13 @@
 defmodule BurpeeTrainerWeb.OverviewLive do
   @moduledoc """
-  Landing page. Weekly streak, 12-week calendar grid, quick actions.
+  Home screen. Action-first: status strip + suggested workout card + log link.
   """
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.Workouts
+  alias BurpeeTrainerWeb.Layouts
 
   @goal_min 80.0
-  @calendar_weeks 12
 
   @impl true
   def mount(_params, _session, socket) do
@@ -21,43 +21,27 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       Enum.find(weeks, %{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
 
     completed_weeks = Enum.reject(weeks, &(&1.week_start == current_week_start))
-
     streak = compute_streak(completed_weeks)
-    calendar = build_calendar(weeks, current_week_start)
+
+    trained_days = Workouts.this_week_trained_days(user)
+    last_plan = Workouts.last_run_plan(user)
 
     {:ok,
      socket
      |> assign(:this_week, this_week)
      |> assign(:streak, streak)
-     |> assign(:calendar, calendar)
-     |> assign(:goal_min, @goal_min)}
+     |> assign(:trained_days, trained_days)
+     |> assign(:last_plan, last_plan)
+     |> assign(:goal_min, @goal_min)
+     |> assign(:today, today)
+     |> assign(:week_start, current_week_start)}
   end
 
-  # Count consecutive met-goal weeks going back from the most recent completed week.
-  # If this week already meets the goal, count it too.
   defp compute_streak(completed_weeks) do
     completed_weeks
     |> Enum.sort_by(& &1.week_start, {:desc, Date})
     |> Enum.reduce_while(0, fn week, count ->
       if week.met_goal, do: {:cont, count + 1}, else: {:halt, count}
-    end)
-  end
-
-  defp build_calendar(weeks, current_week_start) do
-    weeks_by_start = Map.new(weeks, &{&1.week_start, &1})
-
-    0..(@calendar_weeks - 1)
-    |> Enum.map(fn offset ->
-      week_start = Date.add(current_week_start, -offset * 7)
-      data = Map.get(weeks_by_start, week_start, %{minutes: 0.0, met_goal: false})
-      is_current = week_start == current_week_start
-
-      %{
-        week_start: week_start,
-        minutes: data.minutes,
-        met_goal: data.met_goal,
-        is_current: is_current
-      }
     end)
   end
 
@@ -70,199 +54,162 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       current_level={@current_level}
       current_page={:home}
     >
-      <div class="space-y-4">
-        <div class="flex items-center justify-between mb-4 sm:hidden">
-          <h1 class="text-xl font-semibold">Home</h1>
-          <.link
-            href={~p"/logout"}
-            method="delete"
-            title="Sign out"
-            class="text-[#3A4A5E] hover:text-[#C8D8F0] transition-colors"
-          >
-            <.icon name="hero-arrow-left-start-on-rectangle" class="size-5" />
-          </.link>
-        </div>
-        <.streak_card
-          streak={@streak}
+      <div class="space-y-8 max-w-lg mx-auto">
+        <.status_strip
           this_week={@this_week}
+          streak={@streak}
+          trained_days={@trained_days}
+          today={@today}
+          week_start={@week_start}
           goal_min={@goal_min}
           current_level={@current_level}
         />
-        <.calendar_card calendar={@calendar} goal_min={@goal_min} />
-        <.quick_actions />
+        <.workout_card last_plan={@last_plan} />
+        <div class="text-center">
+          <.link
+            navigate={~p"/stats"}
+            class="text-sm text-base-content/30 hover:text-base-content/60 transition"
+          >
+            + Log a past session
+          </.link>
+        </div>
       </div>
     </Layouts.app>
     """
   end
 
-  attr :streak, :integer, required: true
   attr :this_week, :map, required: true
+  attr :streak, :integer, required: true
+  attr :trained_days, :any, required: true
+  attr :today, :any, required: true
+  attr :week_start, :any, required: true
   attr :goal_min, :float, required: true
   attr :current_level, :atom, default: nil
 
-  defp streak_card(assigns) do
-    pct = min(assigns.this_week.minutes / assigns.goal_min * 100, 100.0)
-    min_done = Float.round(assigns.this_week.minutes, 1)
-    assigns = assign(assigns, pct: pct, min_done: min_done)
+  defp status_strip(assigns) do
+    min_done = assigns.this_week.minutes |> Float.round(0) |> trunc()
+    goal = trunc(assigns.goal_min)
+    days = [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday]
+
+    day_dots =
+      days
+      |> Enum.with_index()
+      |> Enum.map(fn {day, offset} ->
+        date = Date.add(assigns.week_start, offset)
+        trained = MapSet.member?(assigns.trained_days, date)
+        is_today = date == assigns.today
+        %{trained: trained, is_today: is_today, label: day_label(day)}
+      end)
+
+    assigns = assign(assigns, min_done: min_done, goal: goal, day_dots: day_dots)
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-5 flex items-center gap-4">
-      <div class="flex-1 min-w-0">
-        <div class="flex items-baseline gap-2">
-          <span class="text-[32px] font-semibold leading-none tracking-tight text-base-content">
-            {@streak}
+    <div class="space-y-2 px-1">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-base-content/60">
+          <span class={if @this_week.met_goal, do: "text-primary font-medium", else: "text-base-content font-medium"}>
+            {@min_done}
           </span>
-          <span class="text-sm text-base-content/40">
-            {if @streak == 1, do: "week", else: "weeks"}
-          </span>
-        </div>
-        <p class="mt-1 text-xs text-base-content/40 uppercase tracking-wide">current streak</p>
-      </div>
-
-      <div class="w-px self-stretch bg-[#1E2535]"></div>
-
-      <div class="flex-1 min-w-0 space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="text-xs text-base-content/40 uppercase tracking-wide">This week</span>
-          <%= if @this_week.met_goal do %>
-            <span class="inline-flex items-center gap-1 text-xs font-medium text-success">
-              Goal met <.icon name="hero-check" class="size-3" />
-            </span>
-          <% else %>
-            <span class="text-xs text-base-content/40">
-              {@min_done |> :erlang.float_to_binary(decimals: 0)} / {trunc(@goal_min)} min
-            </span>
+          <span class="text-base-content/30"> / {@goal} min</span>
+        </span>
+        <div class="flex items-center gap-2">
+          <%= for dot <- @day_dots do %>
+            <div class="flex flex-col items-center gap-0.5">
+              <div class={[
+                "w-1.5 h-1.5 rounded-full",
+                dot.trained && "bg-primary",
+                !dot.trained && dot.is_today && "border border-primary/60 bg-transparent",
+                !dot.trained && !dot.is_today && "bg-[#1E2535]"
+              ]} />
+              <span class={[
+                "text-[9px] uppercase",
+                dot.is_today && "text-primary/70",
+                !dot.is_today && "text-base-content/20"
+              ]}>
+                {dot.label}
+              </span>
+            </div>
           <% end %>
         </div>
-        <div class="h-2 rounded-full bg-[#1E2535] overflow-hidden">
-          <div
-            class={[
-              "h-full rounded-full transition-all duration-500",
-              @this_week.met_goal && "bg-success",
-              !@this_week.met_goal && "bg-primary"
-            ]}
-            style={"width: #{@pct}%"}
-          >
-          </div>
-        </div>
       </div>
-
-      <%= if @current_level do %>
-        <div class="w-px self-stretch bg-[#1E2535]"></div>
-
-        <div class="flex flex-col items-center gap-1 min-w-[48px]">
-          <span class="text-[11px] font-semibold tracking-widest text-primary uppercase px-2 py-0.5 rounded border border-primary/30 bg-primary/10">
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-base-content/40">
+          <%= if @streak > 0 do %>
+            {@streak} {if @streak == 1, do: "week", else: "weeks"} streak
+          <% else %>
+            No streak yet
+          <% end %>
+        </span>
+        <%= if @current_level do %>
+          <span class="text-xs font-semibold tracking-widest text-primary uppercase">
             {level_label(@current_level)}
           </span>
-          <p class="text-[10px] text-base-content/40 uppercase tracking-wide">level</p>
-        </div>
-      <% end %>
-    </div>
-    """
-  end
-
-  defp level_label(:graduated), do: "Grad"
-
-  defp level_label(l),
-    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
-
-  attr :calendar, :list, required: true
-  attr :goal_min, :float, required: true
-
-  defp calendar_card(assigns) do
-    ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 overflow-hidden">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-[#1E2535]">
-        <h2 class="text-xs font-medium uppercase tracking-wide text-base-content/50">
-          Weekly progress
-        </h2>
-        <span class="text-xs text-base-content/30">goal: {trunc(@goal_min)} min / week</span>
-      </div>
-
-      <div class="p-4 grid grid-cols-4 sm:grid-cols-6 gap-2">
-        <%= for week <- @calendar do %>
-          <.week_cell week={week} goal_min={@goal_min} />
         <% end %>
       </div>
     </div>
     """
   end
 
-  attr :week, :map, required: true
-  attr :goal_min, :float, required: true
+  attr :last_plan, :any, default: nil
 
-  defp week_cell(assigns) do
-    pct = min(assigns.week.minutes / assigns.goal_min * 100, 100.0)
-    min_str = trunc(assigns.week.minutes)
-
-    assigns = assign(assigns, pct: pct, min_str: min_str)
-
+  defp workout_card(%{last_plan: nil} = assigns) do
     ~H"""
-    <div class={[
-      "rounded-lg border p-2.5 flex flex-col gap-1.5 min-w-0",
-      @week.is_current && "border-primary/40 bg-primary/5",
-      !@week.is_current && "border-[#1E2535] bg-base-100"
-    ]}>
-      <span class="text-[10px] text-base-content/30 tabular-nums">
-        {Calendar.strftime(@week.week_start, "%b %-d")}
-      </span>
-
-      <div class="h-[3px] rounded-full bg-[#1E2535] overflow-hidden">
-        <div
-          class={[
-            "h-full rounded-full",
-            @week.met_goal && "bg-success",
-            !@week.met_goal && @week.minutes > 0 && "bg-primary",
-            @week.minutes == 0 && "bg-transparent"
-          ]}
-          style={"width: #{@pct}%"}
-        >
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between gap-1">
-        <span class="text-[11px] font-medium text-base-content/60 tabular-nums">
-          {if @week.minutes > 0, do: "#{@min_str}m", else: "—"}
-        </span>
-        <span class={[
-          "text-[10px] font-medium",
-          @week.is_current && "text-primary",
-          !@week.is_current && @week.met_goal && "text-success",
-          !@week.is_current && !@week.met_goal && @week.minutes > 0 && "text-base-content/20",
-          @week.minutes == 0 && "text-transparent"
-        ]}>
-          <%= cond do %>
-            <% @week.is_current -> %>
-              <.icon name="hero-arrow-right" class="size-2.5" />
-            <% @week.met_goal -> %>
-              <.icon name="hero-check" class="size-2.5" />
-            <% @week.minutes > 0 -> %>
-              ·
-            <% true -> %>
-              ·
-          <% end %>
-        </span>
-      </div>
-    </div>
-    """
-  end
-
-  defp quick_actions(assigns) do
-    ~H"""
-    <div class="space-y-2">
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-4">
+      <p class="text-sm text-base-content/50">No plans yet.</p>
       <.link
-        navigate={~p"/workouts"}
+        navigate={~p"/workouts/new"}
         class="flex items-center justify-center gap-2 w-full h-12 rounded-lg bg-primary text-primary-content text-sm font-medium hover:bg-primary/90 transition-colors"
       >
-        <.icon name="hero-play" class="size-4" /> Run a plan
-      </.link>
-      <.link
-        navigate={~p"/stats"}
-        class="flex items-center justify-center gap-2 w-full h-12 rounded-lg border border-[#1E2535] text-base-content/60 text-sm hover:text-base-content hover:border-base-content/20 transition-colors"
-      >
-        <.icon name="hero-plus" class="size-4" /> Log a session
+        <.icon name="hero-plus" class="size-4" /> Create a plan
       </.link>
     </div>
     """
   end
+
+  defp workout_card(assigns) do
+    type_label = if assigns.last_plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
+    assigns = assign(assigns, :type_label, type_label)
+
+    ~H"""
+    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5">
+      <div class="space-y-1">
+        <p class="text-xs text-base-content/40 uppercase tracking-wide font-medium">
+          Pick up where you left off
+        </p>
+        <p class="text-lg font-semibold leading-snug">{@last_plan.name}</p>
+        <p class="text-sm text-base-content/50">
+          {@last_plan.burpee_count_target} {@type_label}
+          <span class="text-base-content/30"> · </span>
+          {@last_plan.target_duration_min} min
+        </p>
+      </div>
+      <.link
+        navigate={~p"/session/#{@last_plan.id}"}
+        class="flex items-center justify-center gap-2 w-full h-14 rounded-lg bg-primary text-primary-content text-base font-semibold hover:bg-primary/90 transition-colors"
+      >
+        <.icon name="hero-play" class="size-5" /> Start
+      </.link>
+      <div class="text-center">
+        <.link
+          navigate={~p"/workouts"}
+          class="text-xs text-base-content/30 hover:text-base-content/60 transition"
+        >
+          Pick another workout →
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
+  defp level_label(:graduated), do: "Grad"
+  defp level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
+
+  defp day_label(:monday), do: "M"
+  defp day_label(:tuesday), do: "T"
+  defp day_label(:wednesday), do: "W"
+  defp day_label(:thursday), do: "T"
+  defp day_label(:friday), do: "F"
+  defp day_label(:saturday), do: "S"
+  defp day_label(:sunday), do: "S"
 end
