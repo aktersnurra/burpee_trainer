@@ -12,16 +12,13 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
-    weeks = Workouts.weekly_minutes(user)
 
     today = Date.utc_today()
     current_week_start = Date.beginning_of_week(today, :monday)
 
     this_week =
-      Enum.find(weeks, %{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
-
-    completed_weeks = Enum.reject(weeks, &(&1.week_start == current_week_start))
-    streak = compute_streak(completed_weeks)
+      Workouts.weekly_minutes(user)
+      |> Enum.find(%{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
 
     trained_days = Workouts.this_week_trained_days(user)
     last_plan = Workouts.last_run_plan(user)
@@ -29,20 +26,11 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     {:ok,
      socket
      |> assign(:this_week, this_week)
-     |> assign(:streak, streak)
      |> assign(:trained_days, trained_days)
      |> assign(:last_plan, last_plan)
      |> assign(:goal_min, @goal_min)
      |> assign(:today, today)
      |> assign(:week_start, current_week_start)}
-  end
-
-  defp compute_streak(completed_weeks) do
-    completed_weeks
-    |> Enum.sort_by(& &1.week_start, {:desc, Date})
-    |> Enum.reduce_while(0, fn week, count ->
-      if week.met_goal, do: {:cont, count + 1}, else: {:halt, count}
-    end)
   end
 
   @impl true
@@ -57,12 +45,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       <div class="space-y-8 max-w-lg mx-auto">
         <.status_strip
           this_week={@this_week}
-          streak={@streak}
           trained_days={@trained_days}
           today={@today}
           week_start={@week_start}
           goal_min={@goal_min}
-          current_level={@current_level}
         />
         <.workout_card last_plan={@last_plan} />
         <div class="text-center">
@@ -79,12 +65,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   attr :this_week, :map, required: true
-  attr :streak, :integer, required: true
   attr :trained_days, :any, required: true
   attr :today, :any, required: true
   attr :week_start, :any, required: true
   attr :goal_min, :float, required: true
-  attr :current_level, :atom, default: nil
 
   defp status_strip(assigns) do
     min_done = assigns.this_week.minutes |> Float.round(0) |> trunc()
@@ -104,58 +88,34 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     assigns = assign(assigns, min_done: min_done, goal: goal, day_dots: day_dots)
 
     ~H"""
-    <div class="space-y-3 px-1">
-      <%!-- Row 1: headline minutes + day strip --%>
-      <div class="flex items-end justify-between">
-        <div class="flex items-baseline gap-1.5">
-          <span class={[
-            "text-4xl font-bold leading-none tabular-nums",
-            @this_week.met_goal && "text-primary",
-            !@this_week.met_goal && "text-base-content"
-          ]}>
-            {@min_done}
-          </span>
-          <span class="text-sm text-base-content/40">/ {@goal} min</span>
-        </div>
-        <div class="flex items-end gap-3">
-          <%= for dot <- @day_dots do %>
-            <div class="flex flex-col items-center gap-1">
-              <div class={[
-                "w-1.5 h-1.5 rounded-full",
-                dot.trained && "bg-primary",
-                !dot.trained && dot.is_today && "border border-primary bg-transparent",
-                !dot.trained && !dot.is_today && "bg-[#1E2535]"
-              ]} />
-              <span class={[
-                "text-[11px] font-medium uppercase",
-                dot.trained && "text-primary",
-                !dot.trained && dot.is_today && "text-base-content/80",
-                !dot.trained && !dot.is_today && "text-base-content/25"
-              ]}>
-                {dot.label}
-              </span>
-            </div>
-          <% end %>
-        </div>
-      </div>
-      <%!-- Row 2: streak + level chip --%>
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-base-content/50">
-          <%= if @streak > 0 do %>
-            {@streak} {if @streak == 1, do: "week", else: "weeks"} streak
-          <% else %>
-            No streak yet
-          <% end %>
+    <div class="flex items-end justify-between px-1">
+      <div class="flex items-baseline gap-1.5">
+        <span class={[
+          "text-4xl font-bold leading-none tabular-nums",
+          @this_week.met_goal && "text-primary",
+          !@this_week.met_goal && "text-base-content"
+        ]}>
+          {@min_done}
         </span>
-        <%= if @current_level do %>
-          <span class="flex items-baseline gap-1">
-            <span class="text-[10px] font-medium text-base-content/40 uppercase tracking-wide">
-              Level
+        <span class="text-sm text-base-content/40">/ {@goal} min</span>
+      </div>
+      <div class="flex items-end gap-3">
+        <%= for dot <- @day_dots do %>
+          <div class="flex flex-col items-center gap-1">
+            <div class={[
+              "w-1.5 h-1.5 rounded-full",
+              dot.trained && "bg-primary",
+              !dot.trained && "bg-[#1E2535]"
+            ]} />
+            <span class={[
+              "text-[11px] font-medium uppercase leading-none",
+              dot.is_today && "text-base-content rounded px-0.5 ring-1 ring-base-content/40",
+              !dot.is_today && dot.trained && "text-primary",
+              !dot.is_today && !dot.trained && "text-base-content/25"
+            ]}>
+              {dot.label}
             </span>
-            <span class="text-xs font-bold text-primary uppercase tracking-widest">
-              {level_label(@current_level)}
-            </span>
-          </span>
+          </div>
         <% end %>
       </div>
     </div>
@@ -211,7 +171,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       >
         <.icon name="hero-play" class="size-5" /> Start
       </.link>
-      <div class="text-center">
+      <div class="text-center mt-2">
         <.link
           navigate={~p"/workouts"}
           class="text-sm text-base-content/50 hover:text-base-content/80 transition underline-offset-2 hover:underline"
@@ -222,11 +182,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     </div>
     """
   end
-
-  defp level_label(:graduated), do: "Grad"
-
-  defp level_label(l),
-    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
   defp day_label(:monday), do: "M"
   defp day_label(:tuesday), do: "T"
