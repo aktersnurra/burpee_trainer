@@ -45,17 +45,6 @@ defmodule BurpeeTrainerWeb.Layouts do
           />
           <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
         </.nav_icon>
-
-        <div class="w-px h-4 bg-base-raised mx-1" />
-
-        <.link
-          href={~p"/logout"}
-          method="delete"
-          title="Sign out"
-          class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded transition-colors text-base-muted hover:text-[#C8D8F0] hover:bg-base-raised"
-        >
-          <.icon name="hero-arrow-left-start-on-rectangle" />
-        </.link>
       </nav>
 
       <%!-- Mobile bottom tab bar --%>
