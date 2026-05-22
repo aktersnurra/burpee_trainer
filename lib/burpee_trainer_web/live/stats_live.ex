@@ -463,18 +463,15 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
-        </div>
-
-        <%= if @has_more do %>
-          <div class="flex justify-center pt-1">
+          <%= if @has_more do %>
             <button
               phx-click="load_more_sessions"
-              class="px-4 py-1.5 rounded-full border border-[#1E2535] text-xs text-base-content/40 hover:text-base-content/70 hover:border-[#2E3A4E] transition"
+              class="w-full py-3 text-xs text-base-content/40 hover:text-base-content/60 transition text-center"
             >
               Load more
             </button>
-          </div>
-        <% end %>
+          <% end %>
+        </div>
       <% end %>
     </div>
     """
@@ -494,27 +491,31 @@ defmodule BurpeeTrainerWeb.StatsLive do
     assigns = assign(assigns, date_str: date_str)
 
     ~H"""
-    <div class="flex items-center justify-between gap-4 py-2.5">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-sm font-semibold tabular-nums w-10 shrink-0">
-          {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
-        </span>
-        <span class="text-sm text-base-content/70 shrink-0">
-          {Fmt.burpee_type(@session.burpee_type)}
-        </span>
-        <span class="text-sm text-base-content/40 tabular-nums shrink-0">
-          {Fmt.duration_sec(@session.duration_sec_actual)}
-        </span>
-        <%= if @session.goal do %>
-          <span class="flex items-center gap-1 text-[10px] text-primary shrink-0">
-            <.icon name="hero-trophy" class="size-3" /> Goal reached
+    <div class="flex items-start justify-between gap-3 py-3">
+      <div class="min-w-0 space-y-0.5">
+        <div class="flex items-baseline gap-2">
+          <span class="text-base font-bold tabular-nums leading-none">
+            {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
           </span>
-        <% end %>
-        <%= if @session.plan do %>
-          <span class="text-xs text-base-content/25 truncate">{@session.plan.name}</span>
-        <% end %>
+          <span class="text-xs text-base-content/50">
+            {Fmt.burpee_type(@session.burpee_type)}
+          </span>
+          <span class="text-xs text-base-content/35 tabular-nums">
+            {Fmt.duration_sec(@session.duration_sec_actual)}
+          </span>
+        </div>
+        <div class="flex items-center gap-2 min-w-0">
+          <%= if @session.plan do %>
+            <span class="text-xs text-base-content/35 truncate">{@session.plan.name}</span>
+          <% end %>
+          <%= if @session.goal do %>
+            <span class="flex items-center gap-1 text-[10px] text-primary shrink-0">
+              <.icon name="hero-trophy" class="size-3" /> Goal
+            </span>
+          <% end %>
+        </div>
       </div>
-      <span class="text-xs text-base-content/30 shrink-0">{@date_str}</span>
+      <span class="text-xs text-base-content/35 shrink-0 pt-0.5">{@date_str}</span>
     </div>
     """
   end
