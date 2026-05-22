@@ -745,7 +745,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </div>
 
         <%!-- Single input card --%>
-        <section class="rounded-[10px] border border-base-border bg-base-200 divide-y divide-base-border">
+        <section class="rounded-[10px] bg-base-300 divide-y divide-base-border">
           <%!-- Type + core inputs --%>
           <form phx-change="change_basics" class="p-5 space-y-4">
             <%!-- Burpee type pill --%>
@@ -794,7 +794,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 />
               </div>
               <div class="space-y-1">
-                <label class="text-xs text-base-content/50">Total burpees</label>
+                <label class="text-xs text-base-content/50">Total reps</label>
                 <input
                   type="number"
                   name="burpee_count_target"
@@ -983,7 +983,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </section>
 
         <%!-- Layer 3 — Solution card --%>
-        <section class="rounded-[10px] border border-base-border bg-base-200">
+        <section class="rounded-[10px] bg-base-300">
           <%!-- Solution header --%>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4 border-b border-base-border">
             <%= if @solver_error do %>
@@ -1019,7 +1019,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   }>
                     {@derived.burpee_count}
                   </span>
-                  <span class="text-base-content/50"> burpees</span>
+                  <span class="text-base-content/50"> reps</span>
                   <%= if @solver_solution && !@manual_edit do %>
                     <span class="text-base-content/30"> · </span>
                     <span class="text-base-content/70">
@@ -1065,7 +1065,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
             <div class="border-t border-base-border pt-4 flex items-center justify-between">
               <%= if @manual_edit do %>
-                <label class="cursor-pointer rounded-md border border-base-border px-3 py-1.5 text-sm text-base-content/60 hover:bg-base-300 transition">
+                <label class="cursor-pointer rounded-full border border-base-border px-4 py-1.5 text-sm text-base-content/50 hover:text-base-content hover:border-base-border-hover transition">
                   + Add block
                   <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
                 </label>
@@ -1076,14 +1076,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 <button
                   type="submit"
                   class={[
-                    "rounded-md px-6 py-2 text-sm font-medium text-primary-content transition",
+                    "rounded-full px-5 py-2 text-sm font-medium transition",
                     if(@derived && @derived.both_ok,
-                      do: "bg-primary hover:bg-primary/90",
-                      else: "bg-base-300 text-base-content/60 cursor-not-allowed"
+                      do:
+                        "border border-primary/40 text-primary hover:border-primary hover:bg-primary/10",
+                      else: "border border-base-border text-base-content/30 cursor-not-allowed"
                     )
                   ]}
                 >
-                  Save plan
+                  Save
                 </button>
               </div>
             </div>
