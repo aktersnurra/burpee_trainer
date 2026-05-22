@@ -21,7 +21,7 @@ defmodule BurpeeTrainerWeb.Layouts do
     ~H"""
     <%= if @current_user do %>
       <%!-- Desktop top nav — hidden on mobile --%>
-      <nav class="hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b border-[#141B26] bg-[#0D1017]">
+      <nav class="hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b border-[#161A24] bg-[#0D0F15]">
         <.nav_icon navigate={~p"/"} title="Home" active={@current_page == :home}>
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
@@ -46,20 +46,20 @@ defmodule BurpeeTrainerWeb.Layouts do
           <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
         </.nav_icon>
 
-        <div class="w-px h-4 bg-[#141B26] mx-1" />
+        <div class="w-px h-4 bg-[#161A24] mx-1" />
 
         <.link
           href={~p"/logout"}
           method="delete"
           title="Sign out"
-          class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded transition-colors text-[#3A4A5E] hover:text-[#C8D8F0] hover:bg-[#141B26]"
+          class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded transition-colors text-[#3D4E6A] hover:text-[#C8D8F0] hover:bg-[#161A24]"
         >
           <.icon name="hero-arrow-left-start-on-rectangle" />
         </.link>
       </nav>
 
       <%!-- Mobile bottom tab bar --%>
-      <nav class="fixed bottom-0 inset-x-0 z-50 sm:hidden flex items-center justify-around bg-[#0D1017] border-t border-[#141B26] pb-safe">
+      <nav class="fixed bottom-0 inset-x-0 z-50 sm:hidden flex items-center justify-around bg-[#0D0F15] border-t border-[#161A24] pb-safe">
         <.bottom_tab navigate={~p"/"} active={@current_page == :home} label="Home">
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
@@ -110,8 +110,8 @@ defmodule BurpeeTrainerWeb.Layouts do
       title={@title}
       class={[
         "inline-flex items-center justify-center w-9 h-9 rounded transition-colors",
-        @active && "text-[#C8D8F0] bg-[#141B26]",
-        !@active && "text-[#3A4A5E] hover:text-[#6B8FA8] hover:bg-[#141B26]"
+        @active && "text-[#C8D8F0] bg-[#161A24]",
+        !@active && "text-[#3D4E6A] hover:text-[#6B8FA8] hover:bg-[#161A24]"
       ]}
     >
       {render_slot(@inner_block)}
@@ -131,7 +131,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       class={[
         "inline-flex flex-col items-center justify-center gap-0.5 w-16 h-14 shrink-0 transition-colors",
         @active && "text-[#4A9EFF]",
-        !@active && "text-[#3A4A5E]"
+        !@active && "text-[#3D4E6A]"
       ]}
     >
       {render_slot(@inner_block)}

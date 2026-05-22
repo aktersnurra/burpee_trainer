@@ -208,7 +208,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-6 z-40">
         <.link
           navigate={~p"/workouts/new"}
-          class="w-12 h-12 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
+          class="w-12 h-12 rounded-full bg-[#161A24] border border-[#222840] text-[#4A9EFF] flex items-center justify-center hover:bg-[#222840] transition"
           aria-label="New plan"
         >
           <.icon name="hero-plus" class="size-5" />
@@ -233,7 +233,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       phx-value-level={if @value_key == "level", do: @value}
       class={[
         "rounded-full px-3 py-1 text-xs font-medium transition whitespace-nowrap shrink-0",
-        @active && "bg-[#1E2535] text-base-content",
+        @active && "bg-[#222840] text-base-content",
         !@active && "text-base-content/40 hover:text-base-content/70"
       ]}
     >
@@ -297,11 +297,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <%= if @open_menu do %>
             <div
               phx-click-away="close_menu"
-              class="absolute right-0 top-7 z-50 min-w-[140px] rounded-lg border border-[#1E2535] bg-[#0D1017] py-1 shadow-xl"
+              class="absolute right-0 top-7 z-50 min-w-[140px] rounded-lg border border-[#222840] bg-[#0D0F15] py-1 shadow-xl"
             >
               <.link
                 navigate={@item.edit_path}
-                class="flex items-center gap-2 px-4 py-3 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
+                class="flex items-center gap-2 px-4 py-3 text-sm text-base-content/70 hover:text-base-content hover:bg-[#161A24] transition-colors"
               >
                 <.icon name="hero-pencil-square" class="size-4" /> Edit
               </.link>
@@ -309,7 +309,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                 type="button"
                 phx-click="duplicate"
                 phx-value-id={@item.id}
-                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
+                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-base-content/70 hover:text-base-content hover:bg-[#161A24] transition-colors"
               >
                 <.icon name="hero-document-duplicate" class="size-4" /> Clone
               </button>
@@ -318,7 +318,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                 phx-click="delete"
                 phx-value-id={@item.id}
                 data-confirm={"Delete '#{@item.title}'? This cannot be undone."}
-                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-error/80 hover:text-error hover:bg-[#141B26] transition-colors"
+                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-error/80 hover:text-error hover:bg-[#161A24] transition-colors"
               >
                 <.icon name="hero-trash" class="size-4" /> Delete
               </button>

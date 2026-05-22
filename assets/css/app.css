@@ -23,17 +23,17 @@
   default: true;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: #0C0E14;
-  --color-base-200: #11141C;
-  --color-base-300: #181C26;
-  --color-base-content: #E2E8F4;
+  --color-base-100: #0D0F15;
+  --color-base-200: #13161F;
+  --color-base-300: #1A1E2A;
+  --color-base-content: #E4E9F5;
   --color-primary: #4A9EFF;
   --color-primary-content: #E6F1FF;
-  --color-secondary: #6B8FA8;
+  --color-secondary: #7090A8;
   --color-secondary-content: #D4E4EF;
   --color-accent: #8B77DB;
   --color-accent-content: #EDE9FE;
-  --color-neutral: #1E2535;
+  --color-neutral: #222840;
   --color-neutral-content: #E2E8F4;
   --color-info: #4A9EFF;
   --color-info-content: #E6F1FF;
@@ -81,7 +81,7 @@
   --phase-done-content:  #EDE9FE;
 
   /* Border token used throughout cards/dividers */
-  --color-base-border: #1E2535;
+  --color-base-border: #222840;
 }
 
 /* Dark color-scheme on the root so browser date/time pickers use dark chrome */

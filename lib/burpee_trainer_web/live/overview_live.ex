@@ -137,7 +137,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         </p>
       </div>
 
-      <div class="h-1 w-full rounded-full bg-[#1E2535]">
+      <div class="h-1 w-full rounded-full bg-[#222840]">
         <div
           class="h-1 rounded-full bg-primary transition-all duration-500"
           style={"width: #{@pct}%"}
@@ -155,7 +155,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
                 "h-1 rounded-full transition-colors",
                 segment.trained && "bg-primary",
                 !segment.trained && segment.is_today && "bg-base-content/25",
-                !segment.trained && !segment.is_today && "bg-[#1E2535]"
+                !segment.trained && !segment.is_today && "bg-[#222840]"
               ]}
             />
           <% end %>

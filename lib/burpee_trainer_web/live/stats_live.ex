@@ -153,7 +153,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <button
           type="button"
           phx-click="open_log_modal"
-          class="w-12 h-12 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
+          class="w-12 h-12 rounded-full bg-[#161A24] border border-[#222840] text-[#4A9EFF] flex items-center justify-center hover:bg-[#222840] transition"
           aria-label="Log session"
         >
           <.icon name="hero-plus" class="size-5" />
@@ -166,7 +166,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           id="log-modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6">
+          <div class="w-full sm:max-w-md bg-[#0D0F15] border border-[#222840] rounded-t-2xl sm:rounded-2xl p-6">
             <.live_component
               module={BurpeeTrainerWeb.LogFormComponent}
               id="log-form"
@@ -183,7 +183,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           id="goal-modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-[#0D1017] border border-[#1E2535] rounded-t-2xl sm:rounded-2xl p-6">
+          <div class="w-full sm:max-w-md bg-[#0D0F15] border border-[#222840] rounded-t-2xl sm:rounded-2xl p-6">
             <.live_component
               module={BurpeeTrainerWeb.GoalFormComponent}
               id="goal-form"
@@ -234,7 +234,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         </div>
       </div>
 
-      <div class="h-3 rounded-full bg-[#1E2535] overflow-hidden">
+      <div class="h-3 rounded-full bg-[#222840] overflow-hidden">
         <div
           class={[
             "h-full rounded-full transition-all duration-500",
@@ -261,8 +261,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
               day in @streak.days_active_this_week && "w-4 h-4 bg-primary",
               day == @today && day not in @streak.days_active_this_week &&
                 "w-4 h-4 ring-2 ring-primary ring-offset-2 ring-offset-base-300 bg-transparent",
-              day > @today && "w-3 h-3 bg-[#1E2535]",
-              day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-[#1E2535]"
+              day > @today && "w-3 h-3 bg-[#222840]",
+              day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-[#222840]"
             ]} />
           </div>
         <% end %>
@@ -369,7 +369,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full py-2 rounded-lg border border-[#1E2535] text-sm text-base-content/60 hover:text-base-content hover:border-[#2E3A4E] transition text-center"
+            class="mt-auto w-full py-2 rounded-lg border border-[#222840] text-sm text-base-content/60 hover:text-base-content hover:border-[#2C3450] transition text-center"
           >
             Set new goal
           </button>
@@ -390,7 +390,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <span class="text-xs text-base-content/40">/ {@goal.burpee_count_target}</span>
             </div>
           </div>
-          <div class="h-1.5 rounded-full bg-[#1E2535] overflow-hidden">
+          <div class="h-1.5 rounded-full bg-[#222840] overflow-hidden">
             <div
               class="h-full rounded-full bg-primary transition-all duration-500"
               style={"width: #{@pct}%"}
@@ -411,7 +411,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full py-2 rounded-lg border border-[#1E2535] text-sm text-base-content/60 hover:text-base-content hover:border-[#2E3A4E] transition text-center"
+            class="mt-auto w-full py-2 rounded-lg border border-[#222840] text-sm text-base-content/60 hover:text-base-content hover:border-[#2C3450] transition text-center"
           >
             Update goal
           </button>
@@ -448,7 +448,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
-        <div class="rounded-[10px] bg-base-300 divide-y divide-[#1E2535] px-4">
+        <div class="rounded-[10px] bg-base-300 divide-y divide-[#222840] px-4">
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
@@ -577,7 +577,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     <div class="rounded-[10px] bg-base-300 p-4">
       <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
         <%!-- y-axis: 0 only --%>
-        <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#3A4A5E">0</text>
+        <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#3D4E6A">0</text>
 
         <%!-- bars --%>
         <%= for {week, i} <- @chart_weeks do %>
@@ -585,14 +585,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
           x = cx - @bar_w / 2
           height = max(min(week.minutes / @max_m * 70, 70), if(week.minutes > 0, do: 1, else: 0))
           y = 75 - height
-          color = if week.met_goal, do: "#4A9EFF", else: "#2A3A4E" %>
+          color = if week.met_goal, do: "#4A9EFF", else: "#283248" %>
           <%= if height > 0 do %>
             <rect x={x} y={y} width={@bar_w} height={height} fill={color} rx="2" />
           <% end %>
         <% end %>
 
         <%!-- 80 min target line — label on lhs --%>
-        <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#3A4A5E">
+        <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#3D4E6A">
           80
         </text>
         <line
@@ -600,7 +600,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           y1={@target_y}
           x2={@chart_w}
           y2={@target_y}
-          stroke="#3A4A5E"
+          stroke="#3D4E6A"
           stroke-width="0.5"
           stroke-dasharray="3,3"
         />
@@ -608,7 +608,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <%!-- x-axis: label data weeks only --%>
         <%= for {week, i} <- @chart_weeks, week.iso_week != nil do %>
           <% cx = @y_axis_w + (i + 0.5) * @slot_w %>
-          <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#3A4A5E">
+          <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#3D4E6A">
             W{week.iso_week}
           </text>
         <% end %>
@@ -746,8 +746,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <%!-- gridlines — only for 0 tick, targets get their own labels --%>
           <%= for tick <- @y_ticks, tick == 0 do %>
             <% gy = @to_y.(tick * 1.0) %>
-            <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#1E2535" stroke-width="0.5" />
-            <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#3A4A5E">
+            <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#222840" stroke-width="0.5" />
+            <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#3D4E6A">
               {tick}
             </text>
           <% end %>
@@ -823,7 +823,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               y={@top_pad + @plot_h + 14}
               text-anchor="middle"
               font-size="8"
-              fill="#3A4A5E"
+              fill="#3D4E6A"
             >
               W{w}
             </text>
