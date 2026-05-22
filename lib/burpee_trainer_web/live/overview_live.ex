@@ -247,39 +247,35 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   defp coach_suggestion(%{suggestion: nil} = assigns), do: ~H""
 
   defp coach_suggestion(assigns) do
+    type_label = if assigns.suggestion.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
+
+    dimension_label =
+      case assigns.suggestion.dimension do
+        :reps -> "Push volume"
+        :pace -> "Push intensity"
+        :rest -> "Push density"
+        :baseline -> "Confirm your level"
+      end
+
+    assigns = assign(assigns, type_label: type_label, dimension_label: dimension_label)
+
     ~H"""
     <div
       data-home-coach-suggestion
-      class="rounded-[10px] border border-primary/20 bg-primary/5 p-4 space-y-3"
+      class="rounded-[10px] border border-primary/20 bg-primary/5 px-4 py-3 flex items-center gap-3"
     >
-      <div class="space-y-0.5">
-        <p class="text-xs text-primary/70 font-medium uppercase tracking-wide">
-          Coach · {if @suggestion.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"}
-        </p>
-        <p class="text-sm font-semibold">
-          <%= case @suggestion.dimension do %>
-            <% :reps -> %>
-              Push volume
-            <% :pace -> %>
-              Push intensity
-            <% :rest -> %>
-              Push density
-            <% :baseline -> %>
-              Confirm your level
-          <% end %>
-        </p>
-        <p class="text-xs text-base-content/50">{@suggestion.rationale}</p>
-      </div>
-      <div class="flex items-center gap-4 text-xs text-base-content/60">
-        <span><strong class="text-base-content">{@suggestion.burpee_count}</strong> reps</span>
-        <span><strong class="text-base-content">{@suggestion.sec_per_burpee}s</strong> pace</span>
-        <%= if @suggestion.rest_sec > 0 do %>
-          <span><strong class="text-base-content">{@suggestion.rest_sec}s</strong> rest</span>
-        <% end %>
+      <div class="flex-1 min-w-0">
+        <span class="text-xs text-primary/70 font-medium uppercase tracking-wide">
+          Coach · {@type_label}
+        </span>
+        <span class="text-xs text-base-content/50 mx-1.5">·</span>
+        <span class="text-xs font-semibold text-base-content">{@dimension_label}</span>
+        <span class="text-xs text-base-content/40 mx-1">—</span>
+        <span class="text-xs text-base-content/50 truncate">{@suggestion.rationale}</span>
       </div>
       <.link
         navigate={"/workouts/new?count=#{@suggestion.burpee_count}&pace=#{@suggestion.sec_per_burpee}&rest=#{@suggestion.rest_sec}"}
-        class="text-sm text-primary hover:text-primary/80 transition font-medium"
+        class="shrink-0 text-sm text-primary hover:text-primary/80 transition font-medium whitespace-nowrap"
       >
         Try it →
       </.link>
