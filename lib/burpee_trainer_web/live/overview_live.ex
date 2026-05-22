@@ -189,12 +189,15 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         <p class="text-xl font-bold leading-snug">Create a plan to begin</p>
         <p class="text-sm text-base-content/40">Set your burpee type, reps, and duration</p>
       </div>
-      <.link
-        navigate={~p"/workouts/new"}
-        class="flex items-center justify-center gap-2 w-full h-14 rounded-lg bg-primary text-primary-content text-base font-semibold hover:bg-primary/90 transition-colors"
-      >
-        <.icon name="hero-plus" class="size-5" /> Create a plan
-      </.link>
+      <div class="flex justify-center">
+        <.link
+          navigate={~p"/workouts/new"}
+          class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-primary flex items-center justify-center hover:bg-base-border transition"
+          aria-label="Create a plan"
+        >
+          <.icon name="hero-plus" class="size-5" />
+        </.link>
+      </div>
       <div class="text-center">
         <.link
           navigate={~p"/workouts"}
@@ -224,12 +227,15 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           {@last_plan.target_duration_min} min
         </p>
       </div>
-      <.link
-        navigate={~p"/session/#{@last_plan.id}"}
-        class="flex items-center justify-center w-full h-14 rounded-lg bg-primary text-primary-content text-base font-semibold hover:bg-primary/90 transition-colors"
-      >
-        Start
-      </.link>
+      <div class="flex justify-center">
+        <.link
+          navigate={~p"/session/#{@last_plan.id}"}
+          class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-primary flex items-center justify-center hover:bg-base-border transition"
+          aria-label="Start workout"
+        >
+          <.icon name="hero-play" class="size-5" />
+        </.link>
+      </div>
       <div class="text-center mt-2">
         <.link
           navigate={~p"/workouts"}
