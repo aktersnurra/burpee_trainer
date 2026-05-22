@@ -183,11 +183,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5"
+      class="rounded-[10px] bg-base-300 p-6 space-y-5"
     >
       <div class="space-y-1">
-        <p class="text-sm text-base-content/50">Start your first workout</p>
-        <p class="text-lg font-semibold leading-snug">Create a plan to begin</p>
+        <p class="text-xl font-bold leading-snug">Create a plan to begin</p>
         <p class="text-sm text-base-content/40">Set your burpee type, reps, and duration</p>
       </div>
       <.link
@@ -215,11 +214,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5"
+      class="rounded-[10px] bg-base-300 p-6 space-y-5"
     >
       <div class="space-y-1">
-        <p class="text-sm text-base-content/50">Pick up where you left off</p>
-        <p class="text-lg font-semibold leading-snug">{@last_plan.name}</p>
+        <p class="text-xl font-bold leading-snug">{@last_plan.name}</p>
         <p class="text-sm text-base-content/50">
           {@last_plan.burpee_count_target} {@type_label}
           <span class="text-base-content/30"> · </span>
