@@ -794,7 +794,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               points={@six_polyline}
               fill="none"
               stroke="#4A9EFF"
-              stroke-width="1.5"
+              stroke-width="1"
               stroke-linejoin="round"
             />
           <% end %>
@@ -808,7 +808,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               points={@seal_polyline}
               fill="none"
               stroke="#F97316"
-              stroke-width="1.5"
+              stroke-width="1"
               stroke-linejoin="round"
             />
           <% end %>
