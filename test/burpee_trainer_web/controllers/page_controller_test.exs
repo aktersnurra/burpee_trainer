@@ -51,7 +51,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     html = html_response(conn, 200)
 
     assert html =~ ~s(id="home-week-rhythm")
-    assert html =~ ~s(This week)
+    assert html =~ ~s(/ 80 min)
     assert html =~ ~s(data-week-rhythm-segment)
     assert html =~ ~s(aria-label="Monday:)
     refute html =~ ~s(data-week-dot)
