@@ -99,13 +99,15 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       end)
 
     session_count = MapSet.size(assigns.trained_days)
+    pct = min(trunc(min_done / goal * 100), 100)
 
     assigns =
       assign(assigns,
         min_done: min_done,
         goal: goal,
         rhythm_segments: rhythm_segments,
-        session_count: session_count
+        session_count: session_count,
+        pct: pct
       )
 
     ~H"""
@@ -135,11 +137,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         </p>
       </div>
 
-      <% pct = min(trunc(@min_done / @goal * 100), 100) %>
       <div class="h-1 w-full rounded-full bg-[#1E2535]">
         <div
           class="h-1 rounded-full bg-primary transition-all duration-500"
-          style={"width: #{pct}%"}
+          style={"width: #{@pct}%"}
           aria-label={"#{@min_done} of #{@goal} minutes"}
         />
       </div>
