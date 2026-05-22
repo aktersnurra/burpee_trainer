@@ -208,7 +208,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-6 z-40">
         <.link
           navigate={~p"/workouts/new"}
-          class="w-10 h-10 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
+          class="w-12 h-12 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
           aria-label="New plan"
         >
           <.icon name="hero-plus" class="size-5" />

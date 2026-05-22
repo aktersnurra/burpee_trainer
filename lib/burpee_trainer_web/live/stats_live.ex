@@ -153,7 +153,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <button
           type="button"
           phx-click="open_log_modal"
-          class="w-10 h-10 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
+          class="w-12 h-12 rounded-full bg-[#141B26] border border-[#1E2535] text-[#4A9EFF] flex items-center justify-center hover:bg-[#1E2535] transition"
           aria-label="Log session"
         >
           <.icon name="hero-plus" class="size-5" />
