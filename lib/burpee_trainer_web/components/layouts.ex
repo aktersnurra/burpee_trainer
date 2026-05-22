@@ -21,7 +21,7 @@ defmodule BurpeeTrainerWeb.Layouts do
     ~H"""
     <%= if @current_user do %>
       <%!-- Desktop top nav — hidden on mobile --%>
-      <nav class="hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b border-base-raised bg-base-nav">
+      <nav class="hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b border-base-border bg-base-nav">
         <.nav_icon navigate={~p"/"} title="Home" active={@current_page == :home}>
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
@@ -59,7 +59,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       </nav>
 
       <%!-- Mobile bottom tab bar --%>
-      <nav class="fixed bottom-0 inset-x-0 z-50 sm:hidden flex items-center justify-around bg-base-nav border-t border-base-raised pb-safe">
+      <nav class="fixed bottom-0 inset-x-0 z-50 sm:hidden flex items-center justify-around bg-base-nav border-t border-base-border pb-safe">
         <.bottom_tab navigate={~p"/"} active={@current_page == :home} label="Home">
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
