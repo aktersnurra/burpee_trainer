@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   alias BurpeeTrainer.Coach
   alias BurpeeTrainer.Workouts
-  alias BurpeeTrainerWeb.Layouts
+  alias BurpeeTrainerWeb.{Layouts, LogFormComponent}
 
   @goal_min 80.0
 
@@ -33,7 +33,22 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      |> assign(:goal_min, @goal_min)
      |> assign(:today, today)
      |> assign(:week_start, current_week_start)
-     |> assign(:coach_suggestions, coach_suggestions)}
+     |> assign(:coach_suggestions, coach_suggestions)
+     |> assign(:log_modal_open, false)}
+  end
+
+  @impl true
+  def handle_event("open_log_modal", _, socket) do
+    {:noreply, assign(socket, :log_modal_open, true)}
+  end
+
+  def handle_event("close_log_modal", _, socket) do
+    {:noreply, assign(socket, :log_modal_open, false)}
+  end
+
+  @impl true
+  def handle_info(:session_saved, socket) do
+    {:noreply, assign(socket, :log_modal_open, false)}
   end
 
   @impl true
@@ -58,14 +73,31 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           <.coach_suggestion suggestion={suggestion} />
         <% end %>
         <div class="text-center">
-          <.link
-            navigate={~p"/stats"}
+          <button
+            type="button"
+            phx-click="open_log_modal"
             class="text-sm text-base-content/30 hover:text-base-content/60 transition"
           >
             + Log a past session
-          </.link>
+          </button>
         </div>
       </div>
+
+      <%= if @log_modal_open do %>
+        <div
+          id="home-log-modal"
+          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+        >
+          <div class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
+            <.live_component
+              module={LogFormComponent}
+              id="home-log-form"
+              current_user={@current_user}
+              on_save={:session_saved}
+            />
+          </div>
+        </div>
+      <% end %>
     </Layouts.app>
     """
   end
