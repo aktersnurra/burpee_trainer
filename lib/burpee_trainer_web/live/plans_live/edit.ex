@@ -935,28 +935,33 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
               <form phx-change="change_rest" class="flex items-center gap-2">
                 <input type="hidden" name="rest[index]" value={idx} />
-                <input
-                  type="number"
-                  name="rest[rest_sec]"
-                  min="1"
-                  value={rest.rest_sec}
-                  class="w-16 rounded-md border border-base-border bg-base-raised px-2 py-2 text-sm text-center tabular-nums"
-                />
-                <span class="text-xs text-base-content/30">s @</span>
-                <input
-                  type="number"
-                  name="rest[target_min]"
-                  min="1"
-                  max={@plan_input.target_duration_min - 1}
-                  value={rest.target_min}
-                  class="w-16 rounded-md border border-base-border bg-base-raised px-2 py-2 text-sm text-center tabular-nums"
-                />
-                <span class="text-xs text-base-content/30">min</span>
+                <div class="rounded-lg border border-base-border bg-base-raised px-3 py-2 text-center space-y-0.5 w-20">
+                  <input
+                    type="number"
+                    name="rest[rest_sec]"
+                    min="1"
+                    value={rest.rest_sec}
+                    class="w-full bg-transparent text-base font-bold tabular-nums text-center focus:outline-none"
+                  />
+                  <p class="text-[10px] text-base-content/30 uppercase tracking-widest">sec</p>
+                </div>
+                <span class="text-xs text-base-content/20">@</span>
+                <div class="rounded-lg border border-base-border bg-base-raised px-3 py-2 text-center space-y-0.5 w-20">
+                  <input
+                    type="number"
+                    name="rest[target_min]"
+                    min="1"
+                    max={@plan_input.target_duration_min - 1}
+                    value={rest.target_min}
+                    class="w-full bg-transparent text-base font-bold tabular-nums text-center focus:outline-none"
+                  />
+                  <p class="text-[10px] text-base-content/30 uppercase tracking-widest">min</p>
+                </div>
                 <button
                   type="button"
                   phx-click="remove_rest"
                   phx-value-index={idx}
-                  class="ml-auto text-base-content/25 hover:text-base-content/60 transition"
+                  class="ml-auto text-base-content/20 hover:text-base-content/50 transition"
                   aria-label="Remove rest"
                 >
                   <.icon name="hero-trash" class="size-3.5" />
@@ -998,11 +1003,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     <div class="flex items-center gap-2 text-xs text-base-content/40">
                       <%= if @solver_solution && !@manual_edit do %>
                         <span class="tabular-nums">
-                          {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s pace
+                          {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s
                         </span>
                       <% end %>
                       <%= if !@derived.both_ok do %>
-                        <span class="text-error">· constraints not met</span>
+                        <.icon name="hero-exclamation-triangle" class="size-3 text-error" />
                       <% end %>
                     </div>
                   </div>
@@ -1098,15 +1103,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           <%!-- Block header --%>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <h3 class="text-sm font-semibold text-base-content/80">
-                Block {block_f.index + 1}
-                <%= if repeat && repeat > 1 do %>
-                  <span class="font-normal text-base-content/40">× {repeat}</span>
-                <% end %>
-              </h3>
-              <span class="text-xs text-base-content/30">
+              <span class="text-xs text-base-content/35 tabular-nums">
                 {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
               </span>
+              <%= if repeat && repeat > 1 do %>
+                <span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-base-border text-base-content/50">
+                  ×{repeat}
+                </span>
+              <% end %>
             </div>
             <div class="relative flex items-center gap-3">
               <%= if @manual_edit do %>
@@ -1226,18 +1230,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     <% end %>
                     <div class="space-y-0.5 min-w-0">
                       <p class="text-sm font-semibold tabular-nums leading-none">
-                        {set.burpee_count} <span class="font-normal text-base-content/50">reps</span>
+                        {set.burpee_count}
                       </p>
-                      <p class="text-xs text-base-content/40 tabular-nums">
+                      <p class="text-xs text-base-content/35 tabular-nums">
                         <%= if set.sec_per_rep && set.sec_per_rep > 0 do %>
-                          <% cadence_label =
-                            if set.sec_per_burpee && set.sec_per_rep - set.sec_per_burpee > 0.1,
-                              do: "cadence",
-                              else: "pace" %>
-                          {format_sec(set.sec_per_rep)}s {cadence_label}
+                          {format_sec(set.sec_per_rep)}s
                         <% end %>
                         <%= if set.end_of_set_rest && set.end_of_set_rest != 0 do %>
-                          <span class="text-base-content/25"> · </span>{set.end_of_set_rest}s rest
+                          <span class="text-base-content/20"> · </span>{set.end_of_set_rest}s
                         <% end %>
                       </p>
                     </div>
