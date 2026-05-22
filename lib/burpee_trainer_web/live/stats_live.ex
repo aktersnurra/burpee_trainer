@@ -209,7 +209,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="rounded-[10px] bg-base-300 p-5 space-y-4">
-      <div class="flex items-start justify-between">
+      <div class="flex items-end justify-between">
         <div class="tabular-nums leading-none">
           <div class="flex items-baseline gap-2">
             <span class="text-8xl font-bold tracking-tight">
@@ -218,7 +218,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             <span class="text-base-content/50 text-base">/ 80 min</span>
           </div>
         </div>
-        <div class="text-right space-y-1">
+        <div class="text-right space-y-1 pb-1">
           <%= if @current_level do %>
             <p class="text-xs font-semibold text-base-content/40">
               Level <span class="text-base-content/70">{level_label(@current_level)}</span>
@@ -260,7 +260,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               "rounded-full",
               day in @streak.days_active_this_week && "w-4 h-4 bg-primary",
               day == @today && day not in @streak.days_active_this_week &&
-                "w-4 h-4 ring-2 ring-primary ring-offset-2 ring-offset-base-200 bg-transparent",
+                "w-4 h-4 ring-2 ring-primary ring-offset-2 ring-offset-base-300 bg-transparent",
               day > @today && "w-3 h-3 bg-[#1E2535]",
               day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-[#1E2535]"
             ]} />
@@ -498,8 +498,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
             <span class="text-xs text-base-content/35 truncate">{@session.plan.name}</span>
           <% end %>
           <%= if @session.goal do %>
-            <span class="flex items-center gap-1 text-[10px] text-primary shrink-0">
-              <.icon name="hero-trophy" class="size-3" /> Goal
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium shrink-0">
+              <.icon name="hero-trophy" class="size-2.5" /> Goal
             </span>
           <% end %>
         </div>
