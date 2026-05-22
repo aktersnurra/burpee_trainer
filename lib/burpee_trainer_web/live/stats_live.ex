@@ -357,7 +357,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           </p>
           <div class="flex items-baseline gap-1.5 tabular-nums">
             <span class="text-2xl font-bold">{@goal.burpee_count_target}</span>
-            <span class="text-xs text-base-content/40">burpees</span>
+            <span class="text-xs text-base-content/40">reps</span>
           </div>
           <div class="flex items-center gap-1.5 text-primary">
             <.icon name="hero-trophy" class="size-3.5 shrink-0" />
