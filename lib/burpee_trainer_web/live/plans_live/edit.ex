@@ -986,7 +986,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         <%!-- Layer 3 — Solution card --%>
         <section class="rounded-[10px] bg-base-300">
           <%!-- Solution header --%>
-          <div class="px-6 py-5 border-b border-base-border">
+          <div class="px-5 py-4 border-b border-base-border">
             <%= if @solver_error do %>
               <div class="flex items-center gap-2">
                 <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
@@ -994,47 +994,54 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </div>
             <% else %>
               <%= if @derived do %>
-                <div class="space-y-4">
-                  <%!-- Tier 1: duration + reps --%>
-                  <div class="grid grid-cols-2 gap-px bg-base-border rounded-lg overflow-hidden border border-base-border">
-                    <div class="bg-base-300 p-4 text-center space-y-2">
-                      <p class={[
-                        "text-5xl font-bold tabular-nums leading-none",
-                        if(@derived.duration_ok, do: "text-base-content", else: "text-error")
-                      ]}>
-                        {Fmt.duration_sec(round(@derived.duration_sec))}
-                      </p>
-                      <p class="text-[10px] text-base-content/40 uppercase tracking-widest">
-                        duration
-                      </p>
+                <div class="space-y-3">
+                  <%!-- Status label --%>
+                  <p class={[
+                    "text-xs font-semibold uppercase tracking-widest",
+                    if(@derived.both_ok, do: "text-primary", else: "text-error")
+                  ]}>
+                    {if @derived.both_ok, do: "✓ Solution", else: "✗ Invalid"}
+                  </p>
+                  <%!-- Duration + reps + Edit manually --%>
+                  <div class="flex items-end justify-between gap-6">
+                    <div class="flex items-end gap-6">
+                      <div class="space-y-0.5">
+                        <p class={[
+                          "text-2xl font-bold tabular-nums leading-none",
+                          if(@derived.duration_ok, do: "text-base-content", else: "text-error")
+                        ]}>
+                          {Fmt.duration_sec(round(@derived.duration_sec))}
+                        </p>
+                        <p class="text-[10px] text-base-content/40 uppercase tracking-widest">
+                          duration
+                        </p>
+                      </div>
+                      <div class="space-y-0.5">
+                        <p class={[
+                          "text-2xl font-bold tabular-nums leading-none",
+                          if(@derived.count_ok, do: "text-base-content", else: "text-error")
+                        ]}>
+                          {@derived.burpee_count}
+                        </p>
+                        <p class="text-[10px] text-base-content/40 uppercase tracking-widest">reps</p>
+                      </div>
                     </div>
-                    <div class="bg-base-300 p-4 text-center space-y-2">
-                      <p class={[
-                        "text-5xl font-bold tabular-nums leading-none",
-                        if(@derived.count_ok, do: "text-base-content", else: "text-error")
-                      ]}>
-                        {@derived.burpee_count}
-                      </p>
-                      <p class="text-[10px] text-base-content/40 uppercase tracking-widest">reps</p>
-                    </div>
-                  </div>
-                  <%!-- Pace + edit link --%>
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs text-base-content/40 tabular-nums">
-                      <%= if @solver_solution && !@manual_edit do %>
-                        {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
-                      <% end %>
-                    </span>
                     <%= if !@manual_edit do %>
                       <button
                         type="button"
                         phx-click="enable_manual_edit"
-                        class="text-xs text-base-content/30 hover:text-base-content/60 transition"
+                        class="text-xs text-base-content/30 hover:text-base-content/60 transition mb-0.5"
                       >
                         Edit manually
                       </button>
                     <% end %>
                   </div>
+                  <%!-- Pace --%>
+                  <%= if @solver_solution && !@manual_edit do %>
+                    <p class="text-xs text-base-content/40 tabular-nums">
+                      {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                    </p>
+                  <% end %>
                 </div>
               <% end %>
             <% end %>
@@ -1059,29 +1066,44 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               }
             />
 
-            <div class="border-t border-base-border pt-4 flex items-center justify-between">
+            <div class="border-t border-base-border pt-4 space-y-3">
               <%= if @manual_edit do %>
-                <label class="cursor-pointer rounded-full border border-base-border px-4 py-1.5 text-sm text-base-content/50 hover:text-base-content hover:border-base-border-hover transition">
-                  + Add block
+                <label class="cursor-pointer text-xs text-base-content/35 hover:text-primary transition flex items-center gap-1">
+                  <.icon name="hero-plus" class="size-3.5" /> Add block
                   <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
                 </label>
-              <% else %>
-                <div />
               <% end %>
-              <button
-                type="submit"
-                aria-label="Save plan"
-                class={[
-                  "w-12 h-12 rounded-full flex items-center justify-center transition",
-                  if(@derived && @derived.both_ok,
-                    do: "bg-base-raised border border-base-border text-primary hover:bg-base-border",
-                    else:
-                      "bg-base-raised border border-base-border text-base-content/25 cursor-not-allowed"
-                  )
-                ]}
-              >
-                <.icon name="hero-check" class="size-5" />
-              </button>
+              <div class="flex items-center justify-between">
+                <%= if @derived do %>
+                  <p class="text-sm text-base-content/50 tabular-nums">
+                    <span class={if @derived.duration_ok, do: "text-base-content", else: "text-error"}>
+                      {Fmt.duration_sec(round(@derived.duration_sec))}
+                    </span>
+                    <span class="text-base-content/25 mx-1">·</span>
+                    <span class={if @derived.count_ok, do: "text-base-content", else: "text-error"}>
+                      {@derived.burpee_count}
+                    </span>
+                    <span class="text-base-content/40"> reps</span>
+                  </p>
+                <% else %>
+                  <div />
+                <% end %>
+                <button
+                  type="submit"
+                  aria-label="Save plan"
+                  class={[
+                    "w-10 h-10 rounded-full flex items-center justify-center transition",
+                    if(@derived && @derived.both_ok,
+                      do:
+                        "bg-base-raised border border-base-border text-primary hover:bg-base-border",
+                      else:
+                        "bg-base-raised border border-base-border text-base-content/20 cursor-not-allowed"
+                    )
+                  ]}
+                >
+                  <.icon name="hero-check" class="size-4" />
+                </button>
+              </div>
             </div>
           </.form>
         </section>
@@ -1389,35 +1411,27 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       )
 
     ~H"""
-    <div class="space-y-3">
-      <p class="text-base font-semibold tabular-nums">
-        {@n} × {@reps} reps
-        <%= if @pace do %>
-          <span class="font-normal text-base-content/40">@ {@format_sec.(@pace)}s/rep</span>
-        <% end %>
-      </p>
-      <div class="border-l-2 border-base-border pl-3 space-y-1.5">
-        <%= for {from, to, rest} <- @rest_groups do %>
-          <div class="flex items-baseline gap-2 text-sm">
-            <span class="text-base-content/35 tabular-nums shrink-0">
-              <%= if from == to do %>
-                Set {from}
-              <% else %>
-                Sets {from}–{to}
-              <% end %>
-            </span>
-            <span class="text-base-content/20">·</span>
-            <span class="text-base-content/50 tabular-nums">
-              <%= cond do %>
-                <% rest == 0 || is_nil(rest) -> %>
-                  no rest
-                <% true -> %>
-                  {rest}s rest
-              <% end %>
-            </span>
-          </div>
-        <% end %>
-      </div>
+    <div class="space-y-1.5">
+      <%= for {from, to, rest} <- @rest_groups do %>
+        <% count = to - from + 1 %>
+        <p class="text-sm tabular-nums text-base-content/70">
+          <span class="text-base-content/40 w-8 inline-block">{count}×</span>
+          <span class="font-medium text-base-content">{@reps}</span>
+          <span class="text-base-content/40"> reps</span>
+          <%= if @pace do %>
+            <span class="text-base-content/25"> ·</span>
+            <span class="text-base-content/50">{@format_sec.(@pace)}s/rep</span>
+          <% end %>
+          <%= cond do %>
+            <% rest == 0 || is_nil(rest) -> %>
+              <span class="text-base-content/25"> ·</span>
+              <span class="text-base-content/30"> no rest</span>
+            <% true -> %>
+              <span class="text-base-content/25"> ·</span>
+              <span class="text-base-content/50">{rest}s rest</span>
+          <% end %>
+        </p>
+      <% end %>
     </div>
     """
   end
