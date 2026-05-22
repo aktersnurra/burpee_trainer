@@ -209,28 +209,28 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="rounded-[10px] bg-base-300 p-5 space-y-4">
-      <div class="flex items-center justify-between">
-        <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">THIS WEEK</p>
-        <%= if @current_level do %>
-          <p class="text-xs font-semibold text-base-content/40">
-            Level <span class="text-base-content/70">{level_label(@current_level)}</span>
-          </p>
-        <% end %>
-      </div>
-
-      <div class="flex items-end justify-between">
+      <div class="flex items-start justify-between">
         <div class="tabular-nums leading-none">
-          <span class="text-8xl font-bold tracking-tight">
-            {trunc(@streak.current_week_minutes)}
-          </span>
-          <span class="text-base-content/50 text-base ml-2">/ 80 min</span>
+          <div class="flex items-baseline gap-2">
+            <span class="text-8xl font-bold tracking-tight">
+              {trunc(@streak.current_week_minutes)}
+            </span>
+            <span class="text-base-content/50 text-base">/ 80 min</span>
+          </div>
         </div>
-        <div class="text-sm text-base-content/60 pb-1">
-          <%= if @streak.streak_weeks == 0 do %>
-            No active streak
-          <% else %>
-            {@streak.streak_weeks} week streak
+        <div class="text-right space-y-1">
+          <%= if @current_level do %>
+            <p class="text-xs font-semibold text-base-content/40">
+              Level <span class="text-base-content/70">{level_label(@current_level)}</span>
+            </p>
           <% end %>
+          <div class="text-sm text-base-content/60">
+            <%= if @streak.streak_weeks == 0 do %>
+              No active streak
+            <% else %>
+              {@streak.streak_weeks} week streak
+            <% end %>
+          </div>
         </div>
       </div>
 
@@ -357,7 +357,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <.icon name="hero-trophy" class="size-4 shrink-0" />
               <span class="text-sm font-semibold">Goal reached</span>
             </div>
-            <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/30">
+            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
               {@label}
             </p>
             <p class="text-sm font-semibold tabular-nums">
@@ -378,7 +378,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           </div>
         <% @goal && @goal.status == :active -> %>
           <div class="space-y-2">
-            <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/30">
+            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
               {@label}
             </p>
             <div class="flex items-baseline justify-between">
@@ -427,7 +427,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           </div>
         <% true -> %>
           <div class="space-y-2">
-            <p class="text-[10px] font-semibold uppercase tracking-widest text-base-content/30">
+            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
               {@label}
             </p>
             <%= if @has_sessions do %>
@@ -455,7 +455,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp sessions_section(assigns) do
     ~H"""
-    <div>
+    <div class="space-y-3">
+      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">Sessions</p>
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
@@ -466,12 +467,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
         </div>
 
         <%= if @has_more do %>
-          <button
-            phx-click="load_more_sessions"
-            class="w-full pt-3 text-xs text-base-content/40 hover:text-base-content/70 transition text-center"
-          >
-            Load more
-          </button>
+          <div class="flex justify-center pt-1">
+            <button
+              phx-click="load_more_sessions"
+              class="px-4 py-1.5 rounded-full border border-[#1E2535] text-xs text-base-content/40 hover:text-base-content/70 hover:border-[#2E3A4E] transition"
+            >
+              Load more
+            </button>
+          </div>
         <% end %>
       <% end %>
     </div>
@@ -530,7 +533,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="space-y-3">
-      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">Trends</p>
       <.weekly_minutes_chart weekly_data={@weekly_data} />
       <.progress_chart
         six_count_sessions={@six_count_sessions}
@@ -584,7 +586,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="rounded-[10px] bg-base-300 p-4">
-      <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">Weekly minutes</p>
       <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
         <%!-- y-axis: 0 only --%>
         <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#3A4A5E">0</text>

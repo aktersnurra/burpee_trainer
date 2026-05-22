@@ -15,7 +15,6 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
   describe "/stats" do
     test "renders streak card with zero state", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stats")
-      assert html =~ "THIS WEEK"
       assert html =~ "/ 80 min"
       assert html =~ "No active streak"
     end
@@ -74,10 +73,10 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
 
     test "Load more appends next page of sessions", %{conn: conn, user: user} do
       plan = plan_fixture(user)
-      for _ <- 1..21, do: session_from_plan_fixture(user, plan)
+      for _ <- 1..6, do: session_from_plan_fixture(user, plan)
       {:ok, view, _html} = live(conn, ~p"/stats")
       view |> element("button[phx-click='load_more_sessions']") |> render_click()
-      # After loading more, the extra session is visible and no more pages
+      # After loading the last page, Load more disappears
       refute render(view) =~ "Load more"
     end
 
