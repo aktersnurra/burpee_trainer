@@ -811,47 +811,47 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
               </span>
               <span class="text-base-content/20 text-xs">·</span>
-              <form phx-submit="set_pace_override" class="flex items-center gap-2">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="1"
-                  name="pace"
-                  placeholder={
-                    :erlang.float_to_binary(
-                      PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
-                        name: "",
-                        burpee_type: @plan_input.burpee_type,
-                        target_duration_min: @plan_input.target_duration_min,
-                        burpee_count_target: @plan_input.burpee_count_target,
-                        pacing_style: @plan_input.pacing_style,
-                        level: @level
-                      }) * 1.0,
-                      decimals: 1
-                    )
-                  }
-                  value={
-                    if @plan_input.sec_per_burpee_override,
-                      do:
-                        :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0,
-                          decimals: 1
-                        ),
-                      else: ""
-                  }
-                  class="w-16 rounded border border-base-border bg-base-raised px-2 py-1 text-xs text-center tabular-nums text-base-content/70 focus:text-base-content"
-                />
-                <span class="text-xs text-base-content/30">s/rep</span>
-                <%= if @plan_input.sec_per_burpee_override do %>
-                  <button
-                    type="button"
-                    phx-click="set_pace_override"
-                    phx-value-pace=""
-                    class="text-xs text-base-content/30 hover:text-base-content/60 transition"
-                  >
-                    ×
-                  </button>
-                <% end %>
-              </form>
+              <input
+                type="number"
+                step="0.1"
+                min="1"
+                phx-change="set_pace_override"
+                phx-debounce="500"
+                name="pace"
+                placeholder={
+                  :erlang.float_to_binary(
+                    PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
+                      name: "",
+                      burpee_type: @plan_input.burpee_type,
+                      target_duration_min: @plan_input.target_duration_min,
+                      burpee_count_target: @plan_input.burpee_count_target,
+                      pacing_style: @plan_input.pacing_style,
+                      level: @level
+                    }) * 1.0,
+                    decimals: 1
+                  )
+                }
+                value={
+                  if @plan_input.sec_per_burpee_override,
+                    do:
+                      :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0,
+                        decimals: 1
+                      ),
+                    else: ""
+                }
+                class="w-16 rounded border border-base-border bg-base-raised px-2 py-1 text-xs text-center tabular-nums text-base-content/70 focus:text-base-content"
+              />
+              <span class="text-xs text-base-content/30">s/rep</span>
+              <%= if @plan_input.sec_per_burpee_override do %>
+                <button
+                  type="button"
+                  phx-click="set_pace_override"
+                  phx-value-pace=""
+                  class="text-xs text-base-content/30 hover:text-base-content/60 transition"
+                >
+                  ×
+                </button>
+              <% end %>
             </div>
 
             <%!-- Pacing --%>
