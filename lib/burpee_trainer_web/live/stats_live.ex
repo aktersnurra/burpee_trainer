@@ -349,102 +349,91 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="rounded-[10px] bg-base-300 p-4 space-y-3">
+    <div class="rounded-[10px] bg-base-300 p-4 flex flex-col gap-3">
       <%= cond do %>
         <% @goal && @goal.status == :achieved -> %>
-          <div class="space-y-2">
-            <div class="flex items-center gap-2 text-primary">
-              <.icon name="hero-trophy" class="size-4 shrink-0" />
-              <span class="text-sm font-semibold">Goal reached</span>
-            </div>
-            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
-              {@label}
-            </p>
-            <p class="text-sm font-semibold tabular-nums">
-              {@goal.burpee_count_target}
-              <span class="text-xs font-normal text-base-content/40 ml-0.5">burpees</span>
-            </p>
-            <p class="text-[10px] text-base-content/30">
-              {Calendar.strftime(DateTime.to_date(@goal.updated_at), "%-d %b %Y")}
-            </p>
-            <button
-              type="button"
-              phx-click="open_goal_modal"
-              phx-value-type={@burpee_type}
-              class="text-xs text-primary hover:underline"
-            >
-              Set new goal
-            </button>
+          <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
+            {@label}
+          </p>
+          <div class="flex items-baseline gap-1.5 tabular-nums">
+            <span class="text-2xl font-bold">{@goal.burpee_count_target}</span>
+            <span class="text-xs text-base-content/40">burpees</span>
           </div>
+          <div class="flex items-center gap-1.5 text-primary">
+            <.icon name="hero-trophy" class="size-3.5 shrink-0" />
+            <span class="text-xs font-medium">
+              Reached {Calendar.strftime(DateTime.to_date(@goal.updated_at), "%-d %b %Y")}
+            </span>
+          </div>
+          <button
+            type="button"
+            phx-click="open_goal_modal"
+            phx-value-type={@burpee_type}
+            class="mt-auto w-full py-2 rounded-lg border border-[#1E2535] text-sm text-base-content/60 hover:text-base-content hover:border-[#2E3A4E] transition text-center"
+          >
+            Set new goal
+          </button>
         <% @goal && @goal.status == :active -> %>
-          <div class="space-y-2">
+          <div class="flex items-start justify-between gap-2">
             <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
               {@label}
             </p>
-            <div class="flex items-baseline justify-between">
-              <div class="tabular-nums">
-                <span class="text-lg font-semibold">{@current_reps}</span>
-                <span class="text-xs text-base-content/40 ml-1">
-                  / {@goal.burpee_count_target}
-                </span>
-              </div>
-              <%= if @weekly_pace && @days_left > 0 do %>
-                <span class="text-[10px] text-base-content/40 tabular-nums">~{@weekly_pace}/wk</span>
-              <% end %>
-            </div>
-
-            <div class="h-1.5 rounded-full bg-[#1E2535] overflow-hidden">
-              <div
-                class="h-full rounded-full bg-primary transition-all duration-500"
-                style={"width: #{@pct}%"}
-              />
-            </div>
-
-            <%= if @current_reps == 0 do %>
-              <p class="text-[10px] text-base-content/30">Log a 20-min session to track progress</p>
+            <%= if @weekly_pace && @days_left > 0 do %>
+              <span class="text-[10px] text-base-content/40 tabular-nums shrink-0">
+                ~{@weekly_pace}/wk
+              </span>
             <% end %>
-
-            <p class="text-[10px] text-base-content/30">
-              by {Calendar.strftime(@goal.date_target, "%-d %b")}
-              <%= cond do %>
-                <% @days_left > 0 -> %>
-                  · {@days_left}d left
-                <% @days_left == 0 -> %>
-                  · Today
-                <% true -> %>
-                  · Overdue
-              <% end %>
-            </p>
-
-            <button
-              type="button"
-              phx-click="open_goal_modal"
-              phx-value-type={@burpee_type}
-              class="text-[10px] text-base-content/30 hover:text-primary transition"
-            >
-              Update goal
-            </button>
           </div>
+          <div class="tabular-nums">
+            <div class="flex items-baseline gap-1">
+              <span class="text-2xl font-bold">{@current_reps}</span>
+              <span class="text-xs text-base-content/40">/ {@goal.burpee_count_target}</span>
+            </div>
+          </div>
+          <div class="h-1.5 rounded-full bg-[#1E2535] overflow-hidden">
+            <div
+              class="h-full rounded-full bg-primary transition-all duration-500"
+              style={"width: #{@pct}%"}
+            />
+          </div>
+          <p class="text-xs text-base-content/40">
+            by {Calendar.strftime(@goal.date_target, "%-d %b")}
+            <%= cond do %>
+              <% @days_left > 0 -> %>
+                · {@days_left}d left
+              <% @days_left == 0 -> %>
+                · Today
+              <% true -> %>
+                · Overdue
+            <% end %>
+          </p>
+          <button
+            type="button"
+            phx-click="open_goal_modal"
+            phx-value-type={@burpee_type}
+            class="mt-auto w-full py-2 rounded-lg border border-[#1E2535] text-sm text-base-content/60 hover:text-base-content hover:border-[#2E3A4E] transition text-center"
+          >
+            Update goal
+          </button>
+        <% @has_sessions -> %>
+          <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
+            {@label}
+          </p>
+          <p class="text-sm text-base-content/40">No goal set</p>
+          <button
+            type="button"
+            phx-click="open_goal_modal"
+            phx-value-type={@burpee_type}
+            class="mt-auto w-full py-2 rounded-lg bg-primary text-primary-content text-sm font-medium hover:bg-primary/90 transition text-center"
+          >
+            Set goal
+          </button>
         <% true -> %>
-          <div class="space-y-2">
-            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
-              {@label}
-            </p>
-            <%= if @has_sessions do %>
-              <p class="text-xs text-base-content/40">No goal set</p>
-              <button
-                type="button"
-                phx-click="open_goal_modal"
-                phx-value-type={@burpee_type}
-                class="text-xs text-primary hover:underline"
-              >
-                Set goal
-              </button>
-            <% else %>
-              <p class="text-xs text-base-content/40">No sessions yet</p>
-              <p class="text-[10px] text-base-content/30">Log a session to set a goal</p>
-            <% end %>
-          </div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
+            {@label}
+          </p>
+          <p class="text-sm text-base-content/40">No sessions yet</p>
+          <p class="text-xs text-base-content/30">Log a session first</p>
       <% end %>
     </div>
     """
