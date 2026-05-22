@@ -135,6 +135,15 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         </p>
       </div>
 
+      <% pct = min(trunc(@min_done / @goal * 100), 100) %>
+      <div class="h-1 w-full rounded-full bg-[#1E2535]">
+        <div
+          class="h-1 rounded-full bg-primary transition-all duration-500"
+          style={"width: #{pct}%"}
+          aria-label={"#{@min_done} of #{@goal} minutes"}
+        />
+      </div>
+
       <div id="home-week-rhythm" class="space-y-1.5" aria-label="Weekly training rhythm">
         <div class="grid grid-cols-7 gap-1">
           <%= for segment <- @rhythm_segments do %>
