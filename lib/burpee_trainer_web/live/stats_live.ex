@@ -577,7 +577,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     <div class="rounded-[10px] bg-base-300 p-4">
       <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
         <%!-- y-axis: 0 only --%>
-        <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#727272">0</text>
+        <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#5A6480">0</text>
 
         <%!-- bars --%>
         <%= for {week, i} <- @chart_weeks do %>
@@ -585,14 +585,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
           x = cx - @bar_w / 2
           height = max(min(week.minutes / @max_m * 70, 70), if(week.minutes > 0, do: 1, else: 0))
           y = 75 - height
-          color = if week.met_goal, do: "#4A9EFF", else: "#2E2E2E" %>
+          color = if week.met_goal, do: "#4A9EFF", else: "#252830" %>
           <%= if height > 0 do %>
             <rect x={x} y={y} width={@bar_w} height={height} fill={color} rx="2" />
           <% end %>
         <% end %>
 
         <%!-- 80 min target line — label on lhs --%>
-        <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#727272">
+        <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#5A6480">
           80
         </text>
         <line
@@ -600,7 +600,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           y1={@target_y}
           x2={@chart_w}
           y2={@target_y}
-          stroke="#727272"
+          stroke="#5A6480"
           stroke-width="0.5"
           stroke-dasharray="3,3"
         />
@@ -608,7 +608,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <%!-- x-axis: label data weeks only --%>
         <%= for {week, i} <- @chart_weeks, week.iso_week != nil do %>
           <% cx = @y_axis_w + (i + 0.5) * @slot_w %>
-          <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#727272">
+          <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#5A6480">
             W{week.iso_week}
           </text>
         <% end %>
@@ -746,8 +746,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <%!-- gridlines — only for 0 tick, targets get their own labels --%>
           <%= for tick <- @y_ticks, tick == 0 do %>
             <% gy = @to_y.(tick * 1.0) %>
-            <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#373737" stroke-width="0.5" />
-            <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#727272">
+            <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#2C3040" stroke-width="0.5" />
+            <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#5A6480">
               {tick}
             </text>
           <% end %>
@@ -823,7 +823,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               y={@top_pad + @plot_h + 14}
               text-anchor="middle"
               font-size="8"
-              fill="#727272"
+              fill="#5A6480"
             >
               W{w}
             </text>

@@ -17,24 +17,24 @@
   themes: false;
 }
 
-/* Neutral dark theme — pure gray base from no-clown-fiesta, electric blue accent. */
+/* Dark theme — subtle blue-gray tint, electric blue accent. */
 @plugin "../vendor/daisyui-theme" {
   name: "dark";
   default: true;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: #151515;
-  --color-base-200: #191919;
-  --color-base-300: #202020;
-  --color-base-content: #E1E1E1;
+  --color-base-100: #111318;
+  --color-base-200: #16181F;
+  --color-base-300: #1C1F28;
+  --color-base-content: #DDE2EE;
   --color-primary: #4A9EFF;
   --color-primary-content: #E6F1FF;
   --color-secondary: #7E97AB;
   --color-secondary-content: #D4E4EF;
   --color-accent: #AA749F;
   --color-accent-content: #EDE9FE;
-  --color-neutral: #373737;
-  --color-neutral-content: #E1E1E1;
+  --color-neutral: #2C3040;
+  --color-neutral-content: #DDE2EE;
   --color-info: #4A9EFF;
   --color-info-content: #E6F1FF;
   --color-success: #22C55E;
@@ -58,10 +58,10 @@
    flow through automatically — no more hardcoded hex in templates. */
 @theme {
   --color-base-nav:          var(--color-base-100);
-  --color-base-raised:       #202020;
+  --color-base-raised:       #1C1F28;
   --color-base-border:       var(--color-neutral);
-  --color-base-border-hover: #4A4A4A;
-  --color-base-muted:        #727272;
+  --color-base-border-hover: #3A3F52;
+  --color-base-muted:        #5A6480;
 }
 
 /* Add variants based on LiveView classes */
@@ -92,7 +92,7 @@
   --phase-done-content:  #EDE9FE;
 
   /* Border token used throughout cards/dividers */
-  --color-base-border: #373737;
+  --color-base-border: #2C3040;
 }
 
 /* Dark color-scheme on the root so browser date/time pickers use dark chrome */
