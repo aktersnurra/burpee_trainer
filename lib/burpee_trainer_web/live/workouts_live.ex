@@ -132,13 +132,13 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
   ]
   @level_labels %{
     graduated: "Grad",
-    level_4: "L4",
-    level_3: "L3",
-    level_2: "L2",
-    level_1d: "L1D",
-    level_1c: "L1C",
-    level_1b: "L1B",
-    level_1a: "L1A"
+    level_4: "4",
+    level_3: "3",
+    level_2: "2",
+    level_1d: "1D",
+    level_1c: "1C",
+    level_1b: "1B",
+    level_1a: "1A"
   }
 
   @impl true
@@ -153,12 +153,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
       <div class="space-y-4">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">Workouts</h1>
-        </div>
-
-        <%!-- Source filter row --%>
-        <div class="flex gap-2">
+        <%!-- Single scrollable filter row --%>
+        <div class="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
           <.filter_pill
             label="Mine"
             value_key="source"
@@ -171,10 +167,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             value="videos"
             active={@filters[:source] == :videos}
           />
-        </div>
-
-        <%!-- Type + level filter row (scrollable on small screens) --%>
-        <div class="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
           <.filter_pill
             label="6-Count"
             value_key="burpee_type"
@@ -187,7 +179,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             value="navy_seal"
             active={@filters[:burpee_type] == :navy_seal}
           />
-          <div class="w-px h-5 bg-[#1E2535] self-center shrink-0 mx-0.5" />
           <%= for {level_atom, label} <- @level_pills do %>
             <.filter_pill
               label={label}
@@ -263,7 +254,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       <%!-- Entire card is a link to start --%>
       <.link
         navigate={@item.start_path}
-        class="block rounded-[10px] border border-[#1E2535] bg-base-200 px-4 py-3 hover:border-[#2E3A4E] transition-colors"
+        class="block rounded-[10px] bg-base-300 px-4 py-3 hover:brightness-110 transition-all"
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 space-y-1">
@@ -297,10 +288,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             type="button"
             phx-click="toggle_menu"
             phx-value-id={@menu_id}
-            class="p-1 text-base-content/30 hover:text-base-content/60 transition rounded"
+            class="p-2 text-base-content/30 hover:text-base-content/60 transition rounded"
             aria-label="More options"
           >
-            <.icon name="hero-ellipsis-horizontal" class="size-4" />
+            <.icon name="hero-ellipsis-horizontal" class="size-5" />
           </button>
 
           <%= if @open_menu do %>
