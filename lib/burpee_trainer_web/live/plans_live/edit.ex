@@ -867,131 +867,131 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 </div>
               <% end %>
             </div>
+          </form>
 
-            <%!-- Rests --%>
-            <div class="px-6 py-4 space-y-4 border-b border-base-border">
-              <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
-                <form phx-change="change_rest">
-                  <input type="hidden" name="rest[index]" value={idx} />
-                  <div class="flex items-end gap-4">
-                    <div class="space-y-1">
-                      <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Rest</p>
-                      <div class="flex items-baseline gap-1">
-                        <input
-                          type="number"
-                          name="rest[rest_sec]"
-                          min="1"
-                          value={rest.rest_sec}
-                          class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
-                        />
-                        <span class="text-sm text-base-content/30">s</span>
-                      </div>
-                    </div>
-                    <span class="text-xs text-base-content/25 mb-1">at</span>
-                    <div class="space-y-1">
-                      <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Minute</p>
-                      <div class="flex items-baseline gap-1">
-                        <input
-                          type="number"
-                          name="rest[target_min]"
-                          min="1"
-                          max={@plan_input.target_duration_min - 1}
-                          value={rest.target_min}
-                          class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      phx-click="remove_rest"
-                      phx-value-index={idx}
-                      class="ml-auto mb-1 text-base-content/20 hover:text-base-content/50 transition"
-                      aria-label="Remove rest"
-                    >
-                      <.icon name="hero-x-mark" class="size-3.5" />
-                    </button>
-                  </div>
-                </form>
-              <% end %>
-              <button
-                type="button"
-                phx-click="add_rest"
-                class="text-xs text-base-content/30 hover:text-primary transition flex items-center gap-1.5"
-              >
-                <.icon name="hero-plus" class="size-3" /> Add rest
-              </button>
-            </div>
-
-            <%!-- Level context + Advanced --%>
-            <div class="px-6 py-4 space-y-3">
-              <p class="text-xs text-base-content/30 tabular-nums">
-                {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
-                <span class="text-base-content/15 mx-1">·</span>
-                min {:erlang.float_to_binary(
-                  BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) * 1.0,
-                  decimals: 1
-                )}s/rep
-              </p>
-              <details class="group">
-                <summary class="cursor-pointer text-xs text-base-content/25 hover:text-base-content/50 transition list-none flex items-center gap-1 select-none">
-                  <.icon
-                    name="hero-chevron-right"
-                    class="size-3 group-open:rotate-90 transition-transform"
-                  /> Advanced
-                </summary>
-                <div class="mt-4 flex items-end gap-3">
+          <%!-- Rests --%>
+          <div class="px-6 py-4 space-y-4 border-b border-base-border">
+            <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
+              <form phx-change="change_rest">
+                <input type="hidden" name="rest[index]" value={idx} />
+                <div class="flex items-end gap-4">
                   <div class="space-y-1">
-                    <p class="text-[10px] text-base-content/30 uppercase tracking-widest">
-                      Pace override
-                    </p>
+                    <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Rest</p>
                     <div class="flex items-baseline gap-1">
                       <input
                         type="number"
-                        step="0.1"
+                        name="rest[rest_sec]"
                         min="1"
-                        phx-change="set_pace_override"
-                        phx-debounce="500"
-                        name="pace"
-                        placeholder={
-                          :erlang.float_to_binary(
-                            PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
-                              name: "",
-                              burpee_type: @plan_input.burpee_type,
-                              target_duration_min: @plan_input.target_duration_min,
-                              burpee_count_target: @plan_input.burpee_count_target,
-                              pacing_style: @plan_input.pacing_style,
-                              level: @level
-                            }) * 1.0,
-                            decimals: 1
-                          )
-                        }
-                        value={
-                          if @plan_input.sec_per_burpee_override,
-                            do:
-                              :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0,
-                                decimals: 1
-                              ),
-                            else: ""
-                        }
-                        class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none placeholder:text-base-content/15"
+                        value={rest.rest_sec}
+                        class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
                       />
-                      <span class="text-sm text-base-content/30">s/rep</span>
+                      <span class="text-sm text-base-content/30">s</span>
                     </div>
                   </div>
-                  <%= if @plan_input.sec_per_burpee_override do %>
-                    <button
-                      type="button"
-                      phx-click="set_pace_override"
-                      phx-value-pace=""
-                      class="mb-1 text-base-content/25 hover:text-base-content/60 transition"
-                    >
-                      <.icon name="hero-x-mark" class="size-3.5" />
-                    </button>
-                  <% end %>
+                  <span class="text-xs text-base-content/25 mb-1">at</span>
+                  <div class="space-y-1">
+                    <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Minute</p>
+                    <div class="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        name="rest[target_min]"
+                        min="1"
+                        max={@plan_input.target_duration_min - 1}
+                        value={rest.target_min}
+                        class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    phx-click="remove_rest"
+                    phx-value-index={idx}
+                    class="ml-auto mb-1 text-base-content/20 hover:text-base-content/50 transition"
+                    aria-label="Remove rest"
+                  >
+                    <.icon name="hero-x-mark" class="size-3.5" />
+                  </button>
                 </div>
-              </details>
-            </div>
-          </form>
+              </form>
+            <% end %>
+            <button
+              type="button"
+              phx-click="add_rest"
+              class="text-xs text-base-content/30 hover:text-primary transition flex items-center gap-1.5"
+            >
+              <.icon name="hero-plus" class="size-3" /> Add rest
+            </button>
+          </div>
+
+          <%!-- Level context + Advanced --%>
+          <div class="px-6 py-4 space-y-3">
+            <p class="text-xs text-base-content/30 tabular-nums">
+              {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
+              <span class="text-base-content/15 mx-1">·</span>
+              min {:erlang.float_to_binary(
+                BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) * 1.0,
+                decimals: 1
+              )}s/rep
+            </p>
+            <details class="group">
+              <summary class="cursor-pointer text-xs text-base-content/25 hover:text-base-content/50 transition list-none flex items-center gap-1 select-none">
+                <.icon
+                  name="hero-chevron-right"
+                  class="size-3 group-open:rotate-90 transition-transform"
+                /> Advanced
+              </summary>
+              <div class="mt-4 flex items-end gap-3">
+                <div class="space-y-1">
+                  <p class="text-[10px] text-base-content/30 uppercase tracking-widest">
+                    Pace override
+                  </p>
+                  <div class="flex items-baseline gap-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1"
+                      phx-change="set_pace_override"
+                      phx-debounce="500"
+                      name="pace"
+                      placeholder={
+                        :erlang.float_to_binary(
+                          PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
+                            name: "",
+                            burpee_type: @plan_input.burpee_type,
+                            target_duration_min: @plan_input.target_duration_min,
+                            burpee_count_target: @plan_input.burpee_count_target,
+                            pacing_style: @plan_input.pacing_style,
+                            level: @level
+                          }) * 1.0,
+                          decimals: 1
+                        )
+                      }
+                      value={
+                        if @plan_input.sec_per_burpee_override,
+                          do:
+                            :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0,
+                              decimals: 1
+                            ),
+                          else: ""
+                      }
+                      class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none placeholder:text-base-content/15"
+                    />
+                    <span class="text-sm text-base-content/30">s/rep</span>
+                  </div>
+                </div>
+                <%= if @plan_input.sec_per_burpee_override do %>
+                  <button
+                    type="button"
+                    phx-click="set_pace_override"
+                    phx-value-pace=""
+                    class="mb-1 text-base-content/25 hover:text-base-content/60 transition"
+                  >
+                    <.icon name="hero-x-mark" class="size-3.5" />
+                  </button>
+                <% end %>
+              </div>
+            </details>
+          </div>
         </section>
 
         <%!-- Layer 3 — Solution card --%>
