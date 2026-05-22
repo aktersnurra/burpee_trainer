@@ -456,7 +456,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
   defp sessions_section(assigns) do
     ~H"""
     <div class="space-y-3">
-      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">Sessions</p>
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
