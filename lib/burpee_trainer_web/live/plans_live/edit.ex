@@ -841,20 +841,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
               <%= if @plan_input.pacing_style == :unbroken do %>
                 <%!-- Tier 2: reps per set --%>
-                <div class="flex items-end justify-between">
-                  <div class="text-center space-y-2">
+                <div class="flex items-baseline justify-between gap-4">
+                  <div class="space-y-1.5">
                     <input
                       type="number"
                       name="reps_per_set"
                       min="1"
                       value={@plan_input.reps_per_set}
-                      class="w-24 bg-transparent text-4xl font-bold tabular-nums text-center focus:outline-none leading-none block"
+                      class="w-24 bg-transparent text-4xl font-bold tabular-nums text-left focus:outline-none leading-none block"
                     />
                     <p class="text-[10px] text-base-content/40 uppercase tracking-widest">
                       reps / set
                     </p>
                   </div>
-                  <span class="text-sm text-base-content/35 tabular-nums pb-1">
+                  <span class="text-sm text-base-content/35 tabular-nums shrink-0">
                     → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
                     <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do %>
                       + 1
@@ -865,43 +865,43 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             </div>
 
             <%!-- Group 4: Rests — sentence form --%>
-            <div class="space-y-4">
+            <div class="space-y-5">
               <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
-                <form phx-change="change_rest" class="flex items-end gap-3">
+                <form phx-change="change_rest">
                   <input type="hidden" name="rest[index]" value={idx} />
-                  <%!-- Tier 3: rest sec --%>
-                  <div class="text-center space-y-2">
-                    <input
-                      type="number"
-                      name="rest[rest_sec]"
-                      min="1"
-                      value={rest.rest_sec}
-                      class="w-20 bg-transparent text-4xl font-bold tabular-nums text-center focus:outline-none leading-none block"
-                    />
-                    <p class="text-[10px] text-base-content/40 uppercase tracking-widest">sec</p>
+                  <div class="flex items-end gap-3">
+                    <div class="space-y-1.5">
+                      <input
+                        type="number"
+                        name="rest[rest_sec]"
+                        min="1"
+                        value={rest.rest_sec}
+                        class="w-20 bg-transparent text-4xl font-bold tabular-nums text-left focus:outline-none leading-none block"
+                      />
+                      <p class="text-[10px] text-base-content/40 uppercase tracking-widest">sec</p>
+                    </div>
+                    <span class="text-sm text-base-content/30 mb-1.5">at minute</span>
+                    <div class="space-y-1.5">
+                      <input
+                        type="number"
+                        name="rest[target_min]"
+                        min="1"
+                        max={@plan_input.target_duration_min - 1}
+                        value={rest.target_min}
+                        class="w-20 bg-transparent text-4xl font-bold tabular-nums text-left focus:outline-none leading-none block"
+                      />
+                      <p class="text-[10px] text-base-content/40 uppercase tracking-widest">min</p>
+                    </div>
+                    <button
+                      type="button"
+                      phx-click="remove_rest"
+                      phx-value-index={idx}
+                      class="ml-auto mb-1.5 text-base-content/20 hover:text-base-content/50 transition"
+                      aria-label="Remove rest"
+                    >
+                      <.icon name="hero-x-mark" class="size-4" />
+                    </button>
                   </div>
-                  <span class="text-sm text-base-content/30 pb-2">at minute</span>
-                  <%!-- Tier 3: target min --%>
-                  <div class="text-center space-y-2">
-                    <input
-                      type="number"
-                      name="rest[target_min]"
-                      min="1"
-                      max={@plan_input.target_duration_min - 1}
-                      value={rest.target_min}
-                      class="w-20 bg-transparent text-4xl font-bold tabular-nums text-center focus:outline-none leading-none block"
-                    />
-                    <p class="text-[10px] text-base-content/40 uppercase tracking-widest">min</p>
-                  </div>
-                  <button
-                    type="button"
-                    phx-click="remove_rest"
-                    phx-value-index={idx}
-                    class="ml-auto mb-2 text-base-content/20 hover:text-base-content/50 transition"
-                    aria-label="Remove rest"
-                  >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
                 </form>
               <% end %>
               <button
@@ -1389,29 +1389,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       )
 
     ~H"""
-    <div class="space-y-2">
+    <div class="space-y-3">
       <p class="text-base font-semibold tabular-nums">
-        {@n} sets of {@reps} reps
+        {@n} × {@reps} reps
         <%= if @pace do %>
-          <span class="font-normal text-base-content/50">@ {@format_sec.(@pace)}s/rep</span>
+          <span class="font-normal text-base-content/40">@ {@format_sec.(@pace)}s/rep</span>
         <% end %>
       </p>
-      <div class="space-y-1 pl-1">
+      <div class="border-l-2 border-base-border pl-3 space-y-1.5">
         <%= for {from, to, rest} <- @rest_groups do %>
-          <% is_last_group =
-            {from, to} == {elem(List.last(@rest_groups), 0), elem(List.last(@rest_groups), 1)}
-
-          connector = if is_last_group, do: "└", else: "├" %>
-          <p class="text-sm text-base-content/50 font-mono">
-            <span class="text-base-content/25">{connector}</span>
-            <span class="ml-1">
+          <div class="flex items-baseline gap-2 text-sm">
+            <span class="text-base-content/35 tabular-nums shrink-0">
               <%= if from == to do %>
-                Set {from}:
+                Set {from}
               <% else %>
-                Sets {from}–{to}:
+                Sets {from}–{to}
               <% end %>
             </span>
-            <span class="text-base-content/40 ml-1">
+            <span class="text-base-content/20">·</span>
+            <span class="text-base-content/50 tabular-nums">
               <%= cond do %>
                 <% rest == 0 || is_nil(rest) -> %>
                   no rest
@@ -1419,7 +1415,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   {rest}s rest
               <% end %>
             </span>
-          </p>
+          </div>
         <% end %>
       </div>
     </div>
