@@ -53,10 +53,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           week_start={@week_start}
           goal_min={@goal_min}
         />
+        <.workout_card last_plan={@last_plan} />
         <%= for suggestion <- @coach_suggestions do %>
           <.coach_suggestion suggestion={suggestion} />
         <% end %>
-        <.workout_card last_plan={@last_plan} />
         <div class="text-center">
           <.link
             navigate={~p"/stats"}
@@ -70,69 +70,111 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     """
   end
 
-  attr :this_week, :map, required: true
-  attr :trained_days, :any, required: true
-  attr :today, :any, required: true
-  attr :week_start, :any, required: true
-  attr :goal_min, :float, required: true
+  attr(:this_week, :map, required: true)
+  attr(:trained_days, :any, required: true)
+  attr(:today, :any, required: true)
+  attr(:week_start, :any, required: true)
+  attr(:goal_min, :float, required: true)
 
   defp status_strip(assigns) do
     min_done = assigns.this_week.minutes |> Float.round(0) |> trunc()
     goal = trunc(assigns.goal_min)
     days = [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday]
 
-    day_dots =
+    rhythm_segments =
       days
       |> Enum.with_index()
       |> Enum.map(fn {day, offset} ->
         date = Date.add(assigns.week_start, offset)
         trained = MapSet.member?(assigns.trained_days, date)
         is_today = date == assigns.today
-        %{trained: trained, is_today: is_today, label: day_label(day)}
+        state_label = rhythm_state_label(trained, is_today)
+
+        %{
+          trained: trained,
+          is_today: is_today,
+          label: day_label(day),
+          aria_label: "#{day_name(day)}: #{state_label}"
+        }
       end)
 
-    assigns = assign(assigns, min_done: min_done, goal: goal, day_dots: day_dots)
+    session_count = MapSet.size(assigns.trained_days)
+
+    assigns =
+      assign(assigns,
+        min_done: min_done,
+        goal: goal,
+        rhythm_segments: rhythm_segments,
+        session_count: session_count
+      )
 
     ~H"""
-    <div class="flex items-end justify-between px-1">
-      <div class="flex items-baseline gap-1.5">
-        <span class={[
-          "text-4xl font-bold leading-none tabular-nums",
-          @this_week.met_goal && "text-primary",
-          !@this_week.met_goal && "text-base-content"
-        ]}>
-          {@min_done}
-        </span>
-        <span class="text-sm text-base-content/40">/ {@goal} min</span>
-      </div>
-      <div class="flex items-end gap-3">
-        <%= for dot <- @day_dots do %>
-          <div class="flex flex-col items-center gap-1">
-            <div class={[
-              "w-1.5 h-1.5 rounded-full",
-              dot.trained && "bg-primary",
-              !dot.trained && "bg-[#1E2535]"
-            ]} />
+    <div class="space-y-3 px-1">
+      <div class="flex items-end justify-between gap-4">
+        <div class="space-y-1">
+          <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-base-content/35">
+            This week
+          </p>
+          <div class="flex items-baseline gap-1.5">
             <span class={[
-              "text-[11px] font-medium uppercase leading-none",
-              dot.is_today && "text-base-content rounded px-0.5 ring-1 ring-base-content/40",
-              !dot.is_today && dot.trained && "text-primary",
-              !dot.is_today && !dot.trained && "text-base-content/25"
+              "text-4xl font-bold leading-none tabular-nums",
+              @this_week.met_goal && "text-primary",
+              !@this_week.met_goal && "text-base-content"
             ]}>
-              {dot.label}
+              {@min_done}
             </span>
+            <span class="text-sm text-base-content/40">/ {@goal} min</span>
           </div>
-        <% end %>
+        </div>
+        <p class="pb-1 text-xs text-base-content/45 tabular-nums">
+          <%= if @session_count == 1 do %>
+            1 session
+          <% else %>
+            {@session_count} sessions
+          <% end %>
+        </p>
+      </div>
+
+      <div id="home-week-rhythm" class="space-y-1.5" aria-label="Weekly training rhythm">
+        <div class="grid grid-cols-7 gap-1">
+          <%= for segment <- @rhythm_segments do %>
+            <div
+              data-week-rhythm-segment
+              aria-label={segment.aria_label}
+              class={[
+                "h-1 rounded-full transition-colors",
+                segment.trained && "bg-primary",
+                !segment.trained && segment.is_today && "bg-base-content/25",
+                !segment.trained && !segment.is_today && "bg-[#1E2535]"
+              ]}
+            />
+          <% end %>
+        </div>
+        <div class="grid grid-cols-7 gap-1 text-center">
+          <%= for segment <- @rhythm_segments do %>
+            <span class={[
+              "text-[10px] font-medium uppercase leading-none",
+              segment.is_today && "text-base-content/70",
+              !segment.is_today && segment.trained && "text-primary/80",
+              !segment.is_today && !segment.trained && "text-base-content/25"
+            ]}>
+              {segment.label}
+            </span>
+          <% end %>
+        </div>
       </div>
     </div>
     """
   end
 
-  attr :last_plan, :any, default: nil
+  attr(:last_plan, :any, default: nil)
 
   defp workout_card(%{last_plan: nil} = assigns) do
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5">
+    <div
+      id="home-workout-card"
+      class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5"
+    >
       <div class="space-y-1">
         <p class="text-sm text-base-content/50">Start your first workout</p>
         <p class="text-lg font-semibold leading-snug">Create a plan to begin</p>
@@ -161,7 +203,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     assigns = assign(assigns, :type_label, type_label)
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5">
+    <div
+      id="home-workout-card"
+      class="rounded-[10px] border border-[#1E2535] bg-base-200 p-6 space-y-5"
+    >
       <div class="space-y-1">
         <p class="text-sm text-base-content/50">Pick up where you left off</p>
         <p class="text-lg font-semibold leading-snug">{@last_plan.name}</p>
@@ -189,13 +234,16 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     """
   end
 
-  attr :suggestion, :any, default: nil
+  attr(:suggestion, :any, default: nil)
 
   defp coach_suggestion(%{suggestion: nil} = assigns), do: ~H""
 
   defp coach_suggestion(assigns) do
     ~H"""
-    <div class="rounded-[10px] border border-primary/20 bg-primary/5 p-4 space-y-3">
+    <div
+      data-home-coach-suggestion
+      class="rounded-[10px] border border-primary/20 bg-primary/5 p-4 space-y-3"
+    >
       <div class="space-y-0.5">
         <p class="text-xs text-primary/70 font-medium uppercase tracking-wide">
           Coach · {if @suggestion.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"}
@@ -231,6 +279,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     """
   end
 
+  defp rhythm_state_label(true, _is_today), do: "trained"
+  defp rhythm_state_label(false, true), do: "today"
+  defp rhythm_state_label(false, false), do: "not trained"
+
   defp day_label(:monday), do: "M"
   defp day_label(:tuesday), do: "T"
   defp day_label(:wednesday), do: "W"
@@ -238,4 +290,12 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   defp day_label(:friday), do: "F"
   defp day_label(:saturday), do: "S"
   defp day_label(:sunday), do: "S"
+
+  defp day_name(:monday), do: "Monday"
+  defp day_name(:tuesday), do: "Tuesday"
+  defp day_name(:wednesday), do: "Wednesday"
+  defp day_name(:thursday), do: "Thursday"
+  defp day_name(:friday), do: "Friday"
+  defp day_name(:saturday), do: "Saturday"
+  defp day_name(:sunday), do: "Sunday"
 end
