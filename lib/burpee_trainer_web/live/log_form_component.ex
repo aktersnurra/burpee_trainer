@@ -110,128 +110,138 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div>
-      <div class="flex items-center justify-between mb-5">
-        <h2 class="text-lg font-semibold">Log session</h2>
+    <div class="space-y-3">
+      <%!-- Header --%>
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-base-content/50 uppercase tracking-widest">
+          Log session
+        </h2>
         <button
           type="button"
           phx-click="close_log_modal"
-          class="text-base-content/40 hover:text-base-content/70 transition"
+          class="text-base-content/30 hover:text-base-content/60 transition"
         >
-          <.icon name="hero-x-mark" class="size-5" />
+          <.icon name="hero-x-mark" class="size-4" />
         </button>
       </div>
 
-      <%!-- Burpee type pills (outside form — socket assign) --%>
-      <div class="mb-4">
-        <p class="text-sm font-medium mb-2">Type</p>
-        <div class="flex gap-2">
-          <%= for {label, val} <- [{"6-Count", :six_count}, {"Navy SEAL", :navy_seal}] do %>
-            <button
-              type="button"
-              phx-click="set_type"
-              phx-value-type={val}
-              phx-target={@myself}
-              class={[
-                "flex-1 rounded-full px-4 py-2 text-sm font-medium border transition",
-                @burpee_type == val && "border-primary bg-primary/10 text-primary",
-                @burpee_type != val &&
-                  "border-base-border text-base-content/50 hover:text-base-content/80"
-              ]}
-            >
-              {label}
-            </button>
+      <%!-- Card 1: Type --%>
+      <div class="rounded-[10px] bg-base-300 overflow-hidden flex">
+        <%= for {label, val} <- [{"6-Count", :six_count}, {"Navy SEAL", :navy_seal}] do %>
+          <button
+            type="button"
+            phx-click="set_type"
+            phx-value-type={val}
+            phx-target={@myself}
+            class={[
+              "flex-1 py-3 text-sm font-medium tracking-wide transition",
+              @burpee_type == val && "text-primary bg-primary/10",
+              @burpee_type != val &&
+                "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
+            ]}
+          >
+            {label}
+          </button>
+          <%= if val == :six_count do %>
+            <div class="w-px bg-base-border" />
           <% end %>
-        </div>
+        <% end %>
       </div>
 
-      <%!-- Date — inside form so validate captures it without resetting --%>
-
+      <%!-- Card 2: Reps + Duration + Date --%>
       <.form
         for={@form}
         id={"log-form-#{@id}"}
         phx-submit="save"
         phx-change="validate"
         phx-target={@myself}
-        class="space-y-4"
       >
-        <.input
-          field={@form[:burpee_count_actual]}
-          type="text"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          label="Burpees done"
-        />
-        <.input
-          field={@form[:duration_sec_actual]}
-          type="text"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          label="Duration (minutes)"
-        />
-
-        <div class="fieldset mb-2">
-          <label>
-            <span class="label mb-1">Date</span>
+        <div class="rounded-[10px] bg-base-300 overflow-hidden grid grid-cols-3">
+          <div class="p-5 space-y-1 border-r border-base-border">
+            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Reps</p>
+            <input
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              name="workout_session[burpee_count_actual]"
+              value={@form[:burpee_count_actual].value}
+              class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none placeholder:text-base-content/15"
+              placeholder="—"
+            />
+          </div>
+          <div class="p-5 space-y-1 border-r border-base-border">
+            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Min</p>
+            <input
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              name="workout_session[duration_sec_actual]"
+              value={@form[:duration_sec_actual].value}
+              class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none placeholder:text-base-content/15"
+              placeholder="—"
+            />
+          </div>
+          <div class="p-5 space-y-1">
+            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Date</p>
             <input
               type="date"
               name="workout_session[log_date]"
               value={Date.to_iso8601(@log_date)}
               max={Date.to_iso8601(Date.utc_today())}
-              class="w-full input"
+              class="w-full bg-transparent text-sm tabular-nums focus:outline-none leading-none text-base-content/70"
             />
-          </label>
-        </div>
-
-        <div>
-          <p class="text-sm font-medium mb-2">How did it feel?</p>
-          <div class="flex gap-2">
-            <%= for {icon, label, val} <- @mood_options do %>
-              <button
-                type="button"
-                phx-click="set_mood"
-                phx-value-mood={val}
-                phx-target={@myself}
-                class={[
-                  "flex-1 flex flex-col items-center gap-1 rounded-lg border py-2.5 text-xs transition",
-                  @mood == val && "border-primary text-primary bg-primary/10",
-                  @mood != val && "border-base-border text-base-content/40 hover:text-base-content/70"
-                ]}
-              >
-                <.icon name={icon} class="size-5" />
-                {label}
-              </button>
-            <% end %>
           </div>
         </div>
 
-        <div>
-          <p class="text-sm font-medium mb-2">Tags</p>
-          <div class="flex flex-wrap gap-2">
-            <%= for tag <- @tag_options do %>
-              <button
-                type="button"
-                phx-click="toggle_tag"
-                phx-value-tag={tag}
-                phx-target={@myself}
-                class={[
-                  "rounded-full px-3 py-1 text-xs border transition",
-                  tag in @log_tags && "border-primary text-primary bg-primary/10",
-                  tag not in @log_tags &&
-                    "border-base-border text-base-content/40 hover:text-base-content/70"
-                ]}
-              >
-                {String.replace(tag, "_", " ")}
-              </button>
+        <%!-- Card 3: Mood --%>
+        <div class="rounded-[10px] bg-base-300 overflow-hidden flex mt-3">
+          <%= for {icon, label, val} <- @mood_options do %>
+            <button
+              type="button"
+              phx-click="set_mood"
+              phx-value-mood={val}
+              phx-target={@myself}
+              class={[
+                "flex-1 flex flex-col items-center gap-1.5 py-4 text-[10px] uppercase tracking-widest transition",
+                @mood == val && "text-primary bg-primary/10",
+                @mood != val && "text-base-content/30 hover:text-base-content/60 hover:bg-base-raised"
+              ]}
+            >
+              <.icon name={icon} class="size-5" />
+              {label}
+            </button>
+            <%= if val != 1 do %>
+              <div class="w-px bg-base-border self-stretch" />
             <% end %>
-          </div>
+          <% end %>
         </div>
 
+        <%!-- Card 4: Tags --%>
+        <div class="rounded-[10px] bg-base-300 px-4 py-3 flex flex-wrap gap-2 mt-3">
+          <%= for tag <- @tag_options do %>
+            <button
+              type="button"
+              phx-click="toggle_tag"
+              phx-value-tag={tag}
+              phx-target={@myself}
+              class={[
+                "rounded-full px-3 py-1 text-xs border transition",
+                tag in @log_tags && "border-primary/40 text-primary bg-primary/10",
+                tag not in @log_tags &&
+                  "border-base-border text-base-content/35 hover:text-base-content/60"
+              ]}
+            >
+              {String.replace(tag, "_", " ")}
+            </button>
+          <% end %>
+        </div>
+
+        <%!-- Save --%>
         <button
           type="submit"
-          class="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-content hover:bg-primary/90 transition"
+          class="w-full mt-3 py-4 rounded-[10px] text-sm font-semibold tracking-wide bg-primary/75 text-primary-content hover:bg-primary/85 transition flex items-center justify-center gap-2"
         >
-          Save session
+          Save session <.icon name="hero-arrow-right" class="size-4" />
         </button>
       </.form>
     </div>
