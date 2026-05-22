@@ -421,41 +421,39 @@ defmodule BurpeeTrainerWeb.SessionLive do
       )
 
     ~H"""
-    <section class="rounded-[10px] border border-base-border bg-base-200 p-5 space-y-5">
-      <div>
-        <h2 class="text-lg font-semibold tracking-tight">Session complete</h2>
-        <p class="text-sm text-base-content/40 mt-1">
-          Planned <span class="text-base-content/70 tabular-nums">{@summary.burpee_count_total}</span>
-          burpees ·
-          <span class="text-base-content/70 tabular-nums">
-            {Fmt.duration_sec(round(@summary.duration_sec_total))}
-          </span>
+    <div class="space-y-3">
+      <%!-- Header --%>
+      <div class="flex items-baseline justify-between">
+        <p class="text-sm font-semibold text-base-content/50 uppercase tracking-widest">
+          Session complete
+        </p>
+        <p class="text-xs text-base-content/30 tabular-nums">
+          {@summary.burpee_count_total} reps · {Fmt.duration_sec(round(@summary.duration_sec_total))} planned
         </p>
       </div>
 
-      <div class="space-y-1.5">
-        <p class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">Mood</p>
-        <div class="inline-flex rounded-lg border border-base-border overflow-hidden">
-          <%= for {icon, label, value} <- @mood_options do %>
-            <button
-              type="button"
-              phx-click="set_mood"
-              phx-value-mood={value}
-              class={[
-                "flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition",
-                if(@mood == value,
-                  do: "bg-primary/15 text-primary",
-                  else: "text-base-content/50 hover:text-base-content hover:bg-base-300"
-                )
-              ]}
-            >
-              <.icon name={icon} class="size-4" /> {label}
-            </button>
-            <%= if value != 1 do %>
-              <div class="w-px bg-base-border" />
-            <% end %>
+      <%!-- Mood --%>
+      <div class="rounded-[10px] bg-base-300 overflow-hidden flex">
+        <%= for {icon, label, value} <- @mood_options do %>
+          <button
+            type="button"
+            phx-click="set_mood"
+            phx-value-mood={value}
+            class={[
+              "flex-1 flex flex-col items-center gap-1.5 py-4 text-[10px] uppercase tracking-widest transition",
+              if(@mood == value,
+                do: "text-primary bg-primary/10",
+                else: "text-base-content/30 hover:text-base-content/60 hover:bg-base-raised"
+              )
+            ]}
+          >
+            <.icon name={icon} class="size-5" />
+            {label}
+          </button>
+          <%= if value != 1 do %>
+            <div class="w-px bg-base-border self-stretch" />
           <% end %>
-        </div>
+        <% end %>
       </div>
 
       <.form
@@ -463,26 +461,23 @@ defmodule BurpeeTrainerWeb.SessionLive do
         id="session-completion-form"
         phx-change="validate_session"
         phx-submit="save_session"
-        class="space-y-4"
+        class="space-y-3"
       >
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="space-y-1">
-            <label class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">
-              Burpees done
-            </label>
+        <%!-- Reps + Duration dials --%>
+        <div class="rounded-[10px] bg-base-300 overflow-hidden grid grid-cols-2">
+          <div class="p-5 space-y-1 border-r border-base-border">
+            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Reps</p>
             <input
               type="number"
               name={@form[:burpee_count_actual].name}
               value={@form[:burpee_count_actual].value}
               min="0"
               inputmode="numeric"
-              class="w-full rounded-md border border-base-border bg-base-300 px-3 py-2 text-sm"
+              class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none"
             />
           </div>
-          <div class="space-y-1">
-            <label class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">
-              Duration (min)
-            </label>
+          <div class="p-5 space-y-1">
+            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Min</p>
             <input
               type="number"
               name="workout_session[duration_min]"
@@ -494,37 +489,67 @@ defmodule BurpeeTrainerWeb.SessionLive do
               min="0"
               step="0.1"
               inputmode="decimal"
-              class="w-full rounded-md border border-base-border bg-base-300 px-3 py-2 text-sm"
+              class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none"
             />
           </div>
         </div>
 
-        <.input field={@form[:note_post]} type="textarea" label="How did it go?" rows="2" />
+        <%!-- Tags --%>
+        <div class="rounded-[10px] bg-base-300 px-4 py-3 flex flex-wrap gap-2">
+          <%= for tag <- @tag_options do %>
+            <button
+              type="button"
+              phx-click="toggle_tag"
+              phx-value-tag={tag}
+              class={[
+                "rounded-full px-3 py-1 text-xs border transition",
+                tag in @completion_tags && "border-primary/40 text-primary bg-primary/10",
+                tag not in @completion_tags &&
+                  "border-base-border text-base-content/35 hover:text-base-content/60"
+              ]}
+            >
+              {String.replace(tag, "_", " ")}
+            </button>
+          <% end %>
+        </div>
 
+        <%!-- Note --%>
+        <div class="rounded-[10px] bg-base-300 p-4">
+          <p class="text-[10px] text-base-content/30 uppercase tracking-widest mb-2">Note</p>
+          <textarea
+            name={@form[:note_post].name}
+            rows="2"
+            placeholder="How did it go?"
+            class="w-full bg-transparent text-sm text-base-content/80 focus:outline-none resize-none placeholder:text-base-content/20"
+          >{@form[:note_post].value}</textarea>
+        </div>
+
+        <%!-- Hidden fields --%>
         <div class="hidden">
           <.input field={@form[:burpee_type]} type="text" />
           <.input field={@form[:burpee_count_planned]} type="number" />
           <.input field={@form[:duration_sec_planned]} type="number" />
         </div>
 
-        <div class="flex items-center justify-between">
+        <%!-- Actions --%>
+        <button
+          type="submit"
+          class="w-full py-4 rounded-[10px] text-sm font-semibold tracking-wide bg-primary/75 text-primary-content hover:bg-primary/85 transition flex items-center justify-center gap-2"
+        >
+          Save session <.icon name="hero-arrow-right" class="size-4" />
+        </button>
+        <div class="text-center">
           <button
             type="button"
             phx-click="discard"
             data-confirm="Discard this session without saving?"
-            class="text-sm text-base-content/40 hover:text-base-content/70 transition"
+            class="text-xs text-base-content/30 hover:text-base-content/60 transition"
           >
             Discard
           </button>
-          <button
-            type="submit"
-            class="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
-          >
-            Save session
-          </button>
         </div>
       </.form>
-    </section>
+    </div>
     """
   end
 end

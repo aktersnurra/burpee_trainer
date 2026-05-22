@@ -100,7 +100,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     })
 
     html = render(view)
-    assert html =~ "Mood"
+    assert html =~ "Tired"
   end
 
   test "save_session creates session and navigates to history", %{conn: conn, user: user} do
