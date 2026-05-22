@@ -301,7 +301,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             >
               <.link
                 navigate={@item.edit_path}
-                class="flex items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
+                class="flex items-center gap-2 px-4 py-3 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
               >
                 <.icon name="hero-pencil-square" class="size-4" /> Edit
               </.link>
@@ -309,7 +309,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                 type="button"
                 phx-click="duplicate"
                 phx-value-id={@item.id}
-                class="flex w-full items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
+                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-base-content/70 hover:text-base-content hover:bg-[#141B26] transition-colors"
               >
                 <.icon name="hero-document-duplicate" class="size-4" /> Clone
               </button>
@@ -318,7 +318,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                 phx-click="delete"
                 phx-value-id={@item.id}
                 data-confirm={"Delete '#{@item.title}'? This cannot be undone."}
-                class="flex w-full items-center gap-2 px-3 py-2 text-sm text-error/80 hover:text-error hover:bg-[#141B26] transition-colors"
+                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-error/80 hover:text-error hover:bg-[#141B26] transition-colors"
               >
                 <.icon name="hero-trash" class="size-4" /> Delete
               </button>
