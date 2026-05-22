@@ -86,9 +86,13 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       <%= if @log_modal_open do %>
         <div
           id="home-log-modal"
+          phx-click="close_log_modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
+          <div
+            phx-click|stopPropagation
+            class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
+          >
             <.live_component
               module={LogFormComponent}
               id="home-log-form"

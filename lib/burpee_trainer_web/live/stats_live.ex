@@ -164,9 +164,13 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @log_modal_open do %>
         <div
           id="log-modal"
+          phx-click="close_log_modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
+          <div
+            phx-click|stopPropagation
+            class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
+          >
             <.live_component
               module={BurpeeTrainerWeb.LogFormComponent}
               id="log-form"
@@ -181,9 +185,13 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @goal_modal_type do %>
         <div
           id="goal-modal"
+          phx-click="close_goal_modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
+          <div
+            phx-click|stopPropagation
+            class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
+          >
             <.live_component
               module={BurpeeTrainerWeb.GoalFormComponent}
               id="goal-form"
