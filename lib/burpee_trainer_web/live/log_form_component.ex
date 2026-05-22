@@ -136,7 +136,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
                 "flex-1 rounded-full px-4 py-2 text-sm font-medium border transition",
                 @burpee_type == val && "border-primary bg-primary/10 text-primary",
                 @burpee_type != val &&
-                  "border-[#222840] text-base-content/50 hover:text-base-content/80"
+                  "border-base-border text-base-content/50 hover:text-base-content/80"
               ]}
             >
               {label}
@@ -195,7 +195,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
                 class={[
                   "flex-1 flex flex-col items-center gap-1 rounded-lg border py-2.5 text-xs transition",
                   @mood == val && "border-primary text-primary bg-primary/10",
-                  @mood != val && "border-[#222840] text-base-content/40 hover:text-base-content/70"
+                  @mood != val && "border-base-border text-base-content/40 hover:text-base-content/70"
                 ]}
               >
                 <.icon name={icon} class="size-5" />
@@ -218,7 +218,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
                   "rounded-full px-3 py-1 text-xs border transition",
                   tag in @log_tags && "border-primary text-primary bg-primary/10",
                   tag not in @log_tags &&
-                    "border-[#222840] text-base-content/40 hover:text-base-content/70"
+                    "border-base-border text-base-content/40 hover:text-base-content/70"
                 ]}
               >
                 {String.replace(tag, "_", " ")}

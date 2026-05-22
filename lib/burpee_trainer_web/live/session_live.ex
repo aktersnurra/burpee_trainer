@@ -358,7 +358,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
             type="button"
             id="warmup-yes-btn"
             class={[
-              "flex flex-col items-center gap-1.5 rounded-xl border border-[#222840]",
+              "flex flex-col items-center gap-1.5 rounded-xl border border-base-border",
               "px-8 py-4 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
             ]}
           >
@@ -369,7 +369,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
             type="button"
             id="warmup-skip-btn"
             class={[
-              "flex flex-col items-center gap-1.5 rounded-xl border border-[#222840]",
+              "flex flex-col items-center gap-1.5 rounded-xl border border-base-border",
               "px-8 py-4 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
             ]}
           >
@@ -386,7 +386,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               phx-click="session_started"
               phx-value-mood={value}
               class={[
-                "flex flex-col items-center gap-1.5 rounded-xl border border-[#222840]",
+                "flex flex-col items-center gap-1.5 rounded-xl border border-base-border",
                 "px-6 py-4 text-sm font-medium transition active:scale-[0.97] hover:bg-base-200"
               ]}
             >
@@ -421,7 +421,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       )
 
     ~H"""
-    <section class="rounded-[10px] border border-[#222840] bg-base-200 p-5 space-y-5">
+    <section class="rounded-[10px] border border-base-border bg-base-200 p-5 space-y-5">
       <div>
         <h2 class="text-lg font-semibold tracking-tight">Session complete</h2>
         <p class="text-sm text-base-content/40 mt-1">
@@ -435,7 +435,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
       <div class="space-y-1.5">
         <p class="text-xs text-base-content/40 uppercase tracking-wide font-semibold">Mood</p>
-        <div class="inline-flex rounded-lg border border-[#222840] overflow-hidden">
+        <div class="inline-flex rounded-lg border border-base-border overflow-hidden">
           <%= for {icon, label, value} <- @mood_options do %>
             <button
               type="button"
@@ -452,7 +452,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               <.icon name={icon} class="size-4" /> {label}
             </button>
             <%= if value != 1 do %>
-              <div class="w-px bg-[#222840]" />
+              <div class="w-px bg-base-border" />
             <% end %>
           <% end %>
         </div>
@@ -476,7 +476,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               value={@form[:burpee_count_actual].value}
               min="0"
               inputmode="numeric"
-              class="w-full rounded-md border border-[#222840] bg-base-300 px-3 py-2 text-sm"
+              class="w-full rounded-md border border-base-border bg-base-300 px-3 py-2 text-sm"
             />
           </div>
           <div class="space-y-1">
@@ -494,7 +494,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               min="0"
               step="0.1"
               inputmode="decimal"
-              class="w-full rounded-md border border-[#222840] bg-base-300 px-3 py-2 text-sm"
+              class="w-full rounded-md border border-base-border bg-base-300 px-3 py-2 text-sm"
             />
           </div>
         </div>

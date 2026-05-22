@@ -733,7 +733,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               type="text"
               name="name"
               value={@plan_input.name}
-              class="w-full bg-transparent text-2xl font-semibold tracking-tight focus:outline-none border-b border-transparent focus:border-[#222840] transition pb-0.5"
+              class="w-full bg-transparent text-2xl font-semibold tracking-tight focus:outline-none border-b border-transparent focus:border-base-border transition pb-0.5"
             />
           </form>
           <.link
@@ -745,11 +745,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </div>
 
         <%!-- Single input card --%>
-        <section class="rounded-[10px] border border-[#222840] bg-base-200 divide-y divide-[#222840]">
+        <section class="rounded-[10px] border border-base-border bg-base-200 divide-y divide-base-border">
           <%!-- Type + core inputs --%>
           <form phx-change="change_basics" class="p-5 space-y-4">
             <%!-- Burpee type pill --%>
-            <div class="inline-flex rounded-lg border border-[#222840] overflow-hidden">
+            <div class="inline-flex rounded-lg border border-base-border overflow-hidden">
               <button
                 type="button"
                 phx-click="pick_type"
@@ -764,7 +764,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               >
                 6-Count
               </button>
-              <div class="w-px bg-[#222840]" />
+              <div class="w-px bg-base-border" />
               <button
                 type="button"
                 phx-click="pick_type"
@@ -790,7 +790,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   min="1"
                   max="120"
                   value={@plan_input.target_duration_min}
-                  class="w-full rounded-md border border-[#222840] bg-base-300 px-3 py-2 text-sm"
+                  class="w-full rounded-md border border-base-border bg-base-300 px-3 py-2 text-sm"
                 />
               </div>
               <div class="space-y-1">
@@ -800,7 +800,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   name="burpee_count_target"
                   min="1"
                   value={@plan_input.burpee_count_target}
-                  class="w-full rounded-md border border-[#222840] bg-base-300 px-3 py-2 text-sm"
+                  class="w-full rounded-md border border-base-border bg-base-300 px-3 py-2 text-sm"
                 />
               </div>
               <div class="space-y-0.5">
@@ -819,7 +819,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
             <%!-- Pacing --%>
             <div class="space-y-1.5">
-              <div class="inline-flex rounded-lg border border-[#222840] overflow-hidden">
+              <div class="inline-flex rounded-lg border border-base-border overflow-hidden">
                 <button
                   type="button"
                   phx-click="pick_pacing"
@@ -834,7 +834,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 >
                   Even
                 </button>
-                <div class="w-px bg-[#222840]" />
+                <div class="w-px bg-base-border" />
                 <button
                   type="button"
                   phx-click="pick_pacing"
@@ -866,7 +866,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   name="reps_per_set"
                   min="1"
                   value={@plan_input.reps_per_set}
-                  class="w-16 rounded-md border border-[#222840] bg-base-300 px-2 py-1.5 text-sm text-center font-semibold"
+                  class="w-16 rounded-md border border-base-border bg-base-300 px-2 py-1.5 text-sm text-center font-semibold"
                 />
                 <span class="text-xs text-base-content/40">
                   → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
@@ -901,7 +901,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   name="rest[rest_sec]"
                   min="1"
                   value={rest.rest_sec}
-                  class="w-16 rounded-md border border-[#222840] bg-base-300 px-2 py-1.5 text-sm text-center"
+                  class="w-16 rounded-md border border-base-border bg-base-300 px-2 py-1.5 text-sm text-center"
                 />
                 <span class="text-xs text-base-content/40">s at min</span>
                 <input
@@ -910,7 +910,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   min="1"
                   max={@plan_input.target_duration_min - 1}
                   value={rest.target_min}
-                  class="w-16 rounded-md border border-[#222840] bg-base-300 px-2 py-1.5 text-sm text-center"
+                  class="w-16 rounded-md border border-base-border bg-base-300 px-2 py-1.5 text-sm text-center"
                 />
                 <button
                   type="button"
@@ -934,7 +934,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                   class="size-3 group-open:rotate-90 transition-transform"
                 /> Advanced
               </summary>
-              <div class="mt-3 pl-4 border-l border-[#222840]">
+              <div class="mt-3 pl-4 border-l border-base-border">
                 <form phx-submit="set_pace_override" class="flex items-center gap-3">
                   <label class="text-xs text-base-content/50 shrink-0">Pace override</label>
                   <input
@@ -963,7 +963,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                           ),
                         else: ""
                     }
-                    class="w-20 rounded-md border border-[#222840] bg-base-300 px-2 py-1.5 text-sm text-center"
+                    class="w-20 rounded-md border border-base-border bg-base-300 px-2 py-1.5 text-sm text-center"
                   />
                   <span class="text-xs text-base-content/40">s/rep — Enter to apply</span>
                   <%= if @plan_input.sec_per_burpee_override do %>
@@ -983,9 +983,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </section>
 
         <%!-- Layer 3 — Solution card --%>
-        <section class="rounded-[10px] border border-[#222840] bg-base-200">
+        <section class="rounded-[10px] border border-base-border bg-base-200">
           <%!-- Solution header --%>
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4 border-b border-[#222840]">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4 border-b border-base-border">
             <%= if @solver_error do %>
               <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
               <span class="text-xs font-semibold uppercase tracking-wide text-error">Error</span>
@@ -1063,9 +1063,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               }
             />
 
-            <div class="border-t border-[#222840] pt-4 flex items-center justify-between">
+            <div class="border-t border-base-border pt-4 flex items-center justify-between">
               <%= if @manual_edit do %>
-                <label class="cursor-pointer rounded-md border border-[#222840] px-3 py-1.5 text-sm text-base-content/60 hover:bg-base-300 transition">
+                <label class="cursor-pointer rounded-md border border-base-border px-3 py-1.5 text-sm text-base-content/60 hover:bg-base-300 transition">
                   + Add block
                   <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
                 </label>
@@ -1111,7 +1111,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         repeat = block_f[:repeat_count].value || 1
         {range_start, range_end} = Enum.at(@block_time_ranges, block_f.index, {0.0, 0.0}) %>
 
-        <div class="border-t border-[#222840] pt-4 space-y-2">
+        <div class="border-t border-base-border pt-4 space-y-2">
           <input type="hidden" name="workout_plan[blocks_sort][]" value={block_f.index} />
           <input
             type="hidden"
@@ -1147,17 +1147,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               <%= if @open_block_menu == block_f.index do %>
                 <div
                   phx-click-away="close_block_menu"
-                  class="absolute right-0 top-7 z-50 min-w-[140px] rounded-lg border border-[#222840] bg-[#0D0F15] py-1"
+                  class="absolute right-0 top-7 z-50 min-w-[140px] rounded-lg border border-base-border bg-base-nav py-1"
                 >
                   <button
                     type="button"
                     phx-click="copy_block"
                     phx-value-index={block_f.index}
-                    class="flex w-full items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-[#161A24] transition-colors"
+                    class="flex w-full items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-base-raised transition-colors"
                   >
                     <.icon name="hero-document-duplicate" class="size-4" /> Duplicate
                   </button>
-                  <label class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-error/70 hover:text-error hover:bg-[#161A24] transition-colors">
+                  <label class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-error/70 hover:text-error hover:bg-base-raised transition-colors">
                     <.icon name="hero-trash" class="size-4" /> Remove
                     <input
                       type="checkbox"
@@ -1180,7 +1180,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                 name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
                 min="1"
                 value={block_f[:repeat_count].value}
-                class="w-16 rounded-md border border-[#222840] bg-base-300 px-2 py-1 text-sm text-center"
+                class="w-16 rounded-md border border-base-border bg-base-300 px-2 py-1 text-sm text-center"
               />
             </div>
           <% else %>
@@ -1281,7 +1281,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
               <%= if @manual_edit do %>
                 <div class={[
-                  "flex items-center gap-2 py-1 border-b border-[#222840] last:border-0",
+                  "flex items-center gap-2 py-1 border-b border-base-border last:border-0",
                   hide_row && "hidden"
                 ]}>
                   <span class="text-xs text-base-content/30 tabular-nums w-5 shrink-0 text-right">
@@ -1292,7 +1292,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                     value={set_f[:burpee_count].value}
                     min="0"
-                    class="w-12 rounded border border-[#222840] bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
+                    class="w-12 rounded border border-base-border bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
                   />
                   <input
                     type="number"
@@ -1300,14 +1300,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
                     value={format_sec(set_f[:sec_per_rep].value)}
                     min="0.1"
-                    class="w-12 rounded border border-[#222840] bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
+                    class="w-12 rounded border border-base-border bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
                   />
                   <input
                     type="number"
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
                     value={set_f[:end_of_set_rest].value}
                     min="0"
-                    class="w-12 rounded border border-[#222840] bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
+                    class="w-12 rounded border border-base-border bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
                   />
                   <div class="ml-auto flex items-center gap-2">
                     <button

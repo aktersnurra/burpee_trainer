@@ -153,7 +153,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <button
           type="button"
           phx-click="open_log_modal"
-          class="w-12 h-12 rounded-full bg-[#161A24] border border-[#222840] text-[#4A9EFF] flex items-center justify-center hover:bg-[#222840] transition"
+          class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-[#4A9EFF] flex items-center justify-center hover:bg-base-border transition"
           aria-label="Log session"
         >
           <.icon name="hero-plus" class="size-5" />
@@ -166,7 +166,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           id="log-modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-[#0D0F15] border border-[#222840] rounded-t-2xl sm:rounded-2xl p-6">
+          <div class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
             <.live_component
               module={BurpeeTrainerWeb.LogFormComponent}
               id="log-form"
@@ -183,7 +183,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
           id="goal-modal"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
         >
-          <div class="w-full sm:max-w-md bg-[#0D0F15] border border-[#222840] rounded-t-2xl sm:rounded-2xl p-6">
+          <div class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
             <.live_component
               module={BurpeeTrainerWeb.GoalFormComponent}
               id="goal-form"
@@ -234,7 +234,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         </div>
       </div>
 
-      <div class="h-3 rounded-full bg-[#222840] overflow-hidden">
+      <div class="h-3 rounded-full bg-base-border overflow-hidden">
         <div
           class={[
             "h-full rounded-full transition-all duration-500",
@@ -261,8 +261,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
               day in @streak.days_active_this_week && "w-4 h-4 bg-primary",
               day == @today && day not in @streak.days_active_this_week &&
                 "w-4 h-4 ring-2 ring-primary ring-offset-2 ring-offset-base-300 bg-transparent",
-              day > @today && "w-3 h-3 bg-[#222840]",
-              day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-[#222840]"
+              day > @today && "w-3 h-3 bg-base-border",
+              day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-base-border"
             ]} />
           </div>
         <% end %>
@@ -369,7 +369,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full py-2 rounded-lg border border-[#222840] text-sm text-base-content/60 hover:text-base-content hover:border-[#2C3450] transition text-center"
+            class="mt-auto w-full py-2 rounded-lg border border-base-border text-sm text-base-content/60 hover:text-base-content hover:border-base-border-hover transition text-center"
           >
             Set new goal
           </button>
@@ -390,7 +390,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <span class="text-xs text-base-content/40">/ {@goal.burpee_count_target}</span>
             </div>
           </div>
-          <div class="h-1.5 rounded-full bg-[#222840] overflow-hidden">
+          <div class="h-1.5 rounded-full bg-base-border overflow-hidden">
             <div
               class="h-full rounded-full bg-primary transition-all duration-500"
               style={"width: #{@pct}%"}
@@ -411,7 +411,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full py-2 rounded-lg border border-[#222840] text-sm text-base-content/60 hover:text-base-content hover:border-[#2C3450] transition text-center"
+            class="mt-auto w-full py-2 rounded-lg border border-base-border text-sm text-base-content/60 hover:text-base-content hover:border-base-border-hover transition text-center"
           >
             Update goal
           </button>
@@ -448,7 +448,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
-        <div class="rounded-[10px] bg-base-300 divide-y divide-[#222840] px-4">
+        <div class="rounded-[10px] bg-base-300 divide-y divide-base-border px-4">
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>

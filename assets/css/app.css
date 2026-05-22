@@ -53,6 +53,17 @@
   --noise: 0;
 }
 
+/* Semantic colour tokens for Tailwind utility classes.
+   Values reference the CSS vars so palette changes in the daisyUI theme block above
+   flow through automatically — no more hardcoded hex in templates. */
+@theme {
+  --color-base-nav:          var(--color-base-100);
+  --color-base-raised:       #161A24;
+  --color-base-border:       var(--color-neutral);
+  --color-base-border-hover: #2C3450;
+  --color-base-muted:        #3D4E6A;
+}
+
 /* Add variants based on LiveView classes */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
