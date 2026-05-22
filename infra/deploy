@@ -25,6 +25,16 @@ rsync -az --delete \
   "${TARGET}:${HOST_DEPLOY_DIR}/"
 ssh "$TARGET" "doas chown -R ${JAIL}:${JAIL} ${HOST_DEPLOY_DIR}"
 
+log "Syncing videos"
+VIDEO_DIR="/jails/${JAIL}/var/lib/${APP}/videos"
+ssh "$TARGET" "doas mkdir -p ${VIDEO_DIR}"
+rsync -az \
+  --rsync-path="doas rsync" \
+  --include="*_h264.mp4" --exclude="*" \
+  "videos/" \
+  "${TARGET}:${VIDEO_DIR}/"
+ssh "$TARGET" "doas chown -R ${JAIL}:${JAIL} ${VIDEO_DIR}"
+
 log "Running migrations"
 ssh "$TARGET" "
   doas jexec ${JAIL} sh -c '
