@@ -114,9 +114,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     <div class="space-y-3 px-1">
       <div class="flex items-end justify-between gap-4">
         <div class="space-y-1">
-          <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-base-content/35">
-            This week
-          </p>
           <div class="flex items-baseline gap-1.5">
             <span class={[
               "text-4xl font-bold leading-none tabular-nums",
@@ -215,31 +212,28 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     assigns = assign(assigns, :type_label, type_label)
 
     ~H"""
-    <div
-      id="home-workout-card"
-      class="rounded-[10px] bg-base-300 p-6 space-y-5"
-    >
-      <div class="space-y-1">
-        <p class="text-xl font-bold leading-snug">{@last_plan.name}</p>
-        <p class="text-sm text-base-content/50">
-          {@last_plan.burpee_count_target} {@type_label}
-          <span class="text-base-content/30"> · </span>
-          {@last_plan.target_duration_min} min
-        </p>
-      </div>
-      <div class="flex justify-center">
+    <div id="home-workout-card" class="rounded-[10px] bg-base-300 px-5 py-4">
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0 space-y-0.5">
+          <p class="text-base font-semibold leading-snug truncate">{@last_plan.name}</p>
+          <p class="text-sm text-base-content/40 tabular-nums">
+            {@last_plan.burpee_count_target} {@type_label}
+            <span class="text-base-content/20"> · </span>
+            {@last_plan.target_duration_min} min
+          </p>
+        </div>
         <.link
           navigate={~p"/session/#{@last_plan.id}"}
-          class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-primary flex items-center justify-center hover:bg-base-border transition"
+          class="w-11 h-11 shrink-0 rounded-full bg-base-raised border border-base-border text-primary flex items-center justify-center hover:bg-base-border transition"
           aria-label="Start workout"
         >
-          <.icon name="hero-play" class="size-5" />
+          <.icon name="hero-play" class="size-4" />
         </.link>
       </div>
-      <div class="text-center mt-2">
+      <div class="mt-3 pt-3 border-t border-base-border">
         <.link
           navigate={~p"/workouts"}
-          class="text-sm text-base-content/50 hover:text-base-content/80 transition underline-offset-2 hover:underline"
+          class="text-xs text-base-content/35 hover:text-base-content/60 transition"
         >
           Pick another workout →
         </.link>
