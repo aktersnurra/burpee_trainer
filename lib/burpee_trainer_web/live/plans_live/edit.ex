@@ -1103,15 +1103,16 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           <%!-- Block header --%>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="text-xs text-base-content/35 tabular-nums">
-                {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
+              <span class="text-sm font-semibold text-base-content/70">
+                Block {block_f.index + 1}
+                <%= if repeat && repeat > 1 do %>
+                  <span class="font-normal text-base-content/35">×{repeat}</span>
+                <% end %>
               </span>
-              <%= if repeat && repeat > 1 do %>
-                <span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-base-border text-base-content/50">
-                  ×{repeat}
-                </span>
-              <% end %>
             </div>
+            <span class="text-xs text-base-content/35 tabular-nums">
+              {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
+            </span>
             <div class="relative flex items-center gap-3">
               <%= if @manual_edit do %>
                 <button
@@ -1216,34 +1217,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </div>
             <% end %>
 
-            <%!-- Read-only grouped summary — rendered before inputs_for so we can chunk --%>
+            <%!-- Read-only structured summary --%>
             <%= if !@manual_edit do %>
-              <div class="space-y-4">
-                <%= for {count, set} <- group_sets(sets) do %>
-                  <div class="flex items-start gap-3">
-                    <%= if count > 1 do %>
-                      <span class="shrink-0 mt-0.5 text-[10px] font-medium tabular-nums px-1.5 py-0.5 rounded bg-base-border text-base-content/50">
-                        {count}×
-                      </span>
-                    <% else %>
-                      <span class="shrink-0 mt-0.5 w-[26px]" />
-                    <% end %>
-                    <div class="space-y-1 min-w-0">
-                      <p class="text-lg font-bold tabular-nums leading-none">
-                        {set.burpee_count}
-                      </p>
-                      <p class="text-sm text-base-content/35 tabular-nums">
-                        <%= if set.sec_per_rep && set.sec_per_rep > 0 do %>
-                          {format_sec(set.sec_per_rep)}s
-                        <% end %>
-                        <%= if set.end_of_set_rest && set.end_of_set_rest != 0 do %>
-                          <span class="text-base-content/20"> · </span>{set.end_of_set_rest}s
-                        <% end %>
-                      </p>
-                    </div>
-                  </div>
-                <% end %>
-              </div>
+              <.block_summary sets={sets} />
             <% end %>
 
             <.inputs_for :let={set_f} field={block_f[:sets]}>
@@ -1364,14 +1340,75 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     """
   end
 
-  # Groups consecutive identical sets into {count, set} tuples for compact display.
-  # Two sets are "identical" for display if they share reps, cadence, and rest.
-  defp group_sets(sets) do
-    sets
-    |> Enum.chunk_by(fn s ->
-      {s.burpee_count, s.sec_per_rep, s.end_of_set_rest}
-    end)
-    |> Enum.map(fn chunk -> {length(chunk), hd(chunk)} end)
+  attr :sets, :list, required: true
+
+  defp block_summary(%{sets: []} = assigns), do: ~H""
+
+  defp block_summary(assigns) do
+    sets = assigns.sets
+    n = length(sets)
+    first = List.first(sets)
+
+    # Summary line: N sets of M reps @ Xs/rep
+    reps = first.burpee_count
+    pace = if first.sec_per_rep && first.sec_per_rep > 0, do: first.sec_per_rep, else: nil
+
+    # Rest rows: group consecutive sets with same rest into ranges
+    rest_groups =
+      sets
+      |> Enum.with_index(1)
+      |> Enum.chunk_by(fn {s, _i} -> s.end_of_set_rest end)
+      |> Enum.map(fn chunk ->
+        {first_s, first_i} = hd(chunk)
+        {_last_s, last_i} = List.last(chunk)
+        {first_i, last_i, first_s.end_of_set_rest}
+      end)
+
+    assigns =
+      assign(assigns,
+        n: n,
+        reps: reps,
+        pace: pace,
+        rest_groups: rest_groups,
+        format_sec: &format_sec/1
+      )
+
+    ~H"""
+    <div class="space-y-2">
+      <p class="text-base font-semibold tabular-nums">
+        {@n} sets of {@reps} reps
+        <%= if @pace do %>
+          <span class="font-normal text-base-content/50">@ {@format_sec.(@pace)}s/rep</span>
+        <% end %>
+      </p>
+      <div class="space-y-1 pl-1">
+        <%= for {from, to, rest} <- @rest_groups do %>
+          <% is_last_group =
+            {from, to} == {elem(List.last(@rest_groups), 0), elem(List.last(@rest_groups), 1)}
+
+          connector = if is_last_group, do: "└", else: "├" %>
+          <p class="text-sm text-base-content/50 font-mono">
+            <span class="text-base-content/25">{connector}</span>
+            <span class="ml-1">
+              <%= if from == to do %>
+                Set {from}:
+              <% else %>
+                Sets {from}–{to}:
+              <% end %>
+            </span>
+            <span class="text-base-content/40 ml-1">
+              <%= cond do %>
+                <% rest == 0 || is_nil(rest) -> %>
+                  no rest
+                <% true -> %>
+                  {rest}s rest
+              <% end %>
+            </span>
+          </p>
+        <% end %>
+      </div>
+    </div>
+    """
   end
 
   defp sets_uniform?([]), do: true
