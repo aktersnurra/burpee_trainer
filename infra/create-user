@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Usage: sh infra/create-user user@nuc <username> <password>
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "${SCRIPT_DIR}/config"
+
+TARGET="${1:?usage: $0 user@nuc username password}"
+USERNAME="${2:?usage: $0 user@nuc username password}"
+PASSWORD="${3:?usage: $0 user@nuc username password}"
+
+ssh "$TARGET" "
+  doas jexec ${JAIL} sh -c '
+    set -a && . /etc/${JAIL}/env && set +a
+    ${JAIL_DEPLOY_DIR}/bin/${APP} eval \"
+      case ${MODULE}.Accounts.register_user(%{username: \\\"${USERNAME}\\\", password: \\\"${PASSWORD}\\\"}) do
+        {:ok, user} -> IO.puts(\\\"Created user: #{user.username}\\\")
+        {:error, cs} -> IO.puts(\\\"Error: #{inspect(cs.errors)}\\\"); System.halt(1)
+      end
+    \"
+  '
+"

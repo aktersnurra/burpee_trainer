@@ -16,28 +16,14 @@ MIX_ENV=prod mix assets.deploy
 log "Building release"
 MIX_ENV=prod mix release --overwrite
 
-VERSION="$(grep 'version:' mix.exs | head -1 | grep -oP '[\d.]+')"
-RELEASE_TAR="_build/prod/rel/${APP}/${APP}-${VERSION}.tar.gz"
-
 log "Uploading to ${TARGET}:${HOST_DEPLOY_DIR}"
 ssh "$TARGET" "doas mkdir -p ${HOST_DEPLOY_DIR}"
 
-[ -f "$RELEASE_TAR" ] && {
-  scp "$RELEASE_TAR" "${TARGET}:/tmp/${APP}.tar.gz"
-  ssh "$TARGET" "
-    doas jexec ${JAIL} sh -c '
-      tar -xzf /tmp/${APP}.tar.gz -C ${JAIL_DEPLOY_DIR}
-      chown -R ${JAIL}:${JAIL} ${JAIL_DEPLOY_DIR}
-    '
-    rm /tmp/${APP}.tar.gz
-  "
-} || {
-  rsync -az --delete \
-    --rsync-path="doas rsync" \
-    "_build/prod/rel/${APP}/" \
-    "${TARGET}:${HOST_DEPLOY_DIR}/"
-  ssh "$TARGET" "doas chown -R ${JAIL}:${JAIL} ${HOST_DEPLOY_DIR}"
-}
+rsync -az --delete \
+  --rsync-path="doas rsync" \
+  "_build/prod/rel/${APP}/" \
+  "${TARGET}:${HOST_DEPLOY_DIR}/"
+ssh "$TARGET" "doas chown -R ${JAIL}:${JAIL} ${HOST_DEPLOY_DIR}"
 
 log "Running migrations"
 ssh "$TARGET" "
