@@ -131,8 +131,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
       <div class="space-y-5 pb-20">
-        <h1 class="text-2xl font-semibold tracking-tight">Stats</h1>
-
         <.streak_card streak={@streak} today={@today} current_level={@current_level} />
         <.goals_section
           goals={@goals}
@@ -210,7 +208,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     assigns = assign(assigns, :week_days, Enum.map(0..6, &Date.add(week_start, &1)))
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-5 space-y-4">
+    <div class="rounded-[10px] bg-base-300 p-5 space-y-4">
       <div class="flex items-center justify-between">
         <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">THIS WEEK</p>
         <%= if @current_level do %>
@@ -351,7 +349,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4 space-y-3">
+    <div class="rounded-[10px] bg-base-300 p-4 space-y-3">
       <%= cond do %>
         <% @goal && @goal.status == :achieved -> %>
           <div class="space-y-2">
@@ -461,7 +459,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @sessions == [] do %>
         <p class="text-sm text-base-content/40">No sessions yet.</p>
       <% else %>
-        <div class="rounded-[10px] border border-[#1E2535] bg-base-200 divide-y divide-[#1E2535] px-4">
+        <div class="rounded-[10px] bg-base-300 divide-y divide-[#1E2535] px-4">
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
@@ -585,7 +583,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-4">
+    <div class="rounded-[10px] bg-base-300 p-4">
       <p class="text-xs text-base-content/40 mb-3 uppercase tracking-wide">Weekly minutes</p>
       <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
         <%!-- y-axis: 0 only --%>
@@ -731,7 +729,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="rounded-[10px] border border-[#1E2535] bg-base-200 p-5">
+    <div class="rounded-[10px] bg-base-300 p-5">
       <div class="flex items-start justify-between mb-1">
         <div>
           <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">Progress</p>

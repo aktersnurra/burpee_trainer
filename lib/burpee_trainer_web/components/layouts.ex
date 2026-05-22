@@ -109,13 +109,12 @@ defmodule BurpeeTrainerWeb.Layouts do
       navigate={@navigate}
       title={@title}
       class={[
-        "inline-flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded transition-colors",
+        "inline-flex items-center justify-center w-9 h-9 rounded transition-colors",
         @active && "text-[#C8D8F0] bg-[#141B26]",
         !@active && "text-[#3A4A5E] hover:text-[#6B8FA8] hover:bg-[#141B26]"
       ]}
     >
       {render_slot(@inner_block)}
-      <span class="text-[10px]">{@title}</span>
     </.link>
     """
   end
