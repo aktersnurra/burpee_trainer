@@ -226,9 +226,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       </div>
       <.link
         navigate={~p"/session/#{@last_plan.id}"}
-        class="flex items-center justify-center gap-2 w-full h-14 rounded-lg bg-primary text-primary-content text-base font-semibold hover:bg-primary/90 transition-colors"
+        class="flex items-center justify-center w-full h-14 rounded-lg bg-primary text-primary-content text-base font-semibold hover:bg-primary/90 transition-colors"
       >
-        <.icon name="hero-play" class="size-5" /> Start
+        Start
       </.link>
       <div class="text-center mt-2">
         <.link
