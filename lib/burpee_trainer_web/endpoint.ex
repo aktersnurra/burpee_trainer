@@ -40,6 +40,13 @@ defmodule BurpeeTrainerWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :burpee_trainer
   end
 
+  # Trust X-Forwarded-For from the VPS Caddy (and only the VPS Caddy) so
+  # conn.remote_ip reflects the real client, not the proxy. Runs before
+  # any plug that reads remote_ip (Telemetry, RequestId).
+  plug RemoteIp,
+    headers: ~w[x-forwarded-for],
+    proxies: ~w[100.64.0.2/32]
+
   plug Phoenix.LiveDashboard.RequestLogger,
     param_key: "request_logger",
     cookie_key: "request_logger"

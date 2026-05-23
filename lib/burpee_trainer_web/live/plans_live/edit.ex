@@ -1086,23 +1086,22 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </section>
 
         <%!-- Full-width save button --%>
-        <.form for={@form} phx-submit="save">
-          <button
-            type="submit"
-            class={[
-              "w-full py-4 rounded-[10px] text-sm font-semibold tracking-wide transition flex items-center justify-center gap-2",
-              if(@derived && @derived.both_ok,
-                do: "bg-primary/75 text-primary-content hover:bg-primary/85",
-                else: "bg-base-300 text-base-content/20 cursor-not-allowed"
-              )
-            ]}
-          >
-            {if @live_action == :new, do: "Create plan", else: "Save plan"}
-            <%= if @derived && @derived.both_ok do %>
-              <.icon name="hero-arrow-right" class="size-4" />
-            <% end %>
-          </button>
-        </.form>
+        <button
+          type="submit"
+          form="plan-form"
+          class={[
+            "w-full py-4 rounded-[10px] text-sm font-semibold tracking-wide transition flex items-center justify-center gap-2",
+            if(@derived && @derived.both_ok,
+              do: "bg-primary/75 text-primary-content hover:bg-primary/85",
+              else: "bg-base-300 text-base-content/20 cursor-not-allowed"
+            )
+          ]}
+        >
+          {if @live_action == :new, do: "Create plan", else: "Save plan"}
+          <%= if @derived && @derived.both_ok do %>
+            <.icon name="hero-arrow-right" class="size-4" />
+          <% end %>
+        </button>
       </div>
     </Layouts.app>
     """

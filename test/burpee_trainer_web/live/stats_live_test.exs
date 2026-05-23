@@ -85,6 +85,20 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       view |> element("button[phx-click='open_log_modal']") |> render_click()
       assert render(view) =~ "Log session"
     end
+
+    test "log modal uses separate backdrop so mobile input taps stay open", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-click='open_log_modal']") |> render_click()
+
+      assert has_element?(view, "#log-modal-backdrop[phx-click='close_log_modal']")
+
+      assert has_element?(
+               view,
+               "#log-modal-sheet input[name='workout_session[burpee_count_actual]']"
+             )
+
+      refute has_element?(view, "#log-modal[phx-click='close_log_modal']")
+    end
   end
 
   describe "goal creation modal" do

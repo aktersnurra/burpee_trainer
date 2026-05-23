@@ -164,12 +164,18 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @log_modal_open do %>
         <div
           id="log-modal"
-          phx-click="close_log_modal"
-          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6"
         >
+          <button
+            id="log-modal-backdrop"
+            type="button"
+            phx-click="close_log_modal"
+            class="absolute inset-0 bg-black/60"
+            aria-label="Close log session"
+          />
           <div
-            phx-click|stopPropagation
-            class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
+            id="log-modal-sheet"
+            class="relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl"
           >
             <.live_component
               module={BurpeeTrainerWeb.LogFormComponent}
@@ -207,9 +213,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :streak, State, required: true
-  attr :today, Date, required: true
-  attr :current_level, :atom, default: nil
+  attr(:streak, State, required: true)
+  attr(:today, Date, required: true)
+  attr(:current_level, :atom, default: nil)
 
   defp streak_card(assigns) do
     week_start = Date.beginning_of_week(assigns.today, :monday)
@@ -285,11 +291,11 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :goals, :list, required: true
-  attr :six_progress, :any, required: true
-  attr :seal_progress, :any, required: true
-  attr :six_has_sessions, :boolean, required: true
-  attr :seal_has_sessions, :boolean, required: true
+  attr(:goals, :list, required: true)
+  attr(:six_progress, :any, required: true)
+  attr(:seal_progress, :any, required: true)
+  attr(:six_has_sessions, :boolean, required: true)
+  attr(:seal_has_sessions, :boolean, required: true)
 
   defp goals_section(assigns) do
     assigns =
@@ -317,11 +323,11 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :burpee_type, :atom, required: true
-  attr :label, :string, required: true
-  attr :goal, :any, required: true
-  attr :progress, :any, required: true
-  attr :has_sessions, :boolean, required: true
+  attr(:burpee_type, :atom, required: true)
+  attr(:label, :string, required: true)
+  attr(:goal, :any, required: true)
+  attr(:progress, :any, required: true)
+  attr(:has_sessions, :boolean, required: true)
 
   defp goal_slot(assigns) do
     today = Date.utc_today()
@@ -447,8 +453,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :sessions, :list, required: true
-  attr :has_more, :boolean, required: true
+  attr(:sessions, :list, required: true)
+  attr(:has_more, :boolean, required: true)
 
   defp sessions_section(assigns) do
     ~H"""
@@ -474,7 +480,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :session, :any, required: true
+  attr(:session, :any, required: true)
 
   defp session_row(assigns) do
     today = Date.utc_today()
@@ -517,10 +523,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :weekly_data, :list, required: true
-  attr :six_count_sessions, :list, required: true
-  attr :navy_seal_sessions, :list, required: true
-  attr :goals, :list, required: true
+  attr(:weekly_data, :list, required: true)
+  attr(:six_count_sessions, :list, required: true)
+  attr(:navy_seal_sessions, :list, required: true)
+  attr(:goals, :list, required: true)
 
   defp trends_section(assigns) do
     assigns =
@@ -541,7 +547,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :weekly_data, :list, required: true
+  attr(:weekly_data, :list, required: true)
 
   defp weekly_minutes_chart(assigns) do
     # Always show 12 slots; pad with empty weeks at the start if less data
@@ -625,10 +631,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
     """
   end
 
-  attr :six_count_sessions, :list, required: true
-  attr :navy_seal_sessions, :list, required: true
-  attr :six_goal, :any, required: true
-  attr :seal_goal, :any, required: true
+  attr(:six_count_sessions, :list, required: true)
+  attr(:navy_seal_sessions, :list, required: true)
+  attr(:six_goal, :any, required: true)
+  attr(:seal_goal, :any, required: true)
 
   defp progress_chart(assigns) do
     to_points = fn sessions ->
