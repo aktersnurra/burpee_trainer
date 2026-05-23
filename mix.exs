@@ -67,7 +67,8 @@ defmodule BurpeeTrainer.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:bcrypt_elixir, "~> 3.0"},
-      {:contex, "~> 0.5"}
+      {:contex, "~> 0.5"},
+      {:remote_ip, "~> 1.2"}
     ]
   end
 
