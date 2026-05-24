@@ -14,7 +14,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Mood, Planner, Workouts}
+  alias BurpeeTrainer.{Duration, Mood, Planner, Workouts}
   alias BurpeeTrainer.Workouts.WorkoutSession
   alias BurpeeTrainerWeb.Fmt
 
@@ -164,9 +164,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}
 
   defp coerce_duration(params) do
-    case Float.parse(Map.get(params, "duration_min", "")) do
-      {min, _} when min >= 0 -> Map.put(params, "duration_sec_actual", round(min * 60))
-      _ -> params
+    case Duration.parse_minutes_to_seconds(Map.get(params, "duration_min", "")) do
+      {:ok, seconds} -> Map.put(params, "duration_sec_actual", seconds)
+      {:error, _reason} -> params
     end
   end
 
