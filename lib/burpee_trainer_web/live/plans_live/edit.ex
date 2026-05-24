@@ -306,16 +306,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("add_rest", _, socket) do
-    current = socket.assigns.plan_input
-    count = length(current.additional_rests) + 1
-    # Space new rests evenly: 1st at 50%, 2nd at 33%/66%, etc.
-    target_min = max(1, div(current.target_duration_min * count, count + 1))
-    new_rest = %{rest_sec: 30, target_min: target_min}
-    plan_input = %{current | additional_rests: current.additional_rests ++ [new_rest]}
+    {:ok, editor} = PlanEditor.add_rest(socket.assigns.editor)
 
     socket =
       socket
-      |> assign(:plan_input, plan_input)
+      |> put_editor(editor)
       |> regenerate()
       |> assign_derived()
 
@@ -323,51 +318,35 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("remove_rest", %{"index" => idx_str}, socket) do
-    idx = String.to_integer(idx_str)
-    rests = List.delete_at(socket.assigns.plan_input.additional_rests, idx)
-    plan_input = Map.put(socket.assigns.plan_input, :additional_rests, rests)
+    case PlanEditor.remove_rest(socket.assigns.editor, idx_str) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
 
-    socket =
-      socket
-      |> assign(:plan_input, plan_input)
-      |> regenerate()
-      |> assign_derived()
+        {:noreply, socket}
 
-    {:noreply, socket}
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("change_rest", %{"rest" => rest_params} = _params, socket) do
-    idx = rest_params |> Map.get("index", "0") |> String.to_integer()
+    case PlanEditor.change_rest(socket.assigns.editor, rest_params) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
 
-    existing =
-      Enum.at(socket.assigns.plan_input.additional_rests, idx, %{rest_sec: 30, target_min: 10})
+        {:noreply, socket}
 
-    rest_sec =
-      case Integer.parse(rest_params["rest_sec"] || "") do
-        {n, ""} when n > 0 -> n
-        _ -> existing.rest_sec
-      end
-
-    target_min =
-      case Integer.parse(rest_params["target_min"] || "") do
-        {n, ""} when n > 0 -> n
-        _ -> existing.target_min
-      end
-
-    rests =
-      List.update_at(socket.assigns.plan_input.additional_rests, idx, fn _ ->
-        %{rest_sec: rest_sec, target_min: target_min}
-      end)
-
-    plan_input = Map.put(socket.assigns.plan_input, :additional_rests, rests)
-
-    socket =
-      socket
-      |> assign(:plan_input, plan_input)
-      |> regenerate()
-      |> assign_derived()
-
-    {:noreply, socket}
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("set_pace_override", %{"pace" => pace}, socket) do

@@ -98,6 +98,50 @@ defmodule BurpeeTrainer.PlanEditor do
     {:ok, %{state | input: %{state.input | sec_per_burpee_override: override}}}
   end
 
+  @spec add_rest(State.t()) :: {:ok, State.t()}
+  def add_rest(%State{} = state) do
+    current = state.input
+    count = length(current.additional_rests) + 1
+    target_min = max(1, div(current.target_duration_min * count, count + 1))
+    rest = %{rest_sec: 30, target_min: target_min}
+
+    {:ok, %{state | input: %{current | additional_rests: current.additional_rests ++ [rest]}}}
+  end
+
+  @spec remove_rest(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def remove_rest(%State{} = state, index) do
+    case parse_non_negative_integer(index) do
+      {:ok, index} ->
+        rests = List.delete_at(state.input.additional_rests, index)
+        {:ok, %{state | input: %{state.input | additional_rests: rests}}}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  @spec change_rest(State.t(), map()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def change_rest(%State{} = state, rest_params) do
+    with {:ok, index} <- parse_non_negative_integer(Map.get(rest_params, "index", "0")) do
+      existing = Enum.at(state.input.additional_rests, index, %{rest_sec: 30, target_min: 10})
+
+      rest_sec =
+        parse_positive_integer_or(Map.get(rest_params, "rest_sec", ""), existing.rest_sec)
+
+      target_min =
+        parse_positive_integer_or(Map.get(rest_params, "target_min", ""), existing.target_min)
+
+      rests =
+        List.update_at(state.input.additional_rests, index, fn _ ->
+          %{rest_sec: rest_sec, target_min: target_min}
+        end)
+
+      {:ok, %{state | input: %{state.input | additional_rests: rests}}}
+    else
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(plan) do
     rests =
@@ -150,6 +194,24 @@ defmodule BurpeeTrainer.PlanEditor do
 
   defp parse_positive_float(value) when is_number(value) and value > 0, do: {:ok, value * 1.0}
   defp parse_positive_float(value), do: {:error, {:invalid_pace, value}}
+
+  defp parse_non_negative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
+
+  defp parse_non_negative_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} when integer >= 0 -> {:ok, integer}
+      _ -> {:error, {:invalid_index, value}}
+    end
+  end
+
+  defp parse_non_negative_integer(value), do: {:error, {:invalid_index, value}}
+
+  defp parse_positive_integer_or(value, default) do
+    case Integer.parse(to_string(value || "")) do
+      {integer, ""} when integer > 0 -> integer
+      _ -> default
+    end
+  end
 
   defp infer_reps_per_set(plan) do
     first_set =

@@ -123,6 +123,53 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
+  describe "rest transitions" do
+    test "add_rest appends a rest at the next evenly spaced target" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.add_rest(state)
+
+      assert [%{target_min: 10, rest_sec: 30}] = state.input.additional_rests
+    end
+
+    test "remove_rest drops rest by index" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.add_rest(state)
+
+      {:ok, state} = PlanEditor.remove_rest(state, "0")
+
+      assert state.input.additional_rests == []
+    end
+
+    test "change_rest updates a rest by index" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.add_rest(state)
+
+      {:ok, state} =
+        PlanEditor.change_rest(state, %{
+          "index" => "0",
+          "target_min" => "12",
+          "rest_sec" => "90"
+        })
+
+      assert [%{target_min: 12, rest_sec: 90}] = state.input.additional_rests
+    end
+
+    test "change_rest preserves existing values for invalid input" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.add_rest(state)
+
+      {:ok, state} =
+        PlanEditor.change_rest(state, %{
+          "index" => "0",
+          "target_min" => "bad",
+          "rest_sec" => ""
+        })
+
+      assert [%{target_min: 10, rest_sec: 30}] = state.input.additional_rests
+    end
+  end
+
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
