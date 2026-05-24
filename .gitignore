@@ -64,3 +64,6 @@ mock-workout.png
 
 /docs/
 edit_mock.png
+
+# Symlink to nuc-setup deploy script
+/deploy
