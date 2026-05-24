@@ -23,27 +23,49 @@ defmodule BurpeeTrainer.Coach.LearningTest do
 
   test "record_session_completed starts a supervised task and updates arms in async mode" do
     previous_mode = Application.get_env(:burpee_trainer, :coach_learning_mode)
-    Application.put_env(:burpee_trainer, :coach_learning_mode, :async)
+    test_pid = self()
+    handler_id = {__MODULE__, self(), :coach_learning_start}
 
     on_exit(fn ->
       restore_learning_mode(previous_mode)
-      :erlang.trace(:all, false, [:call])
-      :erlang.trace_pattern({Coach, :update_arms, 2}, false, [])
+      :telemetry.detach(handler_id)
     end)
-
-    :erlang.trace_pattern({Coach, :update_arms, 2}, true, [])
-    :erlang.trace(:all, true, [:call])
 
     {user, session} = user_and_completed_session()
     before_arms = arms_for(user)
 
+    :telemetry.attach(
+      handler_id,
+      [:burpee_trainer, :coach, :learning, :start],
+      fn _event, _measurements, metadata, _config ->
+        send(
+          test_pid,
+          {:coach_learning_started, metadata.pid, metadata.user_id, metadata.session_id}
+        )
+
+        receive do
+          :continue_coach_learning -> :ok
+        after
+          500 -> :ok
+        end
+      end,
+      nil
+    )
+
+    Application.put_env(:burpee_trainer, :coach_learning_mode, :async)
+
     assert :ok = Learning.record_session_completed(user, session)
 
-    test_pid = self()
+    assert_receive {:coach_learning_started, update_pid, user_id, session_id}, 500
+    ref = Process.monitor(update_pid)
+    Ecto.Adapters.SQL.Sandbox.allow(BurpeeTrainer.Repo, self(), update_pid)
+    send(update_pid, :continue_coach_learning)
 
-    assert_receive {:trace, update_pid, :call, {Coach, :update_arms, [^user, ^session]}}, 500
     assert update_pid != test_pid
+    assert user_id == user.id
+    assert session_id == session.id
     assert_eventually(fn -> alpha_increased?(before_arms, arms_for(user)) end)
+    assert_receive {:DOWN, ^ref, :process, ^update_pid, :normal}, 500
   end
 
   defp user_and_completed_session do

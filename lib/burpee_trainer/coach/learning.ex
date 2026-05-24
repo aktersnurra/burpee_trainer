@@ -41,6 +41,12 @@ defmodule BurpeeTrainer.Coach.Learning do
   end
 
   defp update_arms(user, session) do
+    :telemetry.execute([:burpee_trainer, :coach, :learning, :start], %{}, %{
+      pid: self(),
+      user_id: user.id,
+      session_id: session.id
+    })
+
     case Coach.update_arms(user, session) do
       :ok ->
         :ok

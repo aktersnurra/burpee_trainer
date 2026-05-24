@@ -37,6 +37,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     timestamps(type: :utc_datetime)
   end
 
+  @spec burpee_types() :: [:six_count | :navy_seal]
   def burpee_types, do: @burpee_types
 
   @doc """
@@ -47,6 +48,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
   Derived analytics fields are put directly on the changeset by the
   context after validation — they are never cast from user-supplied attrs.
   """
+  @spec from_plan_changeset(t(), map()) :: Ecto.Changeset.t()
   def from_plan_changeset(session, attrs) do
     session
     |> cast(attrs, [
@@ -67,6 +69,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
   @doc """
   Changeset for a free-form session (no plan). Planned fields stay nil.
   """
+  @spec free_form_changeset(t(), map()) :: Ecto.Changeset.t()
   def free_form_changeset(session, attrs) do
     session
     |> cast(attrs, [

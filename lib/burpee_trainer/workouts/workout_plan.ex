@@ -31,8 +31,10 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     timestamps(type: :utc_datetime)
   end
 
+  @spec burpee_types() :: [:six_count | :navy_seal]
   def burpee_types, do: @burpee_types
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(plan, attrs) do
     plan
     |> cast(attrs, [
