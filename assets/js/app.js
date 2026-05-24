@@ -27,18 +27,42 @@ import ChartHook from "./hooks/chart_hook";
 import SessionHook from "./hooks/session_hook";
 import VideoHook from "./hooks/video_hook";
 
+const themeStorage = {
+  get() {
+    try {
+      return window.localStorage.getItem("phx:theme");
+    } catch (_error) {
+      return null;
+    }
+  },
+  set(theme) {
+    try {
+      window.localStorage.setItem("phx:theme", theme);
+    } catch (_error) {
+      // Ignore unavailable storage so LiveView boot can continue.
+    }
+  },
+  remove() {
+    try {
+      window.localStorage.removeItem("phx:theme");
+    } catch (_error) {
+      // Ignore unavailable storage so LiveView boot can continue.
+    }
+  },
+};
+
 const setTheme = (theme) => {
   if (theme === "system") {
-    localStorage.removeItem("phx:theme");
+    themeStorage.remove();
     document.documentElement.removeAttribute("data-theme");
   } else {
-    localStorage.setItem("phx:theme", theme);
+    themeStorage.set(theme);
     document.documentElement.setAttribute("data-theme", theme);
   }
 };
 
 if (!document.documentElement.hasAttribute("data-theme")) {
-  setTheme(localStorage.getItem("phx:theme") || "system");
+  setTheme(themeStorage.get() || "system");
 }
 
 window.addEventListener("storage", (event) => {
