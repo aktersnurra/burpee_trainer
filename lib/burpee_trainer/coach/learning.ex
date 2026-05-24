@@ -1,6 +1,9 @@
 defmodule BurpeeTrainer.Coach.Learning do
   @moduledoc """
   Boundary for recording coach learning side effects after completed sessions.
+
+  `record_session_completed/2` returns `:ok` after scheduling or running the update.
+  In async mode, update failures crash only the supervised task, not the caller.
   """
 
   require Logger
@@ -23,15 +26,7 @@ defmodule BurpeeTrainer.Coach.Learning do
   end
 
   defp sync? do
-    Application.get_env(:burpee_trainer, :coach_learning_mode, default_mode()) == :sync
-  end
-
-  defp default_mode do
-    if Code.ensure_loaded?(Mix) and Mix.env() == :test do
-      :sync
-    else
-      :async
-    end
+    Application.get_env(:burpee_trainer, :coach_learning_mode, :async) == :sync
   end
 
   defp start_update_task(user, session) do
@@ -54,13 +49,5 @@ defmodule BurpeeTrainer.Coach.Learning do
         Logger.warning("Coach learning update returned unexpected result: #{inspect(other)}")
         :ok
     end
-  rescue
-    exception ->
-      Logger.warning(
-        "Coach learning update failed: " <>
-          Exception.format(:error, exception, __STACKTRACE__)
-      )
-
-      :ok
   end
 end
