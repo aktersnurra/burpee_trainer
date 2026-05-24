@@ -3,6 +3,7 @@ defmodule BurpeeTrainer.PlanEditor do
   Pure plan-editor transitions extracted from the plan LiveView.
   """
 
+  alias BurpeeTrainer.BurpeeType
   alias BurpeeTrainer.PlanEditor.State
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
@@ -61,6 +62,39 @@ defmodule BurpeeTrainer.PlanEditor do
     |> maybe_put_pace(params)
   end
 
+  @spec pick_type(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def pick_type(%State{} = state, type) do
+    case BurpeeType.parse(type) do
+      {:ok, burpee_type} ->
+        input = %{
+          state.input
+          | burpee_type: burpee_type,
+            reps_per_set: PlanSolver.default_reps_per_set(burpee_type)
+        }
+
+        {:ok, %{state | input: input}}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  @spec pick_pacing(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def pick_pacing(%State{} = state, style) when style in ["even", "unbroken", :even, :unbroken] do
+    pacing_style = if is_binary(style), do: String.to_existing_atom(style), else: style
+    {:ok, %{state | input: %{state.input | pacing_style: pacing_style}}}
+  end
+
+  def pick_pacing(%State{} = state, style), do: {:error, {:invalid_pacing_style, style}, state}
+
+  @spec set_pace_override(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def set_pace_override(%State{} = state, pace) do
+    case parse_positive_float(pace) do
+      {:ok, pace} -> {:ok, %{state | input: %{state.input | sec_per_burpee_override: pace}}}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(plan) do
     rests =
@@ -103,6 +137,16 @@ defmodule BurpeeTrainer.PlanEditor do
   end
 
   defp maybe_put_pace(plan_input, _params), do: plan_input
+
+  defp parse_positive_float(value) when is_binary(value) do
+    case Float.parse(value) do
+      {number, _rest} when number > 0 -> {:ok, number}
+      _ -> {:error, {:invalid_pace, value}}
+    end
+  end
+
+  defp parse_positive_float(value) when is_number(value) and value > 0, do: {:ok, value * 1.0}
+  defp parse_positive_float(value), do: {:error, {:invalid_pace, value}}
 
   defp infer_reps_per_set(plan) do
     first_set =

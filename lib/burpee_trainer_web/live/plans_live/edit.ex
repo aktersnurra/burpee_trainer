@@ -273,35 +273,36 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
-  def handle_event("pick_type", %{"type" => type}, socket)
-      when type in ["six_count", "navy_seal"] do
-    burpee_type = String.to_atom(type)
+  def handle_event("pick_type", %{"type" => type}, socket) do
+    case PlanEditor.pick_type(socket.assigns.editor, type) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
 
-    plan_input =
-      socket.assigns.plan_input
-      |> Map.put(:burpee_type, burpee_type)
-      |> Map.put(:reps_per_set, PlanSolver.default_reps_per_set(burpee_type))
+        {:noreply, socket}
 
-    socket =
-      socket
-      |> assign(:plan_input, plan_input)
-      |> regenerate()
-      |> assign_derived()
-
-    {:noreply, socket}
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
   end
 
-  def handle_event("pick_pacing", %{"style" => style}, socket)
-      when style in ["even", "unbroken"] do
-    plan_input = Map.put(socket.assigns.plan_input, :pacing_style, String.to_atom(style))
+  def handle_event("pick_pacing", %{"style" => style}, socket) do
+    case PlanEditor.pick_pacing(socket.assigns.editor, style) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
 
-    socket =
-      socket
-      |> assign(:plan_input, plan_input)
-      |> regenerate()
-      |> assign_derived()
+        {:noreply, socket}
 
-    {:noreply, socket}
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("add_rest", _, socket) do
@@ -369,22 +370,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
-  def handle_event("set_pace_override", %{"pace" => pace_str}, socket) do
-    override =
-      case Float.parse(pace_str) do
-        {f, _} when f > 0 -> f
-        _ -> nil
-      end
+  def handle_event("set_pace_override", %{"pace" => pace}, socket) do
+    case PlanEditor.set_pace_override(socket.assigns.editor, pace) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
 
-    plan_input = Map.put(socket.assigns.plan_input, :sec_per_burpee_override, override)
+        {:noreply, socket}
 
-    socket =
-      socket
-      |> assign(:plan_input, plan_input)
-      |> regenerate()
-      |> assign_derived()
-
-    {:noreply, socket}
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
   end
 
   # ---------------------------------------------------------------------------

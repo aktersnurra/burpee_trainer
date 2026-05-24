@@ -48,6 +48,66 @@ defmodule BurpeeTrainer.PlanEditorTest do
     assert input.burpee_type == plan.burpee_type
   end
 
+  describe "low-risk input transitions" do
+    test "pick_type updates type and resets reps per set" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.pick_type(state, "navy_seal")
+
+      assert state.input.burpee_type == :navy_seal
+      assert state.input.reps_per_set == PlanSolver.default_reps_per_set(:navy_seal)
+    end
+
+    test "pick_type rejects invalid type without changing state" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      assert {:error, {:invalid_burpee_type, "bad"}, ^state} = PlanEditor.pick_type(state, "bad")
+    end
+
+    test "pick_pacing updates pacing style" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.pick_pacing(state, "unbroken")
+
+      assert state.input.pacing_style == :unbroken
+    end
+
+    test "pick_pacing accepts atom pacing style" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.pick_pacing(state, :unbroken)
+
+      assert state.input.pacing_style == :unbroken
+    end
+
+    test "pick_pacing rejects invalid style without changing state" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      assert {:error, {:invalid_pacing_style, "bad"}, ^state} =
+               PlanEditor.pick_pacing(state, "bad")
+    end
+
+    test "set_pace_override accepts positive pace and rejects invalid pace" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.set_pace_override(state, "2.5")
+      assert state.input.sec_per_burpee_override == 2.5
+
+      {:error, {:invalid_pace, "bad"}, unchanged} = PlanEditor.set_pace_override(state, "bad")
+      assert unchanged.input.sec_per_burpee_override == 2.5
+    end
+
+    test "set_pace_override accepts positive number values" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.set_pace_override(state, 3)
+      assert state.input.sec_per_burpee_override == 3.0
+
+      {:ok, state} = PlanEditor.set_pace_override(state, 2.75)
+      assert state.input.sec_per_burpee_override == 2.75
+    end
+  end
+
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
