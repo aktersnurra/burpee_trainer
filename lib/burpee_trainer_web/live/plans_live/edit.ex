@@ -17,6 +17,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Levels, Planner, Workouts}
+  alias BurpeeTrainer.PlanEditor
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.PlanSolver.Input
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
@@ -45,7 +46,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> Workouts.get_plan!(String.to_integer(id))
       |> preload_duration_min()
 
-    plan_input = plan_input_from_plan(plan)
+    plan_input = PlanEditor.input_from_plan(plan)
 
     socket
     |> assign(:plan, plan)
@@ -57,7 +58,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp load_plan(socket, params) do
-    plan_input = default_plan_input() |> apply_coach_params(params)
+    plan_input = PlanEditor.default_input() |> PlanEditor.apply_coach_params(params)
 
     socket
     |> assign(:plan, nil)
@@ -66,80 +67,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:solver_error, nil)
     |> assign(:solver_solution, nil)
     |> assign(:manual_edit, false)
-  end
-
-  defp apply_coach_params(plan_input, params) do
-    plan_input
-    |> maybe_put_count(params)
-    |> maybe_put_pace(params)
-  end
-
-  defp maybe_put_count(plan_input, %{"count" => count_str}) do
-    case Integer.parse(count_str) do
-      {n, ""} when n > 0 -> %{plan_input | burpee_count_target: n}
-      _ -> plan_input
-    end
-  end
-
-  defp maybe_put_count(plan_input, _), do: plan_input
-
-  defp maybe_put_pace(plan_input, %{"pace" => pace_str}) do
-    case Float.parse(pace_str) do
-      {f, _} when f > 0 -> %{plan_input | sec_per_burpee_override: f}
-      _ -> plan_input
-    end
-  end
-
-  defp maybe_put_pace(plan_input, _), do: plan_input
-
-  defp default_plan_input do
-    %{
-      name: "New plan",
-      burpee_type: :six_count,
-      target_duration_min: 20,
-      burpee_count_target: 100,
-      pacing_style: :even,
-      reps_per_set: PlanSolver.default_reps_per_set(:six_count),
-      additional_rests: [],
-      sec_per_burpee_override: nil
-    }
-  end
-
-  defp plan_input_from_plan(plan) do
-    rests =
-      case Jason.decode(plan.additional_rests || "[]") do
-        {:ok, list} ->
-          Enum.map(list, fn %{"rest_sec" => r, "target_min" => t} ->
-            %{rest_sec: r, target_min: t}
-          end)
-
-        _ ->
-          []
-      end
-
-    %{
-      name: plan.name,
-      burpee_type: plan.burpee_type,
-      target_duration_min: plan.target_duration_min || 20,
-      burpee_count_target: plan.burpee_count_target || 100,
-      pacing_style: plan.pacing_style || :even,
-      reps_per_set: infer_reps_per_set(plan),
-      additional_rests: rests,
-      sec_per_burpee_override: nil
-    }
-  end
-
-  defp infer_reps_per_set(plan) do
-    first_set =
-      plan.blocks
-      |> Enum.sort_by(& &1.position)
-      |> List.first()
-      |> case do
-        nil -> nil
-        block -> block.sets |> Enum.sort_by(& &1.position) |> List.first()
-      end
-
-    (first_set && first_set.burpee_count) || PlanSolver.default_reps_per_set(plan.burpee_type)
   end
 
   defp preload_duration_min(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) do
