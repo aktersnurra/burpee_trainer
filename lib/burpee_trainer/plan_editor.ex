@@ -3,38 +3,9 @@ defmodule BurpeeTrainer.PlanEditor do
   Pure plan-editor transitions extracted from the plan LiveView.
   """
 
+  alias BurpeeTrainer.PlanEditor.State
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
-
-  defmodule Derived do
-    @moduledoc """
-    Derived editor values computed from the current form and solver state.
-    """
-
-    defstruct [:summary, :duration_ok?, :reps_ok?, :can_save?]
-
-    @type t :: %__MODULE__{}
-  end
-
-  defmodule State do
-    @moduledoc """
-    Plan editor state shared by the LiveView and pure editor transitions.
-    """
-
-    defstruct [
-      :plan,
-      :input,
-      :level,
-      :solver_error,
-      :solver_solution,
-      :derived,
-      manual_edit?: false,
-      expanded_blocks: MapSet.new(),
-      open_block_menu: nil
-    ]
-
-    @type t :: %__MODULE__{}
-  end
 
   @type input :: %{
           name: String.t(),

@@ -49,9 +49,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:ok, editor} = PlanEditor.from_plan(plan, socket.assigns.level)
 
     socket
-    |> assign(:editor, editor)
-    |> assign(:plan, editor.plan)
-    |> assign(:plan_input, editor.input)
+    |> put_editor(editor)
     |> assign(:page_title, "Edit plan")
     |> assign(:solver_error, editor.solver_error)
     |> assign(:solver_solution, editor.solver_solution)
@@ -62,13 +60,19 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:ok, editor} = PlanEditor.new(socket.assigns.level, params)
 
     socket
-    |> assign(:editor, editor)
-    |> assign(:plan, editor.plan)
-    |> assign(:plan_input, editor.input)
+    |> put_editor(editor)
     |> assign(:page_title, "New plan")
     |> assign(:solver_error, editor.solver_error)
     |> assign(:solver_solution, editor.solver_solution)
     |> assign(:manual_edit, editor.manual_edit?)
+  end
+
+  # Legacy assigns are mirrored until the remaining LiveView transitions migrate to :editor.
+  defp put_editor(socket, editor) do
+    socket
+    |> assign(:editor, editor)
+    |> assign(:plan, editor.plan)
+    |> assign(:plan_input, editor.input)
   end
 
   defp preload_duration_min(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) do
