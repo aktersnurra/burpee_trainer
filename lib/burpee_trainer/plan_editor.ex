@@ -87,12 +87,15 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def pick_pacing(%State{} = state, style), do: {:error, {:invalid_pacing_style, style}, state}
 
-  @spec set_pace_override(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  @spec set_pace_override(State.t(), term()) :: {:ok, State.t()}
   def set_pace_override(%State{} = state, pace) do
-    case parse_positive_float(pace) do
-      {:ok, pace} -> {:ok, %{state | input: %{state.input | sec_per_burpee_override: pace}}}
-      {:error, reason} -> {:error, reason, state}
-    end
+    override =
+      case parse_positive_float(pace) do
+        {:ok, pace} -> pace
+        {:error, _reason} -> nil
+      end
+
+    {:ok, %{state | input: %{state.input | sec_per_burpee_override: override}}}
   end
 
   @spec input_from_plan(WorkoutPlan.t()) :: input()

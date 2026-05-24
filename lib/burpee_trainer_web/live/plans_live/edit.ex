@@ -371,19 +371,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("set_pace_override", %{"pace" => pace}, socket) do
-    case PlanEditor.set_pace_override(socket.assigns.editor, pace) do
-      {:ok, editor} ->
-        socket =
-          socket
-          |> put_editor(editor)
-          |> regenerate()
-          |> assign_derived()
+    {:ok, editor} = PlanEditor.set_pace_override(socket.assigns.editor, pace)
 
-        {:noreply, socket}
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
 
-      {:error, _reason, _state} ->
-        {:noreply, socket}
-    end
+    {:noreply, socket}
   end
 
   # ---------------------------------------------------------------------------

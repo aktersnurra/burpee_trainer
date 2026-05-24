@@ -87,14 +87,29 @@ defmodule BurpeeTrainer.PlanEditorTest do
                PlanEditor.pick_pacing(state, "bad")
     end
 
-    test "set_pace_override accepts positive pace and rejects invalid pace" do
+    test "set_pace_override accepts positive pace" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
 
       {:ok, state} = PlanEditor.set_pace_override(state, "2.5")
       assert state.input.sec_per_burpee_override == 2.5
+    end
 
-      {:error, {:invalid_pace, "bad"}, unchanged} = PlanEditor.set_pace_override(state, "bad")
-      assert unchanged.input.sec_per_burpee_override == 2.5
+    test "set_pace_override clears pace for empty input" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.set_pace_override(state, "2.5")
+
+      {:ok, state} = PlanEditor.set_pace_override(state, "")
+
+      assert state.input.sec_per_burpee_override == nil
+    end
+
+    test "set_pace_override clears pace for invalid input" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.set_pace_override(state, "2.5")
+
+      {:ok, state} = PlanEditor.set_pace_override(state, "bad")
+
+      assert state.input.sec_per_burpee_override == nil
     end
 
     test "set_pace_override accepts positive number values" do
