@@ -6,6 +6,36 @@ defmodule BurpeeTrainer.PlanEditor do
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
 
+  defmodule Derived do
+    @moduledoc """
+    Derived editor values computed from the current form and solver state.
+    """
+
+    defstruct [:summary, :duration_ok?, :reps_ok?, :can_save?]
+
+    @type t :: %__MODULE__{}
+  end
+
+  defmodule State do
+    @moduledoc """
+    Plan editor state shared by the LiveView and pure editor transitions.
+    """
+
+    defstruct [
+      :plan,
+      :input,
+      :level,
+      :solver_error,
+      :solver_solution,
+      :derived,
+      manual_edit?: false,
+      expanded_blocks: MapSet.new(),
+      open_block_menu: nil
+    ]
+
+    @type t :: %__MODULE__{}
+  end
+
   @type input :: %{
           name: String.t(),
           burpee_type: PlanSolver.Input.burpee_type(),
@@ -16,6 +46,28 @@ defmodule BurpeeTrainer.PlanEditor do
           additional_rests: [PlanSolver.Input.additional_rest()],
           sec_per_burpee_override: float() | nil
         }
+
+  @spec new(atom(), map()) :: {:ok, State.t()}
+  def new(level, params) do
+    state = %State{
+      plan: nil,
+      input: default_input() |> apply_coach_params(params),
+      level: level
+    }
+
+    {:ok, state}
+  end
+
+  @spec from_plan(WorkoutPlan.t(), atom()) :: {:ok, State.t()}
+  def from_plan(%WorkoutPlan{} = plan, level) do
+    state = %State{
+      plan: plan,
+      input: input_from_plan(plan),
+      level: level
+    }
+
+    {:ok, state}
+  end
 
   @spec default_input() :: input()
   def default_input do

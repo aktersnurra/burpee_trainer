@@ -46,27 +46,29 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> Workouts.get_plan!(String.to_integer(id))
       |> preload_duration_min()
 
-    plan_input = PlanEditor.input_from_plan(plan)
+    {:ok, editor} = PlanEditor.from_plan(plan, socket.assigns.level)
 
     socket
-    |> assign(:plan, plan)
-    |> assign(:plan_input, plan_input)
+    |> assign(:editor, editor)
+    |> assign(:plan, editor.plan)
+    |> assign(:plan_input, editor.input)
     |> assign(:page_title, "Edit plan")
-    |> assign(:solver_error, nil)
-    |> assign(:solver_solution, nil)
-    |> assign(:manual_edit, false)
+    |> assign(:solver_error, editor.solver_error)
+    |> assign(:solver_solution, editor.solver_solution)
+    |> assign(:manual_edit, editor.manual_edit?)
   end
 
   defp load_plan(socket, params) do
-    plan_input = PlanEditor.default_input() |> PlanEditor.apply_coach_params(params)
+    {:ok, editor} = PlanEditor.new(socket.assigns.level, params)
 
     socket
-    |> assign(:plan, nil)
-    |> assign(:plan_input, plan_input)
+    |> assign(:editor, editor)
+    |> assign(:plan, editor.plan)
+    |> assign(:plan_input, editor.input)
     |> assign(:page_title, "New plan")
-    |> assign(:solver_error, nil)
-    |> assign(:solver_solution, nil)
-    |> assign(:manual_edit, false)
+    |> assign(:solver_error, editor.solver_error)
+    |> assign(:solver_solution, editor.solver_solution)
+    |> assign(:manual_edit, editor.manual_edit?)
   end
 
   defp preload_duration_min(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) do

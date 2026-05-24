@@ -47,4 +47,38 @@ defmodule BurpeeTrainer.PlanEditorTest do
     assert input.burpee_count_target == 42
     assert input.burpee_type == plan.burpee_type
   end
+
+  describe "state initialization" do
+    test "new/2 builds default editor state" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      assert %PlanEditor.State{} = state
+      assert state.plan == nil
+      assert state.level == :level_1a
+      assert state.input.name == "New plan"
+      assert state.input.burpee_type == :six_count
+      assert state.manual_edit? == false
+      assert state.expanded_blocks == MapSet.new()
+      assert state.open_block_menu == nil
+    end
+
+    test "new/2 applies coach params" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{"count" => "75", "pace" => "2.5"})
+
+      assert state.input.burpee_count_target == 75
+      assert state.input.sec_per_burpee_override == 2.5
+    end
+
+    test "from_plan/2 builds edit state from persisted plan" do
+      user = user_fixture()
+      plan = plan_fixture(user, %{"name" => "Persisted", "burpee_count_target" => 42})
+
+      {:ok, state} = PlanEditor.from_plan(plan, :level_2)
+
+      assert state.plan.id == plan.id
+      assert state.level == :level_2
+      assert state.input.name == "Persisted"
+      assert state.input.burpee_count_target == 42
+    end
+  end
 end
