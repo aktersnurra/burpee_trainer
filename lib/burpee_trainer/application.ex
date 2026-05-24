@@ -18,6 +18,7 @@ defmodule BurpeeTrainer.Application do
       {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
       # Start a worker by calling: BurpeeTrainer.Worker.start_link(arg)
       # {BurpeeTrainer.Worker, arg},
+      {Task.Supervisor, name: BurpeeTrainer.CoachLearningSupervisor},
       # Start to serve requests, typically the last entry
       BurpeeTrainerWeb.Endpoint
     ]
