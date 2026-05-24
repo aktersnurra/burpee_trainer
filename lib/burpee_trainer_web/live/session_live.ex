@@ -14,7 +14,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Planner, Workouts}
+  alias BurpeeTrainer.{Mood, Planner, Workouts}
   alias BurpeeTrainer.Workouts.WorkoutSession
   alias BurpeeTrainerWeb.Fmt
 
@@ -65,9 +65,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("session_started", %{"mood" => mood_str}, socket) do
     mood =
-      case Integer.parse(mood_str) do
-        {m, ""} when m in [-1, 0, 1] -> m
-        _ -> 0
+      case Mood.parse(mood_str) do
+        {:ok, mood} -> mood
+        {:error, _reason} -> 0
       end
 
     {:noreply,
@@ -92,9 +92,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("set_mood", %{"mood" => mood_str}, socket) do
     mood =
-      case Integer.parse(mood_str) do
-        {m, ""} when m in [-1, 0, 1] -> m
-        _ -> socket.assigns.mood
+      case Mood.parse(mood_str) do
+        {:ok, mood} -> mood
+        {:error, _reason} -> socket.assigns.mood
       end
 
     {:noreply, assign(socket, :mood, mood)}
