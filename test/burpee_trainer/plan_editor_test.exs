@@ -170,6 +170,37 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
+  describe "regeneration and derived state" do
+    test "regenerate creates a solver solution and derived summary" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      assert state.solver_error == nil
+      assert state.solver_solution != nil
+      assert state.derived.summary != nil
+      assert state.derived.can_save? in [true, false]
+    end
+
+    test "change_basics updates input then regenerates" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} =
+        PlanEditor.change_basics(state, %{
+          "name" => "Changed",
+          "target_duration_min" => "25",
+          "burpee_count_target" => "120",
+          "reps_per_set" => "10"
+        })
+
+      assert state.input.name == "Changed"
+      assert state.input.target_duration_min == 25
+      assert state.input.burpee_count_target == 120
+      assert state.input.reps_per_set == 10
+      assert state.solver_solution != nil
+    end
+  end
+
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})

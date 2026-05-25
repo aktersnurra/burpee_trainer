@@ -4,8 +4,9 @@ defmodule BurpeeTrainer.PlanEditor do
   """
 
   alias BurpeeTrainer.BurpeeType
-  alias BurpeeTrainer.PlanEditor.State
-  alias BurpeeTrainer.PlanSolver
+  alias BurpeeTrainer.PlanEditor.{Derived, State}
+  alias BurpeeTrainer.{Planner, PlanSolver}
+  alias BurpeeTrainer.PlanSolver.Input
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
 
   @type input :: %{
@@ -142,6 +143,82 @@ defmodule BurpeeTrainer.PlanEditor do
     end
   end
 
+  @spec regenerate(State.t()) :: {:ok, State.t()}
+  def regenerate(%State{} = state) do
+    solver_input = %Input{
+      name: state.input.name,
+      burpee_type: state.input.burpee_type,
+      target_duration_min: state.input.target_duration_min,
+      burpee_count_target: state.input.burpee_count_target,
+      pacing_style: state.input.pacing_style,
+      level: state.level,
+      reps_per_set: state.input.reps_per_set,
+      additional_rests: state.input.additional_rests,
+      sec_per_burpee_override: state.input.sec_per_burpee_override
+    }
+
+    case PlanSolver.solve(solver_input) do
+      {:ok, solution} ->
+        {:ok,
+         %{
+           state
+           | solver_error: nil,
+             solver_solution: solution,
+             manual_edit?: false,
+             derived: derived(solution.plan, state.input)
+         }}
+
+      {:error, reasons} ->
+        {:ok, %{state | solver_error: Enum.join(reasons, "; "), solver_solution: nil}}
+    end
+  end
+
+  @spec change_basics(State.t(), map()) :: {:ok, State.t()}
+  def change_basics(%State{} = state, params) do
+    state
+    |> put_input(parse_basics(params, state.input))
+    |> regenerate()
+  end
+
+  @spec derived(WorkoutPlan.t(), input()) :: Derived.t()
+  def derived(%WorkoutPlan{} = plan, plan_input) do
+    if can_summarize?(plan) do
+      summary = Planner.summary(plan)
+      target_sec = plan_input.target_duration_min * 60
+      target_count = plan_input.burpee_count_target
+
+      duration_ok = abs(summary.duration_sec_total - target_sec) <= 5
+      count_ok = summary.burpee_count_total == target_count
+
+      summary = %{
+        duration_sec: summary.duration_sec_total,
+        burpee_count: summary.burpee_count_total,
+        target_sec: target_sec,
+        target_count: target_count,
+        duration_ok: duration_ok,
+        count_ok: count_ok,
+        both_ok: duration_ok and count_ok
+      }
+
+      %Derived{
+        summary: summary,
+        duration_ok?: duration_ok,
+        reps_ok?: count_ok,
+        can_save?: duration_ok and count_ok
+      }
+    else
+      %Derived{}
+    end
+  end
+
+  @spec derived(State.t()) :: Derived.t()
+  def derived(%State{} = state) do
+    case state.solver_solution do
+      %{plan: %WorkoutPlan{} = plan} -> derived(plan, state.input)
+      _ -> %Derived{}
+    end
+  end
+
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(plan) do
     rests =
@@ -164,6 +241,38 @@ defmodule BurpeeTrainer.PlanEditor do
       reps_per_set: infer_reps_per_set(plan),
       additional_rests: rests,
       sec_per_burpee_override: nil
+    }
+  end
+
+  defp put_input(%State{} = state, input), do: %{state | input: input}
+
+  defp parse_basics(params, current) do
+    name = Map.get(params, "name", current.name)
+
+    target_duration_min =
+      case Integer.parse(Map.get(params, "target_duration_min", "")) do
+        {count, ""} when count > 0 -> count
+        _ -> current.target_duration_min
+      end
+
+    burpee_count_target =
+      case Integer.parse(Map.get(params, "burpee_count_target", "")) do
+        {count, ""} when count > 0 -> count
+        _ -> current.burpee_count_target
+      end
+
+    reps_per_set =
+      case Integer.parse(Map.get(params, "reps_per_set", "")) do
+        {count, ""} when count > 0 -> count
+        _ -> current.reps_per_set
+      end
+
+    %{
+      current
+      | name: name,
+        target_duration_min: target_duration_min,
+        burpee_count_target: burpee_count_target,
+        reps_per_set: reps_per_set
     }
   end
 
@@ -212,6 +321,21 @@ defmodule BurpeeTrainer.PlanEditor do
       _ -> default
     end
   end
+
+  defp can_summarize?(%WorkoutPlan{blocks: blocks}) when is_list(blocks) and blocks != [] do
+    Enum.all?(blocks, fn block ->
+      is_integer(block.repeat_count) and block.repeat_count > 0 and
+        is_list(block.sets) and block.sets != [] and
+        Enum.all?(block.sets, fn set ->
+          is_integer(set.burpee_count) and set.burpee_count >= 0 and
+            is_number(set.sec_per_rep) and set.sec_per_rep > 0 and
+            is_number(set.sec_per_burpee) and set.sec_per_burpee > 0 and
+            is_number(set.end_of_set_rest)
+        end)
+    end)
+  end
+
+  defp can_summarize?(_), do: false
 
   defp infer_reps_per_set(plan) do
     first_set =

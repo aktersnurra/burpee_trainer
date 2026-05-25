@@ -16,10 +16,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Levels, Planner, Workouts}
+  alias BurpeeTrainer.{Levels, Workouts}
   alias BurpeeTrainer.PlanEditor
   alias BurpeeTrainer.PlanSolver
-  alias BurpeeTrainer.PlanSolver.Input
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
 
@@ -73,7 +72,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:editor, editor)
     |> assign(:plan, editor.plan)
     |> assign(:plan_input, editor.input)
+    |> assign(:solver_error, editor.solver_error)
+    |> assign(:solver_solution, editor.solver_solution)
+    |> assign(:manual_edit, editor.manual_edit?)
+    |> assign(:derived, derived_assign(editor))
   end
+
+  defp derived_assign(%{derived: %{summary: summary}}), do: summary
+  defp derived_assign(_editor), do: nil
 
   defp preload_duration_min(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) do
     %{plan | blocks: Enum.map(blocks, &preload_block_duration_min/1)}
@@ -105,42 +111,24 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
-  # Re-run the solver from plan_input and rebuild the blocks form.
+  # Re-run the solver from editor state and rebuild the blocks form.
   defp regenerate(socket) do
-    plan_input = socket.assigns.plan_input
-    level = socket.assigns.level
+    {:ok, editor} = PlanEditor.regenerate(socket.assigns.editor)
 
-    solver_input = %Input{
-      name: plan_input.name,
-      burpee_type: plan_input.burpee_type,
-      target_duration_min: plan_input.target_duration_min,
-      burpee_count_target: plan_input.burpee_count_target,
-      pacing_style: plan_input.pacing_style,
-      level: level,
-      reps_per_set: plan_input.reps_per_set,
-      additional_rests: plan_input.additional_rests,
-      sec_per_burpee_override: plan_input.sec_per_burpee_override
-    }
+    socket = put_editor(socket, editor)
 
-    case PlanSolver.solve(solver_input) do
-      {:ok, solution} ->
-        base = socket.assigns.plan || %WorkoutPlan{}
-        changeset = Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(solution.plan))
+    if editor.solver_solution do
+      base = editor.plan || %WorkoutPlan{}
 
-        socket
-        |> assign(:form, to_form(changeset))
-        |> assign(:solver_error, nil)
-        |> assign(:solver_solution, solution)
-        |> assign(:manual_edit, false)
+      changeset =
+        Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(editor.solver_solution.plan))
 
-      {:error, reasons} ->
-        existing_form =
-          socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+      assign(socket, :form, to_form(changeset))
+    else
+      existing_form =
+        socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
 
-        socket
-        |> assign(:form, existing_form)
-        |> assign(:solver_error, Enum.join(reasons, "; "))
-        |> assign(:solver_solution, nil)
+      assign(socket, :form, existing_form)
     end
   end
 
@@ -185,30 +173,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp assign_derived(socket) do
     changeset = socket.assigns.form.source
-    plan_input = socket.assigns.plan_input
 
     derived =
       try do
-        plan = Ecto.Changeset.apply_changes(changeset)
-
-        if can_summarize?(plan) do
-          summary = Planner.summary(plan)
-          target_sec = plan_input.target_duration_min * 60
-          target_count = plan_input.burpee_count_target
-
-          duration_ok = abs(summary.duration_sec_total - target_sec) <= 5
-          count_ok = summary.burpee_count_total == target_count
-
-          %{
-            duration_sec: summary.duration_sec_total,
-            burpee_count: summary.burpee_count_total,
-            target_sec: target_sec,
-            target_count: target_count,
-            duration_ok: duration_ok,
-            count_ok: count_ok,
-            both_ok: duration_ok and count_ok
-          }
-        end
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> PlanEditor.derived(socket.assigns.plan_input)
       rescue
         e ->
           require Logger
@@ -216,23 +186,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           nil
       end
 
-    assign(socket, :derived, derived)
-  end
+    editor = %{socket.assigns.editor | derived: derived}
 
-  defp can_summarize?(%WorkoutPlan{blocks: blocks}) when is_list(blocks) and blocks != [] do
-    Enum.all?(blocks, fn block ->
-      is_integer(block.repeat_count) and block.repeat_count > 0 and
-        is_list(block.sets) and block.sets != [] and
-        Enum.all?(block.sets, fn set ->
-          is_integer(set.burpee_count) and set.burpee_count >= 0 and
-            is_number(set.sec_per_rep) and set.sec_per_rep > 0 and
-            is_number(set.sec_per_burpee) and set.sec_per_burpee > 0 and
-            is_number(set.end_of_set_rest)
-        end)
-    end)
+    socket
+    |> assign(:editor, editor)
+    |> assign(:derived, derived_assign(editor))
   end
-
-  defp can_summarize?(_), do: false
 
   defp block_time_ranges(blocks, plan_input) do
     _target_sec = plan_input.target_duration_min * 60.0
@@ -262,11 +221,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   @impl true
   def handle_event("change_basics", params, socket) do
-    plan_input = parse_basics(params, socket.assigns.plan_input)
+    {:ok, editor} = PlanEditor.change_basics(socket.assigns.editor, params)
 
     socket =
       socket
-      |> assign(:plan_input, plan_input)
+      |> put_editor(editor)
       |> regenerate()
       |> assign_derived()
 
@@ -574,36 +533,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       },
       params
     )
-  end
-
-  defp parse_basics(params, current) do
-    name = Map.get(params, "name", current.name)
-
-    target_duration_min =
-      case Integer.parse(Map.get(params, "target_duration_min", "")) do
-        {n, ""} when n > 0 -> n
-        _ -> current.target_duration_min
-      end
-
-    burpee_count_target =
-      case Integer.parse(Map.get(params, "burpee_count_target", "")) do
-        {n, ""} when n > 0 -> n
-        _ -> current.burpee_count_target
-      end
-
-    reps_per_set =
-      case Integer.parse(Map.get(params, "reps_per_set", "")) do
-        {n, ""} when n > 0 -> n
-        _ -> current.reps_per_set
-      end
-
-    %{
-      current
-      | name: name,
-        target_duration_min: target_duration_min,
-        burpee_count_target: burpee_count_target,
-        reps_per_set: reps_per_set
-    }
   end
 
   defp format_sec(nil), do: nil
