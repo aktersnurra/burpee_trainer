@@ -75,6 +75,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:solver_error, editor.solver_error)
     |> assign(:solver_solution, editor.solver_solution)
     |> assign(:manual_edit, editor.manual_edit?)
+    |> assign(:expanded_blocks, editor.expanded_blocks)
+    |> assign(:open_block_menu, editor.open_block_menu)
     |> assign(:derived, derived_assign(editor))
   end
 
@@ -177,7 +179,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {derived, form_plan} =
       try do
         form_plan = Ecto.Changeset.apply_changes(changeset)
-        {PlanEditor.derived(form_plan, socket.assigns.plan_input), form_plan}
+        {PlanEditor.derived(form_plan, socket.assigns.editor.input), form_plan}
       rescue
         e ->
           require Logger
@@ -350,24 +352,28 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   def handle_event("toggle_block_menu", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
-    open = if socket.assigns.open_block_menu == idx, do: nil, else: idx
-    {:noreply, assign(socket, :open_block_menu, open)}
+    open = if socket.assigns.editor.open_block_menu == idx, do: nil, else: idx
+    editor = %{socket.assigns.editor | open_block_menu: open}
+
+    {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, open)}
   end
 
   def handle_event("close_block_menu", _, socket) do
-    {:noreply, assign(socket, :open_block_menu, nil)}
+    editor = %{socket.assigns.editor | open_block_menu: nil}
+    {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, nil)}
   end
 
   def handle_event("toggle_block_expand", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
-    expanded = socket.assigns.expanded_blocks
+    expanded = socket.assigns.editor.expanded_blocks
 
     expanded =
       if MapSet.member?(expanded, idx),
         do: MapSet.delete(expanded, idx),
         else: MapSet.put(expanded, idx)
 
-    {:noreply, assign(socket, :expanded_blocks, expanded)}
+    editor = %{socket.assigns.editor | expanded_blocks: expanded}
+    {:noreply, socket |> put_editor(editor) |> assign(:expanded_blocks, expanded)}
   end
 
   def handle_event("validate", %{"workout_plan" => params}, socket) do
@@ -375,7 +381,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     changeset =
       base_plan
-      |> Workouts.change_plan(merge_basics(params, socket.assigns.plan_input))
+      |> Workouts.change_plan(merge_basics(params, socket.assigns.editor.input))
       |> Map.put(:action, :validate)
 
     socket =
@@ -388,7 +394,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("save", %{"workout_plan" => params}, socket) do
-    full_params = merge_basics(params, socket.assigns.plan_input)
+    full_params = merge_basics(params, socket.assigns.editor.input)
     save_plan(socket, socket.assigns.live_action, full_params)
   end
 
