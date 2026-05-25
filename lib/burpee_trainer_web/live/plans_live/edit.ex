@@ -174,19 +174,18 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp assign_derived(socket) do
     changeset = socket.assigns.form.source
 
-    derived =
+    {derived, form_plan} =
       try do
-        changeset
-        |> Ecto.Changeset.apply_changes()
-        |> PlanEditor.derived(socket.assigns.plan_input)
+        form_plan = Ecto.Changeset.apply_changes(changeset)
+        {PlanEditor.derived(form_plan, socket.assigns.plan_input), form_plan}
       rescue
         e ->
           require Logger
           Logger.warning("assign_derived failed: #{inspect(e)}")
-          nil
+          {nil, socket.assigns.editor.form_plan}
       end
 
-    editor = %{socket.assigns.editor | derived: derived}
+    editor = %{socket.assigns.editor | derived: derived, form_plan: form_plan}
 
     socket
     |> assign(:editor, editor)
@@ -325,118 +324,27 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # ---------------------------------------------------------------------------
 
   def handle_event("enable_manual_edit", _, socket) do
-    {:noreply, assign(socket, :manual_edit, true)}
+    {:ok, editor} = PlanEditor.enable_manual_edit(socket.assigns.editor)
+    {:noreply, put_editor(socket, editor)}
   end
 
   def handle_event("copy_block", %{"index" => idx_str}, socket) do
-    idx = String.to_integer(idx_str)
-    changeset = socket.assigns.form.source
-    plan = Ecto.Changeset.apply_changes(changeset)
+    case PlanEditor.copy_block(socket.assigns.editor, idx_str) do
+      {:ok, editor} ->
+        validate_editor_form(socket, editor)
 
-    blocks = Enum.sort_by(plan.blocks, & &1.position)
-    source_block = Enum.at(blocks, idx)
-
-    if source_block do
-      next_pos = length(blocks) + 1
-
-      new_block_attrs = %{
-        "position" => next_pos,
-        "repeat_count" => source_block.repeat_count,
-        "sets" =>
-          source_block.sets
-          |> Enum.sort_by(& &1.position)
-          |> Enum.with_index()
-          |> Map.new(fn {set, si} ->
-            {to_string(si),
-             %{
-               "position" => set.position,
-               "burpee_count" => set.burpee_count,
-               "sec_per_rep" => set.sec_per_rep,
-               "sec_per_burpee" => set.sec_per_burpee,
-               "end_of_set_rest" => set.end_of_set_rest
-             }}
-          end)
-      }
-
-      new_blocks_attrs = blocks_to_attrs(blocks)
-      new_idx = map_size(new_blocks_attrs)
-      merged = Map.put(new_blocks_attrs, to_string(new_idx), new_block_attrs)
-
-      params = %{
-        "workout_plan" => %{
-          "blocks" => merged,
-          "blocks_sort" => Enum.map(0..new_idx, &to_string/1)
-        }
-      }
-
-      handle_event("validate", params, socket)
-    else
-      {:noreply, socket}
+      {:error, _reason, _state} ->
+        {:noreply, socket}
     end
   end
 
   def handle_event("copy_set", %{"block_index" => bi_str, "set_index" => si_str}, socket) do
-    bi = String.to_integer(bi_str)
-    si = String.to_integer(si_str)
-    changeset = socket.assigns.form.source
-    plan = Ecto.Changeset.apply_changes(changeset)
+    case PlanEditor.copy_set(socket.assigns.editor, bi_str, si_str) do
+      {:ok, editor} ->
+        validate_editor_form(socket, editor)
 
-    blocks = Enum.sort_by(plan.blocks, & &1.position)
-    block = Enum.at(blocks, bi)
-
-    if block do
-      sets = Enum.sort_by(block.sets, & &1.position)
-      source_set = Enum.at(sets, si)
-
-      if source_set do
-        new_set_attrs = %{
-          "position" => length(sets) + 1,
-          "burpee_count" => source_set.burpee_count,
-          "sec_per_rep" => source_set.sec_per_rep,
-          "sec_per_burpee" => source_set.sec_per_burpee,
-          "end_of_set_rest" => source_set.end_of_set_rest
-        }
-
-        existing_sets =
-          sets
-          |> Enum.with_index()
-          |> Map.new(fn {set, idx} ->
-            {to_string(idx),
-             %{
-               "position" => set.position,
-               "burpee_count" => set.burpee_count,
-               "sec_per_rep" => set.sec_per_rep,
-               "sec_per_burpee" => set.sec_per_burpee,
-               "end_of_set_rest" => set.end_of_set_rest
-             }}
-          end)
-
-        new_si = map_size(existing_sets)
-        merged_sets = Map.put(existing_sets, to_string(new_si), new_set_attrs)
-
-        existing_blocks = blocks_to_attrs(blocks)
-
-        updated_block =
-          Map.merge(existing_blocks[to_string(bi)], %{
-            "sets" => merged_sets,
-            "sets_sort" => Enum.map(0..new_si, &to_string/1)
-          })
-
-        merged_blocks = Map.put(existing_blocks, to_string(bi), updated_block)
-
-        params = %{
-          "workout_plan" => %{
-            "blocks" => merged_blocks,
-            "blocks_sort" => Enum.map(0..(length(blocks) - 1), &to_string/1)
-          }
-        }
-
-        handle_event("validate", params, socket)
-      else
+      {:error, _reason, _state} ->
         {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
     end
   end
 
@@ -482,6 +390,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("save", %{"workout_plan" => params}, socket) do
     full_params = merge_basics(params, socket.assigns.plan_input)
     save_plan(socket, socket.assigns.live_action, full_params)
+  end
+
+  defp validate_editor_form(socket, editor) do
+    params = %{"blocks" => blocks_to_attrs(editor.form_plan.blocks)}
+    base_plan = editor.plan || %WorkoutPlan{}
+
+    changeset =
+      base_plan
+      |> Workouts.change_plan(merge_basics(params, editor.input))
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> assign(:form, to_form(changeset))
+      |> assign(:solver_error, nil)
+      |> assign_derived()
+
+    {:noreply, socket}
   end
 
   defp save_plan(socket, :new, params) do

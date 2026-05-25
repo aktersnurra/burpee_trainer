@@ -35,6 +35,7 @@ defmodule BurpeeTrainer.PlanEditor do
   def from_plan(%WorkoutPlan{} = plan, level) do
     state = %State{
       plan: plan,
+      form_plan: plan,
       input: input_from_plan(plan),
       level: level
     }
@@ -164,6 +165,7 @@ defmodule BurpeeTrainer.PlanEditor do
            state
            | solver_error: nil,
              solver_solution: solution,
+             form_plan: solution.plan,
              manual_edit?: false,
              derived: derived(solution.plan, state.input)
          }}
@@ -218,6 +220,61 @@ defmodule BurpeeTrainer.PlanEditor do
       _ -> %Derived{}
     end
   end
+
+  @spec enable_manual_edit(State.t()) :: {:ok, State.t()}
+  def enable_manual_edit(%State{} = state), do: {:ok, %{state | manual_edit?: true}}
+
+  @spec copy_block(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def copy_block(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, index) do
+    with {:ok, index} <- parse_non_negative_integer(index),
+         blocks <- Enum.sort_by(blocks || [], & &1.position),
+         %Block{} = source_block <- Enum.at(blocks, index) do
+      copied_block = %{source_block | position: length(blocks) + 1}
+      form_plan = %{state.form_plan | blocks: blocks ++ [copied_block]}
+
+      {:ok,
+       %{
+         state
+         | form_plan: form_plan,
+           manual_edit?: true,
+           derived: derived(form_plan, state.input)
+       }}
+    else
+      nil -> {:error, {:missing_block, index}, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  def copy_block(%State{} = state, _index), do: {:error, :missing_form_plan, state}
+
+  @spec copy_set(State.t(), term(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def copy_set(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, block_index, set_index) do
+    with {:ok, block_index} <- parse_non_negative_integer(block_index),
+         {:ok, set_index} <- parse_non_negative_integer(set_index),
+         blocks <- Enum.sort_by(blocks || [], & &1.position),
+         %Block{} = block <- Enum.at(blocks, block_index),
+         sets <- Enum.sort_by(block.sets || [], & &1.position),
+         %Set{} = source_set <- Enum.at(sets, set_index) do
+      copied_set = %{source_set | position: length(sets) + 1}
+      updated_block = %{block | sets: sets ++ [copied_set]}
+      updated_blocks = List.replace_at(blocks, block_index, updated_block)
+      form_plan = %{state.form_plan | blocks: updated_blocks}
+
+      {:ok,
+       %{
+         state
+         | form_plan: form_plan,
+           manual_edit?: true,
+           derived: derived(form_plan, state.input)
+       }}
+    else
+      nil -> {:error, :missing_item, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  def copy_set(%State{} = state, _block_index, _set_index),
+    do: {:error, :missing_form_plan, state}
 
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(plan) do

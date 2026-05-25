@@ -201,6 +201,40 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
+  describe "manual edit transitions" do
+    test "enable_manual_edit marks state manual" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.enable_manual_edit(state)
+
+      assert state.manual_edit? == true
+    end
+
+    test "copy_block returns manual state with another block" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+      block_count = length(state.form_plan.blocks)
+
+      {:ok, state} = PlanEditor.copy_block(state, "0")
+
+      assert state.manual_edit? == true
+      assert length(state.form_plan.blocks) == block_count + 1
+    end
+
+    test "copy_set returns manual state with another set" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+      [first_block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
+      set_count = length(first_block.sets)
+
+      {:ok, state} = PlanEditor.copy_set(state, "0", "0")
+      [first_block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
+
+      assert state.manual_edit? == true
+      assert length(first_block.sets) == set_count + 1
+    end
+  end
+
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
