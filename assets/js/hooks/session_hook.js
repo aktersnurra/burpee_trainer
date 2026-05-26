@@ -91,11 +91,13 @@ const SessionHook = {
 		this.el.addEventListener("click", (e) => {
 			const warmupYes = e.target.closest("#warmup-yes-btn");
 			const warmupSkip = e.target.closest("#warmup-skip-btn");
+			const workoutReady = e.target.closest("#workout-ready-btn");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
 
 			if (warmupYes) this.onWarmupYes();
 			if (warmupSkip) this.onWarmupSkip();
+			if (workoutReady) this.onWorkoutReady();
 			if (
 				ringContainer &&
 				(this.startTime !== null || this.countdownCount !== null)
@@ -242,6 +244,44 @@ const SessionHook = {
 	},
 
 	showWarmupDonePrompt() {
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		this.rafId = null;
+		this.audio.stop();
+		this.startTime = null;
+		this.countdownCount = null;
+		this.countdownPaused = false;
+
+		const parent =
+			this.el.querySelector("#session-runner-client") || this.el;
+		let overlay = this.el.querySelector("#start-overlay");
+
+		if (!overlay) {
+			overlay = document.createElement("div");
+			overlay.id = "start-overlay";
+		}
+
+		overlay.className =
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-base-100/95 p-6 text-center shadow-2xl backdrop-blur-sm";
+		overlay.replaceChildren();
+
+		const title = document.createElement("span");
+		title.className = "text-xl font-semibold tracking-tight";
+		title.textContent = "Warmup complete";
+
+		const description = document.createElement("p");
+		description.className = "max-w-xs text-sm text-base-content/60";
+		description.textContent =
+			"Take a breath. Start the workout when you're ready.";
+
+		const button = document.createElement("button");
+		button.type = "button";
+		button.id = "workout-ready-btn";
+		button.className =
+			"rounded-xl bg-primary px-8 py-4 text-sm font-semibold text-primary-content transition active:scale-[0.97] hover:brightness-110";
+		button.textContent = "Start workout";
+
+		overlay.append(title, description, button);
+		parent.appendChild(overlay);
 	},
 
 	onWarmupYes() {
@@ -250,6 +290,10 @@ const SessionHook = {
 
 	onWarmupSkip() {
 		this.dispatchFlow({ type: "WARMUP_SKIP" });
+	},
+
+	onWorkoutReady() {
+		this.dispatchFlow({ type: "WORKOUT_READY" });
 	},
 
 	countdownColor(n) {
