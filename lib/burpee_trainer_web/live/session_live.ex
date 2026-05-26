@@ -279,9 +279,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
-  attr :phase, :atom, required: true
-  attr :summary, :map, required: true
-  attr :warmup_asked, :boolean, required: true
+  attr(:phase, :atom, required: true)
+  attr(:summary, :map, required: true)
+  attr(:warmup_asked, :boolean, required: true)
 
   defp session_runner(assigns) do
     ~H"""
@@ -369,7 +369,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
-  attr :warmup_asked, :boolean, required: true
+  attr(:warmup_asked, :boolean, required: true)
 
   defp tap_to_start_overlay(assigns) do
     ~H"""
@@ -429,11 +429,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
-  attr :plan, :any, required: true
-  attr :summary, :map, required: true
-  attr :form, :any, required: true
-  attr :mood, :integer, default: nil
-  attr :completion_tags, :list, default: []
+  attr(:plan, :any, required: true)
+  attr(:summary, :map, required: true)
+  attr(:form, :any, required: true)
+  attr(:mood, :integer, default: nil)
+  attr(:completion_tags, :list, default: [])
 
   @mood_options [
     {"hero-face-frown", "Tired", -1},
