@@ -226,4 +226,31 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert length(sessions) == 1
     refute hd(sessions).tags == "warmup"
   end
+
+  test "save_session does not persist warmup when main session is invalid", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main" => %{"burpee_count_done" => 25, "duration_sec" => 80},
+      "warmup" => %{"burpee_count_done" => 5, "duration_sec" => 60}
+    })
+
+    params = %{
+      "burpee_type" => "six_count",
+      "burpee_count_planned" => "30",
+      "duration_sec_planned" => "90",
+      "burpee_count_actual" => "",
+      "duration_min" => ""
+    }
+
+    view
+    |> form("#session-completion-form", workout_session: params)
+    |> render_submit()
+
+    assert Workouts.list_sessions(user) == []
+  end
 end

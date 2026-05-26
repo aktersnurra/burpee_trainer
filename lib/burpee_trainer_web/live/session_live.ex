@@ -124,13 +124,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def handle_event("save_session", %{"workout_session" => params}, socket) do
     %{current_user: user, plan: plan, mood: mood, completion_tags: tags} = socket.assigns
 
-    if socket.assigns.warmup_burpee_count > 0 do
-      Workouts.create_warmup_session(user, %{
-        burpee_type: plan.burpee_type,
-        burpee_count_done: socket.assigns.warmup_burpee_count,
-        duration_sec: socket.assigns.warmup_duration_sec
-      })
-    end
+    warmup_params =
+      if socket.assigns.warmup_burpee_count > 0 do
+        %{
+          burpee_type: plan.burpee_type,
+          burpee_count_done: socket.assigns.warmup_burpee_count,
+          duration_sec: socket.assigns.warmup_duration_sec
+        }
+      end
 
     session_params =
       params
@@ -138,7 +139,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       |> Map.put("mood", mood)
       |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
 
-    case Workouts.create_session_from_plan(user, plan, session_params) do
+    case Workouts.create_session_from_plan_with_warmup(user, plan, session_params, warmup_params) do
       {:ok, _session} ->
         {:noreply,
          socket

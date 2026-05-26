@@ -353,6 +353,31 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Create a completed plan session and optional warmup atomically.
+  """
+  @spec create_session_from_plan_with_warmup(User.t(), WorkoutPlan.t(), map, map | nil) ::
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | any}
+  def create_session_from_plan_with_warmup(user, plan, attrs, nil) do
+    create_session_from_plan(user, plan, attrs)
+  end
+
+  def create_session_from_plan_with_warmup(
+        %User{} = user,
+        %WorkoutPlan{} = plan,
+        attrs,
+        warmup_attrs
+      ) do
+    Repo.transaction(fn ->
+      with {:ok, _warmup} <- create_warmup_session(user, warmup_attrs),
+           {:ok, session} <- create_session_from_plan(user, plan, attrs) do
+        session
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc """
   Save a warmup session silently (no UI shown). `plan_id` is nil.
   Tagged "warmup" so it's distinguishable in history.
   """
