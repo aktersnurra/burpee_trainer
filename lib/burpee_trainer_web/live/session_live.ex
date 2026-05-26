@@ -74,20 +74,25 @@ defmodule BurpeeTrainerWeb.SessionLive do
      socket |> assign(:phase, :running) |> assign(:mood, mood) |> assign(:warmup_asked, true)}
   end
 
-  def handle_event("session_complete", %{"main" => main, "warmup" => warmup}, socket) do
-    main_count = Map.get(main, "burpee_count_done", 0)
-    main_duration = Map.get(main, "duration_sec", 0)
-    warmup_count = Map.get(warmup, "burpee_count_done", 0)
-    warmup_duration = Map.get(warmup, "duration_sec", 0)
+  def handle_event("session_complete", payload, socket) do
+    case parse_completion_payload(payload) do
+      {:ok, %{main: main, warmup: warmup}} ->
+        socket =
+          socket
+          |> assign(:phase, :done)
+          |> assign(:warmup_burpee_count, warmup.burpee_count_done)
+          |> assign(:warmup_duration_sec, warmup.duration_sec)
+          |> assign(
+            :completion_form,
+            build_completion_form(socket, main.burpee_count_done, main.duration_sec)
+          )
 
-    socket =
-      socket
-      |> assign(:phase, :done)
-      |> assign(:warmup_burpee_count, warmup_count)
-      |> assign(:warmup_duration_sec, warmup_duration)
-      |> assign(:completion_form, build_completion_form(socket, main_count, main_duration))
+        {:noreply, socket}
 
-    {:noreply, socket}
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Invalid session result. Please try the workout again.")}
+    end
   end
 
   def handle_event("set_mood", %{"mood" => mood_str}, socket) do
@@ -167,6 +172,30 @@ defmodule BurpeeTrainerWeb.SessionLive do
     case Duration.parse_minutes_to_seconds(Map.get(params, "duration_min", "")) do
       {:ok, seconds} -> Map.put(params, "duration_sec_actual", seconds)
       {:error, _reason} -> params
+    end
+  end
+
+  defp parse_completion_payload(%{"main" => main, "warmup" => warmup})
+       when is_map(main) and is_map(warmup) do
+    with {:ok, main_result} <- parse_completion_result(main),
+         {:ok, warmup_result} <- parse_completion_result(warmup) do
+      {:ok, %{main: main_result, warmup: warmup_result}}
+    end
+  end
+
+  defp parse_completion_payload(_payload), do: {:error, :invalid_payload}
+
+  defp parse_completion_result(result) do
+    with {:ok, burpee_count_done} <- non_negative_integer(result, "burpee_count_done"),
+         {:ok, duration_sec} <- non_negative_integer(result, "duration_sec") do
+      {:ok, %{burpee_count_done: burpee_count_done, duration_sec: duration_sec}}
+    end
+  end
+
+  defp non_negative_integer(result, key) do
+    case Map.get(result, key, 0) do
+      value when is_integer(value) and value >= 0 -> {:ok, value}
+      _value -> {:error, :invalid_number}
     end
   end
 

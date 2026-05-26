@@ -103,6 +103,36 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert html =~ "Tired"
   end
 
+  test "session_complete rejects negative counts", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main" => %{"burpee_count_done" => -1, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
+    })
+
+    html = render(view)
+    refute html =~ "Session complete"
+    refute has_element?(view, "form#session-completion-form")
+    assert html =~ "Invalid session result"
+  end
+
+  test "session_complete rejects non-numeric durations", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main" => %{"burpee_count_done" => 30, "duration_sec" => "fast"},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
+    })
+
+    html = render(view)
+    refute html =~ "Session complete"
+    refute has_element?(view, "form#session-completion-form")
+    assert html =~ "Invalid session result"
+  end
+
   test "save_session creates session and navigates to history", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
