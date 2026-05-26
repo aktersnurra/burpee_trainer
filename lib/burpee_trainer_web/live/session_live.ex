@@ -63,15 +63,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
     {:noreply, push_event(socket, "warmup_ready", %{warmup: serialize_timeline(warmup)})}
   end
 
-  def handle_event("session_started", %{"mood" => mood_str}, socket) do
-    mood =
-      case Mood.parse(mood_str) do
-        {:ok, mood} -> mood
-        {:error, _reason} -> 0
-      end
-
-    {:noreply,
-     socket |> assign(:phase, :running) |> assign(:mood, mood) |> assign(:warmup_asked, true)}
+  def handle_event("session_started", _params, socket) do
+    {:noreply, socket |> assign(:phase, :running) |> assign(:warmup_asked, true)}
   end
 
   def handle_event("session_complete", payload, socket) do

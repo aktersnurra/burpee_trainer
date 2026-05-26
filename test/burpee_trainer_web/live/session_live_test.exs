@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    render_hook(view, "session_started", %{"mood" => "0"})
+    render_hook(view, "session_started", %{})
 
     html = render(view)
     refute html =~ "Do you want a warmup?"

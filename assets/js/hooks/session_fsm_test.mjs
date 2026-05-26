@@ -74,18 +74,11 @@ let result = transition(initialSessionState(), {
 assert.equal(result.state.mode, "warmup_prompt");
 assert.equal(result.state.mainTimeline.length, 1);
 
-result = transition(result.state, { type: "WARMUP_SKIP" });
-assert.equal(result.state.mode, "mood_prompt");
-assert.deepEqual(result.state.timeline, [work]);
-
-result = transition(result.state, {
-	type: "MOOD_SELECTED",
-	mood: "0",
-	now: 1000,
-});
+result = transition(result.state, { type: "WARMUP_SKIP", now: 1000 });
 assert.equal(result.state.mode, "countdown");
+assert.deepEqual(result.state.timeline, [work]);
 assert.deepEqual(result.commands, [
-	{ type: "pushSessionStarted", mood: "0" },
+	{ type: "pushSessionStarted" },
 	{ type: "startCountdownTimer" },
 ]);
 
@@ -94,15 +87,18 @@ result = transition(initialSessionState(), {
 	timeline: [work],
 	blockCount: 1,
 });
-result = transition(result.state, { type: "WARMUP_READY", warmup: [warmup] });
-assert.equal(result.state.mode, "mood_prompt");
-assert.deepEqual(result.state.timeline, [warmup, work]);
-
 result = transition(result.state, {
-	type: "MOOD_SELECTED",
-	mood: "1",
+	type: "WARMUP_READY",
+	warmup: [warmup],
 	now: 1000,
 });
+assert.equal(result.state.mode, "countdown");
+assert.deepEqual(result.state.timeline, [warmup, work]);
+assert.deepEqual(result.commands, [
+	{ type: "pushSessionStarted" },
+	{ type: "startCountdownTimer" },
+]);
+
 result = transition(result.state, { type: "COUNTDOWN_PAUSE", now: 1250 });
 assert.equal(result.state.mode, "countdown_paused");
 assert.equal(result.state.countdown.stepElapsedMs, 250);
@@ -274,6 +270,36 @@ assert.deepEqual(result.commands, [
 ]);
 assert.equal(result.state.display.lastEventType, "work_burpee");
 assert.equal(result.state.display.lastBurpeeCount, 5);
+
+result = transition(initialSessionState(), {
+	type: "DISPLAY_FRAME",
+	frame: { event: warmup, index: 0, phase_elapsed: 5, phase_remaining: 5 },
+	elapsedSec: 5,
+	totalDurationSec: 30,
+	warmupEndSec: 10,
+	blockCount: 3,
+	doneInEvent: 2,
+});
+assert.deepEqual(result.commands[0], {
+	type: "renderProgressBar",
+	percent: 0,
+	color: "#F59E0B",
+});
+
+result = transition(initialSessionState(), {
+	type: "DISPLAY_FRAME",
+	frame: { event: work, index: 1, phase_elapsed: 5, phase_remaining: 5 },
+	elapsedSec: 15,
+	totalDurationSec: 30,
+	warmupEndSec: 10,
+	blockCount: 3,
+	doneInEvent: 2,
+});
+assert.deepEqual(result.commands[0], {
+	type: "renderProgressBar",
+	percent: 25,
+	color: "#4A9EFF",
+});
 
 displayState = result.state;
 result = transition(displayState, {

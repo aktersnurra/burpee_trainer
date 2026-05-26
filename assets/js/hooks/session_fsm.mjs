@@ -175,10 +175,17 @@ function blockLabel(label, blockCount) {
 function displayCommandsForFrame(display, event) {
 	const frame = event.frame;
 	const totalDurationSec = event.totalDurationSec || 0;
+	const warmupEndSec = event.warmupEndSec || 0;
 	const elapsedSec = event.elapsedSec || 0;
+	const workoutDurationSec = Math.max(totalDurationSec - warmupEndSec, 0);
+	const workoutElapsedSec = Math.max(elapsedSec - warmupEndSec, 0);
 	const percent =
-		totalDurationSec > 0
-			? Number(Math.min((elapsedSec / totalDurationSec) * 100, 100).toFixed(1))
+		workoutDurationSec > 0
+			? Number(
+					Math.min((workoutElapsedSec / workoutDurationSec) * 100, 100).toFixed(
+						1,
+					),
+				)
 			: 0;
 	const timeLeftSec = Math.max(totalDurationSec - elapsedSec, 0);
 
@@ -284,10 +291,16 @@ export function transition(state, event) {
 			return {
 				state: {
 					...state,
-					mode: "mood_prompt",
+					mode: "countdown",
 					timeline: state.mainTimeline,
+					countdown: {
+						...state.countdown,
+						value: 5,
+						paused: false,
+						stepStartedAt: event.now || null,
+					},
 				},
-				commands: [{ type: "renderMoodPrompt" }],
+				commands: [{ type: "pushSessionStarted" }, { type: "startCountdownTimer" }],
 			};
 
 		case "WARMUP_YES":
@@ -297,18 +310,8 @@ export function transition(state, event) {
 			return {
 				state: {
 					...state,
-					mode: "mood_prompt",
-					timeline: [...(event.warmup || []), ...state.mainTimeline],
-				},
-				commands: [{ type: "renderMoodPrompt" }],
-			};
-
-		case "MOOD_SELECTED":
-			return {
-				state: {
-					...state,
 					mode: "countdown",
-					mood: event.mood,
+					timeline: [...(event.warmup || []), ...state.mainTimeline],
 					countdown: {
 						...state.countdown,
 						value: 5,
@@ -316,10 +319,7 @@ export function transition(state, event) {
 						stepStartedAt: event.now || null,
 					},
 				},
-				commands: [
-					{ type: "pushSessionStarted", mood: event.mood },
-					{ type: "startCountdownTimer" },
-				],
+				commands: [{ type: "pushSessionStarted" }, { type: "startCountdownTimer" }],
 			};
 
 		case "COUNTDOWN_PAUSE":

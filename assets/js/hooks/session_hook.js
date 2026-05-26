@@ -16,7 +16,7 @@ import { SessionWakeLock } from "./session_wake_lock.mjs";
 //
 // Events sent TO the server:
 //   warmup_requested  — user tapped Yes on warmup prompt
-//   session_started   — user picked mood, session begins
+//   session_started   — workout clock begins
 //   session_complete  — workout finished; carries main + warmup counts
 //
 // Events received FROM the server:
@@ -160,11 +160,8 @@ const SessionHook = {
 			case "pushWarmupRequested":
 				this.pushEvent("warmup_requested", {});
 				break;
-			case "renderMoodPrompt":
-				this.showMoodPicker();
-				break;
 			case "pushSessionStarted":
-				this.pushEvent("session_started", { mood: command.mood });
+				this.pushEvent("session_started", {});
 				break;
 			case "startCountdownTimer":
 				this.startCountdown();
@@ -249,51 +246,6 @@ const SessionHook = {
 
 	onWarmupSkip() {
 		this.dispatchSession({ type: "WARMUP_SKIP" });
-	},
-
-	showMoodPicker() {
-		const overlay = this.el.querySelector("#start-overlay");
-		if (!overlay) return;
-
-		const moodIcons = {
-			"-1": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.318A4.486 4.486 0 0 0 12.016 15a4.486 4.486 0 0 0-3.198 1.318M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" /></svg>`,
-			0: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`,
-			1: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" /></svg>`,
-		};
-
-		// Patch the overlay in-place — delegation on the hook root catches the clicks.
-		overlay.innerHTML = `
-      <span class="text-xl font-semibold tracking-tight">How do you feel?</span>
-      <div class="flex gap-3">
-        ${[
-					["Tired", "-1"],
-					["OK", "0"],
-					["Hyped", "1"],
-				]
-					.map(
-						([label, val]) => `
-          <button type="button" data-mood="${val}"
-            class="flex flex-col items-center gap-1.5 rounded-xl border border-[#1E2535] px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-[#181C26]">
-            ${moodIcons[val]}
-            <span>${label}</span>
-          </button>
-        `,
-					)
-					.join("")}
-      </div>
-    `;
-
-		// Delegation won't reach data-mood — wire these directly since the overlay is JS-owned.
-		overlay.querySelectorAll("[data-mood]").forEach((btn) => {
-			btn.addEventListener("click", () => {
-				const mood = btn.getAttribute("data-mood");
-				this.dispatchSession({
-					type: "MOOD_SELECTED",
-					mood,
-					now: performance.now(),
-				});
-			});
-		});
 	},
 
 	// Show a 5-4-3-2-1 countdown overlay before the workout clock begins.
@@ -436,6 +388,7 @@ const SessionHook = {
 			frame,
 			elapsedSec: elapsed,
 			totalDurationSec: this.fsm.clock.totalDurationSec,
+			warmupEndSec: this.fsm.clock.warmupEndSec,
 			blockCount: this.blockCount,
 			doneInEvent: this.doneReps,
 		});
@@ -530,7 +483,6 @@ const SessionHook = {
 		this.syncRepStateFromFsm();
 		this.dispatchSession({ type: "COMPLETE_SESSION", elapsedSec: elapsed });
 	},
-
 };
 
 export default SessionHook;
