@@ -4,6 +4,7 @@ import {
 	initialSessionState,
 	transition,
 } from "./session_fsm.mjs";
+import { SessionWakeLock } from "./session_wake_lock.mjs";
 
 // SessionHook — client-driven session runtime.
 //
@@ -30,7 +31,7 @@ const NS = "http://www.w3.org/2000/svg";
 const SessionHook = {
 	mounted() {
 		this.audio = new SessionAudio();
-		this.wakeLock = null;
+		this.wakeLock = new SessionWakeLock();
 
 		this.fsm = initialSessionState();
 		this.timeline = [];
@@ -78,7 +79,7 @@ const SessionHook = {
 					this.startTime = this.fsm.clock.startTime;
 				}
 				this.hiddenAt = null;
-				this.maybeReacquireWakeLock();
+				this.wakeLock.reacquireWhenVisible();
 				// Restart the RAF loop if we were running.
 				if (!this.paused && this.startTime !== null && !this.rafId) {
 					this.rafId = requestAnimationFrame(() => this.tick());
@@ -137,7 +138,7 @@ const SessionHook = {
 		document.removeEventListener("touchstart", this.primeAudio, {
 			capture: true,
 		});
-		this.releaseWakeLock();
+		this.wakeLock.release();
 		this.audio.close();
 	},
 
@@ -307,7 +308,7 @@ const SessionHook = {
 
 	startCountdown() {
 		this.audio.ensureRunning();
-		this.acquireWakeLock();
+		this.wakeLock.acquire();
 
 		const overlay = this.el.querySelector("#start-overlay");
 		if (overlay) overlay.remove();
@@ -685,32 +686,6 @@ const SessionHook = {
 		this.dispatchSession({ type: "ACCOUNT_REPS", frame: null });
 		this.syncRepStateFromFsm();
 		this.dispatchSession({ type: "COMPLETE_SESSION", elapsedSec: elapsed });
-	},
-
-	// ---------------------------------------------------------------------------
-	// Wake lock
-	// ---------------------------------------------------------------------------
-
-	acquireWakeLock() {
-		if (this.wakeLock) return;
-		navigator.wakeLock
-			?.request("screen")
-			.then((lock) => {
-				this.wakeLock = lock;
-			})
-			.catch(() => {});
-	},
-
-	maybeReacquireWakeLock() {
-		if (document.visibilityState === "visible") {
-			this.wakeLock = null;
-			this.acquireWakeLock();
-		}
-	},
-
-	releaseWakeLock() {
-		this.wakeLock?.release?.().catch(() => {});
-		this.wakeLock = null;
 	},
 
 	// ---------------------------------------------------------------------------
