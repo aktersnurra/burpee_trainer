@@ -250,6 +250,35 @@ export function transition(state, event) {
 			};
 		}
 
+		case "TICK": {
+			if (event.elapsedSec >= state.clock.totalDurationSec) {
+				return {
+					state: { ...state, mode: "completed" },
+					commands: [
+						{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
+						{ type: "completeWorkout", elapsedSec: event.elapsedSec },
+					],
+				};
+			}
+
+			return {
+				state: {
+					...state,
+					clock: { ...state.clock, elapsedSec: event.elapsedSec },
+				},
+				commands: [
+					{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
+					{ type: "scheduleAnimationFrame" },
+				],
+			};
+		}
+
+		case "FINISH_EARLY":
+			return {
+				state: { ...state, mode: "completed" },
+				commands: [{ type: "completeWorkout", elapsedSec: event.elapsedSec }],
+			};
+
 		case "PAUSE":
 			return {
 				state: {

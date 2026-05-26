@@ -115,7 +115,11 @@ assert.deepEqual(result.commands, [
 	{ type: "resumeCountdownTimer", remainingMs: 750 },
 ]);
 
-result = transition(result.state, { type: "COUNTDOWN_TICK", value: 4, now: 2100 });
+result = transition(result.state, {
+	type: "COUNTDOWN_TICK",
+	value: 4,
+	now: 2100,
+});
 assert.equal(result.state.countdown.value, 4);
 assert.equal(result.state.countdown.stepStartedAt, 2100);
 assert.deepEqual(result.commands, [
@@ -124,7 +128,11 @@ assert.deepEqual(result.commands, [
 	{ type: "scheduleCountdownTick", nextValue: 3, delayMs: 1000 },
 ]);
 
-result = transition(result.state, { type: "COUNTDOWN_TICK", value: 0, now: 5100 });
+result = transition(result.state, {
+	type: "COUNTDOWN_TICK",
+	value: 0,
+	now: 5100,
+});
 assert.equal(result.state.countdown.value, null);
 assert.deepEqual(result.commands, [
 	{ type: "clearCountdown" },
@@ -151,5 +159,22 @@ result = transition(result.state, { type: "VISIBILITY_VISIBLE", now: 8000 });
 assert.equal(result.state.clock.hiddenAt, null);
 assert.equal(result.state.clock.startTime, 6500);
 assert.deepEqual(result.commands, [{ type: "startAnimationFrame" }]);
+
+result = transition(result.state, { type: "TICK", elapsedSec: 2 });
+assert.deepEqual(result.commands, [
+	{ type: "renderRunningFrame", elapsedSec: 2 },
+	{ type: "scheduleAnimationFrame" },
+]);
+
+result = transition(result.state, { type: "TICK", elapsedSec: 20 });
+assert.equal(result.state.mode, "completed");
+assert.deepEqual(result.commands, [
+	{ type: "renderRunningFrame", elapsedSec: 20 },
+	{ type: "completeWorkout", elapsedSec: 20 },
+]);
+
+result = transition(result.state, { type: "FINISH_EARLY", elapsedSec: 7 });
+assert.equal(result.state.mode, "completed");
+assert.deepEqual(result.commands, [{ type: "completeWorkout", elapsedSec: 7 }]);
 
 console.log("session_fsm tests passed");

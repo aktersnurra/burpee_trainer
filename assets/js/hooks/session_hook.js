@@ -200,6 +200,15 @@ const SessionHook = {
 			case "beginSession":
 				this.beginSession();
 				break;
+			case "renderRunningFrame":
+				this.renderRunningFrame(command.elapsedSec);
+				break;
+			case "scheduleAnimationFrame":
+				this.rafId = requestAnimationFrame(() => this.tick());
+				break;
+			case "completeWorkout":
+				this.onComplete(command.elapsedSec);
+				break;
 		}
 	},
 
@@ -400,18 +409,16 @@ const SessionHook = {
 	tick() {
 		const now = performance.now();
 		const elapsed = (now - this.startTime) / 1000;
+		this.dispatchSession({ type: "TICK", elapsedSec: elapsed });
+	},
+
+	renderRunningFrame(elapsed) {
 		const state = this.currentEvent(elapsed);
 		const frame = currentFrame(this.timeline, elapsed);
 
 		this.accountBoundaryReps(frame);
 		this.updateUI(state, elapsed);
 		this.checkBeeps(state, elapsed);
-
-		if (!this.paused && elapsed < this.totalDuration) {
-			this.rafId = requestAnimationFrame(() => this.tick());
-		} else if (elapsed >= this.totalDuration) {
-			this.onComplete(elapsed);
-		}
 	},
 
 	currentEvent(elapsed_sec) {
@@ -518,7 +525,7 @@ const SessionHook = {
 		if (!confirm("End the session now and log what you've done so far?"))
 			return;
 		const elapsed = (performance.now() - this.startTime) / 1000;
-		this.onComplete(elapsed);
+		this.dispatchSession({ type: "FINISH_EARLY", elapsedSec: elapsed });
 	},
 
 	// ---------------------------------------------------------------------------
@@ -796,7 +803,6 @@ const SessionHook = {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 
 		this.accountBoundaryReps(null);
-		this.fsm = transition(this.fsm, { type: "WORKOUT_DONE" }).state;
 
 		// Warmup duration = elapsed up to warmupEndSec (or total warmup sec)
 		const warmupDuration = Math.min(elapsed, this.warmupEndSec);
