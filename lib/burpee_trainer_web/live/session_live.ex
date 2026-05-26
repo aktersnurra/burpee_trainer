@@ -290,10 +290,21 @@ defmodule BurpeeTrainerWeb.SessionLive do
       <div
         id="ring-container"
         class="relative mx-auto w-[280px] h-[280px] cursor-pointer select-none"
+        style="width: 280px; height: 280px; flex: 0 0 280px;"
       >
-        <svg id="ring-svg" viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px]"></svg>
+        <svg
+          id="ring-svg"
+          viewBox="0 0 280 280"
+          class="absolute inset-0 w-[280px] h-[280px]"
+          style="width: 280px; height: 280px;"
+        >
+        </svg>
 
-        <svg viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px] pointer-events-none">
+        <svg
+          viewBox="0 0 280 280"
+          class="absolute inset-0 w-[280px] h-[280px] pointer-events-none"
+          style="width: 280px; height: 280px;"
+        >
           <circle
             id="flash-circle"
             cx="140"
