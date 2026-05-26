@@ -25,6 +25,10 @@ export function initialSessionState() {
 			stepStartedAt: null,
 			stepElapsedMs: 0,
 		},
+		beeps: {
+			lastRepIndex: -1,
+			lastRestCount: null,
+		},
 	};
 }
 
@@ -93,6 +97,55 @@ export function accountReps(previousFrame, nextFrame, reps) {
 		currentEventKey: nextKey,
 		doneInEvent: 0,
 		mainDone: reps.mainDone + missing,
+	};
+}
+
+function beepCommandsForFrame(beeps, frame) {
+	if (!frame) return { beeps, commands: [] };
+
+	const { event: timelineEvent, phase_elapsed, phase_remaining } = frame;
+	const isBurpee =
+		timelineEvent.type === "work_burpee" ||
+		timelineEvent.type === "warmup_burpee";
+
+	if (isBurpee) {
+		const secondsPerRep =
+			timelineEvent.sec_per_rep ||
+			timelineEvent.sec_per_burpee ||
+			timelineEvent.duration_sec / (timelineEvent.burpee_count || 1);
+		const repIndex = Math.floor(phase_elapsed / secondsPerRep);
+
+		if (repIndex !== beeps.lastRepIndex) {
+			return {
+				beeps: { lastRepIndex: repIndex, lastRestCount: null },
+				commands: [{ type: "playRepBeep" }],
+			};
+		}
+
+		return { beeps: { ...beeps, lastRestCount: null }, commands: [] };
+	}
+
+	const isRest =
+		timelineEvent.type === "work_rest" ||
+		timelineEvent.type === "warmup_rest" ||
+		timelineEvent.type === "rest_block";
+
+	if (!isRest) {
+		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
+	}
+
+	if (phase_remaining > 2) {
+		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
+	}
+
+	const restCount = Math.ceil(phase_remaining);
+	if (restCount === beeps.lastRestCount) {
+		return { beeps: { ...beeps, lastRepIndex: -1 }, commands: [] };
+	}
+
+	return {
+		beeps: { lastRepIndex: -1, lastRestCount: restCount },
+		commands: [{ type: restCount === 0 ? "playRepBeep" : "playLeadBeep" }],
 	};
 }
 
@@ -278,6 +331,14 @@ export function transition(state, event) {
 				state: { ...state, mode: "completed" },
 				commands: [{ type: "completeWorkout", elapsedSec: event.elapsedSec }],
 			};
+
+		case "BEEP_FRAME": {
+			const result = beepCommandsForFrame(state.beeps, event.frame);
+			return {
+				state: { ...state, beeps: result.beeps },
+				commands: result.commands,
+			};
+		}
 
 		case "PAUSE":
 			return {

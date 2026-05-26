@@ -177,4 +177,44 @@ result = transition(result.state, { type: "FINISH_EARLY", elapsedSec: 7 });
 assert.equal(result.state.mode, "completed");
 assert.deepEqual(result.commands, [{ type: "completeWorkout", elapsedSec: 7 }]);
 
+const beepState = {
+	...result.state,
+	mode: "running",
+	beeps: { lastRepIndex: -1, lastRestCount: null },
+};
+
+result = transition(beepState, {
+	type: "BEEP_FRAME",
+	frame: { event: work, phase_elapsed: 2.1, phase_remaining: 7.9 },
+});
+assert.equal(result.state.beeps.lastRepIndex, 1);
+assert.deepEqual(result.commands, [{ type: "playRepBeep" }]);
+
+result = transition(result.state, {
+	type: "BEEP_FRAME",
+	frame: { event: work, phase_elapsed: 2.2, phase_remaining: 7.8 },
+});
+assert.deepEqual(result.commands, []);
+
+result = transition(result.state, {
+	type: "BEEP_FRAME",
+	frame: { event: rest, phase_elapsed: 3.1, phase_remaining: 1.9 },
+});
+assert.equal(result.state.beeps.lastRestCount, 2);
+assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
+
+result = transition(result.state, {
+	type: "BEEP_FRAME",
+	frame: { event: rest, phase_elapsed: 4.1, phase_remaining: 0.9 },
+});
+assert.equal(result.state.beeps.lastRestCount, 1);
+assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
+
+result = transition(result.state, {
+	type: "BEEP_FRAME",
+	frame: { event: rest, phase_elapsed: 5, phase_remaining: 0 },
+});
+assert.equal(result.state.beeps.lastRestCount, 0);
+assert.deepEqual(result.commands, [{ type: "playRepBeep" }]);
+
 console.log("session_fsm tests passed");

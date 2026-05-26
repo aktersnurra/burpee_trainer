@@ -191,6 +191,9 @@ const SessionHook = {
 			case "playLeadBeep":
 				this.leadBeepAt(this.audioContext().currentTime + 0.02);
 				break;
+			case "playRepBeep":
+				this.repBeepAt(this.audioContext().currentTime + 0.02);
+				break;
 			case "scheduleCountdownTick":
 				this.scheduleCountdownTick(command.nextValue, command.delayMs);
 				break;
@@ -418,7 +421,7 @@ const SessionHook = {
 
 		this.accountBoundaryReps(frame);
 		this.updateUI(state, elapsed);
-		this.checkBeeps(state, elapsed);
+		this.dispatchSession({ type: "BEEP_FRAME", frame: state });
 	},
 
 	currentEvent(elapsed_sec) {
@@ -526,51 +529,6 @@ const SessionHook = {
 			return;
 		const elapsed = (performance.now() - this.startTime) / 1000;
 		this.dispatchSession({ type: "FINISH_EARLY", elapsedSec: elapsed });
-	},
-
-	// ---------------------------------------------------------------------------
-	// Beeps
-	// ---------------------------------------------------------------------------
-
-	checkBeeps(state, elapsed) {
-		if (!state) return;
-		const { event, phase_elapsed, phase_remaining } = state;
-
-		// Rep beep: fire once per rep boundary within a burpee phase
-		if (event.type === "work_burpee" || event.type === "warmup_burpee") {
-			const secPerRep =
-				event.sec_per_rep ||
-				event.sec_per_burpee ||
-				event.duration_sec / (event.burpee_count || 1);
-			const repIndex = Math.floor(phase_elapsed / secPerRep);
-			if (repIndex !== this.lastRepIndex) {
-				this.lastRepIndex = repIndex;
-				this.repBeepAt(this.audioContext().currentTime + 0.02);
-			}
-		} else {
-			this.lastRepIndex = -1;
-		}
-
-		// Rest-ending countdown: lead beep at 2 and 1, rep beep at 0 (first burpee of next set).
-		// Safe if rest < 2s — countSec will simply never reach 2 so nothing fires early.
-		const REST_TYPES = ["work_rest", "warmup_rest", "rest_block"];
-		if (REST_TYPES.includes(event.type)) {
-			if (phase_remaining <= 2) {
-				const countSec = Math.ceil(phase_remaining); // 2, 1, 0
-				if (countSec !== this.lastRestCount) {
-					this.lastRestCount = countSec;
-					if (countSec === 0) {
-						this.repBeepAt(this.audioContext().currentTime + 0.02);
-					} else {
-						this.leadBeepAt(this.audioContext().currentTime + 0.02);
-					}
-				}
-			} else {
-				this.lastRestCount = null;
-			}
-		} else {
-			this.lastRestCount = null;
-		}
 	},
 
 	accountBoundaryReps(frame) {
