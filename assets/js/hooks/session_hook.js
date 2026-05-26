@@ -51,6 +51,7 @@ const SessionHook = {
     this.lastDisplayed = -1;
     this.lastEventType = null;
     this.lastBurpeeCount = 0;
+    this.lastWorkEvent = null;
     this.restRingEl = null;
     this.countdownRingEl = null;
 
@@ -297,6 +298,7 @@ const SessionHook = {
     this.countdownRingEl = null;
     this.lastEventType = null;
     this.lastBurpeeCount = 0;
+    this.lastWorkEvent = null;
 
     const firstEvent = this.timeline[0];
     const isFirstWork =
@@ -322,6 +324,7 @@ const SessionHook = {
     const elapsed = (now - this.startTime) / 1000;
     const state = this.currentEvent(elapsed);
 
+    this.finalizeCompletedWorkEvent(state);
     this.updateUI(state, elapsed);
     this.checkBeeps(state, elapsed);
 
@@ -506,6 +509,41 @@ const SessionHook = {
     }
   },
 
+  finalizeCompletedWorkEvent(state) {
+    const currentEvent = state && state.event;
+    const lastEvent = this.lastWorkEvent;
+
+    if (
+      !lastEvent ||
+      currentEvent === lastEvent ||
+      (currentEvent &&
+        currentEvent.type === lastEvent.type &&
+        currentEvent.label === lastEvent.label &&
+        currentEvent.burpee_count === lastEvent.burpee_count &&
+        currentEvent.duration_sec === lastEvent.duration_sec)
+    ) {
+      return;
+    }
+
+    const isBurpee =
+      lastEvent.type === "work_burpee" || lastEvent.type === "warmup_burpee";
+    if (!isBurpee) return;
+
+    const missingReps = Math.max((lastEvent.burpee_count || 0) - this.doneReps, 0);
+    if (missingReps === 0) return;
+
+    if (lastEvent.type === "warmup_burpee") {
+      this.warmupBurpeeCount += missingReps;
+      this.updateTotalCounter(this.mainBurpeeCount);
+    } else {
+      this.mainBurpeeCount += missingReps;
+      this.updateTotalCounter(this.mainBurpeeCount);
+    }
+
+    this.doneReps = lastEvent.burpee_count || 0;
+    this.lastWorkEvent = null;
+  },
+
   // ---------------------------------------------------------------------------
   // UI updates (direct DOM writes for high-frequency elements)
   // ---------------------------------------------------------------------------
@@ -572,18 +610,20 @@ const SessionHook = {
 
       // Falling edge — rep completed
       if (repIndex > this.doneReps) {
+        const completedReps = repIndex - this.doneReps;
         this.triggerFlash();
         this.doneReps = repIndex;
         if (event.type === "warmup_burpee") {
-          this.warmupBurpeeCount++;
-          this.updateTotalCounter(this.warmupBurpeeCount + this.mainBurpeeCount);
+          this.warmupBurpeeCount += completedReps;
+          this.updateTotalCounter(this.mainBurpeeCount);
         } else {
-          this.mainBurpeeCount++;
+          this.mainBurpeeCount += completedReps;
           this.updateTotalCounter(this.mainBurpeeCount);
         }
         this.triggerDown(Math.max(this.totalReps - this.doneReps, 0));
       }
 
+      this.lastWorkEvent = event;
       this.updateWorkRing(repProgress, color);
     } else if (isRest) {
       // Build a single continuous arc for rest phases

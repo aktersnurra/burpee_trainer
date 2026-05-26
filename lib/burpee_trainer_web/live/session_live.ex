@@ -286,15 +286,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp session_runner(assigns) do
     ~H"""
-    <div class="relative flex flex-col gap-5">
+    <div class="relative flex min-h-[calc(100dvh-9rem)] flex-col justify-center gap-4 sm:min-h-0 sm:justify-start sm:gap-5">
       <div
         id="ring-container"
-        class="relative mx-auto w-[280px] h-[280px] cursor-pointer select-none"
+        class="relative mx-auto h-[min(280px,72vw)] w-[min(280px,72vw)] cursor-pointer select-none"
         phx-update="ignore"
       >
-        <svg id="ring-svg" viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px]"></svg>
+        <svg id="ring-svg" viewBox="0 0 280 280" class="absolute inset-0 h-full w-full"></svg>
 
-        <svg viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px] pointer-events-none">
+        <svg viewBox="0 0 280 280" class="absolute inset-0 h-full w-full pointer-events-none">
           <circle
             id="flash-circle"
             cx="140"
@@ -350,8 +350,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
         </span>
       </div>
 
-      <div class="flex flex-col gap-1">
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-base-300">
+      <div class="flex flex-col gap-2">
+        <div class="h-3 w-full overflow-hidden rounded-full bg-base-300">
           <div
             id="progress-fill"
             class="h-full rounded-full transition-none"
