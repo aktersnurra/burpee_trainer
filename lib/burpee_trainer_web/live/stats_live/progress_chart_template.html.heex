@@ -1,0 +1,112 @@
+<div class="rounded-[10px] bg-base-300 p-5">
+  <div class="flex items-start justify-between mb-1">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">Progress</p>
+      <p class="text-[10px] text-base-content/30 mt-0.5">Normalized reps / 20 min</p>
+    </div>
+    <div class="flex items-center gap-3 pt-0.5">
+      <span class="flex items-center gap-1 text-[10px] text-base-content/50">
+        <span class="inline-block w-2 h-2 rounded-full bg-[#4A9EFF]"></span>6-Count
+      </span>
+      <span class="flex items-center gap-1 text-[10px] text-base-content/50">
+        <span class="inline-block w-2 h-2 rounded-full bg-[#F97316]"></span>Navy SEAL
+      </span>
+    </div>
+  </div>
+
+  <%= if @all_empty do %>
+    <p class="text-xs text-base-content/30 mt-4">No sessions yet.</p>
+  <% else %>
+    <svg
+      viewBox={"0 0 #{@chart_w} #{@total_h}"}
+      class="w-full mt-3 overflow-visible"
+      aria-hidden="true"
+    >
+      <%!-- gridlines — only for 0 tick, targets get their own labels --%>
+      <%= for tick <- @y_ticks, tick == 0 do %>
+        <% gy = @to_y.(tick * 1.0) %>
+        <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#2C3040" stroke-width="0.5" />
+        <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#5A6480">
+          {tick}
+        </text>
+      <% end %>
+
+      <%!-- 6-Count target line — label anchored to right end of line --%>
+      <%= if @six_target do %>
+        <% ty = @to_y.(@six_target * 1.0) %>
+        <line
+          x1={@y_axis_w}
+          y1={ty}
+          x2={@chart_w}
+          y2={ty}
+          stroke="#4A9EFF"
+          stroke-width="0.75"
+          stroke-dasharray="4,3"
+          opacity="0.4"
+        />
+        <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#4A9EFF" opacity="0.7">
+          {@six_target}
+        </text>
+      <% end %>
+
+      <%!-- Navy SEAL target line — label anchored to right end of line --%>
+      <%= if @seal_target do %>
+        <% ty = @to_y.(@seal_target * 1.0) %>
+        <line
+          x1={@y_axis_w}
+          y1={ty}
+          x2={@chart_w}
+          y2={ty}
+          stroke="#F97316"
+          stroke-width="0.75"
+          stroke-dasharray="4,3"
+          opacity="0.4"
+        />
+        <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#F97316" opacity="0.7">
+          {@seal_target}
+        </text>
+      <% end %>
+
+      <%!-- 6-Count line + dots --%>
+      <%= if length(@six_points) > 1 do %>
+        <polyline
+          points={@six_polyline}
+          fill="none"
+          stroke="#4A9EFF"
+          stroke-width="1"
+          stroke-linejoin="round"
+        />
+      <% end %>
+      <%= for p <- @six_points do %>
+        <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#4A9EFF" />
+      <% end %>
+
+      <%!-- Navy SEAL line + dots --%>
+      <%= if length(@seal_points) > 1 do %>
+        <polyline
+          points={@seal_polyline}
+          fill="none"
+          stroke="#F97316"
+          stroke-width="1"
+          stroke-linejoin="round"
+        />
+      <% end %>
+      <%= for p <- @seal_points do %>
+        <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#F97316" />
+      <% end %>
+
+      <%!-- x-axis week labels --%>
+      <%= for w <- @x_label_weeks do %>
+        <text
+          x={@to_x.(w)}
+          y={@top_pad + @plot_h + 14}
+          text-anchor="middle"
+          font-size="8"
+          fill="#5A6480"
+        >
+          W{w}
+        </text>
+      <% end %>
+    </svg>
+  <% end %>
+</div>

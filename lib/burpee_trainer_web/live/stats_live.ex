@@ -6,6 +6,8 @@ defmodule BurpeeTrainerWeb.StatsLive do
   alias BurpeeTrainer.Streak.State
   alias BurpeeTrainerWeb.Fmt
 
+  embed_templates "stats_live/*"
+
   @page_size 5
 
   @impl true
@@ -125,93 +127,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:goal_baseline_session, nil)
      |> assign(:goals, goals)
      |> compute_goal_progress(user, goals)}
-  end
-
-  @impl true
-  def render(assigns) do
-    ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
-      <div class="space-y-5 pb-20">
-        <.streak_card streak={@streak} today={@today} current_level={@current_level} />
-        <.goals_section
-          goals={@goals}
-          six_progress={@six_progress}
-          seal_progress={@seal_progress}
-          six_has_sessions={@six_count_sessions != []}
-          seal_has_sessions={@navy_seal_sessions != []}
-        />
-        <.trends_section
-          weekly_data={@weekly_data}
-          six_count_sessions={@six_count_sessions}
-          navy_seal_sessions={@navy_seal_sessions}
-          goals={@goals}
-        />
-        <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
-      </div>
-
-      <%!-- FAB --%>
-      <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-6 z-40">
-        <button
-          type="button"
-          phx-click="open_log_modal"
-          class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-[#4A9EFF] flex items-center justify-center hover:bg-base-border transition"
-          aria-label="Log session"
-        >
-          <.icon name="hero-plus" class="size-5" />
-        </button>
-      </div>
-
-      <%!-- Log modal --%>
-      <%= if @log_modal_open do %>
-        <div
-          id="log-modal"
-          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6"
-        >
-          <button
-            id="log-modal-backdrop"
-            type="button"
-            phx-click="close_log_modal"
-            class="absolute inset-0 bg-black/60"
-            aria-label="Close log session"
-          />
-          <div
-            id="log-modal-sheet"
-            class="relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl"
-          >
-            <.live_component
-              module={BurpeeTrainerWeb.LogFormComponent}
-              id="log-form"
-              current_user={@current_user}
-              on_save={:session_saved}
-            />
-          </div>
-        </div>
-      <% end %>
-
-      <%!-- Goal modal --%>
-      <%= if @goal_modal_type do %>
-        <div
-          id="goal-modal"
-          phx-click="close_goal_modal"
-          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
-        >
-          <div
-            phx-click|stopPropagation
-            class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
-          >
-            <.live_component
-              module={BurpeeTrainerWeb.GoalFormComponent}
-              id="goal-form"
-              current_user={@current_user}
-              burpee_type={@goal_modal_type}
-              baseline_session={@goal_baseline_session}
-              on_save={:goal_saved}
-            />
-          </div>
-        </div>
-      <% end %>
-    </Layouts.app>
-    """
   end
 
   attr(:streak, State, required: true)
@@ -589,48 +504,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         target_y: target_y
       )
 
-    ~H"""
-    <div class="rounded-[10px] bg-base-300 p-4">
-      <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
-        <%!-- y-axis: 0 only --%>
-        <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#5A6480">0</text>
-
-        <%!-- bars --%>
-        <%= for {week, i} <- @chart_weeks do %>
-          <% cx = @y_axis_w + (i + 0.5) * @slot_w
-          x = cx - @bar_w / 2
-          height = max(min(week.minutes / @max_m * 70, 70), if(week.minutes > 0, do: 1, else: 0))
-          y = 75 - height
-          color = if week.met_goal, do: "#4A9EFF", else: "#252830" %>
-          <%= if height > 0 do %>
-            <rect x={x} y={y} width={@bar_w} height={height} fill={color} rx="2" />
-          <% end %>
-        <% end %>
-
-        <%!-- 80 min target line — label on lhs --%>
-        <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#5A6480">
-          80
-        </text>
-        <line
-          x1={@y_axis_w}
-          y1={@target_y}
-          x2={@chart_w}
-          y2={@target_y}
-          stroke="#5A6480"
-          stroke-width="0.5"
-          stroke-dasharray="3,3"
-        />
-
-        <%!-- x-axis: label data weeks only --%>
-        <%= for {week, i} <- @chart_weeks, week.iso_week != nil do %>
-          <% cx = @y_axis_w + (i + 0.5) * @slot_w %>
-          <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#5A6480">
-            W{week.iso_week}
-          </text>
-        <% end %>
-      </svg>
-    </div>
-    """
+    weekly_minutes_chart_template(assigns)
   end
 
   attr(:six_count_sessions, :list, required: true)
@@ -734,120 +608,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         y_axis_w: y_axis_w
       )
 
-    ~H"""
-    <div class="rounded-[10px] bg-base-300 p-5">
-      <div class="flex items-start justify-between mb-1">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">Progress</p>
-          <p class="text-[10px] text-base-content/30 mt-0.5">Normalized reps / 20 min</p>
-        </div>
-        <div class="flex items-center gap-3 pt-0.5">
-          <span class="flex items-center gap-1 text-[10px] text-base-content/50">
-            <span class="inline-block w-2 h-2 rounded-full bg-[#4A9EFF]"></span>6-Count
-          </span>
-          <span class="flex items-center gap-1 text-[10px] text-base-content/50">
-            <span class="inline-block w-2 h-2 rounded-full bg-[#F97316]"></span>Navy SEAL
-          </span>
-        </div>
-      </div>
-
-      <%= if @all_empty do %>
-        <p class="text-xs text-base-content/30 mt-4">No sessions yet.</p>
-      <% else %>
-        <svg
-          viewBox={"0 0 #{@chart_w} #{@total_h}"}
-          class="w-full mt-3 overflow-visible"
-          aria-hidden="true"
-        >
-          <%!-- gridlines — only for 0 tick, targets get their own labels --%>
-          <%= for tick <- @y_ticks, tick == 0 do %>
-            <% gy = @to_y.(tick * 1.0) %>
-            <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#2C3040" stroke-width="0.5" />
-            <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#5A6480">
-              {tick}
-            </text>
-          <% end %>
-
-          <%!-- 6-Count target line — label anchored to right end of line --%>
-          <%= if @six_target do %>
-            <% ty = @to_y.(@six_target * 1.0) %>
-            <line
-              x1={@y_axis_w}
-              y1={ty}
-              x2={@chart_w}
-              y2={ty}
-              stroke="#4A9EFF"
-              stroke-width="0.75"
-              stroke-dasharray="4,3"
-              opacity="0.4"
-            />
-            <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#4A9EFF" opacity="0.7">
-              {@six_target}
-            </text>
-          <% end %>
-
-          <%!-- Navy SEAL target line — label anchored to right end of line --%>
-          <%= if @seal_target do %>
-            <% ty = @to_y.(@seal_target * 1.0) %>
-            <line
-              x1={@y_axis_w}
-              y1={ty}
-              x2={@chart_w}
-              y2={ty}
-              stroke="#F97316"
-              stroke-width="0.75"
-              stroke-dasharray="4,3"
-              opacity="0.4"
-            />
-            <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#F97316" opacity="0.7">
-              {@seal_target}
-            </text>
-          <% end %>
-
-          <%!-- 6-Count line + dots --%>
-          <%= if length(@six_points) > 1 do %>
-            <polyline
-              points={@six_polyline}
-              fill="none"
-              stroke="#4A9EFF"
-              stroke-width="1"
-              stroke-linejoin="round"
-            />
-          <% end %>
-          <%= for p <- @six_points do %>
-            <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#4A9EFF" />
-          <% end %>
-
-          <%!-- Navy SEAL line + dots --%>
-          <%= if length(@seal_points) > 1 do %>
-            <polyline
-              points={@seal_polyline}
-              fill="none"
-              stroke="#F97316"
-              stroke-width="1"
-              stroke-linejoin="round"
-            />
-          <% end %>
-          <%= for p <- @seal_points do %>
-            <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#F97316" />
-          <% end %>
-
-          <%!-- x-axis week labels --%>
-          <%= for w <- @x_label_weeks do %>
-            <text
-              x={@to_x.(w)}
-              y={@top_pad + @plot_h + 14}
-              text-anchor="middle"
-              font-size="8"
-              fill="#5A6480"
-            >
-              W{w}
-            </text>
-          <% end %>
-        </svg>
-      <% end %>
-    </div>
-    """
+    progress_chart_template(assigns)
   end
 
   defp level_label(:graduated), do: "Grad"

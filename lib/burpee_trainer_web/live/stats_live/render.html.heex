@@ -1,0 +1,81 @@
+<Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
+  <div class="space-y-5 pb-20">
+    <.streak_card streak={@streak} today={@today} current_level={@current_level} />
+    <.goals_section
+      goals={@goals}
+      six_progress={@six_progress}
+      seal_progress={@seal_progress}
+      six_has_sessions={@six_count_sessions != []}
+      seal_has_sessions={@navy_seal_sessions != []}
+    />
+    <.trends_section
+      weekly_data={@weekly_data}
+      six_count_sessions={@six_count_sessions}
+      navy_seal_sessions={@navy_seal_sessions}
+      goals={@goals}
+    />
+    <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
+  </div>
+
+  <%!-- FAB --%>
+  <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-6 z-40">
+    <button
+      type="button"
+      phx-click="open_log_modal"
+      class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-[#4A9EFF] flex items-center justify-center hover:bg-base-border transition"
+      aria-label="Log session"
+    >
+      <.icon name="hero-plus" class="size-5" />
+    </button>
+  </div>
+
+  <%!-- Log modal --%>
+  <%= if @log_modal_open do %>
+    <div
+      id="log-modal"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6"
+    >
+      <button
+        id="log-modal-backdrop"
+        type="button"
+        phx-click="close_log_modal"
+        class="absolute inset-0 bg-black/60"
+        aria-label="Close log session"
+      />
+      <div
+        id="log-modal-sheet"
+        class="relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl"
+      >
+        <.live_component
+          module={BurpeeTrainerWeb.LogFormComponent}
+          id="log-form"
+          current_user={@current_user}
+          on_save={:session_saved}
+        />
+      </div>
+    </div>
+  <% end %>
+
+  <%!-- Goal modal --%>
+  <%= if @goal_modal_type do %>
+    <div
+      id="goal-modal"
+      phx-click="close_goal_modal"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+    >
+      <div
+        phx-click|stopPropagation
+        class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
+      >
+        <.live_component
+          module={BurpeeTrainerWeb.GoalFormComponent}
+          id="goal-form"
+          current_user={@current_user}
+          burpee_type={@goal_modal_type}
+          baseline_session={@goal_baseline_session}
+          on_save={:goal_saved}
+        />
+      </div>
+    </div>
+  <% end %>
+</Layouts.app>

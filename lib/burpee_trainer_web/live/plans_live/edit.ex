@@ -22,7 +22,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
 
-  embed_templates "edit/*"
+  embed_templates("edit/*")
 
   @impl true
   def mount(params, _session, socket) do
