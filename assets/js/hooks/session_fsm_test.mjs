@@ -285,6 +285,7 @@ assert.deepEqual(result.commands[0], {
 	percent: 0,
 	color: "#F59E0B",
 });
+assert.deepEqual(result.commands[1], { type: "renderTimer", timeLeftSec: 20 });
 
 result = transition(initialSessionState(), {
 	type: "DISPLAY_FRAME",
@@ -300,6 +301,7 @@ assert.deepEqual(result.commands[0], {
 	percent: 25,
 	color: "#4A9EFF",
 });
+assert.deepEqual(result.commands[1], { type: "renderTimer", timeLeftSec: 15 });
 
 displayState = result.state;
 result = transition(displayState, {

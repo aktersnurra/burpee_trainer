@@ -187,7 +187,7 @@ function displayCommandsForFrame(display, event) {
 					),
 				)
 			: 0;
-	const timeLeftSec = Math.max(totalDurationSec - elapsedSec, 0);
+	const timeLeftSec = Math.max(workoutDurationSec - workoutElapsedSec, 0);
 
 	if (!frame) {
 		return {
@@ -300,7 +300,10 @@ export function transition(state, event) {
 						stepStartedAt: event.now || null,
 					},
 				},
-				commands: [{ type: "pushSessionStarted" }, { type: "startCountdownTimer" }],
+				commands: [
+					{ type: "pushSessionStarted" },
+					{ type: "startCountdownTimer" },
+				],
 			};
 
 		case "WARMUP_YES":
@@ -319,7 +322,10 @@ export function transition(state, event) {
 						stepStartedAt: event.now || null,
 					},
 				},
-				commands: [{ type: "pushSessionStarted" }, { type: "startCountdownTimer" }],
+				commands: [
+					{ type: "pushSessionStarted" },
+					{ type: "startCountdownTimer" },
+				],
 			};
 
 		case "COUNTDOWN_PAUSE":
