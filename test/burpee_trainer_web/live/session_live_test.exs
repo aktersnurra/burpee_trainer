@@ -65,7 +65,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    assert has_element?(view, "#ring-container.w-\\[min\\(280px\\,72vw\\)\\]")
+    assert has_element?(view, "#ring-container.aspect-square.max-w-\\[280px\\]")
     assert has_element?(view, ".h-3 #progress-fill")
   end
 
