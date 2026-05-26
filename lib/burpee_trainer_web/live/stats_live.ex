@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Goals, Streak, Workouts}
+  alias BurpeeTrainer.Stats.Series
   alias BurpeeTrainer.Streak.State
   alias BurpeeTrainerWeb.Fmt
 
@@ -551,10 +552,11 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp weekly_minutes_chart(assigns) do
     # Always show 12 slots; pad with empty weeks at the start if less data
+    weekly_model = Series.weekly_minutes(assigns.weekly_data)
+
     raw_weeks =
-      assigns.weekly_data
+      weekly_model.points
       |> Enum.take(12)
-      |> Enum.reverse()
 
     n_slots = 12
     n_data = length(raw_weeks)
@@ -638,10 +640,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp progress_chart(assigns) do
     to_points = fn sessions ->
-      Enum.map(sessions, fn s ->
-        {_y, w} = :calendar.iso_week_number(Date.to_erl(DateTime.to_date(s.inserted_at)))
-        %{reps: round(s.burpee_count_actual / s.duration_sec_actual * 1200.0), iso_week: w}
-      end)
+      sessions
+      |> Series.progress()
+      |> Map.fetch!(:points)
+      |> Enum.map(&%{reps: &1.normalized_reps, iso_week: &1.iso_week})
     end
 
     six_points = to_points.(assigns.six_count_sessions)

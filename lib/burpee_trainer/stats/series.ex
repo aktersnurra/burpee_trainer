@@ -44,7 +44,18 @@ defmodule BurpeeTrainer.Stats.Series do
         duration = session.duration_sec_actual || 0
         pace = if count > 0, do: duration / count, else: 0.0
 
-        %{inserted_at: session.inserted_at, burpee_count: count, sec_per_burpee: pace}
+        {_year, iso_week} =
+          :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.inserted_at)))
+
+        normalized_reps = if duration > 0, do: round(count / duration * 1200.0), else: 0
+
+        %{
+          inserted_at: session.inserted_at,
+          burpee_count: count,
+          sec_per_burpee: pace,
+          normalized_reps: normalized_reps,
+          iso_week: iso_week
+        }
       end)
 
     paces = Enum.map(points, & &1.sec_per_burpee)
