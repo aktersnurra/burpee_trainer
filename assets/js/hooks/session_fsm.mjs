@@ -18,6 +18,7 @@ export function initialSessionState() {
 			doneInEvent: 0,
 			mainDone: 0,
 			warmupDone: 0,
+			previousFrame: null,
 		},
 		countdown: {
 			value: null,
@@ -331,6 +332,23 @@ export function transition(state, event) {
 				state: { ...state, mode: "completed" },
 				commands: [{ type: "completeWorkout", elapsedSec: event.elapsedSec }],
 			};
+
+		case "ACCOUNT_REPS": {
+			const nextReps = accountReps(
+				state.reps.previousFrame,
+				event.frame,
+				state.reps,
+			);
+			return {
+				state: {
+					...state,
+					reps: { ...nextReps, previousFrame: event.frame },
+				},
+				commands: [
+					{ type: "updateVisibleRepTotal", mainDone: nextReps.mainDone },
+				],
+			};
+		}
 
 		case "BEEP_FRAME": {
 			const result = beepCommandsForFrame(state.beeps, event.frame);

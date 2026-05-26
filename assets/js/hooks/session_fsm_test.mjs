@@ -217,4 +217,38 @@ result = transition(result.state, {
 assert.equal(result.state.beeps.lastRestCount, 0);
 assert.deepEqual(result.commands, [{ type: "playRepBeep" }]);
 
+let repState = {
+	...initialSessionState(),
+	reps: {
+		currentEventKey: "0:warmup_burpee:Warmup",
+		doneInEvent: 4,
+		mainDone: 0,
+		warmupDone: 4,
+		previousFrame: { event: warmup, index: 0 },
+	},
+};
+
+result = transition(repState, {
+	type: "ACCOUNT_REPS",
+	frame: { event: rest, index: 1 },
+});
+assert.equal(result.state.reps.warmupDone, 5);
+assert.equal(result.state.reps.mainDone, 0);
+assert.deepEqual(result.commands, [{ type: "updateVisibleRepTotal", mainDone: 0 }]);
+
+repState = {
+	...initialSessionState(),
+	reps: {
+		currentEventKey: "0:work_burpee:Block 1",
+		doneInEvent: 4,
+		mainDone: 4,
+		warmupDone: 0,
+		previousFrame: { event: work, index: 0 },
+	},
+};
+
+result = transition(repState, { type: "ACCOUNT_REPS", frame: null });
+assert.equal(result.state.reps.mainDone, 5);
+assert.deepEqual(result.commands, [{ type: "updateVisibleRepTotal", mainDone: 5 }]);
+
 console.log("session_fsm tests passed");

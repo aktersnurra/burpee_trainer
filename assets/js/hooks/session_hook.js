@@ -1,9 +1,4 @@
-import {
-	accountReps,
-	currentFrame,
-	initialSessionState,
-	transition,
-} from "./session_fsm.mjs";
+import { currentFrame, initialSessionState, transition } from "./session_fsm.mjs";
 
 // SessionHook — client-driven session runtime.
 //
@@ -64,7 +59,6 @@ const SessionHook = {
 		this.lastWorkEvent = null;
 		this.restRingEl = null;
 		this.countdownRingEl = null;
-		this.previousFrame = null;
 
 		this.hiddenAt = null; // track when tab went hidden for pause accounting
 
@@ -205,6 +199,10 @@ const SessionHook = {
 				break;
 			case "renderRunningFrame":
 				this.renderRunningFrame(command.elapsedSec);
+				break;
+			case "updateVisibleRepTotal":
+				this.mainBurpeeCount = command.mainDone;
+				this.updateTotalCounter(command.mainDone);
 				break;
 			case "scheduleAnimationFrame":
 				this.rafId = requestAnimationFrame(() => this.tick());
@@ -387,7 +385,6 @@ const SessionHook = {
 		this.lastEventType = null;
 		this.lastBurpeeCount = 0;
 		this.lastWorkEvent = null;
-		this.previousFrame = null;
 
 		const firstEvent = this.timeline[0];
 		const isFirstWork =
@@ -419,7 +416,8 @@ const SessionHook = {
 		const state = this.currentEvent(elapsed);
 		const frame = currentFrame(this.timeline, elapsed);
 
-		this.accountBoundaryReps(frame);
+		this.dispatchSession({ type: "ACCOUNT_REPS", frame });
+		this.syncRepStateFromFsm();
 		this.updateUI(state, elapsed);
 		this.dispatchSession({ type: "BEEP_FRAME", frame: state });
 	},
@@ -531,25 +529,10 @@ const SessionHook = {
 		this.dispatchSession({ type: "FINISH_EARLY", elapsedSec: elapsed });
 	},
 
-	accountBoundaryReps(frame) {
-		const nextReps = accountReps(this.previousFrame, frame, {
-			currentEventKey: this.previousFrame
-				? `${this.previousFrame.index}:${this.previousFrame.event.type}:${this.previousFrame.event.label || ""}`
-				: null,
-			doneInEvent: this.doneReps,
-			mainDone: this.mainBurpeeCount,
-			warmupDone: this.warmupBurpeeCount,
-		});
-
-		this.mainBurpeeCount = nextReps.mainDone;
-		this.warmupBurpeeCount = nextReps.warmupDone;
-		this.previousFrame = frame;
-
-		if (frame && nextReps.currentEventKey) {
-			this.doneReps = nextReps.doneInEvent;
-		}
-
-		this.updateTotalCounter(this.mainBurpeeCount);
+	syncRepStateFromFsm() {
+		this.mainBurpeeCount = this.fsm.reps.mainDone;
+		this.warmupBurpeeCount = this.fsm.reps.warmupDone;
+		this.doneReps = this.fsm.reps.doneInEvent;
 	},
 
 	// ---------------------------------------------------------------------------
@@ -760,7 +743,8 @@ const SessionHook = {
 	onComplete(elapsed) {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 
-		this.accountBoundaryReps(null);
+		this.dispatchSession({ type: "ACCOUNT_REPS", frame: null });
+		this.syncRepStateFromFsm();
 
 		// Warmup duration = elapsed up to warmupEndSec (or total warmup sec)
 		const warmupDuration = Math.min(elapsed, this.warmupEndSec);
