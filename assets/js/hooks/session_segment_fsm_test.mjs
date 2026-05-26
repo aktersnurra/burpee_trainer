@@ -20,6 +20,20 @@ const rest = {
 	label: "Rest",
 };
 
+const warmupWork = {
+	type: "warmup_burpee",
+	duration_sec: 10,
+	burpee_count: 5,
+	label: "Warmup",
+};
+
+const warmupRest = {
+	type: "warmup_rest",
+	duration_sec: 5,
+	burpee_count: 0,
+	label: "Warmup rest",
+};
+
 assert.deepEqual(currentFrame([work, rest], 2), {
 	event: work,
 	index: 0,
@@ -145,6 +159,30 @@ assert.deepEqual(result.commands.slice(3), [
 	{ type: "renderWorkRepProgress", progress: 0, color: "#4A9EFF" },
 ]);
 
+result = segmentTransition(initialSegmentState(), {
+	type: "DISPLAY_FRAME",
+	frame: {
+		event: warmupWork,
+		index: 0,
+		phase_elapsed: 2,
+		phase_remaining: 8,
+	},
+	elapsedSec: 2,
+	totalDurationSec: 15,
+	doneInEvent: 1,
+	blockCount: 0,
+});
+assert.deepEqual(result.commands.slice(0, 3), [
+	{ type: "renderProgressBar", percent: 13.3, color: "#F59E0B" },
+	{ type: "renderTimer", timeLeftSec: 13 },
+	{ type: "renderBlockLabel", label: "" },
+]);
+assert.deepEqual(result.commands.slice(3), [
+	{ type: "enterWorkPhase", eventType: "warmup_burpee", burpeeCount: 5 },
+	{ type: "triggerDown", remainingReps: 4 },
+	{ type: "renderWorkRepProgress", progress: 0, color: "#F59E0B" },
+]);
+
 result = segmentTransition(result.state, {
 	type: "DISPLAY_FRAME",
 	frame: { event: rest, index: 1, phase_elapsed: 1, phase_remaining: 4 },
@@ -185,6 +223,26 @@ assert.deepEqual(result.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 5 },
 ]);
 
+result = segmentTransition(
+	{
+		...initialSegmentState(),
+		reps: {
+			currentEventKey: "0:warmup_burpee:Warmup",
+			doneInEvent: 4,
+			burpeeCountDone: 4,
+			previousFrame: { event: warmupWork, index: 0 },
+		},
+	},
+	{
+		type: "ACCOUNT_REPS",
+		frame: { event: warmupRest, index: 1 },
+	},
+);
+assert.equal(result.state.reps.burpeeCountDone, 5);
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 5 },
+]);
+
 let beepState = {
 	...initialSegmentState(),
 	beeps: { lastRepIndex: -1, lastRestCount: null },
@@ -199,6 +257,12 @@ assert.deepEqual(result.commands, [{ type: "playRepBeep" }]);
 result = segmentTransition(result.state, {
 	type: "BEEP_FRAME",
 	frame: { event: rest, phase_elapsed: 3.1, phase_remaining: 1.9 },
+});
+assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
+
+result = segmentTransition(initialSegmentState(), {
+	type: "BEEP_FRAME",
+	frame: { event: warmupRest, phase_elapsed: 3.1, phase_remaining: 1.9 },
 });
 assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
 

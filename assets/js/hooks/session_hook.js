@@ -392,7 +392,13 @@ const SessionHook = {
 		});
 
 		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
-		if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
+		if (finishEarlyBtn) {
+			if (this.activeSegment === "workout") {
+				finishEarlyBtn.removeAttribute("disabled");
+			} else {
+				finishEarlyBtn.setAttribute("disabled", "disabled");
+			}
+		}
 
 		this.countdownRingEl = null;
 		const firstEvent = this.timeline[0];
@@ -497,6 +503,7 @@ const SessionHook = {
 	},
 
 	onFinishEarly() {
+		if (this.activeSegment !== "workout") return;
 		if (!confirm("End the session now and log what you've done so far?")) return;
 		const elapsed = (performance.now() - this.startTime) / 1000;
 		this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });

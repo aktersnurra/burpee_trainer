@@ -67,9 +67,12 @@ export function accountReps(previousFrame, nextFrame, reps) {
 	const previousEvent = previousFrame.event;
 	const previousKey = eventKey(previousFrame);
 	const nextKey = eventKey(nextFrame);
+	const isBurpee =
+		previousEvent.type === "work_burpee" ||
+		previousEvent.type === "warmup_burpee";
 
 	if (previousKey === nextKey) return reps;
-	if (previousEvent.type !== "work_burpee") return reps;
+	if (!isBurpee) return reps;
 
 	const target = previousEvent.burpee_count || 0;
 	const doneInEvent =
@@ -96,7 +99,9 @@ function beepCommandsForFrame(beeps, frame) {
 	if (!frame) return { beeps, commands: [] };
 
 	const { event: timelineEvent, phase_elapsed, phase_remaining } = frame;
-	const isBurpee = timelineEvent.type === "work_burpee";
+	const isBurpee =
+		timelineEvent.type === "work_burpee" ||
+		timelineEvent.type === "warmup_burpee";
 
 	if (isBurpee) {
 		const secondsPerRep =
@@ -116,7 +121,9 @@ function beepCommandsForFrame(beeps, frame) {
 	}
 
 	const isRest =
-		timelineEvent.type === "work_rest" || timelineEvent.type === "rest_block";
+		timelineEvent.type === "work_rest" ||
+		timelineEvent.type === "warmup_rest" ||
+		timelineEvent.type === "rest_block";
 
 	if (!isRest) {
 		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
@@ -141,7 +148,9 @@ function phaseColor(type, isWarning) {
 	if (isWarning) return "#F59E0B";
 	const colors = {
 		work_burpee: "#4A9EFF",
+		warmup_burpee: "#F59E0B",
 		work_rest: "#6B8FA8",
+		warmup_rest: "#6B8FA8",
 		rest_block: "#6B8FA8",
 	};
 	return colors[type] || "#1E2535";
@@ -174,9 +183,13 @@ function displayCommandsForFrame(display, event) {
 	}
 
 	const timelineEvent = frame.event;
-	const isWork = timelineEvent.type === "work_burpee";
+	const isWork =
+		timelineEvent.type === "work_burpee" ||
+		timelineEvent.type === "warmup_burpee";
 	const isRest =
-		timelineEvent.type === "work_rest" || timelineEvent.type === "rest_block";
+		timelineEvent.type === "work_rest" ||
+		timelineEvent.type === "warmup_rest" ||
+		timelineEvent.type === "rest_block";
 	const isWarning = isRest && frame.phase_remaining <= 5;
 	const color = phaseColor(timelineEvent.type, isWarning);
 	const commands = [
