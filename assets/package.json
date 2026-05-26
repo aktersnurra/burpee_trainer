@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node js/hooks/session_fsm_test.mjs",
+    "test": "node js/hooks/session_fsm_test.mjs && node js/hooks/session_segment_fsm_test.mjs",
     "format": "prettier --write \"js/**/*.js\""
   },
   "keywords": [],
