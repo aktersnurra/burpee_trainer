@@ -12,6 +12,7 @@ export function initialSessionState() {
 			elapsedSec: 0,
 			totalDurationSec: 0,
 			warmupEndSec: 0,
+			workoutDurationSec: 0,
 		},
 		reps: {
 			currentEventKey: null,
@@ -177,7 +178,7 @@ function displayCommandsForFrame(display, event) {
 	const totalDurationSec = event.totalDurationSec || 0;
 	const warmupEndSec = event.warmupEndSec || 0;
 	const elapsedSec = event.elapsedSec || 0;
-	const workoutDurationSec = Math.max(totalDurationSec - warmupEndSec, 0);
+	const workoutDurationSec = event.workoutDurationSec || Math.max(totalDurationSec - warmupEndSec, 0);
 	const workoutElapsedSec = Math.max(elapsedSec - warmupEndSec, 0);
 	const percent =
 		workoutDurationSec > 0
@@ -411,6 +412,12 @@ export function transition(state, event) {
 						item.type === "warmup_burpee" || item.type === "warmup_rest",
 				)
 				.reduce((sum, item) => sum + item.duration_sec, 0);
+			const workoutDurationSec = state.timeline
+				.filter(
+					(item) =>
+						item.type !== "warmup_burpee" && item.type !== "warmup_rest",
+				)
+				.reduce((sum, item) => sum + item.duration_sec, 0);
 
 			return {
 				state: {
@@ -421,6 +428,7 @@ export function transition(state, event) {
 						startTime: event.now || null,
 						totalDurationSec,
 						warmupEndSec,
+						workoutDurationSec,
 					},
 				},
 				commands: [{ type: "startAnimationFrame" }],

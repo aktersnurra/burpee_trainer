@@ -137,6 +137,9 @@ assert.deepEqual(result.commands, [
 
 result = transition(result.state, { type: "COUNTDOWN_DONE", now: 3000 });
 assert.equal(result.state.mode, "running");
+assert.equal(result.state.clock.totalDurationSec, 20);
+assert.equal(result.state.clock.warmupEndSec, 10);
+assert.equal(result.state.clock.workoutDurationSec, 10);
 result = transition(result.state, { type: "PAUSE", now: 3500 });
 assert.equal(result.state.mode, "paused");
 assert.equal(result.state.clock.pauseTime, 3500);

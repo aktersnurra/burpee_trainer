@@ -389,6 +389,7 @@ const SessionHook = {
 			elapsedSec: elapsed,
 			totalDurationSec: this.fsm.clock.totalDurationSec,
 			warmupEndSec: this.fsm.clock.warmupEndSec,
+			workoutDurationSec: this.fsm.clock.workoutDurationSec,
 			blockCount: this.blockCount,
 			doneInEvent: this.doneReps,
 		});
