@@ -4,6 +4,7 @@ import {
 	initialSessionState,
 	transition,
 } from "./session_fsm.mjs";
+import { SessionRenderer } from "./session_renderer.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 
 // SessionHook — client-driven session runtime.
@@ -31,6 +32,7 @@ const NS = "http://www.w3.org/2000/svg";
 const SessionHook = {
 	mounted() {
 		this.audio = new SessionAudio();
+		this.renderer = new SessionRenderer(this.el);
 		this.wakeLock = new SessionWakeLock();
 
 		this.fsm = initialSessionState();
@@ -47,11 +49,7 @@ const SessionHook = {
 		this.warmupBurpeeCount = 0;
 		this.mainBurpeeCount = 0;
 
-		this.workRingEl = null;
 		this.doneReps = 0;
-		this.downTimeout = null;
-		this.lastDisplayed = -1;
-		this.restRingEl = null;
 		this.countdownRingEl = null;
 
 		this.hiddenAt = null; // track when tab went hidden for pause accounting
@@ -131,7 +129,7 @@ const SessionHook = {
 	destroyed() {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
-		if (this.downTimeout) clearTimeout(this.downTimeout);
+		this.renderer.clearTimers();
 		this.audio.stop();
 		document.removeEventListener("visibilitychange", this.onVisibility);
 		document.removeEventListener("click", this.primeAudio, { capture: true });
@@ -195,31 +193,31 @@ const SessionHook = {
 				break;
 			case "updateVisibleRepTotal":
 				this.mainBurpeeCount = command.mainDone;
-				this.updateTotalCounter(command.mainDone);
+				this.renderer.updateTotalCounter(command.mainDone);
 				break;
 			case "renderProgressBar":
-				this.renderProgressBar(command.percent, command.color);
+				this.renderer.renderProgressBar(command.percent, command.color);
 				break;
 			case "renderTimer":
-				this.renderTimer(command.timeLeftSec);
+				this.renderer.renderTimer(command.timeLeftSec);
 				break;
 			case "renderBlockLabel":
-				this.renderBlockLabel(command.label);
+				this.renderer.renderBlockLabel(command.label);
 				break;
 			case "enterWorkPhase":
-				this.enterWorkPhase();
+				this.renderer.enterWorkPhase();
 				break;
 			case "triggerDown":
-				this.triggerDown(command.remainingReps);
+				this.renderer.triggerDown(command.remainingReps);
 				break;
 			case "renderWorkRepProgress":
-				this.updateWorkRing(command.progress, command.color);
+				this.renderer.updateWorkRing(command.progress, command.color);
 				break;
 			case "enterRestPhase":
-				this.enterRestPhase();
+				this.renderer.enterRestPhase();
 				break;
 			case "renderRestProgress":
-				this.renderRestProgress(
+				this.renderer.renderRestProgress(
 					command.progress,
 					command.color,
 					command.timeLeftSec,
@@ -410,8 +408,8 @@ const SessionHook = {
 			(firstEvent.type === "work_burpee" ||
 				firstEvent.type === "warmup_burpee");
 		if (isFirstWork) {
-			this.buildWorkRing();
-			this.triggerDown(firstEvent.burpee_count);
+			this.renderer.buildWorkRing();
+			this.renderer.triggerDown(firstEvent.burpee_count);
 		}
 
 		this.startTime = performance.now();
@@ -474,13 +472,13 @@ const SessionHook = {
 		// Record how much of the current 1-second step has already elapsed.
 		this.countdownStepElapsed = this.fsm.countdown.stepElapsedMs;
 		this.audio.stop();
-		this.updatePauseBtn(true);
+		this.renderer.updatePauseButton(true);
 	},
 
 	resumeCountdown() {
 		this.dispatchSession({ type: "COUNTDOWN_RESUME", now: performance.now() });
 		this.countdownPaused = false;
-		this.updatePauseBtn(false);
+		this.renderer.updatePauseButton(false);
 
 		const n = this.countdownCount;
 		if (n === null) return;
@@ -497,7 +495,7 @@ const SessionHook = {
 		this.paused = true;
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.audio.stop();
-		this.updatePauseBtn(true);
+		this.renderer.updatePauseButton(true);
 	},
 
 	resume() {
@@ -507,25 +505,7 @@ const SessionHook = {
 		this.paused = false;
 		this.hiddenAt = null;
 		this.rafId = requestAnimationFrame(() => this.tick());
-		this.updatePauseBtn(false);
-	},
-
-	updatePauseBtn(paused) {
-		const pauseIcon = this.el.querySelector("#pause-icon");
-		const countEl = this.el.querySelector("#count");
-		const downEl = this.el.querySelector("#down-word");
-		const ringContainer = this.el.querySelector("#ring-container");
-
-		if (paused) {
-			if (countEl) countEl.style.visibility = "hidden";
-			if (downEl) downEl.style.display = "none";
-			if (pauseIcon) pauseIcon.style.display = "";
-			if (ringContainer) ringContainer.style.opacity = "0.6";
-		} else {
-			if (pauseIcon) pauseIcon.style.display = "none";
-			if (ringContainer) ringContainer.style.opacity = "";
-			if (countEl) countEl.style.visibility = "";
-		}
+		this.renderer.updatePauseButton(false);
 	},
 
 	onFinishEarly() {
@@ -542,143 +522,6 @@ const SessionHook = {
 	},
 
 	// ---------------------------------------------------------------------------
-	// UI updates (direct DOM writes for high-frequency elements)
-	// ---------------------------------------------------------------------------
-
-	renderProgressBar(percent, color) {
-		const fill = this.el.querySelector("#progress-fill");
-		if (!fill) return;
-		fill.style.width = percent.toFixed(1) + "%";
-		fill.style.backgroundColor = color;
-	},
-
-	renderTimer(timeLeftSec) {
-		const timeLeftEl = this.el.querySelector("#time-left");
-		if (timeLeftEl) timeLeftEl.textContent = this.formatTime(timeLeftSec);
-	},
-
-	renderBlockLabel(label) {
-		const blockInfo = this.el.querySelector("#block-info");
-		if (blockInfo) blockInfo.textContent = label;
-	},
-
-	enterWorkPhase() {
-		this.buildWorkRing();
-	},
-
-	enterRestPhase() {
-		const svgEl = this.el.querySelector("#ring-svg");
-		if (svgEl) {
-			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-			const restRing = document.createElementNS(NS, "circle");
-			restRing.setAttribute("cx", CX);
-			restRing.setAttribute("cy", CY);
-			restRing.setAttribute("r", R);
-			restRing.setAttribute("fill", "none");
-			restRing.setAttribute("stroke-width", "16");
-			restRing.setAttribute("stroke-linecap", "round");
-			restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-			svgEl.appendChild(restRing);
-			this.restRingEl = restRing;
-		}
-	},
-
-	renderRestProgress(progress, color, timeLeftSec) {
-		const offset = CIRC * (1 - Math.min(progress, 1));
-		if (this.restRingEl) {
-			this.restRingEl.setAttribute("stroke", color);
-			this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-			this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
-		}
-
-		const countEl = this.el.querySelector("#count");
-		if (countEl) {
-			countEl.style.visibility = "";
-			countEl.textContent = this.formatTime(timeLeftSec);
-			countEl.style.color = color;
-		}
-		const downEl = this.el.querySelector("#down-word");
-		if (downEl) downEl.style.display = "none";
-	},
-
-	// ---------------------------------------------------------------------------
-	// Work ring — single arc that fills continuously per rep, resets each rep
-	// ---------------------------------------------------------------------------
-
-	buildWorkRing() {
-		this.doneReps = 0;
-		this.lastDisplayed = -1;
-		const svgEl = this.el.querySelector("#ring-svg");
-		if (!svgEl) return;
-		while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-
-		const ring = document.createElementNS(NS, "circle");
-		ring.setAttribute("cx", CX);
-		ring.setAttribute("cy", CY);
-		ring.setAttribute("r", R);
-		ring.setAttribute("fill", "none");
-		ring.setAttribute("stroke-width", "16");
-		ring.setAttribute("stroke-linecap", "round");
-		ring.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-		ring.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-		ring.setAttribute("stroke-dashoffset", CIRC.toFixed(4));
-		svgEl.appendChild(ring);
-		this.workRingEl = ring;
-	},
-
-	updateWorkRing(repProgress, color) {
-		if (!this.workRingEl) return;
-		const offset = CIRC * (1 - Math.min(repProgress, 1));
-		this.workRingEl.setAttribute("stroke", color);
-		this.workRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-		this.workRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
-	},
-
-	triggerDown(repsLeft) {
-		if (this.downTimeout) clearTimeout(this.downTimeout);
-		const countEl = this.el.querySelector("#count");
-		const downEl = this.el.querySelector("#down-word");
-		if (!countEl || !downEl) return;
-
-		// Hard cut: hide count, show "Down" instantly
-		countEl.style.visibility = "hidden";
-		downEl.style.display = "";
-
-		this.downTimeout = setTimeout(() => {
-			this.downTimeout = null;
-			// Hard cut: hide "Down", show new count
-			downEl.style.display = "none";
-			countEl.textContent = repsLeft;
-			countEl.style.color = "#C8D8F0";
-			countEl.style.visibility = "";
-			this.lastDisplayed = repsLeft;
-		}, 350);
-	},
-
-	triggerFlash() {
-		const flashEl = this.el.querySelector("#flash-circle");
-		if (!flashEl) return;
-		flashEl.style.transition = "none";
-		flashEl.setAttribute("opacity", "0.5");
-		requestAnimationFrame(() =>
-			requestAnimationFrame(() => {
-				flashEl.style.transition = "opacity 0.2s ease-out";
-				flashEl.setAttribute("opacity", "0");
-			}),
-		);
-	},
-
-	updateTotalCounter(n) {
-		const el = this.el.querySelector("#total-done");
-		if (!el) return;
-		el.textContent = n;
-		el.style.color = "#FFFFFF";
-		setTimeout(() => {
-			el.style.color = "";
-		}, 160);
-	},
-
-	// ---------------------------------------------------------------------------
 	// Completion
 	// ---------------------------------------------------------------------------
 
@@ -688,16 +531,6 @@ const SessionHook = {
 		this.dispatchSession({ type: "COMPLETE_SESSION", elapsedSec: elapsed });
 	},
 
-	// ---------------------------------------------------------------------------
-	// Helpers
-	// ---------------------------------------------------------------------------
-
-	formatTime(sec) {
-		const s = Math.max(Math.ceil(sec), 0);
-		const m = Math.floor(s / 60);
-		const r = s % 60;
-		return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${r}`;
-	},
 };
 
 export default SessionHook;
