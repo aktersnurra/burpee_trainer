@@ -1,27 +1,12 @@
 import { SessionAudio } from "./session_audio.mjs";
 import {
 	currentFrame,
-	initialSessionState,
-	transition,
-} from "./session_fsm.mjs";
+	initialSegmentState,
+	segmentTransition,
+} from "./session_segment_fsm.mjs";
+import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
 import { SessionRenderer } from "./session_renderer.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
-
-// SessionHook — client-driven session runtime.
-//
-// The server pushes a flat timeline on mount ("session_ready"). The client
-// owns the clock (performance.now + requestAnimationFrame), state machine,
-// beeps, and all high-frequency DOM updates. The server is idle during the
-// workout and only involved at save time.
-//
-// Events sent TO the server:
-//   warmup_requested  — user tapped Yes on warmup prompt
-//   session_started   — workout clock begins
-//   session_complete  — workout finished; carries main + warmup counts
-//
-// Events received FROM the server:
-//   session_ready     — initial main timeline
-//   warmup_ready      — warmup timeline prepended on Yes
 
 const CX = 140,
 	CY = 140,
@@ -35,7 +20,9 @@ const SessionHook = {
 		this.renderer = new SessionRenderer(this.el);
 		this.wakeLock = new SessionWakeLock();
 
-		this.fsm = initialSessionState();
+		this.flow = initialFlowState();
+		this.segment = initialSegmentState();
+		this.activeSegment = null;
 		this.timeline = [];
 		this.startTime = null;
 		this.paused = false;
@@ -43,42 +30,38 @@ const SessionHook = {
 		this.countdownPaused = false;
 		this.countdownCount = null;
 		this.countdownTimeoutId = null;
-		this.countdownStepStarted = null; // performance.now() when the current step began
-		this.countdownStepElapsed = 0; // ms elapsed in the current step when paused
+		this.countdownStepStarted = null;
+		this.countdownStepElapsed = 0;
 
 		this.warmupBurpeeCount = 0;
 		this.mainBurpeeCount = 0;
-
 		this.doneReps = 0;
 		this.countdownRingEl = null;
-
-		this.hiddenAt = null; // track when tab went hidden for pause accounting
+		this.hiddenAt = null;
+		this.blockCount = 0;
 
 		this.onVisibility = () => {
 			if (document.visibilityState === "hidden") {
-				// Screen locked / tab backgrounded — pause the clock silently.
 				if (!this.paused && this.startTime !== null) {
-					this.dispatchSession({
+					this.dispatchSegment({
 						type: "VISIBILITY_HIDDEN",
 						now: performance.now(),
 					});
-					this.hiddenAt = this.fsm.clock.hiddenAt;
+					this.hiddenAt = this.segment.clock.hiddenAt;
 					if (this.rafId) cancelAnimationFrame(this.rafId);
 					this.rafId = null;
 					this.audio.stop();
 				}
 			} else {
-				// Tab visible again — absorb the gap into startTime so elapsed is unaffected.
 				if (!this.paused && this.hiddenAt !== null && this.startTime !== null) {
-					this.dispatchSession({
+					this.dispatchSegment({
 						type: "VISIBILITY_VISIBLE",
 						now: performance.now(),
 					});
-					this.startTime = this.fsm.clock.startTime;
+					this.startTime = this.segment.clock.startTime;
 				}
 				this.hiddenAt = null;
 				this.wakeLock.reacquireWhenVisible();
-				// Restart the RAF loop if we were running.
 				if (!this.paused && this.startTime !== null && !this.rafId) {
 					this.rafId = requestAnimationFrame(() => this.tick());
 				}
@@ -93,22 +76,18 @@ const SessionHook = {
 			passive: true,
 		});
 
-		this.blockCount = 0;
-
 		this.handleEvent("session_ready", ({ timeline, block_count }) => {
-			this.dispatchSession({
+			this.dispatchFlow({
 				type: "SESSION_READY",
-				timeline,
+				workoutTimeline: timeline,
 				blockCount: block_count || 0,
 			});
 		});
 
 		this.handleEvent("warmup_ready", ({ warmup }) => {
-			this.dispatchSession({ type: "WARMUP_READY", warmup });
+			this.dispatchFlow({ type: "WARMUP_READY", warmupTimeline: warmup });
 		});
 
-		// Event delegation on the outer hook element — survives LiveView re-renders
-		// because the hook root (#burpee-session) is never replaced.
 		this.el.addEventListener("click", (e) => {
 			const warmupYes = e.target.closest("#warmup-yes-btn");
 			const warmupSkip = e.target.closest("#warmup-skip-btn");
@@ -140,19 +119,13 @@ const SessionHook = {
 		this.audio.close();
 	},
 
-	// ---------------------------------------------------------------------------
-	// Session flow
-	// ---------------------------------------------------------------------------
-
-	dispatchSession(event) {
-		const result = transition(this.fsm, event);
-		this.fsm = result.state;
-		this.timeline = this.fsm.timeline;
-		this.blockCount = this.fsm.blockCount;
-		result.commands.forEach((command) => this.runSessionCommand(command));
+	dispatchFlow(event) {
+		const result = flowTransition(this.flow, event);
+		this.flow = result.state;
+		result.commands.forEach((command) => this.runFlowCommand(command));
 	},
 
-	runSessionCommand(command) {
+	runFlowCommand(command) {
 		switch (command.type) {
 			case "renderPrompt":
 				this.showWarmupPrompt();
@@ -160,11 +133,34 @@ const SessionHook = {
 			case "pushWarmupRequested":
 				this.pushEvent("warmup_requested", {});
 				break;
-			case "pushSessionStarted":
-				this.pushEvent("session_started", {});
+			case "startSegment":
+				this.startSegment(command);
 				break;
+			case "showWarmupDonePrompt":
+				this.showWarmupDonePrompt();
+				break;
+			case "pushSessionComplete":
+				this.pushEvent("session_complete", command.payload);
+				break;
+		}
+	},
+
+	dispatchSegment(event) {
+		const result = segmentTransition(this.segment, event);
+		this.segment = result.state;
+		this.timeline = this.segment.timeline;
+		this.blockCount = this.segment.blockCount;
+		result.commands.forEach((command) => this.runSegmentCommand(command));
+	},
+
+	runSegmentCommand(command) {
+		switch (command.type) {
 			case "startCountdownTimer":
 				this.startCountdown();
+				break;
+			case "pauseCountdownTimer":
+				break;
+			case "resumeCountdownTimer":
 				break;
 			case "renderCountdown":
 				this.countdownCount = command.value;
@@ -182,15 +178,19 @@ const SessionHook = {
 			case "clearCountdown":
 				this.clearCountdown();
 				break;
-			case "beginSession":
-				this.beginSession();
+			case "beginSegment":
+				this.beginSegment();
 				break;
 			case "renderRunningFrame":
 				this.renderRunningFrame(command.elapsedSec);
 				break;
 			case "updateVisibleRepTotal":
-				this.mainBurpeeCount = command.mainDone;
-				this.renderer.updateTotalCounter(command.mainDone);
+				if (this.activeSegment === "warmup") {
+					this.warmupBurpeeCount = command.burpeeCountDone;
+				} else {
+					this.mainBurpeeCount = command.burpeeCountDone;
+				}
+				this.renderer.updateTotalCounter(command.burpeeCountDone);
 				break;
 			case "renderProgressBar":
 				this.renderer.renderProgressBar(command.percent, command.color);
@@ -221,35 +221,37 @@ const SessionHook = {
 				);
 				break;
 			case "scheduleAnimationFrame":
+			case "startAnimationFrame":
 				this.rafId = requestAnimationFrame(() => this.tick());
 				break;
-			case "completeWorkout":
-				this.onComplete(command.elapsedSec);
+			case "cancelAnimationFrame":
+				if (this.rafId) cancelAnimationFrame(this.rafId);
+				this.rafId = null;
 				break;
-			case "playCompletionFanfare":
-				this.audio.playCompletionFanfare();
-				break;
-			case "pushSessionComplete":
-				this.pushEvent("session_complete", command.payload);
+			case "segmentDone":
+				this.dispatchFlow({
+					type: "SEGMENT_DONE",
+					segment: this.activeSegment,
+					result: command.result,
+				});
 				break;
 		}
 	},
 
 	showWarmupPrompt() {
-		// Overlay is already rendered by the server; nothing to do here.
+	},
+
+	showWarmupDonePrompt() {
 	},
 
 	onWarmupYes() {
-		this.dispatchSession({ type: "WARMUP_YES" });
-		// server responds with warmup_ready → mood picker
+		this.dispatchFlow({ type: "WARMUP_YES" });
 	},
 
 	onWarmupSkip() {
-		this.dispatchSession({ type: "WARMUP_SKIP" });
+		this.dispatchFlow({ type: "WARMUP_SKIP" });
 	},
 
-	// Show a 5-4-3-2-1 countdown overlay before the workout clock begins.
-	// Color ramp: 5=amber, 4=amber-orange, 3=orange, 2=orange-red, 1=red
 	countdownColor(n) {
 		return (
 			["#EF4444", "#F97316", "#F97316", "#F59E0B", "#F59E0B"][n] || "#F59E0B"
@@ -263,7 +265,6 @@ const SessionHook = {
 		const overlay = this.el.querySelector("#start-overlay");
 		if (overlay) overlay.remove();
 
-		// Build a single amber ring in #ring-svg for the countdown
 		const svgEl = this.el.querySelector("#ring-svg");
 		if (svgEl) {
 			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
@@ -285,11 +286,11 @@ const SessionHook = {
 		const countEl = this.el.querySelector("#count");
 		if (countEl) countEl.style.visibility = "";
 
-		const showCount = (n, animate) => {
-			const color = this.countdownColor(n);
+		const showCount = (value, animate) => {
+			const color = this.countdownColor(value);
 
 			if (countEl) {
-				countEl.textContent = n;
+				countEl.textContent = value;
 				countEl.style.color = color;
 				countEl.classList.remove("countdown-pop");
 				void countEl.offsetWidth;
@@ -297,7 +298,7 @@ const SessionHook = {
 			}
 
 			if (this.countdownRingEl) {
-				const remaining = n / 5;
+				const remaining = value / 5;
 				this.countdownRingEl.style.transition = animate
 					? "stroke-dashoffset 0.8s ease-out, stroke 0.3s"
 					: "none";
@@ -311,8 +312,6 @@ const SessionHook = {
 		};
 
 		this.countdownShowCount = showCount;
-
-		// Render 5 with no transition — ring stays full, no animation flash.
 		this.countdownCount = 5;
 		showCount(5, false);
 		this.audio.playLeadBeep();
@@ -323,7 +322,7 @@ const SessionHook = {
 		this.countdownStepStarted = performance.now();
 		this.countdownTimeoutId = setTimeout(() => {
 			if (this.countdownPaused) return;
-			this.dispatchSession({
+			this.dispatchSegment({
 				type: "COUNTDOWN_TICK",
 				value: n,
 				now: performance.now(),
@@ -342,63 +341,56 @@ const SessionHook = {
 		}
 	},
 
-	beginSession() {
-		const result = transition(this.fsm, {
+	beginSegment() {
+		this.dispatchSegment({
 			type: "COUNTDOWN_DONE",
 			now: performance.now(),
 		});
-		this.fsm = result.state;
 
 		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
 		if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
 
-		// Clear countdown ring; build work ring for the first event
 		this.countdownRingEl = null;
 		const firstEvent = this.timeline[0];
 		const isFirstWork =
 			firstEvent &&
-			(firstEvent.type === "work_burpee" ||
-				firstEvent.type === "warmup_burpee");
+			(firstEvent.type === "work_burpee" || firstEvent.type === "warmup_burpee");
 		if (isFirstWork) {
 			this.renderer.buildWorkRing();
 			this.renderer.triggerDown(firstEvent.burpee_count);
 		}
 
-		this.startTime = performance.now();
-		this.rafId = requestAnimationFrame(() => this.tick());
+		this.startTime = this.segment.clock.startTime;
 	},
 
-	// ---------------------------------------------------------------------------
-	// Clock loop
-	// ---------------------------------------------------------------------------
+	startSegment({ segment, timeline, blockCount }) {
+		this.activeSegment = segment;
+		this.segment = initialSegmentState();
+		this.dispatchSegment({ type: "SEGMENT_READY", timeline, blockCount });
+		this.dispatchSegment({ type: "COUNTDOWN_START", now: performance.now() });
+	},
 
 	tick() {
 		const now = performance.now();
 		const elapsed = (now - this.startTime) / 1000;
-		this.dispatchSession({ type: "TICK", elapsedSec: elapsed });
+		this.dispatchSegment({ type: "TICK", elapsedSec: elapsed });
 	},
 
 	renderRunningFrame(elapsed) {
 		const frame = currentFrame(this.timeline, elapsed);
 
-		this.dispatchSession({ type: "ACCOUNT_REPS", frame });
-		this.syncRepStateFromFsm();
-		this.dispatchSession({
+		this.dispatchSegment({ type: "ACCOUNT_REPS", frame });
+		this.syncRepStateFromSegment();
+		this.dispatchSegment({
 			type: "DISPLAY_FRAME",
 			frame,
 			elapsedSec: elapsed,
-			totalDurationSec: this.fsm.clock.totalDurationSec,
-			warmupEndSec: this.fsm.clock.warmupEndSec,
-			workoutDurationSec: this.fsm.clock.workoutDurationSec,
+			totalDurationSec: this.segment.clock.totalDurationSec,
 			blockCount: this.blockCount,
 			doneInEvent: this.doneReps,
 		});
-		this.dispatchSession({ type: "BEEP_FRAME", frame });
+		this.dispatchSegment({ type: "BEEP_FRAME", frame });
 	},
-
-	// ---------------------------------------------------------------------------
-	// Pause / resume
-	// ---------------------------------------------------------------------------
 
 	togglePause() {
 		if (this.countdownCount !== null) {
@@ -417,27 +409,25 @@ const SessionHook = {
 	},
 
 	pauseCountdown() {
-		this.dispatchSession({ type: "COUNTDOWN_PAUSE", now: performance.now() });
+		this.dispatchSegment({ type: "COUNTDOWN_PAUSE", now: performance.now() });
 		this.countdownPaused = true;
 		if (this.countdownTimeoutId) {
 			clearTimeout(this.countdownTimeoutId);
 			this.countdownTimeoutId = null;
 		}
-		// Record how much of the current 1-second step has already elapsed.
-		this.countdownStepElapsed = this.fsm.countdown.stepElapsedMs;
+		this.countdownStepElapsed = this.segment.countdown.stepElapsedMs;
 		this.audio.stop();
 		this.renderer.updatePauseButton(true);
 	},
 
 	resumeCountdown() {
-		this.dispatchSession({ type: "COUNTDOWN_RESUME", now: performance.now() });
+		this.dispatchSegment({ type: "COUNTDOWN_RESUME", now: performance.now() });
 		this.countdownPaused = false;
 		this.renderer.updatePauseButton(false);
 
 		const n = this.countdownCount;
 		if (n === null) return;
 
-		// Show the current number and wait only the remaining portion of its second.
 		this.countdownShowCount(n, false);
 		const remaining = Math.max(1000 - (this.countdownStepElapsed || 0), 0);
 		this.scheduleCountdownTick(n - 1, remaining);
@@ -445,7 +435,7 @@ const SessionHook = {
 
 	pause() {
 		if (this.paused) return;
-		this.dispatchSession({ type: "PAUSE", now: performance.now() });
+		this.dispatchSegment({ type: "PAUSE", now: performance.now() });
 		this.paused = true;
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.audio.stop();
@@ -454,8 +444,8 @@ const SessionHook = {
 
 	resume() {
 		if (!this.paused) return;
-		this.dispatchSession({ type: "RESUME", now: performance.now() });
-		this.startTime = this.fsm.clock.startTime;
+		this.dispatchSegment({ type: "RESUME", now: performance.now() });
+		this.startTime = this.segment.clock.startTime;
 		this.paused = false;
 		this.hiddenAt = null;
 		this.rafId = requestAnimationFrame(() => this.tick());
@@ -463,26 +453,18 @@ const SessionHook = {
 	},
 
 	onFinishEarly() {
-		if (!confirm("End the session now and log what you've done so far?"))
-			return;
+		if (!confirm("End the session now and log what you've done so far?")) return;
 		const elapsed = (performance.now() - this.startTime) / 1000;
-		this.dispatchSession({ type: "FINISH_EARLY", elapsedSec: elapsed });
+		this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });
 	},
 
-	syncRepStateFromFsm() {
-		this.mainBurpeeCount = this.fsm.reps.mainDone;
-		this.warmupBurpeeCount = this.fsm.reps.warmupDone;
-		this.doneReps = this.fsm.reps.doneInEvent;
-	},
-
-	// ---------------------------------------------------------------------------
-	// Completion
-	// ---------------------------------------------------------------------------
-
-	onComplete(elapsed) {
-		this.dispatchSession({ type: "ACCOUNT_REPS", frame: null });
-		this.syncRepStateFromFsm();
-		this.dispatchSession({ type: "COMPLETE_SESSION", elapsedSec: elapsed });
+	syncRepStateFromSegment() {
+		this.doneReps = this.segment.reps.doneInEvent;
+		if (this.activeSegment === "warmup") {
+			this.warmupBurpeeCount = this.segment.reps.burpeeCountDone;
+		} else {
+			this.mainBurpeeCount = this.segment.reps.burpeeCountDone;
+		}
 	},
 };
 
