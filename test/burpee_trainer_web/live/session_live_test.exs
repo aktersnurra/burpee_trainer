@@ -61,11 +61,16 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute html =~ "How do you feel?"
   end
 
-  test "runner uses mobile-scaled ring and thicker progress bar", %{conn: conn, user: user} do
+  test "runner keeps client-owned fixed ring box and thicker progress bar", %{
+    conn: conn,
+    user: user
+  } do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    assert has_element?(view, "#ring-container.aspect-square.max-w-\\[280px\\]")
+    assert has_element?(view, "#session-runner-client[phx-update=ignore]")
+    assert has_element?(view, "#ring-container.w-\\[280px\\].h-\\[280px\\]")
+    assert has_element?(view, "svg#ring-svg.w-\\[280px\\].h-\\[280px\\]")
     assert has_element?(view, ".h-3 #progress-fill")
   end
 

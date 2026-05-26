@@ -286,15 +286,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp session_runner(assigns) do
     ~H"""
-    <div class="relative flex flex-col gap-5">
+    <div id="session-runner-client" class="relative flex flex-col gap-5" phx-update="ignore">
       <div
         id="ring-container"
-        class="relative mx-auto aspect-square w-[72vw] max-w-[280px] cursor-pointer select-none"
-        phx-update="ignore"
+        class="relative mx-auto w-[280px] h-[280px] cursor-pointer select-none"
       >
-        <svg id="ring-svg" viewBox="0 0 280 280" class="absolute inset-0 h-full w-full"></svg>
+        <svg id="ring-svg" viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px]"></svg>
 
-        <svg viewBox="0 0 280 280" class="absolute inset-0 h-full w-full pointer-events-none">
+        <svg viewBox="0 0 280 280" class="absolute inset-0 w-[280px] h-[280px] pointer-events-none">
           <circle
             id="flash-circle"
             cx="140"
