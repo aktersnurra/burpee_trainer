@@ -139,6 +139,36 @@ export function transition(state, event) {
         ],
       };
 
+    case "COUNTDOWN_PAUSE":
+      return {
+        state: {
+          ...state,
+          mode: "countdown_paused",
+          countdown: {
+            ...state.countdown,
+            paused: true,
+            stepElapsedMs: Math.max((event.now || 0) - (state.countdown.stepStartedAt || 0), 0),
+          },
+        },
+        commands: [{type: "pauseCountdownTimer"}],
+      };
+
+    case "COUNTDOWN_RESUME": {
+      const remainingMs = Math.max(1000 - (state.countdown.stepElapsedMs || 0), 0);
+      return {
+        state: {
+          ...state,
+          mode: "countdown",
+          countdown: {
+            ...state.countdown,
+            paused: false,
+            stepStartedAt: event.now || null,
+          },
+        },
+        commands: [{type: "resumeCountdownTimer", remainingMs}],
+      };
+    }
+
     case "COUNTDOWN_DONE": {
       const totalDurationSec = state.timeline.reduce((sum, item) => sum + item.duration_sec, 0);
       const warmupEndSec = state.timeline
@@ -154,6 +184,58 @@ export function transition(state, event) {
             startTime: event.now || null,
             totalDurationSec,
             warmupEndSec,
+          },
+        },
+        commands: [{type: "startAnimationFrame"}],
+      };
+    }
+
+    case "PAUSE":
+      return {
+        state: {
+          ...state,
+          mode: "paused",
+          clock: {...state.clock, pauseTime: event.now || null},
+        },
+        commands: [{type: "cancelAnimationFrame"}],
+      };
+
+    case "RESUME": {
+      const pausedFor = Math.max((event.now || 0) - (state.clock.pauseTime || 0), 0);
+      return {
+        state: {
+          ...state,
+          mode: "running",
+          clock: {
+            ...state.clock,
+            startTime:
+              state.clock.startTime === null ? null : state.clock.startTime + pausedFor,
+            pauseTime: null,
+          },
+        },
+        commands: [{type: "startAnimationFrame"}],
+      };
+    }
+
+    case "VISIBILITY_HIDDEN":
+      return {
+        state: {
+          ...state,
+          clock: {...state.clock, hiddenAt: event.now || null},
+        },
+        commands: [{type: "cancelAnimationFrame"}],
+      };
+
+    case "VISIBILITY_VISIBLE": {
+      const hiddenFor = Math.max((event.now || 0) - (state.clock.hiddenAt || 0), 0);
+      return {
+        state: {
+          ...state,
+          clock: {
+            ...state.clock,
+            startTime:
+              state.clock.startTime === null ? null : state.clock.startTime + hiddenFor,
+            hiddenAt: null,
           },
         },
         commands: [{type: "startAnimationFrame"}],

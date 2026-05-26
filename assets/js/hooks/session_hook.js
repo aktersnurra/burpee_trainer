@@ -1,4 +1,9 @@
-import {accountReps, currentFrame, initialSessionState, transition} from "./session_fsm.mjs";
+import {
+	accountReps,
+	currentFrame,
+	initialSessionState,
+	transition,
+} from "./session_fsm.mjs";
 
 // SessionHook — client-driven session runtime.
 //
@@ -16,950 +21,965 @@ import {accountReps, currentFrame, initialSessionState, transition} from "./sess
 //   session_ready     — initial main timeline
 //   warmup_ready      — warmup timeline prepended on Yes
 
-const CX = 140, CY = 140, R = 107;
+const CX = 140,
+	CY = 140,
+	R = 107;
 const CIRC = 2 * Math.PI * R;
 const NS = "http://www.w3.org/2000/svg";
 
 const SessionHook = {
-  mounted() {
-    this.ctx = null;
-    this.bus = null;
-    this.scheduledOscs = [];
-    this.wakeLock = null;
+	mounted() {
+		this.ctx = null;
+		this.bus = null;
+		this.scheduledOscs = [];
+		this.wakeLock = null;
 
-    this.fsm = initialSessionState();
-    this.timeline = [];
-    this.mainTimeline = [];
-    this.startTime = null;
-    this.totalDuration = 0;
-    this.paused = false;
-    this.pauseTime = null;
-    this.rafId = null;
-    this.countdownPaused = false;
-    this.countdownCount = null;
-    this.countdownTimeoutId = null;
-    this.countdownStepStarted = null; // performance.now() when the current step began
-    this.countdownStepElapsed = 0;    // ms elapsed in the current step when paused
+		this.fsm = initialSessionState();
+		this.timeline = [];
+		this.mainTimeline = [];
+		this.startTime = null;
+		this.totalDuration = 0;
+		this.paused = false;
+		this.pauseTime = null;
+		this.rafId = null;
+		this.countdownPaused = false;
+		this.countdownCount = null;
+		this.countdownTimeoutId = null;
+		this.countdownStepStarted = null; // performance.now() when the current step began
+		this.countdownStepElapsed = 0; // ms elapsed in the current step when paused
 
-    this.lastRepIndex = -1;
-    this.lastRestCount = null;
-    this.warmupBurpeeCount = 0;
-    this.mainBurpeeCount = 0;
-    this.warmupEndSec = 0; // elapsed time when warmup phase ends
+		this.lastRepIndex = -1;
+		this.lastRestCount = null;
+		this.warmupBurpeeCount = 0;
+		this.mainBurpeeCount = 0;
+		this.warmupEndSec = 0; // elapsed time when warmup phase ends
 
-    this.workRingEl = null;
-    this.doneReps = 0;
-    this.totalReps = 0;
-    this.downTimeout = null;
-    this.lastDisplayed = -1;
-    this.lastEventType = null;
-    this.lastBurpeeCount = 0;
-    this.lastWorkEvent = null;
-    this.restRingEl = null;
-    this.countdownRingEl = null;
-    this.previousFrame = null;
+		this.workRingEl = null;
+		this.doneReps = 0;
+		this.totalReps = 0;
+		this.downTimeout = null;
+		this.lastDisplayed = -1;
+		this.lastEventType = null;
+		this.lastBurpeeCount = 0;
+		this.lastWorkEvent = null;
+		this.restRingEl = null;
+		this.countdownRingEl = null;
+		this.previousFrame = null;
 
-    this.hiddenAt = null; // track when tab went hidden for pause accounting
+		this.hiddenAt = null; // track when tab went hidden for pause accounting
 
-    this.onVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        // Screen locked / tab backgrounded — pause the clock silently.
-        if (!this.paused && this.startTime !== null) {
-          this.hiddenAt = performance.now();
-          if (this.rafId) cancelAnimationFrame(this.rafId);
-          this.rafId = null;
-          this.stopAudio();
-        }
-      } else {
-        // Tab visible again — absorb the gap into startTime so elapsed is unaffected.
-        if (!this.paused && this.hiddenAt !== null && this.startTime !== null) {
-          this.startTime += performance.now() - this.hiddenAt;
-        }
-        this.hiddenAt = null;
-        this.maybeReacquireWakeLock();
-        // Restart the RAF loop if we were running.
-        if (!this.paused && this.startTime !== null && !this.rafId) {
-          this.rafId = requestAnimationFrame(() => this.tick());
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", this.onVisibility);
+		this.onVisibility = () => {
+			if (document.visibilityState === "hidden") {
+				// Screen locked / tab backgrounded — pause the clock silently.
+				if (!this.paused && this.startTime !== null) {
+					this.dispatchSession({ type: "VISIBILITY_HIDDEN", now: performance.now() });
+					this.hiddenAt = this.fsm.clock.hiddenAt;
+					if (this.rafId) cancelAnimationFrame(this.rafId);
+					this.rafId = null;
+					this.stopAudio();
+				}
+			} else {
+				// Tab visible again — absorb the gap into startTime so elapsed is unaffected.
+				if (!this.paused && this.hiddenAt !== null && this.startTime !== null) {
+					this.dispatchSession({ type: "VISIBILITY_VISIBLE", now: performance.now() });
+					this.startTime = this.fsm.clock.startTime;
+				}
+				this.hiddenAt = null;
+				this.maybeReacquireWakeLock();
+				// Restart the RAF loop if we were running.
+				if (!this.paused && this.startTime !== null && !this.rafId) {
+					this.rafId = requestAnimationFrame(() => this.tick());
+				}
+			}
+		};
+		document.addEventListener("visibilitychange", this.onVisibility);
 
-    this.primeAudio = () => this.ensureRunningAudio();
-    document.addEventListener("click", this.primeAudio, { capture: true });
-    document.addEventListener("touchstart", this.primeAudio, {
-      capture: true,
-      passive: true,
-    });
+		this.primeAudio = () => this.ensureRunningAudio();
+		document.addEventListener("click", this.primeAudio, { capture: true });
+		document.addEventListener("touchstart", this.primeAudio, {
+			capture: true,
+			passive: true,
+		});
 
-    this.blockCount = 0;
+		this.blockCount = 0;
 
-    this.handleEvent("session_ready", ({ timeline, block_count }) => {
-      this.dispatchSession({
-        type: "SESSION_READY",
-        timeline,
-        blockCount: block_count || 0,
-      });
-    });
+		this.handleEvent("session_ready", ({ timeline, block_count }) => {
+			this.dispatchSession({
+				type: "SESSION_READY",
+				timeline,
+				blockCount: block_count || 0,
+			});
+		});
 
-    this.handleEvent("warmup_ready", ({ warmup }) => {
-      this.dispatchSession({type: "WARMUP_READY", warmup});
-    });
+		this.handleEvent("warmup_ready", ({ warmup }) => {
+			this.dispatchSession({ type: "WARMUP_READY", warmup });
+		});
 
-    // Event delegation on the outer hook element — survives LiveView re-renders
-    // because the hook root (#burpee-session) is never replaced.
-    this.el.addEventListener("click", (e) => {
-      const warmupYes = e.target.closest("#warmup-yes-btn");
-      const warmupSkip = e.target.closest("#warmup-skip-btn");
-      const ringContainer = e.target.closest("#ring-container");
-      const finishEarly = e.target.closest("#finish-early-btn");
+		// Event delegation on the outer hook element — survives LiveView re-renders
+		// because the hook root (#burpee-session) is never replaced.
+		this.el.addEventListener("click", (e) => {
+			const warmupYes = e.target.closest("#warmup-yes-btn");
+			const warmupSkip = e.target.closest("#warmup-skip-btn");
+			const ringContainer = e.target.closest("#ring-container");
+			const finishEarly = e.target.closest("#finish-early-btn");
 
-      if (warmupYes) this.onWarmupYes();
-      if (warmupSkip) this.onWarmupSkip();
-      if (ringContainer && (this.startTime !== null || this.countdownCount !== null)) this.togglePause();
-      if (finishEarly) this.onFinishEarly();
-    });
-  },
+			if (warmupYes) this.onWarmupYes();
+			if (warmupSkip) this.onWarmupSkip();
+			if (
+				ringContainer &&
+				(this.startTime !== null || this.countdownCount !== null)
+			)
+				this.togglePause();
+			if (finishEarly) this.onFinishEarly();
+		});
+	},
 
-  destroyed() {
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
-    if (this.downTimeout) clearTimeout(this.downTimeout);
-    this.stopAudio();
-    document.removeEventListener("visibilitychange", this.onVisibility);
-    document.removeEventListener("click", this.primeAudio, { capture: true });
-    document.removeEventListener("touchstart", this.primeAudio, {
-      capture: true,
-    });
-    this.releaseWakeLock();
-    if (this.ctx) this.ctx.close();
-  },
+	destroyed() {
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
+		if (this.downTimeout) clearTimeout(this.downTimeout);
+		this.stopAudio();
+		document.removeEventListener("visibilitychange", this.onVisibility);
+		document.removeEventListener("click", this.primeAudio, { capture: true });
+		document.removeEventListener("touchstart", this.primeAudio, {
+			capture: true,
+		});
+		this.releaseWakeLock();
+		if (this.ctx) this.ctx.close();
+	},
 
-  // ---------------------------------------------------------------------------
-  // Session flow
-  // ---------------------------------------------------------------------------
+	// ---------------------------------------------------------------------------
+	// Session flow
+	// ---------------------------------------------------------------------------
 
-  dispatchSession(event) {
-    const result = transition(this.fsm, event);
-    this.fsm = result.state;
-    this.timeline = this.fsm.timeline;
-    this.mainTimeline = this.fsm.mainTimeline;
-    this.blockCount = this.fsm.blockCount;
-    result.commands.forEach((command) => this.runSessionCommand(command));
-  },
+	dispatchSession(event) {
+		const result = transition(this.fsm, event);
+		this.fsm = result.state;
+		this.timeline = this.fsm.timeline;
+		this.mainTimeline = this.fsm.mainTimeline;
+		this.blockCount = this.fsm.blockCount;
+		result.commands.forEach((command) => this.runSessionCommand(command));
+	},
 
-  runSessionCommand(command) {
-    switch (command.type) {
-      case "renderPrompt":
-        this.showWarmupPrompt();
-        break;
-      case "pushWarmupRequested":
-        this.pushEvent("warmup_requested", {});
-        break;
-      case "renderMoodPrompt":
-        this.showMoodPicker();
-        break;
-      case "pushSessionStarted":
-        this.pushEvent("session_started", {mood: command.mood});
-        break;
-      case "startCountdownTimer":
-        this.startCountdown();
-        break;
-    }
-  },
+	runSessionCommand(command) {
+		switch (command.type) {
+			case "renderPrompt":
+				this.showWarmupPrompt();
+				break;
+			case "pushWarmupRequested":
+				this.pushEvent("warmup_requested", {});
+				break;
+			case "renderMoodPrompt":
+				this.showMoodPicker();
+				break;
+			case "pushSessionStarted":
+				this.pushEvent("session_started", { mood: command.mood });
+				break;
+			case "startCountdownTimer":
+				this.startCountdown();
+				break;
+		}
+	},
 
-  showWarmupPrompt() {
-    // Overlay is already rendered by the server; nothing to do here.
-  },
+	showWarmupPrompt() {
+		// Overlay is already rendered by the server; nothing to do here.
+	},
 
-  onWarmupYes() {
-    this.dispatchSession({type: "WARMUP_YES"});
-    // server responds with warmup_ready → mood picker
-  },
+	onWarmupYes() {
+		this.dispatchSession({ type: "WARMUP_YES" });
+		// server responds with warmup_ready → mood picker
+	},
 
-  onWarmupSkip() {
-    this.dispatchSession({type: "WARMUP_SKIP"});
-  },
+	onWarmupSkip() {
+		this.dispatchSession({ type: "WARMUP_SKIP" });
+	},
 
-  showMoodPicker() {
-    const overlay = this.el.querySelector("#start-overlay");
-    if (!overlay) return;
+	showMoodPicker() {
+		const overlay = this.el.querySelector("#start-overlay");
+		if (!overlay) return;
 
-    const moodIcons = {
-      "-1": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.318A4.486 4.486 0 0 0 12.016 15a4.486 4.486 0 0 0-3.198 1.318M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" /></svg>`,
-      "0": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`,
-      "1": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" /></svg>`,
-    };
+		const moodIcons = {
+			"-1": `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.318A4.486 4.486 0 0 0 12.016 15a4.486 4.486 0 0 0-3.198 1.318M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" /></svg>`,
+			0: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`,
+			1: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" /></svg>`,
+		};
 
-    // Patch the overlay in-place — delegation on the hook root catches the clicks.
-    overlay.innerHTML = `
+		// Patch the overlay in-place — delegation on the hook root catches the clicks.
+		overlay.innerHTML = `
       <span class="text-xl font-semibold tracking-tight">How do you feel?</span>
       <div class="flex gap-3">
         ${[
-          ["Tired", "-1"],
-          ["OK", "0"],
-          ["Hyped", "1"],
-        ]
-          .map(
-            ([label, val]) => `
+					["Tired", "-1"],
+					["OK", "0"],
+					["Hyped", "1"],
+				]
+					.map(
+						([label, val]) => `
           <button type="button" data-mood="${val}"
             class="flex flex-col items-center gap-1.5 rounded-xl border border-[#1E2535] px-5 py-3 text-sm font-medium transition active:scale-[0.97] hover:bg-[#181C26]">
             ${moodIcons[val]}
             <span>${label}</span>
           </button>
         `,
-          )
-          .join("")}
+					)
+					.join("")}
       </div>
     `;
 
-    // Delegation won't reach data-mood — wire these directly since the overlay is JS-owned.
-    overlay.querySelectorAll("[data-mood]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const mood = btn.getAttribute("data-mood");
-        this.dispatchSession({type: "MOOD_SELECTED", mood, now: performance.now()});
-      });
-    });
-  },
-
-  // Show a 5-4-3-2-1 countdown overlay before the workout clock begins.
-  // Color ramp: 5=amber, 4=amber-orange, 3=orange, 2=orange-red, 1=red
-  countdownColor(n) {
-    return (
-      ["#EF4444", "#F97316", "#F97316", "#F59E0B", "#F59E0B"][n] || "#F59E0B"
-    );
-  },
-
-  startCountdown() {
-    this.ensureRunningAudio();
-    this.acquireWakeLock();
-
-    const overlay = this.el.querySelector("#start-overlay");
-    if (overlay) overlay.remove();
-
-    // Build a single amber ring in #ring-svg for the countdown
-    const svgEl = this.el.querySelector("#ring-svg");
-    if (svgEl) {
-      while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-      const cdRing = document.createElementNS(NS, "circle");
-      cdRing.setAttribute("cx", CX);
-      cdRing.setAttribute("cy", CY);
-      cdRing.setAttribute("r", R);
-      cdRing.setAttribute("fill", "none");
-      cdRing.setAttribute("stroke-width", "16");
-      cdRing.setAttribute("stroke-linecap", "round");
-      cdRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-      cdRing.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-      cdRing.setAttribute("stroke-dashoffset", "0");
-      cdRing.setAttribute("stroke", this.countdownColor(5));
-      svgEl.appendChild(cdRing);
-      this.countdownRingEl = cdRing;
-    }
-
-    const countEl = this.el.querySelector("#count");
-    if (countEl) countEl.style.visibility = "";
-
-    const showCount = (n, animate) => {
-      const color = this.countdownColor(n);
-
-      if (countEl) {
-        countEl.textContent = n;
-        countEl.style.color = color;
-        countEl.classList.remove("countdown-pop");
-        void countEl.offsetWidth;
-        countEl.classList.add("countdown-pop");
-      }
-
-      if (this.countdownRingEl) {
-        const remaining = n / 5;
-        this.countdownRingEl.style.transition = animate
-          ? "stroke-dashoffset 0.8s ease-out, stroke 0.3s"
-          : "none";
-        this.countdownRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-        this.countdownRingEl.setAttribute(
-          "stroke-dashoffset",
-          (CIRC * (1 - remaining)).toFixed(4),
-        );
-        this.countdownRingEl.setAttribute("stroke", color);
-      }
-    };
-
-    this.countdownShowCount = showCount;
-
-    // scheduleNext: show `n` after `delayMs`, then continue.
-    // countdownCount tracks the number currently *visible* on screen.
-    const scheduleNext = (n, delayMs = 1000) => {
-      this.countdownStepStarted = performance.now();
-      this.countdownTimeoutId = setTimeout(() => {
-        if (this.countdownPaused) return;
-        if (n >= 1) {
-          this.countdownCount = n;
-          showCount(n, true);
-          this.leadBeepAt(this.audioContext().currentTime + 0.02);
-          scheduleNext(n - 1);
-        } else {
-          this.countdownCount = null;
-          this.countdownTimeoutId = null;
-          this.countdownStepStarted = null;
-          if (countEl) {
-            countEl.style.color = "#C8D8F0";
-            countEl.textContent = "—";
-          }
-          this.beginSession();
-        }
-      }, delayMs);
-    };
-
-    // Render 5 with no transition — ring stays full, no animation flash.
-    this.countdownCount = 5;
-    showCount(5, false);
-    this.leadBeepAt(this.audioContext().currentTime + 0.02);
-    scheduleNext(4);
-  },
-
-  beginSession() {
-    const result = transition(this.fsm, {type: "COUNTDOWN_DONE", now: performance.now()});
-    this.fsm = result.state;
-
-    this.totalDuration = this.timeline.reduce((s, e) => s + e.duration_sec, 0);
-    this.warmupEndSec = this.timeline
-      .filter((e) => e.type === "warmup_burpee" || e.type === "warmup_rest")
-      .reduce((s, e) => s + e.duration_sec, 0);
-
-    const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
-    if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
-
-    // Clear countdown ring; build work ring for the first event
-    this.countdownRingEl = null;
-    this.lastEventType = null;
-    this.lastBurpeeCount = 0;
-    this.lastWorkEvent = null;
-    this.previousFrame = null;
-
-    const firstEvent = this.timeline[0];
-    const isFirstWork =
-      firstEvent &&
-      (firstEvent.type === "work_burpee" || firstEvent.type === "warmup_burpee");
-    if (isFirstWork) {
-      this.buildWorkRing(firstEvent.type, firstEvent.burpee_count);
-      this.triggerDown(firstEvent.burpee_count);
-      this.lastEventType = firstEvent.type;
-      this.lastBurpeeCount = firstEvent.burpee_count;
-    }
-
-    this.startTime = performance.now();
-    this.rafId = requestAnimationFrame(() => this.tick());
-  },
-
-  // ---------------------------------------------------------------------------
-  // Clock loop
-  // ---------------------------------------------------------------------------
-
-  tick() {
-    const now = performance.now();
-    const elapsed = (now - this.startTime) / 1000;
-    const state = this.currentEvent(elapsed);
-    const frame = currentFrame(this.timeline, elapsed);
-
-    this.accountBoundaryReps(frame);
-    this.updateUI(state, elapsed);
-    this.checkBeeps(state, elapsed);
-
-    if (!this.paused && elapsed < this.totalDuration) {
-      this.rafId = requestAnimationFrame(() => this.tick());
-    } else if (elapsed >= this.totalDuration) {
-      this.onComplete(elapsed);
-    }
-  },
-
-  currentEvent(elapsed_sec) {
-    let cursor = 0;
-    for (const event of this.timeline) {
-      if (elapsed_sec < cursor + event.duration_sec) {
-        return {
-          event,
-          phase_elapsed: elapsed_sec - cursor,
-          phase_remaining: event.duration_sec - (elapsed_sec - cursor),
-        };
-      }
-      cursor += event.duration_sec;
-    }
-    return null;
-  },
-
-  // ---------------------------------------------------------------------------
-  // Pause / resume
-  // ---------------------------------------------------------------------------
-
-  togglePause() {
-    if (this.countdownCount !== null) {
-      if (this.countdownPaused) {
-        this.resumeCountdown();
-      } else {
-        this.pauseCountdown();
-      }
-      return;
-    }
-    if (this.paused) {
-      this.resume();
-    } else {
-      this.pause();
-    }
-  },
-
-  pauseCountdown() {
-    this.countdownPaused = true;
-    if (this.countdownTimeoutId) {
-      clearTimeout(this.countdownTimeoutId);
-      this.countdownTimeoutId = null;
-    }
-    // Record how much of the current 1-second step has already elapsed.
-    this.countdownStepElapsed = this.countdownStepStarted !== null
-      ? performance.now() - this.countdownStepStarted
-      : 0;
-    this.stopAudio();
-    this.updatePauseBtn(true);
-  },
-
-  resumeCountdown() {
-    this.countdownPaused = false;
-    this.updatePauseBtn(false);
-
-    const n = this.countdownCount;
-    if (n === null) return;
-
-    const scheduleNext = (n, delayMs = 1000) => {
-      this.countdownStepStarted = performance.now();
-      this.countdownTimeoutId = setTimeout(() => {
-        if (this.countdownPaused) return;
-        if (n >= 1) {
-          this.countdownCount = n;
-          this.countdownShowCount(n, true);
-          this.leadBeepAt(this.audioContext().currentTime + 0.02);
-          scheduleNext(n - 1);
-        } else {
-          this.countdownCount = null;
-          this.countdownTimeoutId = null;
-          this.countdownStepStarted = null;
-          const countEl = this.el.querySelector("#count");
-          if (countEl) {
-            countEl.style.color = "#C8D8F0";
-            countEl.textContent = "—";
-          }
-          this.beginSession();
-        }
-      }, delayMs);
-    };
-
-    // Show the current number and wait only the remaining portion of its second.
-    this.countdownShowCount(n, false);
-    const elapsed = this.countdownStepElapsed || 0;
-    const remaining = Math.max(1000 - elapsed, 0);
-    scheduleNext(n - 1, remaining);
-  },
-
-  pause() {
-    if (this.paused) return;
-    this.paused = true;
-    this.pauseTime = performance.now();
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.stopAudio();
-    this.updatePauseBtn(true);
-  },
-
-  resume() {
-    if (!this.paused) return;
-    this.startTime += performance.now() - this.pauseTime;
-    this.paused = false;
-    this.hiddenAt = null;
-    this.rafId = requestAnimationFrame(() => this.tick());
-    this.updatePauseBtn(false);
-  },
-
-  updatePauseBtn(paused) {
-    const pauseIcon = this.el.querySelector("#pause-icon");
-    const countEl = this.el.querySelector("#count");
-    const downEl = this.el.querySelector("#down-word");
-    const ringContainer = this.el.querySelector("#ring-container");
-
-    if (paused) {
-      if (countEl) countEl.style.visibility = "hidden";
-      if (downEl) downEl.style.display = "none";
-      if (pauseIcon) pauseIcon.style.display = "";
-      if (ringContainer) ringContainer.style.opacity = "0.6";
-    } else {
-      if (pauseIcon) pauseIcon.style.display = "none";
-      if (ringContainer) ringContainer.style.opacity = "";
-      if (countEl) countEl.style.visibility = "";
-    }
-  },
-
-  onFinishEarly() {
-    if (!confirm("End the session now and log what you've done so far?"))
-      return;
-    const elapsed = (performance.now() - this.startTime) / 1000;
-    this.onComplete(elapsed);
-  },
-
-  // ---------------------------------------------------------------------------
-  // Beeps
-  // ---------------------------------------------------------------------------
-
-  checkBeeps(state, elapsed) {
-    if (!state) return;
-    const { event, phase_elapsed, phase_remaining } = state;
-
-    // Rep beep: fire once per rep boundary within a burpee phase
-    if (event.type === "work_burpee" || event.type === "warmup_burpee") {
-      const secPerRep =
-        event.sec_per_rep ||
-        event.sec_per_burpee ||
-        event.duration_sec / (event.burpee_count || 1);
-      const repIndex = Math.floor(phase_elapsed / secPerRep);
-      if (repIndex !== this.lastRepIndex) {
-        this.lastRepIndex = repIndex;
-        this.repBeepAt(this.audioContext().currentTime + 0.02);
-      }
-    } else {
-      this.lastRepIndex = -1;
-    }
-
-    // Rest-ending countdown: lead beep at 2 and 1, rep beep at 0 (first burpee of next set).
-    // Safe if rest < 2s — countSec will simply never reach 2 so nothing fires early.
-    const REST_TYPES = ["work_rest", "warmup_rest", "rest_block"];
-    if (REST_TYPES.includes(event.type)) {
-      if (phase_remaining <= 2) {
-        const countSec = Math.ceil(phase_remaining); // 2, 1, 0
-        if (countSec !== this.lastRestCount) {
-          this.lastRestCount = countSec;
-          if (countSec === 0) {
-            this.repBeepAt(this.audioContext().currentTime + 0.02);
-          } else {
-            this.leadBeepAt(this.audioContext().currentTime + 0.02);
-          }
-        }
-      } else {
-        this.lastRestCount = null;
-      }
-    } else {
-      this.lastRestCount = null;
-    }
-  },
-
-  accountBoundaryReps(frame) {
-    const nextReps = accountReps(this.previousFrame, frame, {
-      currentEventKey: this.previousFrame
-        ? `${this.previousFrame.index}:${this.previousFrame.event.type}:${this.previousFrame.event.label || ""}`
-        : null,
-      doneInEvent: this.doneReps,
-      mainDone: this.mainBurpeeCount,
-      warmupDone: this.warmupBurpeeCount,
-    });
-
-    this.mainBurpeeCount = nextReps.mainDone;
-    this.warmupBurpeeCount = nextReps.warmupDone;
-    this.previousFrame = frame;
-
-    if (frame && nextReps.currentEventKey) {
-      this.doneReps = nextReps.doneInEvent;
-    }
-
-    this.updateTotalCounter(this.mainBurpeeCount);
-  },
-
-  // ---------------------------------------------------------------------------
-  // UI updates (direct DOM writes for high-frequency elements)
-  // ---------------------------------------------------------------------------
-
-  updateUI(state, elapsed) {
-    const totalSec = this.totalDuration;
-    const timeLeft = Math.max(totalSec - elapsed, 0);
-
-    // Overall progress bar — fills over the whole workout
-    const overallPct =
-      totalSec > 0 ? Math.min((elapsed / totalSec) * 100, 100) : 0;
-    const fill = this.el.querySelector("#progress-fill");
-    if (fill) fill.style.width = overallPct.toFixed(1) + "%";
-
-    const timeLeftEl = this.el.querySelector("#time-left");
-    if (timeLeftEl) timeLeftEl.textContent = this.formatTime(timeLeft);
-
-    if (!state) return;
-
-    const { event, phase_elapsed, phase_remaining } = state;
-    const isWork =
-      event.type === "work_burpee" || event.type === "warmup_burpee";
-    const isRest =
-      event.type === "work_rest" ||
-      event.type === "warmup_rest" ||
-      event.type === "rest_block";
-    const isWarning = isRest && phase_remaining <= 5;
-
-    const color = this.phaseColor(event.type, isWarning);
-
-    // Overall progress bar color
-    if (fill) fill.style.backgroundColor = isWarning ? "#F59E0B" : color;
-
-    // Block info header — parse block number from label ("Block N")
-    const blockInfo = this.el.querySelector("#block-info");
-    if (blockInfo && event.label) {
-      const match = event.label.match(/Block (\d+)/);
-      if (match && this.blockCount > 0) {
-        blockInfo.textContent = `Block ${match[1]} of ${this.blockCount}`;
-      } else {
-        blockInfo.textContent = "";
-      }
-    }
-
-    if (isWork) {
-      // Rebuild ring when entering a new work event
-      if (
-        event.type !== this.lastEventType ||
-        event.burpee_count !== this.lastBurpeeCount
-      ) {
-        this.buildWorkRing(event.type, event.burpee_count);
-        this.triggerDown(event.burpee_count);
-        this.lastEventType = event.type;
-        this.lastBurpeeCount = event.burpee_count;
-      }
-
-      const secPerRep =
-        event.sec_per_rep ||
-        event.sec_per_burpee ||
-        event.duration_sec / (event.burpee_count || 1);
-      const repIndex = Math.floor(phase_elapsed / secPerRep);
-      const repElapsed = phase_elapsed - repIndex * secPerRep;
-      const repProgress = repElapsed / secPerRep;
-
-      // Falling edge — rep completed
-      if (repIndex > this.doneReps) {
-        const completedReps = repIndex - this.doneReps;
-        this.triggerFlash();
-        this.doneReps = repIndex;
-        if (event.type === "warmup_burpee") {
-          this.warmupBurpeeCount += completedReps;
-          this.updateTotalCounter(this.mainBurpeeCount);
-        } else {
-          this.mainBurpeeCount += completedReps;
-          this.updateTotalCounter(this.mainBurpeeCount);
-        }
-        this.triggerDown(Math.max(this.totalReps - this.doneReps, 0));
-      }
-
-      this.lastWorkEvent = event;
-      this.updateWorkRing(repProgress, color);
-    } else if (isRest) {
-      // Build a single continuous arc for rest phases
-      if (event.type !== this.lastEventType) {
-        const svgEl = this.el.querySelector("#ring-svg");
-        if (svgEl) {
-          while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-          const restRing = document.createElementNS(NS, "circle");
-          restRing.setAttribute("cx", CX);
-          restRing.setAttribute("cy", CY);
-          restRing.setAttribute("r", R);
-          restRing.setAttribute("fill", "none");
-          restRing.setAttribute("stroke-width", "16");
-          restRing.setAttribute("stroke-linecap", "round");
-          restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-          svgEl.appendChild(restRing);
-          this.restRingEl = restRing;
-        }
-        this.lastEventType = event.type;
-        this.lastBurpeeCount = 0;
-      }
-
-      const phasePct =
-        event.duration_sec > 0 ? phase_elapsed / event.duration_sec : 0;
-      const offset = CIRC * (1 - Math.min(phasePct, 1));
-      const rColor = isWarning ? "#F59E0B" : "#6B8FA8";
-      if (this.restRingEl) {
-        this.restRingEl.setAttribute("stroke", rColor);
-        this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-        this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
-      }
-
-      const countEl = this.el.querySelector("#count");
-      if (countEl) {
-        countEl.style.visibility = "";
-        countEl.textContent = this.formatTime(phase_remaining);
-        countEl.style.color = isWarning ? "#F59E0B" : "#C8D8F0";
-      }
-      const downEl = this.el.querySelector("#down-word");
-      if (downEl) downEl.style.display = "none";
-    }
-  },
-
-  // ---------------------------------------------------------------------------
-  // Work ring — single arc that fills continuously per rep, resets each rep
-  // ---------------------------------------------------------------------------
-
-  buildWorkRing(eventType, burpeeCount) {
-    this.totalReps = burpeeCount;
-    this.doneReps = 0;
-    this.lastDisplayed = -1;
-    const svgEl = this.el.querySelector("#ring-svg");
-    if (!svgEl) return;
-    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-
-    const ring = document.createElementNS(NS, "circle");
-    ring.setAttribute("cx", CX);
-    ring.setAttribute("cy", CY);
-    ring.setAttribute("r", R);
-    ring.setAttribute("fill", "none");
-    ring.setAttribute("stroke-width", "16");
-    ring.setAttribute("stroke-linecap", "round");
-    ring.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-    ring.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-    ring.setAttribute("stroke-dashoffset", CIRC.toFixed(4));
-    svgEl.appendChild(ring);
-    this.workRingEl = ring;
-  },
-
-  updateWorkRing(repProgress, color) {
-    if (!this.workRingEl) return;
-    const offset = CIRC * (1 - Math.min(repProgress, 1));
-    this.workRingEl.setAttribute("stroke", color);
-    this.workRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-    this.workRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
-  },
-
-  triggerDown(repsLeft) {
-    if (this.downTimeout) clearTimeout(this.downTimeout);
-    const countEl = this.el.querySelector("#count");
-    const downEl = this.el.querySelector("#down-word");
-    if (!countEl || !downEl) return;
-
-    // Hard cut: hide count, show "Down" instantly
-    countEl.style.visibility = "hidden";
-    downEl.style.display = "";
-
-    this.downTimeout = setTimeout(() => {
-      this.downTimeout = null;
-      // Hard cut: hide "Down", show new count
-      downEl.style.display = "none";
-      countEl.textContent = repsLeft;
-      countEl.style.color = "#C8D8F0";
-      countEl.style.visibility = "";
-      this.lastDisplayed = repsLeft;
-    }, 350);
-  },
-
-  triggerFlash() {
-    const flashEl = this.el.querySelector("#flash-circle");
-    if (!flashEl) return;
-    flashEl.style.transition = "none";
-    flashEl.setAttribute("opacity", "0.5");
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        flashEl.style.transition = "opacity 0.2s ease-out";
-        flashEl.setAttribute("opacity", "0");
-      }),
-    );
-  },
-
-  updateTotalCounter(n) {
-    const el = this.el.querySelector("#total-done");
-    if (!el) return;
-    el.textContent = n;
-    el.style.color = "#FFFFFF";
-    setTimeout(() => {
-      el.style.color = "";
-    }, 160);
-  },
-
-  // ---------------------------------------------------------------------------
-  // Completion
-  // ---------------------------------------------------------------------------
-
-  onComplete(elapsed) {
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-
-    this.accountBoundaryReps(null);
-    this.fsm = transition(this.fsm, {type: "WORKOUT_DONE"}).state;
-
-    // Warmup duration = elapsed up to warmupEndSec (or total warmup sec)
-    const warmupDuration = Math.min(elapsed, this.warmupEndSec);
-    const mainDuration = Math.max(Math.round(elapsed - warmupDuration), 0);
-
-    this.onCompleted(); // fanfare
-
-    this.pushEvent("session_complete", {
-      main: {
-        burpee_count_done: this.mainBurpeeCount,
-        duration_sec: mainDuration,
-      },
-      warmup: {
-        burpee_count_done: this.warmupBurpeeCount,
-        duration_sec: Math.round(warmupDuration),
-      },
-    });
-  },
-
-  // ---------------------------------------------------------------------------
-  // Audio core (carried over from BurpeeHook)
-  // ---------------------------------------------------------------------------
-
-  audioContext() {
-    if (!this.ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AC();
-    }
-    return this.ctx;
-  },
-
-  ensureRunningAudio() {
-    const ctx = this.audioContext();
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
-  },
-
-  masterBus() {
-    const ctx = this.audioContext();
-    if (!this.bus) {
-      this.bus = ctx.createGain();
-      this.bus.gain.value = 1.0;
-      this.bus.connect(ctx.destination);
-    }
-    return this.bus;
-  },
-
-  tickAt(startAt, { freq, durMs, gain, type = "sine", attackMs = 3 }) {
-    const ctx = this.audioContext();
-    const dur = durMs / 1000;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, startAt);
-    g.gain.setValueAtTime(0, startAt);
-    g.gain.linearRampToValueAtTime(gain, startAt + attackMs / 1000);
-    g.gain.exponentialRampToValueAtTime(0.0001, startAt + dur);
-    osc.connect(g);
-    g.connect(this.masterBus());
-    osc.start(startAt);
-    osc.stop(startAt + dur + 0.05);
-    this.trackOsc(osc);
-  },
-
-  chimeAt(startAt, { freq, durMs = 300, gain = 0.4 }) {
-    const ctx = this.audioContext();
-    const dur = durMs / 1000;
-    const partials = [
-      { m: 1, g: 1.0, d: dur },
-      { m: 2, g: 0.4, d: dur * 0.7 },
-      { m: 3, g: 0.2, d: dur * 0.5 },
-    ];
-    const master = ctx.createGain();
-    master.gain.value = gain;
-    master.connect(this.masterBus());
-    partials.forEach((p) => {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.frequency.setValueAtTime(freq * p.m, startAt);
-      g.gain.setValueAtTime(0, startAt);
-      g.gain.linearRampToValueAtTime(p.g, startAt + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, startAt + p.d);
-      osc.connect(g);
-      g.connect(master);
-      osc.start(startAt);
-      osc.stop(startAt + p.d + 0.05);
-      this.trackOsc(osc);
-    });
-  },
-
-  leadBeepAt(t) {
-    this.tickAt(t, { freq: 440, durMs: 150, gain: 0.6, type: "triangle" });
-  },
-
-  repBeepAt(t) {
-    this.tickAt(t, {
-      freq: 800,
-      durMs: 40,
-      gain: 0.7,
-      type: "square",
-      attackMs: 2,
-    });
-    this.chimeAt(t, { freq: 659.25, durMs: 350, gain: 0.8 });
-    this.tickAt(t, { freq: 329.63, durMs: 200, gain: 0.4, type: "triangle" });
-  },
-
-  onCompleted() {
-    this.stopAudio();
-    const now = this.audioContext().currentTime;
-    this.chimeAt(now, { freq: 523.25, durMs: 250, gain: 0.4 });
-    this.chimeAt(now + 0.2, { freq: 659.25, durMs: 300, gain: 0.4 });
-    this.chimeAt(now + 0.4, { freq: 783.99, durMs: 350, gain: 0.5 });
-    this.chimeAt(now + 0.6, { freq: 1046.5, durMs: 900, gain: 0.5 });
-  },
-
-  trackOsc(osc) {
-    this.scheduledOscs.push(osc);
-    osc.addEventListener("ended", () => {
-      this.scheduledOscs = this.scheduledOscs.filter((o) => o !== osc);
-    });
-  },
-
-  stopAudio() {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    this.scheduledOscs.forEach((osc) => {
-      try {
-        osc.stop(now);
-      } catch (_) {}
-    });
-    this.scheduledOscs = [];
-  },
-
-  // ---------------------------------------------------------------------------
-  // Wake lock
-  // ---------------------------------------------------------------------------
-
-  acquireWakeLock() {
-    if (this.wakeLock) return;
-    navigator.wakeLock
-      ?.request("screen")
-      .then((lock) => {
-        this.wakeLock = lock;
-      })
-      .catch(() => {});
-  },
-
-  maybeReacquireWakeLock() {
-    if (document.visibilityState === "visible") {
-      this.wakeLock = null;
-      this.acquireWakeLock();
-    }
-  },
-
-  releaseWakeLock() {
-    this.wakeLock?.release?.().catch(() => {});
-    this.wakeLock = null;
-  },
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
-  formatTime(sec) {
-    const s = Math.max(Math.ceil(sec), 0);
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${r}`;
-  },
-
-  // Returns the accent color for the current phase (ring, progress bar fill).
-  phaseColor(type, isWarning) {
-    if (isWarning) return "#F59E0B";
-    const colors = {
-      work_burpee: "#4A9EFF",
-      warmup_burpee: "#F59E0B",
-      work_rest: "#6B8FA8",
-      warmup_rest: "#6B8FA8",
-      rest_block: "#6B8FA8",
-    };
-    return colors[type] || "#1E2535";
-  },
-
-
+		// Delegation won't reach data-mood — wire these directly since the overlay is JS-owned.
+		overlay.querySelectorAll("[data-mood]").forEach((btn) => {
+			btn.addEventListener("click", () => {
+				const mood = btn.getAttribute("data-mood");
+				this.dispatchSession({
+					type: "MOOD_SELECTED",
+					mood,
+					now: performance.now(),
+				});
+			});
+		});
+	},
+
+	// Show a 5-4-3-2-1 countdown overlay before the workout clock begins.
+	// Color ramp: 5=amber, 4=amber-orange, 3=orange, 2=orange-red, 1=red
+	countdownColor(n) {
+		return (
+			["#EF4444", "#F97316", "#F97316", "#F59E0B", "#F59E0B"][n] || "#F59E0B"
+		);
+	},
+
+	startCountdown() {
+		this.ensureRunningAudio();
+		this.acquireWakeLock();
+
+		const overlay = this.el.querySelector("#start-overlay");
+		if (overlay) overlay.remove();
+
+		// Build a single amber ring in #ring-svg for the countdown
+		const svgEl = this.el.querySelector("#ring-svg");
+		if (svgEl) {
+			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+			const cdRing = document.createElementNS(NS, "circle");
+			cdRing.setAttribute("cx", CX);
+			cdRing.setAttribute("cy", CY);
+			cdRing.setAttribute("r", R);
+			cdRing.setAttribute("fill", "none");
+			cdRing.setAttribute("stroke-width", "16");
+			cdRing.setAttribute("stroke-linecap", "round");
+			cdRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+			cdRing.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+			cdRing.setAttribute("stroke-dashoffset", "0");
+			cdRing.setAttribute("stroke", this.countdownColor(5));
+			svgEl.appendChild(cdRing);
+			this.countdownRingEl = cdRing;
+		}
+
+		const countEl = this.el.querySelector("#count");
+		if (countEl) countEl.style.visibility = "";
+
+		const showCount = (n, animate) => {
+			const color = this.countdownColor(n);
+
+			if (countEl) {
+				countEl.textContent = n;
+				countEl.style.color = color;
+				countEl.classList.remove("countdown-pop");
+				void countEl.offsetWidth;
+				countEl.classList.add("countdown-pop");
+			}
+
+			if (this.countdownRingEl) {
+				const remaining = n / 5;
+				this.countdownRingEl.style.transition = animate
+					? "stroke-dashoffset 0.8s ease-out, stroke 0.3s"
+					: "none";
+				this.countdownRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+				this.countdownRingEl.setAttribute(
+					"stroke-dashoffset",
+					(CIRC * (1 - remaining)).toFixed(4),
+				);
+				this.countdownRingEl.setAttribute("stroke", color);
+			}
+		};
+
+		this.countdownShowCount = showCount;
+
+		// scheduleNext: show `n` after `delayMs`, then continue.
+		// countdownCount tracks the number currently *visible* on screen.
+		const scheduleNext = (n, delayMs = 1000) => {
+			this.countdownStepStarted = performance.now();
+			this.countdownTimeoutId = setTimeout(() => {
+				if (this.countdownPaused) return;
+				if (n >= 1) {
+					this.countdownCount = n;
+					showCount(n, true);
+					this.leadBeepAt(this.audioContext().currentTime + 0.02);
+					scheduleNext(n - 1);
+				} else {
+					this.countdownCount = null;
+					this.countdownTimeoutId = null;
+					this.countdownStepStarted = null;
+					if (countEl) {
+						countEl.style.color = "#C8D8F0";
+						countEl.textContent = "—";
+					}
+					this.beginSession();
+				}
+			}, delayMs);
+		};
+
+		// Render 5 with no transition — ring stays full, no animation flash.
+		this.countdownCount = 5;
+		showCount(5, false);
+		this.leadBeepAt(this.audioContext().currentTime + 0.02);
+		scheduleNext(4);
+	},
+
+	beginSession() {
+		const result = transition(this.fsm, {
+			type: "COUNTDOWN_DONE",
+			now: performance.now(),
+		});
+		this.fsm = result.state;
+
+		this.totalDuration = this.timeline.reduce((s, e) => s + e.duration_sec, 0);
+		this.warmupEndSec = this.timeline
+			.filter((e) => e.type === "warmup_burpee" || e.type === "warmup_rest")
+			.reduce((s, e) => s + e.duration_sec, 0);
+
+		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
+		if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
+
+		// Clear countdown ring; build work ring for the first event
+		this.countdownRingEl = null;
+		this.lastEventType = null;
+		this.lastBurpeeCount = 0;
+		this.lastWorkEvent = null;
+		this.previousFrame = null;
+
+		const firstEvent = this.timeline[0];
+		const isFirstWork =
+			firstEvent &&
+			(firstEvent.type === "work_burpee" ||
+				firstEvent.type === "warmup_burpee");
+		if (isFirstWork) {
+			this.buildWorkRing(firstEvent.type, firstEvent.burpee_count);
+			this.triggerDown(firstEvent.burpee_count);
+			this.lastEventType = firstEvent.type;
+			this.lastBurpeeCount = firstEvent.burpee_count;
+		}
+
+		this.startTime = performance.now();
+		this.rafId = requestAnimationFrame(() => this.tick());
+	},
+
+	// ---------------------------------------------------------------------------
+	// Clock loop
+	// ---------------------------------------------------------------------------
+
+	tick() {
+		const now = performance.now();
+		const elapsed = (now - this.startTime) / 1000;
+		const state = this.currentEvent(elapsed);
+		const frame = currentFrame(this.timeline, elapsed);
+
+		this.accountBoundaryReps(frame);
+		this.updateUI(state, elapsed);
+		this.checkBeeps(state, elapsed);
+
+		if (!this.paused && elapsed < this.totalDuration) {
+			this.rafId = requestAnimationFrame(() => this.tick());
+		} else if (elapsed >= this.totalDuration) {
+			this.onComplete(elapsed);
+		}
+	},
+
+	currentEvent(elapsed_sec) {
+		let cursor = 0;
+		for (const event of this.timeline) {
+			if (elapsed_sec < cursor + event.duration_sec) {
+				return {
+					event,
+					phase_elapsed: elapsed_sec - cursor,
+					phase_remaining: event.duration_sec - (elapsed_sec - cursor),
+				};
+			}
+			cursor += event.duration_sec;
+		}
+		return null;
+	},
+
+	// ---------------------------------------------------------------------------
+	// Pause / resume
+	// ---------------------------------------------------------------------------
+
+	togglePause() {
+		if (this.countdownCount !== null) {
+			if (this.countdownPaused) {
+				this.resumeCountdown();
+			} else {
+				this.pauseCountdown();
+			}
+			return;
+		}
+		if (this.paused) {
+			this.resume();
+		} else {
+			this.pause();
+		}
+	},
+
+	pauseCountdown() {
+		this.dispatchSession({ type: "COUNTDOWN_PAUSE", now: performance.now() });
+		this.countdownPaused = true;
+		if (this.countdownTimeoutId) {
+			clearTimeout(this.countdownTimeoutId);
+			this.countdownTimeoutId = null;
+		}
+		// Record how much of the current 1-second step has already elapsed.
+		this.countdownStepElapsed = this.fsm.countdown.stepElapsedMs;
+		this.stopAudio();
+		this.updatePauseBtn(true);
+	},
+
+	resumeCountdown() {
+		this.dispatchSession({ type: "COUNTDOWN_RESUME", now: performance.now() });
+		this.countdownPaused = false;
+		this.updatePauseBtn(false);
+
+		const n = this.countdownCount;
+		if (n === null) return;
+
+		const scheduleNext = (n, delayMs = 1000) => {
+			this.countdownStepStarted = performance.now();
+			this.countdownTimeoutId = setTimeout(() => {
+				if (this.countdownPaused) return;
+				if (n >= 1) {
+					this.countdownCount = n;
+					this.countdownShowCount(n, true);
+					this.leadBeepAt(this.audioContext().currentTime + 0.02);
+					scheduleNext(n - 1);
+				} else {
+					this.countdownCount = null;
+					this.countdownTimeoutId = null;
+					this.countdownStepStarted = null;
+					const countEl = this.el.querySelector("#count");
+					if (countEl) {
+						countEl.style.color = "#C8D8F0";
+						countEl.textContent = "—";
+					}
+					this.beginSession();
+				}
+			}, delayMs);
+		};
+
+		// Show the current number and wait only the remaining portion of its second.
+		this.countdownShowCount(n, false);
+		const remaining = Math.max(1000 - (this.countdownStepElapsed || 0), 0);
+		scheduleNext(n - 1, remaining);
+	},
+
+	pause() {
+		if (this.paused) return;
+		this.dispatchSession({ type: "PAUSE", now: performance.now() });
+		this.paused = true;
+		this.pauseTime = this.fsm.clock.pauseTime;
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		this.stopAudio();
+		this.updatePauseBtn(true);
+	},
+
+	resume() {
+		if (!this.paused) return;
+		this.dispatchSession({ type: "RESUME", now: performance.now() });
+		this.startTime = this.fsm.clock.startTime;
+		this.paused = false;
+		this.hiddenAt = null;
+		this.rafId = requestAnimationFrame(() => this.tick());
+		this.updatePauseBtn(false);
+	},
+
+	updatePauseBtn(paused) {
+		const pauseIcon = this.el.querySelector("#pause-icon");
+		const countEl = this.el.querySelector("#count");
+		const downEl = this.el.querySelector("#down-word");
+		const ringContainer = this.el.querySelector("#ring-container");
+
+		if (paused) {
+			if (countEl) countEl.style.visibility = "hidden";
+			if (downEl) downEl.style.display = "none";
+			if (pauseIcon) pauseIcon.style.display = "";
+			if (ringContainer) ringContainer.style.opacity = "0.6";
+		} else {
+			if (pauseIcon) pauseIcon.style.display = "none";
+			if (ringContainer) ringContainer.style.opacity = "";
+			if (countEl) countEl.style.visibility = "";
+		}
+	},
+
+	onFinishEarly() {
+		if (!confirm("End the session now and log what you've done so far?"))
+			return;
+		const elapsed = (performance.now() - this.startTime) / 1000;
+		this.onComplete(elapsed);
+	},
+
+	// ---------------------------------------------------------------------------
+	// Beeps
+	// ---------------------------------------------------------------------------
+
+	checkBeeps(state, elapsed) {
+		if (!state) return;
+		const { event, phase_elapsed, phase_remaining } = state;
+
+		// Rep beep: fire once per rep boundary within a burpee phase
+		if (event.type === "work_burpee" || event.type === "warmup_burpee") {
+			const secPerRep =
+				event.sec_per_rep ||
+				event.sec_per_burpee ||
+				event.duration_sec / (event.burpee_count || 1);
+			const repIndex = Math.floor(phase_elapsed / secPerRep);
+			if (repIndex !== this.lastRepIndex) {
+				this.lastRepIndex = repIndex;
+				this.repBeepAt(this.audioContext().currentTime + 0.02);
+			}
+		} else {
+			this.lastRepIndex = -1;
+		}
+
+		// Rest-ending countdown: lead beep at 2 and 1, rep beep at 0 (first burpee of next set).
+		// Safe if rest < 2s — countSec will simply never reach 2 so nothing fires early.
+		const REST_TYPES = ["work_rest", "warmup_rest", "rest_block"];
+		if (REST_TYPES.includes(event.type)) {
+			if (phase_remaining <= 2) {
+				const countSec = Math.ceil(phase_remaining); // 2, 1, 0
+				if (countSec !== this.lastRestCount) {
+					this.lastRestCount = countSec;
+					if (countSec === 0) {
+						this.repBeepAt(this.audioContext().currentTime + 0.02);
+					} else {
+						this.leadBeepAt(this.audioContext().currentTime + 0.02);
+					}
+				}
+			} else {
+				this.lastRestCount = null;
+			}
+		} else {
+			this.lastRestCount = null;
+		}
+	},
+
+	accountBoundaryReps(frame) {
+		const nextReps = accountReps(this.previousFrame, frame, {
+			currentEventKey: this.previousFrame
+				? `${this.previousFrame.index}:${this.previousFrame.event.type}:${this.previousFrame.event.label || ""}`
+				: null,
+			doneInEvent: this.doneReps,
+			mainDone: this.mainBurpeeCount,
+			warmupDone: this.warmupBurpeeCount,
+		});
+
+		this.mainBurpeeCount = nextReps.mainDone;
+		this.warmupBurpeeCount = nextReps.warmupDone;
+		this.previousFrame = frame;
+
+		if (frame && nextReps.currentEventKey) {
+			this.doneReps = nextReps.doneInEvent;
+		}
+
+		this.updateTotalCounter(this.mainBurpeeCount);
+	},
+
+	// ---------------------------------------------------------------------------
+	// UI updates (direct DOM writes for high-frequency elements)
+	// ---------------------------------------------------------------------------
+
+	updateUI(state, elapsed) {
+		const totalSec = this.totalDuration;
+		const timeLeft = Math.max(totalSec - elapsed, 0);
+
+		// Overall progress bar — fills over the whole workout
+		const overallPct =
+			totalSec > 0 ? Math.min((elapsed / totalSec) * 100, 100) : 0;
+		const fill = this.el.querySelector("#progress-fill");
+		if (fill) fill.style.width = overallPct.toFixed(1) + "%";
+
+		const timeLeftEl = this.el.querySelector("#time-left");
+		if (timeLeftEl) timeLeftEl.textContent = this.formatTime(timeLeft);
+
+		if (!state) return;
+
+		const { event, phase_elapsed, phase_remaining } = state;
+		const isWork =
+			event.type === "work_burpee" || event.type === "warmup_burpee";
+		const isRest =
+			event.type === "work_rest" ||
+			event.type === "warmup_rest" ||
+			event.type === "rest_block";
+		const isWarning = isRest && phase_remaining <= 5;
+
+		const color = this.phaseColor(event.type, isWarning);
+
+		// Overall progress bar color
+		if (fill) fill.style.backgroundColor = isWarning ? "#F59E0B" : color;
+
+		// Block info header — parse block number from label ("Block N")
+		const blockInfo = this.el.querySelector("#block-info");
+		if (blockInfo && event.label) {
+			const match = event.label.match(/Block (\d+)/);
+			if (match && this.blockCount > 0) {
+				blockInfo.textContent = `Block ${match[1]} of ${this.blockCount}`;
+			} else {
+				blockInfo.textContent = "";
+			}
+		}
+
+		if (isWork) {
+			// Rebuild ring when entering a new work event
+			if (
+				event.type !== this.lastEventType ||
+				event.burpee_count !== this.lastBurpeeCount
+			) {
+				this.buildWorkRing(event.type, event.burpee_count);
+				this.triggerDown(event.burpee_count);
+				this.lastEventType = event.type;
+				this.lastBurpeeCount = event.burpee_count;
+			}
+
+			const secPerRep =
+				event.sec_per_rep ||
+				event.sec_per_burpee ||
+				event.duration_sec / (event.burpee_count || 1);
+			const repIndex = Math.floor(phase_elapsed / secPerRep);
+			const repElapsed = phase_elapsed - repIndex * secPerRep;
+			const repProgress = repElapsed / secPerRep;
+
+			// Falling edge — rep completed
+			if (repIndex > this.doneReps) {
+				const completedReps = repIndex - this.doneReps;
+				this.triggerFlash();
+				this.doneReps = repIndex;
+				if (event.type === "warmup_burpee") {
+					this.warmupBurpeeCount += completedReps;
+					this.updateTotalCounter(this.mainBurpeeCount);
+				} else {
+					this.mainBurpeeCount += completedReps;
+					this.updateTotalCounter(this.mainBurpeeCount);
+				}
+				this.triggerDown(Math.max(this.totalReps - this.doneReps, 0));
+			}
+
+			this.lastWorkEvent = event;
+			this.updateWorkRing(repProgress, color);
+		} else if (isRest) {
+			// Build a single continuous arc for rest phases
+			if (event.type !== this.lastEventType) {
+				const svgEl = this.el.querySelector("#ring-svg");
+				if (svgEl) {
+					while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+					const restRing = document.createElementNS(NS, "circle");
+					restRing.setAttribute("cx", CX);
+					restRing.setAttribute("cy", CY);
+					restRing.setAttribute("r", R);
+					restRing.setAttribute("fill", "none");
+					restRing.setAttribute("stroke-width", "16");
+					restRing.setAttribute("stroke-linecap", "round");
+					restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+					svgEl.appendChild(restRing);
+					this.restRingEl = restRing;
+				}
+				this.lastEventType = event.type;
+				this.lastBurpeeCount = 0;
+			}
+
+			const phasePct =
+				event.duration_sec > 0 ? phase_elapsed / event.duration_sec : 0;
+			const offset = CIRC * (1 - Math.min(phasePct, 1));
+			const rColor = isWarning ? "#F59E0B" : "#6B8FA8";
+			if (this.restRingEl) {
+				this.restRingEl.setAttribute("stroke", rColor);
+				this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+				this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
+			}
+
+			const countEl = this.el.querySelector("#count");
+			if (countEl) {
+				countEl.style.visibility = "";
+				countEl.textContent = this.formatTime(phase_remaining);
+				countEl.style.color = isWarning ? "#F59E0B" : "#C8D8F0";
+			}
+			const downEl = this.el.querySelector("#down-word");
+			if (downEl) downEl.style.display = "none";
+		}
+	},
+
+	// ---------------------------------------------------------------------------
+	// Work ring — single arc that fills continuously per rep, resets each rep
+	// ---------------------------------------------------------------------------
+
+	buildWorkRing(eventType, burpeeCount) {
+		this.totalReps = burpeeCount;
+		this.doneReps = 0;
+		this.lastDisplayed = -1;
+		const svgEl = this.el.querySelector("#ring-svg");
+		if (!svgEl) return;
+		while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+		const ring = document.createElementNS(NS, "circle");
+		ring.setAttribute("cx", CX);
+		ring.setAttribute("cy", CY);
+		ring.setAttribute("r", R);
+		ring.setAttribute("fill", "none");
+		ring.setAttribute("stroke-width", "16");
+		ring.setAttribute("stroke-linecap", "round");
+		ring.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+		ring.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+		ring.setAttribute("stroke-dashoffset", CIRC.toFixed(4));
+		svgEl.appendChild(ring);
+		this.workRingEl = ring;
+	},
+
+	updateWorkRing(repProgress, color) {
+		if (!this.workRingEl) return;
+		const offset = CIRC * (1 - Math.min(repProgress, 1));
+		this.workRingEl.setAttribute("stroke", color);
+		this.workRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+		this.workRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
+	},
+
+	triggerDown(repsLeft) {
+		if (this.downTimeout) clearTimeout(this.downTimeout);
+		const countEl = this.el.querySelector("#count");
+		const downEl = this.el.querySelector("#down-word");
+		if (!countEl || !downEl) return;
+
+		// Hard cut: hide count, show "Down" instantly
+		countEl.style.visibility = "hidden";
+		downEl.style.display = "";
+
+		this.downTimeout = setTimeout(() => {
+			this.downTimeout = null;
+			// Hard cut: hide "Down", show new count
+			downEl.style.display = "none";
+			countEl.textContent = repsLeft;
+			countEl.style.color = "#C8D8F0";
+			countEl.style.visibility = "";
+			this.lastDisplayed = repsLeft;
+		}, 350);
+	},
+
+	triggerFlash() {
+		const flashEl = this.el.querySelector("#flash-circle");
+		if (!flashEl) return;
+		flashEl.style.transition = "none";
+		flashEl.setAttribute("opacity", "0.5");
+		requestAnimationFrame(() =>
+			requestAnimationFrame(() => {
+				flashEl.style.transition = "opacity 0.2s ease-out";
+				flashEl.setAttribute("opacity", "0");
+			}),
+		);
+	},
+
+	updateTotalCounter(n) {
+		const el = this.el.querySelector("#total-done");
+		if (!el) return;
+		el.textContent = n;
+		el.style.color = "#FFFFFF";
+		setTimeout(() => {
+			el.style.color = "";
+		}, 160);
+	},
+
+	// ---------------------------------------------------------------------------
+	// Completion
+	// ---------------------------------------------------------------------------
+
+	onComplete(elapsed) {
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+
+		this.accountBoundaryReps(null);
+		this.fsm = transition(this.fsm, { type: "WORKOUT_DONE" }).state;
+
+		// Warmup duration = elapsed up to warmupEndSec (or total warmup sec)
+		const warmupDuration = Math.min(elapsed, this.warmupEndSec);
+		const mainDuration = Math.max(Math.round(elapsed - warmupDuration), 0);
+
+		this.onCompleted(); // fanfare
+
+		this.pushEvent("session_complete", {
+			main: {
+				burpee_count_done: this.mainBurpeeCount,
+				duration_sec: mainDuration,
+			},
+			warmup: {
+				burpee_count_done: this.warmupBurpeeCount,
+				duration_sec: Math.round(warmupDuration),
+			},
+		});
+	},
+
+	// ---------------------------------------------------------------------------
+	// Audio core (carried over from BurpeeHook)
+	// ---------------------------------------------------------------------------
+
+	audioContext() {
+		if (!this.ctx) {
+			const AC = window.AudioContext || window.webkitAudioContext;
+			this.ctx = new AC();
+		}
+		return this.ctx;
+	},
+
+	ensureRunningAudio() {
+		const ctx = this.audioContext();
+		if (ctx.state === "suspended") ctx.resume().catch(() => {});
+	},
+
+	masterBus() {
+		const ctx = this.audioContext();
+		if (!this.bus) {
+			this.bus = ctx.createGain();
+			this.bus.gain.value = 1.0;
+			this.bus.connect(ctx.destination);
+		}
+		return this.bus;
+	},
+
+	tickAt(startAt, { freq, durMs, gain, type = "sine", attackMs = 3 }) {
+		const ctx = this.audioContext();
+		const dur = durMs / 1000;
+		const osc = ctx.createOscillator();
+		const g = ctx.createGain();
+		osc.type = type;
+		osc.frequency.setValueAtTime(freq, startAt);
+		g.gain.setValueAtTime(0, startAt);
+		g.gain.linearRampToValueAtTime(gain, startAt + attackMs / 1000);
+		g.gain.exponentialRampToValueAtTime(0.0001, startAt + dur);
+		osc.connect(g);
+		g.connect(this.masterBus());
+		osc.start(startAt);
+		osc.stop(startAt + dur + 0.05);
+		this.trackOsc(osc);
+	},
+
+	chimeAt(startAt, { freq, durMs = 300, gain = 0.4 }) {
+		const ctx = this.audioContext();
+		const dur = durMs / 1000;
+		const partials = [
+			{ m: 1, g: 1.0, d: dur },
+			{ m: 2, g: 0.4, d: dur * 0.7 },
+			{ m: 3, g: 0.2, d: dur * 0.5 },
+		];
+		const master = ctx.createGain();
+		master.gain.value = gain;
+		master.connect(this.masterBus());
+		partials.forEach((p) => {
+			const osc = ctx.createOscillator();
+			const g = ctx.createGain();
+			osc.frequency.setValueAtTime(freq * p.m, startAt);
+			g.gain.setValueAtTime(0, startAt);
+			g.gain.linearRampToValueAtTime(p.g, startAt + 0.005);
+			g.gain.exponentialRampToValueAtTime(0.0001, startAt + p.d);
+			osc.connect(g);
+			g.connect(master);
+			osc.start(startAt);
+			osc.stop(startAt + p.d + 0.05);
+			this.trackOsc(osc);
+		});
+	},
+
+	leadBeepAt(t) {
+		this.tickAt(t, { freq: 440, durMs: 150, gain: 0.6, type: "triangle" });
+	},
+
+	repBeepAt(t) {
+		this.tickAt(t, {
+			freq: 800,
+			durMs: 40,
+			gain: 0.7,
+			type: "square",
+			attackMs: 2,
+		});
+		this.chimeAt(t, { freq: 659.25, durMs: 350, gain: 0.8 });
+		this.tickAt(t, { freq: 329.63, durMs: 200, gain: 0.4, type: "triangle" });
+	},
+
+	onCompleted() {
+		this.stopAudio();
+		const now = this.audioContext().currentTime;
+		this.chimeAt(now, { freq: 523.25, durMs: 250, gain: 0.4 });
+		this.chimeAt(now + 0.2, { freq: 659.25, durMs: 300, gain: 0.4 });
+		this.chimeAt(now + 0.4, { freq: 783.99, durMs: 350, gain: 0.5 });
+		this.chimeAt(now + 0.6, { freq: 1046.5, durMs: 900, gain: 0.5 });
+	},
+
+	trackOsc(osc) {
+		this.scheduledOscs.push(osc);
+		osc.addEventListener("ended", () => {
+			this.scheduledOscs = this.scheduledOscs.filter((o) => o !== osc);
+		});
+	},
+
+	stopAudio() {
+		if (!this.ctx) return;
+		const now = this.ctx.currentTime;
+		this.scheduledOscs.forEach((osc) => {
+			try {
+				osc.stop(now);
+			} catch (_) {}
+		});
+		this.scheduledOscs = [];
+	},
+
+	// ---------------------------------------------------------------------------
+	// Wake lock
+	// ---------------------------------------------------------------------------
+
+	acquireWakeLock() {
+		if (this.wakeLock) return;
+		navigator.wakeLock
+			?.request("screen")
+			.then((lock) => {
+				this.wakeLock = lock;
+			})
+			.catch(() => {});
+	},
+
+	maybeReacquireWakeLock() {
+		if (document.visibilityState === "visible") {
+			this.wakeLock = null;
+			this.acquireWakeLock();
+		}
+	},
+
+	releaseWakeLock() {
+		this.wakeLock?.release?.().catch(() => {});
+		this.wakeLock = null;
+	},
+
+	// ---------------------------------------------------------------------------
+	// Helpers
+	// ---------------------------------------------------------------------------
+
+	formatTime(sec) {
+		const s = Math.max(Math.ceil(sec), 0);
+		const m = Math.floor(s / 60);
+		const r = s % 60;
+		return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${r}`;
+	},
+
+	// Returns the accent color for the current phase (ring, progress bar fill).
+	phaseColor(type, isWarning) {
+		if (isWarning) return "#F59E0B";
+		const colors = {
+			work_burpee: "#4A9EFF",
+			warmup_burpee: "#F59E0B",
+			work_rest: "#6B8FA8",
+			warmup_rest: "#6B8FA8",
+			rest_block: "#6B8FA8",
+		};
+		return colors[type] || "#1E2535";
+	},
 };
 
 export default SessionHook;
