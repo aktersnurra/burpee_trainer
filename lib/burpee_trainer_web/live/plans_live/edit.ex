@@ -495,270 +495,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       current_page={:plans}
     >
       <div class="space-y-6 max-w-3xl">
-        <%!-- Inline-editable plan name as page title --%>
-        <div class="flex items-center justify-between gap-4">
-          <form phx-change="change_basics" class="flex-1 min-w-0">
-            <input
-              type="text"
-              name="name"
-              value={@plan_input.name}
-              class="w-full bg-transparent text-2xl font-semibold tracking-tight focus:outline-none border-b border-transparent focus:border-base-border transition pb-0.5"
-            />
-          </form>
-          <.link
-            navigate={~p"/workouts"}
-            class="text-sm text-base-content/40 hover:text-base-content transition shrink-0"
-          >
-            Cancel
-          </.link>
-        </div>
+        <.plan_editor_header plan_input={@plan_input} />
 
-        <%!-- Card 1: Type --%>
-        <div class="rounded-[10px] bg-base-300 overflow-hidden flex">
-          <button
-            type="button"
-            phx-click="pick_type"
-            phx-value-type="six_count"
-            class={[
-              "flex-1 py-3 text-sm font-medium tracking-wide transition",
-              if(@plan_input.burpee_type == :six_count,
-                do: "text-primary bg-primary/10",
-                else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
-              )
-            ]}
-          >
-            6-Count
-          </button>
-          <div class="w-px bg-base-border" />
-          <button
-            type="button"
-            phx-click="pick_type"
-            phx-value-type="navy_seal"
-            class={[
-              "flex-1 py-3 text-sm font-medium tracking-wide transition",
-              if(@plan_input.burpee_type == :navy_seal,
-                do: "text-primary bg-primary/10",
-                else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
-              )
-            ]}
-          >
-            Navy SEAL
-          </button>
-        </div>
+        <.plan_type_picker plan_input={@plan_input} />
 
-        <%!-- Card 2: Goals — Duration · Reps · Pace --%>
-        <form
-          phx-change="change_basics"
-          class="rounded-[10px] bg-base-300 overflow-hidden grid grid-cols-3"
-        >
-          <div class="p-5 space-y-1 border-r border-base-border">
-            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Duration</p>
-            <div class="flex items-baseline gap-1">
-              <input
-                type="number"
-                name="target_duration_min"
-                min="1"
-                max="120"
-                value={@plan_input.target_duration_min}
-                class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none"
-              />
-              <span class="text-sm text-base-content/30">min</span>
-            </div>
-          </div>
-          <div class="p-5 space-y-1 border-r border-base-border">
-            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Reps</p>
-            <input
-              type="number"
-              name="burpee_count_target"
-              min="1"
-              value={@plan_input.burpee_count_target}
-              class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none"
-            />
-          </div>
-          <div class="p-5 space-y-1">
-            <p class={[
-              "text-[10px] uppercase tracking-widest",
-              if(@plan_input.sec_per_burpee_override,
-                do: "text-primary/60",
-                else: "text-base-content/30"
-              )
-            ]}>
-              Pace
-            </p>
-            <div class="flex items-baseline gap-1">
-              <input
-                type="number"
-                step="0.1"
-                min="1"
-                phx-change="set_pace_override"
-                phx-debounce="500"
-                name="pace"
-                placeholder={
-                  :erlang.float_to_binary(
-                    PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
-                      name: "",
-                      burpee_type: @plan_input.burpee_type,
-                      target_duration_min: @plan_input.target_duration_min,
-                      burpee_count_target: @plan_input.burpee_count_target,
-                      pacing_style: @plan_input.pacing_style,
-                      level: @level
-                    }) * 1.0,
-                    decimals: 1
-                  )
-                }
-                value={
-                  if @plan_input.sec_per_burpee_override,
-                    do:
-                      :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0, decimals: 1),
-                    else: ""
-                }
-                class={[
-                  "w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none placeholder:text-base-content/15",
-                  if(@plan_input.sec_per_burpee_override, do: "text-primary", else: "")
-                ]}
-              />
-              <div class="flex flex-col items-center gap-0.5">
-                <span class="text-sm text-base-content/30 leading-none">s</span>
-                <%= if @plan_input.sec_per_burpee_override do %>
-                  <button
-                    type="button"
-                    phx-click="set_pace_override"
-                    phx-value-pace=""
-                    class="text-base-content/25 hover:text-base-content/60 transition"
-                  >
-                    <.icon name="hero-x-mark" class="size-2.5" />
-                  </button>
-                <% end %>
-              </div>
-            </div>
-          </div>
-        </form>
+        <.plan_goal_controls plan_input={@plan_input} level={@level} />
 
-        <%!-- Card 3: Pacing + reps per set --%>
-        <form phx-change="change_basics" class="rounded-[10px] bg-base-300 overflow-hidden">
-          <div class="flex">
-            <button
-              type="button"
-              phx-click="pick_pacing"
-              phx-value-style="even"
-              class={[
-                "flex-1 py-3 text-sm font-medium tracking-wide transition",
-                if(@plan_input.pacing_style == :even,
-                  do: "text-primary bg-primary/10",
-                  else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
-                )
-              ]}
-            >
-              Even
-            </button>
-            <div class="w-px bg-base-border" />
-            <button
-              type="button"
-              phx-click="pick_pacing"
-              phx-value-style="unbroken"
-              class={[
-                "flex-1 py-3 text-sm font-medium tracking-wide transition",
-                if(@plan_input.pacing_style == :unbroken,
-                  do: "text-primary bg-primary/10",
-                  else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
-                )
-              ]}
-            >
-              Unbroken
-            </button>
-          </div>
-          <%= if @plan_input.pacing_style == :unbroken do %>
-            <div class="px-6 py-5 flex items-baseline justify-between border-t border-base-border">
-              <div class="space-y-1">
-                <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Per set</p>
-                <div class="flex items-baseline gap-1.5">
-                  <input
-                    type="number"
-                    name="reps_per_set"
-                    min="1"
-                    value={@plan_input.reps_per_set}
-                    class="w-20 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
-                  />
-                  <span class="text-sm text-base-content/30">reps</span>
-                </div>
-              </div>
-              <span class="text-sm text-base-content/30 tabular-nums">
-                → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
-                <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do %>
-                  <span class="text-base-content/20">+ 1</span>
-                <% end %>
-              </span>
-            </div>
-          <% end %>
-        </form>
+        <.plan_pacing_controls plan_input={@plan_input} />
 
-        <%!-- Card 4: Level + Rests --%>
-        <div class="rounded-[10px] bg-base-300 overflow-hidden">
-          <div class="px-5 py-3 border-b border-base-border">
-            <span class="text-xs text-base-content/30 tabular-nums">
-              {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
-              <span class="text-base-content/15 mx-1">·</span>
-              min {:erlang.float_to_binary(
-                BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) * 1.0,
-                decimals: 1
-              )}s/rep
-            </span>
-          </div>
-          <div class="divide-y divide-base-border">
-            <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
-              <form phx-change="change_rest" class="px-5 py-4">
-                <input type="hidden" name="rest[index]" value={idx} />
-                <div class="flex items-end gap-4">
-                  <div class="space-y-1">
-                    <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Rest</p>
-                    <div class="flex items-baseline gap-1">
-                      <input
-                        type="number"
-                        name="rest[rest_sec]"
-                        min="1"
-                        value={rest.rest_sec}
-                        class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
-                      />
-                      <span class="text-sm text-base-content/30">s</span>
-                    </div>
-                  </div>
-                  <span class="text-xs text-base-content/20 mb-1">at</span>
-                  <div class="space-y-1">
-                    <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Minute</p>
-                    <div class="flex items-baseline gap-1">
-                      <input
-                        type="number"
-                        name="rest[target_min]"
-                        min="1"
-                        max={@plan_input.target_duration_min - 1}
-                        value={rest.target_min}
-                        class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    phx-click="remove_rest"
-                    phx-value-index={idx}
-                    class="ml-auto mb-1 text-base-content/20 hover:text-base-content/50 transition"
-                    aria-label="Remove rest"
-                  >
-                    <.icon name="hero-x-mark" class="size-3.5" />
-                  </button>
-                </div>
-              </form>
-            <% end %>
-            <div class="px-5 py-3">
-              <button
-                type="button"
-                phx-click="add_rest"
-                class="text-xs text-base-content/30 hover:text-primary transition flex items-center gap-1.5"
-              >
-                <.icon name="hero-plus" class="size-3" /> Add rest
-              </button>
-            </div>
-          </div>
-        </div>
+        <.plan_rest_controls plan_input={@plan_input} level={@level} />
 
         <%!-- Layer 3 — Solution card --%>
         <section class="rounded-[10px] bg-base-300">
@@ -873,6 +618,297 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </button>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr :plan_input, :map, required: true
+
+  defp plan_editor_header(assigns) do
+    ~H"""
+    <div class="flex items-center justify-between gap-4">
+      <form phx-change="change_basics" class="flex-1 min-w-0">
+        <input
+          type="text"
+          name="name"
+          value={@plan_input.name}
+          class="w-full bg-transparent text-2xl font-semibold tracking-tight focus:outline-none border-b border-transparent focus:border-base-border transition pb-0.5"
+        />
+      </form>
+      <.link
+        navigate={~p"/workouts"}
+        class="text-sm text-base-content/40 hover:text-base-content transition shrink-0"
+      >
+        Cancel
+      </.link>
+    </div>
+    """
+  end
+
+  attr :plan_input, :map, required: true
+
+  defp plan_type_picker(assigns) do
+    ~H"""
+    <div class="rounded-[10px] bg-base-300 overflow-hidden flex">
+      <button
+        type="button"
+        phx-click="pick_type"
+        phx-value-type="six_count"
+        class={[
+          "flex-1 py-3 text-sm font-medium tracking-wide transition",
+          if(@plan_input.burpee_type == :six_count,
+            do: "text-primary bg-primary/10",
+            else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
+          )
+        ]}
+      >
+        6-Count
+      </button>
+      <div class="w-px bg-base-border" />
+      <button
+        type="button"
+        phx-click="pick_type"
+        phx-value-type="navy_seal"
+        class={[
+          "flex-1 py-3 text-sm font-medium tracking-wide transition",
+          if(@plan_input.burpee_type == :navy_seal,
+            do: "text-primary bg-primary/10",
+            else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
+          )
+        ]}
+      >
+        Navy SEAL
+      </button>
+    </div>
+    """
+  end
+
+  attr :plan_input, :map, required: true
+  attr :level, :atom, required: true
+
+  defp plan_goal_controls(assigns) do
+    ~H"""
+    <form
+      phx-change="change_basics"
+      class="rounded-[10px] bg-base-300 overflow-hidden grid grid-cols-3"
+    >
+      <div class="p-5 space-y-1 border-r border-base-border">
+        <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Duration</p>
+        <div class="flex items-baseline gap-1">
+          <input
+            type="number"
+            name="target_duration_min"
+            min="1"
+            max="120"
+            value={@plan_input.target_duration_min}
+            class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none"
+          />
+          <span class="text-sm text-base-content/30">min</span>
+        </div>
+      </div>
+      <div class="p-5 space-y-1 border-r border-base-border">
+        <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Reps</p>
+        <input
+          type="number"
+          name="burpee_count_target"
+          min="1"
+          value={@plan_input.burpee_count_target}
+          class="w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none"
+        />
+      </div>
+      <div class="p-5 space-y-1">
+        <p class={[
+          "text-[10px] uppercase tracking-widest",
+          if(@plan_input.sec_per_burpee_override,
+            do: "text-primary/60",
+            else: "text-base-content/30"
+          )
+        ]}>
+          Pace
+        </p>
+        <div class="flex items-baseline gap-1">
+          <input
+            type="number"
+            step="0.1"
+            min="1"
+            phx-change="set_pace_override"
+            phx-debounce="500"
+            name="pace"
+            placeholder={
+              :erlang.float_to_binary(
+                PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
+                  name: "",
+                  burpee_type: @plan_input.burpee_type,
+                  target_duration_min: @plan_input.target_duration_min,
+                  burpee_count_target: @plan_input.burpee_count_target,
+                  pacing_style: @plan_input.pacing_style,
+                  level: @level
+                }) * 1.0,
+                decimals: 1
+              )
+            }
+            value={
+              if @plan_input.sec_per_burpee_override,
+                do: :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0, decimals: 1),
+                else: ""
+            }
+            class={[
+              "w-full bg-transparent text-4xl font-bold tabular-nums focus:outline-none leading-none placeholder:text-base-content/15",
+              if(@plan_input.sec_per_burpee_override, do: "text-primary", else: "")
+            ]}
+          />
+          <div class="flex flex-col items-center gap-0.5">
+            <span class="text-sm text-base-content/30 leading-none">s</span>
+            <%= if @plan_input.sec_per_burpee_override do %>
+              <button
+                type="button"
+                phx-click="set_pace_override"
+                phx-value-pace=""
+                class="text-base-content/25 hover:text-base-content/60 transition"
+              >
+                <.icon name="hero-x-mark" class="size-2.5" />
+              </button>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </form>
+    """
+  end
+
+  attr :plan_input, :map, required: true
+
+  defp plan_pacing_controls(assigns) do
+    ~H"""
+    <form phx-change="change_basics" class="rounded-[10px] bg-base-300 overflow-hidden">
+      <div class="flex">
+        <button
+          type="button"
+          phx-click="pick_pacing"
+          phx-value-style="even"
+          class={[
+            "flex-1 py-3 text-sm font-medium tracking-wide transition",
+            if(@plan_input.pacing_style == :even,
+              do: "text-primary bg-primary/10",
+              else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
+            )
+          ]}
+        >
+          Even
+        </button>
+        <div class="w-px bg-base-border" />
+        <button
+          type="button"
+          phx-click="pick_pacing"
+          phx-value-style="unbroken"
+          class={[
+            "flex-1 py-3 text-sm font-medium tracking-wide transition",
+            if(@plan_input.pacing_style == :unbroken,
+              do: "text-primary bg-primary/10",
+              else: "text-base-content/35 hover:text-base-content/70 hover:bg-base-raised"
+            )
+          ]}
+        >
+          Unbroken
+        </button>
+      </div>
+      <%= if @plan_input.pacing_style == :unbroken do %>
+        <div class="px-6 py-5 flex items-baseline justify-between border-t border-base-border">
+          <div class="space-y-1">
+            <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Per set</p>
+            <div class="flex items-baseline gap-1.5">
+              <input
+                type="number"
+                name="reps_per_set"
+                min="1"
+                value={@plan_input.reps_per_set}
+                class="w-20 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
+              />
+              <span class="text-sm text-base-content/30">reps</span>
+            </div>
+          </div>
+          <span class="text-sm text-base-content/30 tabular-nums">
+            → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
+            <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do %>
+              <span class="text-base-content/20">+ 1</span>
+            <% end %>
+          </span>
+        </div>
+      <% end %>
+    </form>
+    """
+  end
+
+  attr :plan_input, :map, required: true
+  attr :level, :atom, required: true
+
+  defp plan_rest_controls(assigns) do
+    ~H"""
+    <div class="rounded-[10px] bg-base-300 overflow-hidden">
+      <div class="px-5 py-3 border-b border-base-border">
+        <span class="text-xs text-base-content/30 tabular-nums">
+          {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
+          <span class="text-base-content/15 mx-1">·</span>
+          min {:erlang.float_to_binary(
+            BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) * 1.0,
+            decimals: 1
+          )}s/rep
+        </span>
+      </div>
+      <div class="divide-y divide-base-border">
+        <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
+          <form phx-change="change_rest" class="px-5 py-4">
+            <input type="hidden" name="rest[index]" value={idx} />
+            <div class="flex items-end gap-4">
+              <div class="space-y-1">
+                <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Rest</p>
+                <div class="flex items-baseline gap-1">
+                  <input
+                    type="number"
+                    name="rest[rest_sec]"
+                    min="1"
+                    value={rest.rest_sec}
+                    class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
+                  />
+                  <span class="text-sm text-base-content/30">s</span>
+                </div>
+              </div>
+              <span class="text-xs text-base-content/20 mb-1">at</span>
+              <div class="space-y-1">
+                <p class="text-[10px] text-base-content/30 uppercase tracking-widest">Minute</p>
+                <div class="flex items-baseline gap-1">
+                  <input
+                    type="number"
+                    name="rest[target_min]"
+                    min="1"
+                    max={@plan_input.target_duration_min - 1}
+                    value={rest.target_min}
+                    class="w-16 bg-transparent text-3xl font-bold tabular-nums focus:outline-none leading-none"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                phx-click="remove_rest"
+                phx-value-index={idx}
+                class="ml-auto mb-1 text-base-content/20 hover:text-base-content/50 transition"
+                aria-label="Remove rest"
+              >
+                <.icon name="hero-x-mark" class="size-3.5" />
+              </button>
+            </div>
+          </form>
+        <% end %>
+        <div class="px-5 py-3">
+          <button
+            type="button"
+            phx-click="add_rest"
+            class="text-xs text-base-content/30 hover:text-primary transition flex items-center gap-1.5"
+          >
+            <.icon name="hero-plus" class="size-3" /> Add rest
+          </button>
+        </div>
+      </div>
+    </div>
     """
   end
 
