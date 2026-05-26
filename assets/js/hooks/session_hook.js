@@ -35,11 +35,8 @@ const SessionHook = {
 
 		this.fsm = initialSessionState();
 		this.timeline = [];
-		this.mainTimeline = [];
 		this.startTime = null;
-		this.totalDuration = 0;
 		this.paused = false;
-		this.pauseTime = null;
 		this.rafId = null;
 		this.countdownPaused = false;
 		this.countdownCount = null;
@@ -47,18 +44,13 @@ const SessionHook = {
 		this.countdownStepStarted = null; // performance.now() when the current step began
 		this.countdownStepElapsed = 0; // ms elapsed in the current step when paused
 
-		this.lastRepIndex = -1;
-		this.lastRestCount = null;
 		this.warmupBurpeeCount = 0;
 		this.mainBurpeeCount = 0;
 
 		this.workRingEl = null;
 		this.doneReps = 0;
-		this.totalReps = 0;
 		this.downTimeout = null;
 		this.lastDisplayed = -1;
-		this.lastEventType = null;
-		this.lastBurpeeCount = 0;
 		this.restRingEl = null;
 		this.countdownRingEl = null;
 
@@ -158,7 +150,6 @@ const SessionHook = {
 		const result = transition(this.fsm, event);
 		this.fsm = result.state;
 		this.timeline = this.fsm.timeline;
-		this.mainTimeline = this.fsm.mainTimeline;
 		this.blockCount = this.fsm.blockCount;
 		result.commands.forEach((command) => this.runSessionCommand(command));
 	},
@@ -216,7 +207,7 @@ const SessionHook = {
 				this.renderBlockLabel(command.label);
 				break;
 			case "enterWorkPhase":
-				this.enterWorkPhase(command.eventType, command.burpeeCount);
+				this.enterWorkPhase();
 				break;
 			case "triggerDown":
 				this.triggerDown(command.remainingReps);
@@ -225,7 +216,7 @@ const SessionHook = {
 				this.updateWorkRing(command.progress, command.color);
 				break;
 			case "enterRestPhase":
-				this.enterRestPhase(command.eventType);
+				this.enterRestPhase();
 				break;
 			case "renderRestProgress":
 				this.renderRestProgress(
@@ -408,26 +399,19 @@ const SessionHook = {
 		});
 		this.fsm = result.state;
 
-		this.totalDuration = this.fsm.clock.totalDurationSec;
-
 		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
 		if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
 
 		// Clear countdown ring; build work ring for the first event
 		this.countdownRingEl = null;
-		this.lastEventType = null;
-		this.lastBurpeeCount = 0;
-
 		const firstEvent = this.timeline[0];
 		const isFirstWork =
 			firstEvent &&
 			(firstEvent.type === "work_burpee" ||
 				firstEvent.type === "warmup_burpee");
 		if (isFirstWork) {
-			this.buildWorkRing(firstEvent.type, firstEvent.burpee_count);
+			this.buildWorkRing();
 			this.triggerDown(firstEvent.burpee_count);
-			this.lastEventType = firstEvent.type;
-			this.lastBurpeeCount = firstEvent.burpee_count;
 		}
 
 		this.startTime = performance.now();
@@ -453,7 +437,7 @@ const SessionHook = {
 			type: "DISPLAY_FRAME",
 			frame,
 			elapsedSec: elapsed,
-			totalDurationSec: this.totalDuration,
+			totalDurationSec: this.fsm.clock.totalDurationSec,
 			blockCount: this.blockCount,
 			doneInEvent: this.doneReps,
 		});
@@ -511,7 +495,6 @@ const SessionHook = {
 		if (this.paused) return;
 		this.dispatchSession({ type: "PAUSE", now: performance.now() });
 		this.paused = true;
-		this.pauseTime = this.fsm.clock.pauseTime;
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.stopAudio();
 		this.updatePauseBtn(true);
@@ -579,13 +562,11 @@ const SessionHook = {
 		if (blockInfo) blockInfo.textContent = label;
 	},
 
-	enterWorkPhase(eventType, burpeeCount) {
-		this.buildWorkRing(burpeeCount);
-		this.lastEventType = eventType;
-		this.lastBurpeeCount = burpeeCount;
+	enterWorkPhase() {
+		this.buildWorkRing();
 	},
 
-	enterRestPhase(eventType) {
+	enterRestPhase() {
 		const svgEl = this.el.querySelector("#ring-svg");
 		if (svgEl) {
 			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
@@ -600,8 +581,6 @@ const SessionHook = {
 			svgEl.appendChild(restRing);
 			this.restRingEl = restRing;
 		}
-		this.lastEventType = eventType;
-		this.lastBurpeeCount = 0;
 	},
 
 	renderRestProgress(progress, color, timeLeftSec) {
@@ -626,8 +605,7 @@ const SessionHook = {
 	// Work ring — single arc that fills continuously per rep, resets each rep
 	// ---------------------------------------------------------------------------
 
-	buildWorkRing(burpeeCount) {
-		this.totalReps = burpeeCount;
+	buildWorkRing() {
 		this.doneReps = 0;
 		this.lastDisplayed = -1;
 		const svgEl = this.el.querySelector("#ring-svg");
