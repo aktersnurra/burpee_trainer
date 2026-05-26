@@ -51,7 +51,6 @@ const SessionHook = {
 		this.lastRestCount = null;
 		this.warmupBurpeeCount = 0;
 		this.mainBurpeeCount = 0;
-		this.warmupEndSec = 0; // elapsed time when warmup phase ends
 
 		this.workRingEl = null;
 		this.doneReps = 0;
@@ -229,13 +228,23 @@ const SessionHook = {
 				this.enterRestPhase(command.eventType);
 				break;
 			case "renderRestProgress":
-				this.renderRestProgress(command.progress, command.color, command.timeLeftSec);
+				this.renderRestProgress(
+					command.progress,
+					command.color,
+					command.timeLeftSec,
+				);
 				break;
 			case "scheduleAnimationFrame":
 				this.rafId = requestAnimationFrame(() => this.tick());
 				break;
 			case "completeWorkout":
 				this.onComplete(command.elapsedSec);
+				break;
+			case "playCompletionFanfare":
+				this.onCompleted();
+				break;
+			case "pushSessionComplete":
+				this.pushEvent("session_complete", command.payload);
 				break;
 		}
 	},
@@ -399,10 +408,7 @@ const SessionHook = {
 		});
 		this.fsm = result.state;
 
-		this.totalDuration = this.timeline.reduce((s, e) => s + e.duration_sec, 0);
-		this.warmupEndSec = this.timeline
-			.filter((e) => e.type === "warmup_burpee" || e.type === "warmup_rest")
-			.reduce((s, e) => s + e.duration_sec, 0);
+		this.totalDuration = this.fsm.clock.totalDurationSec;
 
 		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
 		if (finishEarlyBtn) finishEarlyBtn.removeAttribute("disabled");
@@ -699,27 +705,9 @@ const SessionHook = {
 	// ---------------------------------------------------------------------------
 
 	onComplete(elapsed) {
-		if (this.rafId) cancelAnimationFrame(this.rafId);
-
 		this.dispatchSession({ type: "ACCOUNT_REPS", frame: null });
 		this.syncRepStateFromFsm();
-
-		// Warmup duration = elapsed up to warmupEndSec (or total warmup sec)
-		const warmupDuration = Math.min(elapsed, this.warmupEndSec);
-		const mainDuration = Math.max(Math.round(elapsed - warmupDuration), 0);
-
-		this.onCompleted(); // fanfare
-
-		this.pushEvent("session_complete", {
-			main: {
-				burpee_count_done: this.mainBurpeeCount,
-				duration_sec: mainDuration,
-			},
-			warmup: {
-				burpee_count_done: this.warmupBurpeeCount,
-				duration_sec: Math.round(warmupDuration),
-			},
-		});
+		this.dispatchSession({ type: "COMPLETE_SESSION", elapsedSec: elapsed });
 	},
 
 	// ---------------------------------------------------------------------------

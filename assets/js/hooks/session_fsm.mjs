@@ -483,6 +483,36 @@ export function transition(state, event) {
 			};
 		}
 
+		case "COMPLETE_SESSION": {
+			const warmupDurationSec = Math.round(
+				Math.min(event.elapsedSec, state.clock.warmupEndSec),
+			);
+			const mainDurationSec = Math.max(
+				Math.round(event.elapsedSec - warmupDurationSec),
+				0,
+			);
+			return {
+				state: { ...state, mode: "completed" },
+				commands: [
+					{ type: "cancelAnimationFrame" },
+					{ type: "playCompletionFanfare" },
+					{
+						type: "pushSessionComplete",
+						payload: {
+							main: {
+								burpee_count_done: state.reps.mainDone,
+								duration_sec: mainDurationSec,
+							},
+							warmup: {
+								burpee_count_done: state.reps.warmupDone,
+								duration_sec: warmupDurationSec,
+							},
+						},
+					},
+				],
+			};
+		}
+
 		case "PAUSE":
 			return {
 				state: {

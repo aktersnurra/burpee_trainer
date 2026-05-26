@@ -289,7 +289,50 @@ assert.deepEqual(result.commands, [
 	{ type: "renderTimer", timeLeftSec: 9 },
 	{ type: "renderBlockLabel", label: "" },
 	{ type: "enterRestPhase", eventType: "work_rest" },
-	{ type: "renderRestProgress", progress: 0.2, color: "#F59E0B", timeLeftSec: 4 },
+	{
+		type: "renderRestProgress",
+		progress: 0.2,
+		color: "#F59E0B",
+		timeLeftSec: 4,
+	},
 ]);
+
+let completionState = {
+	...initialSessionState(),
+	clock: { ...initialSessionState().clock, warmupEndSec: 10 },
+	reps: { ...initialSessionState().reps, mainDone: 15, warmupDone: 5 },
+};
+result = transition(completionState, {
+	type: "COMPLETE_SESSION",
+	elapsedSec: 42,
+});
+assert.deepEqual(result.commands, [
+	{ type: "cancelAnimationFrame" },
+	{ type: "playCompletionFanfare" },
+	{
+		type: "pushSessionComplete",
+		payload: {
+			main: { burpee_count_done: 15, duration_sec: 32 },
+			warmup: { burpee_count_done: 5, duration_sec: 10 },
+		},
+	},
+]);
+
+completionState = {
+	...initialSessionState(),
+	clock: { ...initialSessionState().clock, warmupEndSec: 10 },
+	reps: { ...initialSessionState().reps, mainDone: 3, warmupDone: 4 },
+};
+result = transition(completionState, {
+	type: "COMPLETE_SESSION",
+	elapsedSec: 6,
+});
+assert.deepEqual(result.commands.at(-1), {
+	type: "pushSessionComplete",
+	payload: {
+		main: { burpee_count_done: 3, duration_sec: 0 },
+		warmup: { burpee_count_done: 4, duration_sec: 6 },
+	},
+});
 
 console.log("session_fsm tests passed");
