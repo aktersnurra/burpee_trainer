@@ -1,4 +1,8 @@
-import { currentFrame, initialSessionState, transition } from "./session_fsm.mjs";
+import {
+	currentFrame,
+	initialSessionState,
+	transition,
+} from "./session_fsm.mjs";
 
 // SessionHook — client-driven session runtime.
 //
@@ -56,7 +60,6 @@ const SessionHook = {
 		this.lastDisplayed = -1;
 		this.lastEventType = null;
 		this.lastBurpeeCount = 0;
-		this.lastWorkEvent = null;
 		this.restRingEl = null;
 		this.countdownRingEl = null;
 
@@ -203,6 +206,30 @@ const SessionHook = {
 			case "updateVisibleRepTotal":
 				this.mainBurpeeCount = command.mainDone;
 				this.updateTotalCounter(command.mainDone);
+				break;
+			case "renderProgressBar":
+				this.renderProgressBar(command.percent, command.color);
+				break;
+			case "renderTimer":
+				this.renderTimer(command.timeLeftSec);
+				break;
+			case "renderBlockLabel":
+				this.renderBlockLabel(command.label);
+				break;
+			case "enterWorkPhase":
+				this.enterWorkPhase(command.eventType, command.burpeeCount);
+				break;
+			case "triggerDown":
+				this.triggerDown(command.remainingReps);
+				break;
+			case "renderWorkRepProgress":
+				this.updateWorkRing(command.progress, command.color);
+				break;
+			case "enterRestPhase":
+				this.enterRestPhase(command.eventType);
+				break;
+			case "renderRestProgress":
+				this.renderRestProgress(command.progress, command.color, command.timeLeftSec);
 				break;
 			case "scheduleAnimationFrame":
 				this.rafId = requestAnimationFrame(() => this.tick());
@@ -384,7 +411,6 @@ const SessionHook = {
 		this.countdownRingEl = null;
 		this.lastEventType = null;
 		this.lastBurpeeCount = 0;
-		this.lastWorkEvent = null;
 
 		const firstEvent = this.timeline[0];
 		const isFirstWork =
@@ -413,28 +439,19 @@ const SessionHook = {
 	},
 
 	renderRunningFrame(elapsed) {
-		const state = this.currentEvent(elapsed);
 		const frame = currentFrame(this.timeline, elapsed);
 
 		this.dispatchSession({ type: "ACCOUNT_REPS", frame });
 		this.syncRepStateFromFsm();
-		this.updateUI(state, elapsed);
-		this.dispatchSession({ type: "BEEP_FRAME", frame: state });
-	},
-
-	currentEvent(elapsed_sec) {
-		let cursor = 0;
-		for (const event of this.timeline) {
-			if (elapsed_sec < cursor + event.duration_sec) {
-				return {
-					event,
-					phase_elapsed: elapsed_sec - cursor,
-					phase_remaining: event.duration_sec - (elapsed_sec - cursor),
-				};
-			}
-			cursor += event.duration_sec;
-		}
-		return null;
+		this.dispatchSession({
+			type: "DISPLAY_FRAME",
+			frame,
+			elapsedSec: elapsed,
+			totalDurationSec: this.totalDuration,
+			blockCount: this.blockCount,
+			doneInEvent: this.doneReps,
+		});
+		this.dispatchSession({ type: "BEEP_FRAME", frame });
 	},
 
 	// ---------------------------------------------------------------------------
@@ -539,130 +556,71 @@ const SessionHook = {
 	// UI updates (direct DOM writes for high-frequency elements)
 	// ---------------------------------------------------------------------------
 
-	updateUI(state, elapsed) {
-		const totalSec = this.totalDuration;
-		const timeLeft = Math.max(totalSec - elapsed, 0);
-
-		// Overall progress bar — fills over the whole workout
-		const overallPct =
-			totalSec > 0 ? Math.min((elapsed / totalSec) * 100, 100) : 0;
+	renderProgressBar(percent, color) {
 		const fill = this.el.querySelector("#progress-fill");
-		if (fill) fill.style.width = overallPct.toFixed(1) + "%";
+		if (!fill) return;
+		fill.style.width = percent.toFixed(1) + "%";
+		fill.style.backgroundColor = color;
+	},
 
+	renderTimer(timeLeftSec) {
 		const timeLeftEl = this.el.querySelector("#time-left");
-		if (timeLeftEl) timeLeftEl.textContent = this.formatTime(timeLeft);
+		if (timeLeftEl) timeLeftEl.textContent = this.formatTime(timeLeftSec);
+	},
 
-		if (!state) return;
-
-		const { event, phase_elapsed, phase_remaining } = state;
-		const isWork =
-			event.type === "work_burpee" || event.type === "warmup_burpee";
-		const isRest =
-			event.type === "work_rest" ||
-			event.type === "warmup_rest" ||
-			event.type === "rest_block";
-		const isWarning = isRest && phase_remaining <= 5;
-
-		const color = this.phaseColor(event.type, isWarning);
-
-		// Overall progress bar color
-		if (fill) fill.style.backgroundColor = isWarning ? "#F59E0B" : color;
-
-		// Block info header — parse block number from label ("Block N")
+	renderBlockLabel(label) {
 		const blockInfo = this.el.querySelector("#block-info");
-		if (blockInfo && event.label) {
-			const match = event.label.match(/Block (\d+)/);
-			if (match && this.blockCount > 0) {
-				blockInfo.textContent = `Block ${match[1]} of ${this.blockCount}`;
-			} else {
-				blockInfo.textContent = "";
-			}
+		if (blockInfo) blockInfo.textContent = label;
+	},
+
+	enterWorkPhase(eventType, burpeeCount) {
+		this.buildWorkRing(burpeeCount);
+		this.lastEventType = eventType;
+		this.lastBurpeeCount = burpeeCount;
+	},
+
+	enterRestPhase(eventType) {
+		const svgEl = this.el.querySelector("#ring-svg");
+		if (svgEl) {
+			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+			const restRing = document.createElementNS(NS, "circle");
+			restRing.setAttribute("cx", CX);
+			restRing.setAttribute("cy", CY);
+			restRing.setAttribute("r", R);
+			restRing.setAttribute("fill", "none");
+			restRing.setAttribute("stroke-width", "16");
+			restRing.setAttribute("stroke-linecap", "round");
+			restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+			svgEl.appendChild(restRing);
+			this.restRingEl = restRing;
+		}
+		this.lastEventType = eventType;
+		this.lastBurpeeCount = 0;
+	},
+
+	renderRestProgress(progress, color, timeLeftSec) {
+		const offset = CIRC * (1 - Math.min(progress, 1));
+		if (this.restRingEl) {
+			this.restRingEl.setAttribute("stroke", color);
+			this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
+			this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
 		}
 
-		if (isWork) {
-			// Rebuild ring when entering a new work event
-			if (
-				event.type !== this.lastEventType ||
-				event.burpee_count !== this.lastBurpeeCount
-			) {
-				this.buildWorkRing(event.type, event.burpee_count);
-				this.triggerDown(event.burpee_count);
-				this.lastEventType = event.type;
-				this.lastBurpeeCount = event.burpee_count;
-			}
-
-			const secPerRep =
-				event.sec_per_rep ||
-				event.sec_per_burpee ||
-				event.duration_sec / (event.burpee_count || 1);
-			const repIndex = Math.floor(phase_elapsed / secPerRep);
-			const repElapsed = phase_elapsed - repIndex * secPerRep;
-			const repProgress = repElapsed / secPerRep;
-
-			// Falling edge — rep completed
-			if (repIndex > this.doneReps) {
-				const completedReps = repIndex - this.doneReps;
-				this.triggerFlash();
-				this.doneReps = repIndex;
-				if (event.type === "warmup_burpee") {
-					this.warmupBurpeeCount += completedReps;
-					this.updateTotalCounter(this.mainBurpeeCount);
-				} else {
-					this.mainBurpeeCount += completedReps;
-					this.updateTotalCounter(this.mainBurpeeCount);
-				}
-				this.triggerDown(Math.max(this.totalReps - this.doneReps, 0));
-			}
-
-			this.lastWorkEvent = event;
-			this.updateWorkRing(repProgress, color);
-		} else if (isRest) {
-			// Build a single continuous arc for rest phases
-			if (event.type !== this.lastEventType) {
-				const svgEl = this.el.querySelector("#ring-svg");
-				if (svgEl) {
-					while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-					const restRing = document.createElementNS(NS, "circle");
-					restRing.setAttribute("cx", CX);
-					restRing.setAttribute("cy", CY);
-					restRing.setAttribute("r", R);
-					restRing.setAttribute("fill", "none");
-					restRing.setAttribute("stroke-width", "16");
-					restRing.setAttribute("stroke-linecap", "round");
-					restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-					svgEl.appendChild(restRing);
-					this.restRingEl = restRing;
-				}
-				this.lastEventType = event.type;
-				this.lastBurpeeCount = 0;
-			}
-
-			const phasePct =
-				event.duration_sec > 0 ? phase_elapsed / event.duration_sec : 0;
-			const offset = CIRC * (1 - Math.min(phasePct, 1));
-			const rColor = isWarning ? "#F59E0B" : "#6B8FA8";
-			if (this.restRingEl) {
-				this.restRingEl.setAttribute("stroke", rColor);
-				this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-				this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
-			}
-
-			const countEl = this.el.querySelector("#count");
-			if (countEl) {
-				countEl.style.visibility = "";
-				countEl.textContent = this.formatTime(phase_remaining);
-				countEl.style.color = isWarning ? "#F59E0B" : "#C8D8F0";
-			}
-			const downEl = this.el.querySelector("#down-word");
-			if (downEl) downEl.style.display = "none";
+		const countEl = this.el.querySelector("#count");
+		if (countEl) {
+			countEl.style.visibility = "";
+			countEl.textContent = this.formatTime(timeLeftSec);
+			countEl.style.color = color;
 		}
+		const downEl = this.el.querySelector("#down-word");
+		if (downEl) downEl.style.display = "none";
 	},
 
 	// ---------------------------------------------------------------------------
 	// Work ring — single arc that fills continuously per rep, resets each rep
 	// ---------------------------------------------------------------------------
 
-	buildWorkRing(eventType, burpeeCount) {
+	buildWorkRing(burpeeCount) {
 		this.totalReps = burpeeCount;
 		this.doneReps = 0;
 		this.lastDisplayed = -1;
@@ -912,19 +870,6 @@ const SessionHook = {
 		const m = Math.floor(s / 60);
 		const r = s % 60;
 		return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${r}`;
-	},
-
-	// Returns the accent color for the current phase (ring, progress bar fill).
-	phaseColor(type, isWarning) {
-		if (isWarning) return "#F59E0B";
-		const colors = {
-			work_burpee: "#4A9EFF",
-			warmup_burpee: "#F59E0B",
-			work_rest: "#6B8FA8",
-			warmup_rest: "#6B8FA8",
-			rest_block: "#6B8FA8",
-		};
-		return colors[type] || "#1E2535";
 	},
 };
 

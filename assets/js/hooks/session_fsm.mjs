@@ -30,6 +30,10 @@ export function initialSessionState() {
 			lastRepIndex: -1,
 			lastRestCount: null,
 		},
+		display: {
+			lastEventType: null,
+			lastBurpeeCount: 0,
+		},
 	};
 }
 
@@ -148,6 +152,119 @@ function beepCommandsForFrame(beeps, frame) {
 		beeps: { lastRepIndex: -1, lastRestCount: restCount },
 		commands: [{ type: restCount === 0 ? "playRepBeep" : "playLeadBeep" }],
 	};
+}
+
+function phaseColor(type, isWarning) {
+	if (isWarning) return "#F59E0B";
+	const colors = {
+		work_burpee: "#4A9EFF",
+		warmup_burpee: "#F59E0B",
+		work_rest: "#6B8FA8",
+		warmup_rest: "#6B8FA8",
+		rest_block: "#6B8FA8",
+	};
+	return colors[type] || "#1E2535";
+}
+
+function blockLabel(label, blockCount) {
+	if (!label) return "";
+	const match = label.match(/Block (\d+)/);
+	return match && blockCount > 0 ? `Block ${match[1]} of ${blockCount}` : "";
+}
+
+function displayCommandsForFrame(display, event) {
+	const frame = event.frame;
+	const totalDurationSec = event.totalDurationSec || 0;
+	const elapsedSec = event.elapsedSec || 0;
+	const percent =
+		totalDurationSec > 0
+			? Number(Math.min((elapsedSec / totalDurationSec) * 100, 100).toFixed(1))
+			: 0;
+	const timeLeftSec = Math.max(totalDurationSec - elapsedSec, 0);
+
+	if (!frame) {
+		return {
+			display,
+			commands: [
+				{ type: "renderProgressBar", percent, color: "#1E2535" },
+				{ type: "renderTimer", timeLeftSec },
+			],
+		};
+	}
+
+	const timelineEvent = frame.event;
+	const isWork =
+		timelineEvent.type === "work_burpee" ||
+		timelineEvent.type === "warmup_burpee";
+	const isRest =
+		timelineEvent.type === "work_rest" ||
+		timelineEvent.type === "warmup_rest" ||
+		timelineEvent.type === "rest_block";
+	const isWarning = isRest && frame.phase_remaining <= 5;
+	const color = phaseColor(timelineEvent.type, isWarning);
+	const commands = [
+		{ type: "renderProgressBar", percent, color },
+		{ type: "renderTimer", timeLeftSec },
+		{
+			type: "renderBlockLabel",
+			label: blockLabel(timelineEvent.label, event.blockCount || 0),
+		},
+	];
+
+	let nextDisplay = display;
+
+	if (isWork) {
+		const burpeeCount = timelineEvent.burpee_count || 0;
+		const enteringWork =
+			timelineEvent.type !== display.lastEventType ||
+			burpeeCount !== display.lastBurpeeCount;
+		if (enteringWork) {
+			commands.push({
+				type: "enterWorkPhase",
+				eventType: timelineEvent.type,
+				burpeeCount,
+			});
+			commands.push({
+				type: "triggerDown",
+				remainingReps: Math.max(burpeeCount - (event.doneInEvent || 0), 0),
+			});
+			nextDisplay = {
+				lastEventType: timelineEvent.type,
+				lastBurpeeCount: burpeeCount,
+			};
+		}
+
+		const secondsPerRep =
+			timelineEvent.sec_per_rep ||
+			timelineEvent.sec_per_burpee ||
+			timelineEvent.duration_sec / (burpeeCount || 1);
+		const repIndex = Math.floor(frame.phase_elapsed / secondsPerRep);
+		const repElapsed = frame.phase_elapsed - repIndex * secondsPerRep;
+		commands.push({
+			type: "renderWorkRepProgress",
+			progress: repElapsed / secondsPerRep,
+			color,
+		});
+	} else if (isRest) {
+		if (timelineEvent.type !== display.lastEventType) {
+			commands.push({ type: "enterRestPhase", eventType: timelineEvent.type });
+			nextDisplay = {
+				lastEventType: timelineEvent.type,
+				lastBurpeeCount: 0,
+			};
+		}
+		commands.push({
+			type: "renderRestProgress",
+			progress:
+				timelineEvent.duration_sec > 0
+					? frame.phase_elapsed / timelineEvent.duration_sec
+					: 0,
+			color,
+			timeLeftSec: frame.phase_remaining,
+		});
+	}
+
+	return { display: nextDisplay, commands };
 }
 
 export function transition(state, event) {
@@ -332,6 +449,14 @@ export function transition(state, event) {
 				state: { ...state, mode: "completed" },
 				commands: [{ type: "completeWorkout", elapsedSec: event.elapsedSec }],
 			};
+
+		case "DISPLAY_FRAME": {
+			const result = displayCommandsForFrame(state.display, event);
+			return {
+				state: { ...state, display: result.display },
+				commands: result.commands,
+			};
+		}
 
 		case "ACCOUNT_REPS": {
 			const nextReps = accountReps(

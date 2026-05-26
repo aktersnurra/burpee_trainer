@@ -234,7 +234,9 @@ result = transition(repState, {
 });
 assert.equal(result.state.reps.warmupDone, 5);
 assert.equal(result.state.reps.mainDone, 0);
-assert.deepEqual(result.commands, [{ type: "updateVisibleRepTotal", mainDone: 0 }]);
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", mainDone: 0 },
+]);
 
 repState = {
 	...initialSessionState(),
@@ -249,6 +251,45 @@ repState = {
 
 result = transition(repState, { type: "ACCOUNT_REPS", frame: null });
 assert.equal(result.state.reps.mainDone, 5);
-assert.deepEqual(result.commands, [{ type: "updateVisibleRepTotal", mainDone: 5 }]);
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", mainDone: 5 },
+]);
+
+let displayState = initialSessionState();
+result = transition(displayState, {
+	type: "DISPLAY_FRAME",
+	frame: { event: work, index: 0, phase_elapsed: 2, phase_remaining: 8 },
+	elapsedSec: 2,
+	totalDurationSec: 20,
+	blockCount: 3,
+	doneInEvent: 1,
+});
+assert.deepEqual(result.commands, [
+	{ type: "renderProgressBar", percent: 10, color: "#4A9EFF" },
+	{ type: "renderTimer", timeLeftSec: 18 },
+	{ type: "renderBlockLabel", label: "Block 1 of 3" },
+	{ type: "enterWorkPhase", eventType: "work_burpee", burpeeCount: 5 },
+	{ type: "triggerDown", remainingReps: 4 },
+	{ type: "renderWorkRepProgress", progress: 0, color: "#4A9EFF" },
+]);
+assert.equal(result.state.display.lastEventType, "work_burpee");
+assert.equal(result.state.display.lastBurpeeCount, 5);
+
+displayState = result.state;
+result = transition(displayState, {
+	type: "DISPLAY_FRAME",
+	frame: { event: rest, index: 1, phase_elapsed: 1, phase_remaining: 4 },
+	elapsedSec: 11,
+	totalDurationSec: 20,
+	blockCount: 3,
+	doneInEvent: 0,
+});
+assert.deepEqual(result.commands, [
+	{ type: "renderProgressBar", percent: 55, color: "#F59E0B" },
+	{ type: "renderTimer", timeLeftSec: 9 },
+	{ type: "renderBlockLabel", label: "" },
+	{ type: "enterRestPhase", eventType: "work_rest" },
+	{ type: "renderRestProgress", progress: 0.2, color: "#F59E0B", timeLeftSec: 4 },
+]);
 
 console.log("session_fsm tests passed");
