@@ -111,7 +111,25 @@ assert.deepEqual(result.commands, [{ type: "pauseCountdownTimer" }]);
 result = transition(result.state, { type: "COUNTDOWN_RESUME", now: 2000 });
 assert.equal(result.state.mode, "countdown");
 assert.equal(result.state.countdown.stepStartedAt, 2000);
-assert.deepEqual(result.commands, [{ type: "resumeCountdownTimer", remainingMs: 750 }]);
+assert.deepEqual(result.commands, [
+	{ type: "resumeCountdownTimer", remainingMs: 750 },
+]);
+
+result = transition(result.state, { type: "COUNTDOWN_TICK", value: 4, now: 2100 });
+assert.equal(result.state.countdown.value, 4);
+assert.equal(result.state.countdown.stepStartedAt, 2100);
+assert.deepEqual(result.commands, [
+	{ type: "renderCountdown", value: 4, animate: true },
+	{ type: "playLeadBeep" },
+	{ type: "scheduleCountdownTick", nextValue: 3, delayMs: 1000 },
+]);
+
+result = transition(result.state, { type: "COUNTDOWN_TICK", value: 0, now: 5100 });
+assert.equal(result.state.countdown.value, null);
+assert.deepEqual(result.commands, [
+	{ type: "clearCountdown" },
+	{ type: "beginSession" },
+]);
 
 result = transition(result.state, { type: "COUNTDOWN_DONE", now: 3000 });
 assert.equal(result.state.mode, "running");

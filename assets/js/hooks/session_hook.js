@@ -72,7 +72,10 @@ const SessionHook = {
 			if (document.visibilityState === "hidden") {
 				// Screen locked / tab backgrounded — pause the clock silently.
 				if (!this.paused && this.startTime !== null) {
-					this.dispatchSession({ type: "VISIBILITY_HIDDEN", now: performance.now() });
+					this.dispatchSession({
+						type: "VISIBILITY_HIDDEN",
+						now: performance.now(),
+					});
 					this.hiddenAt = this.fsm.clock.hiddenAt;
 					if (this.rafId) cancelAnimationFrame(this.rafId);
 					this.rafId = null;
@@ -81,7 +84,10 @@ const SessionHook = {
 			} else {
 				// Tab visible again — absorb the gap into startTime so elapsed is unaffected.
 				if (!this.paused && this.hiddenAt !== null && this.startTime !== null) {
-					this.dispatchSession({ type: "VISIBILITY_VISIBLE", now: performance.now() });
+					this.dispatchSession({
+						type: "VISIBILITY_VISIBLE",
+						now: performance.now(),
+					});
 					this.startTime = this.fsm.clock.startTime;
 				}
 				this.hiddenAt = null;
@@ -177,6 +183,22 @@ const SessionHook = {
 				break;
 			case "startCountdownTimer":
 				this.startCountdown();
+				break;
+			case "renderCountdown":
+				this.countdownCount = command.value;
+				this.countdownShowCount(command.value, command.animate);
+				break;
+			case "playLeadBeep":
+				this.leadBeepAt(this.audioContext().currentTime + 0.02);
+				break;
+			case "scheduleCountdownTick":
+				this.scheduleCountdownTick(command.nextValue, command.delayMs);
+				break;
+			case "clearCountdown":
+				this.clearCountdown();
+				break;
+			case "beginSession":
+				this.beginSession();
 				break;
 		}
 	},
@@ -303,35 +325,34 @@ const SessionHook = {
 
 		this.countdownShowCount = showCount;
 
-		// scheduleNext: show `n` after `delayMs`, then continue.
-		// countdownCount tracks the number currently *visible* on screen.
-		const scheduleNext = (n, delayMs = 1000) => {
-			this.countdownStepStarted = performance.now();
-			this.countdownTimeoutId = setTimeout(() => {
-				if (this.countdownPaused) return;
-				if (n >= 1) {
-					this.countdownCount = n;
-					showCount(n, true);
-					this.leadBeepAt(this.audioContext().currentTime + 0.02);
-					scheduleNext(n - 1);
-				} else {
-					this.countdownCount = null;
-					this.countdownTimeoutId = null;
-					this.countdownStepStarted = null;
-					if (countEl) {
-						countEl.style.color = "#C8D8F0";
-						countEl.textContent = "—";
-					}
-					this.beginSession();
-				}
-			}, delayMs);
-		};
-
 		// Render 5 with no transition — ring stays full, no animation flash.
 		this.countdownCount = 5;
 		showCount(5, false);
 		this.leadBeepAt(this.audioContext().currentTime + 0.02);
-		scheduleNext(4);
+		this.scheduleCountdownTick(4);
+	},
+
+	scheduleCountdownTick(n, delayMs = 1000) {
+		this.countdownStepStarted = performance.now();
+		this.countdownTimeoutId = setTimeout(() => {
+			if (this.countdownPaused) return;
+			this.dispatchSession({
+				type: "COUNTDOWN_TICK",
+				value: n,
+				now: performance.now(),
+			});
+		}, delayMs);
+	},
+
+	clearCountdown() {
+		this.countdownCount = null;
+		this.countdownTimeoutId = null;
+		this.countdownStepStarted = null;
+		const countEl = this.el.querySelector("#count");
+		if (countEl) {
+			countEl.style.color = "#C8D8F0";
+			countEl.textContent = "—";
+		}
 	},
 
 	beginSession() {
@@ -449,33 +470,10 @@ const SessionHook = {
 		const n = this.countdownCount;
 		if (n === null) return;
 
-		const scheduleNext = (n, delayMs = 1000) => {
-			this.countdownStepStarted = performance.now();
-			this.countdownTimeoutId = setTimeout(() => {
-				if (this.countdownPaused) return;
-				if (n >= 1) {
-					this.countdownCount = n;
-					this.countdownShowCount(n, true);
-					this.leadBeepAt(this.audioContext().currentTime + 0.02);
-					scheduleNext(n - 1);
-				} else {
-					this.countdownCount = null;
-					this.countdownTimeoutId = null;
-					this.countdownStepStarted = null;
-					const countEl = this.el.querySelector("#count");
-					if (countEl) {
-						countEl.style.color = "#C8D8F0";
-						countEl.textContent = "—";
-					}
-					this.beginSession();
-				}
-			}, delayMs);
-		};
-
 		// Show the current number and wait only the remaining portion of its second.
 		this.countdownShowCount(n, false);
 		const remaining = Math.max(1000 - (this.countdownStepElapsed || 0), 0);
-		scheduleNext(n - 1, remaining);
+		this.scheduleCountdownTick(n - 1, remaining);
 	},
 
 	pause() {
