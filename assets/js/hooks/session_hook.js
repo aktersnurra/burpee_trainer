@@ -1,3 +1,5 @@
+import {accountReps, currentFrame, initialSessionState, transition} from "./session_fsm.mjs";
+
 // SessionHook — client-driven session runtime.
 //
 // The server pushes a flat timeline on mount ("session_ready"). The client
@@ -25,6 +27,7 @@ const SessionHook = {
     this.scheduledOscs = [];
     this.wakeLock = null;
 
+    this.fsm = initialSessionState();
     this.timeline = [];
     this.mainTimeline = [];
     this.startTime = null;
@@ -54,6 +57,7 @@ const SessionHook = {
     this.lastWorkEvent = null;
     this.restRingEl = null;
     this.countdownRingEl = null;
+    this.previousFrame = null;
 
     this.hiddenAt = null; // track when tab went hidden for pause accounting
 
@@ -91,14 +95,15 @@ const SessionHook = {
     this.blockCount = 0;
 
     this.handleEvent("session_ready", ({ timeline, block_count }) => {
-      this.mainTimeline = timeline;
-      this.blockCount = block_count || 0;
-      this.showWarmupPrompt();
+      this.dispatchSession({
+        type: "SESSION_READY",
+        timeline,
+        blockCount: block_count || 0,
+      });
     });
 
     this.handleEvent("warmup_ready", ({ warmup }) => {
-      this.timeline = [...warmup, ...this.mainTimeline];
-      this.startCountdown();
+      this.dispatchSession({type: "WARMUP_READY", warmup});
     });
 
     // Event delegation on the outer hook element — survives LiveView re-renders
@@ -134,18 +139,46 @@ const SessionHook = {
   // Session flow
   // ---------------------------------------------------------------------------
 
+  dispatchSession(event) {
+    const result = transition(this.fsm, event);
+    this.fsm = result.state;
+    this.timeline = this.fsm.timeline;
+    this.mainTimeline = this.fsm.mainTimeline;
+    this.blockCount = this.fsm.blockCount;
+    result.commands.forEach((command) => this.runSessionCommand(command));
+  },
+
+  runSessionCommand(command) {
+    switch (command.type) {
+      case "renderPrompt":
+        this.showWarmupPrompt();
+        break;
+      case "pushWarmupRequested":
+        this.pushEvent("warmup_requested", {});
+        break;
+      case "renderMoodPrompt":
+        this.showMoodPicker();
+        break;
+      case "pushSessionStarted":
+        this.pushEvent("session_started", {mood: command.mood});
+        break;
+      case "startCountdownTimer":
+        this.startCountdown();
+        break;
+    }
+  },
+
   showWarmupPrompt() {
     // Overlay is already rendered by the server; nothing to do here.
   },
 
   onWarmupYes() {
-    this.pushEvent("warmup_requested", {});
-    // server responds with warmup_ready → startCountdown()
+    this.dispatchSession({type: "WARMUP_YES"});
+    // server responds with warmup_ready → mood picker
   },
 
   onWarmupSkip() {
-    this.timeline = this.mainTimeline;
-    this.showMoodPicker();
+    this.dispatchSession({type: "WARMUP_SKIP"});
   },
 
   showMoodPicker() {
@@ -184,8 +217,7 @@ const SessionHook = {
     overlay.querySelectorAll("[data-mood]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const mood = btn.getAttribute("data-mood");
-        this.pushEvent("session_started", { mood });
-        this.startCountdown();
+        this.dispatchSession({type: "MOOD_SELECTED", mood, now: performance.now()});
       });
     });
   },
@@ -286,6 +318,9 @@ const SessionHook = {
   },
 
   beginSession() {
+    const result = transition(this.fsm, {type: "COUNTDOWN_DONE", now: performance.now()});
+    this.fsm = result.state;
+
     this.totalDuration = this.timeline.reduce((s, e) => s + e.duration_sec, 0);
     this.warmupEndSec = this.timeline
       .filter((e) => e.type === "warmup_burpee" || e.type === "warmup_rest")
@@ -299,6 +334,7 @@ const SessionHook = {
     this.lastEventType = null;
     this.lastBurpeeCount = 0;
     this.lastWorkEvent = null;
+    this.previousFrame = null;
 
     const firstEvent = this.timeline[0];
     const isFirstWork =
@@ -323,8 +359,9 @@ const SessionHook = {
     const now = performance.now();
     const elapsed = (now - this.startTime) / 1000;
     const state = this.currentEvent(elapsed);
+    const frame = currentFrame(this.timeline, elapsed);
 
-    this.finalizeCompletedWorkEvent(state);
+    this.accountBoundaryReps(frame);
     this.updateUI(state, elapsed);
     this.checkBeeps(state, elapsed);
 
@@ -509,39 +546,25 @@ const SessionHook = {
     }
   },
 
-  finalizeCompletedWorkEvent(state) {
-    const currentEvent = state && state.event;
-    const lastEvent = this.lastWorkEvent;
+  accountBoundaryReps(frame) {
+    const nextReps = accountReps(this.previousFrame, frame, {
+      currentEventKey: this.previousFrame
+        ? `${this.previousFrame.index}:${this.previousFrame.event.type}:${this.previousFrame.event.label || ""}`
+        : null,
+      doneInEvent: this.doneReps,
+      mainDone: this.mainBurpeeCount,
+      warmupDone: this.warmupBurpeeCount,
+    });
 
-    if (
-      !lastEvent ||
-      currentEvent === lastEvent ||
-      (currentEvent &&
-        currentEvent.type === lastEvent.type &&
-        currentEvent.label === lastEvent.label &&
-        currentEvent.burpee_count === lastEvent.burpee_count &&
-        currentEvent.duration_sec === lastEvent.duration_sec)
-    ) {
-      return;
+    this.mainBurpeeCount = nextReps.mainDone;
+    this.warmupBurpeeCount = nextReps.warmupDone;
+    this.previousFrame = frame;
+
+    if (frame && nextReps.currentEventKey) {
+      this.doneReps = nextReps.doneInEvent;
     }
 
-    const isBurpee =
-      lastEvent.type === "work_burpee" || lastEvent.type === "warmup_burpee";
-    if (!isBurpee) return;
-
-    const missingReps = Math.max((lastEvent.burpee_count || 0) - this.doneReps, 0);
-    if (missingReps === 0) return;
-
-    if (lastEvent.type === "warmup_burpee") {
-      this.warmupBurpeeCount += missingReps;
-      this.updateTotalCounter(this.mainBurpeeCount);
-    } else {
-      this.mainBurpeeCount += missingReps;
-      this.updateTotalCounter(this.mainBurpeeCount);
-    }
-
-    this.doneReps = lastEvent.burpee_count || 0;
-    this.lastWorkEvent = null;
+    this.updateTotalCounter(this.mainBurpeeCount);
   },
 
   // ---------------------------------------------------------------------------
@@ -751,6 +774,9 @@ const SessionHook = {
 
   onComplete(elapsed) {
     if (this.rafId) cancelAnimationFrame(this.rafId);
+
+    this.accountBoundaryReps(null);
+    this.fsm = transition(this.fsm, {type: "WORKOUT_DONE"}).state;
 
     // Warmup duration = elapsed up to warmupEndSec (or total warmup sec)
     const warmupDuration = Math.min(elapsed, this.warmupEndSec);
