@@ -1,0 +1,30 @@
+<Layouts.app
+  flash={@flash}
+  current_user={@current_user}
+  current_level={@current_level}
+  current_page={:plans}
+>
+  <div class="space-y-6 max-w-3xl">
+    <.plan_editor_header plan_input={@plan_input} />
+
+    <.plan_type_picker plan_input={@plan_input} />
+
+    <.plan_goal_controls plan_input={@plan_input} level={@level} />
+
+    <.plan_pacing_controls plan_input={@plan_input} />
+
+    <.plan_rest_controls plan_input={@plan_input} level={@level} />
+
+    <.plan_solution_card
+      form={@form}
+      expanded_blocks={@expanded_blocks}
+      open_block_menu={@open_block_menu}
+      plan_input={@plan_input}
+      manual_edit={@manual_edit}
+      derived={@derived}
+      solver_error={@solver_error}
+      solver_solution={@solver_solution}
+      live_action={@live_action}
+    />
+  </div>
+</Layouts.app>

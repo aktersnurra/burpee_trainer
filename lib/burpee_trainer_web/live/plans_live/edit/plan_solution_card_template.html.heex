@@ -1,0 +1,102 @@
+<section class="rounded-[10px] bg-base-300">
+  <div class="px-5 py-4 border-b border-base-border">
+    <%= if @solver_error do %>
+      <div class="flex items-center gap-2">
+        <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
+        <span class="text-sm text-error">{@solver_error}</span>
+      </div>
+    <% else %>
+      <%= if @derived do %>
+        <div class="space-y-3">
+          <p class={[
+            "text-xs font-semibold uppercase tracking-widest",
+            if(@derived.both_ok, do: "text-primary", else: "text-error")
+          ]}>
+            {if @derived.both_ok, do: "✓ Solution", else: "✗ Invalid"}
+          </p>
+          <div class="flex items-end justify-between gap-6">
+            <div class="flex items-end gap-6">
+              <div class="space-y-0.5">
+                <p class={[
+                  "text-2xl font-bold tabular-nums leading-none",
+                  if(@derived.duration_ok, do: "text-base-content", else: "text-error")
+                ]}>
+                  {Fmt.duration_sec(round(@derived.duration_sec))}
+                </p>
+                <p class="text-[10px] text-base-content/40 uppercase tracking-widest">
+                  duration
+                </p>
+              </div>
+              <div class="space-y-0.5">
+                <p class={[
+                  "text-2xl font-bold tabular-nums leading-none",
+                  if(@derived.count_ok, do: "text-base-content", else: "text-error")
+                ]}>
+                  {@derived.burpee_count}
+                </p>
+                <p class="text-[10px] text-base-content/40 uppercase tracking-widest">reps</p>
+              </div>
+            </div>
+            <%= if !@manual_edit do %>
+              <button
+                type="button"
+                phx-click="enable_manual_edit"
+                class="text-xs text-base-content/30 hover:text-base-content/60 transition mb-0.5"
+              >
+                Edit manually
+              </button>
+            <% end %>
+          </div>
+          <%= if @solver_solution && !@manual_edit do %>
+            <p class="text-xs text-base-content/40 tabular-nums">
+              {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+            </p>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <.form
+    for={@form}
+    id="plan-form"
+    phx-change="validate"
+    phx-submit="save"
+    class="px-5 pb-5 space-y-4"
+  >
+    <.blocks_editor
+      form={@form}
+      expanded_blocks={@expanded_blocks}
+      open_block_menu={@open_block_menu}
+      plan_input={@plan_input}
+      manual_edit={@manual_edit}
+      block_time_ranges={@block_time_ranges}
+    />
+
+    <%= if @manual_edit do %>
+      <div class="border-t border-base-border pt-4">
+        <label class="cursor-pointer text-xs text-base-content/35 hover:text-primary transition flex items-center gap-1">
+          <.icon name="hero-plus" class="size-3.5" /> Add block
+          <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
+        </label>
+      </div>
+    <% end %>
+  </.form>
+</section>
+
+<button
+  type="submit"
+  form="plan-form"
+  class={[
+    "w-full py-4 rounded-[10px] text-sm font-semibold tracking-wide transition flex items-center justify-center gap-2",
+    if(@derived && @derived.both_ok,
+      do: "bg-primary/75 text-primary-content hover:bg-primary/85",
+      else: "bg-base-300 text-base-content/20 cursor-not-allowed"
+    )
+  ]}
+>
+  {if @live_action == :new, do: "Create plan", else: "Save plan"}
+  <%= if @derived && @derived.both_ok do %>
+    <.icon name="hero-arrow-right" class="size-4" />
+  <% end %>
+</button>
