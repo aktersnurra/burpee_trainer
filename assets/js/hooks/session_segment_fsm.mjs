@@ -61,32 +61,63 @@ export function eventKey(frameOrEvent, fallbackIndex = 0) {
 	return `${index}:${event.type}:${event.label || ""}`;
 }
 
+function isBurpeeEvent(event) {
+	return event.type === "work_burpee" || event.type === "warmup_burpee";
+}
+
+function completedRepsInFrame(frame) {
+	if (!frame || !frame.event || !isBurpeeEvent(frame.event)) return 0;
+
+	const event = frame.event;
+	const target = event.burpee_count || 0;
+	const secondsPerRep =
+		event.sec_per_rep ||
+		event.sec_per_burpee ||
+		event.duration_sec / (target || 1);
+
+	return Math.min(Math.floor((frame.phase_elapsed || 0) / secondsPerRep), target);
+}
+
 export function accountReps(previousFrame, nextFrame, reps) {
-	if (!previousFrame || !previousFrame.event) return reps;
+	const nextKey = eventKey(nextFrame);
+
+	if (!previousFrame || !previousFrame.event) {
+		const completed = completedRepsInFrame(nextFrame);
+		return {
+			...reps,
+			currentEventKey: nextKey,
+			doneInEvent: completed,
+			burpeeCountDone: reps.burpeeCountDone + completed,
+		};
+	}
 
 	const previousEvent = previousFrame.event;
 	const previousKey = eventKey(previousFrame);
-	const nextKey = eventKey(nextFrame);
-	const isBurpee =
-		previousEvent.type === "work_burpee" ||
-		previousEvent.type === "warmup_burpee";
+	const isBurpee = isBurpeeEvent(previousEvent);
 
-	if (previousKey === nextKey) return reps;
-	if (!isBurpee) return reps;
+	if (previousKey === nextKey) {
+		const completed = completedRepsInFrame(nextFrame);
+		const doneInEvent = reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
+		const newlyCompleted = Math.max(completed - doneInEvent, 0);
+
+		return {
+			...reps,
+			currentEventKey: nextKey,
+			doneInEvent: Math.max(doneInEvent, completed),
+			burpeeCountDone: reps.burpeeCountDone + newlyCompleted,
+		};
+	}
+
+	if (!isBurpee) return { ...reps, currentEventKey: nextKey, doneInEvent: 0 };
 
 	const target = previousEvent.burpee_count || 0;
-	const doneInEvent =
-		reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
+	const doneInEvent = reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
 	const missing = Math.max(target - doneInEvent, 0);
-
-	if (missing === 0) {
-		return { ...reps, currentEventKey: nextKey, doneInEvent: 0 };
-	}
 
 	return {
 		...reps,
 		currentEventKey: nextKey,
-		doneInEvent: 0,
+		doneInEvent: completedRepsInFrame(nextFrame),
 		burpeeCountDone: reps.burpeeCountDone + missing,
 	};
 }
@@ -280,15 +311,21 @@ function finalizeSegment(state, elapsedSec) {
 
 export function segmentTransition(state, event) {
 	switch (event.type) {
-		case "SEGMENT_READY":
+		case "SEGMENT_READY": {
+			const timeline = event.timeline || [];
 			return {
 				state: {
 					...initialSegmentState(),
-					timeline: event.timeline || [],
+					timeline,
 					blockCount: event.blockCount || 0,
 				},
-				commands: [{ type: "updateVisibleRepTotal", burpeeCountDone: 0 }],
+				commands: [
+					{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+					{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
+					{ type: "renderTimer", timeLeftSec: totalDurationSec(timeline) },
+				],
 			};
+		}
 
 		case "COUNTDOWN_START":
 			return {

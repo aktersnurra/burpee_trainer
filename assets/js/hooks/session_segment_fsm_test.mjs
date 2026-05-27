@@ -72,6 +72,8 @@ assert.equal(result.state.mode, "idle");
 assert.equal(result.state.timeline.length, 2);
 assert.deepEqual(result.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
+	{ type: "renderTimer", timeLeftSec: 15 },
 ]);
 
 const resetResult = segmentTransition(
@@ -91,6 +93,8 @@ assert.equal(resetResult.state.reps.burpeeCountDone, 0);
 assert.equal(resetResult.state.reps.doneInEvent, 0);
 assert.deepEqual(resetResult.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
+	{ type: "renderTimer", timeLeftSec: 10 },
 ]);
 
 result = segmentTransition(result.state, { type: "COUNTDOWN_START", now: 1000 });
@@ -243,6 +247,36 @@ result = segmentTransition(repState, {
 assert.equal(result.state.reps.burpeeCountDone, 5);
 assert.deepEqual(result.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 5 },
+]);
+
+result = segmentTransition(initialSegmentState(), {
+	type: "ACCOUNT_REPS",
+	frame: {
+		event: warmupWork,
+		index: 0,
+		phase_elapsed: 2.1,
+		phase_remaining: 7.9,
+	},
+});
+assert.equal(result.state.reps.doneInEvent, 1);
+assert.equal(result.state.reps.burpeeCountDone, 1);
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 1 },
+]);
+
+result = segmentTransition(result.state, {
+	type: "ACCOUNT_REPS",
+	frame: {
+		event: warmupWork,
+		index: 0,
+		phase_elapsed: 2.2,
+		phase_remaining: 7.8,
+	},
+});
+assert.equal(result.state.reps.doneInEvent, 1);
+assert.equal(result.state.reps.burpeeCountDone, 1);
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 1 },
 ]);
 
 result = segmentTransition(
