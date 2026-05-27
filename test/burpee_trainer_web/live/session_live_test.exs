@@ -172,7 +172,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert main.plan_id == plan.id
   end
 
-  test "save_session with warmup saves a separate warmup session", %{conn: conn, user: user} do
+  test "save_session with warmup saves only the main workout session", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
@@ -194,18 +194,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       |> form("#session-completion-form", workout_session: params)
       |> render_submit()
 
-    sessions = Workouts.list_sessions(user)
-    assert length(sessions) == 2
-
-    warmup_session = Enum.find(sessions, fn s -> s.tags == "warmup" end)
-    assert warmup_session
-    assert warmup_session.burpee_count_actual == 5
-    assert warmup_session.plan_id == nil
-
-    main_session = Enum.find(sessions, fn s -> s.tags != "warmup" end)
-    assert main_session
+    [main_session] = Workouts.list_sessions(user)
     assert main_session.burpee_count_actual == 25
     assert main_session.plan_id == plan.id
+    refute main_session.tags == "warmup"
   end
 
   test "save_session with no warmup saves only main session", %{conn: conn, user: user} do
