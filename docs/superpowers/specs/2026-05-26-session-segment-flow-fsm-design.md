@@ -19,7 +19,7 @@ Warmup?
   Yes  -> warmup countdown -> warmup -> Ready for workout? -> workout countdown -> workout -> logger
 ```
 
-Each segment owns its own countdown, timer, progress, rep accounting, display commands, and final result.
+Each segment owns its own countdown, timer, progress, visible rep counter, rep accounting, display commands, and final result. Warmup progress and rep count reset when the workout segment starts; the workout segment does not inherit visible progress or reps from warmup.
 
 ## Architecture
 
@@ -56,6 +56,7 @@ Responsibilities:
 - pause/resume and visibility clock adjustment
 - per-segment rep accounting
 - per-segment display command derivation
+- per-segment visible rep total updates
 - beep command derivation
 - completion of one segment
 
@@ -167,6 +168,7 @@ Flow commands are session-specific:
 
 - countdown transitions to running
 - running tick displays progress/timer using only the segment duration
+- visible rep total is segment-local and resets for each `SEGMENT_READY`
 - segment completion emits `segmentDone`
 - pause/resume preserves elapsed time
 - visibility hidden/visible preserves elapsed time
