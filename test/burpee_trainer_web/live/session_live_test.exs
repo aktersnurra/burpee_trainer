@@ -20,34 +20,29 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert html =~ "Skip"
   end
 
-  test "mount pushes session_ready with serialized timeline", %{conn: conn, user: user} do
+  test "mount pushes session_ready with serialized plan", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    assert_push_event(view, "session_ready", %{timeline: timeline})
-    assert is_list(timeline)
-    assert length(timeline) > 0
+    assert_push_event(view, "session_ready", %{plan: plan_payload})
+    assert is_list(plan_payload.blocks)
+    assert length(plan_payload.blocks) > 0
 
-    first = hd(timeline)
-    assert Map.has_key?(first, :type)
-    assert Map.has_key?(first, :duration_sec)
-    assert Map.has_key?(first, :burpee_count)
-    assert Map.has_key?(first, :sec_per_burpee)
-    assert Map.has_key?(first, :label)
+    first_block = hd(plan_payload.blocks)
+    first_set = hd(first_block.sets)
+    assert Map.has_key?(first_block, :repeat_count)
+    assert Map.has_key?(first_set, :burpee_count)
+    assert Map.has_key?(first_set, :sec_per_rep)
+    assert Map.has_key?(first_set, :end_of_set_rest)
   end
 
-  test "warmup_requested returns warmup_ready event", %{conn: conn, user: user} do
+  test "warmup_requested is not needed by client-owned runner", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "warmup_requested", %{})
 
-    assert_push_event(view, "warmup_ready", %{warmup: warmup})
-    assert is_list(warmup)
-    assert length(warmup) > 0
-    types = Enum.map(warmup, & &1.type)
-    assert "warmup_burpee" in types
-    assert "warmup_rest" in types
+    refute_push_event(view, "warmup_ready", %{}, 20)
   end
 
   test "session_started transitions phase to running", %{conn: conn, user: user} do

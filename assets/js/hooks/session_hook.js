@@ -5,6 +5,11 @@ import {
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
 import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
+import {
+	timelineBurpeeCount,
+	warmupTimelineFromPlan,
+	workoutTimelineFromPlan,
+} from "./session_plan.mjs";
 import { SessionRenderer } from "./session_renderer.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 
@@ -74,19 +79,12 @@ const SessionHook = {
 			passive: true,
 		});
 
-		this.handleEvent("session_ready", ({ timeline, block_count }) => {
+		this.handleEvent("session_ready", ({ plan }) => {
+			this.plan = plan;
 			this.dispatchFlow({
 				type: "SESSION_READY",
-				workoutTimeline: timeline,
-				blockCount: block_count || 0,
-			});
-		});
-
-		this.handleEvent("warmup_ready", ({ warmup, burpee_count_target }) => {
-			this.dispatchFlow({
-				type: "WARMUP_READY",
-				warmupTimeline: warmup,
-				burpeeCountTarget: burpee_count_target,
+				workoutTimeline: workoutTimelineFromPlan(plan),
+				blockCount: (plan.blocks || []).length,
 			});
 		});
 
@@ -283,7 +281,12 @@ const SessionHook = {
 	},
 
 	onWarmupYes() {
-		this.dispatchFlow({ type: "WARMUP_YES" });
+		const warmupTimeline = warmupTimelineFromPlan(this.plan);
+		this.dispatchFlow({
+			type: "WARMUP_READY",
+			warmupTimeline,
+			burpeeCountTarget: timelineBurpeeCount(warmupTimeline),
+		});
 	},
 
 	onWarmupSkip() {

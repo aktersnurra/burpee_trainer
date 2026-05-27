@@ -19,7 +19,12 @@ assert.deepEqual(result.commands, [{ type: "renderPrompt" }]);
 result = flowTransition(result.state, { type: "WARMUP_SKIP" });
 assert.equal(result.state.mode, "workout_countdown");
 assert.deepEqual(result.commands, [
-	{ type: "startSegment", segment: "workout", timeline: workoutTimeline, blockCount: 1 },
+	{
+		type: "startSegment",
+		segment: "workout",
+		timeline: workoutTimeline,
+		blockCount: 1,
+	},
 ]);
 
 result = flowTransition(initialFlowState(), {
@@ -28,7 +33,7 @@ result = flowTransition(initialFlowState(), {
 	blockCount: 1,
 });
 result = flowTransition(result.state, { type: "WARMUP_YES" });
-assert.deepEqual(result.commands, [{ type: "pushWarmupRequested" }]);
+assert.deepEqual(result.commands, []);
 
 result = flowTransition(result.state, {
 	type: "WARMUP_READY",
@@ -57,7 +62,12 @@ assert.deepEqual(result.commands, [{ type: "showWarmupDonePrompt" }]);
 result = flowTransition(result.state, { type: "WORKOUT_READY" });
 assert.equal(result.state.mode, "workout_countdown");
 assert.deepEqual(result.commands, [
-	{ type: "startSegment", segment: "workout", timeline: workoutTimeline, blockCount: 1 },
+	{
+		type: "startSegment",
+		segment: "workout",
+		timeline: workoutTimeline,
+		blockCount: 1,
+	},
 ]);
 
 result = flowTransition(result.state, {

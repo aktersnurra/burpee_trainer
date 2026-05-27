@@ -25,15 +25,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
     case Integer.parse(plan_id) do
       {id, ""} ->
         plan = Workouts.get_plan!(user, id)
-        timeline = Planner.to_timeline(plan)
         summary = Planner.summary(plan)
 
         socket =
           socket
           |> assign(:plan, plan)
-          |> assign(:timeline, timeline)
           |> assign(:summary, summary)
-          |> assign(:phase, if(timeline == [], do: :not_runnable, else: :idle))
+          |> assign(:phase, if(plan.blocks == [], do: :not_runnable, else: :idle))
           |> assign(:mood, nil)
           |> assign(:warmup_asked, false)
           |> assign(:completion_tags, [])
@@ -41,13 +39,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:warmup_burpee_count, 0)
           |> assign(:warmup_duration_sec, 0)
 
-        block_count = length(plan.blocks)
-
-        {:ok,
-         push_event(socket, "session_ready", %{
-           timeline: serialize_timeline(timeline),
-           block_count: block_count
-         })}
+        {:ok, push_event(socket, "session_ready", %{plan: serialize_plan(plan)})}
 
       _ ->
         {:ok,
@@ -58,15 +50,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
-  def handle_event("warmup_requested", _, socket) do
-    warmup = Planner.warmup_timeline(socket.assigns.plan)
-
-    {:noreply,
-     push_event(socket, "warmup_ready", %{
-       warmup: serialize_timeline(warmup),
-       burpee_count_target: timeline_burpee_count(warmup)
-     })}
-  end
+  def handle_event("warmup_requested", _params, socket), do: {:noreply, socket}
 
   def handle_event("session_started", _params, socket) do
     {:noreply, socket |> assign(:phase, :running) |> assign(:warmup_asked, true)}
@@ -153,26 +137,27 @@ defmodule BurpeeTrainerWeb.SessionLive do
     {:noreply, push_navigate(socket, to: ~p"/workouts")}
   end
 
-  defp serialize_timeline(events) do
-    Enum.map(events, fn e ->
-      %{
-        type: Atom.to_string(e.type),
-        duration_sec: e.duration_sec,
-        burpee_count: e.burpee_count,
-        sec_per_burpee: e.sec_per_burpee,
-        label: e.label
-      }
-    end)
-  end
-
-  defp timeline_burpee_count(events) do
-    Enum.reduce(events, 0, fn
-      %{type: type, burpee_count: count}, total when type in [:warmup_burpee, :work_burpee] ->
-        total + (count || 0)
-
-      _event, total ->
-        total
-    end)
+  defp serialize_plan(plan) do
+    %{
+      sec_per_burpee: plan.sec_per_burpee,
+      blocks:
+        Enum.map(plan.blocks, fn block ->
+          %{
+            position: block.position,
+            repeat_count: block.repeat_count,
+            sets:
+              Enum.map(block.sets, fn set ->
+                %{
+                  position: set.position,
+                  burpee_count: set.burpee_count,
+                  sec_per_rep: set.sec_per_rep,
+                  sec_per_burpee: set.sec_per_burpee,
+                  end_of_set_rest: set.end_of_set_rest
+                }
+              end)
+          }
+        end)
+    }
   end
 
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}

@@ -40,7 +40,7 @@ export function flowTransition(state, event) {
 			};
 
 		case "WARMUP_YES":
-			return { state, commands: [{ type: "pushWarmupRequested" }] };
+			return { state, commands: [] };
 
 		case "WARMUP_READY":
 			return {
