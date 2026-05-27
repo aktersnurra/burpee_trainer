@@ -70,6 +70,28 @@ let result = segmentTransition(initialSegmentState(), {
 });
 assert.equal(result.state.mode, "idle");
 assert.equal(result.state.timeline.length, 2);
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+]);
+
+const resetResult = segmentTransition(
+	{
+		...initialSegmentState(),
+		reps: {
+			...initialSegmentState().reps,
+			burpeeCountDone: 7,
+			doneInEvent: 7,
+			currentEventKey: "0:work_burpee:Previous",
+			previousFrame: { event: work, index: 0 },
+		},
+	},
+	{ type: "SEGMENT_READY", timeline: [work], blockCount: 1 },
+);
+assert.equal(resetResult.state.reps.burpeeCountDone, 0);
+assert.equal(resetResult.state.reps.doneInEvent, 0);
+assert.deepEqual(resetResult.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+]);
 
 result = segmentTransition(result.state, { type: "COUNTDOWN_START", now: 1000 });
 assert.equal(result.state.mode, "countdown");

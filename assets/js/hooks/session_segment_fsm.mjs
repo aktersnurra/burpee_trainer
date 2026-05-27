@@ -287,7 +287,7 @@ export function segmentTransition(state, event) {
 					timeline: event.timeline || [],
 					blockCount: event.blockCount || 0,
 				},
-				commands: [],
+				commands: [{ type: "updateVisibleRepTotal", burpeeCountDone: 0 }],
 			};
 
 		case "COUNTDOWN_START":
