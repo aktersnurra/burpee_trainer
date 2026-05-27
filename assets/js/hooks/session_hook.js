@@ -204,6 +204,9 @@ const SessionHook = {
 			case "triggerDown":
 				this.renderer.triggerDown(command.remainingReps);
 				break;
+			case "renderCurrentSetRepCount":
+				this.renderer.updateCurrentSetRepCount(command.remainingReps);
+				break;
 			case "renderWorkRepProgress":
 				this.renderer.updateWorkRing(command.progress, command.color);
 				break;

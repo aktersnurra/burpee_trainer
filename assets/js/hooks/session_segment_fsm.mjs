@@ -29,6 +29,7 @@ export function initialSegmentState() {
 		display: {
 			lastEventType: null,
 			lastBurpeeCount: 0,
+			lastRemainingReps: null,
 		},
 	};
 }
@@ -248,6 +249,7 @@ function displayCommandsForFrame(display, event) {
 
 	if (isWork) {
 		const burpeeCount = timelineEvent.burpee_count || 0;
+		const remainingReps = Math.max(burpeeCount - (event.doneInEvent || 0), 0);
 		const enteringWork =
 			timelineEvent.type !== display.lastEventType ||
 			burpeeCount !== display.lastBurpeeCount;
@@ -259,12 +261,16 @@ function displayCommandsForFrame(display, event) {
 			});
 			commands.push({
 				type: "triggerDown",
-				remainingReps: Math.max(burpeeCount - (event.doneInEvent || 0), 0),
+				remainingReps,
 			});
 			nextDisplay = {
 				lastEventType: timelineEvent.type,
 				lastBurpeeCount: burpeeCount,
+				lastRemainingReps: remainingReps,
 			};
+		} else if (remainingReps !== display.lastRemainingReps) {
+			commands.push({ type: "renderCurrentSetRepCount", remainingReps });
+			nextDisplay = { ...display, lastRemainingReps: remainingReps };
 		}
 
 		const secondsPerRep =
@@ -284,6 +290,7 @@ function displayCommandsForFrame(display, event) {
 			nextDisplay = {
 				lastEventType: timelineEvent.type,
 				lastBurpeeCount: 0,
+				lastRemainingReps: null,
 			};
 		}
 		commands.push({

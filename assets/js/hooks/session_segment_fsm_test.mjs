@@ -241,6 +241,29 @@ assert.deepEqual(result.commands.slice(3), [
 
 result = segmentTransition(result.state, {
 	type: "DISPLAY_FRAME",
+	frame: {
+		event: warmupWork,
+		index: 0,
+		phase_elapsed: 4,
+		phase_remaining: 6,
+	},
+	elapsedSec: 4,
+	totalDurationSec: 15,
+	doneInEvent: 2,
+	blockCount: 0,
+});
+assert.deepEqual(result.commands.slice(0, 3), [
+	{ type: "renderProgressBar", percent: 26.7, color: "#F59E0B" },
+	{ type: "renderTimer", timeLeftSec: 11 },
+	{ type: "renderBlockLabel", label: "" },
+]);
+assert.deepEqual(result.commands.slice(3), [
+	{ type: "renderCurrentSetRepCount", remainingReps: 3 },
+	{ type: "renderWorkRepProgress", progress: 0, color: "#F59E0B" },
+]);
+
+result = segmentTransition(result.state, {
+	type: "DISPLAY_FRAME",
 	frame: { event: rest, index: 1, phase_elapsed: 1, phase_remaining: 4 },
 	elapsedSec: 11,
 	totalDurationSec: 15,

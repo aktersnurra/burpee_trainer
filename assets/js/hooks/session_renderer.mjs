@@ -132,11 +132,17 @@ export class SessionRenderer {
 		this.downTimeout = setTimeout(() => {
 			this.downTimeout = null;
 			downEl.style.display = "none";
-			countEl.textContent = repsLeft;
-			countEl.style.color = "#C8D8F0";
-			countEl.style.visibility = "";
-			this.lastDisplayed = repsLeft;
+			this.updateCurrentSetRepCount(repsLeft);
 		}, 350);
+	}
+
+	updateCurrentSetRepCount(repsLeft) {
+		const countEl = this.root.querySelector("#count");
+		if (!countEl) return;
+		countEl.textContent = repsLeft;
+		countEl.style.color = "#C8D8F0";
+		countEl.style.visibility = "";
+		this.lastDisplayed = repsLeft;
 	}
 
 	triggerFlash() {
