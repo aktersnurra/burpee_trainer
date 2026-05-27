@@ -60,7 +60,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
   @impl true
   def handle_event("warmup_requested", _, socket) do
     warmup = Planner.warmup_timeline(socket.assigns.plan)
-    {:noreply, push_event(socket, "warmup_ready", %{warmup: serialize_timeline(warmup)})}
+
+    {:noreply,
+     push_event(socket, "warmup_ready", %{
+       warmup: serialize_timeline(warmup),
+       burpee_count_target: timeline_burpee_count(warmup)
+     })}
   end
 
   def handle_event("session_started", _params, socket) do
@@ -157,6 +162,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
         sec_per_burpee: e.sec_per_burpee,
         label: e.label
       }
+    end)
+  end
+
+  defp timeline_burpee_count(events) do
+    Enum.reduce(events, 0, fn
+      %{type: type, burpee_count: count}, total when type in [:warmup_burpee, :work_burpee] ->
+        total + (count || 0)
+
+      _event, total ->
+        total
     end)
   end
 

@@ -55,6 +55,7 @@ export function flowTransition(state, event) {
 						segment: "warmup",
 						timeline: event.warmupTimeline || [],
 						blockCount: state.blockCount,
+						burpeeCountTarget: event.burpeeCountTarget,
 					},
 				],
 			};

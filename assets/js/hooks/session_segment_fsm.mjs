@@ -325,6 +325,8 @@ export function segmentTransition(state, event) {
 	switch (event.type) {
 		case "SEGMENT_READY": {
 			const timeline = event.timeline || [];
+			const burpeeCountTarget =
+				event.burpeeCountTarget ?? totalBurpeeCount(timeline);
 			return {
 				state: {
 					...initialSegmentState(),
@@ -335,7 +337,7 @@ export function segmentTransition(state, event) {
 					{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
 					{
 						type: "updateVisibleRepGoal",
-						burpeeCountTarget: totalBurpeeCount(timeline),
+						burpeeCountTarget,
 					},
 					{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 					{ type: "renderTimer", timeLeftSec: totalDurationSec(timeline) },

@@ -30,10 +30,20 @@ result = flowTransition(initialFlowState(), {
 result = flowTransition(result.state, { type: "WARMUP_YES" });
 assert.deepEqual(result.commands, [{ type: "pushWarmupRequested" }]);
 
-result = flowTransition(result.state, { type: "WARMUP_READY", warmupTimeline });
+result = flowTransition(result.state, {
+	type: "WARMUP_READY",
+	warmupTimeline,
+	burpeeCountTarget: 6,
+});
 assert.equal(result.state.mode, "warmup_countdown");
 assert.deepEqual(result.commands, [
-	{ type: "startSegment", segment: "warmup", timeline: warmupTimeline, blockCount: 1 },
+	{
+		type: "startSegment",
+		segment: "warmup",
+		timeline: warmupTimeline,
+		blockCount: 1,
+		burpeeCountTarget: 6,
+	},
 ]);
 
 result = flowTransition(result.state, {

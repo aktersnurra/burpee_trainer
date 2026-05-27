@@ -82,8 +82,12 @@ const SessionHook = {
 			});
 		});
 
-		this.handleEvent("warmup_ready", ({ warmup }) => {
-			this.dispatchFlow({ type: "WARMUP_READY", warmupTimeline: warmup });
+		this.handleEvent("warmup_ready", ({ warmup, burpee_count_target }) => {
+			this.dispatchFlow({
+				type: "WARMUP_READY",
+				warmupTimeline: warmup,
+				burpeeCountTarget: burpee_count_target,
+			});
 		});
 
 		this.el.addEventListener("click", (e) => {
@@ -408,10 +412,15 @@ const SessionHook = {
 		this.startTime = this.segment.clock.startTime;
 	},
 
-	startSegment({ segment, timeline, blockCount }) {
+	startSegment({ segment, timeline, blockCount, burpeeCountTarget }) {
 		this.activeSegment = segment;
 		this.segment = initialSegmentState();
-		this.dispatchSegment({ type: "SEGMENT_READY", timeline, blockCount });
+		this.dispatchSegment({
+			type: "SEGMENT_READY",
+			timeline,
+			blockCount,
+			burpeeCountTarget,
+		});
 		this.dispatchSegment({ type: "COUNTDOWN_START", now: performance.now() });
 	},
 
