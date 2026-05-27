@@ -75,7 +75,10 @@ function completedRepsInFrame(frame) {
 		event.sec_per_burpee ||
 		event.duration_sec / (target || 1);
 
-	return Math.min(Math.floor((frame.phase_elapsed || 0) / secondsPerRep), target);
+	return Math.min(
+		Math.floor((frame.phase_elapsed || 0) / secondsPerRep),
+		target,
+	);
 }
 
 export function accountReps(previousFrame, nextFrame, reps) {
@@ -97,7 +100,8 @@ export function accountReps(previousFrame, nextFrame, reps) {
 
 	if (previousKey === nextKey) {
 		const completed = completedRepsInFrame(nextFrame);
-		const doneInEvent = reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
+		const doneInEvent =
+			reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
 		const newlyCompleted = Math.max(completed - doneInEvent, 0);
 
 		return {
@@ -111,7 +115,8 @@ export function accountReps(previousFrame, nextFrame, reps) {
 	if (!isBurpee) return { ...reps, currentEventKey: nextKey, doneInEvent: 0 };
 
 	const target = previousEvent.burpee_count || 0;
-	const doneInEvent = reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
+	const doneInEvent =
+		reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
 	const missing = Math.max(target - doneInEvent, 0);
 
 	return {
@@ -328,7 +333,10 @@ export function segmentTransition(state, event) {
 				},
 				commands: [
 					{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
-					{ type: "updateVisibleRepGoal", burpeeCountTarget: totalBurpeeCount(timeline) },
+					{
+						type: "updateVisibleRepGoal",
+						burpeeCountTarget: totalBurpeeCount(timeline),
+					},
 					{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 					{ type: "renderTimer", timeLeftSec: totalDurationSec(timeline) },
 				],
@@ -368,7 +376,10 @@ export function segmentTransition(state, event) {
 			};
 
 		case "COUNTDOWN_RESUME": {
-			const remainingMs = Math.max(1000 - (state.countdown.stepElapsedMs || 0), 0);
+			const remainingMs = Math.max(
+				1000 - (state.countdown.stepElapsedMs || 0),
+				0,
+			);
 			return {
 				state: {
 					...state,
@@ -397,7 +408,11 @@ export function segmentTransition(state, event) {
 					commands: [
 						{ type: "renderCountdown", value: event.value, animate: true },
 						{ type: "playLeadBeep" },
-						{ type: "scheduleCountdownTick", nextValue: event.value - 1, delayMs: 1000 },
+						{
+							type: "scheduleCountdownTick",
+							nextValue: event.value - 1,
+							delayMs: 1000,
+						},
 					],
 				};
 			}
@@ -456,7 +471,9 @@ export function segmentTransition(state, event) {
 			const repsAfterFrame = frame
 				? accountReps(state.reps.previousFrame, frame, state.reps)
 				: accountReps(state.reps.previousFrame, null, state.reps);
-			const nextReps = frame ? accountReps(frame, null, repsAfterFrame) : repsAfterFrame;
+			const nextReps = frame
+				? accountReps(frame, null, repsAfterFrame)
+				: repsAfterFrame;
 
 			return {
 				state: {
@@ -481,7 +498,8 @@ export function segmentTransition(state, event) {
 		case "DISPLAY_FRAME": {
 			const result = displayCommandsForFrame(state.display, {
 				...event,
-				totalDurationSec: event.totalDurationSec || state.clock.totalDurationSec,
+				totalDurationSec:
+					event.totalDurationSec || state.clock.totalDurationSec,
 			});
 			return {
 				state: { ...state, display: result.display },
@@ -490,14 +508,21 @@ export function segmentTransition(state, event) {
 		}
 
 		case "ACCOUNT_REPS": {
-			const nextReps = accountReps(state.reps.previousFrame, event.frame, state.reps);
+			const nextReps = accountReps(
+				state.reps.previousFrame,
+				event.frame,
+				state.reps,
+			);
 			return {
 				state: {
 					...state,
 					reps: { ...nextReps, previousFrame: event.frame },
 				},
 				commands: [
-					{ type: "updateVisibleRepTotal", burpeeCountDone: nextReps.burpeeCountDone },
+					{
+						type: "updateVisibleRepTotal",
+						burpeeCountDone: nextReps.burpeeCountDone,
+					},
 				],
 			};
 		}
@@ -530,7 +555,10 @@ export function segmentTransition(state, event) {
 			};
 
 		case "RESUME": {
-			const pausedFor = Math.max((event.now || 0) - (state.clock.pauseTime || 0), 0);
+			const pausedFor = Math.max(
+				(event.now || 0) - (state.clock.pauseTime || 0),
+				0,
+			);
 			return {
 				state: {
 					...state,
@@ -558,7 +586,10 @@ export function segmentTransition(state, event) {
 			};
 
 		case "VISIBILITY_VISIBLE": {
-			const hiddenFor = Math.max((event.now || 0) - (state.clock.hiddenAt || 0), 0);
+			const hiddenFor = Math.max(
+				(event.now || 0) - (state.clock.hiddenAt || 0),
+				0,
+			);
 			return {
 				state: {
 					...state,

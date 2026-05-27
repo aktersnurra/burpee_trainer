@@ -236,8 +236,7 @@ const SessionHook = {
 		}
 	},
 
-	showWarmupPrompt() {
-	},
+	showWarmupPrompt() {},
 
 	showWarmupDonePrompt() {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
@@ -247,8 +246,7 @@ const SessionHook = {
 		this.countdownCount = null;
 		this.countdownPaused = false;
 
-		const parent =
-			this.el.querySelector("#session-runner-client") || this.el;
+		const parent = this.el.querySelector("#session-runner-client") || this.el;
 		let overlay = this.el.querySelector("#start-overlay");
 
 		if (!overlay) {
@@ -400,7 +398,8 @@ const SessionHook = {
 		const firstEvent = this.timeline[0];
 		const isFirstWork =
 			firstEvent &&
-			(firstEvent.type === "work_burpee" || firstEvent.type === "warmup_burpee");
+			(firstEvent.type === "work_burpee" ||
+				firstEvent.type === "warmup_burpee");
 		if (isFirstWork) {
 			this.renderer.buildWorkRing();
 			this.renderer.triggerDown(firstEvent.burpee_count);
@@ -500,7 +499,8 @@ const SessionHook = {
 
 	onFinishEarly() {
 		if (this.activeSegment !== "workout") return;
-		if (!confirm("End the session now and log what you've done so far?")) return;
+		if (!confirm("End the session now and log what you've done so far?"))
+			return;
 		const elapsed = (performance.now() - this.startTime) / 1000;
 		this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });
 	},

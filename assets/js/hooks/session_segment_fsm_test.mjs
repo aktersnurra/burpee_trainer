@@ -99,16 +99,37 @@ assert.deepEqual(resetResult.commands, [
 	{ type: "renderTimer", timeLeftSec: 10 },
 ]);
 
-result = segmentTransition(result.state, { type: "COUNTDOWN_START", now: 1000 });
+const warmupReadyResult = segmentTransition(initialSegmentState(), {
+	type: "SEGMENT_READY",
+	timeline: [warmupWork, warmupRest, warmupWork, warmupRest],
+	blockCount: 0,
+});
+assert.deepEqual(warmupReadyResult.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+	{ type: "updateVisibleRepGoal", burpeeCountTarget: 10 },
+	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
+	{ type: "renderTimer", timeLeftSec: 30 },
+]);
+
+result = segmentTransition(result.state, {
+	type: "COUNTDOWN_START",
+	now: 1000,
+});
 assert.equal(result.state.mode, "countdown");
 assert.deepEqual(result.commands, [{ type: "startCountdownTimer" }]);
 
-result = segmentTransition(result.state, { type: "COUNTDOWN_PAUSE", now: 1250 });
+result = segmentTransition(result.state, {
+	type: "COUNTDOWN_PAUSE",
+	now: 1250,
+});
 assert.equal(result.state.mode, "countdown_paused");
 assert.equal(result.state.countdown.stepElapsedMs, 250);
 assert.deepEqual(result.commands, [{ type: "pauseCountdownTimer" }]);
 
-result = segmentTransition(result.state, { type: "COUNTDOWN_RESUME", now: 2000 });
+result = segmentTransition(result.state, {
+	type: "COUNTDOWN_RESUME",
+	now: 2000,
+});
 assert.equal(result.state.mode, "countdown");
 assert.equal(result.state.countdown.stepStartedAt, 2000);
 assert.deepEqual(result.commands, [
@@ -153,11 +174,17 @@ assert.equal(result.state.mode, "running");
 assert.deepEqual(result.commands, [{ type: "startAnimationFrame" }]);
 assert.equal(result.state.clock.startTime, 8000);
 
-result = segmentTransition(result.state, { type: "VISIBILITY_HIDDEN", now: 10000 });
+result = segmentTransition(result.state, {
+	type: "VISIBILITY_HIDDEN",
+	now: 10000,
+});
 assert.equal(result.state.clock.hiddenAt, 10000);
 assert.deepEqual(result.commands, [{ type: "cancelAnimationFrame" }]);
 
-result = segmentTransition(result.state, { type: "VISIBILITY_VISIBLE", now: 13000 });
+result = segmentTransition(result.state, {
+	type: "VISIBILITY_VISIBLE",
+	now: 13000,
+});
 assert.equal(result.state.clock.hiddenAt, null);
 assert.equal(result.state.clock.startTime, 11000);
 assert.deepEqual(result.commands, [{ type: "startAnimationFrame" }]);
