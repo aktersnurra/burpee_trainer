@@ -162,6 +162,12 @@ export class SessionRenderer {
 		}, 160);
 	}
 
+	updateTotalGoal(n) {
+		const el = this.root.querySelector("#total-plan");
+		if (!el) return;
+		el.textContent = n;
+	}
+
 	formatTime(sec) {
 		const s = Math.max(Math.ceil(sec), 0);
 		const m = Math.floor(s / 60);

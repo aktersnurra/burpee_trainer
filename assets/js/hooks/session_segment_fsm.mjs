@@ -126,6 +126,13 @@ function totalDurationSec(timeline) {
 	return timeline.reduce((sum, item) => sum + item.duration_sec, 0);
 }
 
+function totalBurpeeCount(timeline) {
+	return timeline.reduce((sum, item) => {
+		if (!isBurpeeEvent(item)) return sum;
+		return sum + (item.burpee_count || 0);
+	}, 0);
+}
+
 function beepCommandsForFrame(beeps, frame) {
 	if (!frame) return { beeps, commands: [] };
 
@@ -321,6 +328,7 @@ export function segmentTransition(state, event) {
 				},
 				commands: [
 					{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+					{ type: "updateVisibleRepGoal", burpeeCountTarget: totalBurpeeCount(timeline) },
 					{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 					{ type: "renderTimer", timeLeftSec: totalDurationSec(timeline) },
 				],

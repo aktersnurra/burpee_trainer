@@ -72,6 +72,7 @@ assert.equal(result.state.mode, "idle");
 assert.equal(result.state.timeline.length, 2);
 assert.deepEqual(result.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+	{ type: "updateVisibleRepGoal", burpeeCountTarget: 5 },
 	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 	{ type: "renderTimer", timeLeftSec: 15 },
 ]);
@@ -93,6 +94,7 @@ assert.equal(resetResult.state.reps.burpeeCountDone, 0);
 assert.equal(resetResult.state.reps.doneInEvent, 0);
 assert.deepEqual(resetResult.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+	{ type: "updateVisibleRepGoal", burpeeCountTarget: 5 },
 	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 	{ type: "renderTimer", timeLeftSec: 10 },
 ]);
@@ -230,7 +232,7 @@ assert.deepEqual(result.commands, [
 	},
 ]);
 
-let repState = {
+const repState = {
 	...initialSegmentState(),
 	reps: {
 		currentEventKey: "0:work_burpee:Block 1",
@@ -299,7 +301,7 @@ assert.deepEqual(result.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 5 },
 ]);
 
-let beepState = {
+const beepState = {
 	...initialSegmentState(),
 	beeps: { lastRepIndex: -1, lastRestCount: null },
 };

@@ -187,6 +187,9 @@ const SessionHook = {
 			case "updateVisibleRepTotal":
 				this.renderer.updateTotalCounter(command.burpeeCountDone);
 				break;
+			case "updateVisibleRepGoal":
+				this.renderer.updateTotalGoal(command.burpeeCountTarget);
+				break;
 			case "renderProgressBar":
 				this.renderer.renderProgressBar(command.percent, command.color);
 				break;
