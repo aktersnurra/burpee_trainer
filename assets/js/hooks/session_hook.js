@@ -33,8 +33,6 @@ const SessionHook = {
 		this.countdownStepStarted = null;
 		this.countdownStepElapsed = 0;
 
-		this.warmupBurpeeCount = 0;
-		this.mainBurpeeCount = 0;
 		this.doneReps = 0;
 		this.countdownRingEl = null;
 		this.hiddenAt = null;
@@ -187,11 +185,6 @@ const SessionHook = {
 				this.renderRunningFrame(command.elapsedSec);
 				break;
 			case "updateVisibleRepTotal":
-				if (this.activeSegment === "warmup") {
-					this.warmupBurpeeCount = command.burpeeCountDone;
-				} else {
-					this.mainBurpeeCount = command.burpeeCountDone;
-				}
 				this.renderer.updateTotalCounter(command.burpeeCountDone);
 				break;
 			case "renderProgressBar":
@@ -511,11 +504,6 @@ const SessionHook = {
 
 	syncRepStateFromSegment() {
 		this.doneReps = this.segment.reps.doneInEvent;
-		if (this.activeSegment === "warmup") {
-			this.warmupBurpeeCount = this.segment.reps.burpeeCountDone;
-		} else {
-			this.mainBurpeeCount = this.segment.reps.burpeeCountDone;
-		}
 	},
 };
 
