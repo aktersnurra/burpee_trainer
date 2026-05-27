@@ -60,13 +60,16 @@
   <%= if @goal_modal_type do %>
     <div
       id="goal-modal"
-      phx-click="close_goal_modal"
-      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
     >
-      <div
-        phx-click|stopPropagation
-        class="w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6"
+      <button
+        type="button"
+        aria-label="Close goal modal"
+        phx-click="close_goal_modal"
+        class="absolute inset-0 bg-black/60"
       >
+      </button>
+      <div class="relative w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
         <.live_component
           module={BurpeeTrainerWeb.GoalFormComponent}
           id="goal-form"
