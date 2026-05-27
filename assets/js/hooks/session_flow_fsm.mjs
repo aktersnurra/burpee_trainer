@@ -39,9 +39,6 @@ export function flowTransition(state, event) {
 				],
 			};
 
-		case "WARMUP_YES":
-			return { state, commands: [] };
-
 		case "WARMUP_READY":
 			return {
 				state: {

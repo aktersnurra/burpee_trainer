@@ -2,9 +2,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
   @moduledoc """
   Session runner — client-driven execution model.
 
-  On mount the server computes the timeline once and pushes it to the client
-  via `session_ready`. The client (SessionHook) owns the clock, state machine,
-  beeps, and UI updates. The server is idle during the workout.
+  On mount the server loads the persisted workout plan and pushes serialized
+  plan data via `session_ready`. The client derives warmup/workout timelines,
+  owns the clock, state machine, beeps, and high-frequency DOM updates. The
+  server stays idle during the workout and only validates/saves completion.
 
   State machine (server-side phase):
       :idle → :running → :done

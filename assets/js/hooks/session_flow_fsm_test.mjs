@@ -32,9 +32,6 @@ result = flowTransition(initialFlowState(), {
 	workoutTimeline,
 	blockCount: 1,
 });
-result = flowTransition(result.state, { type: "WARMUP_YES" });
-assert.deepEqual(result.commands, []);
-
 result = flowTransition(result.state, {
 	type: "WARMUP_READY",
 	warmupTimeline,

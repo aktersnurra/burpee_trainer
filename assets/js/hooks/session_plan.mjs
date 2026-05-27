@@ -1,3 +1,6 @@
+// Client-owned runner plan projection.
+// Phoenix sends persisted plan data; this module derives the runnable warmup
+// and workout segments used by the browser FSM.
 export function workoutTimelineFromPlan(plan) {
 	return sortedBlocks(plan).flatMap((block) => blockTimeline(block));
 }
@@ -8,10 +11,14 @@ export function warmupTimelineFromPlan(plan) {
 
 	if (!firstSet) return [];
 
-	const secPerBurpee = plan.sec_per_burpee || firstSet.sec_per_burpee || firstSet.sec_per_rep;
+	const secPerBurpee =
+		plan.sec_per_burpee || firstSet.sec_per_burpee || firstSet.sec_per_rep;
 	if (!secPerBurpee || secPerBurpee <= 0) return [];
 
-	const warmupReps = Math.min(firstSet.burpee_count || 0, Math.trunc(60 / secPerBurpee));
+	const warmupReps = Math.min(
+		firstSet.burpee_count || 0,
+		Math.trunc(60 / secPerBurpee),
+	);
 	if (warmupReps <= 0) return [];
 
 	const durationSec = warmupReps * secPerBurpee;
@@ -50,7 +57,8 @@ export function warmupTimelineFromPlan(plan) {
 
 export function timelineBurpeeCount(timeline) {
 	return timeline.reduce((total, event) => {
-		if (event.type !== "work_burpee" && event.type !== "warmup_burpee") return total;
+		if (event.type !== "work_burpee" && event.type !== "warmup_burpee")
+			return total;
 		return total + (event.burpee_count || 0);
 	}, 0);
 }
@@ -87,9 +95,13 @@ function blockTimeline(block) {
 }
 
 function sortedBlocks(plan) {
-	return [...(plan?.blocks || [])].sort((a, b) => (a.position || 0) - (b.position || 0));
+	return [...(plan?.blocks || [])].sort(
+		(a, b) => (a.position || 0) - (b.position || 0),
+	);
 }
 
 function sortedSets(block) {
-	return [...(block?.sets || [])].sort((a, b) => (a.position || 0) - (b.position || 0));
+	return [...(block?.sets || [])].sort(
+		(a, b) => (a.position || 0) - (b.position || 0),
+	);
 }

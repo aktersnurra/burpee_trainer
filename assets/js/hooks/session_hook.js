@@ -132,9 +132,6 @@ const SessionHook = {
 			case "renderPrompt":
 				this.showWarmupPrompt();
 				break;
-			case "pushWarmupRequested":
-				this.pushEvent("warmup_requested", {});
-				break;
 			case "startSegment":
 				this.startSegment(command);
 				break;
