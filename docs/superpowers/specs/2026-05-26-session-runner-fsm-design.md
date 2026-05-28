@@ -134,9 +134,10 @@ The hook owns these IDs during a session:
 
 Server events remain limited to:
 
-- initial `session_ready`,
-- optional `warmup_ready`,
+- initial `session_ready` with serialized plan data,
 - final `session_complete`.
+
+Warmup/workout timelines are derived in the browser from the serialized plan.
 
 ## Testing
 

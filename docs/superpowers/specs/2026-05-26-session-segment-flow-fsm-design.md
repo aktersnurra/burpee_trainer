@@ -93,7 +93,7 @@ workout_done
 Responsibilities:
 
 - decide whether warmup is skipped
-- request warmup timeline from the server
+- derive/start the warmup segment from client-owned plan data
 - start the warmup segment
 - store the warmup segment result
 - show the `Ready for workout?` prompt

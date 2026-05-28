@@ -23,10 +23,11 @@ defmodule BurpeeTrainer.Workouts do
   @spec list_plans(User.t()) :: [WorkoutPlan.t()]
   def list_plans(%User{id: user_id}) do
     Repo.all(
-      from plan in WorkoutPlan,
+      from(plan in WorkoutPlan,
         where: plan.user_id == ^user_id,
         order_by: [desc: plan.updated_at],
         preload: [blocks: :sets]
+      )
     )
   end
 
@@ -37,9 +38,10 @@ defmodule BurpeeTrainer.Workouts do
   @spec get_plan!(User.t(), integer) :: WorkoutPlan.t()
   def get_plan!(%User{id: user_id}, id) do
     Repo.one!(
-      from plan in WorkoutPlan,
+      from(plan in WorkoutPlan,
         where: plan.id == ^id and plan.user_id == ^user_id,
         preload: [blocks: :sets]
+      )
     )
   end
 
@@ -139,18 +141,20 @@ defmodule BurpeeTrainer.Workouts do
   @spec list_sessions(User.t()) :: [WorkoutSession.t()]
   def list_sessions(%User{id: user_id}) do
     Repo.all(
-      from session in WorkoutSession,
+      from(session in WorkoutSession,
         where: session.user_id == ^user_id,
         order_by: [desc: session.inserted_at]
+      )
     )
   end
 
   @spec list_sessions(User.t(), atom) :: [WorkoutSession.t()]
   def list_sessions(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
     Repo.all(
-      from session in WorkoutSession,
+      from(session in WorkoutSession,
         where: session.user_id == ^user_id and session.burpee_type == ^burpee_type,
         order_by: [desc: session.inserted_at]
+      )
     )
   end
 
@@ -162,11 +166,12 @@ defmodule BurpeeTrainer.Workouts do
   def weekly_minutes(%User{id: user_id}) do
     sessions =
       Repo.all(
-        from s in WorkoutSession,
+        from(s in WorkoutSession,
           where:
             s.user_id == ^user_id and
               (is_nil(s.tags) or s.tags != "warmup"),
           select: %{inserted_at: s.inserted_at, duration_sec_actual: s.duration_sec_actual}
+        )
       )
 
     sessions
@@ -194,13 +199,14 @@ defmodule BurpeeTrainer.Workouts do
     week_end_dt = DateTime.new!(week_end, ~T[23:59:59], "Etc/UTC")
 
     Repo.all(
-      from s in WorkoutSession,
+      from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
             (is_nil(s.tags) or s.tags != "warmup") and
             s.inserted_at >= ^week_start_dt and
             s.inserted_at <= ^week_end_dt,
         select: s.inserted_at
+      )
     )
     |> Enum.map(&DateTime.to_date/1)
     |> MapSet.new()
@@ -214,7 +220,7 @@ defmodule BurpeeTrainer.Workouts do
   def last_run_plan(%User{id: user_id}) do
     result =
       Repo.one(
-        from s in WorkoutSession,
+        from(s in WorkoutSession,
           join: p in WorkoutPlan,
           on: p.id == s.plan_id,
           where:
@@ -224,6 +230,7 @@ defmodule BurpeeTrainer.Workouts do
           order_by: [desc: s.inserted_at],
           limit: 1,
           select: p
+        )
       )
 
     case result do
@@ -244,11 +251,12 @@ defmodule BurpeeTrainer.Workouts do
     before_dt = Keyword.get(opts, :before)
 
     query =
-      from s in WorkoutSession,
+      from(s in WorkoutSession,
         where: s.user_id == ^user_id,
         order_by: [desc: s.inserted_at],
         limit: ^(limit + 1),
         preload: [:plan, :goal]
+      )
 
     query =
       if before_dt,
@@ -267,7 +275,7 @@ defmodule BurpeeTrainer.Workouts do
   @spec last_session_for_type(User.t(), atom) :: WorkoutSession.t() | nil
   def last_session_for_type(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
     Repo.one(
-      from s in WorkoutSession,
+      from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
             s.burpee_type == ^burpee_type and
@@ -276,6 +284,7 @@ defmodule BurpeeTrainer.Workouts do
             s.duration_sec_actual <= 1210,
         order_by: [desc: s.inserted_at],
         limit: 1
+      )
     )
   end
 
@@ -287,7 +296,7 @@ defmodule BurpeeTrainer.Workouts do
   @spec best_qualifying_session(User.t(), atom) :: WorkoutSession.t() | nil
   def best_qualifying_session(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
     Repo.one(
-      from s in WorkoutSession,
+      from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
             s.burpee_type == ^burpee_type and
@@ -296,6 +305,7 @@ defmodule BurpeeTrainer.Workouts do
             s.duration_sec_actual <= 1210,
         order_by: [desc: s.burpee_count_actual],
         limit: 1
+      )
     )
   end
 
@@ -306,13 +316,14 @@ defmodule BurpeeTrainer.Workouts do
   @spec list_sessions_for_chart(User.t(), atom) :: [WorkoutSession.t()]
   def list_sessions_for_chart(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
     Repo.all(
-      from s in WorkoutSession,
+      from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual > 0,
         order_by: [asc: s.inserted_at]
+      )
     )
   end
 
@@ -387,7 +398,7 @@ defmodule BurpeeTrainer.Workouts do
   """
   @spec list_style_performances(User.t()) :: [StylePerformance.t()]
   def list_style_performances(%User{id: user_id}) do
-    Repo.all(from sp in StylePerformance, where: sp.user_id == ^user_id)
+    Repo.all(from(sp in StylePerformance, where: sp.user_id == ^user_id))
   end
 
   @doc """
@@ -509,10 +520,11 @@ defmodule BurpeeTrainer.Workouts do
 
   defp fetch_prev_session(user_id, burpee_type) do
     Repo.one(
-      from s in WorkoutSession,
+      from(s in WorkoutSession,
         where: s.user_id == ^user_id and s.burpee_type == ^burpee_type,
         order_by: [desc: s.inserted_at],
         limit: 1
+      )
     )
   end
 
@@ -521,13 +533,14 @@ defmodule BurpeeTrainer.Workouts do
   defp compute_rate_rolling(user_id, burpee_type, current_rate) do
     prev_rates =
       Repo.all(
-        from s in WorkoutSession,
+        from(s in WorkoutSession,
           where:
             s.user_id == ^user_id and s.burpee_type == ^burpee_type and
               not is_nil(s.rate_per_min_actual),
           order_by: [desc: s.inserted_at],
           limit: 2,
           select: s.rate_per_min_actual
+        )
       )
 
     # Oldest first, then current session — EMA gives more weight to recent.
@@ -566,13 +579,14 @@ defmodule BurpeeTrainer.Workouts do
 
     level =
       Repo.all(
-        from s in WorkoutSession,
+        from(s in WorkoutSession,
           where: s.user_id == ^user_id and s.burpee_type == ^bt,
           select: %{
             burpee_type: s.burpee_type,
             burpee_count_actual: s.burpee_count_actual,
             duration_sec_actual: s.duration_sec_actual
           }
+        )
       )
       |> Levels.level_for_type(bt)
       |> Atom.to_string()

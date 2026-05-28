@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status note (2026-05-28):** This historical plan predates the client-owned runner boundary. Current implementation derives warmup/workout timelines in `assets/js/hooks/session_plan.mjs`; Phoenix no longer serves `warmup_requested`/`warmup_ready` timeline events.
+
 **Goal:** Split the runner into a generic segment FSM and a session flow FSM so warmup and workout run through the same segment machine with different orchestration outcomes.
 
 **Architecture:** `session_segment_fsm.mjs` owns one runnable segment and emits `segmentDone`. `session_flow_fsm.mjs` owns warmup/workout orchestration and emits session-specific commands. `session_hook.js` routes browser/server events and commands without calculating segment meaning.
