@@ -97,12 +97,6 @@ defmodule BurpeeTrainer.PlannerTest do
       assert third.burpee_count == 2
       assert fourth.label == "Block 2"
     end
-
-    test "to_timeline/1 never emits warmup events" do
-      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 0)])])
-      events = Planner.to_timeline(plan)
-      refute Enum.any?(events, &(&1.type in [:warmup_burpee, :warmup_rest]))
-    end
   end
 
   describe "to_timeline/1 — repeat_count > 1" do
@@ -146,75 +140,6 @@ defmodule BurpeeTrainer.PlannerTest do
       events = Planner.to_timeline(plan)
       rest = Enum.find(events, &(&1.type == :work_rest))
       assert rest.sec_per_burpee == nil
-    end
-  end
-
-  describe "warmup_timeline/1" do
-    test "returns empty list when plan has no blocks" do
-      assert Planner.warmup_timeline(build_plan([])) == []
-    end
-
-    test "returns two warmup rounds with rests" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
-          %{sec_per_burpee: 5.0}
-        )
-
-      events = Planner.warmup_timeline(plan)
-      types = Enum.map(events, & &1.type)
-      assert types == [:warmup_burpee, :warmup_rest, :warmup_burpee, :warmup_rest]
-    end
-
-    test "warmup_burpee events have sec_per_burpee set, rest events have nil" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
-          %{sec_per_burpee: 5.0}
-        )
-
-      events = Planner.warmup_timeline(plan)
-      work_events = Enum.filter(events, &(&1.type == :warmup_burpee))
-      rest_events = Enum.filter(events, &(&1.type == :warmup_rest))
-
-      assert Enum.all?(work_events, &(&1.sec_per_burpee == 5.0))
-      assert Enum.all?(rest_events, &(&1.sec_per_burpee == nil))
-    end
-
-    test "inter-round rest is 120s and final rest is 180s" do
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
-          %{sec_per_burpee: 5.0}
-        )
-
-      [_, rest1, _, rest2] = Planner.warmup_timeline(plan)
-      assert rest1.duration_sec == 120.0
-      assert rest2.duration_sec == 180.0
-    end
-
-    test "warmup reps capped at first set burpee_count" do
-      # 10 reps in set but pace allows 60/5=12 per min → capped at 10
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 10, 5.0, 0)])],
-          %{sec_per_burpee: 5.0}
-        )
-
-      [round1 | _] = Planner.warmup_timeline(plan)
-      assert round1.burpee_count == 10
-    end
-
-    test "warmup reps capped at reps achievable in 1 min" do
-      # first set has 100 reps but pace is 10s/rep → 6 per min
-      plan =
-        build_plan(
-          [build_block(1, 1, [build_set(1, 100, 10.0, 0)])],
-          %{sec_per_burpee: 10.0}
-        )
-
-      [round1 | _] = Planner.warmup_timeline(plan)
-      assert round1.burpee_count == 6
     end
   end
 

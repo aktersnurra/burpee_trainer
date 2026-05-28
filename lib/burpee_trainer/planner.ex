@@ -9,9 +9,6 @@ defmodule BurpeeTrainer.Planner do
   Inter-block rest: blocks are connected via the `end_of_set_rest` of the
   final set of the preceding block. There is no separate inter-block rest
   field — this is by design.
-
-  Warmup is decoupled from plans. Call `warmup_timeline/1` separately and
-  prepend to the main timeline if the user opts in.
   """
 
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
@@ -20,19 +17,14 @@ defmodule BurpeeTrainer.Planner do
     @moduledoc """
     A single timed event in a workout timeline.
 
-    `type` is one of `:warmup_burpee`, `:warmup_rest`, `:work_burpee`,
-    `:work_rest`, `:rest_block`. `burpee_count` is `nil` for rest events.
+    `type` is one of `:work_burpee`, `:work_rest`, `:rest_block`.
+    `burpee_count` is `nil` for rest events.
     """
 
     @enforce_keys [:type, :duration_sec, :label]
     defstruct [:type, :duration_sec, :burpee_count, :sec_per_burpee, :label]
 
-    @type kind ::
-            :warmup_burpee
-            | :warmup_rest
-            | :work_burpee
-            | :work_rest
-            | :rest_block
+    @type kind :: :work_burpee | :work_rest | :rest_block
 
     @type t :: %__MODULE__{
             type: kind,
@@ -44,72 +36,10 @@ defmodule BurpeeTrainer.Planner do
   end
 
   @doc """
-  Produces the full ordered event timeline for a plan (main work only,
-  no warmup). Call `warmup_timeline/1` and prepend if the user opts in.
+  Produces the full ordered event timeline for a plan.
   """
   @spec to_timeline(WorkoutPlan.t()) :: [Event.t()]
   def to_timeline(%WorkoutPlan{} = plan), do: build_timeline_main(plan)
-
-  @doc """
-  Generates a two-round warmup timeline for a plan. The warmup rep count
-  is the smaller of: the first set's burpee_count, and reps achievable in
-  one minute at the plan's pace. Hardcoded rests: 120s between rounds,
-  180s before main workout.
-
-  Returns `[]` if no blocks/sets exist or if pace is 0.
-  """
-  @spec warmup_timeline(WorkoutPlan.t()) :: [Event.t()]
-  def warmup_timeline(%WorkoutPlan{blocks: blocks} = plan)
-      when is_list(blocks) and blocks != [] do
-    first_block = blocks |> sort_by_position() |> List.first()
-    first_set = first_block && first_block.sets |> sort_by_position() |> List.first()
-
-    if is_nil(first_set) or first_set.sec_per_burpee <= 0 do
-      []
-    else
-      sec_per_burpee = plan.sec_per_burpee || first_set.sec_per_burpee
-      warmup_reps = min(first_set.burpee_count, trunc(60.0 / sec_per_burpee))
-
-      if warmup_reps <= 0 do
-        []
-      else
-        dur = warmup_reps * sec_per_burpee
-
-        [
-          %Event{
-            type: :warmup_burpee,
-            duration_sec: dur,
-            burpee_count: warmup_reps,
-            sec_per_burpee: sec_per_burpee,
-            label: "Warmup Round 1"
-          },
-          %Event{
-            type: :warmup_rest,
-            duration_sec: 120.0,
-            burpee_count: nil,
-            sec_per_burpee: nil,
-            label: "Warmup Rest"
-          },
-          %Event{
-            type: :warmup_burpee,
-            duration_sec: dur,
-            burpee_count: warmup_reps,
-            sec_per_burpee: sec_per_burpee,
-            label: "Warmup Round 2"
-          },
-          %Event{
-            type: :warmup_rest,
-            duration_sec: 180.0,
-            burpee_count: nil,
-            sec_per_burpee: nil,
-            label: "Warmup Rest"
-          }
-        ]
-      end
-    end
-  end
-
-  def warmup_timeline(_), do: []
 
   @doc """
   Distribute rest time across adjustable sets so the plan's total

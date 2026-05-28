@@ -104,12 +104,12 @@ describe "weekly_volume/1" do
       "burpee_count_actual" => 40
     })
 
-    {:ok, _} =
-      Workouts.create_warmup_session(user, %{
-        burpee_type: :six_count,
-        burpee_count_done: 5,
-        duration_sec: 600
-      })
+    free_form_session_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 5,
+      "duration_sec_actual" => 600,
+      "tags" => "warmup"
+    })
 
     [week] = Workouts.weekly_volume(user)
     assert week.six_count_reps == 40
