@@ -36,15 +36,6 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Map.has_key?(first_set, :end_of_set_rest)
   end
 
-  test "warmup_requested is not needed by client-owned runner", %{conn: conn, user: user} do
-    plan = plan_fixture(user)
-    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    render_hook(view, "warmup_requested", %{})
-
-    refute_push_event(view, "warmup_ready", %{}, 20)
-  end
-
   test "session_started transitions phase to running", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")

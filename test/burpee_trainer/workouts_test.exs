@@ -345,13 +345,12 @@ defmodule BurpeeTrainer.WorkoutsTest do
       # 90 min main session
       free_form_session_fixture(user, %{"duration_sec_actual" => 5400})
 
-      # warmup session — must not count
-      {:ok, _} =
-        Workouts.create_warmup_session(user, %{
-          burpee_type: :six_count,
-          burpee_count_done: 5,
-          duration_sec: 3600
-        })
+      # legacy warmup-tagged session — must not count
+      free_form_session_fixture(user, %{
+        "burpee_count_actual" => 5,
+        "duration_sec_actual" => 3600,
+        "tags" => "warmup"
+      })
 
       [week] = Workouts.weekly_minutes(user)
       assert_in_delta week.minutes, 90.0, 0.1

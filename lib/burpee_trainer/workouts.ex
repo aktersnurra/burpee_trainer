@@ -353,56 +353,6 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Create a completed plan session and optional warmup atomically.
-  """
-  @spec create_session_from_plan_with_warmup(User.t(), WorkoutPlan.t(), map, map | nil) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | any}
-  def create_session_from_plan_with_warmup(user, plan, attrs, nil) do
-    create_session_from_plan(user, plan, attrs)
-  end
-
-  def create_session_from_plan_with_warmup(
-        %User{} = user,
-        %WorkoutPlan{} = plan,
-        attrs,
-        warmup_attrs
-      ) do
-    Repo.transaction(fn ->
-      with {:ok, _warmup} <- create_warmup_session(user, warmup_attrs),
-           {:ok, session} <- create_session_from_plan(user, plan, attrs) do
-        session
-      else
-        {:error, reason} -> Repo.rollback(reason)
-      end
-    end)
-  end
-
-  @doc """
-  Save a warmup session silently (no UI shown). `plan_id` is nil.
-  Tagged "warmup" so it's distinguishable in history.
-  """
-  @spec create_warmup_session(User.t(), map) :: {:ok, WorkoutSession.t()} | {:error, any}
-  def create_warmup_session(%User{id: user_id}, %{
-        burpee_type: bt,
-        burpee_count_done: count,
-        duration_sec: duration
-      }) do
-    attrs = %{
-      "burpee_type" => Atom.to_string(bt),
-      "burpee_count_actual" => count,
-      "duration_sec_actual" => duration,
-      "burpee_count_planned" => count,
-      "duration_sec_planned" => duration,
-      "tags" => "warmup"
-    }
-
-    %WorkoutSession{user_id: user_id}
-    |> WorkoutSession.free_form_changeset(attrs)
-    |> with_derived_session_fields(user_id)
-    |> Repo.insert()
-  end
-
-  @doc """
   Create a free-form session (no plan reference). `user_id` is set
   programmatically. Same derived-field computation as plan sessions.
   """

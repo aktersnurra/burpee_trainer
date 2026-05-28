@@ -51,8 +51,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
-  def handle_event("warmup_requested", _params, socket), do: {:noreply, socket}
-
   def handle_event("session_started", _params, socket) do
     {:noreply, socket |> assign(:phase, :running) |> assign(:warmup_asked, true)}
   end
