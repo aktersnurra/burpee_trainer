@@ -37,8 +37,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:warmup_asked, false)
           |> assign(:completion_tags, [])
           |> assign(:completion_form, nil)
-          |> assign(:warmup_burpee_count, 0)
-          |> assign(:warmup_duration_sec, 0)
 
         {:ok, push_event(socket, "session_ready", %{plan: serialize_plan(plan)})}
 
@@ -57,12 +55,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("session_complete", payload, socket) do
     case parse_completion_payload(payload) do
-      {:ok, %{main: main, warmup: warmup}} ->
+      {:ok, %{main: main}} ->
         socket =
           socket
           |> assign(:phase, :done)
-          |> assign(:warmup_burpee_count, warmup.burpee_count_done)
-          |> assign(:warmup_duration_sec, warmup.duration_sec)
           |> assign(
             :completion_form,
             build_completion_form(socket, main.burpee_count_done, main.duration_sec)
@@ -159,11 +155,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
     end
   end
 
-  defp parse_completion_payload(%{"main" => main, "warmup" => warmup})
-       when is_map(main) and is_map(warmup) do
-    with {:ok, main_result} <- parse_completion_result(main),
-         {:ok, warmup_result} <- parse_completion_result(warmup) do
-      {:ok, %{main: main_result, warmup: warmup_result}}
+  defp parse_completion_payload(%{"main" => main}) when is_map(main) do
+    with {:ok, main_result} <- parse_completion_result(main) do
+      {:ok, %{main: main_result}}
     end
   end
 

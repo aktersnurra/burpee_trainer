@@ -2,7 +2,6 @@ defmodule BurpeeTrainer.PlannerTest do
   use ExUnit.Case, async: true
 
   alias BurpeeTrainer.Planner
-  alias BurpeeTrainer.Planner.Event
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
 
   defp build_set(position, burpee_count, sec_per_rep, end_of_set_rest) do
@@ -32,115 +31,6 @@ defmodule BurpeeTrainer.PlannerTest do
     }
 
     struct!(base, overrides)
-  end
-
-  describe "to_timeline/1 — basic expansion" do
-    test "single block with one set emits one work event and no rest when rest is zero" do
-      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 0)])])
-
-      assert [
-               %Event{
-                 type: :work_burpee,
-                 duration_sec: 20.0,
-                 burpee_count: 5,
-                 label: "Block 1"
-               }
-             ] = Planner.to_timeline(plan)
-    end
-
-    test "single block with multiple sets preserves order and emits rests between" do
-      plan =
-        build_plan([
-          build_block(1, 1, [
-            build_set(1, 4, 4.0, 30),
-            build_set(2, 3, 4.0, 0)
-          ])
-        ])
-
-      events = Planner.to_timeline(plan)
-
-      assert [
-               %Event{type: :work_burpee, burpee_count: 4, label: "Block 1"},
-               %Event{type: :work_rest, duration_sec: 30.0},
-               %Event{type: :work_burpee, burpee_count: 3, label: "Block 1"}
-             ] = events
-    end
-
-    test "multiple blocks emit in order with trailing rest as inter-block gap" do
-      plan =
-        build_plan([
-          build_block(1, 1, [build_set(1, 4, 4.0, 60)]),
-          build_block(2, 1, [build_set(1, 3, 4.0, 0)])
-        ])
-
-      assert [
-               %Event{type: :work_burpee, burpee_count: 4, label: "Block 1"},
-               %Event{type: :work_rest, duration_sec: 60.0},
-               %Event{type: :work_burpee, burpee_count: 3, label: "Block 2"}
-             ] = Planner.to_timeline(plan)
-    end
-
-    test "blocks and sets are sorted by position regardless of input order" do
-      plan =
-        build_plan([
-          build_block(2, 1, [build_set(1, 3, 4.0, 0)]),
-          build_block(1, 1, [
-            build_set(2, 2, 4.0, 0),
-            build_set(1, 4, 4.0, 10)
-          ])
-        ])
-
-      [first, _rest, third, fourth] = Planner.to_timeline(plan)
-      assert first.label == "Block 1"
-      assert first.burpee_count == 4
-      assert third.label == "Block 1"
-      assert third.burpee_count == 2
-      assert fourth.label == "Block 2"
-    end
-  end
-
-  describe "to_timeline/1 — repeat_count > 1" do
-    test "repeat_count=3 emits the block's sets three times labelled with the block" do
-      plan = build_plan([build_block(1, 3, [build_set(1, 4, 4.0, 36)])])
-
-      events = Planner.to_timeline(plan)
-
-      assert length(events) == 6
-
-      labels = for %Event{type: :work_burpee, label: l} <- events, do: l
-      assert labels == ["Block 1", "Block 1", "Block 1"]
-    end
-
-    test "repeat_count=0 emits no events for that block" do
-      plan =
-        build_plan([
-          build_block(1, 0, [build_set(1, 4, 4.0, 10)]),
-          build_block(2, 1, [build_set(1, 3, 4.0, 0)])
-        ])
-
-      assert [%Event{label: "Block 2"}] = Planner.to_timeline(plan)
-    end
-  end
-
-  describe "to_timeline/1 — edge cases" do
-    test "empty blocks list returns empty timeline" do
-      assert Planner.to_timeline(build_plan([])) == []
-    end
-  end
-
-  describe "to_timeline/1 — sec_per_burpee field" do
-    test "work_burpee events have sec_per_burpee set" do
-      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 0)])])
-      [event] = Planner.to_timeline(plan)
-      assert event.sec_per_burpee == 4.0
-    end
-
-    test "work_rest events have sec_per_burpee nil" do
-      plan = build_plan([build_block(1, 1, [build_set(1, 5, 4.0, 30), build_set(2, 5, 4.0, 0)])])
-      events = Planner.to_timeline(plan)
-      rest = Enum.find(events, &(&1.type == :work_rest))
-      assert rest.sec_per_burpee == nil
-    end
   end
 
   describe "fit_rest_to_duration/2" do

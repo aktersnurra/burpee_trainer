@@ -1,7 +1,6 @@
 defmodule BurpeeTrainer.Planner do
   @moduledoc """
-  Pure functional planner. Converts a `%WorkoutPlan{}` (with preloaded
-  blocks and sets) into an ordered timeline of timed `%Event{}` structs.
+  Pure functional planner for workout plan summaries and rest fitting.
 
   No Ecto, no side effects. All inputs are plain structs, all outputs
   are plain data — fully unit-testable.
@@ -17,14 +16,14 @@ defmodule BurpeeTrainer.Planner do
     @moduledoc """
     A single timed event in a workout timeline.
 
-    `type` is one of `:work_burpee`, `:work_rest`, `:rest_block`.
+    `type` is one of `:work_burpee`, `:work_rest`.
     `burpee_count` is `nil` for rest events.
     """
 
     @enforce_keys [:type, :duration_sec, :label]
     defstruct [:type, :duration_sec, :burpee_count, :sec_per_burpee, :label]
 
-    @type kind :: :work_burpee | :work_rest | :rest_block
+    @type kind :: :work_burpee | :work_rest
 
     @type t :: %__MODULE__{
             type: kind,
@@ -34,12 +33,6 @@ defmodule BurpeeTrainer.Planner do
             label: String.t()
           }
   end
-
-  @doc """
-  Produces the full ordered event timeline for a plan.
-  """
-  @spec to_timeline(WorkoutPlan.t()) :: [Event.t()]
-  def to_timeline(%WorkoutPlan{} = plan), do: build_timeline_main(plan)
 
   @doc """
   Distribute rest time across adjustable sets so the plan's total

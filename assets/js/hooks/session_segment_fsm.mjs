@@ -166,8 +166,7 @@ function beepCommandsForFrame(beeps, frame) {
 
 	const isRest =
 		timelineEvent.type === "work_rest" ||
-		timelineEvent.type === "warmup_rest" ||
-		timelineEvent.type === "rest_block";
+		timelineEvent.type === "warmup_rest";
 
 	if (!isRest) {
 		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
@@ -195,7 +194,6 @@ function phaseColor(type, isWarning) {
 		warmup_burpee: "#F59E0B",
 		work_rest: "#6B8FA8",
 		warmup_rest: "#6B8FA8",
-		rest_block: "#6B8FA8",
 	};
 	return colors[type] || "#1E2535";
 }
@@ -232,8 +230,7 @@ function displayCommandsForFrame(display, event) {
 		timelineEvent.type === "warmup_burpee";
 	const isRest =
 		timelineEvent.type === "work_rest" ||
-		timelineEvent.type === "warmup_rest" ||
-		timelineEvent.type === "rest_block";
+		timelineEvent.type === "warmup_rest";
 	const isWarning = isRest && frame.phase_remaining <= 5;
 	const color = phaseColor(timelineEvent.type, isWarning);
 	const commands = [
