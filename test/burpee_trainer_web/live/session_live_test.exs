@@ -42,6 +42,18 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#pose-tracker[phx-hook='PoseTracker']")
   end
 
+  test "timed mode keeps pose tracker absent after normal session completion", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main" => %{"burpee_count_done" => 10, "duration_sec" => 60},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
+    })
+
+    refute has_element?(view, "#pose-tracker")
+  end
+
   test "tracked finish shows review before save", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
