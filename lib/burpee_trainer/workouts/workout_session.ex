@@ -21,6 +21,10 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     field :note_post, :string
     field :mood, :integer
     field :tags, :string
+    field :capture_mode, Ecto.Enum, values: [:tracked, :timed, :logged], default: :logged
+    field :cadence_ms, :string
+    field :target_pace_sec, :float
+    field :pace_consistency, :float
 
     # Derived fields — computed by Workouts context at save time, never from user input.
     field :style_name, :string
