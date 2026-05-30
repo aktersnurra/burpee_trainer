@@ -26,6 +26,38 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
+  test "timed mode does not render pose tracker", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    refute has_element?(view, "#pose-tracker")
+  end
+
+  test "tracked choice renders pose tracker", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    view |> element("button", "Track with camera") |> render_click()
+
+    assert has_element?(view, "#pose-tracker[phx-hook='PoseTracker']")
+  end
+
+  test "tracked finish shows review before save", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    view |> element("button", "Track with camera") |> render_click()
+
+    render_hook(view, "finish", %{
+      "reps" => 3,
+      "duration_ms" => 15_000,
+      "cadence_ms" => [5_000, 10_000, 15_000]
+    })
+
+    assert render(view) =~ "Review tracked session"
+    assert render(view) =~ "3 reps"
+  end
+
   test "idle state shows warmup prompt", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Grinder"})
     {:ok, _view, html} = live(conn, ~p"/session/#{plan.id}")

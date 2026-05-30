@@ -38,6 +38,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:completion_tags, [])
           |> assign(:completion_form, nil)
           |> assign(:celebration, nil)
+          |> assign(:capture_mode, :timed)
+          |> assign(:tracking_state, :idle)
+          |> assign(:tracked_finish, nil)
+          |> assign(:tracking_error, nil)
 
         {:ok, push_event(socket, "session_ready", %{plan: serialize_plan(plan)})}
 
@@ -52,6 +56,32 @@ defmodule BurpeeTrainerWeb.SessionLive do
   @impl true
   def handle_event("session_started", _params, socket) do
     {:noreply, socket |> assign(:phase, :running) |> assign(:warmup_asked, true)}
+  end
+
+  def handle_event("choose_tracked", _, socket) do
+    {:noreply, socket |> assign(:capture_mode, :tracked) |> assign(:tracking_state, :arming)}
+  end
+
+  def handle_event("tracker_ready", _, socket) do
+    {:noreply, assign(socket, :tracking_state, :ready)}
+  end
+
+  def handle_event("track", %{"state" => "lost"}, socket) do
+    {:noreply, assign(socket, :tracking_state, :degraded)}
+  end
+
+  def handle_event("track", %{"state" => "live"}, socket) do
+    {:noreply, assign(socket, :tracking_state, :running)}
+  end
+
+  def handle_event("finish", %{"reps" => reps, "duration_ms" => duration_ms, "cadence_ms" => cadence}, socket) do
+    finish = %{
+      reps: reps,
+      duration_ms: duration_ms,
+      cadence_ms: cadence
+    }
+
+    {:noreply, socket |> assign(:tracked_finish, finish) |> assign(:tracking_state, :review)}
   end
 
   def handle_event("session_complete", payload, socket) do
@@ -247,6 +277,31 @@ defmodule BurpeeTrainerWeb.SessionLive do
               completion_tags={@completion_tags}
             />
           <% phase when phase in [:idle, :running] -> %>
+            <div :if={phase == :idle} class="rounded-[10px] bg-base-300 p-3">
+              <button
+                id="choose-tracked-btn"
+                type="button"
+                phx-click="choose_tracked"
+                class="w-full rounded-[10px] border border-primary/30 px-4 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10"
+              >
+                Track with camera
+              </button>
+            </div>
+
+            <%= if @capture_mode == :tracked do %>
+              <div
+                id="pose-tracker"
+                phx-hook="PoseTracker"
+                phx-update="ignore"
+                data-target-pace-sec={@plan.sec_per_burpee}
+              />
+            <% end %>
+
+            <div :if={@tracking_state == :review} id="tracked-review" class="rounded-[10px] bg-base-300 p-4 text-center">
+              <h2 class="text-lg font-semibold">Review tracked session</h2>
+              <p class="text-sm text-base-content/60">{@tracked_finish.reps} reps</p>
+            </div>
+
             <.session_runner
               phase={phase}
               summary={@summary}
