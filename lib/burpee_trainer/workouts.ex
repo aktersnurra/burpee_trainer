@@ -357,6 +357,7 @@ defmodule BurpeeTrainer.Workouts do
     changeset =
       %WorkoutSession{user_id: user_id, plan_id: plan_id}
       |> WorkoutSession.from_plan_changeset(attrs)
+      |> Ecto.Changeset.change(capture_mode: :timed)
       |> with_derived_session_fields(user_id)
       |> maybe_carry_style_name(plan)
 
@@ -380,6 +381,7 @@ defmodule BurpeeTrainer.Workouts do
   def create_free_form_session(%User{id: user_id}, attrs) do
     %WorkoutSession{user_id: user_id}
     |> WorkoutSession.free_form_changeset(attrs)
+    |> Ecto.Changeset.change(capture_mode: :logged)
     |> with_derived_session_fields(user_id)
     |> Repo.insert()
   end

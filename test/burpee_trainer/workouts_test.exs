@@ -6,6 +6,42 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
   import BurpeeTrainer.Fixtures
 
+  describe "capture mode classification" do
+    setup do
+      {:ok, user: user_fixture()}
+    end
+
+    test "free-form sessions are logged", %{user: user} do
+      {:ok, session} =
+        Workouts.create_free_form_session(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => "20",
+          "duration_sec_actual" => "1200"
+        })
+
+      assert session.capture_mode == :logged
+      assert session.cadence_ms == nil
+      assert session.target_pace_sec == nil
+      assert session.pace_consistency == nil
+    end
+
+    test "planned sessions are timed by default", %{user: user} do
+      plan = plan_fixture(user)
+
+      {:ok, session} =
+        Workouts.create_session_from_plan(user, plan, %{
+          "burpee_type" => "six_count",
+          "burpee_count_planned" => "30",
+          "duration_sec_planned" => "90",
+          "burpee_count_actual" => "30",
+          "duration_sec_actual" => "90"
+        })
+
+      assert session.capture_mode == :timed
+      assert session.cadence_ms == nil
+    end
+  end
+
   describe "plans" do
     test "create_plan/2 persists plan with blocks and sets" do
       user = user_fixture()
