@@ -93,13 +93,13 @@ export function flowTransition(state, event) {
 
 		case "CAPTURE_TIMED":
 			return {
-				state: {...state, captureMode: "timed"},
+				state: { ...state, captureMode: "timed" },
 				commands: [],
 			};
 
 		case "CAPTURE_TRACKED":
 			return {
-				state: {...state, captureMode: "tracked"},
+				state: { ...state, captureMode: "tracked" },
 				commands: [{ type: "chooseTrackedCapture" }],
 			};
 
