@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.Goals
+  alias BurpeeTrainer.{Goals, Workouts}
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -62,6 +62,25 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       _session = session_from_plan_fixture(user, plan)
       {:ok, _view, html} = live(conn, ~p"/stats")
       assert html =~ "My Plan"
+    end
+
+    test "tracked sessions show consistency badge", %{conn: conn, user: user} do
+      plan = plan_fixture(user)
+
+      {:ok, _session} =
+        Workouts.create_tracked_session_from_plan(user, plan, %{
+          "burpee_type" => "six_count",
+          "burpee_count_planned" => "3",
+          "duration_sec_planned" => "15",
+          "burpee_count_actual" => "3",
+          "duration_sec_actual" => "15",
+          "target_pace_sec" => "5.0",
+          "cadence_ms" => [5000, 10000, 15000]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/stats")
+      assert html =~ "Tracked"
+      assert html =~ "100% consistent"
     end
 
     test "Load more button appears when more sessions exist", %{conn: conn, user: user} do

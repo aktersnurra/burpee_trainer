@@ -464,7 +464,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         do: Calendar.strftime(date, "%-d %b"),
         else: Calendar.strftime(date, "%-d %b %Y")
 
-    assigns = assign(assigns, date_str: date_str)
+    assigns = assign(assigns, date_str: date_str, capture_badge: capture_badge(assigns.session))
 
     ~H"""
     <div class="flex items-start justify-between gap-3 py-3">
@@ -489,12 +489,28 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <.icon name="hero-trophy" class="size-2.5" /> Goal
             </span>
           <% end %>
+          <%= if @capture_badge do %>
+            <span class="inline-flex items-center rounded-full border border-primary/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+              {@capture_badge.label}
+            </span>
+            <span :if={@capture_badge.detail} class="text-xs text-base-content/50">
+              {@capture_badge.detail}
+            </span>
+          <% end %>
         </div>
       </div>
       <span class="text-xs text-base-content/35 shrink-0 pt-0.5">{@date_str}</span>
     </div>
     """
   end
+
+  defp capture_badge(%{capture_mode: :tracked, pace_consistency: consistency})
+       when is_float(consistency) do
+    %{label: "Tracked", detail: "#{round(consistency * 100)}% consistent"}
+  end
+
+  defp capture_badge(%{capture_mode: :timed}), do: %{label: "Timed", detail: nil}
+  defp capture_badge(_), do: nil
 
   attr(:weekly_data, :list, required: true)
   attr(:six_count_sessions, :list, required: true)
