@@ -68,6 +68,34 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert render(view) =~ "Review tracked session"
     assert render(view) =~ "3 reps"
+    assert has_element?(view, "form#session-completion-form")
+  end
+
+  test "tracked finish saves cadence trace", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    view |> element("button", "Track with camera") |> render_click()
+
+    render_hook(view, "finish", %{
+      "reps" => 3,
+      "duration_ms" => 15_000,
+      "cadence_ms" => [5_000, 10_000, 15_000]
+    })
+
+    params = %{
+      "burpee_type" => "six_count",
+      "burpee_count_planned" => "30",
+      "duration_sec_planned" => "90",
+      "burpee_count_actual" => "3",
+      "duration_min" => "0.25"
+    }
+
+    {:error, {:live_redirect, %{to: "/stats"}}} = submit_completion(view, params)
+
+    [session] = Workouts.list_sessions(user)
+    assert session.capture_mode == :tracked
+    assert session.cadence_ms == "[5000,10000,15000]"
   end
 
   test "idle state shows warmup prompt", %{conn: conn, user: user} do

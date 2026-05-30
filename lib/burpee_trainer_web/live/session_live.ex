@@ -75,13 +75,22 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("finish", %{"reps" => reps, "duration_ms" => duration_ms, "cadence_ms" => cadence}, socket) do
+    duration_sec = div(duration_ms + 999, 1000)
+
     finish = %{
       reps: reps,
       duration_ms: duration_ms,
       cadence_ms: cadence
     }
 
-    {:noreply, socket |> assign(:tracked_finish, finish) |> assign(:tracking_state, :review)}
+    socket =
+      socket
+      |> assign(:phase, :done)
+      |> assign(:tracked_finish, finish)
+      |> assign(:tracking_state, :review)
+      |> assign(:completion_form, build_completion_form(socket, reps, duration_sec))
+
+    {:noreply, socket}
   end
 
   def handle_event("session_complete", payload, socket) do
@@ -138,7 +147,23 @@ defmodule BurpeeTrainerWeb.SessionLive do
       |> Map.put("mood", mood)
       |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
 
-    case Workouts.create_session_from_plan(user, plan, session_params) do
+    create_session =
+      if socket.assigns.capture_mode == :tracked && socket.assigns.tracked_finish do
+        tracked = socket.assigns.tracked_finish
+
+        Workouts.create_tracked_session_from_plan(
+          user,
+          plan,
+          Map.merge(session_params, %{
+            "cadence_ms" => tracked.cadence_ms,
+            "target_pace_sec" => plan.sec_per_burpee
+          })
+        )
+      else
+        Workouts.create_session_from_plan(user, plan, session_params)
+      end
+
+    case create_session do
       {:ok, session} ->
         case Workouts.session_milestones(user, session) do
           [] ->
@@ -269,6 +294,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <% :not_runnable -> %>
             <.not_runnable_panel />
           <% :done -> %>
+            <div :if={@tracking_state == :review} id="tracked-review" class="rounded-[10px] bg-base-300 p-4 text-center">
+              <h2 class="text-lg font-semibold">Review tracked session</h2>
+              <p class="text-sm text-base-content/60">{@tracked_finish.reps} reps</p>
+            </div>
             <.completion_panel
               plan={@plan}
               summary={@summary}
@@ -296,11 +325,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 data-target-pace-sec={@plan.sec_per_burpee}
               />
             <% end %>
-
-            <div :if={@tracking_state == :review} id="tracked-review" class="rounded-[10px] bg-base-300 p-4 text-center">
-              <h2 class="text-lg font-semibold">Review tracked session</h2>
-              <p class="text-sm text-base-content/60">{@tracked_finish.reps} reps</p>
-            </div>
 
             <.session_runner
               phase={phase}
