@@ -17,6 +17,14 @@ assert.equal(result.state.mode, "warmup_prompt");
 assert.deepEqual(result.commands, [{ type: "renderPrompt" }]);
 
 result = flowTransition(result.state, { type: "WARMUP_SKIP" });
+assert.equal(result.state.mode, "capture_prompt");
+assert.deepEqual(result.commands, [{ type: "showCapturePrompt" }]);
+
+result = flowTransition(result.state, { type: "CAPTURE_TIMED" });
+assert.equal(result.state.captureMode, "timed");
+assert.deepEqual(result.commands, []);
+
+result = flowTransition(result.state, { type: "WORKOUT_READY" });
 assert.equal(result.state.mode, "workout_countdown");
 assert.deepEqual(result.commands, [
 	{
@@ -53,8 +61,12 @@ result = flowTransition(result.state, {
 	segment: "warmup",
 	result: { burpeeCountDone: 3, durationSec: 6 },
 });
-assert.equal(result.state.mode, "warmup_done_prompt");
-assert.deepEqual(result.commands, [{ type: "showWarmupDonePrompt" }]);
+assert.equal(result.state.mode, "capture_prompt");
+assert.deepEqual(result.commands, [{ type: "showCapturePrompt" }]);
+
+result = flowTransition(result.state, { type: "CAPTURE_TRACKED" });
+assert.equal(result.state.captureMode, "tracked");
+assert.deepEqual(result.commands, [{ type: "chooseTrackedCapture" }]);
 
 result = flowTransition(result.state, { type: "WORKOUT_READY" });
 assert.equal(result.state.mode, "workout_countdown");

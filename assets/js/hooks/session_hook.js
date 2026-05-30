@@ -92,12 +92,16 @@ const SessionHook = {
 			const warmupYes = e.target.closest("#warmup-yes-btn");
 			const warmupSkip = e.target.closest("#warmup-skip-btn");
 			const workoutReady = e.target.closest("#workout-ready-btn");
+			const captureTracked = e.target.closest("#capture-tracked-btn");
+			const captureTimed = e.target.closest("#capture-timed-btn");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
 
 			if (warmupYes) this.onWarmupYes();
 			if (warmupSkip) this.onWarmupSkip();
 			if (workoutReady) this.onWorkoutReady();
+			if (captureTracked) this.onCaptureTracked();
+			if (captureTimed) this.onCaptureTimed();
 			if (
 				ringContainer &&
 				(this.startTime !== null || this.countdownCount !== null)
@@ -137,6 +141,12 @@ const SessionHook = {
 				break;
 			case "showWarmupDonePrompt":
 				this.showWarmupDonePrompt();
+				break;
+			case "showCapturePrompt":
+				this.showCapturePrompt();
+				break;
+			case "chooseTrackedCapture":
+				this.pushEvent("choose_tracked", {});
 				break;
 			case "pushSessionComplete":
 				if (this.pushTrackedFinish(command.payload)) {
@@ -243,6 +253,52 @@ const SessionHook = {
 
 	showWarmupPrompt() {},
 
+	showCapturePrompt() {
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		this.rafId = null;
+		this.audio.stop();
+		this.startTime = null;
+		this.countdownCount = null;
+		this.countdownPaused = false;
+
+		const parent = this.el.querySelector("#session-runner-client") || this.el;
+		let overlay = this.el.querySelector("#start-overlay");
+
+		if (!overlay) {
+			overlay = document.createElement("div");
+			overlay.id = "start-overlay";
+		}
+
+		overlay.className =
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-lg bg-base-100/95 text-center backdrop-blur-sm";
+		overlay.replaceChildren();
+
+		const title = document.createElement("span");
+		title.className = "text-xl font-semibold tracking-tight";
+		title.textContent = "Track with camera?";
+
+		const buttons = document.createElement("div");
+		buttons.className = "flex gap-3";
+
+		const yes = document.createElement("button");
+		yes.type = "button";
+		yes.id = "capture-tracked-btn";
+		yes.className =
+			"rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-content transition active:scale-[0.97]";
+		yes.textContent = "Yes";
+
+		const no = document.createElement("button");
+		no.type = "button";
+		no.id = "capture-timed-btn";
+		no.className =
+			"rounded-xl bg-base-300 px-6 py-3 text-sm font-semibold text-base-content transition active:scale-[0.97]";
+		no.textContent = "No";
+
+		buttons.append(yes, no);
+		overlay.append(title, buttons);
+		parent.appendChild(overlay);
+	},
+
 	showWarmupDonePrompt() {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.rafId = null;
@@ -298,6 +354,16 @@ const SessionHook = {
 
 	onWorkoutReady() {
 		this.dispatchFlow({ type: "WORKOUT_READY" });
+	},
+
+	onCaptureTracked() {
+		this.dispatchFlow({ type: "CAPTURE_TRACKED" });
+		this.onWorkoutReady();
+	},
+
+	onCaptureTimed() {
+		this.dispatchFlow({ type: "CAPTURE_TIMED" });
+		this.onWorkoutReady();
 	},
 
 	countdownColor(n) {

@@ -33,11 +33,11 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute has_element?(view, "#pose-tracker")
   end
 
-  test "tracked choice renders pose tracker", %{conn: conn, user: user} do
+  test "tracked capture event renders pose tracker", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Track with camera") |> render_click()
+    render_hook(view, "choose_tracked", %{})
 
     assert has_element?(view, "#pose-tracker[phx-hook='PoseTracker']")
   end
@@ -61,7 +61,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Track with camera") |> render_click()
+    render_hook(view, "choose_tracked", %{})
 
     render_hook(view, "finish", %{
       "reps" => 3,
@@ -78,7 +78,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
-    view |> element("button", "Track with camera") |> render_click()
+    render_hook(view, "choose_tracked", %{})
 
     render_hook(view, "finish", %{
       "reps" => 3,

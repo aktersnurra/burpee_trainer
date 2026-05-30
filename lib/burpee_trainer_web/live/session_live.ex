@@ -314,17 +314,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
               completion_tags={@completion_tags}
             />
           <% phase when phase in [:idle, :running] -> %>
-            <div :if={phase == :idle} class="rounded-[10px] bg-base-300 p-3">
-              <button
-                id="choose-tracked-btn"
-                type="button"
-                phx-click="choose_tracked"
-                class="w-full rounded-[10px] border border-primary/30 px-4 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10"
-              >
-                Track with camera
-              </button>
-            </div>
-
             <%= if @capture_mode == :tracked do %>
               <div
                 id="pose-tracker"

@@ -6,6 +6,7 @@ export function initialFlowState() {
 		activeSegment: null,
 		warmupResult: { burpeeCountDone: 0, durationSec: 0 },
 		workoutResult: null,
+		captureMode: "timed",
 	};
 }
 
@@ -26,17 +27,10 @@ export function flowTransition(state, event) {
 			return {
 				state: {
 					...state,
-					mode: "workout_countdown",
-					activeSegment: "workout",
+					mode: "capture_prompt",
+					activeSegment: null,
 				},
-				commands: [
-					{
-						type: "startSegment",
-						segment: "workout",
-						timeline: state.workoutTimeline,
-						blockCount: state.blockCount,
-					},
-				],
+				commands: [{ type: "showCapturePrompt" }],
 			};
 
 		case "WARMUP_READY":
@@ -62,11 +56,11 @@ export function flowTransition(state, event) {
 				return {
 					state: {
 						...state,
-						mode: "warmup_done_prompt",
+						mode: "capture_prompt",
 						activeSegment: null,
 						warmupResult: event.result || state.warmupResult,
 					},
-					commands: [{ type: "showWarmupDonePrompt" }],
+					commands: [{ type: "showCapturePrompt" }],
 				};
 			}
 
@@ -96,6 +90,18 @@ export function flowTransition(state, event) {
 				};
 			}
 			return { state, commands: [] };
+
+		case "CAPTURE_TIMED":
+			return {
+				state: {...state, captureMode: "timed"},
+				commands: [],
+			};
+
+		case "CAPTURE_TRACKED":
+			return {
+				state: {...state, captureMode: "tracked"},
+				commands: [{ type: "chooseTrackedCapture" }],
+			};
 
 		case "WORKOUT_READY":
 			return {
