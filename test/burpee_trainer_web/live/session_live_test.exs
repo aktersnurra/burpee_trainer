@@ -6,6 +6,21 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
   alias BurpeeTrainer.Workouts
 
+  defp submit_completion(view, params) do
+    result =
+      view
+      |> form("#session-completion-form", workout_session: params)
+      |> render_submit()
+
+    if has_element?(view, "#celebration-overlay") do
+      view
+      |> element("#celebration-overlay button", "Continue")
+      |> render_click()
+    else
+      result
+    end
+  end
+
   setup %{conn: conn} do
     user = user_fixture()
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
@@ -150,10 +165,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "note_post" => "brutal"
     }
 
-    {:error, {:live_redirect, %{to: "/stats"}}} =
-      view
-      |> form("#session-completion-form", workout_session: params)
-      |> render_submit()
+    {:error, {:live_redirect, %{to: "/stats"}}} = submit_completion(view, params)
 
     sessions = Workouts.list_sessions(user)
     main = Enum.find(sessions, fn s -> s.burpee_count_actual == 28 end)
@@ -180,10 +192,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "duration_min" => "1.34"
     }
 
-    {:error, {:live_redirect, %{to: "/stats"}}} =
-      view
-      |> form("#session-completion-form", workout_session: params)
-      |> render_submit()
+    {:error, {:live_redirect, %{to: "/stats"}}} = submit_completion(view, params)
 
     [main_session] = Workouts.list_sessions(user)
     assert main_session.burpee_count_actual == 25
@@ -208,10 +217,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       "duration_min" => "1.5"
     }
 
-    {:error, {:live_redirect, %{to: "/stats"}}} =
-      view
-      |> form("#session-completion-form", workout_session: params)
-      |> render_submit()
+    {:error, {:live_redirect, %{to: "/stats"}}} = submit_completion(view, params)
 
     sessions = Workouts.list_sessions(user)
     assert length(sessions) == 1

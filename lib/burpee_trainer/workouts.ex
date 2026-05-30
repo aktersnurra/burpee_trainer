@@ -652,7 +652,11 @@ defmodule BurpeeTrainer.Workouts do
 
     changes =
       if data.week_after > data.best_week,
-        do: Map.merge(changes, %{best_week_pushups: data.week_after, best_week_pushups_on: today_str}),
+        do:
+          Map.merge(changes, %{
+            best_week_pushups: data.week_after,
+            best_week_pushups_on: today_str
+          }),
         else: changes
 
     changes =
@@ -667,8 +671,7 @@ defmodule BurpeeTrainer.Workouts do
     changes =
       if data.pace_qualifies? and is_number(data.pace) and
            (is_nil(data.best_pace) or data.pace < data.best_pace),
-         do:
-           Map.merge(changes, %{best_pace_sec_per_burpee: data.pace, best_pace_on: today_str}),
+         do: Map.merge(changes, %{best_pace_sec_per_burpee: data.pace, best_pace_on: today_str}),
          else: changes
 
     new_milestone =

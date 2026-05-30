@@ -97,24 +97,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
     today = socket.assigns.today
     {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
 
-    # Find goals just achieved and tag the achieving session in the DB
-    newly_achieved =
-      socket.assigns.goals
-      |> Enum.filter(&(&1.status == :active))
-      |> Enum.flat_map(fn goal ->
-        best = Workouts.best_qualifying_session(user, goal.burpee_type)
-
-        if best &&
-             round(best.burpee_count_actual / best.duration_sec_actual * 1200.0) >=
-               goal.burpee_count_target do
-          Goals.mark_achieved(goal)
-          Workouts.tag_session_as_goal_reached(best, goal.id)
-          [goal]
-        else
-          []
-        end
-      end)
-
     goals = Goals.list_current_goals(user)
 
     socket =
@@ -129,12 +111,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
       |> assign(:goals, goals)
       |> compute_goal_progress(user, goals)
       |> assign_gamification(user, today)
-
-    socket =
-      Enum.reduce(newly_achieved, socket, fn goal, acc ->
-        type_label = if goal.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
-        put_flash(acc, :info, "#{type_label} goal reached!")
-      end)
 
     {:noreply, socket}
   end
@@ -160,7 +136,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       class="rounded-[10px] bg-base-300 p-4 flex items-start gap-3"
       style="border: 1px solid #4A9EFF;"
     >
-      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" style="color: #4A9EFF;" />
+      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-primary" />
       <div class="space-y-0.5">
         <p class="text-sm font-semibold text-base-content/80">
           Level {level_label(@status.level)} expires in {@status.days_left}d

@@ -98,7 +98,8 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
       |> Map.put("inserted_at", DateTime.new!(log_date, ~T[12:00:00], "Etc/UTC"))
 
     case Workouts.create_free_form_session(user, full_params) do
-      {:ok, _session} ->
+      {:ok, session} ->
+        _events = Workouts.session_milestones(user, session)
         send(self(), socket.assigns.on_save)
         {:noreply, build_form(socket)}
 

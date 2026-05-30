@@ -68,7 +68,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           class="rounded-[10px] bg-base-300 p-4 flex items-start gap-3"
           style="border: 1px solid #4A9EFF;"
         >
-          <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" style="color: #4A9EFF;" />
+          <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-primary" />
           <p class="text-sm text-base-content/80">
             <span class="font-semibold">
               Level {level_label(@level_status.level)} expires in {@level_status.days_left}d

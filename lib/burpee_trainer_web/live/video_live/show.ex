@@ -78,7 +78,9 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       |> Map.put("tags", socket.assigns.log_tags |> Enum.sort() |> Enum.join(","))
 
     case Workouts.create_free_form_session(socket.assigns.current_user, params) do
-      {:ok, _session} ->
+      {:ok, session} ->
+        _events = Workouts.session_milestones(socket.assigns.current_user, session)
+
         {:noreply,
          socket
          |> put_flash(:info, "Session logged.")

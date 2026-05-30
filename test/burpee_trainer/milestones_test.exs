@@ -56,7 +56,9 @@ defmodule BurpeeTrainer.MilestonesTest do
 
   describe "week_pushup_pr" do
     test "fires on crossover above the stored best" do
-      input = base(%{week_pushups_before: 90, week_pushups_after: 120, best_week_pushups_before: 100})
+      input =
+        base(%{week_pushups_before: 90, week_pushups_after: 120, best_week_pushups_before: 100})
+
       assert :week_pushup_pr in types(input)
     end
 
@@ -68,18 +70,24 @@ defmodule BurpeeTrainer.MilestonesTest do
     end
 
     test "does not fire when still under the best" do
-      input = base(%{week_pushups_before: 50, week_pushups_after: 80, best_week_pushups_before: 100})
+      input =
+        base(%{week_pushups_before: 50, week_pushups_after: 80, best_week_pushups_before: 100})
+
       refute :week_pushup_pr in types(input)
     end
   end
 
   describe "session_pushup_pr" do
     test "fires when the session beats the best single session" do
-      assert :session_pushup_pr in types(base(%{session_pushups: 150, best_session_pushups_before: 100}))
+      assert :session_pushup_pr in types(
+               base(%{session_pushups: 150, best_session_pushups_before: 100})
+             )
     end
 
     test "does not fire when tying or below" do
-      refute :session_pushup_pr in types(base(%{session_pushups: 100, best_session_pushups_before: 100}))
+      refute :session_pushup_pr in types(
+               base(%{session_pushups: 100, best_session_pushups_before: 100})
+             )
     end
   end
 
