@@ -12,31 +12,31 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
   @type t :: %__MODULE__{}
 
   schema "workout_sessions" do
-    field :burpee_type, Ecto.Enum, values: @burpee_types
-    field :burpee_count_planned, :integer
-    field :duration_sec_planned, :integer
-    field :burpee_count_actual, :integer
-    field :duration_sec_actual, :integer
-    field :note_pre, :string
-    field :note_post, :string
-    field :mood, :integer
-    field :tags, :string
-    field :capture_mode, Ecto.Enum, values: [:tracked, :timed, :logged], default: :logged
-    field :cadence_ms, :string
-    field :target_pace_sec, :float
-    field :pace_consistency, :float
+    field(:burpee_type, Ecto.Enum, values: @burpee_types)
+    field(:burpee_count_planned, :integer)
+    field(:duration_sec_planned, :integer)
+    field(:burpee_count_actual, :integer)
+    field(:duration_sec_actual, :integer)
+    field(:note_pre, :string)
+    field(:note_post, :string)
+    field(:mood, :integer)
+    field(:tags, :string)
+    field(:capture_mode, Ecto.Enum, values: [:tracked, :timed, :logged], default: :logged)
+    field(:cadence_ms, :string)
+    field(:target_pace_sec, :float)
+    field(:pace_consistency, :float)
 
     # Derived fields — computed by Workouts context at save time, never from user input.
-    field :style_name, :string
-    field :rate_per_min_actual, :float
-    field :days_since_last, :integer
-    field :rate_delta, :float
-    field :rate_avg_rolling_3, :float
-    field :time_of_day_bucket, :string
+    field(:style_name, :string)
+    field(:rate_per_min_actual, :float)
+    field(:days_since_last, :integer)
+    field(:rate_delta, :float)
+    field(:rate_avg_rolling_3, :float)
+    field(:time_of_day_bucket, :string)
 
-    belongs_to :user, User
-    belongs_to :plan, WorkoutPlan
-    belongs_to :goal, Goal
+    belongs_to(:user, User)
+    belongs_to(:plan, WorkoutPlan)
+    belongs_to(:goal, Goal)
 
     timestamps(type: :utc_datetime)
   end
