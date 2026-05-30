@@ -139,6 +139,9 @@ const SessionHook = {
 				this.showWarmupDonePrompt();
 				break;
 			case "pushSessionComplete":
+				if (this.pushTrackedFinish(command.payload)) {
+					break;
+				}
 				this.pushEvent("session_complete", command.payload);
 				break;
 		}
@@ -507,6 +510,18 @@ const SessionHook = {
 		this.hiddenAt = null;
 		this.rafId = requestAnimationFrame(() => this.tick());
 		this.renderer.updatePauseButton(false);
+	},
+
+	pushTrackedFinish(payload) {
+		const tracker = this.el.querySelector("#pose-tracker");
+		if (!tracker || !payload?.main) return false;
+
+		tracker.dispatchEvent(
+			new CustomEvent("pose-tracker:finish", {
+				detail: { durationMs: Math.round(payload.main.duration_sec * 1000) },
+			}),
+		);
+		return true;
 	},
 
 	onFinishEarly() {
