@@ -42,6 +42,60 @@ defmodule BurpeeTrainer.WorkoutsTest do
     end
   end
 
+  describe "tracked session capture" do
+    setup do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      {:ok, user: user, plan: plan}
+    end
+
+    test "tracked plan session stores cadence and consistency", %{user: user, plan: plan} do
+      {:ok, session} =
+        Workouts.create_tracked_session_from_plan(user, plan, %{
+          "burpee_type" => "six_count",
+          "burpee_count_planned" => "3",
+          "duration_sec_planned" => "15",
+          "burpee_count_actual" => "3",
+          "duration_sec_actual" => "15",
+          "target_pace_sec" => "5.0",
+          "cadence_ms" => [5000, 10000, 15000]
+        })
+
+      assert session.capture_mode == :tracked
+      assert session.cadence_ms == "[5000,10000,15000]"
+      assert session.target_pace_sec == 5.0
+      assert session.pace_consistency == 1.0
+    end
+
+    test "tracked plan session rejects length mismatch", %{user: user, plan: plan} do
+      assert {:error, changeset} =
+               Workouts.create_tracked_session_from_plan(user, plan, %{
+                 "burpee_type" => "six_count",
+                 "burpee_count_planned" => "3",
+                 "duration_sec_planned" => "15",
+                 "burpee_count_actual" => "3",
+                 "duration_sec_actual" => "15",
+                 "cadence_ms" => [5000, 10000]
+               })
+
+      assert %{cadence_ms: ["must contain one timestamp per rep"]} = errors_on(changeset)
+    end
+
+    test "tracked plan session rejects timestamps after duration", %{user: user, plan: plan} do
+      assert {:error, changeset} =
+               Workouts.create_tracked_session_from_plan(user, plan, %{
+                 "burpee_type" => "six_count",
+                 "burpee_count_planned" => "3",
+                 "duration_sec_planned" => "15",
+                 "burpee_count_actual" => "3",
+                 "duration_sec_actual" => "15",
+                 "cadence_ms" => [5000, 10000, 16000]
+               })
+
+      assert %{cadence_ms: ["must finish within session duration"]} = errors_on(changeset)
+    end
+  end
+
   describe "plans" do
     test "create_plan/2 persists plan with blocks and sets" do
       user = user_fixture()

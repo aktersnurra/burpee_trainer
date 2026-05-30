@@ -13,6 +13,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Milestones
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
+  alias BurpeeTrainer.Workouts.PaceConsistency
   alias BurpeeTrainer.Workouts.{Block, StylePerformance, WorkoutPlan, WorkoutSession}
 
   # A session is eligible to set a pace PR only when it is a genuine effort:
@@ -372,6 +373,37 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
+  @spec create_tracked_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
+  def create_tracked_session_from_plan(%User{id: user_id}, %WorkoutPlan{id: plan_id} = plan, attrs) do
+    cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
+    cadence_json = Jason.encode!(cadence)
+    consistency = PaceConsistency.score(cadence)
+
+    changeset =
+      %WorkoutSession{user_id: user_id, plan_id: plan_id}
+      |> WorkoutSession.from_plan_changeset(attrs)
+      |> validate_tracked_capture(cadence)
+      |> Ecto.Changeset.change(
+        capture_mode: :tracked,
+        cadence_ms: cadence_json,
+        target_pace_sec: parse_optional_float(Map.get(attrs, "target_pace_sec")),
+        pace_consistency: consistency
+      )
+      |> with_derived_session_fields(user_id)
+      |> maybe_carry_style_name(plan)
+
+    case Repo.insert(changeset) do
+      {:ok, session} ->
+        maybe_upsert_style_performance(session, user_id)
+        Learning.record_session_completed(%User{id: user_id}, session)
+        {:ok, session}
+
+      error ->
+        error
+    end
+  end
+
   @doc """
   Create a free-form session (no plan reference). `user_id` is set
   programmatically. Same derived-field computation as plan sessions.
@@ -714,6 +746,61 @@ defmodule BurpeeTrainer.Workouts do
 
   # If the changeset is invalid skip the DB lookups — the insert will fail
   # anyway and we don't want to charge unnecessary queries.
+  defp validate_tracked_capture(changeset, cadence) do
+    reps = Ecto.Changeset.get_field(changeset, :burpee_count_actual)
+    duration_sec = Ecto.Changeset.get_field(changeset, :duration_sec_actual)
+
+    changeset
+    |> validate_cadence_values(cadence)
+    |> validate_cadence_length(cadence, reps)
+    |> validate_cadence_duration(cadence, duration_sec)
+  end
+
+  defp validate_cadence_values(changeset, cadence) do
+    valid? =
+      is_list(cadence) and
+        Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) and
+        cadence == Enum.sort(cadence)
+
+    if valid?,
+      do: changeset,
+      else:
+        Ecto.Changeset.add_error(
+          changeset,
+          :cadence_ms,
+          "must be monotonic non-negative timestamps"
+        )
+  end
+
+  defp validate_cadence_length(changeset, cadence, reps) when is_integer(reps) do
+    if length(cadence) == reps,
+      do: changeset,
+      else: Ecto.Changeset.add_error(changeset, :cadence_ms, "must contain one timestamp per rep")
+  end
+
+  defp validate_cadence_length(changeset, _cadence, _reps), do: changeset
+
+  defp validate_cadence_duration(changeset, [], _duration_sec), do: changeset
+
+  defp validate_cadence_duration(changeset, cadence, duration_sec) when is_integer(duration_sec) do
+    if List.last(cadence) <= duration_sec * 1000,
+      do: changeset,
+      else: Ecto.Changeset.add_error(changeset, :cadence_ms, "must finish within session duration")
+  end
+
+  defp validate_cadence_duration(changeset, _cadence, _duration_sec), do: changeset
+
+  defp parse_optional_float(nil), do: nil
+  defp parse_optional_float(value) when is_float(value), do: value
+  defp parse_optional_float(value) when is_integer(value), do: value / 1
+
+  defp parse_optional_float(value) when is_binary(value) do
+    case Float.parse(value) do
+      {parsed, ""} -> parsed
+      _ -> nil
+    end
+  end
+
   defp with_derived_session_fields(changeset, user_id) do
     if changeset.valid? do
       burpee_type = Ecto.Changeset.get_field(changeset, :burpee_type)
