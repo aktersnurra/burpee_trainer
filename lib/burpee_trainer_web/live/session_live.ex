@@ -37,6 +37,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:warmup_asked, false)
           |> assign(:completion_tags, [])
           |> assign(:completion_form, nil)
+          |> assign(:celebration, nil)
 
         {:ok, push_event(socket, "session_ready", %{plan: serialize_plan(plan)})}
 
@@ -108,15 +109,25 @@ defmodule BurpeeTrainerWeb.SessionLive do
       |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
 
     case Workouts.create_session_from_plan(user, plan, session_params) do
-      {:ok, _session} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Session saved.")
-         |> push_navigate(to: ~p"/stats")}
+      {:ok, session} ->
+        case Workouts.session_milestones(user, session) do
+          [] ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Session saved.")
+             |> push_navigate(to: ~p"/stats")}
+
+          events ->
+            {:noreply, assign(socket, :celebration, events)}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :completion_form, to_form(changeset))}
     end
+  end
+
+  def handle_event("dismiss_celebration", _, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/stats")}
   end
 
   def handle_event("discard", _, socket) do
@@ -198,6 +209,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
+      <.celebration_overlay :if={@celebration} events={@celebration} />
       <div
         id="burpee-session"
         phx-hook="SessionHook"
@@ -569,4 +581,91 @@ defmodule BurpeeTrainerWeb.SessionLive do
     </div>
     """
   end
+
+  attr(:events, :list, required: true)
+
+  defp celebration_overlay(assigns) do
+    ~H"""
+    <div
+      id="celebration-overlay"
+      class="fixed inset-0 z-50 flex flex-col items-center justify-center px-6"
+      style="background-color: #0C0E14;"
+    >
+      <div class="flex w-full max-w-[420px] flex-col items-center gap-6">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em]" style="color: #4A9EFF;">
+          {if length(@events) > 1, do: "New achievements", else: "New achievement"}
+        </p>
+
+        <div class="flex w-full flex-col gap-3">
+          <%= for {event, idx} <- Enum.with_index(@events) do %>
+            <div
+              class="rounded-[10px] bg-base-300 p-5 text-center"
+              style={if idx == 0, do: "border: 1px solid #4A9EFF;", else: ""}
+            >
+              <p class="text-[10px] uppercase tracking-widest text-base-content/40">
+                {celebration_title(event)}
+              </p>
+              <p class="mt-2 text-3xl font-bold tabular-nums" style="color: #C8D8F0;">
+                {celebration_headline(event)}
+              </p>
+              <p class="mt-1 text-sm text-base-content/60">
+                {celebration_detail(event)}
+              </p>
+            </div>
+          <% end %>
+        </div>
+
+        <button
+          type="button"
+          phx-click="dismiss_celebration"
+          class="w-full max-w-[420px] py-4 rounded-[10px] text-sm font-semibold tracking-wide bg-primary/75 text-primary-content hover:bg-primary/85 transition"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  defp celebration_title(%{type: :level_up}), do: "Level up"
+  defp celebration_title(%{type: :goal_reached}), do: "Goal reached"
+  defp celebration_title(%{type: :week_pushup_pr}), do: "Weekly record"
+  defp celebration_title(%{type: :lifetime_milestone}), do: "Lifetime milestone"
+  defp celebration_title(%{type: :session_pushup_pr}), do: "Session record"
+  defp celebration_title(%{type: :pace_pr}), do: "Fastest pace"
+  defp celebration_title(%{type: :balanced_week}), do: "Balanced week"
+  defp celebration_title(%{type: :comeback}), do: "Welcome back"
+
+  defp celebration_headline(%{type: :level_up, value: %{to: to}}), do: "Level #{level_label(to)}"
+  defp celebration_headline(%{type: :goal_reached, value: %{target: target}}), do: "#{target}"
+  defp celebration_headline(%{type: :week_pushup_pr, value: v}), do: "#{v}"
+  defp celebration_headline(%{type: :lifetime_milestone, value: v}), do: "#{v}"
+  defp celebration_headline(%{type: :session_pushup_pr, value: v}), do: "#{v}"
+
+  defp celebration_headline(%{type: :pace_pr, value: v}),
+    do: "#{:erlang.float_to_binary(v * 1.0, decimals: 2)}s"
+
+  defp celebration_headline(%{type: :balanced_week}), do: "40 / 40"
+  defp celebration_headline(%{type: :comeback, value: v}), do: "#{v} days"
+
+  defp celebration_detail(%{type: :level_up}), do: "Both disciplines, same week"
+
+  defp celebration_detail(%{type: :goal_reached, value: %{deadline: :early}}),
+    do: "Reps target hit ahead of schedule"
+
+  defp celebration_detail(%{type: :goal_reached, value: %{deadline: :on_time}}),
+    do: "Reps target hit right on time"
+
+  defp celebration_detail(%{type: :goal_reached}), do: "Reps target hit"
+  defp celebration_detail(%{type: :week_pushup_pr}), do: "Push-ups this week — a new best"
+  defp celebration_detail(%{type: :lifetime_milestone}), do: "Total push-ups, all-time"
+  defp celebration_detail(%{type: :session_pushup_pr}), do: "Push-ups in a single session"
+  defp celebration_detail(%{type: :pace_pr}), do: "Per burpee — your quickest yet"
+  defp celebration_detail(%{type: :balanced_week}), do: "Six-count and navy seal, evenly trained"
+  defp celebration_detail(%{type: :comeback}), do: "Since your last session — back at it"
+
+  defp level_label(:graduated), do: "Grad"
+
+  defp level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 end

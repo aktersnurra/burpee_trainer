@@ -31,18 +31,61 @@ defmodule BurpeeTrainer.Levels do
   @spec all_levels() :: [atom]
   def all_levels, do: Enum.map(@landmarks, & &1.level)
 
+  # A level must be *maintained*: the most recent co-week pair demonstrating
+  # it has to fall within this many days of `today`, otherwise it decays.
+  # Graduated is given a longer grace period than the climbing levels.
+  @graduated_window_days 30
+  @default_window_days 14
+
+  @doc "Maintenance window (in days) before a level decays."
+  @spec window_days(atom) :: pos_integer
+  def window_days(:graduated), do: @graduated_window_days
+  def window_days(_level), do: @default_window_days
+
   @doc """
-  Returns the highest level where both types have qualifying sessions in
-  the same ISO week. Returns `:level_1a` when no co-week pair exists.
+  Returns the highest level where both types have a qualifying session in the
+  same ISO week *and* that pair was completed recently enough to still count
+  (see `window_days/1`). Returns `:level_1a` when no maintained pair exists.
+
+  `:level_1a` is the floor and never decays.
   """
-  @spec current_level([map]) :: atom
-  def current_level(sessions) do
+  @spec current_level([map], Date.t()) :: atom
+  def current_level(sessions, today \\ Date.utc_today()) do
     found =
       Enum.find(@landmarks, fn lm ->
-        co_week_achieved?(sessions, lm.six_count, lm.navy_seal)
+        case latest_co_week_completion(sessions, lm.six_count, lm.navy_seal) do
+          nil -> false
+          date -> Date.diff(today, date) <= window_days(lm.level)
+        end
       end)
 
     if found, do: found.level, else: :level_1a
+  end
+
+  @doc """
+  Maintenance status for the user's current level: when it expires, how many
+  days remain, and whether it is at risk (≤ 3 days left). `:level_1a` is the
+  floor and reported as never expiring.
+  """
+  @spec level_status([map], Date.t()) :: %{
+          level: atom,
+          expires_on: Date.t() | nil,
+          days_left: integer | nil,
+          at_risk?: boolean
+        }
+  def level_status(sessions, today \\ Date.utc_today()) do
+    level = current_level(sessions, today)
+
+    case Enum.find(@landmarks, &(&1.level == level)) do
+      %{level: :level_1a} ->
+        %{level: :level_1a, expires_on: nil, days_left: nil, at_risk?: false}
+
+      lm ->
+        completion = latest_co_week_completion(sessions, lm.six_count, lm.navy_seal)
+        expires_on = Date.add(completion, window_days(level))
+        days_left = Date.diff(expires_on, today)
+        %{level: level, expires_on: expires_on, days_left: days_left, at_risk?: days_left <= 3}
+    end
   end
 
   @doc """
@@ -141,18 +184,29 @@ defmodule BurpeeTrainer.Levels do
   # Private
   # ---------------------------------------------------------------------------
 
-  defp co_week_achieved?(sessions, six_threshold, navy_threshold) do
-    six_weeks = qualifying_week_keys(sessions, :six_count, six_threshold)
-    navy_weeks = qualifying_week_keys(sessions, :navy_seal, navy_threshold)
-    not MapSet.disjoint?(six_weeks, navy_weeks)
-  end
+  # The date of the most recent ISO week where both types met their thresholds,
+  # using the later ("completing") session's date in that week. `nil` when no
+  # co-week pair exists. This anchors level-maintenance/decay.
+  defp latest_co_week_completion(sessions, six_threshold, navy_threshold) do
+    six_by_week = latest_qualifying_by_week(sessions, :six_count, six_threshold)
+    navy_by_week = latest_qualifying_by_week(sessions, :navy_seal, navy_threshold)
 
-  defp qualifying_week_keys(sessions, burpee_type, threshold) do
-    sessions
-    |> Enum.filter(&(&1.burpee_type == burpee_type))
-    |> Enum.filter(&qualifies?/1)
-    |> Enum.filter(&(&1.burpee_count_actual >= threshold))
-    |> MapSet.new(&week_key/1)
+    common_weeks =
+      MapSet.intersection(
+        MapSet.new(Map.keys(six_by_week)),
+        MapSet.new(Map.keys(navy_by_week))
+      )
+
+    common_weeks
+    |> Enum.map(fn week ->
+      {six_date, _six_dt, _six_id} = six_by_week[week]
+      {navy_date, _navy_dt, _navy_id} = navy_by_week[week]
+      Enum.max([six_date, navy_date], Date)
+    end)
+    |> case do
+      [] -> nil
+      dates -> Enum.max(dates, Date)
+    end
   end
 
   # Find the earliest ISO week where both types have a qualifying session,
