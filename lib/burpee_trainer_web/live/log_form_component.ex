@@ -99,8 +99,8 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
 
     case Workouts.create_free_form_session(user, full_params) do
       {:ok, session} ->
-        _events = Workouts.session_milestones(user, session)
-        send(self(), socket.assigns.on_save)
+        events = Workouts.session_milestones(user, session)
+        send(self(), {socket.assigns.on_save, events})
         {:noreply, build_form(socket)}
 
       {:error, changeset} ->

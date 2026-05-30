@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
   alias BurpeeTrainer.Streak.State
   alias BurpeeTrainerWeb.Fmt
 
-  embed_templates "stats_live/*"
+  embed_templates("stats_live/*")
 
   @page_size 5
 
@@ -93,26 +93,11 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   @impl true
   def handle_info(:session_saved, socket) do
-    user = socket.assigns.current_user
-    today = socket.assigns.today
-    {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
+    {:noreply, refresh_after_session_save(socket, [])}
+  end
 
-    goals = Goals.list_current_goals(user)
-
-    socket =
-      socket
-      |> assign(:log_modal_open, false)
-      |> assign(:streak, Streak.compute(user, today))
-      |> assign(:sessions, sessions)
-      |> assign(:sessions_has_more, has_more)
-      |> assign(:weekly_data, Workouts.weekly_minutes(user))
-      |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
-      |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
-      |> assign(:goals, goals)
-      |> compute_goal_progress(user, goals)
-      |> assign_gamification(user, today)
-
-    {:noreply, socket}
+  def handle_info({:session_saved, events}, socket) do
+    {:noreply, refresh_after_session_save(socket, events)}
   end
 
   def handle_info(:goal_saved, socket) do
@@ -126,6 +111,39 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:goals, goals)
      |> compute_goal_progress(user, goals)}
   end
+
+  defp refresh_after_session_save(socket, events) do
+    user = socket.assigns.current_user
+    today = socket.assigns.today
+    {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
+    goals = Goals.list_current_goals(user)
+
+    socket
+    |> assign(:log_modal_open, false)
+    |> assign(:streak, Streak.compute(user, today))
+    |> assign(:sessions, sessions)
+    |> assign(:sessions_has_more, has_more)
+    |> assign(:weekly_data, Workouts.weekly_minutes(user))
+    |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
+    |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
+    |> assign(:goals, goals)
+    |> compute_goal_progress(user, goals)
+    |> assign_gamification(user, today)
+    |> put_milestone_flashes(events)
+  end
+
+  defp put_milestone_flashes(socket, events) do
+    Enum.reduce(events, socket, fn
+      %{type: :goal_reached, value: %{burpee_type: type}}, acc ->
+        put_flash(acc, :info, "#{goal_type_label(type)} goal reached!")
+
+      _event, acc ->
+        acc
+    end)
+  end
+
+  defp goal_type_label(:six_count), do: "6-Count"
+  defp goal_type_label(:navy_seal), do: "Navy SEAL"
 
   attr(:status, :map, required: true)
 

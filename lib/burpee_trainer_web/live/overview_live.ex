@@ -12,31 +12,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    user = socket.assigns.current_user
-
-    today = Date.utc_today()
-    current_week_start = Date.beginning_of_week(today, :monday)
-
-    this_week =
-      Workouts.weekly_minutes(user)
-      |> Enum.find(%{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
-
-    trained_days = Workouts.this_week_trained_days(user)
-    last_plan = Workouts.last_run_plan(user)
-    coach_suggestions = Coach.suggest_all(user)
-
-    {:ok,
-     socket
-     |> assign(:this_week, this_week)
-     |> assign(:trained_days, trained_days)
-     |> assign(:last_plan, last_plan)
-     |> assign(:goal_min, @goal_min)
-     |> assign(:today, today)
-     |> assign(:week_start, current_week_start)
-     |> assign(:coach_suggestions, coach_suggestions)
-     |> assign(:level_status, Levels.level_status(Workouts.list_sessions(user), today))
-     |> assign(:week_pushups, Workouts.current_week_pushups(user, today))
-     |> assign(:log_modal_open, false)}
+    {:ok, socket |> assign_overview() |> assign(:log_modal_open, false)}
   end
 
   @impl true
@@ -50,8 +26,50 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   @impl true
   def handle_info(:session_saved, socket) do
-    {:noreply, assign(socket, :log_modal_open, false)}
+    {:noreply, socket |> assign_overview() |> assign(:log_modal_open, false)}
   end
+
+  def handle_info({:session_saved, events}, socket) do
+    {:noreply,
+     socket
+     |> assign_overview()
+     |> assign(:log_modal_open, false)
+     |> put_milestone_flashes(events)}
+  end
+
+  defp assign_overview(socket) do
+    user = socket.assigns.current_user
+    today = Date.utc_today()
+    current_week_start = Date.beginning_of_week(today, :monday)
+
+    this_week =
+      Workouts.weekly_minutes(user)
+      |> Enum.find(%{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
+
+    socket
+    |> assign(:this_week, this_week)
+    |> assign(:trained_days, Workouts.this_week_trained_days(user))
+    |> assign(:last_plan, Workouts.last_run_plan(user))
+    |> assign(:goal_min, @goal_min)
+    |> assign(:today, today)
+    |> assign(:week_start, current_week_start)
+    |> assign(:coach_suggestions, Coach.suggest_all(user))
+    |> assign(:level_status, Levels.level_status(Workouts.list_sessions(user), today))
+    |> assign(:week_pushups, Workouts.current_week_pushups(user, today))
+  end
+
+  defp put_milestone_flashes(socket, events) do
+    Enum.reduce(events, socket, fn
+      %{type: :goal_reached, value: %{burpee_type: type}}, acc ->
+        put_flash(acc, :info, "#{goal_type_label(type)} goal reached!")
+
+      _event, acc ->
+        acc
+    end)
+  end
+
+  defp goal_type_label(:six_count), do: "6-Count"
+  defp goal_type_label(:navy_seal), do: "Navy SEAL"
 
   @impl true
   def render(assigns) do

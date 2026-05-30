@@ -86,6 +86,37 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       assert render(view) =~ "Log session"
     end
 
+    test "log modal surfaces goal milestone feedback", %{conn: conn, user: user} do
+      today = Date.utc_today()
+
+      {:ok, goal} =
+        Goals.create_goal(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_target" => 60,
+          "duration_sec_target" => 1200,
+          "date_target" => Date.add(today, 30),
+          "burpee_count_baseline" => 0,
+          "duration_sec_baseline" => 0,
+          "date_baseline" => today
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      view |> element("button[phx-click='open_log_modal']") |> render_click()
+
+      view
+      |> form("#log-form-log-form", %{
+        "workout_session" => %{
+          "burpee_count_actual" => "60",
+          "duration_sec_actual" => "20",
+          "log_date" => Date.to_iso8601(today)
+        }
+      })
+      |> render_submit()
+
+      assert render(view) =~ "6-Count goal reached!"
+      assert %{status: :achieved} = Goals.get_goal!(user, goal.id)
+    end
+
     test "log modal uses separate backdrop so mobile input taps stay open", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stats")
       view |> element("button[phx-click='open_log_modal']") |> render_click()
