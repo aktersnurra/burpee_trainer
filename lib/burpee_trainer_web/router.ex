@@ -49,6 +49,7 @@ defmodule BurpeeTrainerWeb.Router do
       live "/session/:plan_id", SessionLive
 
       live "/stats", StatsLive
+      live "/stats/sessions/:id", SessionAnalysisLive
 
       live "/videos/:id", VideoLive.Show
     end

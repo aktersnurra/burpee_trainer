@@ -467,7 +467,15 @@ defmodule BurpeeTrainerWeb.StatsLive do
     assigns = assign(assigns, date_str: date_str, capture_badge: capture_badge(assigns.session))
 
     ~H"""
-    <div class="flex items-start justify-between gap-3 py-3">
+    <div class="relative flex items-start justify-between gap-3 py-3">
+      <.link
+        :if={@capture_badge && @capture_badge.label == "Tracked"}
+        navigate={~p"/stats/sessions/#{@session.id}"}
+        class="absolute inset-0"
+        aria-label="Open session analysis"
+      >
+        <span class="sr-only">Open session analysis</span>
+      </.link>
       <div class="min-w-0 space-y-0.5">
         <div class="flex items-baseline gap-2">
           <span class="text-base font-bold tabular-nums leading-none">

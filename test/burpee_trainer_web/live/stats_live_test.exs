@@ -64,10 +64,10 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       assert html =~ "My Plan"
     end
 
-    test "tracked sessions show consistency badge", %{conn: conn, user: user} do
+    test "tracked sessions show consistency badge and link", %{conn: conn, user: user} do
       plan = plan_fixture(user)
 
-      {:ok, _session} =
+      {:ok, session} =
         Workouts.create_tracked_session_from_plan(user, plan, %{
           "burpee_type" => "six_count",
           "burpee_count_planned" => "3",
@@ -81,6 +81,15 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       {:ok, _view, html} = live(conn, ~p"/stats")
       assert html =~ "Tracked"
       assert html =~ "100% consistent"
+      assert html =~ ~s(href="/stats/sessions/#{session.id}")
+    end
+
+    test "timed sessions are not clickable", %{conn: conn, user: user} do
+      plan = plan_fixture(user)
+      session = session_from_plan_fixture(user, plan)
+
+      {:ok, _view, html} = live(conn, ~p"/stats")
+      refute html =~ ~s(href="/stats/sessions/#{session.id}")
     end
 
     test "Load more button appears when more sessions exist", %{conn: conn, user: user} do

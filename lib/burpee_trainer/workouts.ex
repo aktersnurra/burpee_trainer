@@ -277,6 +277,16 @@ defmodule BurpeeTrainer.Workouts do
     {Enum.take(rows, limit), has_more}
   end
 
+  @spec get_session!(User.t(), integer) :: WorkoutSession.t()
+  def get_session!(%User{id: user_id}, id) do
+    Repo.one!(
+      from(s in WorkoutSession,
+        where: s.user_id == ^user_id and s.id == ^id,
+        preload: [:plan, :goal]
+      )
+    )
+  end
+
   @doc """
   Most recent session for a user + burpee type that has usable baseline data:
   burpee_count_actual > 0 and duration_sec_actual between 1190 and 1210 (20 min ± 10 sec).
