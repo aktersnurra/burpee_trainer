@@ -375,7 +375,11 @@ defmodule BurpeeTrainer.Workouts do
 
   @spec create_tracked_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
-  def create_tracked_session_from_plan(%User{id: user_id}, %WorkoutPlan{id: plan_id} = plan, attrs) do
+  def create_tracked_session_from_plan(
+        %User{id: user_id},
+        %WorkoutPlan{id: plan_id} = plan,
+        attrs
+      ) do
     cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
     cadence_json = Jason.encode!(cadence)
     consistency = PaceConsistency.score(cadence)
@@ -782,10 +786,12 @@ defmodule BurpeeTrainer.Workouts do
 
   defp validate_cadence_duration(changeset, [], _duration_sec), do: changeset
 
-  defp validate_cadence_duration(changeset, cadence, duration_sec) when is_integer(duration_sec) do
+  defp validate_cadence_duration(changeset, cadence, duration_sec)
+       when is_integer(duration_sec) do
     if List.last(cadence) <= duration_sec * 1000,
       do: changeset,
-      else: Ecto.Changeset.add_error(changeset, :cadence_ms, "must finish within session duration")
+      else:
+        Ecto.Changeset.add_error(changeset, :cadence_ms, "must finish within session duration")
   end
 
   defp validate_cadence_duration(changeset, _cadence, _duration_sec), do: changeset

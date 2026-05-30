@@ -74,7 +74,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
     {:noreply, assign(socket, :tracking_state, :running)}
   end
 
-  def handle_event("finish", %{"reps" => reps, "duration_ms" => duration_ms, "cadence_ms" => cadence}, socket) do
+  def handle_event(
+        "finish",
+        %{"reps" => reps, "duration_ms" => duration_ms, "cadence_ms" => cadence},
+        socket
+      ) do
     duration_sec = div(duration_ms + 999, 1000)
 
     finish = %{
@@ -294,7 +298,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <% :not_runnable -> %>
             <.not_runnable_panel />
           <% :done -> %>
-            <div :if={@tracking_state == :review} id="tracked-review" class="rounded-[10px] bg-base-300 p-4 text-center">
+            <div
+              :if={@tracking_state == :review}
+              id="tracked-review"
+              class="rounded-[10px] bg-base-300 p-4 text-center"
+            >
               <h2 class="text-lg font-semibold">Review tracked session</h2>
               <p class="text-sm text-base-content/60">{@tracked_finish.reps} reps</p>
             </div>
