@@ -16,9 +16,13 @@ defmodule BurpeeTrainer.LevelsTest do
     )
   end
 
-  describe "current_level/1" do
+  describe "current_level/2" do
+    # All sessions default to 2026-01-01; evaluate maintenance as of that day
+    # unless a test needs a later reference point.
+    @today ~D[2026-01-01]
+
     test "returns :level_1a with zero sessions" do
-      assert Levels.current_level([]) == :level_1a
+      assert Levels.current_level([], @today) == :level_1a
     end
 
     test "returns the highest co-week level when both types done same week" do
@@ -28,7 +32,7 @@ defmodule BurpeeTrainer.LevelsTest do
       ]
 
       # six_count 100 ≥ 1c threshold, navy_seal 20 ≥ 1b threshold — co-week = 1b
-      assert Levels.current_level(sessions) == :level_1b
+      assert Levels.current_level(sessions, @today) == :level_1b
     end
 
     test "returns :graduated when both types meet graduated threshold same week" do
@@ -37,7 +41,7 @@ defmodule BurpeeTrainer.LevelsTest do
         session(%{burpee_type: :navy_seal, burpee_count_actual: 150})
       ]
 
-      assert Levels.current_level(sessions) == :graduated
+      assert Levels.current_level(sessions, @today) == :graduated
     end
 
     test "bottleneck type keeps overall level down even same week" do
@@ -46,7 +50,7 @@ defmodule BurpeeTrainer.LevelsTest do
         session(%{burpee_type: :navy_seal, burpee_count_actual: 1})
       ]
 
-      assert Levels.current_level(sessions) == :level_1a
+      assert Levels.current_level(sessions, @today) == :level_1a
     end
 
     test "sessions over 1200s do not qualify even with enough reps" do
@@ -55,7 +59,7 @@ defmodule BurpeeTrainer.LevelsTest do
         session(%{burpee_type: :navy_seal, burpee_count_actual: 150, duration_sec_actual: 1201})
       ]
 
-      assert Levels.current_level(sessions) == :level_1a
+      assert Levels.current_level(sessions, @today) == :level_1a
     end
 
     test "does not level up if thresholds met in different weeks" do
@@ -74,7 +78,7 @@ defmodule BurpeeTrainer.LevelsTest do
         })
       ]
 
-      assert Levels.current_level(sessions) == :level_1a
+      assert Levels.current_level(sessions, ~D[2026-01-12]) == :level_1a
     end
 
     test "levels up once both types share a week, regardless of prior weeks" do
@@ -98,7 +102,67 @@ defmodule BurpeeTrainer.LevelsTest do
         })
       ]
 
-      assert Levels.current_level(sessions) == :level_1b
+      assert Levels.current_level(sessions, ~D[2026-01-12]) == :level_1b
+    end
+  end
+
+  describe "current_level/2 maintenance decay" do
+    defp co_week(level_six, level_navy, date) do
+      [
+        session(%{burpee_type: :six_count, burpee_count_actual: level_six, inserted_at: date}),
+        session(%{burpee_type: :navy_seal, burpee_count_actual: level_navy, inserted_at: date})
+      ]
+    end
+
+    test "a held level decays after its 14-day window" do
+      sessions = co_week(100, 20, ~U[2026-01-06 12:00:00Z])
+      # completing date 2026-01-06; window 14 days → expires 2026-01-20
+      assert Levels.current_level(sessions, ~D[2026-01-18]) == :level_1b
+      assert Levels.current_level(sessions, ~D[2026-01-25]) == :level_1a
+    end
+
+    test "graduated gets a longer 30-day window" do
+      sessions = co_week(325, 150, ~U[2026-01-06 12:00:00Z])
+      assert Levels.current_level(sessions, ~D[2026-02-04]) == :graduated
+      assert Levels.current_level(sessions, ~D[2026-02-10]) == :level_1a
+    end
+
+    test "re-achieving the pair restores the level" do
+      sessions =
+        co_week(100, 20, ~U[2026-01-06 12:00:00Z]) ++
+          co_week(100, 20, ~U[2026-02-02 12:00:00Z])
+
+      # The old pair alone would have decayed by February...
+      assert Levels.current_level(co_week(100, 20, ~U[2026-01-06 12:00:00Z]), ~D[2026-02-05]) ==
+               :level_1a
+
+      # ...but the fresh pair keeps it alive.
+      assert Levels.current_level(sessions, ~D[2026-02-05]) == :level_1b
+    end
+  end
+
+  describe "level_status/2" do
+    test "level_1a never expires" do
+      status = Levels.level_status([], ~D[2026-01-01])
+      assert status == %{level: :level_1a, expires_on: nil, days_left: nil, at_risk?: false}
+    end
+
+    test "reports days left and at_risk near expiry" do
+      sessions = co_week(100, 20, ~U[2026-01-06 12:00:00Z])
+      status = Levels.level_status(sessions, ~D[2026-01-18])
+
+      assert status.level == :level_1b
+      assert status.expires_on == ~D[2026-01-20]
+      assert status.days_left == 2
+      assert status.at_risk?
+    end
+
+    test "not at risk with plenty of window left" do
+      sessions = co_week(100, 20, ~U[2026-01-06 12:00:00Z])
+      status = Levels.level_status(sessions, ~D[2026-01-08])
+
+      assert status.days_left == 12
+      refute status.at_risk?
     end
   end
 

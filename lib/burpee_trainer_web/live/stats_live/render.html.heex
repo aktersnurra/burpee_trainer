@@ -1,6 +1,14 @@
 <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
   <div class="space-y-5 pb-20">
-    <.streak_card streak={@streak} today={@today} current_level={@current_level} />
+    <.at_risk_banner status={@level_status} />
+    <.streak_card
+      streak={@streak}
+      today={@today}
+      current_level={@current_level}
+      week_pushups={@week_pushups}
+      best_week_pushups={@best_week_pushups}
+      week_balanced={@week_balanced}
+    />
     <.goals_section
       goals={@goals}
       six_progress={@six_progress}

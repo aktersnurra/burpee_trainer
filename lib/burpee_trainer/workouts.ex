@@ -672,9 +672,13 @@ defmodule BurpeeTrainer.Workouts do
          else: changes
 
     new_milestone =
-      Milestones.lifetime_milestones()
-      |> Enum.filter(&(&1 > data.lifetime_milestone and &1 <= data.lifetime_after))
-      |> Enum.max(fn -> nil end)
+      case Enum.filter(
+             Milestones.lifetime_milestones(),
+             &(&1 > data.lifetime_milestone and &1 <= data.lifetime_after)
+           ) do
+        [] -> nil
+        crossed -> Enum.max(crossed)
+      end
 
     changes =
       if new_milestone,

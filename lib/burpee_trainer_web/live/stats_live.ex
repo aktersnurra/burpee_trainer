@@ -1,7 +1,7 @@
 defmodule BurpeeTrainerWeb.StatsLive do
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Goals, Streak, Workouts}
+  alias BurpeeTrainer.{Goals, Levels, Scoring, Streak, Workouts}
   alias BurpeeTrainer.Stats.Series
   alias BurpeeTrainer.Streak.State
   alias BurpeeTrainerWeb.Fmt
@@ -29,7 +29,28 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:goal_baseline_session, nil)
      |> assign(:weekly_data, Workouts.weekly_minutes(user))
      |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
-     |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))}
+     |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
+     |> assign_gamification(user, today)}
+  end
+
+  # Push-up score, personal best, balance, and level-maintenance status.
+  defp assign_gamification(socket, user, today) do
+    sessions = Workouts.list_sessions(user)
+    week_start = Date.beginning_of_week(today, :monday)
+
+    this_week =
+      Enum.filter(sessions, fn s ->
+        Date.compare(
+          DateTime.to_date(s.inserted_at) |> Date.beginning_of_week(:monday),
+          week_start
+        ) == :eq
+      end)
+
+    socket
+    |> assign(:level_status, Levels.level_status(sessions, today))
+    |> assign(:week_pushups, Scoring.total_pushups(this_week))
+    |> assign(:best_week_pushups, Workouts.gamification_stats(user).best_week_pushups)
+    |> assign(:week_balanced, Scoring.balanced_week?(this_week))
   end
 
   @impl true
@@ -107,6 +128,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
       |> assign(:goals, goals)
       |> compute_goal_progress(user, goals)
+      |> assign_gamification(user, today)
 
     socket =
       Enum.reduce(newly_achieved, socket, fn goal, acc ->
@@ -129,9 +151,34 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> compute_goal_progress(user, goals)}
   end
 
+  attr(:status, :map, required: true)
+
+  defp at_risk_banner(assigns) do
+    ~H"""
+    <div
+      :if={@status.at_risk?}
+      class="rounded-[10px] bg-base-300 p-4 flex items-start gap-3"
+      style="border: 1px solid #4A9EFF;"
+    >
+      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" style="color: #4A9EFF;" />
+      <div class="space-y-0.5">
+        <p class="text-sm font-semibold text-base-content/80">
+          Level {level_label(@status.level)} expires in {@status.days_left}d
+        </p>
+        <p class="text-xs text-base-content/50">
+          Do a six-count and a navy seal landmark this week to keep it.
+        </p>
+      </div>
+    </div>
+    """
+  end
+
   attr(:streak, State, required: true)
   attr(:today, Date, required: true)
   attr(:current_level, :atom, default: nil)
+  attr(:week_pushups, :integer, default: 0)
+  attr(:best_week_pushups, :integer, default: 0)
+  attr(:week_balanced, :boolean, default: false)
 
   defp streak_card(assigns) do
     week_start = Date.beginning_of_week(assigns.today, :monday)
@@ -196,6 +243,22 @@ defmodule BurpeeTrainerWeb.StatsLive do
             ]} />
           </div>
         <% end %>
+      </div>
+
+      <div class="flex items-center justify-between border-t border-base-border pt-3">
+        <div class="flex items-baseline gap-1.5 tabular-nums">
+          <span class="text-lg font-bold" style="color: #4A9EFF;">{@week_pushups}</span>
+          <span class="text-xs text-base-content/40">push-ups this week</span>
+          <span :if={@best_week_pushups > 0} class="text-xs text-base-content/30">
+            · best {@best_week_pushups}
+          </span>
+        </div>
+        <span
+          :if={@week_balanced}
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium shrink-0"
+        >
+          <.icon name="hero-scale" class="size-2.5" /> Balanced
+        </span>
       </div>
 
       <%= if @streak.streak_weeks == 0 && @streak.previous_best_weeks > 0 do %>

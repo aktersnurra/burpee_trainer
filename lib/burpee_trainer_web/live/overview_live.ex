@@ -5,7 +5,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.Coach
-  alias BurpeeTrainer.Workouts
+  alias BurpeeTrainer.{Levels, Workouts}
   alias BurpeeTrainerWeb.{Layouts, LogFormComponent}
 
   @goal_min 80.0
@@ -34,6 +34,8 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      |> assign(:today, today)
      |> assign(:week_start, current_week_start)
      |> assign(:coach_suggestions, coach_suggestions)
+     |> assign(:level_status, Levels.level_status(Workouts.list_sessions(user), today))
+     |> assign(:week_pushups, Workouts.current_week_pushups(user, today))
      |> assign(:log_modal_open, false)}
   end
 
@@ -61,12 +63,26 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       current_page={:home}
     >
       <div class="space-y-8 max-w-lg mx-auto">
+        <div
+          :if={@level_status.at_risk?}
+          class="rounded-[10px] bg-base-300 p-4 flex items-start gap-3"
+          style="border: 1px solid #4A9EFF;"
+        >
+          <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" style="color: #4A9EFF;" />
+          <p class="text-sm text-base-content/80">
+            <span class="font-semibold">
+              Level {level_label(@level_status.level)} expires in {@level_status.days_left}d
+            </span>
+            — train both burpee types this week to keep it.
+          </p>
+        </div>
         <.status_strip
           this_week={@this_week}
           trained_days={@trained_days}
           today={@today}
           week_start={@week_start}
           goal_min={@goal_min}
+          week_pushups={@week_pushups}
         />
         <.workout_card last_plan={@last_plan} />
         <%= for suggestion <- @coach_suggestions do %>
@@ -117,6 +133,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   attr(:today, :any, required: true)
   attr(:week_start, :any, required: true)
   attr(:goal_min, :float, required: true)
+  attr(:week_pushups, :integer, default: 0)
 
   defp status_strip(assigns) do
     min_done = assigns.this_week.minutes |> Float.round(0) |> trunc()
@@ -167,13 +184,18 @@ defmodule BurpeeTrainerWeb.OverviewLive do
             <span class="text-sm text-base-content/40">/ {@goal} min</span>
           </div>
         </div>
-        <p class="pb-1 text-xs text-base-content/45 tabular-nums">
-          <%= if @session_count == 1 do %>
-            1 session
-          <% else %>
-            {@session_count} sessions
-          <% end %>
-        </p>
+        <div class="pb-1 text-right space-y-0.5">
+          <p class="text-xs text-base-content/45 tabular-nums">
+            <%= if @session_count == 1 do %>
+              1 session
+            <% else %>
+              {@session_count} sessions
+            <% end %>
+          </p>
+          <p :if={@week_pushups > 0} class="text-xs tabular-nums" style="color: #4A9EFF;">
+            {@week_pushups} push-ups
+          </p>
+        </div>
       </div>
 
       <div class="h-1 w-full rounded-full bg-base-border">
@@ -324,6 +346,11 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     </div>
     """
   end
+
+  defp level_label(:graduated), do: "Grad"
+
+  defp level_label(l),
+    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 
   defp rhythm_state_label(true, _is_today), do: "trained"
   defp rhythm_state_label(false, true), do: "today"

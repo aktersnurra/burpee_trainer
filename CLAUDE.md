@@ -15,7 +15,9 @@
 | `BurpeeTrainer.Workouts` | Ecto context: sessions, plans, blocks, sets, style_performance |
 | `BurpeeTrainer.Goals` | Ecto context: goals CRUD |
 | `BurpeeTrainer.Progression` | Pure progression logic: recommend, project_trend, trend_status |
-| `BurpeeTrainer.Levels` | Level unlock rules (co-week rule, landmark_history) |
+| `BurpeeTrainer.Scoring` | Pure push-up score (six_count ×1, navy_seal ×3), weekly totals, 40/40 balance |
+| `BurpeeTrainer.Milestones` | Pure celebration-event detection (PRs, level-up, goals, comeback) |
+| `BurpeeTrainer.Levels` | Level unlock + **decay** rules (co-week, landmark_history, level_status) |
 | `BurpeeTrainer.StyleGenerator` | Generates style variants for a plan |
 | `BurpeeTrainer.StyleRecommender` | Picks a style variant to suggest |
 | `BurpeeTrainer.Accounts` | User auth (bcrypt, sessions) |
@@ -26,6 +28,14 @@
 - `sec_per_rep` on `Set` — cadence = movement + padding (used for timeline math)
 - `additional_rests` on `WorkoutPlan` — stored as JSON text: `[{rest_sec, target_min}]`
 - `pacing_style` — `:even` (sets with end_of_set_rest) or `:unbroken` (one block, one set)
+
+**Levels decay:** `Levels.current_level/2` and `level_status/2` take a `today` and require a
+level to be *maintained* — the most recent co-week pair must be within `window_days/1`
+(30 days for `:graduated`, 14 for the rest) or the level drops. `:level_1a` is the floor.
+
+**`user_stats` gamification columns** (migration `20260529000000`): `best_week_pushups`(+`_on`),
+`best_session_pushups`(+`_on`), `best_pace_sec_per_burpee`(+`_on`), `lifetime_pushup_milestone`.
+Personal bests are persisted by `Workouts.session_milestones/3` at session-save time.
 
 **Removed fields (do not reintroduce):** `warmup_enabled`, `warmup_reps`, `warmup_rounds`,
 `rest_sec_warmup_between`, `rest_sec_warmup_before_main`, `shave_off_sec`, `shave_off_block_count`.
