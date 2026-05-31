@@ -27,6 +27,7 @@ import ChartHook from "./hooks/chart_hook";
 import SessionHook from "./hooks/session_hook";
 import VideoHook from "./hooks/video_hook";
 import PoseTracker from "./hooks/pose_tracker";
+import PoseDebug from "./hooks/pose_debug";
 
 const themeStorage = {
 	get() {
@@ -82,7 +83,7 @@ const csrfToken = document
 const liveSocket = new LiveSocket("/live", Socket, {
 	longPollFallbackMs: 2500,
 	params: { _csrf_token: csrfToken },
-	hooks: { ChartHook, SessionHook, VideoHook, PoseTracker },
+	hooks: { ChartHook, SessionHook, VideoHook, PoseTracker, PoseDebug },
 });
 
 // Show progress bar on live navigation and form submits

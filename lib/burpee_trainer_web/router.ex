@@ -4,54 +4,55 @@ defmodule BurpeeTrainerWeb.Router do
   import BurpeeTrainerWeb.Auth
 
   pipeline :browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {BurpeeTrainerWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-    plug :fetch_current_user
+    plug(:accepts, ["html"])
+    plug(:fetch_session)
+    plug(:fetch_live_flash)
+    plug(:put_root_layout, html: {BurpeeTrainerWeb.Layouts, :root})
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
+    plug(:fetch_current_user)
   end
 
   pipeline :require_auth do
-    plug :require_authenticated_user
+    plug(:require_authenticated_user)
   end
 
   pipeline :redirect_if_authed do
-    plug :redirect_if_user_is_authenticated
+    plug(:redirect_if_user_is_authenticated)
   end
 
   scope "/", BurpeeTrainerWeb do
-    pipe_through [:browser, :redirect_if_authed]
+    pipe_through([:browser, :redirect_if_authed])
 
-    get "/login", SessionController, :new
-    post "/login", SessionController, :create
+    get("/login", SessionController, :new)
+    post("/login", SessionController, :create)
   end
 
   scope "/", BurpeeTrainerWeb do
-    pipe_through :browser
+    pipe_through(:browser)
 
-    delete "/logout", SessionController, :delete
+    delete("/logout", SessionController, :delete)
   end
 
   scope "/", BurpeeTrainerWeb do
-    pipe_through [:browser, :require_auth]
+    pipe_through([:browser, :require_auth])
 
-    get "/videos/stream/:filename", VideoController, :stream
+    get("/videos/stream/:filename", VideoController, :stream)
 
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
-      live "/", OverviewLive
-      live "/workouts", WorkoutsLive, :index
-      live "/workouts/new", PlansLive.Edit, :new
-      live "/workouts/:id/edit", PlansLive.Edit, :edit
+      live("/", OverviewLive)
+      live("/workouts", WorkoutsLive, :index)
+      live("/workouts/new", PlansLive.Edit, :new)
+      live("/workouts/:id/edit", PlansLive.Edit, :edit)
 
-      live "/session/:plan_id", SessionLive
+      live("/session/:plan_id", SessionLive)
 
-      live "/stats", StatsLive
-      live "/stats/sessions/:id", SessionAnalysisLive
+      live("/stats", StatsLive)
+      live("/stats/sessions/:id", SessionAnalysisLive)
+      live("/tracking-test", TrackingTestLive)
 
-      live "/videos/:id", VideoLive.Show
+      live("/videos/:id", VideoLive.Show)
     end
   end
 
@@ -59,10 +60,10 @@ defmodule BurpeeTrainerWeb.Router do
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do
-      pipe_through :browser
+      pipe_through(:browser)
 
-      live_dashboard "/dashboard", metrics: BurpeeTrainerWeb.Telemetry
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
+      live_dashboard("/dashboard", metrics: BurpeeTrainerWeb.Telemetry)
+      forward("/mailbox", Plug.Swoosh.MailboxPreview)
     end
   end
 end
