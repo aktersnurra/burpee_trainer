@@ -2,6 +2,7 @@ const MIN_TEMPLATE_SAMPLES = 3;
 const MIN_SIGNAL_RANGE = 0.12;
 const MIN_CLOSENESS_RANGE = 0.12;
 const MATCH_DISTANCE_LIMIT = 0.18;
+const TRIM_RECOVERY_RATIO = 0.5;
 
 export function initialTemplateMatcherState() {
 	return { samples: [] };
@@ -19,18 +20,23 @@ export function finishTemplateRecording(state) {
 	}
 
 	const ranges = channelRanges(samples);
-	if (
-		ranges.signal.range < MIN_SIGNAL_RANGE &&
-		ranges.closeness.range < MIN_CLOSENESS_RANGE
-	) {
+	if (!hasEnoughMotion(ranges)) {
+		return { ok: false, reason: "low_motion" };
+	}
+
+	const trimmedSamples = trimRepSamples(samples, ranges);
+	const trimmedRanges = channelRanges(trimmedSamples);
+	if (trimmedSamples.length < MIN_TEMPLATE_SAMPLES || !hasEnoughMotion(trimmedRanges)) {
 		return { ok: false, reason: "low_motion" };
 	}
 
 	return {
 		ok: true,
 		template: {
-			points: normalizeSamples(samples, ranges),
-			durationMs: samples.at(-1).tMs - samples[0].tMs,
+			points: normalizeSamples(trimmedSamples, trimmedRanges),
+			durationMs: trimmedSamples.at(-1).tMs - trimmedSamples[0].tMs,
+			sourceStartTMs: trimmedSamples[0].tMs,
+			sourceEndTMs: trimmedSamples.at(-1).tMs,
 		},
 	};
 }
@@ -64,6 +70,43 @@ export function matchTemplateWindow(template, samples) {
 		downTMs: downSample.tMs,
 		upTMs: upSample.tMs,
 	};
+}
+
+function trimRepSamples(samples, ranges) {
+	const downIndex = samples.reduce(
+		(bestIndex, sample, index) =>
+			downScore(sample) > downScore(samples[bestIndex]) ? index : bestIndex,
+		0,
+	);
+	const signalRecovery = ranges.signal.min + ranges.signal.range * TRIM_RECOVERY_RATIO;
+	const closenessRecovery = ranges.closeness.max - ranges.closeness.range * TRIM_RECOVERY_RATIO;
+
+	let startIndex = 0;
+	for (let index = downIndex - 1; index >= 0; index--) {
+		const sample = samples[index];
+		if (sample.signal >= signalRecovery || (sample.closeness ?? 0) <= closenessRecovery) {
+			startIndex = index;
+			break;
+		}
+	}
+
+	let endIndex = samples.length - 1;
+	for (let index = downIndex + 1; index < samples.length; index++) {
+		const sample = samples[index];
+		if (sample.signal >= signalRecovery || (sample.closeness ?? 0) <= closenessRecovery) {
+			endIndex = index;
+			break;
+		}
+	}
+
+	return samples.slice(startIndex, endIndex + 1);
+}
+
+function hasEnoughMotion(ranges) {
+	return (
+		ranges.signal.range >= MIN_SIGNAL_RANGE ||
+		ranges.closeness.range >= MIN_CLOSENESS_RANGE
+	);
 }
 
 function normalizeSamples(samples, ranges) {

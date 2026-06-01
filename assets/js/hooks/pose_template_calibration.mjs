@@ -31,7 +31,11 @@ export function startTemplateCalibration(state, nowMs) {
 }
 
 export function stepTemplateCalibration(state, sample) {
-	if (state.phase === "idle" || state.phase === "ready" || state.phase === "failed") {
+	if (
+		state.phase === "idle" ||
+		state.phase === "ready" ||
+		state.phase === "failed"
+	) {
 		return { state, status: statusFor(state) };
 	}
 

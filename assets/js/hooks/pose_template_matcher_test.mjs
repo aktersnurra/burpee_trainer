@@ -50,6 +50,28 @@ test("rejects templates without a visible down then up recovery", () => {
 	assert.equal(result.reason, "low_motion");
 });
 
+test("trims idle tail from fast calibration rep", () => {
+	let state = initialTemplateMatcherState();
+	for (const item of [
+		sample(0, 0.71, 0.2),
+		sample(500, 0.7, 0.21),
+		sample(1000, 0.38, 0.72),
+		sample(1600, 0.69, 0.24),
+		sample(2500, 0.7, 0.22),
+		sample(3500, 0.71, 0.21),
+		sample(5000, 0.7, 0.2),
+	]) {
+		state = recordTemplateSample(state, item);
+	}
+
+	const result = finishTemplateRecording(state);
+
+	assert.equal(result.ok, true);
+	assert.equal(result.template.sourceStartTMs, 500);
+	assert.equal(result.template.sourceEndTMs, 1600);
+	assert.equal(result.template.durationMs, 1100);
+});
+
 test("matches a stretched rep and backdates down/up timing from the sample window", () => {
 	let state = initialTemplateMatcherState();
 	for (const item of [

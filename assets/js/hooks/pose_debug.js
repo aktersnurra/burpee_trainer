@@ -172,7 +172,8 @@ const PoseDebug = {
 	},
 
 	startTemplateCalibration() {
-		const nowMs = this.startedAt == null ? 0 : performance.now() - this.startedAt;
+		const nowMs =
+			this.startedAt == null ? 0 : performance.now() - this.startedAt;
 		this.calibration = startTemplateCalibration(this.calibration, nowMs);
 		this.template = null;
 		this.dtwRepCount = 0;
@@ -192,7 +193,6 @@ const PoseDebug = {
 		while (this.sampleWindow.length > 0 && this.sampleWindow[0].tMs < minTMs) {
 			this.sampleWindow.shift();
 		}
-
 	},
 
 	stepCalibration(sample) {
@@ -200,7 +200,10 @@ const PoseDebug = {
 		const result = stepTemplateCalibration(this.calibration, sample);
 		this.calibration = result.state;
 
-		if (previousPhase !== this.calibration.phase || this.calibration.phase !== "idle") {
+		if (
+			previousPhase !== this.calibration.phase ||
+			this.calibration.phase !== "idle"
+		) {
 			setText(this.el, "#pose-debug-dtw-status", result.status);
 		}
 
@@ -212,7 +215,10 @@ const PoseDebug = {
 			);
 		}
 
-		if (this.calibration.phase === "ready" && this.template !== this.calibration.template) {
+		if (
+			this.calibration.phase === "ready" &&
+			this.template !== this.calibration.template
+		) {
 			this.template = this.calibration.template;
 			this.dtwRepCount = 0;
 			this.lastDtwUpTMs = null;
@@ -226,7 +232,11 @@ const PoseDebug = {
 
 		if (this.calibration.phase === "failed") {
 			this.template = null;
-			setText(this.el, "#pose-debug-dtw-detail", "Try again with one clearer full-body rep.");
+			setText(
+				this.el,
+				"#pose-debug-dtw-detail",
+				"Try again with one clearer full-body rep.",
+			);
 		}
 	},
 
