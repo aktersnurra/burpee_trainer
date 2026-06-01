@@ -1,5 +1,5 @@
 import * as poseDetection from "@tensorflow-models/pose-detection";
-import "@tensorflow/tfjs-backend-webgl";
+import { ensureTfBackend } from "./tf_backend.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 
@@ -42,7 +42,10 @@ const PoseDebug = {
 			await this.video.play();
 			this.resizeCanvas();
 
-			this.status("Loading model");
+			this.status("Initializing TFJS");
+			const backend = await ensureTfBackend();
+
+			this.status(`Loading model (${backend})`);
 			this.detector = await poseDetection.createDetector(
 				poseDetection.SupportedModels.MoveNet,
 				{

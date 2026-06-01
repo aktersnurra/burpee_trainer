@@ -1,5 +1,5 @@
 import * as poseDetection from "@tensorflow-models/pose-detection";
-import "@tensorflow/tfjs-backend-webgl";
+import { ensureTfBackend } from "./tf_backend.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
@@ -29,6 +29,8 @@ export function createPoseTracker(hook) {
 			video.srcObject = stream;
 			await video.play();
 
+			await ensureTfBackend();
+
 			detector = await poseDetection.createDetector(
 				poseDetection.SupportedModels.MoveNet,
 				{
@@ -42,9 +44,10 @@ export function createPoseTracker(hook) {
 			hook.pushEvent("tracker_ready", {});
 			loop();
 		} catch (error) {
+			console.error("PoseTracker failed", error);
 			hook.pushEvent("track", {
 				state: "lost",
-				reason: error?.name || "tracker_error",
+				reason: error?.message || error?.name || "tracker_error",
 			});
 		}
 	}
