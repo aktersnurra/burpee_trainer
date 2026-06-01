@@ -26,12 +26,29 @@ export function sampleFromPose(pose, tMs, video) {
 			? video.videoHeight / 2
 			: yValues.reduce((sum, y) => sum + y, 0) / yValues.length;
 	const height = video.videoHeight || 1;
+	const width = video.videoWidth || 1;
+	const verticalSignal = 1 - meanY / height;
+	const closeness = bodyCloseness(points, width, height);
 
 	return {
 		tMs: Math.max(0, Math.round(tMs)),
-		signal: clamp01(1 - meanY / height),
+		signal: clamp01(verticalSignal - closeness * 0.45),
 		confidence,
 	};
+}
+
+function bodyCloseness(points, width, height) {
+	const xs = points.map((point) => point.x).filter(Number.isFinite);
+	const ys = points.map((point) => point.y).filter(Number.isFinite);
+
+	if (xs.length < 2 || ys.length < 2) return 0;
+
+	const boxWidth = Math.max(...xs) - Math.min(...xs);
+	const boxHeight = Math.max(...ys) - Math.min(...ys);
+	const widthRatio = boxWidth / width;
+	const heightRatio = boxHeight / height;
+
+	return clamp01(Math.max(widthRatio, heightRatio));
 }
 
 function findKeypoint(keypoints, name) {
