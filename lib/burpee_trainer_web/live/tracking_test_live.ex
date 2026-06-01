@@ -22,7 +22,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
         <button
           id="pose-debug-template-start"
           type="button"
-          phx-click={JS.dispatch("pose-debug:start-calibration", to: "#pose-debug")}
+          phx-hook="PoseCalibrationButton"
           class="relative z-20 w-full touch-manipulation select-none rounded-[10px] bg-primary px-4 py-4 text-base font-semibold text-primary-content shadow-lg shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.99]"
         >
           Start 3s countdown
