@@ -17,19 +17,29 @@ export function stepFsm(state, sample, thresholds = DEFAULT_THRESHOLDS) {
 
 	if (state.phase === "up" && sample.signal <= thresholds.low) {
 		return {
-			state: { ...state, phase: "down", sawDown: true, downSignal: sample.signal },
+			state: {
+				...state,
+				phase: "down",
+				sawDown: true,
+				downSignal: sample.signal,
+			},
 			rep: false,
 		};
 	}
 
-	if (state.phase === "down" && state.downSignal != null && sample.signal < state.downSignal) {
+	if (
+		state.phase === "down" &&
+		state.downSignal != null &&
+		sample.signal < state.downSignal
+	) {
 		return { state: { ...state, downSignal: sample.signal }, rep: false };
 	}
 
 	const recoveryHigh =
 		state.downSignal == null
 			? thresholds.high
-			: state.downSignal + (thresholds.high - thresholds.low) * thresholds.recoveryRatio;
+			: state.downSignal +
+				(thresholds.high - thresholds.low) * thresholds.recoveryRatio;
 
 	if (state.phase === "down" && sample.signal >= recoveryHigh) {
 		const last = state.lastRepTMs;

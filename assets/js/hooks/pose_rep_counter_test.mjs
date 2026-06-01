@@ -84,9 +84,9 @@ test("floor-angle cycles count when up return is partial", () => {
 	const samples = [
 		{ tMs: 0, signal: 0.58, confidence: 0.9 },
 		{ tMs: 500, signal: 0.56, confidence: 0.9 },
-		{ tMs: 1000, signal: 0.40, confidence: 0.9 },
+		{ tMs: 1000, signal: 0.4, confidence: 0.9 },
 		{ tMs: 1800, signal: 0.45, confidence: 0.9 },
-		{ tMs: 2600, signal: 0.50, confidence: 0.9 },
+		{ tMs: 2600, signal: 0.5, confidence: 0.9 },
 		{ tMs: 4200, signal: 0.39, confidence: 0.9 },
 		{ tMs: 5800, signal: 0.49, confidence: 0.9 },
 	];

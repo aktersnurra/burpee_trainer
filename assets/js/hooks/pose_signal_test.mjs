@@ -17,7 +17,12 @@ function pose({ shoulderY, hipY, shoulderX = [120, 180], hipX = [130, 170] }) {
 
 test("closer/larger body lowers uprightness signal even when vertical center is similar", () => {
 	const farUp = sampleFromPose(
-		pose({ shoulderY: 250, hipY: 350, shoulderX: [135, 165], hipX: [140, 160] }),
+		pose({
+			shoulderY: 250,
+			hipY: 350,
+			shoulderX: [135, 165],
+			hipX: [140, 160],
+		}),
 		0,
 		video,
 	);
