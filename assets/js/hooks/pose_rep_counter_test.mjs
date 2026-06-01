@@ -15,24 +15,29 @@ function run(samples) {
 	return { state, reps };
 }
 
-test("clean up-down-up cycles emit one rep per cycle", () => {
+test("closeness phase cycles emit one rep per standing-down-standing cycle", () => {
 	const samples = [
-		{ tMs: 0, signal: 0.9, confidence: 0.9 },
-		{ tMs: 1000, signal: 0.2, confidence: 0.9 },
-		{ tMs: 2500, signal: 0.9, confidence: 0.9 },
-		{ tMs: 4000, signal: 0.2, confidence: 0.9 },
-		{ tMs: 5500, signal: 0.9, confidence: 0.9 },
+		{ tMs: 0, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 500, signal: 0.14, closeness: 0.62, confidence: 0.9 },
+		{ tMs: 1000, signal: 0.12, closeness: 0.88, confidence: 0.9 },
+		{ tMs: 1600, signal: 0.14, closeness: 0.64, confidence: 0.9 },
+		{ tMs: 2400, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 3600, signal: 0.14, closeness: 0.67, confidence: 0.9 },
+		{ tMs: 4300, signal: 0.13, closeness: 0.92, confidence: 0.9 },
+		{ tMs: 5200, signal: 0.15, closeness: 0.55, confidence: 0.9 },
+		{ tMs: 5600, signal: 0.15, closeness: 0.52, confidence: 0.9 },
 	];
 
 	const { state, reps } = run(samples);
-	assert.deepEqual(reps, [2500, 5500]);
-	assert.deepEqual(state.cadenceMs, [2500, 5500]);
+	assert.deepEqual(reps, [2400, 5600]);
+	assert.deepEqual(state.cadenceMs, [2400, 5600]);
 });
 
-test("noise inside hysteresis band emits zero reps", () => {
+test("small closeness noise emits zero reps", () => {
 	const samples = [0, 1, 2, 3, 4].map((i) => ({
 		tMs: i * 500,
-		signal: i % 2 === 0 ? 0.55 : 0.45,
+		signal: 0.15,
+		closeness: i % 2 === 0 ? 0.58 : 0.54,
 		confidence: 0.9,
 	}));
 
@@ -42,55 +47,42 @@ test("noise inside hysteresis band emits zero reps", () => {
 
 test("refractory suppresses double count", () => {
 	const samples = [
-		{ tMs: 0, signal: 0.9, confidence: 0.9 },
-		{ tMs: 500, signal: 0.2, confidence: 0.9 },
-		{ tMs: 900, signal: 0.9, confidence: 0.9 },
-		{ tMs: 1100, signal: 0.2, confidence: 0.9 },
-		{ tMs: 1300, signal: 0.9, confidence: 0.9 },
-		{ tMs: 3000, signal: 0.2, confidence: 0.9 },
-		{ tMs: 4300, signal: 0.9, confidence: 0.9 },
+		{ tMs: 0, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 500, signal: 0.12, closeness: 0.9, confidence: 0.9 },
+		{ tMs: 900, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 1100, signal: 0.12, closeness: 0.91, confidence: 0.9 },
+		{ tMs: 1300, signal: 0.15, closeness: 0.53, confidence: 0.9 },
+		{ tMs: 3000, signal: 0.12, closeness: 0.9, confidence: 0.9 },
+		{ tMs: 4300, signal: 0.14, closeness: 0.7, confidence: 0.9 },
+		{ tMs: 4500, signal: 0.15, closeness: 0.52, confidence: 0.9 },
 	];
 
 	const { reps } = run(samples);
-	assert.deepEqual(reps, [900, 4300]);
+	assert.deepEqual(reps, [1300, 4500]);
 });
 
 test("low confidence samples do not transition", () => {
 	const samples = [
-		{ tMs: 0, signal: 0.9, confidence: 0.9 },
-		{ tMs: 1000, signal: 0.2, confidence: 0.1 },
-		{ tMs: 2500, signal: 0.9, confidence: 0.9 },
+		{ tMs: 0, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 1000, signal: 0.12, closeness: 0.9, confidence: 0.1 },
+		{ tMs: 2500, signal: 0.15, closeness: 0.52, confidence: 0.9 },
 	];
 
 	const { reps } = run(samples);
 	assert.deepEqual(reps, []);
 });
 
-test("adaptive thresholds detect low-amplitude floor-angle cycles", () => {
+test("ring buffer backdates down timestamp to closeness peak", () => {
 	const samples = [
-		{ tMs: 0, signal: 0.58, confidence: 0.9 },
-		{ tMs: 500, signal: 0.57, confidence: 0.9 },
-		{ tMs: 1000, signal: 0.42, confidence: 0.9 },
-		{ tMs: 2500, signal: 0.56, confidence: 0.9 },
-		{ tMs: 4000, signal: 0.41, confidence: 0.9 },
-		{ tMs: 5500, signal: 0.57, confidence: 0.9 },
+		{ tMs: 0, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 500, signal: 0.14, closeness: 0.7, confidence: 0.9 },
+		{ tMs: 900, signal: 0.12, closeness: 0.93, confidence: 0.9 },
+		{ tMs: 1400, signal: 0.13, closeness: 0.86, confidence: 0.9 },
+		{ tMs: 2100, signal: 0.14, closeness: 0.68, confidence: 0.9 },
+		{ tMs: 2800, signal: 0.15, closeness: 0.53, confidence: 0.9 },
 	];
 
-	const { reps } = run(samples);
-	assert.deepEqual(reps, [2500, 5500]);
-});
-
-test("floor-angle cycles count when up return is partial", () => {
-	const samples = [
-		{ tMs: 0, signal: 0.58, confidence: 0.9 },
-		{ tMs: 500, signal: 0.56, confidence: 0.9 },
-		{ tMs: 1000, signal: 0.4, confidence: 0.9 },
-		{ tMs: 1800, signal: 0.45, confidence: 0.9 },
-		{ tMs: 2600, signal: 0.5, confidence: 0.9 },
-		{ tMs: 4200, signal: 0.39, confidence: 0.9 },
-		{ tMs: 5800, signal: 0.49, confidence: 0.9 },
-	];
-
-	const { reps } = run(samples);
-	assert.deepEqual(reps, [1800, 5800]);
+	const { state, reps } = run(samples);
+	assert.deepEqual(reps, [2800]);
+	assert.equal(state.lastDownTMs, 900);
 });

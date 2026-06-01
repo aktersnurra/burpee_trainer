@@ -62,6 +62,7 @@ SPEC_FEAT_UI.md
 # HiGHS solver log (written to CWD when --log_file is not specified)
 Highs.log
 mock-workout.png
+trace_*.jsonl
 
 /.superpowers/
 

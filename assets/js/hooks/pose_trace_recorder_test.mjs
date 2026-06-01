@@ -26,7 +26,12 @@ test("trace recorder counts down before collecting samples", () => {
 
 test("trace recorder auto-stops and exports samples", () => {
 	let state = startTraceRecording(initialTraceRecorder(), 0);
-	for (const item of [sample(3000), sample(6000), sample(9000), sample(13000)]) {
+	for (const item of [
+		sample(3000),
+		sample(6000),
+		sample(9000),
+		sample(13000),
+	]) {
 		state = stepTraceRecorder(state, item).state;
 	}
 

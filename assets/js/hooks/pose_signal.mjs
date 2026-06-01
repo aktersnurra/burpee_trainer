@@ -51,10 +51,10 @@ function normalizedKeypoints(keypoints, width, height) {
 				name,
 				point
 					? {
-						x: round4(point.x / width),
-						y: round4(point.y / height),
-						score: round4(point.score ?? 0),
-					}
+							x: round4(point.x / width),
+							y: round4(point.y / height),
+							score: round4(point.score ?? 0),
+						}
 					: null,
 			];
 		}),
