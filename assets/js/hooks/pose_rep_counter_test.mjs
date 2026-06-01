@@ -65,3 +65,17 @@ test("low confidence samples do not transition", () => {
 	const { reps } = run(samples);
 	assert.deepEqual(reps, []);
 });
+
+test("adaptive thresholds detect low-amplitude floor-angle cycles", () => {
+	const samples = [
+		{ tMs: 0, signal: 0.58, confidence: 0.9 },
+		{ tMs: 500, signal: 0.57, confidence: 0.9 },
+		{ tMs: 1000, signal: 0.42, confidence: 0.9 },
+		{ tMs: 2500, signal: 0.56, confidence: 0.9 },
+		{ tMs: 4000, signal: 0.41, confidence: 0.9 },
+		{ tMs: 5500, signal: 0.57, confidence: 0.9 },
+	];
+
+	const { reps } = run(samples);
+	assert.deepEqual(reps, [2500, 5500]);
+});
