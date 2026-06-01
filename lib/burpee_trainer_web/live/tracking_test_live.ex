@@ -46,6 +46,38 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <.debug_stat label="Reps" value_id="pose-debug-reps" value="0" />
             </div>
 
+            <div class="rounded-[10px] bg-base-100/50 p-3 space-y-3">
+              <div>
+                <p class="text-[10px] uppercase tracking-widest text-base-content/40">
+                  DTW calibration
+                </p>
+                <p class="mt-1 text-xs text-base-content/60">
+                  Record one clean full rep in this page session to compare recent buffered motion against your own rep trajectory.
+                </p>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  id="pose-debug-template-start"
+                  type="button"
+                  class="rounded-[10px] bg-base-200 px-3 py-2 text-sm font-semibold text-base-content transition hover:bg-base-200/80"
+                >
+                  Start calibration
+                </button>
+                <button
+                  id="pose-debug-template-finish"
+                  type="button"
+                  class="rounded-[10px] bg-primary px-3 py-2 text-sm font-semibold text-primary-content transition hover:bg-primary/90"
+                >
+                  Save template
+                </button>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-sm">
+                <.debug_stat label="DTW" value_id="pose-debug-dtw-status" value="No template" />
+                <.debug_stat label="DTW reps" value_id="pose-debug-dtw-reps" value="0" />
+              </div>
+              <p id="pose-debug-dtw-detail" class="text-xs text-base-content/60 break-words">[]</p>
+            </div>
+
             <div class="rounded-[10px] bg-base-100/50 p-3">
               <p class="text-[10px] uppercase tracking-widest text-base-content/40">Cadence</p>
               <p id="pose-debug-cadence" class="mt-1 text-xs text-base-content/60 break-words">[]</p>

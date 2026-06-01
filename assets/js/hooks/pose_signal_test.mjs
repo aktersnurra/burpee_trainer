@@ -4,13 +4,20 @@ import { sampleFromPose } from "./pose_signal.mjs";
 
 const video = { videoWidth: 300, videoHeight: 600 };
 
-function pose({ shoulderY, hipY, shoulderX = [120, 180], hipX = [130, 170] }) {
+function pose({
+	shoulderY,
+	hipY,
+	shoulderX = [120, 180],
+	hipX = [130, 170],
+	extraKeypoints = [],
+}) {
 	return {
 		keypoints: [
 			{ name: "left_shoulder", x: shoulderX[0], y: shoulderY, score: 0.9 },
 			{ name: "right_shoulder", x: shoulderX[1], y: shoulderY, score: 0.9 },
 			{ name: "left_hip", x: hipX[0], y: hipY, score: 0.9 },
 			{ name: "right_hip", x: hipX[1], y: hipY, score: 0.9 },
+			...extraKeypoints,
 		],
 	};
 }
@@ -33,4 +40,29 @@ test("closer/larger body lowers uprightness signal even when vertical center is 
 	);
 
 	assert.ok(farUp.signal > closeDown.signal);
+});
+
+test("full-body keypoints contribute to closeness when visible", () => {
+	const torsoOnly = sampleFromPose(
+		pose({ shoulderY: 180, hipY: 320 }),
+		0,
+		video,
+	);
+	const fullBody = sampleFromPose(
+		pose({
+			shoulderY: 180,
+			hipY: 320,
+			extraKeypoints: [
+				{ name: "nose", x: 150, y: 80, score: 0.9 },
+				{ name: "left_knee", x: 105, y: 430, score: 0.9 },
+				{ name: "right_knee", x: 195, y: 430, score: 0.9 },
+				{ name: "left_ankle", x: 85, y: 560, score: 0.9 },
+				{ name: "right_ankle", x: 215, y: 560, score: 0.9 },
+			],
+		}),
+		1000,
+		video,
+	);
+
+	assert.ok(fullBody.closeness > torsoOnly.closeness);
 });

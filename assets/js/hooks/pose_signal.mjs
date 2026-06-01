@@ -1,20 +1,24 @@
-const KEYPOINTS = Object.freeze({
-	leftShoulder: "left_shoulder",
-	rightShoulder: "right_shoulder",
-	leftHip: "left_hip",
-	rightHip: "right_hip",
-});
+const BODY_KEYPOINTS = Object.freeze([
+	"nose",
+	"left_eye",
+	"right_eye",
+	"left_ear",
+	"right_ear",
+	"left_shoulder",
+	"right_shoulder",
+	"left_hip",
+	"right_hip",
+	"left_knee",
+	"right_knee",
+	"left_ankle",
+	"right_ankle",
+]);
 
 export function sampleFromPose(pose, tMs, video) {
 	const keypoints = pose?.keypoints || [];
-	const leftShoulder = findKeypoint(keypoints, KEYPOINTS.leftShoulder);
-	const rightShoulder = findKeypoint(keypoints, KEYPOINTS.rightShoulder);
-	const leftHip = findKeypoint(keypoints, KEYPOINTS.leftHip);
-	const rightHip = findKeypoint(keypoints, KEYPOINTS.rightHip);
-
-	const points = [leftShoulder, rightShoulder, leftHip, rightHip].filter(
-		Boolean,
-	);
+	const points = BODY_KEYPOINTS.map((name) =>
+		findKeypoint(keypoints, name),
+	).filter(Boolean);
 	const confidence =
 		points.length === 0
 			? 0
@@ -33,6 +37,7 @@ export function sampleFromPose(pose, tMs, video) {
 	return {
 		tMs: Math.max(0, Math.round(tMs)),
 		signal: clamp01(verticalSignal - closeness * 0.45),
+		closeness,
 		confidence,
 	};
 }
