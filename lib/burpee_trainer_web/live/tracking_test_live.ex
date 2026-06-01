@@ -58,7 +58,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <button
                 id="pose-debug-template-start"
                 type="button"
-                class="w-full rounded-[10px] bg-primary px-3 py-3 text-sm font-semibold text-primary-content transition hover:bg-primary/90 active:scale-[0.99]"
+                class="relative z-10 w-full touch-manipulation select-none rounded-[10px] bg-primary px-3 py-4 text-base font-semibold text-primary-content transition hover:bg-primary/90 active:scale-[0.99]"
               >
                 Start 3s countdown
               </button>

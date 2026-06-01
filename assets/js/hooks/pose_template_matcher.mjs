@@ -26,7 +26,10 @@ export function finishTemplateRecording(state) {
 
 	const trimmedSamples = trimRepSamples(samples, ranges);
 	const trimmedRanges = channelRanges(trimmedSamples);
-	if (trimmedSamples.length < MIN_TEMPLATE_SAMPLES || !hasEnoughMotion(trimmedRanges)) {
+	if (
+		trimmedSamples.length < MIN_TEMPLATE_SAMPLES ||
+		!hasEnoughMotion(trimmedRanges)
+	) {
 		return { ok: false, reason: "low_motion" };
 	}
 
@@ -78,13 +81,18 @@ function trimRepSamples(samples, ranges) {
 			downScore(sample) > downScore(samples[bestIndex]) ? index : bestIndex,
 		0,
 	);
-	const signalRecovery = ranges.signal.min + ranges.signal.range * TRIM_RECOVERY_RATIO;
-	const closenessRecovery = ranges.closeness.max - ranges.closeness.range * TRIM_RECOVERY_RATIO;
+	const signalRecovery =
+		ranges.signal.min + ranges.signal.range * TRIM_RECOVERY_RATIO;
+	const closenessRecovery =
+		ranges.closeness.max - ranges.closeness.range * TRIM_RECOVERY_RATIO;
 
 	let startIndex = 0;
 	for (let index = downIndex - 1; index >= 0; index--) {
 		const sample = samples[index];
-		if (sample.signal >= signalRecovery || (sample.closeness ?? 0) <= closenessRecovery) {
+		if (
+			sample.signal >= signalRecovery ||
+			(sample.closeness ?? 0) <= closenessRecovery
+		) {
 			startIndex = index;
 			break;
 		}
@@ -93,7 +101,10 @@ function trimRepSamples(samples, ranges) {
 	let endIndex = samples.length - 1;
 	for (let index = downIndex + 1; index < samples.length; index++) {
 		const sample = samples[index];
-		if (sample.signal >= signalRecovery || (sample.closeness ?? 0) <= closenessRecovery) {
+		if (
+			sample.signal >= signalRecovery ||
+			(sample.closeness ?? 0) <= closenessRecovery
+		) {
 			endIndex = index;
 			break;
 		}

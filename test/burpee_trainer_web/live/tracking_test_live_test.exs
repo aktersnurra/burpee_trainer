@@ -20,6 +20,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLiveTest do
     assert html =~ "Start 3s countdown"
     assert html =~ "saves automatically"
     assert html =~ ~s(id="pose-debug-template-start")
+    assert html =~ "touch-manipulation"
     refute html =~ ~s(id="pose-debug-template-finish")
     assert html =~ ~s(id="pose-debug-dtw-status")
   end
