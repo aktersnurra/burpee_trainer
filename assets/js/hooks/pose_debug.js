@@ -7,6 +7,11 @@ import {
 	startTemplateCalibration,
 	stepTemplateCalibration,
 } from "./pose_template_calibration.mjs";
+import {
+	initialTraceRecorder,
+	startTraceRecording,
+	stepTraceRecorder,
+} from "./pose_trace_recorder.mjs";
 
 const SAMPLE_WINDOW_MS = 6000;
 const DTW_REFRACTORY_MS = 1200;
@@ -33,6 +38,7 @@ const PoseDebug = {
 		this.ctx = this.canvas.getContext("2d");
 		this.state = initialCounterState();
 		this.calibration = initialTemplateCalibration();
+		this.traceRecorder = initialTraceRecorder();
 		this.template = null;
 		this.sampleWindow = [];
 		this.dtwRepCount = 0;
@@ -44,6 +50,7 @@ const PoseDebug = {
 		this.detector = null;
 		this.mountedFlag = true;
 		this.bindTemplateControls();
+		this.bindTraceControls();
 
 		this.status("Requesting camera");
 
@@ -95,6 +102,7 @@ const PoseDebug = {
 		this.state = result.state;
 		this.recordSample(sample);
 		this.stepCalibration(sample);
+		this.stepTraceRecording(sample);
 		const templateMatch = this.matchTemplate();
 
 		this.draw(pose);
@@ -165,6 +173,22 @@ const PoseDebug = {
 		});
 	},
 
+	bindTraceControls() {
+		this.el.addEventListener("pose-debug:start-trace", () => {
+			setText(document, "#pose-debug-trace-start", "Trace tap received");
+			this.startTraceRecording();
+		});
+	},
+
+	startTraceRecording() {
+		const nowMs =
+			this.startedAt == null ? 0 : performance.now() - this.startedAt;
+		this.traceRecorder = startTraceRecording(this.traceRecorder, nowMs);
+		setText(this.el, "#pose-debug-trace-status", "Trace starts in 3s");
+		setText(this.el, "#pose-debug-trace-count", "0");
+		setValue(this.el, "#pose-debug-trace-output", "[]");
+	},
+
 	startTemplateCalibration() {
 		const nowMs =
 			this.startedAt == null ? 0 : performance.now() - this.startedAt;
@@ -187,6 +211,42 @@ const PoseDebug = {
 		const minTMs = sample.tMs - SAMPLE_WINDOW_MS;
 		while (this.sampleWindow.length > 0 && this.sampleWindow[0].tMs < minTMs) {
 			this.sampleWindow.shift();
+		}
+	},
+
+	stepTraceRecording(sample) {
+		const previousPhase = this.traceRecorder.phase;
+		const result = stepTraceRecorder(this.traceRecorder, sample);
+		this.traceRecorder = result.state;
+
+		if (
+			previousPhase !== this.traceRecorder.phase ||
+			this.traceRecorder.phase !== "idle"
+		) {
+			setText(this.el, "#pose-debug-trace-status", result.status);
+		}
+
+		if (this.traceRecorder.phase === "recording") {
+			setText(
+				this.el,
+				"#pose-debug-trace-count",
+				String(this.traceRecorder.samples.length),
+			);
+		}
+
+		if (this.traceRecorder.phase === "complete" && this.traceRecorder.export) {
+			setText(this.el, "#pose-debug-trace-status", "Trace ready");
+			setText(
+				this.el,
+				"#pose-debug-trace-count",
+				String(this.traceRecorder.export.samples.length),
+			);
+			setValue(
+				this.el,
+				"#pose-debug-trace-output",
+				JSON.stringify(this.traceRecorder.export),
+			);
+			setText(document, "#pose-debug-trace-start", "Record 10s trace");
 		}
 	},
 
@@ -322,6 +382,11 @@ function scaleY(y, video, rect) {
 function setText(root, selector, value) {
 	const el = root.querySelector(selector);
 	if (el) el.textContent = value;
+}
+
+function setValue(root, selector, value) {
+	const el = root.querySelector(selector);
+	if (el) el.value = value;
 }
 
 export default PoseDebug;

@@ -39,7 +39,26 @@ export function sampleFromPose(pose, tMs, video) {
 		signal: clamp01(verticalSignal - closeness * 0.45),
 		closeness,
 		confidence,
+		keypoints: normalizedKeypoints(keypoints, width, height),
 	};
+}
+
+function normalizedKeypoints(keypoints, width, height) {
+	return Object.fromEntries(
+		BODY_KEYPOINTS.map((name) => {
+			const point = findKeypoint(keypoints, name);
+			return [
+				name,
+				point
+					? {
+						x: round4(point.x / width),
+						y: round4(point.y / height),
+						score: round4(point.score ?? 0),
+					}
+					: null,
+			];
+		}),
+	);
 }
 
 function bodyCloseness(points, width, height) {
@@ -64,4 +83,8 @@ function clamp01(value) {
 	if (value < 0) return 0;
 	if (value > 1) return 1;
 	return value;
+}
+
+function round4(value) {
+	return Math.round(value * 10000) / 10000;
 }

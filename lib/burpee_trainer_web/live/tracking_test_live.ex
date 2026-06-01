@@ -19,14 +19,24 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
           </p>
         </div>
 
-        <button
-          id="pose-debug-template-start"
-          type="button"
-          phx-hook="PoseCalibrationButton"
-          class="relative z-20 w-full touch-manipulation select-none rounded-[10px] bg-primary px-4 py-4 text-base font-semibold text-primary-content shadow-lg shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.99]"
-        >
-          Start 3s countdown
-        </button>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            id="pose-debug-template-start"
+            type="button"
+            phx-hook="PoseCalibrationButton"
+            class="relative z-20 w-full touch-manipulation select-none rounded-[10px] bg-primary px-4 py-4 text-base font-semibold text-primary-content shadow-lg shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.99]"
+          >
+            Start 3s countdown
+          </button>
+          <button
+            id="pose-debug-trace-start"
+            type="button"
+            phx-hook="PoseTraceButton"
+            class="relative z-20 w-full touch-manipulation select-none rounded-[10px] bg-base-200 px-4 py-4 text-base font-semibold text-base-content transition hover:bg-base-200/80 active:scale-[0.99]"
+          >
+            Record 10s trace
+          </button>
+        </div>
 
         <section class="rounded-[10px] bg-base-300 p-3 space-y-3">
           <div
@@ -69,6 +79,26 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
                 <.debug_stat label="DTW reps" value_id="pose-debug-dtw-reps" value="0" />
               </div>
               <p id="pose-debug-dtw-detail" class="text-xs text-base-content/60 break-words">[]</p>
+            </div>
+
+            <div class="rounded-[10px] bg-base-100/50 p-3 space-y-3">
+              <div>
+                <p class="text-[10px] uppercase tracking-widest text-base-content/40">
+                  Trace recorder
+                </p>
+                <p class="mt-1 text-xs text-base-content/60">
+                  Records local pose features for 10 seconds after a countdown. Copy the JSON below after it says Trace ready.
+                </p>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-sm">
+                <.debug_stat label="Trace" value_id="pose-debug-trace-status" value="Trace idle" />
+                <.debug_stat label="Samples" value_id="pose-debug-trace-count" value="0" />
+              </div>
+              <textarea
+                id="pose-debug-trace-output"
+                readonly
+                class="min-h-32 w-full rounded-[10px] bg-base-300 p-2 text-[10px] text-base-content/70"
+              >[]</textarea>
             </div>
 
             <div class="rounded-[10px] bg-base-100/50 p-3">

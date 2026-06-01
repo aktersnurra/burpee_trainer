@@ -29,6 +29,7 @@ import VideoHook from "./hooks/video_hook";
 import PoseTracker from "./hooks/pose_tracker";
 import PoseDebug from "./hooks/pose_debug";
 import PoseCalibrationButton from "./hooks/pose_calibration_button";
+import PoseTraceButton from "./hooks/pose_trace_button";
 
 const themeStorage = {
 	get() {
@@ -91,6 +92,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
 		PoseTracker,
 		PoseDebug,
 		PoseCalibrationButton,
+		PoseTraceButton,
 	},
 });
 
