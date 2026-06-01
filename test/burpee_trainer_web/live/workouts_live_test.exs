@@ -16,6 +16,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "No workouts yet"
     end
 
+    test "links to tracking test page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/workouts")
+      assert html =~ "Tracking Test"
+      assert html =~ ~s(href="/tracking-test")
+    end
+
     test "lists plans and videos together", %{conn: conn, user: user} do
       _plan = plan_fixture(user, %{"name" => "My Plan"})
       _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 600})

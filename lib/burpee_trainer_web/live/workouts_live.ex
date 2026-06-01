@@ -153,6 +153,17 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
       <div class="space-y-4">
+        <.link
+          navigate={~p"/tracking-test"}
+          class="flex items-center justify-between rounded-[10px] bg-base-300 px-4 py-3 text-sm transition hover:bg-base-raised"
+        >
+          <span>
+            <span class="block font-semibold text-base-content">Tracking Test</span>
+            <span class="block text-xs text-base-content/45">Camera + pose overlay diagnostics</span>
+          </span>
+          <.icon name="hero-camera" class="size-5 text-primary" />
+        </.link>
+
         <%!-- Single scrollable filter row --%>
         <div class="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
           <.filter_pill
