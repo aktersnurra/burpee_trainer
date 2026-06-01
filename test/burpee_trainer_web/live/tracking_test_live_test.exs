@@ -17,8 +17,10 @@ defmodule BurpeeTrainerWeb.TrackingTestLiveTest do
     assert html =~ ~s(id="pose-debug")
     assert html =~ ~s(phx-hook="PoseDebug")
     assert html =~ "DTW calibration"
+    assert html =~ "Start 3s countdown"
+    assert html =~ "saves automatically"
     assert html =~ ~s(id="pose-debug-template-start")
-    assert html =~ ~s(id="pose-debug-template-finish")
+    refute html =~ ~s(id="pose-debug-template-finish")
     assert html =~ ~s(id="pose-debug-dtw-status")
   end
 end

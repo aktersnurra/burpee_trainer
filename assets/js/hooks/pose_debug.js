@@ -1,12 +1,12 @@
 import { ensureTfBackend } from "./tf_backend.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
+import { matchTemplateWindow } from "./pose_template_matcher.mjs";
 import {
-	initialTemplateMatcherState,
-	recordTemplateSample,
-	finishTemplateRecording,
-	matchTemplateWindow,
-} from "./pose_template_matcher.mjs";
+	initialTemplateCalibration,
+	startTemplateCalibration,
+	stepTemplateCalibration,
+} from "./pose_template_calibration.mjs";
 
 const SAMPLE_WINDOW_MS = 6000;
 const DTW_REFRACTORY_MS = 1200;
@@ -32,9 +32,8 @@ const PoseDebug = {
 		this.canvas = this.el.querySelector("#pose-debug-canvas");
 		this.ctx = this.canvas.getContext("2d");
 		this.state = initialCounterState();
-		this.templateRecording = initialTemplateMatcherState();
+		this.calibration = initialTemplateCalibration();
 		this.template = null;
-		this.templateRecordingActive = false;
 		this.sampleWindow = [];
 		this.dtwRepCount = 0;
 		this.lastDtwUpTMs = null;
@@ -95,6 +94,7 @@ const PoseDebug = {
 		const result = countRep(this.state, sample);
 		this.state = result.state;
 		this.recordSample(sample);
+		this.stepCalibration(sample);
 		const templateMatch = this.matchTemplate();
 
 		this.draw(pose);
@@ -159,52 +159,29 @@ const PoseDebug = {
 	},
 
 	bindTemplateControls() {
-		this.el
-			.querySelector("#pose-debug-template-start")
-			?.addEventListener("click", () => this.startTemplateRecording());
-		this.el
-			.querySelector("#pose-debug-template-finish")
-			?.addEventListener("click", () => this.finishTemplateRecording());
+		const button = this.el.querySelector("#pose-debug-template-start");
+		if (!button) return;
+
+		const start = (event) => {
+			event.preventDefault();
+			this.startTemplateCalibration();
+		};
+
+		button.addEventListener("click", start);
+		button.addEventListener("touchend", start, { passive: false });
 	},
 
-	startTemplateRecording() {
-		this.templateRecording = initialTemplateMatcherState();
-		this.templateRecordingActive = true;
+	startTemplateCalibration() {
+		const nowMs = this.startedAt == null ? 0 : performance.now() - this.startedAt;
+		this.calibration = startTemplateCalibration(this.calibration, nowMs);
 		this.template = null;
 		this.dtwRepCount = 0;
 		this.lastDtwUpTMs = null;
-		setText(this.el, "#pose-debug-dtw-status", "Recording");
+		setText(this.el, "#pose-debug-dtw-status", "Starting in 3s");
 		setText(
 			this.el,
 			"#pose-debug-dtw-detail",
-			"Do one clean rep, then save template.",
-		);
-		setText(this.el, "#pose-debug-dtw-reps", "0");
-	},
-
-	finishTemplateRecording() {
-		this.templateRecordingActive = false;
-		const result = finishTemplateRecording(this.templateRecording);
-
-		if (!result.ok) {
-			this.template = null;
-			setText(this.el, "#pose-debug-dtw-status", `Rejected: ${result.reason}`);
-			setText(
-				this.el,
-				"#pose-debug-dtw-detail",
-				"Record a rep with clearer down/up movement.",
-			);
-			return;
-		}
-
-		this.template = result.template;
-		this.dtwRepCount = 0;
-		this.lastDtwUpTMs = null;
-		setText(this.el, "#pose-debug-dtw-status", "Template ready");
-		setText(
-			this.el,
-			"#pose-debug-dtw-detail",
-			`template samples=${result.template.points.length} duration=${result.template.durationMs}ms`,
+			"Put the phone down now. Do one clean rep after the countdown; it auto-saves.",
 		);
 		setText(this.el, "#pose-debug-dtw-reps", "0");
 	},
@@ -216,21 +193,45 @@ const PoseDebug = {
 			this.sampleWindow.shift();
 		}
 
-		if (this.templateRecordingActive) {
-			this.templateRecording = recordTemplateSample(
-				this.templateRecording,
-				sample,
-			);
+	},
+
+	stepCalibration(sample) {
+		const previousPhase = this.calibration.phase;
+		const result = stepTemplateCalibration(this.calibration, sample);
+		this.calibration = result.state;
+
+		if (previousPhase !== this.calibration.phase || this.calibration.phase !== "idle") {
+			setText(this.el, "#pose-debug-dtw-status", result.status);
+		}
+
+		if (this.calibration.phase === "recording") {
 			setText(
 				this.el,
 				"#pose-debug-dtw-detail",
-				`recording samples=${this.templateRecording.samples.length}`,
+				`recording samples=${this.calibration.recording.samples.length}`,
 			);
+		}
+
+		if (this.calibration.phase === "ready" && this.template !== this.calibration.template) {
+			this.template = this.calibration.template;
+			this.dtwRepCount = 0;
+			this.lastDtwUpTMs = null;
+			setText(
+				this.el,
+				"#pose-debug-dtw-detail",
+				`template samples=${this.template.points.length} duration=${this.template.durationMs}ms`,
+			);
+			setText(this.el, "#pose-debug-dtw-reps", "0");
+		}
+
+		if (this.calibration.phase === "failed") {
+			this.template = null;
+			setText(this.el, "#pose-debug-dtw-detail", "Try again with one clearer full-body rep.");
 		}
 	},
 
 	matchTemplate() {
-		if (!this.template || this.templateRecordingActive) return null;
+		if (!this.template || this.calibration.phase === "recording") return null;
 
 		const result = matchTemplateWindow(this.template, this.sampleWindow);
 		if (

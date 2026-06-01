@@ -52,25 +52,16 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
                   DTW calibration
                 </p>
                 <p class="mt-1 text-xs text-base-content/60">
-                  Record one clean full rep in this page session to compare recent buffered motion against your own rep trajectory.
+                  Tap once, put the phone down, wait for the countdown, and do one clean full rep. The template saves automatically after 5 seconds.
                 </p>
               </div>
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  id="pose-debug-template-start"
-                  type="button"
-                  class="rounded-[10px] bg-base-200 px-3 py-2 text-sm font-semibold text-base-content transition hover:bg-base-200/80"
-                >
-                  Start calibration
-                </button>
-                <button
-                  id="pose-debug-template-finish"
-                  type="button"
-                  class="rounded-[10px] bg-primary px-3 py-2 text-sm font-semibold text-primary-content transition hover:bg-primary/90"
-                >
-                  Save template
-                </button>
-              </div>
+              <button
+                id="pose-debug-template-start"
+                type="button"
+                class="w-full rounded-[10px] bg-primary px-3 py-3 text-sm font-semibold text-primary-content transition hover:bg-primary/90 active:scale-[0.99]"
+              >
+                Start 3s countdown
+              </button>
               <div class="grid grid-cols-2 gap-2 text-sm">
                 <.debug_stat label="DTW" value_id="pose-debug-dtw-status" value="No template" />
                 <.debug_stat label="DTW reps" value_id="pose-debug-dtw-reps" value="0" />
