@@ -1,4 +1,3 @@
-import * as poseDetection from "@tensorflow-models/pose-detection";
 import { ensureTfBackend } from "./tf_backend.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
@@ -30,6 +29,7 @@ export function createPoseTracker(hook) {
 			await video.play();
 
 			await ensureTfBackend();
+			const poseDetection = await import("@tensorflow-models/pose-detection");
 
 			detector = await poseDetection.createDetector(
 				poseDetection.SupportedModels.MoveNet,

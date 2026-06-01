@@ -1,4 +1,3 @@
-import * as poseDetection from "@tensorflow-models/pose-detection";
 import { ensureTfBackend } from "./tf_backend.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
@@ -44,6 +43,7 @@ const PoseDebug = {
 
 			this.status("Initializing TFJS");
 			const backend = await ensureTfBackend();
+			const poseDetection = await import("@tensorflow-models/pose-detection");
 
 			this.status(`Loading model (${backend})`);
 			this.detector = await poseDetection.createDetector(

@@ -229,10 +229,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     """
   end
 
-  attr :label, :string, required: true
-  attr :value_key, :string, required: true
-  attr :value, :string, required: true
-  attr :active, :boolean, required: true
+  attr(:label, :string, required: true)
+  attr(:value_key, :string, required: true)
+  attr(:value, :string, required: true)
+  attr(:active, :boolean, required: true)
 
   defp filter_pill(assigns) do
     ~H"""
@@ -253,8 +253,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     """
   end
 
-  attr :item, WorkoutItem, required: true
-  attr :open_menu, :boolean, required: true
+  attr(:item, WorkoutItem, required: true)
+  attr(:open_menu, :boolean, required: true)
 
   defp workout_card(assigns) do
     menu_id = to_string(assigns.item.id) <> to_string(assigns.item.kind)
@@ -341,7 +341,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     """
   end
 
-  attr :filters, :map, required: true
+  attr(:filters, :map, required: true)
 
   defp empty_state(%{filters: %{source: :mine}} = assigns) do
     ~H"""
