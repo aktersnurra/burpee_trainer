@@ -159,19 +159,10 @@ const PoseDebug = {
 	},
 
 	bindTemplateControls() {
-		const start = (event) => {
-			const button = event.target?.closest?.("#pose-debug-template-start");
-			if (!button || !this.el.contains(button)) return;
-
-			event.preventDefault();
-			event.stopPropagation();
-			button.textContent = "Tap received";
+		this.el.addEventListener("pose-debug:start-calibration", () => {
+			setText(document, "#pose-debug-template-start", "Tap received");
 			this.startTemplateCalibration();
-		};
-
-		this.el.addEventListener("pointerup", start, true);
-		this.el.addEventListener("touchstart", start, { passive: false, capture: true });
-		this.el.addEventListener("click", start, true);
+		});
 	},
 
 	startTemplateCalibration() {
@@ -188,7 +179,7 @@ const PoseDebug = {
 			"Put the phone down now. Do one clean rep after the countdown; it auto-saves.",
 		);
 		setText(this.el, "#pose-debug-dtw-reps", "0");
-		setText(this.el, "#pose-debug-template-start", "Restart countdown");
+		setText(document, "#pose-debug-template-start", "Restart countdown");
 	},
 
 	recordSample(sample) {

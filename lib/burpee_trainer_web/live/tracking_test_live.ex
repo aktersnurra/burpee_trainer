@@ -19,6 +19,15 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
           </p>
         </div>
 
+        <button
+          id="pose-debug-template-start"
+          type="button"
+          phx-click={JS.dispatch("pose-debug:start-calibration", to: "#pose-debug")}
+          class="relative z-20 w-full touch-manipulation select-none rounded-[10px] bg-primary px-4 py-4 text-base font-semibold text-primary-content shadow-lg shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.99]"
+        >
+          Start 3s countdown
+        </button>
+
         <section class="rounded-[10px] bg-base-300 p-3 space-y-3">
           <div
             id="pose-debug"
@@ -55,13 +64,6 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
                   Tap once, put the phone down, wait for the countdown, and do one clean full rep. The template saves automatically after 5 seconds.
                 </p>
               </div>
-              <button
-                id="pose-debug-template-start"
-                type="button"
-                class="relative z-10 w-full touch-manipulation select-none rounded-[10px] bg-primary px-3 py-4 text-base font-semibold text-primary-content transition hover:bg-primary/90 active:scale-[0.99]"
-              >
-                Start 3s countdown
-              </button>
               <div class="grid grid-cols-2 gap-2 text-sm">
                 <.debug_stat label="DTW" value_id="pose-debug-dtw-status" value="No template" />
                 <.debug_stat label="DTW reps" value_id="pose-debug-dtw-reps" value="0" />
