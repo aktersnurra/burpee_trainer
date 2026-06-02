@@ -27,6 +27,7 @@ export function initialSegmentState() {
 			lastRestCount: null,
 		},
 		display: {
+			lastEventKey: null,
 			lastEventType: null,
 			lastBurpeeCount: 0,
 			lastRemainingReps: null,
@@ -59,11 +60,11 @@ export function eventKey(frameOrEvent, fallbackIndex = 0) {
 	const index = Number.isInteger(frameOrEvent.index)
 		? frameOrEvent.index
 		: fallbackIndex;
-	return `${index}:${event.type}:${event.label || ""}`;
+	return `${index}:${event.phase}:${event.label || ""}`;
 }
 
 function isBurpeeEvent(event) {
-	return event.type === "work_burpee" || event.type === "warmup_burpee";
+	return event.phase === "work";
 }
 
 function completedRepsInFrame(frame) {
@@ -143,11 +144,8 @@ function beepCommandsForFrame(beeps, frame) {
 	if (!frame) return { beeps, commands: [] };
 
 	const { event: timelineEvent, phase_elapsed, phase_remaining } = frame;
-	const isBurpee =
-		timelineEvent.type === "work_burpee" ||
-		timelineEvent.type === "warmup_burpee";
 
-	if (isBurpee) {
+	if (timelineEvent.phase === "work") {
 		const secondsPerRep =
 			timelineEvent.sec_per_rep ||
 			timelineEvent.sec_per_burpee ||
@@ -164,15 +162,11 @@ function beepCommandsForFrame(beeps, frame) {
 		return { beeps: { ...beeps, lastRestCount: null }, commands: [] };
 	}
 
-	const isRest =
-		timelineEvent.type === "work_rest" ||
-		timelineEvent.type === "warmup_rest";
-
-	if (!isRest) {
+	if (timelineEvent.phase !== "rest") {
 		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
 	}
 
-	if (phase_remaining > 2) {
+	if (phase_remaining > 3) {
 		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
 	}
 
@@ -187,60 +181,24 @@ function beepCommandsForFrame(beeps, frame) {
 	};
 }
 
-function phaseColor(type, isWarning) {
-	if (isWarning) return "#F59E0B";
-	const colors = {
-		work_burpee: "#4A9EFF",
-		warmup_burpee: "#F59E0B",
-		work_rest: "#6B8FA8",
-		warmup_rest: "#6B8FA8",
-	};
-	return colors[type] || "#1E2535";
-}
-
-function blockLabel(label, blockCount) {
-	if (!label) return "";
-	const match = label.match(/Block (\d+)/);
-	return match && blockCount > 0 ? `Block ${match[1]} of ${blockCount}` : "";
-}
-
 function displayCommandsForFrame(display, event) {
 	const frame = event.frame;
 	const totalDurationSec = event.totalDurationSec || 0;
 	const elapsedSec = event.elapsedSec || 0;
-	const percent =
-		totalDurationSec > 0
-			? Number(Math.min((elapsedSec / totalDurationSec) * 100, 100).toFixed(1))
-			: 0;
 	const timeLeftSec = Math.max(totalDurationSec - elapsedSec, 0);
 
 	if (!frame) {
 		return {
 			display,
-			commands: [
-				{ type: "renderProgressBar", percent, color: "#1E2535" },
-				{ type: "renderTimer", timeLeftSec },
-			],
+			commands: [{ type: "renderTimer", timeLeftSec }],
 		};
 	}
 
 	const timelineEvent = frame.event;
-	const isWork =
-		timelineEvent.type === "work_burpee" ||
-		timelineEvent.type === "warmup_burpee";
-	const isRest =
-		timelineEvent.type === "work_rest" ||
-		timelineEvent.type === "warmup_rest";
-	const isWarning = isRest && frame.phase_remaining <= 5;
-	const color = phaseColor(timelineEvent.type, isWarning);
-	const commands = [
-		{ type: "renderProgressBar", percent, color },
-		{ type: "renderTimer", timeLeftSec },
-		{
-			type: "renderBlockLabel",
-			label: blockLabel(timelineEvent.label, event.blockCount || 0),
-		},
-	];
+	const frameEventKey = eventKey(frame);
+	const isWork = timelineEvent.phase === "work";
+	const isRest = timelineEvent.phase === "rest";
+	const commands = [{ type: "renderTimer", timeLeftSec }];
 
 	let nextDisplay = display;
 
@@ -248,12 +206,12 @@ function displayCommandsForFrame(display, event) {
 		const burpeeCount = timelineEvent.burpee_count || 0;
 		const remainingReps = Math.max(burpeeCount - (event.doneInEvent || 0), 0);
 		const enteringWork =
-			timelineEvent.type !== display.lastEventType ||
+			frameEventKey !== display.lastEventKey ||
 			burpeeCount !== display.lastBurpeeCount;
 		if (enteringWork) {
 			commands.push({
 				type: "enterWorkPhase",
-				eventType: timelineEvent.type,
+				eventType: timelineEvent.phase,
 				burpeeCount,
 			});
 			commands.push({
@@ -261,7 +219,8 @@ function displayCommandsForFrame(display, event) {
 				remainingReps,
 			});
 			nextDisplay = {
-				lastEventType: timelineEvent.type,
+				lastEventKey: frameEventKey,
+				lastEventType: timelineEvent.phase,
 				lastBurpeeCount: burpeeCount,
 				lastRemainingReps: remainingReps,
 			};
@@ -279,24 +238,19 @@ function displayCommandsForFrame(display, event) {
 		commands.push({
 			type: "renderWorkRepProgress",
 			progress: repElapsed / secondsPerRep,
-			color,
 		});
 	} else if (isRest) {
-		if (timelineEvent.type !== display.lastEventType) {
-			commands.push({ type: "enterRestPhase", eventType: timelineEvent.type });
+		if (frameEventKey !== display.lastEventKey) {
+			commands.push({ type: "enterRestPhase", eventType: timelineEvent.phase });
 			nextDisplay = {
-				lastEventType: timelineEvent.type,
+				lastEventKey: frameEventKey,
+				lastEventType: timelineEvent.phase,
 				lastBurpeeCount: 0,
 				lastRemainingReps: null,
 			};
 		}
 		commands.push({
 			type: "renderRestProgress",
-			progress:
-				timelineEvent.duration_sec > 0
-					? frame.phase_elapsed / timelineEvent.duration_sec
-					: 0,
-			color,
 			timeLeftSec: frame.phase_remaining,
 		});
 	}
@@ -343,7 +297,6 @@ export function segmentTransition(state, event) {
 						type: "updateVisibleRepGoal",
 						burpeeCountTarget,
 					},
-					{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 					{ type: "renderTimer", timeLeftSec: totalDurationSec(timeline) },
 				],
 			};

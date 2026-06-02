@@ -1,28 +1,27 @@
-const CX = 140,
-	CY = 140,
-	R = 107;
-const CIRC = 2 * Math.PI * R;
-const NS = "http://www.w3.org/2000/svg";
+import {
+	appendSessionRing,
+	clearRing,
+	updateSessionRing,
+} from "./session_ring.mjs";
+
+const SESSION_INK = "var(--session-ink)";
+const SESSION_TRACK = "var(--session-track)";
 
 export class SessionRenderer {
 	constructor(root) {
 		this.root = root;
 		this.workRingEl = null;
-		this.restRingEl = null;
 		this.lastDisplayed = -1;
 		this.downTimeout = null;
+		this.downCueActive = false;
+		this.paused = false;
+		this.currentMode = null;
 	}
 
 	clearTimers() {
 		if (this.downTimeout) clearTimeout(this.downTimeout);
 		this.downTimeout = null;
-	}
-
-	renderProgressBar(percent, color) {
-		const fill = this.root.querySelector("#progress-fill");
-		if (!fill) return;
-		fill.style.width = percent.toFixed(1) + "%";
-		fill.style.backgroundColor = color;
+		this.downCueActive = false;
 	}
 
 	renderTimer(timeLeftSec) {
@@ -30,39 +29,55 @@ export class SessionRenderer {
 		if (timeLeftEl) timeLeftEl.textContent = this.formatTime(timeLeftSec);
 	}
 
-	renderBlockLabel(label) {
-		const blockInfo = this.root.querySelector("#block-info");
-		if (blockInfo) blockInfo.textContent = label;
-	}
-
 	setMode(mode) {
 		const ringContainer = this.root.querySelector("#ring-container");
+		const phaseLabel = this.root.querySelector("#phase-label");
+		const sessionSurface = this.root.querySelector("#session-runner-client");
 		if (!ringContainer) return;
+		this.root.classList?.remove?.("is-working", "is-resting", "is-counting-in");
+		sessionSurface?.classList?.remove?.(
+			"is-working",
+			"is-resting",
+			"is-counting-in",
+		);
 		ringContainer.classList.remove(
 			"is-working",
 			"is-resting",
 			"is-counting-in",
 		);
-		if (mode) ringContainer.classList.add(mode);
-	}
-
-	depletingOffset(progress) {
-		const clampedProgress = Math.min(Math.max(progress, 0), 1);
-		return CIRC * clampedProgress;
+		if (phaseLabel) {
+			phaseLabel.classList.remove("is-counting-in");
+			if (mode === "is-counting-in") phaseLabel.classList.add("is-counting-in");
+		}
+		if (mode) {
+			this.root.classList?.add?.(mode);
+			sessionSurface?.classList?.add?.(mode);
+			ringContainer.classList.add(mode);
+		}
+		if (mode !== this.currentMode) {
+			this.workRingEl = null;
+		}
+		this.currentMode = mode;
 	}
 
 	updatePauseButton(paused) {
+		this.paused = paused;
 		const pauseIcon = this.root.querySelector("#pause-icon");
 		const countEl = this.root.querySelector("#count");
 		const downEl = this.root.querySelector("#down-word");
 		const ringContainer = this.root.querySelector("#ring-container");
 
 		if (paused) {
-			if (countEl) countEl.style.visibility = "hidden";
+			this.clearTimers();
+			if (countEl) {
+				countEl.classList.remove("is-down-cue", "countdown-pop");
+				countEl.style.visibility = "hidden";
+			}
 			if (downEl) downEl.style.display = "none";
 			if (pauseIcon) pauseIcon.style.display = "";
 			if (ringContainer) {
 				ringContainer.style.opacity = "0.6";
+				ringContainer.classList.remove("is-down-cue-active");
 				ringContainer.classList.add("is-paused");
 			}
 		} else {
@@ -75,6 +90,65 @@ export class SessionRenderer {
 		}
 	}
 
+	resetReady() {
+		this.clearTimers();
+		this.setMode(null);
+		const svgEl = this.root.querySelector("#ring-svg");
+		if (svgEl) clearRing(svgEl);
+		this.workRingEl = null;
+		const countEl = this.root.querySelector("#count");
+		if (countEl) {
+			countEl.classList.remove(
+				"is-down-cue",
+				"is-rest-time-long",
+				"is-count-long",
+				"is-countdown-dots",
+				"countdown-pop",
+			);
+			countEl.textContent = "—";
+			countEl.style.visibility = "";
+			countEl.style.color = "";
+		}
+		const downEl = this.root.querySelector("#down-word");
+		if (downEl) downEl.style.display = "none";
+		const pauseIcon = this.root.querySelector("#pause-icon");
+		if (pauseIcon) pauseIcon.style.display = "none";
+		this.renderSetGlyphs([]);
+	}
+
+	renderDisplayModel(model) {
+		if (!model) return;
+		if (model.mode === "rest") {
+			this.enterRestPhase();
+			this.renderRestProgress(model.restTimeLeftSec ?? 0);
+		} else {
+			if (model.mode === "countdown") {
+				this.enterCountInPhase();
+			} else {
+				this.setMode("is-working");
+				this.ensureWorkRing();
+				this.updateWorkRing(model.ring?.progress || 0, null);
+				this.updateCurrentSetRepCount(model.primaryCount);
+			}
+		}
+
+		this.renderPhaseLabel(model.phaseLabel || "");
+		if (model.timeLeftSec !== undefined) this.renderTimer(model.timeLeftSec);
+		if (model.totalDone !== undefined) this.updateTotalCounter(model.totalDone);
+		if (model.totalTarget !== undefined)
+			this.updateTotalGoal(model.totalTarget);
+		if (model.mode === "countdown" && model.countdownDots) {
+			this.renderCountdownDots(model.countdownDots);
+		} else {
+			this.renderSetGlyphs(model.setGlyphs || []);
+		}
+	}
+
+	renderPhaseLabel(label) {
+		const el = this.root.querySelector("#phase-label");
+		if (el) el.textContent = label;
+	}
+
 	enterWorkPhase() {
 		this.setMode("is-working");
 		this.buildWorkRing();
@@ -82,44 +156,39 @@ export class SessionRenderer {
 
 	enterCountInPhase() {
 		this.setMode("is-counting-in");
+		this.clearWorkRing();
 		const countEl = this.root.querySelector("#count");
 		if (countEl) {
-			countEl.style.color = "#070707";
+			countEl.classList.remove("is-down-cue", "is-count-long", "countdown-pop");
+			countEl.style.color = "";
 			countEl.style.visibility = "";
 		}
 	}
 
 	enterRestPhase() {
 		this.setMode("is-resting");
-		const svgEl = this.root.querySelector("#ring-svg");
-		if (svgEl) {
-			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-			const restRing = document.createElementNS(NS, "circle");
-			restRing.setAttribute("cx", CX);
-			restRing.setAttribute("cy", CY);
-			restRing.setAttribute("r", R);
-			restRing.setAttribute("fill", "none");
-			restRing.setAttribute("stroke-width", "16");
-			restRing.setAttribute("stroke-linecap", "round");
-			restRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-			svgEl.appendChild(restRing);
-			this.restRingEl = restRing;
-		}
+		this.clearWorkRing();
 	}
 
-	renderRestProgress(progress, color, timeLeftSec) {
-		const offset = this.depletingOffset(progress);
-		if (this.restRingEl) {
-			this.restRingEl.setAttribute("stroke", color);
-			this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-			this.restRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
-		}
+	clearWorkRing() {
+		const svgEl = this.root.querySelector("#ring-svg");
+		if (svgEl) clearRing(svgEl);
+		this.workRingEl = null;
+	}
 
+	renderRestProgress(timeLeftSec) {
 		const countEl = this.root.querySelector("#count");
 		if (countEl) {
+			const timeText = this.formatTime(timeLeftSec);
+			countEl.classList.remove(
+				"is-down-cue",
+				"is-rest-time-long",
+				"is-count-long",
+				"is-countdown-dots",
+			);
 			countEl.style.visibility = "";
-			countEl.textContent = this.formatTime(timeLeftSec);
-			countEl.style.color = color;
+			countEl.textContent = timeText;
+			countEl.style.color = "";
 		}
 		const downEl = this.root.querySelector("#down-word");
 		if (downEl) downEl.style.display = "none";
@@ -129,64 +198,86 @@ export class SessionRenderer {
 		this.lastDisplayed = -1;
 		const svgEl = this.root.querySelector("#ring-svg");
 		if (!svgEl) return;
-		while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-
-		const ring = document.createElementNS(NS, "circle");
-		ring.setAttribute("cx", CX);
-		ring.setAttribute("cy", CY);
-		ring.setAttribute("r", R);
-		ring.setAttribute("fill", "none");
-		ring.setAttribute("stroke-width", "16");
-		ring.setAttribute("stroke-linecap", "round");
-		ring.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-		ring.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-		ring.setAttribute("stroke-dashoffset", CIRC.toFixed(4));
-		svgEl.appendChild(ring);
-		this.workRingEl = ring;
+		this.workRingEl = appendSessionRing(svgEl);
 	}
 
-	updateWorkRing(repProgress, color) {
+	ensureWorkRing() {
+		if (!this.workRingEl) this.buildWorkRing();
+	}
+
+	updateWorkRing(repProgress, _color) {
 		if (!this.workRingEl) return;
-		const offset = this.depletingOffset(repProgress);
-		this.workRingEl.setAttribute("stroke", color);
-		this.workRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-		this.workRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
+		updateSessionRing(this.workRingEl, repProgress);
 	}
 
 	triggerDown(repsLeft) {
 		this.clearTimers();
 		const countEl = this.root.querySelector("#count");
 		const downEl = this.root.querySelector("#down-word");
-		if (!countEl || !downEl) return;
+		if (!countEl) return;
 
-		countEl.style.visibility = "hidden";
-		downEl.style.display = "";
+		if (downEl) downEl.style.display = "none";
+		this.downCueActive = true;
+		const ringContainer = this.root.querySelector("#ring-container");
+		if (ringContainer) ringContainer.classList.add("is-down-cue-active");
+		countEl.classList.remove(
+			"is-rest-time-long",
+			"is-count-long",
+			"is-countdown-dots",
+		);
+		countEl.classList.add("is-down-cue");
+		countEl.textContent = "DOWN";
+		countEl.style.color = "";
+		countEl.style.visibility = "";
+		countEl.classList.remove("countdown-pop");
+		void countEl.offsetWidth;
+		countEl.classList.add("countdown-pop");
 
 		this.downTimeout = setTimeout(() => {
 			this.downTimeout = null;
-			downEl.style.display = "none";
-			this.updateCurrentSetRepCount(repsLeft);
-		}, 350);
+			this.downCueActive = false;
+			if (ringContainer) ringContainer.classList.remove("is-down-cue-active");
+			if (!this.paused) this.updateCurrentSetRepCount(repsLeft);
+		}, 650);
 	}
 
 	updateCurrentSetRepCount(repsLeft) {
+		if (this.downCueActive) return;
 		const countEl = this.root.querySelector("#count");
 		if (!countEl) return;
+		countEl.classList.remove(
+			"is-down-cue",
+			"is-rest-time-long",
+			"is-countdown-dots",
+		);
+		this.setCountLengthClass(countEl, String(repsLeft));
 		countEl.textContent = repsLeft;
-		countEl.style.color = "#C8D8F0";
-		countEl.style.visibility = "";
+		countEl.style.color = "";
+		countEl.style.visibility = this.paused ? "hidden" : "";
 		this.lastDisplayed = repsLeft;
+	}
+
+	setCountLengthClass(countEl, text) {
+		if (String(text).length >= 3) {
+			countEl.classList.add("is-count-long");
+		} else {
+			countEl.classList.remove("is-count-long");
+		}
 	}
 
 	triggerFlash() {
 		const flashEl = this.root.querySelector("#flash-circle");
 		if (!flashEl) return;
+		flashEl.style.display = "block";
 		flashEl.style.transition = "none";
 		flashEl.setAttribute("opacity", "0.5");
 		requestAnimationFrame(() =>
 			requestAnimationFrame(() => {
 				flashEl.style.transition = "opacity 0.2s ease-out";
 				flashEl.setAttribute("opacity", "0");
+				setTimeout(() => {
+					flashEl.style.display = "none";
+				}, 220);
 			}),
 		);
 	}
@@ -195,16 +286,32 @@ export class SessionRenderer {
 		const el = this.root.querySelector("#total-done");
 		if (!el) return;
 		el.textContent = n;
-		el.style.color = "#FFFFFF";
-		setTimeout(() => {
-			el.style.color = "";
-		}, 160);
+		el.style.color = "";
 	}
 
 	updateTotalGoal(n) {
 		const el = this.root.querySelector("#total-plan");
-		if (!el) return;
-		el.textContent = n;
+		if (el) el.textContent = n;
+	}
+
+	renderCountdownDots({ count, faded }) {
+		const countEl = this.root.querySelector("#count");
+		const glyphsEl = this.root.querySelector("#set-glyphs");
+		if (!countEl) return;
+
+		if (glyphsEl) {
+			while (glyphsEl.firstChild) glyphsEl.removeChild(glyphsEl.firstChild);
+		}
+		while (countEl.firstChild) countEl.removeChild(countEl.firstChild);
+		countEl.textContent = "";
+		countEl.classList.add("is-countdown-dots");
+
+		for (let index = 0; index < count; index += 1) {
+			const dot = document.createElement("span");
+			dot.className = "countdown-dot";
+			if (index < faded) dot.className += " is-faded";
+			countEl.appendChild(dot);
+		}
 	}
 
 	renderSetGlyphs(blocks) {
@@ -222,7 +329,7 @@ export class SessionRenderer {
 				mark.className = "block w-[7px] h-[22px]";
 
 				if (index < block.completedSets) {
-					mark.style.background = "#070707";
+					mark.style.background = SESSION_INK;
 				} else if (
 					index === block.completedSets &&
 					block.currentSetProgress !== null
@@ -230,9 +337,9 @@ export class SessionRenderer {
 					const pct = Math.round(
 						Math.min(Math.max(block.currentSetProgress, 0), 1) * 100,
 					);
-					mark.style.background = `linear-gradient(to top, #070707 ${pct}%, #ddd6c7 ${pct}%)`;
+					mark.style.background = `linear-gradient(to top, ${SESSION_INK} ${pct}%, ${SESSION_TRACK} ${pct}%)`;
 				} else {
-					mark.style.background = "#ddd6c7";
+					mark.style.background = SESSION_TRACK;
 				}
 
 				group.appendChild(mark);

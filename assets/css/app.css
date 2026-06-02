@@ -1,6 +1,11 @@
 /* See the Tailwind configuration guide for advanced usage
    https://tailwindcss.com/docs/configuration */
 
+@import "@fontsource/geist/400.css";
+@import "@fontsource/geist/700.css";
+@import "@fontsource/geist/900.css";
+@import "@fontsource/geist/500.css";
+@import "@fontsource/geist/600.css";
 @import "tailwindcss" source(none);
 @source "../css";
 @source "../js";
@@ -57,6 +62,8 @@
    Values reference the CSS vars so palette changes in the daisyUI theme block above
    flow through automatically — no more hardcoded hex in templates. */
 @theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --color-base-nav:          var(--color-base-100);
   --color-base-raised:       #1C1F28;
   --color-base-border:       var(--color-neutral);
@@ -75,28 +82,35 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* Session runner phase color tokens. Decoupled from daisyUI roles
-   so phase semantics don't change if the palette shifts. */
-:root {
-  --phase-work:          #4A9EFF;
-  --phase-work-bg:       #1A2D4A;
-  --phase-work-content:  #E6F1FF;
-  --phase-warmup:        #F59E0B;
-  --phase-warmup-bg:     #2D1F08;
-  --phase-warmup-content:#FEF3C7;
-  --phase-rest:          #6B8FA8;
-  --phase-rest-bg:       #141E28;
-  --phase-rest-content:  #D4E4EF;
-  --phase-done:          #8B77DB;
-  --phase-done-bg:       #1E1A35;
-  --phase-done-content:  #EDE9FE;
-
-  /* Border token used throughout cards/dividers */
-  --color-base-border: #2C3040;
-}
-
 /* Dark color-scheme on the root so browser date/time pickers use dark chrome */
 :root { color-scheme: dark; }
+
+#burpee-session,
+.session-surface {
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --session-bg: #f4f0e6;
+  --session-ink: #070707;
+  --session-muted: #9b9488;
+  --session-soft-muted: #777064;
+  --session-border: #ded8ca;
+  --session-track: #ddd6c7;
+  --session-ring-track: #d8d3c8;
+  --session-countin-bg: var(--session-ink);
+  --session-countin-ink: #ffffff;
+}
+
+[data-theme="dark"] #burpee-session,
+[data-theme="dark"] .session-surface {
+  --session-bg: #070707;
+  --session-ink: #f4f0e6;
+  --session-muted: #9b9488;
+  --session-soft-muted: #b8b0a3;
+  --session-border: #3a342c;
+  --session-track: #413b33;
+  --session-ring-track: #413b33;
+  --session-countin-bg: var(--session-ink);
+  --session-countin-ink: #070707;
+}
 
 /* Subtle pulse for the clock ring when 5s remain in a rest. */
 @keyframes burpee-ring-pulse {
@@ -113,20 +127,185 @@
 }
 .countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+#burpee-session.is-counting-in,
+#burpee-session.is-counting-in #session-runner-client,
+#session-runner-client.is-counting-in {
+  background: var(--session-countin-bg) !important;
+  color: var(--session-countin-ink) !important;
+}
+
+#session-runner-client.is-counting-in #total-done,
+#session-runner-client.is-counting-in #total-plan,
+#session-runner-client.is-counting-in #time-left {
+  color: var(--session-countin-ink) !important;
+}
+
+#phase-label.is-counting-in {
+  display: block !important;
+  border: 0;
+  color: var(--session-countin-ink);
+  padding: 0;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1.62px;
+  line-height: 12.6px;
+  text-transform: uppercase;
+}
+
+#ring-container.is-counting-in {
+  border: 0;
+  border-radius: 0;
+  color: var(--session-countin-ink);
+}
+
+#ring-container #ring-svg,
+#ring-container #flash-circle {
+  display: none;
+}
+
+#ring-container.is-working #ring-svg {
+  display: block;
+}
+
+#ring-container.is-counting-in #pause-icon {
+  color: var(--session-countin-ink);
+}
+
+#ring-container.is-resting #ring-svg,
+#ring-container.is-resting #flash-circle {
+  display: none;
+}
+
 #ring-container.is-resting #instrument-face {
-  background: #070707;
+  background: transparent;
+}
+
+#ring-container.is-resting #rest-ripples {
+  display: block;
+}
+
+@keyframes rest-breathe-ripple {
+  0% {
+    opacity: calc(var(--rest-ripple-alpha) * 0.34);
+    transform: translate(-50%, -50%) scale(0.74);
+  }
+  42% {
+    opacity: var(--rest-ripple-alpha);
+    transform: translate(-50%, -50%) scale(1.16);
+  }
+  56% {
+    opacity: calc(var(--rest-ripple-alpha) * 0.78);
+    transform: translate(-50%, -50%) scale(1.16);
+  }
+  100% {
+    opacity: calc(var(--rest-ripple-alpha) * 0.22);
+    transform: translate(-50%, -50%) scale(0.78);
+  }
+}
+
+.rest-ripple {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  border: 1px solid var(--session-ink);
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.rest-ripple-outer {
+  --rest-ripple-alpha: 0.22;
+  width: 250px;
+  height: 250px;
+  animation: rest-breathe-ripple 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite;
+}
+
+.rest-ripple-middle {
+  --rest-ripple-alpha: 0.28;
+  width: 200px;
+  height: 200px;
+  animation: rest-breathe-ripple 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite 260ms;
+}
+
+.rest-ripple-inner {
+  --rest-ripple-alpha: 0.34;
+  width: 150px;
+  height: 150px;
+  animation: rest-breathe-ripple 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite 520ms;
+}
+
+#count {
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-stretch: normal;
+  font-weight: 600;
+}
+
+#count.is-down-cue {
+  font-size: 132px;
+  letter-spacing: -0.085em;
+}
+
+@media (min-width: 640px) {
+  #count.is-down-cue {
+    font-size: 144px;
+  }
+}
+
+#ring-container #ring-svg {
+  opacity: 1;
+  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#ring-container.is-down-cue-active #ring-svg {
+  opacity: 0;
+}
+
+#count.is-count-long {
+  font-size: clamp(5rem, 24vw, 6.5rem);
+  letter-spacing: -0.075em;
 }
 
 #ring-container.is-resting #count {
-  color: #f4f0e6;
+  color: var(--session-ink);
+  font-size: 64px;
+  font-weight: 500;
+  letter-spacing: -3.2px;
+  line-height: 57.6px;
+  mix-blend-mode: normal;
 }
 
 #ring-container.is-counting-in #instrument-face {
   background: transparent;
 }
 
+#ring-container.is-counting-in #count.is-countdown-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 148px;
+  line-height: 1;
+}
+
+#ring-container.is-counting-in #count .countdown-dot {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: var(--session-countin-ink) !important;
+  opacity: 1;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+#ring-container.is-counting-in #count .countdown-dot.is-faded {
+  opacity: 0.22;
+  transform: scale(0.86);
+}
+
 #ring-container.is-paused #instrument-face {
-  background: #070707;
+  background: transparent;
 }
 
 /* iPhone notch / home-bar safe area for the bottom tab bar */

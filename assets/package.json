@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fontsource/geist": "^5.2.9",
     "@mediapipe/pose": "^0.5.1675469404",
     "chart.js": "^4.5.1",
     "chartjs-adapter-date-fns": "^3.0.0",

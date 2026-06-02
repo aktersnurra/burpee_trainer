@@ -25,28 +25,28 @@ export function warmupTimelineFromPlan(plan) {
 
 	return [
 		{
-			type: "warmup_burpee",
+			phase: "work",
 			duration_sec: durationSec,
 			burpee_count: warmupReps,
 			sec_per_burpee: secPerBurpee,
 			label: "Warmup Round 1",
 		},
 		{
-			type: "warmup_rest",
+			phase: "rest",
 			duration_sec: 120,
 			burpee_count: null,
 			sec_per_burpee: null,
 			label: "Warmup Rest",
 		},
 		{
-			type: "warmup_burpee",
+			phase: "work",
 			duration_sec: durationSec,
 			burpee_count: warmupReps,
 			sec_per_burpee: secPerBurpee,
 			label: "Warmup Round 2",
 		},
 		{
-			type: "warmup_rest",
+			phase: "rest",
 			duration_sec: 180,
 			burpee_count: null,
 			sec_per_burpee: null,
@@ -57,8 +57,7 @@ export function warmupTimelineFromPlan(plan) {
 
 export function timelineBurpeeCount(timeline) {
 	return timeline.reduce((total, event) => {
-		if (event.type !== "work_burpee" && event.type !== "warmup_burpee")
-			return total;
+		if (event.phase !== "work") return total;
 		return total + (event.burpee_count || 0);
 	}, 0);
 }
@@ -72,7 +71,7 @@ function blockTimeline(block) {
 	for (let round = 1; round <= block.repeat_count; round++) {
 		sets.forEach((set, index) => {
 			events.push({
-				type: "work_burpee",
+				phase: "work",
 				duration_sec: set.burpee_count * set.sec_per_rep,
 				burpee_count: set.burpee_count,
 				sec_per_burpee: set.sec_per_rep,
@@ -81,7 +80,7 @@ function blockTimeline(block) {
 
 			if ((set.end_of_set_rest || 0) > 0 && index + 1 <= sets.length) {
 				events.push({
-					type: "work_rest",
+					phase: "rest",
 					duration_sec: set.end_of_set_rest,
 					burpee_count: null,
 					sec_per_burpee: null,

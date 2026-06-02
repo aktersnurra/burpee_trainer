@@ -80,6 +80,40 @@ globalThis.document = {
 	},
 };
 
+test("ready reset clears a previously built ring", () => {
+	const root = fakeRoot();
+	const renderer = new SessionRenderer(root);
+
+	renderer.enterWorkPhase();
+	assert.ok(root.elements["#ring-svg"].children.length > 0);
+
+	renderer.resetReady();
+
+	assert.equal(root.elements["#ring-svg"].children.length, 0);
+	assert.equal(renderer.workRingEl, null);
+	assert.equal(root.elements["#count"].textContent, "—");
+});
+
+test("non-work modes clear a previously built work ring", () => {
+	for (const enterMode of ["enterCountInPhase", "enterRestPhase"]) {
+		const root = fakeRoot();
+		const renderer = new SessionRenderer(root);
+
+		renderer.enterWorkPhase();
+		assert.ok(root.elements["#ring-svg"].children.length > 0);
+
+		renderer[enterMode]();
+
+		assert.equal(
+			root.elements["#ring-container"].classList.contains("is-working"),
+			false,
+			enterMode,
+		);
+		assert.equal(root.elements["#ring-svg"].children.length, 0, enterMode);
+		assert.equal(renderer.workRingEl, null, enterMode);
+	}
+});
+
 test("work ring depletes as progress increases", () => {
 	const root = fakeRoot();
 	const renderer = new SessionRenderer(root);
@@ -103,7 +137,7 @@ test("rest mode inverts instrument class and renders time", () => {
 	const renderer = new SessionRenderer(root);
 
 	renderer.enterRestPhase();
-	renderer.renderRestProgress(0.5, "#0ff", 75);
+	renderer.renderRestProgress(75);
 
 	assert.equal(
 		root.elements["#ring-container"].classList.contains("is-resting"),
@@ -113,6 +147,7 @@ test("rest mode inverts instrument class and renders time", () => {
 		root.elements["#ring-container"].classList.contains("is-working"),
 		false,
 	);
+	assert.equal(root.elements["#count"].style.visibility, "");
 	assert.equal(root.elements["#count"].textContent, "1:15");
 });
 
@@ -126,6 +161,21 @@ test("count-in mode marks instrument without rest inversion", () => {
 		root.elements["#ring-container"].classList.contains("is-counting-in"),
 	);
 	assert.ok(!root.elements["#ring-container"].classList.contains("is-resting"));
+});
+
+test("countdown renders dots in the primary count position", () => {
+	const root = fakeRoot();
+	const renderer = new SessionRenderer(root);
+
+	renderer.renderCountdownDots({ count: 5, faded: 2 });
+
+	const count = root.elements["#count"];
+	assert.equal(count.textContent, "");
+	assert.equal(count.classList.contains("is-countdown-dots"), true);
+	assert.equal(count.children.length, 5);
+	assert.equal(count.children[0].className, "countdown-dot is-faded");
+	assert.equal(count.children[2].className, "countdown-dot");
+	assert.equal(root.elements["#set-glyphs"].children.length, 0);
 });
 
 test("renders grouped set glyphs from plan blocks", () => {
@@ -145,12 +195,51 @@ test("renders grouped set glyphs from plan blocks", () => {
 		glyphs.children.map((group) => group.children.length),
 		[3, 3, 2],
 	);
-	assert.equal(glyphs.children[0].children[0].style.background, "#070707");
+	assert.equal(
+		glyphs.children[0].children[0].style.background,
+		"var(--session-ink)",
+	);
 	assert.equal(
 		glyphs.children[1].children[1].style.background,
-		"linear-gradient(to top, #070707 50%, #ddd6c7 50%)",
+		"linear-gradient(to top, var(--session-ink) 50%, var(--session-track) 50%)",
 	);
-	assert.equal(glyphs.children[2].children[0].style.background, "#ddd6c7");
+	assert.equal(
+		glyphs.children[2].children[0].style.background,
+		"var(--session-track)",
+	);
+});
+
+test("down cue hides ring until count returns", () => {
+	const root = fakeRoot();
+	const renderer = new SessionRenderer(root);
+
+	renderer.triggerDown(4);
+
+	assert.equal(root.elements["#count"].textContent, "DOWN");
+	assert.equal(root.elements["#count"].classList.contains("is-down-cue"), true);
+	assert.equal(
+		root.elements["#ring-container"].classList.contains("is-down-cue-active"),
+		true,
+	);
+});
+
+test("pausing during down hides the cue behind pause icon", () => {
+	const root = fakeRoot();
+	const renderer = new SessionRenderer(root);
+
+	renderer.triggerDown(4);
+	renderer.updatePauseButton(true);
+
+	assert.equal(root.elements["#count"].style.visibility, "hidden");
+	assert.equal(
+		root.elements["#count"].classList.contains("is-down-cue"),
+		false,
+	);
+	assert.equal(
+		root.elements["#ring-container"].classList.contains("is-down-cue-active"),
+		false,
+	);
+	assert.equal(root.elements["#pause-icon"].style.display, "");
 });
 
 test("paused mode hides count and shows pause icon class", () => {
