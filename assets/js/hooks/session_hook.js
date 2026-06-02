@@ -13,6 +13,10 @@ import {
 import { SessionRenderer } from "./session_renderer.mjs";
 import { isPauseToggleKey } from "./session_input.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
+import {
+	setGlyphBlocksFromFrame,
+	setGlyphBlocksFromPlan,
+} from "./session_set_glyphs.mjs";
 
 const CX = 140,
 	CY = 140,
@@ -124,11 +128,7 @@ const SessionHook = {
 	},
 
 	setGlyphBlocksFromPlan(plan) {
-		this.setGlyphBlocks = (plan.blocks || []).map((block) => ({
-			setCount: (block.sets || []).length * (block.repeat_count || 1),
-			completedSets: 0,
-			currentSetProgress: null,
-		}));
+		this.setGlyphBlocks = setGlyphBlocksFromPlan(plan);
 		this.renderer.renderSetGlyphs(this.setGlyphBlocks);
 	},
 
@@ -525,6 +525,7 @@ const SessionHook = {
 
 	renderRunningFrame(elapsed) {
 		const frame = currentFrame(this.timeline, elapsed);
+		this.renderSetGlyphsForFrame(frame);
 
 		this.dispatchSegment({ type: "ACCOUNT_REPS", frame });
 		this.syncRepStateFromSegment();
@@ -617,6 +618,48 @@ const SessionHook = {
 			return;
 		const elapsed = (performance.now() - this.startTime) / 1000;
 		this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });
+	},
+
+	renderSetGlyphsForFrame(frame) {
+		if (this.activeSegment !== "workout" || !this.plan) return;
+
+		const glyphFrame = this.setGlyphFrameFromTimelineFrame(frame);
+		this.setGlyphBlocks = setGlyphBlocksFromFrame(this.plan, glyphFrame);
+		this.renderer.renderSetGlyphs(this.setGlyphBlocks);
+	},
+
+	setGlyphFrameFromTimelineFrame(frame) {
+		if (!frame) {
+			return {
+				completedSetCount: this.countCompletedWorkSets(this.timeline.length),
+			};
+		}
+
+		const completedSetCount = this.countCompletedWorkSets(frame.index);
+
+		if (frame.event?.type !== "work_burpee") {
+			return { completedSetCount };
+		}
+
+		const currentSetProgress =
+			frame.event.duration_sec > 0
+				? Math.min(
+						Math.max(frame.phase_elapsed / frame.event.duration_sec, 0),
+						1,
+					)
+				: 0;
+
+		return {
+			completedSetCount,
+			currentSetIndex: completedSetCount,
+			currentSetProgress,
+		};
+	},
+
+	countCompletedWorkSets(beforeTimelineIndex) {
+		return this.timeline
+			.slice(0, beforeTimelineIndex)
+			.filter((event) => event.type === "work_burpee").length;
 	},
 
 	syncRepStateFromSegment() {
