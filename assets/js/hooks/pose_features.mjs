@@ -78,7 +78,10 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		points.get("right_shoulder"),
 	);
 	const hipMid = midpoint(points.get("left_hip"), points.get("right_hip"));
-	const elbowMid = midpoint(points.get("left_elbow"), points.get("right_elbow"));
+	const elbowMid = midpoint(
+		points.get("left_elbow"),
+		points.get("right_elbow"),
+	);
 	const heelMid = midpoint(points.get("left_heel"), points.get("right_heel"));
 	const torsoLengthPx = distance(shoulderMid, hipMid);
 	const scalar = scalarSignals(points, width, height);

@@ -89,7 +89,8 @@ function low(value, threshold) {
 
 function band(value, min, max) {
 	if (value < min) return clamp01(1 - (min - value) / Math.max(min, 0.0001));
-	if (value > max) return clamp01(1 - (value - max) / Math.max(1 - max, 0.0001));
+	if (value > max)
+		return clamp01(1 - (value - max) / Math.max(1 - max, 0.0001));
 	return 1;
 }
 
