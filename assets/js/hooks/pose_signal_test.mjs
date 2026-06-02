@@ -42,6 +42,44 @@ test("closer/larger body lowers uprightness signal even when vertical center is 
 	assert.ok(farUp.signal > closeDown.signal);
 });
 
+test("trace sample preserves every BlazePose landmark", () => {
+	const allKeypoints = Array.from({ length: 33 }, (_, index) => ({
+		name: `landmark_${index}`,
+		x: index,
+		y: index * 2,
+		z: -index / 10,
+		score: 0.9,
+		visibility: 0.8,
+		presence: 0.7,
+		world: { x: index + 1, y: index + 2, z: index + 3, visibility: 0.6 },
+	}));
+	allKeypoints[0].name = "nose";
+	allKeypoints[15].name = "left_wrist";
+	allKeypoints[31].name = "left_foot_index";
+
+	const sample = sampleFromPose(
+		{ keypoints: allKeypoints, model: "blazepose-full" },
+		1000,
+		video,
+	);
+
+	assert.equal(Object.keys(sample.keypoints).length, 33);
+	assert.deepEqual(sample.keypoints.left_wrist, {
+		x: 0.05,
+		y: 0.05,
+		z: -1.5,
+		score: 0.9,
+		visibility: 0.8,
+		presence: 0.7,
+		world_x: 16,
+		world_y: 17,
+		world_z: 18,
+		world_visibility: 0.6,
+	});
+	assert.deepEqual(sample.keypoints.left_foot_index.world_z, 34);
+	assert.equal(sample.model, "blazepose-full");
+});
+
 test("full-body keypoints contribute to closeness when visible", () => {
 	const torsoOnly = sampleFromPose(
 		pose({ shoulderY: 180, hipY: 320 }),

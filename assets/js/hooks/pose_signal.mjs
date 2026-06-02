@@ -36,6 +36,7 @@ export function sampleFromPose(pose, tMs, video) {
 
 	return {
 		tMs: Math.max(0, Math.round(tMs)),
+		model: pose?.model || null,
 		signal: clamp01(verticalSignal - closeness * 0.45),
 		closeness,
 		confidence,
@@ -45,20 +46,35 @@ export function sampleFromPose(pose, tMs, video) {
 
 function normalizedKeypoints(keypoints, width, height) {
 	return Object.fromEntries(
-		BODY_KEYPOINTS.map((name) => {
-			const point = findKeypoint(keypoints, name);
-			return [
-				name,
-				point
-					? {
-							x: round4(point.x / width),
-							y: round4(point.y / height),
-							score: round4(point.score ?? 0),
-						}
-					: null,
-			];
-		}),
+		keypoints
+			.filter((point) => point?.name || point?.part)
+			.map((point) => [point.name || point.part, normalizedKeypoint(point, width, height)]),
 	);
+}
+
+function normalizedKeypoint(point, width, height) {
+	const normalized = {
+		x: Number.isFinite(point.x) ? round4(point.x / width) : null,
+		y: Number.isFinite(point.y) ? round4(point.y / height) : null,
+		z: Number.isFinite(point.z) ? round4(point.z) : null,
+		score: round4(point.score ?? 0),
+	};
+
+	if (point.visibility != null) normalized.visibility = round4(point.visibility);
+	if (point.presence != null) normalized.presence = round4(point.presence);
+	if (point.world) {
+		normalized.world_x = round4(point.world.x);
+		normalized.world_y = round4(point.world.y);
+		normalized.world_z = round4(point.world.z);
+		if (point.world.visibility != null) {
+			normalized.world_visibility = round4(point.world.visibility);
+		}
+		if (point.world.presence != null) {
+			normalized.world_presence = round4(point.world.presence);
+		}
+	}
+
+	return normalized;
 }
 
 function bodyCloseness(points, width, height) {
