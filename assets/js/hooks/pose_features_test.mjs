@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { featureFrameFromPose, featureFramesFromSamples } from "./pose_features.mjs";
+import {
+	featureFrameFromPose,
+	featureFramesFromSamples,
+} from "./pose_features.mjs";
 
 const video = { videoWidth: 400, videoHeight: 800 };
 
@@ -45,13 +48,19 @@ test("extracts shared BlazePose feature frame with body geometry and normalized 
 	assert.equal(frame.shoulderMidY, 0.25);
 	assert.equal(frame.hipMidY, 0.5);
 	assert.equal(frame.wristMidY, 0.45);
+	assert.equal(frame.elbowMidY, 0.4);
 	assert.equal(frame.footMidY, 0.925);
+	assert.equal(frame.heelMidY, 0.9);
 	assert.equal(frame.shoulderWidth, 0.2);
 	assert.equal(frame.hipWidth, 0.15);
 	assert.equal(frame.torsoLength, 0.25);
 	assert.equal(frame.bboxWidth, 0.3);
 	assert.equal(frame.bboxHeight, 0.825);
-	assert.equal(frame.upperBodyScore > frame.ankleScore, true);
+	assert.equal(frame.signal, 0.1207);
+	assert.equal(frame.closeness, 0.775);
+	assert.equal(frame.upperBodyScore > frame.footScore, true);
+	assert.equal(frame.handScore, 0.8);
+	assert.equal(frame.footScore, 0.5333);
 	assert.deepEqual(frame.normalizedLandmarks.left_wrist, {
 		x: -0.3,
 		y: -0.2,
@@ -64,12 +73,19 @@ test("extracts shared BlazePose feature frame with body geometry and normalized 
 });
 
 test("adds velocity features from actual timestamps", () => {
-	const frames = featureFramesFromSamples([
-		{ pose: poseAt({ tMs: 0, shoulderY: 200, hipY: 400 }), tMs: 0 },
-		{ pose: poseAt({ tMs: 200, shoulderY: 260, hipY: 460 }), tMs: 200 },
-	], video);
+	const frames = featureFramesFromSamples(
+		[
+			{ pose: poseAt({ tMs: 0, shoulderY: 200, hipY: 400 }), tMs: 0 },
+			{ pose: poseAt({ tMs: 200, shoulderY: 260, hipY: 460 }), tMs: 200 },
+		],
+		video,
+	);
 
 	assert.equal(frames[0].dShoulderY, null);
+	assert.equal(frames[0].dSignal, null);
+	assert.equal(frames[0].dCloseness, null);
 	assert.equal(frames[1].dShoulderY, 0.375);
 	assert.equal(frames[1].dHipY, 0.375);
+	assert.equal(frames[1].dSignal, -0.375);
+	assert.equal(frames[1].dCloseness, 0);
 });
