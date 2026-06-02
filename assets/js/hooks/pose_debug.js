@@ -230,7 +230,10 @@ const PoseDebug = {
 
 		this.featureWindow.push(sample.features);
 		const minTMs = sample.tMs - FEATURE_WINDOW_MS;
-		while (this.featureWindow.length > 0 && this.featureWindow[0].tMs < minTMs) {
+		while (
+			this.featureWindow.length > 0 &&
+			this.featureWindow[0].tMs < minTMs
+		) {
 			this.featureWindow.shift();
 		}
 
@@ -355,7 +358,11 @@ const PoseDebug = {
 
 	renderDecoderDiagnostics(diagnostics) {
 		setText(this.el, "#pose-debug-decoder-phase", diagnostics.phase);
-		setText(this.el, "#pose-debug-decoder-candidates", diagnostics.candidateCount);
+		setText(
+			this.el,
+			"#pose-debug-decoder-candidates",
+			diagnostics.candidateCount,
+		);
 		setText(
 			this.el,
 			"#pose-debug-decoder-illegal-transitions",

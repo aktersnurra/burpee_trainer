@@ -94,7 +94,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
                 <.debug_stat label="Decoded phase" value_id="pose-debug-decoder-phase" value="—" />
                 <.debug_stat label="Candidates" value_id="pose-debug-decoder-candidates" value="0" />
                 <.debug_stat
-                  label="Illegal jumps"
+                  label="Illegal transitions"
                   value_id="pose-debug-decoder-illegal-transitions"
                   value="0"
                 />
