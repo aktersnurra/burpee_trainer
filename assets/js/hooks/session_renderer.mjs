@@ -35,6 +35,22 @@ export class SessionRenderer {
 		if (blockInfo) blockInfo.textContent = label;
 	}
 
+	setMode(mode) {
+		const ringContainer = this.root.querySelector("#ring-container");
+		if (!ringContainer) return;
+		ringContainer.classList.remove(
+			"is-working",
+			"is-resting",
+			"is-counting-in",
+		);
+		if (mode) ringContainer.classList.add(mode);
+	}
+
+	depletingOffset(progress) {
+		const clampedProgress = Math.min(Math.max(progress, 0), 1);
+		return CIRC * clampedProgress;
+	}
+
 	updatePauseButton(paused) {
 		const pauseIcon = this.root.querySelector("#pause-icon");
 		const countEl = this.root.querySelector("#count");
@@ -45,19 +61,27 @@ export class SessionRenderer {
 			if (countEl) countEl.style.visibility = "hidden";
 			if (downEl) downEl.style.display = "none";
 			if (pauseIcon) pauseIcon.style.display = "";
-			if (ringContainer) ringContainer.style.opacity = "0.6";
+			if (ringContainer) {
+				ringContainer.style.opacity = "0.6";
+				ringContainer.classList.add("is-paused");
+			}
 		} else {
 			if (pauseIcon) pauseIcon.style.display = "none";
-			if (ringContainer) ringContainer.style.opacity = "";
+			if (ringContainer) {
+				ringContainer.style.opacity = "";
+				ringContainer.classList.remove("is-paused");
+			}
 			if (countEl) countEl.style.visibility = "";
 		}
 	}
 
 	enterWorkPhase() {
+		this.setMode("is-working");
 		this.buildWorkRing();
 	}
 
 	enterRestPhase() {
+		this.setMode("is-resting");
 		const svgEl = this.root.querySelector("#ring-svg");
 		if (svgEl) {
 			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
@@ -75,7 +99,7 @@ export class SessionRenderer {
 	}
 
 	renderRestProgress(progress, color, timeLeftSec) {
-		const offset = CIRC * (1 - Math.min(progress, 1));
+		const offset = this.depletingOffset(progress);
 		if (this.restRingEl) {
 			this.restRingEl.setAttribute("stroke", color);
 			this.restRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
@@ -114,7 +138,7 @@ export class SessionRenderer {
 
 	updateWorkRing(repProgress, color) {
 		if (!this.workRingEl) return;
-		const offset = CIRC * (1 - Math.min(repProgress, 1));
+		const offset = this.depletingOffset(repProgress);
 		this.workRingEl.setAttribute("stroke", color);
 		this.workRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
 		this.workRingEl.setAttribute("stroke-dashoffset", offset.toFixed(4));
