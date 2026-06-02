@@ -127,7 +127,8 @@ defmodule BurpeeTrainerWeb.Layouts do
     <%= if @current_user do %>
       <div class={[
         "sm:hidden",
-        @current_page == :workouts && "h-[92px]",
+        @current_page == :workouts &&
+          "session-surface h-[92px] bg-[var(--session-bg)]",
         @current_page != :workouts && "h-16"
       ]} />
     <% end %>
@@ -178,9 +179,9 @@ defmodule BurpeeTrainerWeb.Layouts do
     <.link
       navigate={@navigate}
       class={[
-        "relative inline-flex shrink-0 flex-col items-center transition-colors",
-        @session_nav? && "h-[92px] w-28 justify-start gap-2 pt-6",
-        !@session_nav? && "h-14 w-16 justify-center gap-0.5",
+        "relative inline-flex flex-col items-center transition-colors",
+        @session_nav? && "h-[92px] min-w-0 flex-1 justify-start gap-2 pt-6",
+        !@session_nav? && "h-14 w-16 shrink-0 justify-center gap-0.5",
         @session_nav? && @active && "font-bold text-[var(--session-ink)]",
         @session_nav? && !@active && "font-medium text-[var(--session-muted)]",
         !@session_nav? && @active && "text-[#4A9EFF]",

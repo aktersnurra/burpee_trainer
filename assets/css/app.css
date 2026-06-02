@@ -112,6 +112,22 @@
   --session-countin-ink: #070707;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) #burpee-session,
+  :root:not([data-theme]) .session-surface {
+    --session-bg: #070707;
+    --session-ink: #f4f0e6;
+    --session-muted: #9b9488;
+    --session-soft-muted: #b8b0a3;
+    --session-border: #3a342c;
+    --session-track: #413b33;
+    --session-ring-track: #413b33;
+    --session-countin-bg: var(--session-ink);
+    --session-countin-ink: #070707;
+  }
+}
+
+
 /* Subtle pulse for the clock ring when 5s remain in a rest. */
 @keyframes burpee-ring-pulse {
   0%, 100% { transform: scale(1); }
