@@ -80,6 +80,15 @@ export class SessionRenderer {
 		this.buildWorkRing();
 	}
 
+	enterCountInPhase() {
+		this.setMode("is-counting-in");
+		const countEl = this.root.querySelector("#count");
+		if (countEl) {
+			countEl.style.color = "#070707";
+			countEl.style.visibility = "";
+		}
+	}
+
 	enterRestPhase() {
 		this.setMode("is-resting");
 		const svgEl = this.root.querySelector("#ring-svg");

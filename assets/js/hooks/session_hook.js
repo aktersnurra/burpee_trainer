@@ -422,6 +422,7 @@ const SessionHook = {
 		if (countEl) countEl.style.visibility = "";
 
 		const showCount = (value, animate) => {
+			this.renderer.enterCountInPhase();
 			const color = this.countdownColor(value);
 
 			if (countEl) {

@@ -113,6 +113,21 @@
 }
 .countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+#ring-container.is-resting #instrument-face {
+  background: #070707;
+}
+
+#ring-container.is-resting #count {
+  color: #f4f0e6;
+}
+
+#ring-container.is-counting-in #instrument-face {
+  background: transparent;
+}
+
+#ring-container.is-paused #instrument-face {
+  background: #070707;
+}
 
 /* iPhone notch / home-bar safe area for the bottom tab bar */
 .pb-safe {

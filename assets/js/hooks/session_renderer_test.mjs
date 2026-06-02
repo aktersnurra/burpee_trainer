@@ -116,6 +116,18 @@ test("rest mode inverts instrument class and renders time", () => {
 	assert.equal(root.elements["#count"].textContent, "1:15");
 });
 
+test("count-in mode marks instrument without rest inversion", () => {
+	const root = fakeRoot();
+	const renderer = new SessionRenderer(root);
+
+	renderer.enterCountInPhase();
+
+	assert.ok(
+		root.elements["#ring-container"].classList.contains("is-counting-in"),
+	);
+	assert.ok(!root.elements["#ring-container"].classList.contains("is-resting"));
+});
+
 test("renders grouped set glyphs from plan blocks", () => {
 	const root = fakeRoot();
 	const renderer = new SessionRenderer(root);
