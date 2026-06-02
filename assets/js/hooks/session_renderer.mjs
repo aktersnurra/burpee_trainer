@@ -198,6 +198,41 @@ export class SessionRenderer {
 		el.textContent = n;
 	}
 
+	renderSetGlyphs(blocks) {
+		const container = this.root.querySelector("#set-glyphs");
+		if (!container) return;
+
+		while (container.firstChild) container.removeChild(container.firstChild);
+
+		blocks.forEach((block) => {
+			const group = document.createElement("div");
+			group.className = "flex items-end gap-1";
+
+			for (let index = 0; index < block.setCount; index += 1) {
+				const mark = document.createElement("span");
+				mark.className = "block w-[7px] h-[22px]";
+
+				if (index < block.completedSets) {
+					mark.style.background = "#070707";
+				} else if (
+					index === block.completedSets &&
+					block.currentSetProgress !== null
+				) {
+					const pct = Math.round(
+						Math.min(Math.max(block.currentSetProgress, 0), 1) * 100,
+					);
+					mark.style.background = `linear-gradient(to top, #070707 ${pct}%, #ddd6c7 ${pct}%)`;
+				} else {
+					mark.style.background = "#ddd6c7";
+				}
+
+				group.appendChild(mark);
+			}
+
+			container.appendChild(group);
+		});
+	}
+
 	formatTime(sec) {
 		const s = Math.max(Math.ceil(sec), 0);
 		const m = Math.floor(s / 60);

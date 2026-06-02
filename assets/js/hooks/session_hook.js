@@ -43,6 +43,7 @@ const SessionHook = {
 		this.countdownRingEl = null;
 		this.hiddenAt = null;
 		this.blockCount = 0;
+		this.setGlyphBlocks = [];
 
 		this.onVisibility = () => {
 			if (document.visibilityState === "hidden") {
@@ -82,6 +83,7 @@ const SessionHook = {
 
 		this.handleEvent("session_ready", ({ plan }) => {
 			this.plan = plan;
+			this.setGlyphBlocksFromPlan(plan);
 			this.dispatchFlow({
 				type: "SESSION_READY",
 				workoutTimeline: workoutTimelineFromPlan(plan),
@@ -119,6 +121,15 @@ const SessionHook = {
 
 	canTogglePause() {
 		return this.startTime !== null || this.countdownCount !== null;
+	},
+
+	setGlyphBlocksFromPlan(plan) {
+		this.setGlyphBlocks = (plan.blocks || []).map((block) => ({
+			setCount: (block.sets || []).length * (block.repeat_count || 1),
+			completedSets: 0,
+			currentSetProgress: null,
+		}));
+		this.renderer.renderSetGlyphs(this.setGlyphBlocks);
 	},
 
 	destroyed() {

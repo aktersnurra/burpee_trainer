@@ -27,6 +27,7 @@ class FakeElement {
 		this.firstChild = null;
 		this.style = {};
 		this.textContent = "";
+		this.className = "";
 		this.classList = new FakeClassList();
 	}
 
@@ -58,6 +59,7 @@ function fakeRoot() {
 		"#count": new FakeElement(),
 		"#down-word": new FakeElement(),
 		"#pause-icon": new FakeElement(),
+		"#set-glyphs": new FakeElement(),
 	};
 
 	return {
@@ -69,6 +71,10 @@ function fakeRoot() {
 }
 
 globalThis.document = {
+	createElement() {
+		return new FakeElement();
+	},
+
 	createElementNS() {
 		return new FakeElement();
 	},
@@ -108,6 +114,31 @@ test("rest mode inverts instrument class and renders time", () => {
 		false,
 	);
 	assert.equal(root.elements["#count"].textContent, "1:15");
+});
+
+test("renders grouped set glyphs from plan blocks", () => {
+	const root = fakeRoot();
+	const renderer = new SessionRenderer(root);
+
+	renderer.renderSetGlyphs([
+		{ setCount: 3, completedSets: 3, currentSetProgress: null },
+		{ setCount: 3, completedSets: 1, currentSetProgress: 0.5 },
+		{ setCount: 2, completedSets: 0, currentSetProgress: null },
+	]);
+
+	const glyphs = root.elements["#set-glyphs"];
+
+	assert.equal(glyphs.children.length, 3);
+	assert.deepEqual(
+		glyphs.children.map((group) => group.children.length),
+		[3, 3, 2],
+	);
+	assert.equal(glyphs.children[0].children[0].style.background, "#070707");
+	assert.equal(
+		glyphs.children[1].children[1].style.background,
+		"linear-gradient(to top, #070707 50%, #ddd6c7 50%)",
+	);
+	assert.equal(glyphs.children[2].children[0].style.background, "#ddd6c7");
 });
 
 test("paused mode hides count and shows pause icon class", () => {
