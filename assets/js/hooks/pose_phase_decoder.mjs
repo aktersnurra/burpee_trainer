@@ -45,7 +45,8 @@ export function decodeBurpeePhases(frames) {
 		score: round4(score),
 		segments,
 		diagnostics: {
-			emissionScoreMean: states.length === 0 ? 0 : round4(score / states.length),
+			emissionScoreMean:
+				states.length === 0 ? 0 : round4(score / states.length),
 			transitionPenalty: illegalTransitionCount,
 			durationPenalty: 0,
 			occlusionPenalty: round4(maxUnknownMs / 1000),

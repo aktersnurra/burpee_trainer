@@ -29,5 +29,11 @@ defmodule BurpeeTrainerWeb.TrackingTestLiveTest do
     assert html =~ "touch-manipulation"
     refute html =~ ~s(id="pose-debug-template-finish")
     assert html =~ ~s(id="pose-debug-dtw-status")
+    assert html =~ "Decoder diagnostics"
+    assert html =~ ~s(id="pose-debug-decoder-phase")
+    assert html =~ ~s(id="pose-debug-decoder-candidates")
+    assert html =~ ~s(id="pose-debug-decoder-illegal-transitions")
+    assert html =~ ~s(id="pose-debug-decoder-max-unknown")
+    assert html =~ ~s(id="pose-debug-decoder-segments")
   end
 end

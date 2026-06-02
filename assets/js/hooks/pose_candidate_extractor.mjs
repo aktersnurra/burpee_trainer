@@ -17,7 +17,10 @@ export function extractBurpeeCandidates(decoded) {
 		if (!matchesLoop(window)) continue;
 
 		const candidate = candidateFromWindow(window, decoded.score ?? 0);
-		if (candidate.durationMs < MIN_REP_MS || candidate.durationMs > MAX_REP_MS) {
+		if (
+			candidate.durationMs < MIN_REP_MS ||
+			candidate.durationMs > MAX_REP_MS
+		) {
 			continue;
 		}
 		candidates.push(candidate);

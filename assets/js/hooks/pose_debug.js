@@ -2,6 +2,9 @@ import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
+import { decodeBurpeePhases } from "./pose_phase_decoder.mjs";
+import { extractBurpeeCandidates } from "./pose_candidate_extractor.mjs";
+import { formatDecoderDiagnostics } from "./pose_decoder_diagnostics.mjs";
 import { matchTemplateWindow } from "./pose_template_matcher.mjs";
 import {
 	initialTemplateCalibration,
@@ -15,6 +18,7 @@ import {
 } from "./pose_trace_recorder.mjs";
 
 const SAMPLE_WINDOW_MS = 6000;
+const FEATURE_WINDOW_MS = 20000;
 const DTW_REFRACTORY_MS = 1200;
 
 const EDGES = [
@@ -42,6 +46,7 @@ const PoseDebug = {
 		this.traceRecorder = initialTraceRecorder();
 		this.template = null;
 		this.sampleWindow = [];
+		this.featureWindow = [];
 		this.dtwRepCount = 0;
 		this.lastDtwUpTMs = null;
 		this.startedAt = null;
@@ -106,12 +111,13 @@ const PoseDebug = {
 		const result = countRep(this.state, sample);
 		this.state = result.state;
 		this.recordSample(sample);
+		const decoderDiagnostics = this.updateDecoderDiagnostics(sample);
 		this.stepCalibration(sample);
 		this.stepTraceRecording(sample);
 		const templateMatch = this.matchTemplate();
 
 		this.draw(pose);
-		this.renderStats(sample, now, templateMatch);
+		this.renderStats(sample, now, templateMatch, decoderDiagnostics);
 		this.raf = requestAnimationFrame(() => this.loop());
 	},
 
@@ -219,6 +225,20 @@ const PoseDebug = {
 		}
 	},
 
+	updateDecoderDiagnostics(sample) {
+		if (!sample.features) return formatDecoderDiagnostics(null, []);
+
+		this.featureWindow.push(sample.features);
+		const minTMs = sample.tMs - FEATURE_WINDOW_MS;
+		while (this.featureWindow.length > 0 && this.featureWindow[0].tMs < minTMs) {
+			this.featureWindow.shift();
+		}
+
+		const decoded = decodeBurpeePhases(this.featureWindow);
+		const candidates = extractBurpeeCandidates(decoded);
+		return formatDecoderDiagnostics(decoded, candidates);
+	},
+
 	stepTraceRecording(sample) {
 		const previousPhase = this.traceRecorder.phase;
 		const result = stepTraceRecorder(this.traceRecorder, sample);
@@ -316,7 +336,7 @@ const PoseDebug = {
 		return result;
 	},
 
-	renderStats(sample, now, templateMatch) {
+	renderStats(sample, now, templateMatch, decoderDiagnostics) {
 		const fps = this.lastFrameAt ? 1000 / (now - this.lastFrameAt) : 0;
 		this.lastFrameAt = now;
 		setText(this.el, "#pose-debug-fps", fps ? fps.toFixed(1) : "—");
@@ -329,7 +349,20 @@ const PoseDebug = {
 			"#pose-debug-cadence",
 			JSON.stringify(this.state.cadenceMs),
 		);
+		this.renderDecoderDiagnostics(decoderDiagnostics);
 		this.renderTemplateMatch(templateMatch);
+	},
+
+	renderDecoderDiagnostics(diagnostics) {
+		setText(this.el, "#pose-debug-decoder-phase", diagnostics.phase);
+		setText(this.el, "#pose-debug-decoder-candidates", diagnostics.candidateCount);
+		setText(
+			this.el,
+			"#pose-debug-decoder-illegal-transitions",
+			diagnostics.illegalTransitions,
+		);
+		setText(this.el, "#pose-debug-decoder-max-unknown", diagnostics.maxUnknown);
+		setText(this.el, "#pose-debug-decoder-segments", diagnostics.segments);
 	},
 
 	renderTemplateMatch(templateMatch) {

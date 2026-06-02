@@ -84,6 +84,34 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
             <div class="rounded-[10px] bg-base-100/50 p-3 space-y-3">
               <div>
                 <p class="text-[10px] uppercase tracking-widest text-base-content/40">
+                  Decoder diagnostics
+                </p>
+                <p class="mt-1 text-xs text-base-content/60">
+                  Debug-only HMM/HSMM phase loop output. This does not drive workout rep counting yet.
+                </p>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-sm">
+                <.debug_stat label="Decoded phase" value_id="pose-debug-decoder-phase" value="—" />
+                <.debug_stat label="Candidates" value_id="pose-debug-decoder-candidates" value="0" />
+                <.debug_stat
+                  label="Illegal jumps"
+                  value_id="pose-debug-decoder-illegal-transitions"
+                  value="0"
+                />
+                <.debug_stat
+                  label="Unknown span"
+                  value_id="pose-debug-decoder-max-unknown"
+                  value="0ms"
+                />
+              </div>
+              <p id="pose-debug-decoder-segments" class="text-xs text-base-content/60 break-words">
+                []
+              </p>
+            </div>
+
+            <div class="rounded-[10px] bg-base-100/50 p-3 space-y-3">
+              <div>
+                <p class="text-[10px] uppercase tracking-widest text-base-content/40">
                   Trace recorder
                 </p>
                 <p class="mt-1 text-xs text-base-content/60">

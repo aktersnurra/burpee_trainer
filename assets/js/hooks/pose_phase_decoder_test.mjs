@@ -71,7 +71,12 @@ function frame(tMs, phase, overrides = {}) {
 	}
 
 	if (phase === "unknown") {
-		return { ...base, poseConfidence: 0.05, visibleFraction: 0.08, isOccluded: true };
+		return {
+			...base,
+			poseConfidence: 0.05,
+			visibleFraction: 0.08,
+			isOccluded: true,
+		};
 	}
 
 	return base;
