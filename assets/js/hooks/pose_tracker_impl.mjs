@@ -2,6 +2,7 @@ import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
+import { shouldSamplePose } from "./pose_sampler.mjs";
 
 export function createPoseTracker(hook) {
 	let stream = null;
@@ -12,6 +13,8 @@ export function createPoseTracker(hook) {
 	let startedAt = null;
 	let trackingState = "lost";
 	let mounted = true;
+	let lastPoseMs = -Infinity;
+	let lastFeature = null;
 
 	async function mountedHook() {
 		hook.el.addEventListener("pose-tracker:finish", finish);
@@ -46,12 +49,21 @@ export function createPoseTracker(hook) {
 	async function loop() {
 		if (!mounted || !detector || !video || startedAt == null) return;
 
+		const now = performance.now();
+		if (!shouldSamplePose(now, lastPoseMs)) {
+			raf = requestAnimationFrame(loop);
+			return;
+		}
+		lastPoseMs = now;
+
 		const poses = await detector.estimatePoses(video);
 		const sample = sampleFromPose(
 			poses[0],
-			performance.now() - startedAt,
+			now - startedAt,
 			video,
+			lastFeature,
 		);
+		lastFeature = sample.features;
 
 		if (sample.confidence < 0.5 && trackingState !== "lost") {
 			trackingState = "lost";

@@ -83,7 +83,11 @@ export function poseFromBlazePoseResults(results, video) {
 	};
 }
 
-export function keypointsFromPoseLandmarks(landmarks, video, worldLandmarks = []) {
+export function keypointsFromPoseLandmarks(
+	landmarks,
+	video,
+	worldLandmarks = [],
+) {
 	const width = video.videoWidth || video.width || 1;
 	const height = video.videoHeight || video.height || 1;
 

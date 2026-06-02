@@ -1,3 +1,5 @@
+import { featureFrameFromPose } from "./pose_features.mjs";
+
 const BODY_KEYPOINTS = Object.freeze([
 	"nose",
 	"left_eye",
@@ -14,7 +16,7 @@ const BODY_KEYPOINTS = Object.freeze([
 	"right_ankle",
 ]);
 
-export function sampleFromPose(pose, tMs, video) {
+export function sampleFromPose(pose, tMs, video, prevFeature = null) {
 	const keypoints = pose?.keypoints || [];
 	const points = BODY_KEYPOINTS.map((name) =>
 		findKeypoint(keypoints, name),
@@ -34,6 +36,8 @@ export function sampleFromPose(pose, tMs, video) {
 	const verticalSignal = 1 - meanY / height;
 	const closeness = bodyCloseness(points, width, height);
 
+	const features = featureFrameFromPose(pose, tMs, video, prevFeature);
+
 	return {
 		tMs: Math.max(0, Math.round(tMs)),
 		model: pose?.model || null,
@@ -41,6 +45,7 @@ export function sampleFromPose(pose, tMs, video) {
 		closeness,
 		confidence,
 		keypoints: normalizedKeypoints(keypoints, width, height),
+		features,
 	};
 }
 
@@ -48,7 +53,10 @@ function normalizedKeypoints(keypoints, width, height) {
 	return Object.fromEntries(
 		keypoints
 			.filter((point) => point?.name || point?.part)
-			.map((point) => [point.name || point.part, normalizedKeypoint(point, width, height)]),
+			.map((point) => [
+				point.name || point.part,
+				normalizedKeypoint(point, width, height),
+			]),
 	);
 }
 
@@ -60,7 +68,8 @@ function normalizedKeypoint(point, width, height) {
 		score: round4(point.score ?? 0),
 	};
 
-	if (point.visibility != null) normalized.visibility = round4(point.visibility);
+	if (point.visibility != null)
+		normalized.visibility = round4(point.visibility);
 	if (point.presence != null) normalized.presence = round4(point.presence);
 	if (point.world) {
 		normalized.world_x = round4(point.world.x);

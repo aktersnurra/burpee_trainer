@@ -1,6 +1,7 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
+import { shouldSamplePose } from "./pose_sampler.mjs";
 import { matchTemplateWindow } from "./pose_template_matcher.mjs";
 import {
 	initialTemplateCalibration,
@@ -45,6 +46,8 @@ const PoseDebug = {
 		this.lastDtwUpTMs = null;
 		this.startedAt = null;
 		this.lastFrameAt = null;
+		this.lastPoseAt = -Infinity;
+		this.lastFeature = null;
 		this.raf = null;
 		this.stream = null;
 		this.detector = null;
@@ -85,9 +88,21 @@ const PoseDebug = {
 		if (!this.mountedFlag) return;
 
 		const now = performance.now();
+		if (!shouldSamplePose(now, this.lastPoseAt)) {
+			this.raf = requestAnimationFrame(() => this.loop());
+			return;
+		}
+		this.lastPoseAt = now;
+
 		const poses = await this.detector.estimatePoses(this.video);
 		const pose = poses[0];
-		const sample = sampleFromPose(pose, now - this.startedAt, this.video);
+		const sample = sampleFromPose(
+			pose,
+			now - this.startedAt,
+			this.video,
+			this.lastFeature,
+		);
+		this.lastFeature = sample.features;
 		const result = countRep(this.state, sample);
 		this.state = result.state;
 		this.recordSample(sample);
