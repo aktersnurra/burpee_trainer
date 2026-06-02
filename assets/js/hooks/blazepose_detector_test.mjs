@@ -15,7 +15,9 @@ test("converts BlazePose landmarks to named pixel keypoints", () => {
 	});
 
 	const nose = keypoints.find((point) => point.name === "nose");
-	const leftShoulder = keypoints.find((point) => point.name === "left_shoulder");
+	const leftShoulder = keypoints.find(
+		(point) => point.name === "left_shoulder",
+	);
 	const leftAnkle = keypoints.find((point) => point.name === "left_ankle");
 
 	assert.deepEqual(nose, { name: "nose", x: 0, y: 0, score: 0.9 });

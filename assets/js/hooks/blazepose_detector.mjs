@@ -42,7 +42,9 @@ const LANDMARK_NAMES = Object.freeze([
 
 export async function createBlazePoseDetector() {
 	let latestLandmarks = null;
-	const pose = new Pose({ locateFile: (file) => `${BLAZEPOSE_MODEL_PATH}/${file}` });
+	const pose = new Pose({
+		locateFile: (file) => `${BLAZEPOSE_MODEL_PATH}/${file}`,
+	});
 
 	pose.setOptions({
 		modelComplexity: 1,
@@ -62,7 +64,9 @@ export async function createBlazePoseDetector() {
 			latestLandmarks = null;
 			await pose.send({ image: video });
 			if (!latestLandmarks) return [];
-			return [{ keypoints: keypointsFromPoseLandmarks(latestLandmarks, video) }];
+			return [
+				{ keypoints: keypointsFromPoseLandmarks(latestLandmarks, video) },
+			];
 		},
 		dispose() {
 			pose.close();
