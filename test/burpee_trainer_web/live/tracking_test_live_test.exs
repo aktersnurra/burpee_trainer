@@ -14,6 +14,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLiveTest do
 
     assert html =~ "Tracking Test"
     assert html =~ "Camera + pose overlay"
+    assert html =~ "BlazePose full"
     assert html =~ ~s(id="pose-debug")
     assert html =~ ~s(phx-hook="PoseDebug")
     assert html =~ "DTW calibration"

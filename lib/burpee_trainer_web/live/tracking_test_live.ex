@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
           </p>
           <h1 class="text-3xl font-bold tracking-tight">Camera + pose overlay</h1>
           <p class="text-sm text-base-content/50">
-            Local-only diagnostic view for MoveNet keypoints, up/down signal, and rep counting.
+            Local-only diagnostic view for BlazePose full keypoints, pose features, and rep counting.
           </p>
         </div>
 

@@ -45,6 +45,19 @@ test("small closeness noise emits zero reps", () => {
 	assert.deepEqual(reps, []);
 });
 
+test("moderate closeness sway does not count as a rep", () => {
+	const samples = [
+		{ tMs: 0, signal: 0.15, closeness: 0.52, confidence: 0.9 },
+		{ tMs: 400, signal: 0.15, closeness: 0.66, confidence: 0.9 },
+		{ tMs: 800, signal: 0.14, closeness: 0.82, confidence: 0.9 },
+		{ tMs: 1300, signal: 0.15, closeness: 0.64, confidence: 0.9 },
+		{ tMs: 1800, signal: 0.15, closeness: 0.53, confidence: 0.9 },
+	];
+
+	const { reps } = run(samples);
+	assert.deepEqual(reps, []);
+});
+
 test("refractory suppresses double count", () => {
 	const samples = [
 		{ tMs: 0, signal: 0.15, closeness: 0.52, confidence: 0.9 },

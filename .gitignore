@@ -31,8 +31,9 @@ burpee_trainer-*.tar
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
 
-# Locally cached MoveNet model assets. Populate with scripts/download_movenet.sh.
+# Locally cached pose model assets. Populate with scripts/download_movenet.sh.
 /priv/static/models/movenet/
+/priv/static/models/mediapipe_pose/
 
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log

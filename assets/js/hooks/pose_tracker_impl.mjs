@@ -1,4 +1,4 @@
-import { ensureTfBackend } from "./tf_backend.mjs";
+import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
@@ -28,16 +28,7 @@ export function createPoseTracker(hook) {
 			video.srcObject = stream;
 			await video.play();
 
-			await ensureTfBackend();
-			const poseDetection = await import("@tensorflow-models/pose-detection");
-
-			detector = await poseDetection.createDetector(
-				poseDetection.SupportedModels.MoveNet,
-				{
-					modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-					modelUrl: "/models/movenet/model.json",
-				},
-			);
+			detector = await createBlazePoseDetector();
 
 			if (!mounted) return;
 			startedAt = performance.now();

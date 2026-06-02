@@ -1,4 +1,4 @@
-import { ensureTfBackend } from "./tf_backend.mjs";
+import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { matchTemplateWindow } from "./pose_template_matcher.mjs";
@@ -63,18 +63,8 @@ const PoseDebug = {
 			await this.video.play();
 			this.resizeCanvas();
 
-			this.status("Initializing TFJS");
-			const backend = await ensureTfBackend();
-			const poseDetection = await import("@tensorflow-models/pose-detection");
-
-			this.status(`Loading model (${backend})`);
-			this.detector = await poseDetection.createDetector(
-				poseDetection.SupportedModels.MoveNet,
-				{
-					modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-					modelUrl: "/models/movenet/model.json",
-				},
-			);
+			this.status("Loading BlazePose full");
+			this.detector = await createBlazePoseDetector();
 
 			this.startedAt = performance.now();
 			this.status("Live");
