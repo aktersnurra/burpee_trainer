@@ -11,6 +11,7 @@ import {
 	workoutTimelineFromPlan,
 } from "./session_plan.mjs";
 import { SessionRenderer } from "./session_renderer.mjs";
+import { isPauseToggleKey } from "./session_input.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 
 const CX = 140,
@@ -102,13 +103,22 @@ const SessionHook = {
 			if (workoutReady) this.onWorkoutReady();
 			if (captureTracked) this.onCaptureTracked();
 			if (captureTimed) this.onCaptureTimed();
-			if (
-				ringContainer &&
-				(this.startTime !== null || this.countdownCount !== null)
-			)
-				this.togglePause();
+			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
 		});
+
+		this.el.addEventListener("keydown", (e) => {
+			const ringContainer = e.target.closest("#ring-container");
+			if (!ringContainer || !isPauseToggleKey(e) || !this.canTogglePause())
+				return;
+
+			e.preventDefault();
+			if (!e.repeat) this.togglePause();
+		});
+	},
+
+	canTogglePause() {
+		return this.startTime !== null || this.countdownCount !== null;
 	},
 
 	destroyed() {

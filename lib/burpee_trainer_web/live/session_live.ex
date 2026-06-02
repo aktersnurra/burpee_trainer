@@ -351,90 +351,112 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp session_runner(assigns) do
     ~H"""
-    <div id="session-runner-client" class="relative flex flex-col gap-5" phx-update="ignore">
-      <div
-        id="ring-container"
-        class="relative mx-auto w-[280px] h-[280px] cursor-pointer select-none"
-        style="width: 280px; height: 280px; flex: 0 0 280px;"
-      >
-        <svg
-          id="ring-svg"
-          viewBox="0 0 280 280"
-          class="absolute inset-0 w-[280px] h-[280px]"
-          style="width: 280px; height: 280px;"
+    <div
+      id="session-runner-client"
+      class="relative min-h-[calc(100dvh-8rem)] overflow-hidden rounded-[2px] border border-[#ded8ca] bg-[#f4f0e6] px-6 py-8 text-[#070707]"
+      phx-update="ignore"
+    >
+      <div class="mx-auto flex max-w-[360px] flex-col items-center gap-8">
+        <div
+          id="ring-container"
+          class="group relative mx-auto mt-8 h-[280px] w-[280px] cursor-pointer select-none touch-manipulation"
+          style="flex: 0 0 280px;"
+          role="button"
+          tabindex="0"
+          aria-label="Pause or resume session"
         >
-        </svg>
-
-        <svg
-          viewBox="0 0 280 280"
-          class="absolute inset-0 w-[280px] h-[280px] pointer-events-none"
-          style="width: 280px; height: 280px;"
-        >
-          <circle
-            id="flash-circle"
-            cx="140"
-            cy="140"
-            r="107"
-            fill="none"
-            stroke="white"
-            stroke-width="18"
-            opacity="0"
-            transform="rotate(-90 140 140)"
-          />
-        </svg>
-
-        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span
-            id="count"
-            class="text-[72px] font-light leading-none tracking-[-0.03em] tabular-nums"
-            style="color: #C8D8F0;"
-          >
-            —
-          </span>
-          <span
-            id="down-word"
-            class="absolute text-[28px] font-mono font-medium tracking-[0.12em] uppercase text-white pointer-events-none"
-            style="display: none;"
-          >
-            Down
-          </span>
           <svg
-            id="pause-icon"
-            viewBox="0 0 48 48"
-            fill="currentColor"
-            class="absolute h-16 w-16"
-            style="display: none; color: #C8D8F0; opacity: 0.85;"
+            id="ring-svg"
+            viewBox="0 0 280 280"
+            class="absolute inset-0 h-[280px] w-[280px]"
+            aria-hidden="true"
           >
-            <rect x="10" y="8" width="10" height="32" rx="2" />
-            <rect x="28" y="8" width="10" height="32" rx="2" />
+            <circle
+              id="instrument-face"
+              cx="140"
+              cy="140"
+              r="116"
+              fill="#efe7d6"
+              stroke="#070707"
+              stroke-width="1.5"
+            />
           </svg>
-        </div>
-      </div>
 
-      <div class="flex items-baseline justify-center gap-[6px]">
-        <span
-          id="total-done"
-          class="text-[32px] font-light leading-none tabular-nums"
-          style="color: #C8D8F0; transition: color 0.12s;"
-        >
-          0
-        </span>
-        <span class="text-[16px]" style="color: #2A3A50;">/</span>
-        <span id="total-plan" class="text-[16px]" style="color: #2A3A50;">
-          {@summary.burpee_count_total}
-        </span>
-      </div>
+          <svg
+            viewBox="0 0 280 280"
+            class="pointer-events-none absolute inset-0 h-[280px] w-[280px]"
+            aria-hidden="true"
+          >
+            <circle
+              id="flash-circle"
+              cx="140"
+              cy="140"
+              r="107"
+              fill="none"
+              stroke="#070707"
+              stroke-width="18"
+              opacity="0"
+              transform="rotate(-90 140 140)"
+            />
+          </svg>
 
-      <div class="flex flex-col gap-2">
-        <div class="h-3 w-full overflow-hidden rounded-full bg-base-300">
-          <div
-            id="progress-fill"
-            class="h-full rounded-full transition-none"
-            style="width: 0%; background-color: #222840;"
-          />
+          <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span
+              id="count"
+              class="text-[76px] font-light leading-none tracking-[-0.06em] tabular-nums text-[#070707]"
+            >
+              —
+            </span>
+            <span
+              id="down-word"
+              class="absolute mt-24 text-[18px] font-semibold uppercase tracking-[0.28em] text-[#070707]"
+              style="display: none;"
+            >
+              Down
+            </span>
+            <svg
+              id="pause-icon"
+              viewBox="0 0 48 48"
+              fill="currentColor"
+              class="absolute h-14 w-14 text-[#070707]"
+              style="display: none; opacity: 0.8;"
+              aria-hidden="true"
+            >
+              <rect x="10" y="8" width="10" height="32" rx="2" />
+              <rect x="28" y="8" width="10" height="32" rx="2" />
+            </svg>
+          </div>
         </div>
-        <div class="text-center text-[13px] text-base-content/50">
-          <span id="time-left">{Fmt.duration_sec(round(@summary.duration_sec_total))}</span>
+
+        <div id="set-glyphs" class="min-h-6 w-full" aria-label="Workout sets"></div>
+
+        <div class="grid w-full grid-cols-3 gap-3 text-center">
+          <div class="border-t border-[#070707] pt-3">
+            <div id="total-done" class="text-3xl font-light tabular-nums leading-none">0</div>
+            <div class="mt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#070707]/55">
+              Done
+            </div>
+          </div>
+          <div class="border-t border-[#070707] pt-3">
+            <div id="total-plan" class="text-3xl font-light tabular-nums leading-none">
+              {@summary.burpee_count_total}
+            </div>
+            <div class="mt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#070707]/55">
+              Plan
+            </div>
+          </div>
+          <div class="border-t border-[#070707] pt-3">
+            <div id="time-left" class="text-3xl font-light tabular-nums leading-none">
+              {Fmt.duration_sec(round(@summary.duration_sec_total))}
+            </div>
+            <div class="mt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#070707]/55">
+              Left
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden" aria-hidden="true">
+          <div id="progress-fill" style="width: 0%;"></div>
         </div>
       </div>
 

@@ -137,17 +137,23 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute html =~ "How do you feel?"
   end
 
-  test "runner keeps client-owned fixed ring box and thicker progress bar", %{
-    conn: conn,
-    user: user
-  } do
+  test "runner renders warm-paper instrument shell", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     assert has_element?(view, "#session-runner-client[phx-update=ignore]")
-    assert has_element?(view, "#ring-container.w-\\[280px\\].h-\\[280px\\]")
-    assert has_element?(view, "svg#ring-svg.w-\\[280px\\].h-\\[280px\\]")
-    assert has_element?(view, ".h-3 #progress-fill")
+    assert has_element?(view, "#ring-container[aria-label='Pause or resume session']")
+    assert has_element?(view, "svg#ring-svg")
+    assert has_element?(view, "#set-glyphs[aria-label='Workout sets']")
+    assert has_element?(view, "#total-done")
+    assert has_element?(view, "#total-plan")
+    assert has_element?(view, "#time-left")
+
+    html = render(view)
+    refute html =~ "REPS LEFT"
+    refute html =~ "RUNNING"
+    refute html =~ "BEAT"
+    refute html =~ "BLOCKS"
   end
 
   test "session_complete transitions to done and shows completion form", %{conn: conn, user: user} do
