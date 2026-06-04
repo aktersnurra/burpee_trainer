@@ -1,5 +1,8 @@
 <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
-  <div class="space-y-5 pb-20">
+  <div
+    data-stats-page
+    class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]"
+  >
     <.at_risk_banner status={@level_status} />
     <.streak_card
       streak={@streak}
@@ -26,11 +29,12 @@
   </div>
 
   <%!-- FAB --%>
-  <div class="fixed bottom-20 right-4 sm:bottom-8 sm:right-6 z-40">
+  <div class="fixed bottom-28 right-4 sm:bottom-8 sm:right-6 z-40">
     <button
       type="button"
       phx-click="open_log_modal"
-      class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-[#4A9EFF] flex items-center justify-center hover:bg-base-border transition"
+      id="stats-log-button"
+      class="size-12 border border-[var(--session-ink)] bg-[var(--session-bg)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
       aria-label="Log session"
     >
       <.icon name="hero-plus" class="size-5" />
@@ -52,7 +56,7 @@
       />
       <div
         id="log-modal-sheet"
-        class="relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl"
+        class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-bg)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
       >
         <.live_component
           module={BurpeeTrainerWeb.LogFormComponent}
@@ -77,7 +81,7 @@
         class="absolute inset-0 bg-black/60"
       >
       </button>
-      <div class="relative w-full sm:max-w-md bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-6">
+      <div class="session-surface relative w-full sm:max-w-md bg-[var(--session-bg)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-6">
         <.live_component
           module={BurpeeTrainerWeb.GoalFormComponent}
           id="goal-form"

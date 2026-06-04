@@ -108,6 +108,14 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       refute render(view) =~ "Load more"
     end
 
+    test "uses session surface visual system", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stats")
+
+      assert has_element?(view, "[data-stats-page].session-surface")
+      assert has_element?(view, "#stats-log-button")
+      assert render(view) =~ "text-[var(--session-ink)]"
+    end
+
     test "FAB opens log modal", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stats")
       view |> element("button[phx-click='open_log_modal']") |> render_click()

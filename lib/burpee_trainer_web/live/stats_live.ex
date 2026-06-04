@@ -151,15 +151,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
     ~H"""
     <div
       :if={@status.at_risk?}
-      class="rounded-[10px] bg-base-300 p-4 flex items-start gap-3"
-      style="border: 1px solid #4A9EFF;"
+      class="border border-[var(--session-border)] bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
     >
-      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-primary" />
+      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-[var(--session-ink)]" />
       <div class="space-y-0.5">
-        <p class="text-sm font-semibold text-base-content/80">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">
           Level {level_label(@status.level)} expires in {@status.days_left}d
         </p>
-        <p class="text-xs text-base-content/50">
+        <p class="text-xs text-[var(--session-muted)]">
           Do a six-count and a navy seal landmark this week to keep it.
         </p>
       </div>
@@ -179,23 +178,23 @@ defmodule BurpeeTrainerWeb.StatsLive do
     assigns = assign(assigns, :week_days, Enum.map(0..6, &Date.add(week_start, &1)))
 
     ~H"""
-    <div class="rounded-[10px] bg-base-300 p-5 space-y-4">
+    <div class="border border-[var(--session-border)] bg-[var(--session-bg)] px-5 py-5 space-y-5">
       <div class="flex items-end justify-between">
         <div class="tabular-nums leading-none">
           <div class="flex items-baseline gap-2">
-            <span class="text-8xl font-bold tracking-tight">
+            <span class="text-7xl font-semibold tracking-[-0.05em] text-[var(--session-ink)]">
               {trunc(@streak.current_week_minutes)}
             </span>
-            <span class="text-base-content/50 text-base">/ 80 min</span>
+            <span class="text-[var(--session-muted)] text-base">/ 80 min</span>
           </div>
         </div>
         <div class="text-right space-y-1 pb-1">
           <%= if @current_level do %>
-            <p class="text-xs font-semibold text-base-content/40">
-              Level <span class="text-base-content/70">{level_label(@current_level)}</span>
+            <p class="text-xs font-semibold text-[var(--session-muted)]">
+              Level <span>{level_label(@current_level)}</span>
             </p>
           <% end %>
-          <div class="text-sm text-base-content/60">
+          <div class="text-sm text-[var(--session-muted)]">
             <%= if @streak.streak_weeks == 0 do %>
               No active streak
             <% else %>
@@ -205,13 +204,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
         </div>
       </div>
 
-      <div class="h-3 rounded-full bg-base-border overflow-hidden">
+      <div class="h-3 rounded-full bg-[var(--session-track)] overflow-hidden">
         <div
           class={[
-            "h-full rounded-full transition-all duration-500",
-            @streak.current_week_minutes >= 80 && "bg-primary",
-            @streak.current_week_minutes < 80 && @streak.on_pace? && "bg-primary/70",
-            !@streak.on_pace? && "bg-primary/30"
+            "h-full rounded-full bg-[var(--session-ink)] transition-all duration-500",
+            @streak.current_week_minutes < 80 && @streak.on_pace? && "opacity-70",
+            !@streak.on_pace? && "opacity-30"
           ]}
           style={"width: #{max(min(@streak.current_week_minutes / 80 * 100, 100), if(@streak.current_week_minutes > 0, do: 2, else: 0))}%"}
         />
@@ -222,41 +220,42 @@ defmodule BurpeeTrainerWeb.StatsLive do
           <div class="flex flex-col items-center gap-1">
             <span class={[
               "text-[10px] font-medium",
-              day == @today && "text-primary",
-              day != @today && "text-base-content/50"
+              day == @today && "text-[var(--session-ink)]",
+              day != @today && "text-[var(--session-muted)]"
             ]}>
               {Calendar.strftime(day, "%a") |> String.slice(0, 1)}
             </span>
             <div class={[
               "rounded-full",
-              day in @streak.days_active_this_week && "w-4 h-4 bg-primary",
+              day in @streak.days_active_this_week && "w-4 h-4 bg-[var(--session-ink)]",
               day == @today && day not in @streak.days_active_this_week &&
-                "w-4 h-4 ring-2 ring-primary ring-offset-2 ring-offset-base-300 bg-transparent",
-              day > @today && "w-3 h-3 bg-base-border",
-              day < @today && day not in @streak.days_active_this_week && "w-3 h-3 bg-base-border"
+                "w-4 h-4 ring-2 ring-[var(--session-muted)] ring-offset-2 ring-offset-[var(--session-bg)] bg-transparent",
+              day > @today && "w-3 h-3 bg-[var(--session-track)]",
+              day < @today && day not in @streak.days_active_this_week &&
+                "w-3 h-3 bg-[var(--session-track)]"
             ]} />
           </div>
         <% end %>
       </div>
 
-      <div class="flex items-center justify-between border-t border-base-border pt-3">
+      <div class="flex items-center justify-between border-t border-[var(--session-border)] pt-3">
         <div class="flex items-baseline gap-1.5 tabular-nums">
-          <span class="text-lg font-bold" style="color: #4A9EFF;">{@week_pushups}</span>
-          <span class="text-xs text-base-content/40">push-ups this week</span>
-          <span :if={@best_week_pushups > 0} class="text-xs text-base-content/30">
+          <span class="text-lg font-bold text-[var(--session-ink)]">{@week_pushups}</span>
+          <span class="text-xs text-[var(--session-muted)]">push-ups this week</span>
+          <span :if={@best_week_pushups > 0} class="text-xs text-[var(--session-muted)]">
             · best {@best_week_pushups}
           </span>
         </div>
         <span
           :if={@week_balanced}
-          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium shrink-0"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--session-track)] text-[var(--session-ink)] text-[10px] font-medium shrink-0"
         >
           <.icon name="hero-scale" class="size-2.5" /> Balanced
         </span>
       </div>
 
       <%= if @streak.streak_weeks == 0 && @streak.previous_best_weeks > 0 do %>
-        <p class="text-xs text-base-content/30">
+        <p class="text-xs text-[var(--session-muted)]">
           Previous best: {@streak.previous_best_weeks} weeks
         </p>
       <% end %>
