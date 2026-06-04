@@ -80,15 +80,14 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       current_level={@current_level}
       current_page={:home}
     >
-      <div class="space-y-8 max-w-lg mx-auto">
+      <div class="mx-auto max-w-lg space-y-7 pb-20 text-[var(--session-ink)]">
         <div
           :if={@level_status.at_risk?}
-          class="rounded-[10px] bg-base-300 p-4 flex items-start gap-3"
-          style="border: 1px solid #4A9EFF;"
+          class="border border-[var(--session-border)] bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
         >
-          <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-primary" />
-          <p class="text-sm text-base-content/80">
-            <span class="font-semibold">
+          <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-[var(--session-ink)]" />
+          <p class="text-sm text-[var(--session-muted)]">
+            <span class="font-semibold text-[var(--session-ink)]">
               Level {level_label(@level_status.level)} expires in {@level_status.days_left}d
             </span>
             — train both burpee types this week to keep it.
@@ -110,7 +109,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           <button
             type="button"
             phx-click="open_log_modal"
-            class="text-sm text-base-content/30 hover:text-base-content/60 transition"
+            class="text-sm text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
           >
             + Log a past session
           </button>
@@ -131,7 +130,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           />
           <div
             id="home-log-modal-sheet"
-            class="relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-base-nav border border-base-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl"
+            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-bg)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
           >
             <.live_component
               module={LogFormComponent}
@@ -188,37 +187,33 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       )
 
     ~H"""
-    <div class="space-y-3 px-1">
+    <div class="space-y-3 border-b border-[var(--session-border)] px-1 pb-5">
       <div class="flex items-end justify-between gap-4">
         <div class="space-y-1">
           <div class="flex items-baseline gap-1.5">
-            <span class={[
-              "text-4xl font-bold leading-none tabular-nums",
-              @this_week.met_goal && "text-primary",
-              !@this_week.met_goal && "text-base-content"
-            ]}>
+            <span class="text-5xl font-semibold leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]">
               {@min_done}
             </span>
-            <span class="text-sm text-base-content/40">/ {@goal} min</span>
+            <span class="text-sm text-[var(--session-muted)]">/ {@goal} min</span>
           </div>
         </div>
         <div class="pb-1 text-right space-y-0.5">
-          <p class="text-xs text-base-content/45 tabular-nums">
+          <p class="text-xs text-[var(--session-muted)] tabular-nums">
             <%= if @session_count == 1 do %>
               1 session
             <% else %>
               {@session_count} sessions
             <% end %>
           </p>
-          <p :if={@week_pushups > 0} class="text-xs tabular-nums" style="color: #4A9EFF;">
+          <p :if={@week_pushups > 0} class="text-xs text-[var(--session-muted)] tabular-nums">
             {@week_pushups} push-ups
           </p>
         </div>
       </div>
 
-      <div class="h-1 w-full rounded-full bg-base-border">
+      <div class="h-1 w-full bg-[var(--session-track)]">
         <div
-          class="h-1 rounded-full bg-primary transition-all duration-500"
+          class="h-1 bg-[var(--session-ink)] transition-all duration-500"
           style={"width: #{@pct}%"}
           aria-label={"#{@min_done} of #{@goal} minutes"}
         />
@@ -231,10 +226,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
               data-week-rhythm-segment
               aria-label={segment.aria_label}
               class={[
-                "h-1 rounded-full transition-colors",
-                segment.trained && "bg-primary",
-                !segment.trained && segment.is_today && "bg-base-content/25",
-                !segment.trained && !segment.is_today && "bg-base-border"
+                "h-1 transition-colors",
+                segment.trained && "bg-[var(--session-ink)]",
+                !segment.trained && segment.is_today && "bg-[var(--session-muted)]",
+                !segment.trained && !segment.is_today && "bg-[var(--session-track)]"
               ]}
             />
           <% end %>
@@ -243,9 +238,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           <%= for segment <- @rhythm_segments do %>
             <span class={[
               "text-[10px] font-medium uppercase leading-none",
-              segment.is_today && "text-base-content/70",
-              !segment.is_today && segment.trained && "text-primary/80",
-              !segment.is_today && !segment.trained && "text-base-content/25"
+              segment.is_today && "text-[var(--session-ink)]",
+              !segment.is_today && segment.trained && "text-[var(--session-ink)]",
+              !segment.is_today && !segment.trained && "text-[var(--session-muted)]"
             ]}>
               {segment.label}
             </span>
@@ -262,16 +257,18 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="rounded-[10px] bg-base-300 p-6 space-y-5"
+      class="border border-[var(--session-border)] bg-[var(--session-bg)] px-5 py-5 space-y-5"
     >
       <div class="space-y-1">
-        <p class="text-xl font-bold leading-snug">Create a plan to begin</p>
-        <p class="text-sm text-base-content/40">Set your burpee type, reps, and duration</p>
+        <p class="text-xl font-semibold leading-snug tracking-[-0.02em] text-[var(--session-ink)]">
+          Create a plan to begin
+        </p>
+        <p class="text-sm text-[var(--session-muted)]">Set your burpee type, reps, and duration</p>
       </div>
       <div class="flex justify-center">
         <.link
           navigate={~p"/workouts/new"}
-          class="w-12 h-12 rounded-full bg-base-raised border border-base-border text-primary flex items-center justify-center hover:bg-base-border transition"
+          class="size-12 border border-[var(--session-ink)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
           aria-label="Create a plan"
         >
           <.icon name="hero-plus" class="size-5" />
@@ -280,7 +277,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       <div class="text-center">
         <.link
           navigate={~p"/workouts"}
-          class="text-sm text-base-content/50 hover:text-base-content/80 transition underline-offset-2 hover:underline"
+          class="text-sm text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
         >
           Browse workouts →
         </.link>
@@ -294,28 +291,33 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     assigns = assign(assigns, :type_label, type_label)
 
     ~H"""
-    <div id="home-workout-card" class="rounded-[10px] bg-base-300 px-5 py-4">
+    <div
+      id="home-workout-card"
+      class="border border-[var(--session-border)] bg-[var(--session-bg)] px-5 py-4"
+    >
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0 space-y-0.5">
-          <p class="text-base font-semibold leading-snug truncate">{@last_plan.name}</p>
-          <p class="text-sm text-base-content/40 tabular-nums">
+          <p class="text-base font-semibold leading-snug truncate text-[var(--session-ink)]">
+            {@last_plan.name}
+          </p>
+          <p class="text-sm text-[var(--session-muted)] tabular-nums">
             {@last_plan.burpee_count_target} {@type_label}
-            <span class="text-base-content/20"> · </span>
+            <span class="text-[var(--session-muted)]"> · </span>
             {@last_plan.target_duration_min} min
           </p>
         </div>
         <.link
           navigate={~p"/session/#{@last_plan.id}"}
-          class="w-11 h-11 shrink-0 rounded-full bg-base-raised border border-base-border text-primary flex items-center justify-center hover:bg-base-border transition"
+          class="size-11 shrink-0 border border-[var(--session-ink)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
           aria-label="Start workout"
         >
           <.icon name="hero-play" class="size-4" />
         </.link>
       </div>
-      <div class="mt-3 pt-3 border-t border-base-border">
+      <div class="mt-3 pt-3 border-t border-[var(--session-border)]">
         <.link
           navigate={~p"/workouts"}
-          class="text-xs text-base-content/35 hover:text-base-content/60 transition"
+          class="text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
         >
           Pick another workout →
         </.link>
@@ -344,20 +346,20 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       data-home-coach-suggestion
-      class="rounded-[10px] border border-primary/20 bg-primary/5 px-4 py-3 flex items-center gap-3"
+      class="border border-[var(--session-border)] bg-[var(--session-track)]/25 px-4 py-3 flex items-center gap-3"
     >
       <div class="flex-1 min-w-0">
-        <span class="text-xs text-primary/70 font-medium uppercase tracking-wide">
+        <span class="text-xs text-[var(--session-muted)] font-medium uppercase tracking-[0.12em]">
           Coach · {@type_label}
         </span>
-        <span class="text-xs text-base-content/50 mx-1.5">·</span>
-        <span class="text-xs font-semibold text-base-content">{@dimension_label}</span>
-        <span class="text-xs text-base-content/40 mx-1">—</span>
-        <span class="text-xs text-base-content/50 truncate">{@suggestion.rationale}</span>
+        <span class="text-xs text-[var(--session-muted)] mx-1.5">·</span>
+        <span class="text-xs font-semibold text-[var(--session-ink)]">{@dimension_label}</span>
+        <span class="text-xs text-[var(--session-muted)] mx-1">—</span>
+        <span class="text-xs text-[var(--session-muted)] truncate">{@suggestion.rationale}</span>
       </div>
       <.link
         navigate={"/workouts/new?count=#{@suggestion.burpee_count}&pace=#{@suggestion.sec_per_burpee}&rest=#{@suggestion.rest_sec}"}
-        class="shrink-0 text-sm text-primary hover:text-primary/80 transition font-medium whitespace-nowrap"
+        class="shrink-0 text-sm text-[var(--session-ink)] hover:text-[var(--session-muted)] transition font-medium whitespace-nowrap"
       >
         Try it →
       </.link>

@@ -16,6 +16,17 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     assert html =~ "Workouts"
   end
 
+  test "GET / uses session surface visual system", %{conn: conn} do
+    user = user_fixture(%{"username" => "home_surface_user"})
+    conn = conn |> init_test_session(%{user_id: user.id}) |> get(~p"/")
+    html = html_response(conn, 200)
+
+    assert html =~ "session-surface"
+    assert html =~ "text-[var(--session-ink)]"
+    assert html =~ ~s(id="home-workout-card")
+    assert html =~ ~s(id="home-week-rhythm")
+  end
+
   test "GET / puts the workout card before coach suggestions", %{conn: conn} do
     user = user_fixture(%{"username" => "home_order_user"})
     plan = plan_fixture(user, %{"name" => "Resume Plan"})
