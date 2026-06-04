@@ -11,13 +11,12 @@ import {
 	workoutTimelineFromPlan,
 } from "./session_plan.mjs";
 import { SessionRenderer } from "./session_renderer.mjs";
+import { isPauseToggleKey } from "./session_input.mjs";
+import {
+	countdownDisplayModel,
+	runningDisplayModel,
+} from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
-
-const CX = 140,
-	CY = 140,
-	R = 107;
-const CIRC = 2 * Math.PI * R;
-const NS = "http://www.w3.org/2000/svg";
 
 const SessionHook = {
 	mounted() {
@@ -35,13 +34,19 @@ const SessionHook = {
 		this.countdownPaused = false;
 		this.countdownCount = null;
 		this.countdownTimeoutId = null;
+		this.countdownRafId = null;
+		this.countdownStartedAt = null;
+		this.countdownElapsedMs = 0;
+		this.renderCountdownFrame = null;
 		this.countdownStepStarted = null;
 		this.countdownStepElapsed = 0;
 
 		this.doneReps = 0;
+		this.lastDownCueKey = null;
 		this.countdownRingEl = null;
 		this.hiddenAt = null;
 		this.blockCount = 0;
+		this.setGlyphBlocks = [];
 
 		this.onVisibility = () => {
 			if (document.visibilityState === "hidden") {
@@ -81,6 +86,7 @@ const SessionHook = {
 
 		this.handleEvent("session_ready", ({ plan }) => {
 			this.plan = plan;
+			this.renderer.resetReady();
 			this.dispatchFlow({
 				type: "SESSION_READY",
 				workoutTimeline: workoutTimelineFromPlan(plan),
@@ -102,17 +108,27 @@ const SessionHook = {
 			if (workoutReady) this.onWorkoutReady();
 			if (captureTracked) this.onCaptureTracked();
 			if (captureTimed) this.onCaptureTimed();
-			if (
-				ringContainer &&
-				(this.startTime !== null || this.countdownCount !== null)
-			)
-				this.togglePause();
+			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
 		});
+
+		this.el.addEventListener("keydown", (e) => {
+			const ringContainer = e.target.closest("#ring-container");
+			if (!ringContainer || !isPauseToggleKey(e) || !this.canTogglePause())
+				return;
+
+			e.preventDefault();
+			if (!e.repeat) this.togglePause();
+		});
+	},
+
+	canTogglePause() {
+		return this.startTime !== null || this.countdownCount !== null;
 	},
 
 	destroyed() {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
+		if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
 		if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
 		this.renderer.clearTimers();
 		this.audio.stop();
@@ -202,14 +218,8 @@ const SessionHook = {
 			case "updateVisibleRepGoal":
 				this.renderer.updateTotalGoal(command.burpeeCountTarget);
 				break;
-			case "renderProgressBar":
-				this.renderer.renderProgressBar(command.percent, command.color);
-				break;
 			case "renderTimer":
 				this.renderer.renderTimer(command.timeLeftSec);
-				break;
-			case "renderBlockLabel":
-				this.renderer.renderBlockLabel(command.label);
 				break;
 			case "enterWorkPhase":
 				this.renderer.enterWorkPhase();
@@ -227,11 +237,7 @@ const SessionHook = {
 				this.renderer.enterRestPhase();
 				break;
 			case "renderRestProgress":
-				this.renderer.renderRestProgress(
-					command.progress,
-					command.color,
-					command.timeLeftSec,
-				);
+				this.renderer.renderRestProgress(command.timeLeftSec);
 				break;
 			case "scheduleAnimationFrame":
 			case "startAnimationFrame":
@@ -254,6 +260,7 @@ const SessionHook = {
 	showWarmupPrompt() {},
 
 	showCapturePrompt() {
+		this.renderer.resetReady();
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.rafId = null;
 		this.audio.stop();
@@ -270,28 +277,29 @@ const SessionHook = {
 		}
 
 		overlay.className =
-			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-lg bg-base-100/95 text-center backdrop-blur-sm";
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] text-center text-[var(--session-ink)]";
 		overlay.replaceChildren();
 
 		const title = document.createElement("span");
-		title.className = "text-xl font-semibold tracking-tight";
+		title.className =
+			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
 		title.textContent = "Track with camera?";
 
 		const buttons = document.createElement("div");
-		buttons.className = "flex gap-3";
+		buttons.className = "flex gap-2";
 
 		const yes = document.createElement("button");
 		yes.type = "button";
 		yes.id = "capture-tracked-btn";
 		yes.className =
-			"rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-content transition active:scale-[0.97]";
+			"min-w-24 border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.98]";
 		yes.textContent = "Yes";
 
 		const no = document.createElement("button");
 		no.type = "button";
 		no.id = "capture-timed-btn";
 		no.className =
-			"rounded-xl bg-base-300 px-6 py-3 text-sm font-semibold text-base-content transition active:scale-[0.97]";
+			"min-w-24 border border-[var(--session-border)] px-6 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-soft-muted)] transition active:scale-[0.98]";
 		no.textContent = "No";
 
 		buttons.append(yes, no);
@@ -300,6 +308,7 @@ const SessionHook = {
 	},
 
 	showWarmupDonePrompt() {
+		this.renderer.resetReady();
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.rafId = null;
 		this.audio.stop();
@@ -316,15 +325,16 @@ const SessionHook = {
 		}
 
 		overlay.className =
-			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-base-100/95 p-6 text-center shadow-2xl backdrop-blur-sm";
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-[var(--session-bg)] p-6 text-center text-[var(--session-ink)]";
 		overlay.replaceChildren();
 
 		const title = document.createElement("span");
-		title.className = "text-xl font-semibold tracking-tight";
+		title.className =
+			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
 		title.textContent = "Warmup complete";
 
 		const description = document.createElement("p");
-		description.className = "max-w-xs text-sm text-base-content/60";
+		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
 		description.textContent =
 			"Take a breath. Start the workout when you're ready.";
 
@@ -332,7 +342,7 @@ const SessionHook = {
 		button.type = "button";
 		button.id = "workout-ready-btn";
 		button.className =
-			"rounded-xl bg-primary px-8 py-4 text-sm font-semibold text-primary-content transition active:scale-[0.97] hover:brightness-110";
+			"border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.98]";
 		button.textContent = "Start workout";
 
 		overlay.append(title, description, button);
@@ -366,12 +376,6 @@ const SessionHook = {
 		this.onWorkoutReady();
 	},
 
-	countdownColor(n) {
-		return (
-			["#EF4444", "#F97316", "#F97316", "#F59E0B", "#F59E0B"][n] || "#F59E0B"
-		);
-	},
-
 	startCountdown() {
 		this.audio.ensureRunning();
 		this.wakeLock.acquire();
@@ -379,57 +383,71 @@ const SessionHook = {
 		const overlay = this.el.querySelector("#start-overlay");
 		if (overlay) overlay.remove();
 
-		const svgEl = this.el.querySelector("#ring-svg");
-		if (svgEl) {
-			while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-			const cdRing = document.createElementNS(NS, "circle");
-			cdRing.setAttribute("cx", CX);
-			cdRing.setAttribute("cy", CY);
-			cdRing.setAttribute("r", R);
-			cdRing.setAttribute("fill", "none");
-			cdRing.setAttribute("stroke-width", "16");
-			cdRing.setAttribute("stroke-linecap", "round");
-			cdRing.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
-			cdRing.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-			cdRing.setAttribute("stroke-dashoffset", "0");
-			cdRing.setAttribute("stroke", this.countdownColor(5));
-			svgEl.appendChild(cdRing);
-			this.countdownRingEl = cdRing;
-		}
+		const renderCountdown = (value, progress, pop) => {
+			const segmentPreview = runningDisplayModel({
+				segment: this.activeSegment,
+				plan: this.plan,
+				timeline: this.timeline,
+				frame: this.timeline[0]
+					? {
+							index: 0,
+							phase_elapsed: 0,
+							phase_remaining: this.timeline[0].duration_sec || 0,
+							event: this.timeline[0],
+						}
+					: null,
+				timeLeftSec: this.segment.clock.totalDurationSec,
+				totalDone: this.segment.reps.burpeeCountDone,
+				totalTarget: this.segment.reps.burpeeCountTarget,
+			});
+			const model = countdownDisplayModel({
+				value,
+				total: 5,
+				setGlyphs: segmentPreview.setGlyphs,
+				totalDone: segmentPreview.totalDone,
+				totalTarget: segmentPreview.totalTarget,
+				timeLeftSec: segmentPreview.timeLeftSec,
+			});
+			model.ring.progress = progress;
+			this.renderer.renderDisplayModel(model);
 
-		const countEl = this.el.querySelector("#count");
-		if (countEl) countEl.style.visibility = "";
-
-		const showCount = (value, animate) => {
-			const color = this.countdownColor(value);
-
-			if (countEl) {
-				countEl.textContent = value;
-				countEl.style.color = color;
+			const countEl = this.el.querySelector("#count");
+			if (pop && countEl) {
 				countEl.classList.remove("countdown-pop");
 				void countEl.offsetWidth;
 				countEl.classList.add("countdown-pop");
 			}
-
-			if (this.countdownRingEl) {
-				const remaining = value / 5;
-				this.countdownRingEl.style.transition = animate
-					? "stroke-dashoffset 0.8s ease-out, stroke 0.3s"
-					: "none";
-				this.countdownRingEl.setAttribute("stroke-dasharray", CIRC.toFixed(4));
-				this.countdownRingEl.setAttribute(
-					"stroke-dashoffset",
-					(CIRC * (1 - remaining)).toFixed(4),
-				);
-				this.countdownRingEl.setAttribute("stroke", color);
-			}
 		};
 
-		this.countdownShowCount = showCount;
+		this.renderCountdownFrame = renderCountdown;
+		this.countdownShowCount = (value, _animate) => {
+			const elapsedMs = this.countdownStartedAt
+				? performance.now() - this.countdownStartedAt
+				: 0;
+			renderCountdown(value, Math.min(Math.max(elapsedMs / 5000, 0), 1), true);
+		};
 		this.countdownCount = 5;
-		showCount(5, false);
+		this.countdownStartedAt = performance.now();
+		this.renderCountdownContinuously(renderCountdown);
+		this.countdownShowCount(5, false);
 		this.audio.playLeadBeep();
 		this.scheduleCountdownTick(4);
+	},
+
+	renderCountdownContinuously(renderCountdown) {
+		const draw = () => {
+			if (this.countdownCount === null || this.countdownPaused) return;
+			const elapsedMs = this.countdownStartedAt
+				? performance.now() - this.countdownStartedAt
+				: 0;
+			renderCountdown(
+				this.countdownCount,
+				Math.min(Math.max(elapsedMs / 5000, 0), 1),
+				false,
+			);
+			this.countdownRafId = requestAnimationFrame(draw);
+		};
+		this.countdownRafId = requestAnimationFrame(draw);
 	},
 
 	scheduleCountdownTick(n, delayMs = 1000) {
@@ -446,11 +464,16 @@ const SessionHook = {
 
 	clearCountdown() {
 		this.countdownCount = null;
+		if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
+		this.countdownRafId = null;
+		this.countdownStartedAt = null;
+		this.countdownElapsedMs = 0;
+		this.renderCountdownFrame = null;
 		this.countdownTimeoutId = null;
 		this.countdownStepStarted = null;
 		const countEl = this.el.querySelector("#count");
 		if (countEl) {
-			countEl.style.color = "#C8D8F0";
+			countEl.style.color = "";
 			countEl.textContent = "—";
 		}
 	},
@@ -471,21 +494,12 @@ const SessionHook = {
 		}
 
 		this.countdownRingEl = null;
-		const firstEvent = this.timeline[0];
-		const isFirstWork =
-			firstEvent &&
-			(firstEvent.type === "work_burpee" ||
-				firstEvent.type === "warmup_burpee");
-		if (isFirstWork) {
-			this.renderer.buildWorkRing();
-			this.renderer.triggerDown(firstEvent.burpee_count);
-		}
-
 		this.startTime = this.segment.clock.startTime;
 	},
 
 	startSegment({ segment, timeline, blockCount, burpeeCountTarget }) {
 		this.activeSegment = segment;
+		this.lastDownCueKey = null;
 		this.segment = initialSegmentState();
 		this.dispatchSegment({
 			type: "SEGMENT_READY",
@@ -497,6 +511,8 @@ const SessionHook = {
 	},
 
 	tick() {
+		this.rafId = null;
+		if (this.paused || this.startTime === null) return;
 		const now = performance.now();
 		const elapsed = (now - this.startTime) / 1000;
 		this.dispatchSegment({ type: "TICK", elapsedSec: elapsed });
@@ -507,15 +523,43 @@ const SessionHook = {
 
 		this.dispatchSegment({ type: "ACCOUNT_REPS", frame });
 		this.syncRepStateFromSegment();
-		this.dispatchSegment({
-			type: "DISPLAY_FRAME",
+
+		const totalDurationSec = this.segment.clock.totalDurationSec;
+		const model = runningDisplayModel({
+			segment: this.activeSegment,
+			plan: this.plan,
+			timeline: this.timeline,
 			frame,
-			elapsedSec: elapsed,
-			totalDurationSec: this.segment.clock.totalDurationSec,
-			blockCount: this.blockCount,
+			timeLeftSec: Math.max(totalDurationSec - elapsed, 0),
+			totalDone: this.segment.reps.burpeeCountDone,
+			totalTarget: this.segment.reps.burpeeCountTarget,
 			doneInEvent: this.doneReps,
 		});
+		this.renderer.renderDisplayModel(model);
+		this.triggerDownCueForFrame(frame, model.primaryCount);
+
 		this.dispatchSegment({ type: "BEEP_FRAME", frame });
+	},
+
+	triggerDownCueForFrame(frame, remainingReps) {
+		const event = frame?.event;
+		if (event?.phase !== "work") {
+			this.lastDownCueKey = null;
+			return;
+		}
+
+		const secondsPerRep =
+			event.sec_per_rep ||
+			event.sec_per_burpee ||
+			event.duration_sec / (event.burpee_count || 1);
+		if (!secondsPerRep || secondsPerRep <= 0) return;
+
+		const repIndex = Math.floor((frame.phase_elapsed || 0) / secondsPerRep);
+		const cueKey = `${this.activeSegment}:${frame.index}:${repIndex}`;
+		if (cueKey === this.lastDownCueKey) return;
+
+		this.lastDownCueKey = cueKey;
+		this.renderer.triggerDown(remainingReps);
 	},
 
 	togglePause() {
@@ -542,6 +586,11 @@ const SessionHook = {
 			this.countdownTimeoutId = null;
 		}
 		this.countdownStepElapsed = this.segment.countdown.stepElapsedMs;
+		this.countdownElapsedMs = this.countdownStartedAt
+			? performance.now() - this.countdownStartedAt
+			: 0;
+		if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
+		this.countdownRafId = null;
 		this.audio.stop();
 		this.renderer.updatePauseButton(true);
 	},
@@ -554,7 +603,12 @@ const SessionHook = {
 		const n = this.countdownCount;
 		if (n === null) return;
 
+		this.countdownStartedAt =
+			performance.now() - (this.countdownElapsedMs || 0);
 		this.countdownShowCount(n, false);
+		if (this.renderCountdownFrame) {
+			this.renderCountdownContinuously(this.renderCountdownFrame);
+		}
 		const remaining = Math.max(1000 - (this.countdownStepElapsed || 0), 0);
 		this.scheduleCountdownTick(n - 1, remaining);
 	},
@@ -564,6 +618,7 @@ const SessionHook = {
 		this.dispatchSegment({ type: "PAUSE", now: performance.now() });
 		this.paused = true;
 		if (this.rafId) cancelAnimationFrame(this.rafId);
+		this.rafId = null;
 		this.audio.stop();
 		this.renderer.updatePauseButton(true);
 	},
@@ -574,7 +629,7 @@ const SessionHook = {
 		this.startTime = this.segment.clock.startTime;
 		this.paused = false;
 		this.hiddenAt = null;
-		this.rafId = requestAnimationFrame(() => this.tick());
+		if (!this.rafId) this.rafId = requestAnimationFrame(() => this.tick());
 		this.renderer.updatePauseButton(false);
 	},
 

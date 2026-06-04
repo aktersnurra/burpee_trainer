@@ -33,8 +33,8 @@ const plan = {
 
 const warmup = warmupTimelineFromPlan(plan);
 assert.deepEqual(
-	warmup.map((event) => event.type),
-	["warmup_burpee", "warmup_rest", "warmup_burpee", "warmup_rest"],
+	warmup.map((event) => event.phase),
+	["work", "rest", "work", "rest"],
 );
 assert.equal(timelineBurpeeCount(warmup), 20);
 assert.equal(warmup[0].duration_sec, 55);
@@ -42,8 +42,8 @@ assert.equal(warmup[2].duration_sec, 55);
 
 const workout = workoutTimelineFromPlan(plan);
 assert.deepEqual(
-	workout.map((event) => event.type),
-	["work_burpee", "work_rest", "work_burpee"],
+	workout.map((event) => event.phase),
+	["work", "rest", "work"],
 );
 assert.equal(timelineBurpeeCount(workout), 17);
 assert.equal(workout[0].burpee_count, 10);

@@ -7,28 +7,28 @@ import {
 } from "./session_segment_fsm.mjs";
 
 const work = {
-	type: "work_burpee",
+	phase: "work",
 	duration_sec: 10,
 	burpee_count: 5,
 	label: "Block 1",
 };
 
 const rest = {
-	type: "work_rest",
+	phase: "rest",
 	duration_sec: 5,
 	burpee_count: 0,
 	label: "Rest",
 };
 
 const warmupWork = {
-	type: "warmup_burpee",
+	phase: "work",
 	duration_sec: 10,
 	burpee_count: 5,
 	label: "Warmup",
 };
 
 const warmupRest = {
-	type: "warmup_rest",
+	phase: "rest",
 	duration_sec: 5,
 	burpee_count: 0,
 	label: "Warmup rest",
@@ -44,7 +44,7 @@ assert.deepEqual(currentFrame([work, rest], 2), {
 assert.equal(currentFrame([work], 10), null);
 
 let reps = {
-	currentEventKey: "0:work_burpee:Block 1",
+	currentEventKey: "0:work:Block 1",
 	doneInEvent: 4,
 	burpeeCountDone: 4,
 	previousFrame: { event: work, index: 0 },
@@ -54,7 +54,7 @@ reps = accountReps(reps.previousFrame, { event: rest, index: 1 }, reps);
 assert.equal(reps.burpeeCountDone, 5);
 
 reps = {
-	currentEventKey: "0:work_burpee:Block 1",
+	currentEventKey: "0:work:Block 1",
 	doneInEvent: 4,
 	burpeeCountDone: 4,
 	previousFrame: { event: work, index: 0 },
@@ -74,7 +74,6 @@ assert.equal(result.state.timeline.length, 2);
 assert.deepEqual(result.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
 	{ type: "updateVisibleRepGoal", burpeeCountTarget: 12 },
-	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 	{ type: "renderTimer", timeLeftSec: 15 },
 ]);
 
@@ -85,7 +84,7 @@ const resetResult = segmentTransition(
 			...initialSegmentState().reps,
 			burpeeCountDone: 7,
 			doneInEvent: 7,
-			currentEventKey: "0:work_burpee:Previous",
+			currentEventKey: "0:work:Previous",
 			previousFrame: { event: work, index: 0 },
 		},
 	},
@@ -96,7 +95,6 @@ assert.equal(resetResult.state.reps.doneInEvent, 0);
 assert.deepEqual(resetResult.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
 	{ type: "updateVisibleRepGoal", burpeeCountTarget: 5 },
-	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 	{ type: "renderTimer", timeLeftSec: 10 },
 ]);
 
@@ -108,7 +106,6 @@ const warmupReadyResult = segmentTransition(initialSegmentState(), {
 assert.deepEqual(warmupReadyResult.commands, [
 	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
 	{ type: "updateVisibleRepGoal", burpeeCountTarget: 10 },
-	{ type: "renderProgressBar", percent: 0, color: "#1E2535" },
 	{ type: "renderTimer", timeLeftSec: 30 },
 ]);
 
@@ -204,15 +201,26 @@ result = segmentTransition(initialSegmentState(), {
 	doneInEvent: 1,
 	blockCount: 1,
 });
-assert.deepEqual(result.commands.slice(0, 3), [
-	{ type: "renderProgressBar", percent: 13.3, color: "#4A9EFF" },
+assert.deepEqual(result.commands, [
 	{ type: "renderTimer", timeLeftSec: 13 },
-	{ type: "renderBlockLabel", label: "Block 1 of 1" },
-]);
-assert.deepEqual(result.commands.slice(3), [
-	{ type: "enterWorkPhase", eventType: "work_burpee", burpeeCount: 5 },
+	{ type: "enterWorkPhase", eventType: "work", burpeeCount: 5 },
 	{ type: "triggerDown", remainingReps: 4 },
-	{ type: "renderWorkRepProgress", progress: 0, color: "#4A9EFF" },
+	{ type: "renderWorkRepProgress", progress: 0 },
+]);
+
+const sameSizedNextWork = segmentTransition(result.state, {
+	type: "DISPLAY_FRAME",
+	frame: { event: work, index: 1, phase_elapsed: 1, phase_remaining: 9 },
+	elapsedSec: 11,
+	totalDurationSec: 20,
+	doneInEvent: 0,
+	blockCount: 1,
+});
+assert.deepEqual(sameSizedNextWork.commands, [
+	{ type: "renderTimer", timeLeftSec: 9 },
+	{ type: "enterWorkPhase", eventType: "work", burpeeCount: 5 },
+	{ type: "triggerDown", remainingReps: 5 },
+	{ type: "renderWorkRepProgress", progress: 0.5 },
 ]);
 
 result = segmentTransition(initialSegmentState(), {
@@ -228,15 +236,11 @@ result = segmentTransition(initialSegmentState(), {
 	doneInEvent: 1,
 	blockCount: 0,
 });
-assert.deepEqual(result.commands.slice(0, 3), [
-	{ type: "renderProgressBar", percent: 13.3, color: "#F59E0B" },
+assert.deepEqual(result.commands, [
 	{ type: "renderTimer", timeLeftSec: 13 },
-	{ type: "renderBlockLabel", label: "" },
-]);
-assert.deepEqual(result.commands.slice(3), [
-	{ type: "enterWorkPhase", eventType: "warmup_burpee", burpeeCount: 5 },
+	{ type: "enterWorkPhase", eventType: "work", burpeeCount: 5 },
 	{ type: "triggerDown", remainingReps: 4 },
-	{ type: "renderWorkRepProgress", progress: 0, color: "#F59E0B" },
+	{ type: "renderWorkRepProgress", progress: 0 },
 ]);
 
 result = segmentTransition(result.state, {
@@ -252,14 +256,10 @@ result = segmentTransition(result.state, {
 	doneInEvent: 2,
 	blockCount: 0,
 });
-assert.deepEqual(result.commands.slice(0, 3), [
-	{ type: "renderProgressBar", percent: 26.7, color: "#F59E0B" },
+assert.deepEqual(result.commands, [
 	{ type: "renderTimer", timeLeftSec: 11 },
-	{ type: "renderBlockLabel", label: "" },
-]);
-assert.deepEqual(result.commands.slice(3), [
 	{ type: "renderCurrentSetRepCount", remainingReps: 3 },
-	{ type: "renderWorkRepProgress", progress: 0, color: "#F59E0B" },
+	{ type: "renderWorkRepProgress", progress: 0 },
 ]);
 
 result = segmentTransition(result.state, {
@@ -271,14 +271,10 @@ result = segmentTransition(result.state, {
 	doneInEvent: 0,
 });
 assert.deepEqual(result.commands, [
-	{ type: "renderProgressBar", percent: 73.3, color: "#F59E0B" },
 	{ type: "renderTimer", timeLeftSec: 4 },
-	{ type: "renderBlockLabel", label: "" },
-	{ type: "enterRestPhase", eventType: "work_rest" },
+	{ type: "enterRestPhase", eventType: "rest" },
 	{
 		type: "renderRestProgress",
-		progress: 0.2,
-		color: "#F59E0B",
 		timeLeftSec: 4,
 	},
 ]);
@@ -286,7 +282,7 @@ assert.deepEqual(result.commands, [
 const repState = {
 	...initialSegmentState(),
 	reps: {
-		currentEventKey: "0:work_burpee:Block 1",
+		currentEventKey: "0:work:Block 1",
 		doneInEvent: 4,
 		burpeeCountDone: 4,
 		previousFrame: { event: work, index: 0 },
@@ -336,7 +332,7 @@ result = segmentTransition(
 	{
 		...initialSegmentState(),
 		reps: {
-			currentEventKey: "0:warmup_burpee:Warmup",
+			currentEventKey: "0:work:Warmup",
 			doneInEvent: 4,
 			burpeeCountDone: 4,
 			previousFrame: { event: warmupWork, index: 0 },
@@ -362,6 +358,12 @@ result = segmentTransition(beepState, {
 	frame: { event: work, phase_elapsed: 2.1, phase_remaining: 7.9 },
 });
 assert.deepEqual(result.commands, [{ type: "playRepBeep" }]);
+
+result = segmentTransition(result.state, {
+	type: "BEEP_FRAME",
+	frame: { event: rest, phase_elapsed: 2.1, phase_remaining: 2.9 },
+});
+assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
 
 result = segmentTransition(result.state, {
 	type: "BEEP_FRAME",
@@ -393,7 +395,7 @@ result = segmentTransition(
 		mode: "running",
 		clock: { ...initialSegmentState().clock, totalDurationSec: 15 },
 		reps: {
-			currentEventKey: "0:work_burpee:Block 1",
+			currentEventKey: "0:work:Block 1",
 			doneInEvent: 5,
 			burpeeCountDone: 5,
 			previousFrame: { event: work, index: 0 },
@@ -413,7 +415,7 @@ result = segmentTransition(
 		mode: "running",
 		clock: { ...initialSegmentState().clock, totalDurationSec: 15 },
 		reps: {
-			currentEventKey: "0:work_burpee:Block 1",
+			currentEventKey: "0:work:Block 1",
 			doneInEvent: 5,
 			burpeeCountDone: 5,
 			previousFrame: { event: work, index: 0 },
