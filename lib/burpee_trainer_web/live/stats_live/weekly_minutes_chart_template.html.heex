@@ -1,7 +1,9 @@
-<div class="rounded-[10px] bg-base-300 p-4">
+<div class="border border-[var(--session-border)] bg-[var(--session-bg)] p-4">
   <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
     <%!-- y-axis: 0 only --%>
-    <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="#5A6480">0</text>
+    <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="var(--session-muted)">
+      0
+    </text>
 
     <%!-- bars --%>
     <%= for {week, i} <- @chart_weeks do %>
@@ -9,14 +11,20 @@
       x = cx - @bar_w / 2
       height = max(min(week.minutes / @max_m * 70, 70), if(week.minutes > 0, do: 1, else: 0))
       y = 75 - height
-      color = if week.met_goal, do: "#4A9EFF", else: "#252830" %>
+      color = if week.met_goal, do: "var(--session-ink)", else: "var(--session-track)" %>
       <%= if height > 0 do %>
         <rect x={x} y={y} width={@bar_w} height={height} fill={color} rx="2" />
       <% end %>
     <% end %>
 
     <%!-- 80 min target line — label on lhs --%>
-    <text x={@y_axis_w - 2} y={@target_y + 3} text-anchor="end" font-size="7" fill="#5A6480">
+    <text
+      x={@y_axis_w - 2}
+      y={@target_y + 3}
+      text-anchor="end"
+      font-size="7"
+      fill="var(--session-muted)"
+    >
       80
     </text>
     <line
@@ -24,7 +32,7 @@
       y1={@target_y}
       x2={@chart_w}
       y2={@target_y}
-      stroke="#5A6480"
+      stroke="var(--session-muted)"
       stroke-width="0.5"
       stroke-dasharray="3,3"
     />
@@ -32,7 +40,7 @@
     <%!-- x-axis: label data weeks only --%>
     <%= for {week, i} <- @chart_weeks, week.iso_week != nil do %>
       <% cx = @y_axis_w + (i + 0.5) * @slot_w %>
-      <text x={cx} y="90" text-anchor="middle" font-size="6" fill="#5A6480">
+      <text x={cx} y="90" text-anchor="middle" font-size="6" fill="var(--session-muted)">
         W{week.iso_week}
       </text>
     <% end %>

@@ -1,21 +1,23 @@
-<div class="rounded-[10px] bg-base-300 p-5">
+<div class="border border-[var(--session-border)] bg-[var(--session-bg)] p-5">
   <div class="flex items-start justify-between mb-1">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">Progress</p>
-      <p class="text-[10px] text-base-content/30 mt-0.5">Normalized reps / 20 min</p>
+      <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+        Progress
+      </p>
+      <p class="text-[10px] text-[var(--session-muted)] mt-0.5">Normalized reps / 20 min</p>
     </div>
     <div class="flex items-center gap-3 pt-0.5">
-      <span class="flex items-center gap-1 text-[10px] text-base-content/50">
-        <span class="inline-block w-2 h-2 rounded-full bg-[#4A9EFF]"></span>6-Count
+      <span class="flex items-center gap-1 text-[10px] text-[var(--session-muted)]">
+        <span class="inline-block w-2 h-2 rounded-full bg-[var(--session-series-six)]"></span>6-Count
       </span>
-      <span class="flex items-center gap-1 text-[10px] text-base-content/50">
-        <span class="inline-block w-2 h-2 rounded-full bg-[#F97316]"></span>Navy SEAL
+      <span class="flex items-center gap-1 text-[10px] text-[var(--session-muted)]">
+        <span class="inline-block w-2 h-2 rounded-full bg-[var(--session-series-seal)]"></span>Navy SEAL
       </span>
     </div>
   </div>
 
   <%= if @all_empty do %>
-    <p class="text-xs text-base-content/30 mt-4">No sessions yet.</p>
+    <p class="text-xs text-[var(--session-muted)] mt-4">No sessions yet.</p>
   <% else %>
     <svg
       viewBox={"0 0 #{@chart_w} #{@total_h}"}
@@ -25,8 +27,21 @@
       <%!-- gridlines — only for 0 tick, targets get their own labels --%>
       <%= for tick <- @y_ticks, tick == 0 do %>
         <% gy = @to_y.(tick * 1.0) %>
-        <line x1={@y_axis_w} y1={gy} x2={@chart_w} y2={gy} stroke="#2C3040" stroke-width="0.5" />
-        <text x={@y_axis_w - 4} y={gy + 3} text-anchor="end" font-size="8" fill="#5A6480">
+        <line
+          x1={@y_axis_w}
+          y1={gy}
+          x2={@chart_w}
+          y2={gy}
+          stroke="var(--session-border)"
+          stroke-width="0.5"
+        />
+        <text
+          x={@y_axis_w - 4}
+          y={gy + 3}
+          text-anchor="end"
+          font-size="8"
+          fill="var(--session-muted)"
+        >
           {tick}
         </text>
       <% end %>
@@ -39,12 +54,19 @@
           y1={ty}
           x2={@chart_w}
           y2={ty}
-          stroke="#4A9EFF"
+          stroke="var(--session-series-six)"
           stroke-width="0.75"
           stroke-dasharray="4,3"
           opacity="0.4"
         />
-        <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#4A9EFF" opacity="0.7">
+        <text
+          x={@chart_w}
+          y={ty - 2}
+          text-anchor="end"
+          font-size="7"
+          fill="var(--session-series-six)"
+          opacity="0.7"
+        >
           {@six_target}
         </text>
       <% end %>
@@ -57,12 +79,19 @@
           y1={ty}
           x2={@chart_w}
           y2={ty}
-          stroke="#F97316"
+          stroke="var(--session-series-seal)"
           stroke-width="0.75"
           stroke-dasharray="4,3"
           opacity="0.4"
         />
-        <text x={@chart_w} y={ty - 2} text-anchor="end" font-size="7" fill="#F97316" opacity="0.7">
+        <text
+          x={@chart_w}
+          y={ty - 2}
+          text-anchor="end"
+          font-size="7"
+          fill="var(--session-series-seal)"
+          opacity="0.7"
+        >
           {@seal_target}
         </text>
       <% end %>
@@ -72,13 +101,18 @@
         <polyline
           points={@six_polyline}
           fill="none"
-          stroke="#4A9EFF"
+          stroke="var(--session-series-six)"
           stroke-width="1"
           stroke-linejoin="round"
         />
       <% end %>
       <%= for p <- @six_points do %>
-        <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#4A9EFF" />
+        <circle
+          cx={@to_x.(p.iso_week)}
+          cy={@to_y.(p.reps * 1.0)}
+          r="2.5"
+          fill="var(--session-series-six)"
+        />
       <% end %>
 
       <%!-- Navy SEAL line + dots --%>
@@ -86,13 +120,18 @@
         <polyline
           points={@seal_polyline}
           fill="none"
-          stroke="#F97316"
+          stroke="var(--session-series-seal)"
           stroke-width="1"
           stroke-linejoin="round"
         />
       <% end %>
       <%= for p <- @seal_points do %>
-        <circle cx={@to_x.(p.iso_week)} cy={@to_y.(p.reps * 1.0)} r="2.5" fill="#F97316" />
+        <circle
+          cx={@to_x.(p.iso_week)}
+          cy={@to_y.(p.reps * 1.0)}
+          r="2.5"
+          fill="var(--session-series-seal)"
+        />
       <% end %>
 
       <%!-- x-axis week labels --%>
@@ -102,7 +141,7 @@
           y={@top_pad + @plot_h + 14}
           text-anchor="middle"
           font-size="8"
-          fill="#5A6480"
+          fill="var(--session-muted)"
         >
           W{w}
         </text>
