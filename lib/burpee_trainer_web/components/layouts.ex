@@ -18,20 +18,23 @@ defmodule BurpeeTrainerWeb.Layouts do
   slot(:inner_block, required: true)
 
   def app(assigns) do
+    assigns =
+      Map.put(assigns, :session_surface_page?, session_surface_page?(assigns.current_page))
+
     ~H"""
     <%= if @current_user do %>
       <%!-- Desktop top nav — hidden on mobile --%>
       <nav class={[
         "hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b",
-        @current_page == :workouts &&
+        @session_surface_page? &&
           "session-surface border-[var(--session-border)] bg-[var(--session-bg)]",
-        @current_page != :workouts && "border-base-border bg-base-nav"
+        !@session_surface_page? && "border-base-border bg-base-nav"
       ]}>
         <.nav_icon
           navigate={~p"/"}
           title="Home"
           active={@current_page == :home}
-          session_nav?={@current_page == :workouts}
+          session_nav?={@session_surface_page?}
         >
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
@@ -41,7 +44,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           navigate={~p"/workouts"}
           title="Workouts"
           active={@current_page == :workouts}
-          session_nav?={@current_page == :workouts}
+          session_nav?={@session_surface_page?}
         >
           <.icon
             name="hero-rectangle-stack-solid"
@@ -57,7 +60,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           navigate={~p"/stats"}
           title="Stats"
           active={@current_page == :stats}
-          session_nav?={@current_page == :workouts}
+          session_nav?={@session_surface_page?}
         >
           <.icon
             name="hero-chart-bar-solid"
@@ -70,15 +73,15 @@ defmodule BurpeeTrainerWeb.Layouts do
       <%!-- Mobile bottom tab bar --%>
       <nav class={[
         "fixed bottom-0 inset-x-0 z-50 sm:hidden flex justify-around border-t pb-safe",
-        @current_page == :workouts &&
+        @session_surface_page? &&
           "session-surface h-[92px] items-start border-[var(--session-border)] bg-[var(--session-bg)]",
-        @current_page != :workouts && "border-base-border bg-base-nav"
+        !@session_surface_page? && "border-base-border bg-base-nav"
       ]}>
         <.bottom_tab
           navigate={~p"/"}
           active={@current_page == :home}
           label="Home"
-          session_nav?={@current_page == :workouts}
+          session_nav?={@session_surface_page?}
         >
           <.icon name="hero-home-solid" class={if @current_page == :home, do: "", else: "hidden"} />
           <.icon name="hero-home" class={if @current_page == :home, do: "hidden", else: ""} />
@@ -88,7 +91,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           navigate={~p"/workouts"}
           active={@current_page == :workouts}
           label="Workouts"
-          session_nav?={@current_page == :workouts}
+          session_nav?={@session_surface_page?}
         >
           <.icon
             name="hero-rectangle-stack-solid"
@@ -104,7 +107,7 @@ defmodule BurpeeTrainerWeb.Layouts do
           navigate={~p"/stats"}
           active={@current_page == :stats}
           label="Stats"
-          session_nav?={@current_page == :workouts}
+          session_nav?={@session_surface_page?}
         >
           <.icon
             name="hero-chart-bar-solid"
@@ -117,9 +120,9 @@ defmodule BurpeeTrainerWeb.Layouts do
 
     <main class={[
       "px-4 py-8 sm:px-6",
-      @current_page == :workouts &&
+      @session_surface_page? &&
         "session-surface min-h-dvh bg-[var(--session-bg)] text-[var(--session-ink)]",
-      @current_page != :workouts && "mx-auto max-w-2xl"
+      !@session_surface_page? && "mx-auto max-w-2xl"
     ]}>
       {render_slot(@inner_block)}
     </main>
@@ -127,15 +130,20 @@ defmodule BurpeeTrainerWeb.Layouts do
     <%= if @current_user do %>
       <div class={[
         "sm:hidden",
-        @current_page == :workouts &&
+        @session_surface_page? &&
           "session-surface h-[92px] bg-[var(--session-bg)]",
-        @current_page != :workouts && "h-16"
+        !@session_surface_page? && "h-16"
       ]} />
     <% end %>
 
     <.flash_group flash={@flash} />
     """
   end
+
+  defp session_surface_page?(:home), do: true
+  defp session_surface_page?(:workouts), do: true
+  defp session_surface_page?(:stats), do: true
+  defp session_surface_page?(_page), do: false
 
   attr(:navigate, :string, required: true)
   attr(:title, :string, required: true)

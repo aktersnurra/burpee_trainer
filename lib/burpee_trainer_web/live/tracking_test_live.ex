@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_page={:tracking_test}>
       <div class="mx-auto max-w-2xl space-y-5 pb-20">
         <div class="space-y-1">
           <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">

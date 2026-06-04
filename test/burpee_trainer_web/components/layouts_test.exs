@@ -18,4 +18,38 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
     refute html =~ "const setTheme"
     refute html =~ "localStorage.getItem(\"phx:theme\")"
   end
+
+  describe "app layout session surface pages" do
+    test "home, workouts, and stats use session surface chrome" do
+      for page <- [:home, :workouts, :stats] do
+        html =
+          render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
+            flash: %{},
+            current_user: %{id: 1},
+            current_page: page,
+            current_level: nil,
+            inner_block: []
+          )
+
+        assert html =~ "session-surface"
+        assert html =~ "bg-[var(--session-bg)]"
+        assert html =~ "text-[var(--session-ink)]"
+        refute html =~ "bg-base-nav"
+      end
+    end
+
+    test "non-session pages keep existing centered dark shell" do
+      html =
+        render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
+          flash: %{},
+          current_user: %{id: 1},
+          current_page: :tracking_test,
+          current_level: nil,
+          inner_block: []
+        )
+
+      assert html =~ "bg-base-nav"
+      assert html =~ "mx-auto max-w-2xl"
+    end
+  end
 end
