@@ -83,7 +83,9 @@ window.addEventListener("phx:toggle-theme", () => {
 	const storedTheme = themeStorage.get();
 	const currentTheme =
 		storedTheme ||
-		(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+		(window.matchMedia("(prefers-color-scheme: dark)").matches
+			? "dark"
+			: "light");
 	setTheme(currentTheme === "dark" ? "light" : "dark");
 });
 

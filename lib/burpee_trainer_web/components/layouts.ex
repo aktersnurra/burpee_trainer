@@ -162,11 +162,11 @@ defmodule BurpeeTrainerWeb.Layouts do
       type="button"
       phx-click={JS.dispatch("phx:toggle-theme")}
       class={[
-        "fixed right-4 top-4 z-40 flex size-9 items-center justify-center border transition sm:top-14",
+        "fixed right-4 top-4 z-40 flex size-9 items-center justify-center transition sm:right-[calc(50%_-_16rem)] sm:top-14",
         @session_nav? &&
-          "session-surface border-[var(--session-border)] bg-[var(--session-bg)] text-[var(--session-muted)] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]",
+          "session-surface text-[var(--session-muted)] hover:text-[var(--session-ink)]",
         !@session_nav? &&
-          "border-base-border bg-base-nav text-base-muted hover:bg-base-raised hover:text-base-content"
+          "text-base-muted hover:text-base-content"
       ]}
       aria-label="Toggle light and dark theme"
     >
