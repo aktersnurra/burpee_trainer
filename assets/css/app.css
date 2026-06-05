@@ -28,26 +28,26 @@
   default: true;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: #161311;
-  --color-base-200: #1D1917;
-  --color-base-300: #1D1917;
-  --color-base-content: #F6F2EC;
+  --color-base-100: #111315;
+  --color-base-200: #171A1D;
+  --color-base-300: #171A1D;
+  --color-base-content: #F5F7FA;
   --color-primary: #4A9EFF;
   --color-primary-content: #E6F1FF;
   --color-secondary: #7E97AB;
   --color-secondary-content: #D4E4EF;
   --color-accent: #AA749F;
   --color-accent-content: #EDE9FE;
-  --color-neutral: #35302C;
-  --color-neutral-content: #F6F2EC;
+  --color-neutral: #2A2F36;
+  --color-neutral-content: #F5F7FA;
   --color-info: #4A9EFF;
   --color-info-content: #E6F1FF;
   --color-success: #22C55E;
-  --color-success-content: #161311;
+  --color-success-content: #111315;
   --color-warning: #F59E0B;
-  --color-warning-content: #161311;
+  --color-warning-content: #111315;
   --color-error: #EF4444;
-  --color-error-content: #161311;
+  --color-error-content: #111315;
   --radius-selector: 0.375rem;
   --radius-field: 0.375rem;
   --radius-box: 0.625rem;
@@ -65,10 +65,10 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --color-base-nav:          var(--color-base-100);
-  --color-base-raised:       #1D1917;
+  --color-base-raised:       #171A1D;
   --color-base-border:       var(--color-neutral);
-  --color-base-border-hover: #35302C;
-  --color-base-muted:        #AAA39B;
+  --color-base-border-hover: #2A2F36;
+  --color-base-muted:        #9AA1AA;
 }
 
 /* Add variants based on LiveView classes */
@@ -94,21 +94,21 @@ body {
 
 [data-theme="dark"] {
   color-scheme: dark;
-  background: #161311;
+  background: #111315;
 }
 
 [data-theme="dark"] body {
-  background: #161311;
+  background: #111315;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    background: #161311;
+    background: #111315;
   }
 
   :root:not([data-theme]) body {
-    background: #161311;
+    background: #111315;
   }
 }
 
@@ -131,14 +131,14 @@ body {
 
 [data-theme="dark"] #burpee-session,
 [data-theme="dark"] .session-surface {
-  --session-bg: #161311;
-  --session-surface: #1d1917;
-  --session-ink: #f6f2ec;
-  --session-muted: #aaa39b;
-  --session-soft-muted: #80776f;
-  --session-border: #35302c;
-  --session-track: #211d19;
-  --session-ring-track: #35302c;
+  --session-bg: #111315;
+  --session-surface: #171a1d;
+  --session-ink: #f5f7fa;
+  --session-muted: #9aa1aa;
+  --session-soft-muted: #9aa1aa;
+  --session-border: #2a2f36;
+  --session-track: #171a1d;
+  --session-ring-track: #2a2f36;
   --session-series-six: var(--session-ink);
   --session-series-seal: #d6a071;
   --session-countin-bg: var(--session-ink);
@@ -148,14 +148,14 @@ body {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) #burpee-session,
   :root:not([data-theme]) .session-surface {
-    --session-bg: #161311;
-    --session-surface: #1d1917;
-    --session-ink: #f6f2ec;
-    --session-muted: #aaa39b;
-    --session-soft-muted: #80776f;
-    --session-border: #35302c;
-    --session-track: #211d19;
-    --session-ring-track: #35302c;
+    --session-bg: #111315;
+    --session-surface: #171a1d;
+    --session-ink: #f5f7fa;
+    --session-muted: #9aa1aa;
+    --session-soft-muted: #9aa1aa;
+    --session-border: #2a2f36;
+    --session-track: #171a1d;
+    --session-ring-track: #2a2f36;
     --session-series-six: var(--session-ink);
     --session-series-seal: #d6a071;
     --session-countin-bg: var(--session-ink);
