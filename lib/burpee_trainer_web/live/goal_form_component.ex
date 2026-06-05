@@ -86,20 +86,20 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div>
-      <div class="flex items-center justify-between mb-5">
+    <div class="session-surface text-[var(--session-ink)]">
+      <div class="mb-5 flex items-center justify-between border-b border-[var(--session-border)] pb-3">
         <h2 class="text-lg font-semibold">Set {@type_label} goal</h2>
         <button
           type="button"
           phx-click="close_goal_modal"
-          class="text-base-content/40 hover:text-base-content/70 transition"
+          class="text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
         >
           <.icon name="hero-x-mark" class="size-5" />
         </button>
       </div>
 
       <%= if @baseline_session == nil do %>
-        <p class="text-sm text-base-content/50">
+        <p class="text-sm text-[var(--session-muted)]">
           Log at least one {@type_label} session of 20+ minutes before setting a goal.
         </p>
       <% else %>
@@ -110,25 +110,37 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
           phx-target={@myself}
           class="space-y-4"
         >
-          <.input
-            field={@form[:burpee_count_target]}
-            type="text"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            label={"Target burpees (max #{@ceiling})"}
-          />
-          <.input
-            field={@form[:date_target]}
-            type="date"
-            label="Target date"
-            min={Date.to_iso8601(Date.add(Date.utc_today(), 1))}
-          />
-          <p class="text-xs text-base-content/40">
+          <label class="block space-y-1">
+            <span class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
+              Target burpees (max {@ceiling})
+            </span>
+            <input
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              name={@form[:burpee_count_target].name}
+              value={@form[:burpee_count_target].value}
+              class="w-full border border-[var(--session-border)] bg-[var(--session-bg)] px-3 py-3 text-lg font-semibold tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
+            />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
+              Target date
+            </span>
+            <input
+              type="date"
+              name={@form[:date_target].name}
+              value={@form[:date_target].value}
+              min={Date.to_iso8601(Date.add(Date.utc_today(), 1))}
+              class="w-full border border-[var(--session-border)] bg-[var(--session-bg)] px-3 py-3 text-sm tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
+            />
+          </label>
+          <p class="text-xs text-[var(--session-muted)]">
             Baseline: {@baseline_session.burpee_count_actual} burpees from your last session.
           </p>
           <button
             type="submit"
-            class="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-content hover:bg-primary/90 transition"
+            class="w-full bg-[var(--session-ink)] py-3 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
           >
             Save goal
           </button>

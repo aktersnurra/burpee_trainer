@@ -20,8 +20,8 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
   end
 
   describe "app layout session surface pages" do
-    test "home, workouts, stats, and plans use session surface chrome" do
-      for page <- [:home, :workouts, :stats, :plans] do
+    test "home, workouts, stats, plans, and tracking test use session surface chrome" do
+      for page <- [:home, :workouts, :stats, :plans, :tracking_test] do
         html =
           render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
             flash: %{},
@@ -71,7 +71,7 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
         render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
           flash: %{},
           current_user: %{id: 1},
-          current_page: :tracking_test,
+          current_page: :video,
           current_level: nil,
           inner_block: []
         )

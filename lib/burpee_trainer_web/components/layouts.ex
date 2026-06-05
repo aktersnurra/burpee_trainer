@@ -148,6 +148,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp session_surface_page?(:workouts), do: true
   defp session_surface_page?(:stats), do: true
   defp session_surface_page?(:plans), do: true
+  defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false
 
   defp theme_toggle?(nil, _page), do: false
