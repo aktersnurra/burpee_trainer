@@ -100,6 +100,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           week_start={@week_start}
           goal_min={@goal_min}
           week_pushups={@week_pushups}
+          current_level={@current_level}
         />
         <.workout_card last_plan={@last_plan} />
         <%= for suggestion <- @coach_suggestions do %>
@@ -130,7 +131,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           />
           <div
             id="home-log-modal-sheet"
-            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-bg)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
+            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
           >
             <.live_component
               module={LogFormComponent}
@@ -151,6 +152,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   attr(:week_start, :any, required: true)
   attr(:goal_min, :float, required: true)
   attr(:week_pushups, :integer, default: 0)
+  attr(:current_level, :atom, default: nil)
 
   defp status_strip(assigns) do
     min_done = assigns.this_week.minutes |> Float.round(0) |> trunc()
@@ -177,46 +179,78 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     session_count = MapSet.size(assigns.trained_days)
     pct = min(trunc(min_done / goal * 100), 100)
 
+    ring_offset = 264 - pct * 2.64
+
+    level_text =
+      if assigns.current_level, do: "Level #{level_label(assigns.current_level)}", else: "Level —"
+
     assigns =
       assign(assigns,
         min_done: min_done,
         goal: goal,
         rhythm_segments: rhythm_segments,
         session_count: session_count,
-        pct: pct
+        pct: pct,
+        ring_offset: ring_offset,
+        level_text: level_text
       )
 
     ~H"""
-    <div class="space-y-3 border-b border-[var(--session-border)] px-1 pb-5">
-      <div class="flex items-end justify-between gap-4">
-        <div class="space-y-1">
-          <div class="flex items-baseline gap-1.5">
-            <span class="text-5xl font-semibold leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]">
+    <div class="space-y-4 border-b border-[var(--session-border)] px-1 pb-5">
+      <div class="flex items-center gap-7">
+        <div class="relative size-[108px] shrink-0" aria-label={"#{@min_done} of #{@goal} minutes"}>
+          <svg viewBox="0 0 100 100" class="size-full -rotate-90">
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke="var(--session-ring-track)"
+              stroke-width="7"
+            />
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke="var(--session-ink)"
+              stroke-width="7"
+              stroke-linecap="butt"
+              stroke-dasharray="264"
+              stroke-dashoffset={@ring_offset}
+            />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span class="text-4xl font-semibold leading-none tracking-[-0.05em] tabular-nums">
               {@min_done}
             </span>
-            <span class="text-sm text-[var(--session-muted)]">/ {@goal} min</span>
+            <span class="mt-1 text-xs font-medium text-[var(--session-muted)]">/ {@goal} min</span>
           </div>
         </div>
-        <div class="pb-1 text-right space-y-0.5">
+        <div class="min-w-0 flex-1 space-y-2">
+          <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+            {@level_text}
+          </p>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-2xl font-semibold tracking-[-0.04em] tabular-nums text-[var(--session-ink)]">
+              {@min_done}
+            </span>
+            <span class="text-sm font-semibold text-[var(--session-ink)]">/ {@goal} min</span>
+          </div>
+          <p class="text-sm font-semibold text-[var(--session-ink)] tabular-nums">
+            {max(@goal - @min_done, 0)} min left
+          </p>
           <p class="text-xs text-[var(--session-muted)] tabular-nums">
             <%= if @session_count == 1 do %>
-              1 session
+              1 session this week
             <% else %>
-              {@session_count} sessions
+              {@session_count} sessions this week
             <% end %>
           </p>
           <p :if={@week_pushups > 0} class="text-xs text-[var(--session-muted)] tabular-nums">
             {@week_pushups} push-ups
           </p>
         </div>
-      </div>
-
-      <div class="h-1 w-full bg-[var(--session-track)]">
-        <div
-          class="h-1 bg-[var(--session-ink)] transition-all duration-500"
-          style={"width: #{@pct}%"}
-          aria-label={"#{@min_done} of #{@goal} minutes"}
-        />
       </div>
 
       <div id="home-week-rhythm" class="space-y-1.5" aria-label="Weekly training rhythm">
@@ -257,7 +291,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="border border-[var(--session-border)] bg-[var(--session-bg)] px-5 py-5 space-y-5"
+      class="border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5 space-y-5"
     >
       <div class="space-y-1">
         <p class="text-xl font-semibold leading-snug tracking-[-0.02em] text-[var(--session-ink)]">
@@ -293,7 +327,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="border border-[var(--session-border)] bg-[var(--session-bg)] px-5 py-4"
+      class="border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-4"
     >
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0 space-y-0.5">

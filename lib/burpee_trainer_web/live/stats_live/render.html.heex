@@ -34,7 +34,7 @@
       type="button"
       phx-click="open_log_modal"
       id="stats-log-button"
-      class="size-12 border border-[var(--session-ink)] bg-[var(--session-bg)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
+      class="size-12 border border-[var(--session-ink)] bg-[var(--session-surface)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
       aria-label="Log session"
     >
       <.icon name="hero-plus" class="size-5" />
@@ -56,7 +56,7 @@
       />
       <div
         id="log-modal-sheet"
-        class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-bg)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
+        class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
       >
         <.live_component
           module={BurpeeTrainerWeb.LogFormComponent}
@@ -81,7 +81,7 @@
         class="absolute inset-0 bg-black/60"
       >
       </button>
-      <div class="session-surface relative w-full sm:max-w-md bg-[var(--session-bg)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-6">
+      <div class="session-surface relative w-full sm:max-w-md bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-6">
         <.live_component
           module={BurpeeTrainerWeb.GoalFormComponent}
           id="goal-form"

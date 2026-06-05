@@ -127,7 +127,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
       </div>
 
       <%!-- Card 1: Type --%>
-      <div class="flex border border-[var(--session-border)] bg-[var(--session-bg)]">
+      <div class="flex border border-[var(--session-border)] bg-[var(--session-surface)]">
         <%= for {label, val} <- [{"6-Count", :six_count}, {"Navy SEAL", :navy_seal}] do %>
           <button
             type="button"
@@ -157,7 +157,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
         phx-change="validate"
         phx-target={@myself}
       >
-        <div class="grid grid-cols-3 border border-[var(--session-border)] bg-[var(--session-bg)]">
+        <div class="grid grid-cols-3 border border-[var(--session-border)] bg-[var(--session-surface)]">
           <div class="p-5 space-y-1 border-r border-[var(--session-border)]">
             <p class="text-[10px] text-[var(--session-muted)] uppercase tracking-widest">Reps</p>
             <input
@@ -195,7 +195,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
         </div>
 
         <%!-- Card 3: Mood --%>
-        <div class="mt-3 flex border border-[var(--session-border)] bg-[var(--session-bg)]">
+        <div class="mt-3 flex border border-[var(--session-border)] bg-[var(--session-surface)]">
           <%= for {icon, label, val} <- @mood_options do %>
             <button
               type="button"
@@ -219,7 +219,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
         </div>
 
         <%!-- Card 4: Tags --%>
-        <div class="mt-3 flex flex-wrap gap-2 border border-[var(--session-border)] bg-[var(--session-bg)] px-4 py-3">
+        <div class="mt-3 flex flex-wrap gap-2 border border-[var(--session-border)] bg-[var(--session-surface)] px-4 py-3">
           <%= for tag <- @tag_options do %>
             <button
               type="button"

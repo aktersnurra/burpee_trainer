@@ -32,13 +32,13 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
             id="pose-debug-trace-start"
             type="button"
             phx-hook="PoseTraceButton"
-            class="relative z-20 w-full touch-manipulation select-none border border-[var(--session-border)] bg-[var(--session-bg)] px-4 py-4 text-base font-semibold text-[var(--session-ink)] transition hover:border-[var(--session-ink)] active:scale-[0.99]"
+            class="relative z-20 w-full touch-manipulation select-none border border-[var(--session-border)] bg-[var(--session-surface)] px-4 py-4 text-base font-semibold text-[var(--session-ink)] transition hover:border-[var(--session-ink)] active:scale-[0.99]"
           >
             Record 10s trace
           </button>
         </div>
 
-        <section class="border border-[var(--session-border)] bg-[var(--session-bg)] p-3 space-y-3">
+        <section class="border border-[var(--session-border)] bg-[var(--session-surface)] p-3 space-y-3">
           <div
             id="pose-debug"
             phx-hook="PoseDebug"
@@ -130,7 +130,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <textarea
                 id="pose-debug-trace-output"
                 readonly
-                class="min-h-32 w-full border border-[var(--session-border)] bg-[var(--session-bg)] p-2 text-[10px] text-[var(--session-muted)]"
+                class="min-h-32 w-full border border-[var(--session-border)] bg-[var(--session-surface)] p-2 text-[10px] text-[var(--session-muted)]"
               >[]</textarea>
             </div>
 

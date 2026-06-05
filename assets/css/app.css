@@ -88,30 +88,32 @@
 #burpee-session,
 .session-surface {
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --session-bg: #f4f0e6;
-  --session-ink: #070707;
-  --session-muted: #9b9488;
-  --session-soft-muted: #777064;
-  --session-border: #ded8ca;
-  --session-track: #ddd6c7;
-  --session-ring-track: #d8d3c8;
+  --session-bg: #f4f0e8;
+  --session-surface: #faf7f2;
+  --session-ink: #181614;
+  --session-muted: #706a63;
+  --session-soft-muted: #aaa39b;
+  --session-border: #ddd7cf;
+  --session-track: #e7e2dc;
+  --session-ring-track: #d8d1c8;
   --session-series-six: var(--session-ink);
-  --session-series-seal: #b86b35;
+  --session-series-seal: #8f6a50;
   --session-countin-bg: var(--session-ink);
   --session-countin-ink: #ffffff;
 }
 
 [data-theme="dark"] #burpee-session,
 [data-theme="dark"] .session-surface {
-  --session-bg: #070707;
-  --session-ink: #f4f0e6;
-  --session-muted: #9b9488;
-  --session-soft-muted: #b8b0a3;
-  --session-border: #3a342c;
-  --session-track: #413b33;
-  --session-ring-track: #413b33;
+  --session-bg: #161311;
+  --session-surface: #1d1917;
+  --session-ink: #f6f2ec;
+  --session-muted: #aaa39b;
+  --session-soft-muted: #80776f;
+  --session-border: #35302c;
+  --session-track: #211d19;
+  --session-ring-track: #35302c;
   --session-series-six: var(--session-ink);
-  --session-series-seal: #d08a52;
+  --session-series-seal: #d6a071;
   --session-countin-bg: var(--session-ink);
   --session-countin-ink: #070707;
 }
@@ -119,15 +121,16 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) #burpee-session,
   :root:not([data-theme]) .session-surface {
-    --session-bg: #070707;
-    --session-ink: #f4f0e6;
-    --session-muted: #9b9488;
-    --session-soft-muted: #b8b0a3;
-    --session-border: #3a342c;
-    --session-track: #413b33;
-    --session-ring-track: #413b33;
+    --session-bg: #161311;
+    --session-surface: #1d1917;
+    --session-ink: #f6f2ec;
+    --session-muted: #aaa39b;
+    --session-soft-muted: #80776f;
+    --session-border: #35302c;
+    --session-track: #211d19;
+    --session-ring-track: #35302c;
     --session-series-six: var(--session-ink);
-    --session-series-seal: #d08a52;
+    --session-series-seal: #d6a071;
     --session-countin-bg: var(--session-ink);
     --session-countin-ink: #070707;
   }

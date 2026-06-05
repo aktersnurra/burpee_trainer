@@ -120,7 +120,7 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
               pattern="[0-9]*"
               name={@form[:burpee_count_target].name}
               value={@form[:burpee_count_target].value}
-              class="w-full border border-[var(--session-border)] bg-[var(--session-bg)] px-3 py-3 text-lg font-semibold tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
+              class="w-full border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-3 text-lg font-semibold tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
             />
           </label>
           <label class="block space-y-1">
@@ -132,7 +132,7 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
               name={@form[:date_target].name}
               value={@form[:date_target].value}
               min={Date.to_iso8601(Date.add(Date.utc_today(), 1))}
-              class="w-full border border-[var(--session-border)] bg-[var(--session-bg)] px-3 py-3 text-sm tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
+              class="w-full border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-3 text-sm tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
             />
           </label>
           <p class="text-xs text-[var(--session-muted)]">

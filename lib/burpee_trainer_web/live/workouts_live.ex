@@ -327,7 +327,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <%= if @open_menu do %>
             <div
               phx-click-away="close_menu"
-              class="absolute right-0 top-8 z-50 min-w-[150px] border border-[var(--session-border)] bg-[var(--session-bg)] py-1 shadow-xl"
+              class="absolute right-0 top-8 z-50 min-w-[150px] border border-[var(--session-border)] bg-[var(--session-surface)] py-1 shadow-xl"
             >
               <.link
                 navigate={@item.edit_path}
