@@ -204,10 +204,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
         </div>
       </div>
 
-      <div class="h-3 rounded-full bg-[var(--session-track)] overflow-hidden">
+      <div class="h-3 bg-[var(--session-track)] overflow-hidden">
         <div
           class={[
-            "h-full rounded-full bg-[var(--session-ink)] transition-all duration-500",
+            "h-full bg-[var(--session-ink)] transition-all duration-500",
             @streak.current_week_minutes < 80 && @streak.on_pace? && "opacity-70",
             !@streak.on_pace? && "opacity-30"
           ]}
@@ -383,9 +383,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <span class="text-xs text-[var(--session-muted)]">/ {@goal.burpee_count_target}</span>
             </div>
           </div>
-          <div class="h-1.5 rounded-full bg-[var(--session-track)] overflow-hidden">
+          <div class="h-1.5 bg-[var(--session-track)] overflow-hidden">
             <div
-              class="h-full rounded-full bg-[var(--session-ink)] transition-all duration-500"
+              class="h-full bg-[var(--session-ink)] transition-all duration-500"
               style={"width: #{@pct}%"}
             />
           </div>
