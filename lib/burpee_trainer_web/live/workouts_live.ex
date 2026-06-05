@@ -225,7 +225,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       <div class="session-surface fixed bottom-20 right-4 z-40 sm:bottom-8 sm:right-6">
         <.link
           navigate={~p"/workouts/new"}
-          class="flex size-12 items-center justify-center border border-[var(--session-ink)] bg-[var(--session-ink)] text-[var(--session-bg)] shadow-lg shadow-black/20 transition active:scale-95 hover:opacity-90"
+          class="flex size-12 items-center justify-center border border-[var(--session-ink)] rounded-2xl bg-[var(--session-ink)] text-[var(--session-bg)] shadow-lg shadow-black/20 transition active:scale-95 hover:opacity-90"
           aria-label="New plan"
         >
           <.icon name="hero-plus" class="size-5" />
@@ -281,7 +281,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                 {@item.title}
               </p>
               <%= if @item.kind == :video do %>
-                <span class="border border-[var(--session-border)] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
+                <span class="border border-[var(--session-border)] rounded-2xl px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
                   Video
                 </span>
               <% end %>
@@ -327,7 +327,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <%= if @open_menu do %>
             <div
               phx-click-away="close_menu"
-              class="absolute right-0 top-8 z-50 min-w-[150px] border border-[var(--session-border)] bg-[var(--session-surface)] py-1 shadow-xl"
+              class="absolute right-0 top-8 z-50 min-w-[150px] border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] py-1 shadow-xl"
             >
               <.link
                 navigate={@item.edit_path}
@@ -373,7 +373,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       </p>
       <.link
         navigate={~p"/workouts/new"}
-        class="mt-6 inline-flex items-center border border-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)]"
+        class="mt-6 inline-flex items-center border border-[var(--session-ink)] rounded-2xl px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)]"
       >
         New plan
       </.link>

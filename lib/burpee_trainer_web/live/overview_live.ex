@@ -83,7 +83,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       <div class="mx-auto max-w-lg space-y-7 pb-20 text-[var(--session-ink)]">
         <div
           :if={@level_status.at_risk?}
-          class="border border-[var(--session-border)] bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
+          class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
         >
           <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-[var(--session-ink)]" />
           <p class="text-sm text-[var(--session-muted)]">
@@ -131,7 +131,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           />
           <div
             id="home-log-modal-sheet"
-            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
+            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-2xl rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
           >
             <.live_component
               module={LogFormComponent}
@@ -291,7 +291,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5 space-y-5"
+      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-5 py-5 space-y-5"
     >
       <div class="space-y-1">
         <p class="text-xl font-semibold leading-snug tracking-[-0.02em] text-[var(--session-ink)]">
@@ -302,7 +302,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       <div class="flex justify-center">
         <.link
           navigate={~p"/workouts/new"}
-          class="size-12 border border-[var(--session-ink)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
+          class="size-12 border border-[var(--session-ink)] rounded-2xl text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
           aria-label="Create a plan"
         >
           <.icon name="hero-plus" class="size-5" />
@@ -327,7 +327,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       id="home-workout-card"
-      class="border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-4"
+      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-5 py-4"
     >
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0 space-y-0.5">
@@ -342,7 +342,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         </div>
         <.link
           navigate={~p"/session/#{@last_plan.id}"}
-          class="size-11 shrink-0 border border-[var(--session-ink)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
+          class="size-11 shrink-0 border border-[var(--session-ink)] rounded-2xl text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
           aria-label="Start workout"
         >
           <.icon name="hero-play" class="size-4" />
@@ -380,7 +380,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     ~H"""
     <div
       data-home-coach-suggestion
-      class="border border-[var(--session-border)] bg-[var(--session-track)]/25 px-4 py-3 flex items-center gap-3"
+      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/25 px-4 py-3 flex items-center gap-3"
     >
       <div class="flex-1 min-w-0">
         <span class="text-xs text-[var(--session-muted)] font-medium uppercase tracking-[0.12em]">

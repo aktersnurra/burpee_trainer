@@ -24,7 +24,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
             id="pose-debug-template-start"
             type="button"
             phx-hook="PoseCalibrationButton"
-            class="relative z-20 w-full touch-manipulation select-none border border-[var(--session-ink)] bg-[var(--session-ink)] px-4 py-4 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
+            class="relative z-20 w-full touch-manipulation select-none border border-[var(--session-ink)] rounded-2xl bg-[var(--session-ink)] px-4 py-4 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
           >
             Start 3s countdown
           </button>
@@ -32,13 +32,13 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
             id="pose-debug-trace-start"
             type="button"
             phx-hook="PoseTraceButton"
-            class="relative z-20 w-full touch-manipulation select-none border border-[var(--session-border)] bg-[var(--session-surface)] px-4 py-4 text-base font-semibold text-[var(--session-ink)] transition hover:border-[var(--session-ink)] active:scale-[0.99]"
+            class="relative z-20 w-full touch-manipulation select-none border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-4 py-4 text-base font-semibold text-[var(--session-ink)] transition hover:border-[var(--session-ink)] active:scale-[0.99]"
           >
             Record 10s trace
           </button>
         </div>
 
-        <section class="border border-[var(--session-border)] bg-[var(--session-surface)] p-3 space-y-3">
+        <section class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] p-3 space-y-3">
           <div
             id="pose-debug"
             phx-hook="PoseDebug"
@@ -65,7 +65,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <.debug_stat label="Reps" value_id="pose-debug-reps" value="0" />
             </div>
 
-            <div class="border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">
+            <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/30 p-3 space-y-3">
               <div>
                 <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
                   DTW calibration
@@ -83,7 +83,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               </p>
             </div>
 
-            <div class="border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">
+            <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/30 p-3 space-y-3">
               <div>
                 <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
                   Decoder diagnostics
@@ -114,7 +114,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               </p>
             </div>
 
-            <div class="border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">
+            <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/30 p-3 space-y-3">
               <div>
                 <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
                   Trace recorder
@@ -130,11 +130,11 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <textarea
                 id="pose-debug-trace-output"
                 readonly
-                class="min-h-32 w-full border border-[var(--session-border)] bg-[var(--session-surface)] p-2 text-[10px] text-[var(--session-muted)]"
+                class="min-h-32 w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] p-2 text-[10px] text-[var(--session-muted)]"
               >[]</textarea>
             </div>
 
-            <div class="border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3">
+            <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/30 p-3">
               <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Cadence</p>
               <p id="pose-debug-cadence" class="mt-1 text-xs text-[var(--session-muted)] break-words">
                 []
@@ -153,7 +153,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
 
   defp debug_stat(assigns) do
     ~H"""
-    <div class="border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3">
+    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/30 p-3">
       <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">{@label}</p>
       <p id={@value_id} class="mt-1 text-lg font-bold tabular-nums">{@value}</p>
     </div>

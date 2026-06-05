@@ -529,7 +529,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       </form>
       <.link
         navigate={~p"/workouts"}
-        class="shrink-0 border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+        class="shrink-0 border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
       >
         Cancel
       </.link>
@@ -541,7 +541,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_type_picker(assigns) do
     ~H"""
-    <div class="flex border border-[var(--session-border)] bg-[var(--session-surface)]">
+    <div class="flex border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
       <button
         type="button"
         phx-click="pick_type"
@@ -584,7 +584,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <form
       phx-change="change_basics"
-      class="grid grid-cols-3 border border-[var(--session-border)] bg-[var(--session-surface)]"
+      class="grid grid-cols-3 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
     >
       <div class="space-y-1 border-r border-[var(--session-border)] p-5">
         <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Duration</p>
@@ -676,7 +676,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <form
       phx-change="change_basics"
-      class="border border-[var(--session-border)] bg-[var(--session-surface)]"
+      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
     >
       <div class="flex">
         <button
@@ -743,7 +743,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_rest_controls(assigns) do
     ~H"""
-    <div class="border border-[var(--session-border)] bg-[var(--session-surface)]">
+    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
       <div class="border-b border-[var(--session-border)] px-5 py-3">
         <span class="text-xs tabular-nums text-[var(--session-muted)]">
           {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}

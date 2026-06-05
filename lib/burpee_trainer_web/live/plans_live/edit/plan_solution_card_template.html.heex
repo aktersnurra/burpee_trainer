@@ -1,4 +1,4 @@
-<section class="border border-[var(--session-border)] bg-[var(--session-surface)]">
+<section class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
   <div class="px-5 py-4 border-b border-[var(--session-border)]">
     <%= if @solver_error do %>
       <div class="flex items-center gap-2">
@@ -94,7 +94,7 @@
     if(@derived && @derived.both_ok,
       do: "bg-[var(--session-ink)] text-[var(--session-bg)] hover:opacity-90",
       else:
-        "border border-[var(--session-border)] bg-[var(--session-track)] text-[var(--session-muted)] cursor-not-allowed"
+        "border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)] text-[var(--session-muted)] cursor-not-allowed"
     )
   ]}
 >

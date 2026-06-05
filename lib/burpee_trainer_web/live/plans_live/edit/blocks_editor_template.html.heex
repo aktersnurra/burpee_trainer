@@ -42,7 +42,7 @@
           <%= if @open_block_menu == block_f.index do %>
             <div
               phx-click-away="close_block_menu"
-              class="absolute right-0 top-7 z-50 min-w-[140px] border border-[var(--session-border)] bg-[var(--session-surface)] py-1"
+              class="absolute right-0 top-7 z-50 min-w-[140px] border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] py-1"
             >
               <button
                 type="button"
@@ -75,7 +75,7 @@
             name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
             min="1"
             value={block_f[:repeat_count].value}
-            class="w-16 border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-sm text-center"
+            class="w-16 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-1 text-sm text-center"
           />
         </div>
       <% else %>
@@ -167,7 +167,7 @@
                 name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                 value={set_f[:burpee_count].value}
                 min="0"
-                class="w-12 border border-[var(--session-border)] bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
+                class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
               />
               <input
                 type="number"
@@ -175,14 +175,14 @@
                 name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
                 value={format_sec(set_f[:sec_per_rep].value)}
                 min="0.1"
-                class="w-12 border border-[var(--session-border)] bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
+                class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
               />
               <input
                 type="number"
                 name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
                 value={set_f[:end_of_set_rest].value}
                 min="0"
-                class="w-12 border border-[var(--session-border)] bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
+                class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
               />
               <div class="ml-auto flex items-center gap-2">
                 <button

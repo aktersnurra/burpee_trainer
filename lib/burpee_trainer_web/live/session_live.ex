@@ -502,14 +502,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <button
             type="button"
             id="warmup-yes-btn"
-            class="min-w-24 border border-[var(--session-border)] px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--session-ink)] transition active:scale-[0.98] hover:border-[var(--session-ink)]"
+            class="min-w-24 border border-[var(--session-border)] rounded-2xl px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--session-ink)] transition active:scale-[0.98] hover:border-[var(--session-ink)]"
           >
             Yes
           </button>
           <button
             type="button"
             id="warmup-skip-btn"
-            class="min-w-24 border border-[var(--session-border)] px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--session-soft-muted)] transition active:scale-[0.98] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="min-w-24 border border-[var(--session-border)] rounded-2xl px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--session-soft-muted)] transition active:scale-[0.98] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
           >
             Skip
           </button>
@@ -524,7 +524,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               type="button"
               phx-click="session_started"
               phx-value-mood={value}
-              class="min-w-20 border border-[var(--session-border)] px-4 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--session-ink)] transition active:scale-[0.98] hover:border-[var(--session-ink)]"
+              class="min-w-20 border border-[var(--session-border)] rounded-2xl px-4 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--session-ink)] transition active:scale-[0.98] hover:border-[var(--session-ink)]"
             >
               {label}
             </button>
@@ -673,7 +673,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         <%!-- Actions --%>
         <button
           type="submit"
-          class="flex w-full items-center justify-center border border-[var(--session-ink)] bg-[var(--session-ink)] py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.99]"
+          class="flex w-full items-center justify-center border border-[var(--session-ink)] rounded-2xl bg-[var(--session-ink)] py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.99]"
         >
           Save session
         </button>

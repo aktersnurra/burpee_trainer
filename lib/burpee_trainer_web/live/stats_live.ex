@@ -151,7 +151,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     ~H"""
     <div
       :if={@status.at_risk?}
-      class="border border-[var(--session-border)] bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
+      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
     >
       <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-[var(--session-ink)]" />
       <div class="space-y-0.5">
@@ -189,7 +189,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5 space-y-5">
+    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-5 py-5 space-y-5">
       <div class="flex items-center gap-7">
         <div class="relative size-[108px] shrink-0" aria-label={"#{@minutes_done} of 80 minutes"}>
           <svg viewBox="0 0 100 100" class="size-full -rotate-90">
@@ -362,7 +362,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="border border-[var(--session-border)] bg-[var(--session-surface)] px-4 py-4 flex flex-col gap-3">
+    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-4 py-4 flex flex-col gap-3">
       <%= cond do %>
         <% @goal && @goal.status == :achieved -> %>
           <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
@@ -384,7 +384,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full border border-[var(--session-ink)] bg-[var(--session-surface)] py-2 text-sm text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+            class="mt-auto w-full border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] py-2 text-sm text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
           >
             Set new goal
           </button>
@@ -428,7 +428,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full border border-[var(--session-ink)] bg-[var(--session-surface)] py-2 text-sm text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+            class="mt-auto w-full border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] py-2 text-sm text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
           >
             Update goal
           </button>
@@ -441,7 +441,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full border border-[var(--session-ink)] bg-[var(--session-surface)] py-2 text-sm font-medium text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+            class="mt-auto w-full border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] py-2 text-sm font-medium text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
           >
             Set goal
           </button>
@@ -468,7 +468,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @sessions == [] do %>
         <p class="text-sm text-[var(--session-muted)]">No sessions yet.</p>
       <% else %>
-        <div class="border border-[var(--session-border)] bg-[var(--session-surface)] px-4">
+        <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-4">
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
@@ -526,12 +526,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
             <span class="text-xs text-[var(--session-muted)] truncate">{@session.plan.name}</span>
           <% end %>
           <%= if @session.goal do %>
-            <span class="inline-flex items-center gap-1 border border-[var(--session-border)] bg-[var(--session-track)] px-1.5 py-0.5 text-[var(--session-ink)] text-[10px] font-medium shrink-0">
+            <span class="inline-flex items-center gap-1 border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)] px-1.5 py-0.5 text-[var(--session-ink)] text-[10px] font-medium shrink-0">
               <.icon name="hero-trophy" class="size-2.5" /> Goal
             </span>
           <% end %>
           <%= if @capture_badge do %>
-            <span class="inline-flex items-center border border-[var(--session-border)] bg-[var(--session-track)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[var(--session-ink)]">
+            <span class="inline-flex items-center border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[var(--session-ink)]">
               {@capture_badge.label}
             </span>
             <span :if={@capture_badge.detail} class="text-xs text-[var(--session-muted)]">
