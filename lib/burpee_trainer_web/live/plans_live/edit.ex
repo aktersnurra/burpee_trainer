@@ -551,7 +551,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           )
         ]}
       >
-        6-Count
+        Six-Count
       </button>
       <div class="w-px bg-base-border" />
       <button

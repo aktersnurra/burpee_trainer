@@ -118,4 +118,29 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ~r"/workouts/\d+/edit"
     end
   end
+
+  describe "/workouts/new" do
+    test "renders the new plan editor surface", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/workouts/new")
+
+      assert html =~ "session-surface"
+      assert html =~ ~s(id="plan-form")
+      assert html =~ "New plan"
+      assert html =~ "Six-Count"
+      assert html =~ "Navy SEAL"
+      assert html =~ "Create plan"
+    end
+
+    test "picking Navy SEAL keeps the editor rendered", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("button[phx-click='pick_type'][phx-value-type='navy_seal']")
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "Navy SEAL"
+      assert html =~ ~s(id="plan-form")
+    end
+  end
 end
