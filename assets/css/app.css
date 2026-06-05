@@ -28,26 +28,26 @@
   default: true;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: #111315;
-  --color-base-200: #171A1D;
-  --color-base-300: #171A1D;
-  --color-base-content: #F5F7FA;
+  --color-base-100: #151515;
+  --color-base-200: #1C1C1C;
+  --color-base-300: #222222;
+  --color-base-content: #F5F5F5;
   --color-primary: #4A9EFF;
   --color-primary-content: #E6F1FF;
   --color-secondary: #7E97AB;
   --color-secondary-content: #D4E4EF;
   --color-accent: #AA749F;
   --color-accent-content: #EDE9FE;
-  --color-neutral: #2A2F36;
-  --color-neutral-content: #F5F7FA;
+  --color-neutral: #2C2C2C;
+  --color-neutral-content: #F5F5F5;
   --color-info: #4A9EFF;
   --color-info-content: #E6F1FF;
   --color-success: #22C55E;
-  --color-success-content: #111315;
+  --color-success-content: #151515;
   --color-warning: #F59E0B;
-  --color-warning-content: #111315;
+  --color-warning-content: #151515;
   --color-error: #EF4444;
-  --color-error-content: #111315;
+  --color-error-content: #151515;
   --radius-selector: 0.375rem;
   --radius-field: 0.375rem;
   --radius-box: 0.625rem;
@@ -65,10 +65,10 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --color-base-nav:          var(--color-base-100);
-  --color-base-raised:       #171A1D;
+  --color-base-raised:       #1C1C1C;
   --color-base-border:       var(--color-neutral);
-  --color-base-border-hover: #2A2F36;
-  --color-base-muted:        #9AA1AA;
+  --color-base-border-hover: #2C2C2C;
+  --color-base-muted:        #9C9C9C;
 }
 
 /* Add variants based on LiveView classes */
@@ -94,21 +94,21 @@ body {
 
 [data-theme="dark"] {
   color-scheme: dark;
-  background: #111315;
+  background: #151515;
 }
 
 [data-theme="dark"] body {
-  background: #111315;
+  background: #151515;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    background: #111315;
+    background: #151515;
   }
 
   :root:not([data-theme]) body {
-    background: #111315;
+    background: #151515;
   }
 }
 
@@ -117,6 +117,7 @@ body {
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --session-bg: #f4f0e8;
   --session-surface: #faf7f2;
+  --session-surface-alt: #e7e2dc;
   --session-ink: #181614;
   --session-muted: #706a63;
   --session-soft-muted: #aaa39b;
@@ -131,14 +132,15 @@ body {
 
 [data-theme="dark"] #burpee-session,
 [data-theme="dark"] .session-surface {
-  --session-bg: #111315;
-  --session-surface: #171a1d;
-  --session-ink: #f5f7fa;
-  --session-muted: #9aa1aa;
-  --session-soft-muted: #9aa1aa;
-  --session-border: #2a2f36;
-  --session-track: #171a1d;
-  --session-ring-track: #2a2f36;
+  --session-bg: #151515;
+  --session-surface: #1c1c1c;
+  --session-surface-alt: #222222;
+  --session-ink: #f5f5f5;
+  --session-muted: #9c9c9c;
+  --session-soft-muted: #9c9c9c;
+  --session-border: #2c2c2c;
+  --session-track: #222222;
+  --session-ring-track: #303030;
   --session-series-six: var(--session-ink);
   --session-series-seal: #d6a071;
   --session-countin-bg: var(--session-ink);
@@ -148,14 +150,15 @@ body {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) #burpee-session,
   :root:not([data-theme]) .session-surface {
-    --session-bg: #111315;
-    --session-surface: #171a1d;
-    --session-ink: #f5f7fa;
-    --session-muted: #9aa1aa;
-    --session-soft-muted: #9aa1aa;
-    --session-border: #2a2f36;
-    --session-track: #171a1d;
-    --session-ring-track: #2a2f36;
+    --session-bg: #151515;
+    --session-surface: #1c1c1c;
+    --session-surface-alt: #222222;
+    --session-ink: #f5f5f5;
+    --session-muted: #9c9c9c;
+    --session-soft-muted: #9c9c9c;
+    --session-border: #2c2c2c;
+    --session-track: #222222;
+    --session-ring-track: #303030;
     --session-series-six: var(--session-ink);
     --session-series-seal: #d6a071;
     --session-countin-bg: var(--session-ink);
