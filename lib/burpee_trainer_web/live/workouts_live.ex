@@ -315,7 +315,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         <.link
           id={"workout-play-#{@item.kind}-#{@item.id}"}
           navigate={@item.start_path}
-          class="flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--session-border)] text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-95"
+          class="flex size-10 shrink-0 items-center justify-center text-[var(--session-muted)] transition hover:text-[var(--session-ink)] active:scale-95"
           aria-label={"Start #{@item.title}"}
         >
           <.icon name="hero-chevron-right" class="size-4" />
