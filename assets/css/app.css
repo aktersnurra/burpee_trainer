@@ -28,26 +28,26 @@
   default: true;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: #111318;
-  --color-base-200: #16181F;
-  --color-base-300: #1C1F28;
-  --color-base-content: #DDE2EE;
+  --color-base-100: #161311;
+  --color-base-200: #1D1917;
+  --color-base-300: #1D1917;
+  --color-base-content: #F6F2EC;
   --color-primary: #4A9EFF;
   --color-primary-content: #E6F1FF;
   --color-secondary: #7E97AB;
   --color-secondary-content: #D4E4EF;
   --color-accent: #AA749F;
   --color-accent-content: #EDE9FE;
-  --color-neutral: #2C3040;
-  --color-neutral-content: #DDE2EE;
+  --color-neutral: #35302C;
+  --color-neutral-content: #F6F2EC;
   --color-info: #4A9EFF;
   --color-info-content: #E6F1FF;
   --color-success: #22C55E;
-  --color-success-content: #0C0E14;
+  --color-success-content: #161311;
   --color-warning: #F59E0B;
-  --color-warning-content: #0C0E14;
+  --color-warning-content: #161311;
   --color-error: #EF4444;
-  --color-error-content: #0C0E14;
+  --color-error-content: #161311;
   --radius-selector: 0.375rem;
   --radius-field: 0.375rem;
   --radius-box: 0.625rem;
@@ -65,10 +65,10 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --color-base-nav:          var(--color-base-100);
-  --color-base-raised:       #1C1F28;
+  --color-base-raised:       #1D1917;
   --color-base-border:       var(--color-neutral);
-  --color-base-border-hover: #3A3F52;
-  --color-base-muted:        #5A6480;
+  --color-base-border-hover: #35302C;
+  --color-base-muted:        #AAA39B;
 }
 
 /* Add variants based on LiveView classes */
@@ -82,8 +82,35 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* Dark color-scheme on the root so browser date/time pickers use dark chrome */
-:root { color-scheme: dark; }
+/* Keep the document chrome/background aligned with the selected app theme. */
+:root {
+  color-scheme: light;
+  background: #f4f0e8;
+}
+
+body {
+  background: #f4f0e8;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  background: #161311;
+}
+
+[data-theme="dark"] body {
+  background: #161311;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    background: #161311;
+  }
+
+  :root:not([data-theme]) body {
+    background: #161311;
+  }
+}
 
 #burpee-session,
 .session-surface {
