@@ -38,6 +38,34 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
       end
     end
 
+    test "authenticated app pages render theme toggle" do
+      html =
+        render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
+          flash: %{},
+          current_user: %{id: 1},
+          current_page: :home,
+          current_level: nil,
+          inner_block: []
+        )
+
+      assert html =~ "phx:toggle-theme"
+      assert html =~ "Toggle light and dark theme"
+    end
+
+    test "session screens without current page omit theme toggle" do
+      html =
+        render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
+          flash: %{},
+          current_user: %{id: 1},
+          current_page: nil,
+          current_level: nil,
+          inner_block: []
+        )
+
+      refute html =~ "phx:toggle-theme"
+      refute html =~ "Toggle light and dark theme"
+    end
+
     test "non-session pages keep existing centered dark shell" do
       html =
         render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",

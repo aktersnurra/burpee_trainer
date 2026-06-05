@@ -79,6 +79,14 @@ window.addEventListener("phx:set-theme", (event) => {
 	setTheme(event.target.dataset.phxTheme);
 });
 
+window.addEventListener("phx:toggle-theme", () => {
+	const storedTheme = themeStorage.get();
+	const currentTheme =
+		storedTheme ||
+		(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+	setTheme(currentTheme === "dark" ? "light" : "dark");
+});
+
 const csrfToken = document
 	.querySelector("meta[name='csrf-token']")
 	.getAttribute("content");

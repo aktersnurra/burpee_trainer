@@ -19,7 +19,9 @@ defmodule BurpeeTrainerWeb.Layouts do
 
   def app(assigns) do
     assigns =
-      Map.put(assigns, :session_surface_page?, session_surface_page?(assigns.current_page))
+      assigns
+      |> Map.put(:session_surface_page?, session_surface_page?(assigns.current_page))
+      |> Map.put(:theme_toggle?, theme_toggle?(assigns.current_user, assigns.current_page))
 
     ~H"""
     <%= if @current_user do %>
@@ -118,6 +120,8 @@ defmodule BurpeeTrainerWeb.Layouts do
       </nav>
     <% end %>
 
+    <.theme_toggle :if={@theme_toggle?} session_nav?={@session_surface_page?} />
+
     <main class={[
       "px-4 py-8 sm:px-6",
       @session_surface_page? &&
@@ -145,6 +149,32 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp session_surface_page?(:stats), do: true
   defp session_surface_page?(:plans), do: true
   defp session_surface_page?(_page), do: false
+
+  defp theme_toggle?(nil, _page), do: false
+  defp theme_toggle?(_user, nil), do: false
+  defp theme_toggle?(_user, _page), do: true
+
+  attr(:session_nav?, :boolean, default: false)
+
+  defp theme_toggle(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click={JS.dispatch("phx:toggle-theme")}
+      class={[
+        "fixed right-4 top-4 z-40 flex size-9 items-center justify-center border transition sm:top-14",
+        @session_nav? &&
+          "session-surface border-[var(--session-border)] bg-[var(--session-bg)] text-[var(--session-muted)] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]",
+        !@session_nav? &&
+          "border-base-border bg-base-nav text-base-muted hover:bg-base-raised hover:text-base-content"
+      ]}
+      aria-label="Toggle light and dark theme"
+    >
+      <.icon name="hero-moon" class="size-4 dark:hidden" />
+      <.icon name="hero-sun" class="hidden size-4 dark:block" />
+    </button>
+    """
+  end
 
   attr(:navigate, :string, required: true)
   attr(:title, :string, required: true)
