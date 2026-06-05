@@ -5,7 +5,7 @@
   current_page={:plans}
 >
   <div class="session-surface mx-auto max-w-3xl space-y-5 pb-24 text-[var(--session-ink)]">
-    <.plan_editor_header plan_input={@plan_input} />
+    <.plan_editor_header plan_input={@plan_input} live_action={@live_action} plan={@plan} />
 
     <.plan_type_picker plan_input={@plan_input} />
 

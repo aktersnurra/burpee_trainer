@@ -269,93 +269,58 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
     ~H"""
     <div class="relative">
-      <%!-- Entire card is a link to start --%>
-      <.link
-        navigate={@item.start_path}
-        class="group block px-1 py-4 transition hover:bg-[var(--session-track)]/40"
-      >
-        <div class="flex items-center justify-between gap-4">
-          <div class="min-w-0 space-y-2">
-            <div class="flex items-center gap-2">
-              <p class="truncate text-lg font-bold leading-tight tracking-[-0.02em] text-[var(--session-ink)]">
-                {@item.title}
-              </p>
-              <%= if @item.kind == :video do %>
-                <span class="border border-[var(--session-border)] rounded-2xl px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
-                  Video
-                </span>
-              <% end %>
+      <div class="flex items-center gap-3 px-1 py-4 transition hover:bg-[var(--session-track)]/40">
+        <.link
+          id={"workout-card-#{@item.kind}-#{@item.id}"}
+          navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}
+          class="group min-w-0 flex-1"
+        >
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0 space-y-2">
+              <div class="flex items-center gap-2">
+                <p class="truncate text-lg font-bold leading-tight tracking-[-0.02em] text-[var(--session-ink)]">
+                  {@item.title}
+                </p>
+                <%= if @item.kind == :video do %>
+                  <span class="border border-[var(--session-border)] rounded-2xl px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
+                    Video
+                  </span>
+                <% end %>
+              </div>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
+                <span>{Fmt.burpee_type(@item.burpee_type)}</span>
+                <%= if @item.level do %>
+                  <span>{Fmt.level(@item.level)}</span>
+                <% end %>
+              </div>
             </div>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
-              <span>{Fmt.burpee_type(@item.burpee_type)}</span>
-              <%= if @item.level do %>
-                <span>{Fmt.level(@item.level)}</span>
+
+            <div class="shrink-0 text-right tabular-nums">
+              <%= if @item.burpee_count do %>
+                <p class="text-3xl font-black leading-none tracking-[-0.05em] text-[var(--session-ink)]">
+                  {@item.burpee_count}
+                </p>
+                <p class="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--session-soft-muted)]">
+                  {Fmt.duration_sec(@item.duration_sec)}
+                </p>
+              <% else %>
+                <p class="text-xl font-bold leading-none tracking-[-0.03em] text-[var(--session-ink)]">
+                  {Fmt.duration_sec(@item.duration_sec)}
+                </p>
               <% end %>
             </div>
           </div>
+        </.link>
 
-          <div class="shrink-0 pr-8 text-right tabular-nums">
-            <%= if @item.burpee_count do %>
-              <p class="text-3xl font-black leading-none tracking-[-0.05em] text-[var(--session-ink)]">
-                {@item.burpee_count}
-              </p>
-              <p class="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--session-soft-muted)]">
-                {Fmt.duration_sec(@item.duration_sec)}
-              </p>
-            <% else %>
-              <p class="text-xl font-bold leading-none tracking-[-0.03em] text-[var(--session-ink)]">
-                {Fmt.duration_sec(@item.duration_sec)}
-              </p>
-            <% end %>
-          </div>
-        </div>
-      </.link>
-
-      <%!-- ⋯ overflow button — sits above the link in z-order --%>
-      <%= if @item.kind == :plan do %>
-        <div class="absolute right-0 top-4">
-          <button
-            type="button"
-            phx-click="toggle_menu"
-            phx-value-id={@menu_id}
-            class="p-2 text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-            aria-label="More options"
-          >
-            <.icon name="hero-ellipsis-horizontal" class="size-5" />
-          </button>
-
-          <%= if @open_menu do %>
-            <div
-              phx-click-away="close_menu"
-              class="absolute right-0 top-8 z-50 min-w-[150px] border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] py-1 shadow-xl"
-            >
-              <.link
-                navigate={@item.edit_path}
-                class="flex items-center gap-2 px-4 py-3 text-sm text-[var(--session-muted)] transition-colors hover:bg-[var(--session-track)]/40 hover:text-[var(--session-ink)]"
-              >
-                <.icon name="hero-pencil-square" class="size-4" /> Edit
-              </.link>
-              <button
-                type="button"
-                phx-click="duplicate"
-                phx-value-id={@item.id}
-                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-[var(--session-muted)] transition-colors hover:bg-[var(--session-track)]/40 hover:text-[var(--session-ink)]"
-              >
-                <.icon name="hero-document-duplicate" class="size-4" /> Clone
-              </button>
-              <button
-                type="button"
-                phx-click="delete"
-                phx-value-id={@item.id}
-                data-confirm={"Delete '#{@item.title}'? This cannot be undone."}
-                class="flex w-full items-center gap-2 px-4 py-3 text-sm text-[var(--session-muted)] transition-colors hover:bg-[var(--session-track)]/40 hover:text-[var(--session-ink)]"
-              >
-                <.icon name="hero-trash" class="size-4" /> Delete
-              </button>
-            </div>
-          <% end %>
-        </div>
-      <% end %>
+        <.link
+          id={"workout-play-#{@item.kind}-#{@item.id}"}
+          navigate={@item.start_path}
+          class="flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)] transition hover:opacity-90 active:scale-95"
+          aria-label={"Start #{@item.title}"}
+        >
+          <.icon name="hero-play-solid" class="ml-0.5 size-5" />
+        </.link>
+      </div>
     </div>
     """
   end

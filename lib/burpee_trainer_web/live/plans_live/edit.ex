@@ -400,6 +400,32 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     save_plan(socket, socket.assigns.live_action, full_params)
   end
 
+  def handle_event("duplicate_plan", _, %{assigns: %{live_action: :edit, plan: plan}} = socket) do
+    case Workouts.duplicate_plan(plan) do
+      {:ok, copy} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Plan copied.")
+         |> push_navigate(to: ~p"/workouts/#{copy.id}/edit")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not copy plan.")}
+    end
+  end
+
+  def handle_event("delete_plan", _, %{assigns: %{live_action: :edit, plan: plan}} = socket) do
+    case Workouts.delete_plan(plan) do
+      {:ok, _plan} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Plan deleted.")
+         |> push_navigate(to: ~p"/workouts")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not delete plan.")}
+    end
+  end
+
   defp validate_editor_form(socket, editor) do
     params = %{"blocks" => blocks_to_attrs(editor.form_plan.blocks)}
     base_plan = editor.plan || %WorkoutPlan{}
@@ -512,6 +538,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   attr(:plan_input, :map, required: true)
+  attr(:live_action, :atom, required: true)
+  attr(:plan, :any, required: true)
 
   defp plan_editor_header(assigns) do
     ~H"""
@@ -527,12 +555,33 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class="w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 pb-1 text-3xl font-semibold tracking-tight text-[var(--session-ink)] transition placeholder:text-[var(--session-muted)] focus:border-[var(--session-ink)] focus:outline-none"
         />
       </form>
-      <.link
-        navigate={~p"/workouts"}
-        class="shrink-0 border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
-      >
-        Cancel
-      </.link>
+      <div class="flex shrink-0 items-center gap-2">
+        <%= if @live_action == :edit do %>
+          <button
+            id="plan-duplicate"
+            type="button"
+            phx-click="duplicate_plan"
+            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+          >
+            Copy
+          </button>
+          <button
+            id="plan-delete"
+            type="button"
+            phx-click="delete_plan"
+            data-confirm={"Delete '#{@plan.name}'? This cannot be undone."}
+            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+          >
+            Delete
+          </button>
+        <% end %>
+        <.link
+          navigate={~p"/workouts"}
+          class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+        >
+          Cancel
+        </.link>
+      </div>
     </div>
     """
   end

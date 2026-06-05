@@ -99,16 +99,40 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert_patch(view, "/workouts?source=mine")
     end
 
-    test "plan card ⋯ menu shows edit, clone, delete options", %{conn: conn, user: user} do
+    test "plan card opens editor and exposes an explicit play button", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "My Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts")
 
-      view |> element("button[phx-click='toggle_menu']") |> render_click()
-      html = render(view)
+      assert has_element?(view, "#workout-card-plan-#{plan.id}[href='/workouts/#{plan.id}/edit']")
+      assert has_element?(view, "#workout-play-plan-#{plan.id}[href='/session/#{plan.id}']")
+    end
 
-      assert html =~ "/workouts/#{plan.id}/edit"
-      assert html =~ "Clone"
-      assert html =~ "Delete"
+    test "plan edit page exposes duplicate and delete actions", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "My Plan"})
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert has_element?(view, "#plan-duplicate")
+      assert has_element?(view, "#plan-delete")
+    end
+
+    test "copying a plan from the edit page opens the copied plan", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "My Plan"})
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      view |> element("#plan-duplicate") |> render_click()
+
+      {path, _flash} = assert_redirect(view)
+      assert path =~ ~r"/workouts/\d+/edit"
+      refute path == "/workouts/#{plan.id}/edit"
+    end
+
+    test "deleting a plan from the edit page returns to workouts", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "My Plan"})
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      view |> element("#plan-delete") |> render_click()
+
+      assert_redirect(view, "/workouts")
     end
 
     test "video card has no edit link", %{conn: conn} do
