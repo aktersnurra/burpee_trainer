@@ -517,7 +517,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <div class="flex items-end justify-between gap-4 border-b border-[var(--session-border)] pb-4">
       <form phx-change="change_basics" class="min-w-0 flex-1 space-y-1">
-        <label class="text-[10px] uppercase tracking-[0.24em] text-[var(--session-muted)]">Plan</label>
+        <label class="text-[10px] uppercase tracking-[0.24em] text-[var(--session-muted)]">
+          Plan
+        </label>
         <input
           type="text"
           name="name"
@@ -548,7 +550,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :six_count,
             do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-            else: "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
+            else:
+              "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
         ]}
       >
@@ -563,7 +566,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :navy_seal,
             do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-            else: "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
+            else:
+              "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
         ]}
       >
@@ -670,7 +674,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_pacing_controls(assigns) do
     ~H"""
-    <form phx-change="change_basics" class="border border-[var(--session-border)] bg-[var(--session-bg)]">
+    <form
+      phx-change="change_basics"
+      class="border border-[var(--session-border)] bg-[var(--session-bg)]"
+    >
       <div class="flex">
         <button
           type="button"
@@ -680,7 +687,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :even,
               do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-              else: "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
+              else:
+                "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
           ]}
         >
@@ -695,7 +703,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :unbroken,
               do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-              else: "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
+              else:
+                "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
           ]}
         >
@@ -765,7 +774,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
               </div>
               <span class="mb-1 text-xs text-[var(--session-muted)]">at</span>
               <div class="space-y-1">
-                <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Minute</p>
+                <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
+                  Minute
+                </p>
                 <div class="flex items-baseline gap-1">
                   <input
                     type="number"
@@ -849,21 +860,21 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     <div class="space-y-1.5">
       <%= for {from, to, rest} <- @rest_groups do %>
         <% count = to - from + 1 %>
-        <p class="text-sm tabular-nums text-base-content/70">
-          <span class="text-base-content/40 w-8 inline-block">{count}×</span>
-          <span class="font-medium text-base-content">{@reps}</span>
-          <span class="text-base-content/40"> reps</span>
+        <p class="text-sm tabular-nums text-[var(--session-muted)]">
+          <span class="text-[var(--session-muted)] w-8 inline-block">{count}×</span>
+          <span class="font-medium text-[var(--session-ink)]">{@reps}</span>
+          <span class="text-[var(--session-muted)]"> reps</span>
           <%= if @pace do %>
-            <span class="text-base-content/25"> ·</span>
-            <span class="text-base-content/50">{@format_sec.(@pace)}s/rep</span>
+            <span class="text-[var(--session-muted)]"> ·</span>
+            <span class="text-[var(--session-muted)]">{@format_sec.(@pace)}s/rep</span>
           <% end %>
           <%= cond do %>
             <% rest == 0 || is_nil(rest) -> %>
-              <span class="text-base-content/25"> ·</span>
-              <span class="text-base-content/30"> no rest</span>
+              <span class="text-[var(--session-muted)]"> ·</span>
+              <span class="text-[var(--session-muted)]"> no rest</span>
             <% true -> %>
-              <span class="text-base-content/25"> ·</span>
-              <span class="text-base-content/50">{rest}s rest</span>
+              <span class="text-[var(--session-muted)]"> ·</span>
+              <span class="text-[var(--session-muted)]">{rest}s rest</span>
           <% end %>
         </p>
       <% end %>

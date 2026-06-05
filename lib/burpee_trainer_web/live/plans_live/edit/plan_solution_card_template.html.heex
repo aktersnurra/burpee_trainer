@@ -1,5 +1,5 @@
-<section class="rounded-[10px] bg-base-300">
-  <div class="px-5 py-4 border-b border-base-border">
+<section class="border border-[var(--session-border)] bg-[var(--session-bg)]">
+  <div class="px-5 py-4 border-b border-[var(--session-border)]">
     <%= if @solver_error do %>
       <div class="flex items-center gap-2">
         <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
@@ -10,7 +10,7 @@
         <div class="space-y-3">
           <p class={[
             "text-xs font-semibold uppercase tracking-widest",
-            if(@derived.both_ok, do: "text-primary", else: "text-error")
+            if(@derived.both_ok, do: "text-[var(--session-ink)]", else: "text-error")
           ]}>
             {if @derived.both_ok, do: "✓ Solution", else: "✗ Invalid"}
           </p>
@@ -19,36 +19,38 @@
               <div class="space-y-0.5">
                 <p class={[
                   "text-2xl font-bold tabular-nums leading-none",
-                  if(@derived.duration_ok, do: "text-base-content", else: "text-error")
+                  if(@derived.duration_ok, do: "text-[var(--session-ink)]", else: "text-error")
                 ]}>
                   {Fmt.duration_sec(round(@derived.duration_sec))}
                 </p>
-                <p class="text-[10px] text-base-content/40 uppercase tracking-widest">
+                <p class="text-[10px] text-[var(--session-muted)] uppercase tracking-widest">
                   duration
                 </p>
               </div>
               <div class="space-y-0.5">
                 <p class={[
                   "text-2xl font-bold tabular-nums leading-none",
-                  if(@derived.count_ok, do: "text-base-content", else: "text-error")
+                  if(@derived.count_ok, do: "text-[var(--session-ink)]", else: "text-error")
                 ]}>
                   {@derived.burpee_count}
                 </p>
-                <p class="text-[10px] text-base-content/40 uppercase tracking-widest">reps</p>
+                <p class="text-[10px] text-[var(--session-muted)] uppercase tracking-widest">
+                  reps
+                </p>
               </div>
             </div>
             <%= if !@manual_edit do %>
               <button
                 type="button"
                 phx-click="enable_manual_edit"
-                class="text-xs text-base-content/30 hover:text-base-content/60 transition mb-0.5"
+                class="text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition mb-0.5"
               >
                 Edit manually
               </button>
             <% end %>
           </div>
           <%= if @solver_solution && !@manual_edit do %>
-            <p class="text-xs text-base-content/40 tabular-nums">
+            <p class="text-xs text-[var(--session-muted)] tabular-nums">
               {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
             </p>
           <% end %>
@@ -74,8 +76,8 @@
     />
 
     <%= if @manual_edit do %>
-      <div class="border-t border-base-border pt-4">
-        <label class="cursor-pointer text-xs text-base-content/35 hover:text-primary transition flex items-center gap-1">
+      <div class="border-t border-[var(--session-border)] pt-4">
+        <label class="cursor-pointer text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition flex items-center gap-1">
           <.icon name="hero-plus" class="size-3.5" /> Add block
           <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
         </label>
@@ -88,10 +90,11 @@
   type="submit"
   form="plan-form"
   class={[
-    "w-full py-4 rounded-[10px] text-sm font-semibold tracking-wide transition flex items-center justify-center gap-2",
+    "w-full py-4 text-sm font-semibold tracking-wide transition flex items-center justify-center gap-2",
     if(@derived && @derived.both_ok,
-      do: "bg-primary/75 text-primary-content hover:bg-primary/85",
-      else: "bg-base-300 text-base-content/20 cursor-not-allowed"
+      do: "bg-[var(--session-ink)] text-[var(--session-bg)] hover:opacity-90",
+      else:
+        "border border-[var(--session-border)] bg-[var(--session-track)] text-[var(--session-muted)] cursor-not-allowed"
     )
   ]}
 >

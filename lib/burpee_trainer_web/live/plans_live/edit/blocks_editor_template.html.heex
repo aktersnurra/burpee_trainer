@@ -6,7 +6,7 @@
     repeat = block_f[:repeat_count].value || 1
     {range_start, range_end} = Enum.at(@block_time_ranges, block_f.index, {0.0, 0.0}) %>
 
-    <div class="border-t border-base-border pt-5 space-y-4">
+    <div class="border-t border-[var(--session-border)] pt-5 space-y-4">
       <input type="hidden" name="workout_plan[blocks_sort][]" value={block_f.index} />
       <input
         type="hidden"
@@ -17,14 +17,14 @@
       <%!-- Block header --%>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-base-content/70">
+          <span class="text-sm font-semibold text-[var(--session-muted)]">
             Block {block_f.index + 1}
             <%= if repeat && repeat > 1 do %>
-              <span class="font-normal text-base-content/35">×{repeat}</span>
+              <span class="font-normal text-[var(--session-muted)]">×{repeat}</span>
             <% end %>
           </span>
         </div>
-        <span class="text-xs text-base-content/35 tabular-nums">
+        <span class="text-xs text-[var(--session-muted)] tabular-nums">
           {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
         </span>
         <div class="relative flex items-center gap-3">
@@ -33,7 +33,7 @@
               type="button"
               phx-click="toggle_block_menu"
               phx-value-index={block_f.index}
-              class="p-1 text-base-content/30 hover:text-base-content/70 transition rounded"
+              class="p-1 text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
               aria-label="Block options"
             >
               <.icon name="hero-ellipsis-horizontal" class="size-4" />
@@ -42,17 +42,17 @@
           <%= if @open_block_menu == block_f.index do %>
             <div
               phx-click-away="close_block_menu"
-              class="absolute right-0 top-7 z-50 min-w-[140px] rounded-lg border border-base-border bg-base-nav py-1"
+              class="absolute right-0 top-7 z-50 min-w-[140px] border border-[var(--session-border)] bg-[var(--session-bg)] py-1"
             >
               <button
                 type="button"
                 phx-click="copy_block"
                 phx-value-index={block_f.index}
-                class="flex w-full items-center gap-2 px-3 py-2 text-sm text-base-content/70 hover:text-base-content hover:bg-base-raised transition-colors"
+                class="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-track)] transition-colors"
               >
                 <.icon name="hero-document-duplicate" class="size-4" /> Duplicate
               </button>
-              <label class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-error/70 hover:text-error hover:bg-base-raised transition-colors">
+              <label class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-error/70 hover:text-error hover:bg-[var(--session-track)] transition-colors">
                 <.icon name="hero-trash" class="size-4" /> Remove
                 <input
                   type="checkbox"
@@ -69,13 +69,13 @@
       <%!-- Repeat count — only when manual_edit --%>
       <%= if @manual_edit do %>
         <div class="flex items-center gap-2">
-          <label class="text-xs text-base-content/40 shrink-0">Repeats</label>
+          <label class="text-xs text-[var(--session-muted)] shrink-0">Repeats</label>
           <input
             type="number"
             name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
             min="1"
             value={block_f[:repeat_count].value}
-            class="w-16 rounded-md border border-base-border bg-base-300 px-2 py-1 text-sm text-center"
+            class="w-16 border border-[var(--session-border)] bg-[var(--session-bg)] px-2 py-1 text-sm text-center"
           />
         </div>
       <% else %>
@@ -94,7 +94,7 @@
             <span class="w-6 shrink-0" />
             <%= if uniform && !expanded && length(sets) > 1 do %>
               <% first = List.first(sets) %>
-              <span class="text-xs text-base-content/40 flex-1">
+              <span class="text-xs text-[var(--session-muted)] flex-1">
                 {length(sets)} × {first.burpee_count} reps
                 <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>
                   · {format_sec(first.sec_per_rep)}s/rep
@@ -107,21 +107,21 @@
                 type="button"
                 phx-click="toggle_block_expand"
                 phx-value-index={block_f.index}
-                class="text-xs text-primary hover:underline ml-auto"
+                class="text-xs text-[var(--session-ink)] hover:underline ml-auto"
               >
                 Edit sets
               </button>
             <% else %>
-              <span class="w-12 text-xs text-base-content/30 text-center">Reps</span>
-              <span class="w-12 text-xs text-base-content/30 text-center">Cadence</span>
-              <span class="w-12 text-xs text-base-content/30 text-center">Rest [s]</span>
+              <span class="w-12 text-xs text-[var(--session-muted)] text-center">Reps</span>
+              <span class="w-12 text-xs text-[var(--session-muted)] text-center">Cadence</span>
+              <span class="w-12 text-xs text-[var(--session-muted)] text-center">Rest [s]</span>
               <div class="ml-auto flex items-center gap-3">
                 <%= if uniform && length(sets) > 1 do %>
                   <button
                     type="button"
                     phx-click="toggle_block_expand"
                     phx-value-index={block_f.index}
-                    class="text-xs text-base-content/40 hover:text-base-content transition"
+                    class="text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
                   >
                     Collapse
                   </button>
@@ -156,10 +156,10 @@
 
           <%= if @manual_edit do %>
             <div class={[
-              "flex items-center gap-2 py-1 border-b border-base-border last:border-0",
+              "flex items-center gap-2 py-1 border-b border-[var(--session-border)] last:border-0",
               hide_row && "hidden"
             ]}>
-              <span class="text-xs text-base-content/30 tabular-nums w-5 shrink-0 text-right">
+              <span class="text-xs text-[var(--session-muted)] tabular-nums w-5 shrink-0 text-right">
                 {set_f.index + 1}
               </span>
               <input
@@ -167,7 +167,7 @@
                 name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                 value={set_f[:burpee_count].value}
                 min="0"
-                class="w-12 rounded border border-base-border bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
+                class="w-12 border border-[var(--session-border)] bg-[var(--session-bg)] px-1 py-1 text-sm text-center tabular-nums"
               />
               <input
                 type="number"
@@ -175,14 +175,14 @@
                 name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
                 value={format_sec(set_f[:sec_per_rep].value)}
                 min="0.1"
-                class="w-12 rounded border border-base-border bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
+                class="w-12 border border-[var(--session-border)] bg-[var(--session-bg)] px-1 py-1 text-sm text-center tabular-nums"
               />
               <input
                 type="number"
                 name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
                 value={set_f[:end_of_set_rest].value}
                 min="0"
-                class="w-12 rounded border border-base-border bg-base-300 px-1 py-1 text-sm text-center tabular-nums"
+                class="w-12 border border-[var(--session-border)] bg-[var(--session-bg)] px-1 py-1 text-sm text-center tabular-nums"
               />
               <div class="ml-auto flex items-center gap-2">
                 <button
@@ -190,12 +190,12 @@
                   phx-click="copy_set"
                   phx-value-block_index={block_f.index}
                   phx-value-set_index={set_f.index}
-                  class="text-base-content/30 hover:text-primary transition"
+                  class="text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
                   aria-label="Copy set"
                 >
                   <.icon name="hero-document-duplicate" class="size-3.5" />
                 </button>
-                <label class="cursor-pointer text-base-content/30 hover:text-error transition">
+                <label class="cursor-pointer text-[var(--session-muted)] hover:text-error transition">
                   <.icon name="hero-trash" class="size-3.5" />
                   <input
                     type="checkbox"
@@ -235,7 +235,7 @@
 
         <%!-- Add set: only in manual_edit, at bottom --%>
         <%= if @manual_edit do %>
-          <label class="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs text-base-content/30 hover:text-primary transition">
+          <label class="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition">
             + Add set
             <input
               type="checkbox"
