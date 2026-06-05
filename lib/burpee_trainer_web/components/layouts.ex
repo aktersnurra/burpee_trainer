@@ -143,6 +143,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp session_surface_page?(:home), do: true
   defp session_surface_page?(:workouts), do: true
   defp session_surface_page?(:stats), do: true
+  defp session_surface_page?(:plans), do: true
   defp session_surface_page?(_page), do: false
 
   attr(:navigate, :string, required: true)
