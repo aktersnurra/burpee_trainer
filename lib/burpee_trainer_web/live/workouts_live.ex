@@ -148,70 +148,80 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       |> Enum.filter(&(&1 in assigns.available_levels))
       |> Enum.map(&{&1, @level_labels[&1]})
 
-    assigns = assign(assigns, :level_pills, level_pills)
+    assigns =
+      assigns
+      |> assign(:level_pills, level_pills)
+      |> assign(:featured_item, List.first(assigns.items))
 
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
-      <div class="session-surface mx-auto max-w-lg space-y-6 bg-[var(--session-bg)] text-[var(--session-ink)]">
-        <header class="space-y-2 px-1 pt-1">
-          <p class="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]">
-            Training menu
-          </p>
-          <div class="flex items-end justify-between gap-4">
-            <h1 class="text-4xl font-black leading-none tracking-[-0.06em] text-[var(--session-ink)]">
-              Choose session
+      <div class="session-surface mx-auto max-w-lg space-y-5 bg-[var(--session-bg)] text-[var(--session-ink)]">
+        <header class="flex items-end justify-between gap-4 px-1 pt-1">
+          <div class="space-y-1">
+            <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+              Workouts
+            </p>
+            <h1 class="text-3xl font-semibold leading-none tracking-[-0.05em] text-[var(--session-ink)]">
+              Choose training
             </h1>
-            <.link
-              navigate={~p"/tracking-test"}
-              class="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-            >
-              <span class="sr-only">Tracking Test</span>
-              <span aria-hidden="true">Diagnostics</span>
-            </.link>
           </div>
+          <.link
+            navigate={~p"/tracking-test"}
+            class="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            <span class="sr-only">Tracking Test</span>
+            <span aria-hidden="true">Diagnostics</span>
+          </.link>
         </header>
 
+        <.featured_workout item={@featured_item} />
+
         <%!-- Single scrollable filter row --%>
-        <div class="flex gap-2 overflow-x-auto border-y border-[var(--session-border)] px-1 py-3 no-scrollbar">
-          <.filter_pill
-            label="Mine"
-            value_key="source"
-            value="mine"
-            active={@filters[:source] == :mine}
-          />
-          <.filter_pill
-            label="Videos"
-            value_key="source"
-            value="videos"
-            active={@filters[:source] == :videos}
-          />
-          <.filter_pill
-            label="6-Count"
-            value_key="burpee_type"
-            value="six_count"
-            active={@filters[:burpee_type] == :six_count}
-          />
-          <.filter_pill
-            label="Navy SEAL"
-            value_key="burpee_type"
-            value="navy_seal"
-            active={@filters[:burpee_type] == :navy_seal}
-          />
-          <%= for {level_atom, label} <- @level_pills do %>
+        <div
+          id="workouts-filter-panel"
+          class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-3"
+        >
+          <div class="flex gap-2 overflow-x-auto no-scrollbar">
             <.filter_pill
-              label={label}
-              value_key="level"
-              value={Atom.to_string(level_atom)}
-              active={@filters[:level] == level_atom}
+              label="Mine"
+              value_key="source"
+              value="mine"
+              active={@filters[:source] == :mine}
             />
-          <% end %>
+            <.filter_pill
+              label="Videos"
+              value_key="source"
+              value="videos"
+              active={@filters[:source] == :videos}
+            />
+            <.filter_pill
+              label="6-Count"
+              value_key="burpee_type"
+              value="six_count"
+              active={@filters[:burpee_type] == :six_count}
+            />
+            <.filter_pill
+              label="Navy SEAL"
+              value_key="burpee_type"
+              value="navy_seal"
+              active={@filters[:burpee_type] == :navy_seal}
+            />
+            <%= for {level_atom, label} <- @level_pills do %>
+              <.filter_pill
+                label={label}
+                value_key="level"
+                value={Atom.to_string(level_atom)}
+                active={@filters[:level] == level_atom}
+              />
+            <% end %>
+          </div>
         </div>
 
         <%!-- List or empty state --%>
         <%= if @items == [] do %>
           <.empty_state filters={@filters} />
         <% else %>
-          <div class="divide-y divide-[var(--session-border)] border-y border-[var(--session-border)]">
+          <div id="workouts-list" class="space-y-3">
             <%= for item <- @items do %>
               <.workout_card
                 item={item}
@@ -232,6 +242,85 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         </.link>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr(:item, WorkoutItem, default: nil)
+
+  defp featured_workout(%{item: nil} = assigns) do
+    ~H"""
+    <section
+      id="workouts-featured-card"
+      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-6 text-center"
+    >
+      <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+        Ready when you are
+      </p>
+      <p class="mt-2 text-lg font-semibold tracking-[-0.02em] text-[var(--session-ink)]">
+        Build a plan to start training
+      </p>
+      <.link
+        navigate={~p"/workouts/new"}
+        class="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)]"
+      >
+        New plan <.icon name="hero-plus" class="size-3.5" />
+      </.link>
+    </section>
+    """
+  end
+
+  defp featured_workout(assigns) do
+    ~H"""
+    <section
+      id="workouts-featured-card"
+      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5"
+    >
+      <div class="flex items-center gap-6">
+        <div class="flex size-[104px] shrink-0 flex-col items-center justify-center rounded-full border-[7px] border-[var(--session-ring-track)] text-center">
+          <%= if @item.burpee_count do %>
+            <span class="text-4xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)]">
+              {@item.burpee_count}
+            </span>
+            <span class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+              Reps
+            </span>
+          <% else %>
+            <span class="text-2xl font-semibold leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]">
+              {Fmt.duration_sec(@item.duration_sec)}
+            </span>
+          <% end %>
+        </div>
+        <div class="min-w-0 flex-1 space-y-2">
+          <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+            Featured training
+          </p>
+          <h2 class="truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
+            {@item.title}
+          </h2>
+          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--session-muted)]">
+            {Fmt.burpee_type(@item.burpee_type)}
+            <%= if @item.level do %>
+              <span class="px-1 text-[var(--session-muted)]">·</span>{Fmt.level(@item.level)}
+            <% end %>
+          </p>
+          <div class="flex items-center gap-4 pt-1">
+            <.link
+              navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}
+              class="text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+            >
+              {if @item.kind == :plan, do: "Edit plan", else: "View video"}
+            </.link>
+            <.link
+              navigate={@item.start_path}
+              class="inline-flex items-center gap-1 text-xs font-semibold text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
+              aria-label={"Start #{@item.title}"}
+            >
+              Start <.icon name="hero-chevron-right" class="size-3.5" />
+            </.link>
+          </div>
+        </div>
+      </div>
+    </section>
     """
   end
 
@@ -268,8 +357,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     assigns = assign(assigns, :menu_id, menu_id)
 
     ~H"""
-    <div class="relative">
-      <div class="flex items-center gap-3 px-1 py-4 transition hover:bg-[var(--session-track)]/40">
+    <div
+      data-workout-row
+      class="relative rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)]"
+    >
+      <div class="flex items-center gap-3 px-4 py-4 transition hover:bg-[var(--session-track)]/40 rounded-2xl">
         <.link
           id={"workout-card-#{@item.kind}-#{@item.id}"}
           navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}

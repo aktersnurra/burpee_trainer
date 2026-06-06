@@ -32,6 +32,21 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "BDT Video"
     end
 
+    test "renders workout page with featured instrument and rounded list", %{
+      conn: conn,
+      user: user
+    } do
+      _plan = plan_fixture(user, %{"name" => "My Plan"})
+      _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 600})
+
+      {:ok, view, _html} = live(conn, ~p"/workouts")
+
+      assert has_element?(view, "#workouts-featured-card")
+      assert has_element?(view, "#workouts-filter-panel")
+      assert has_element?(view, "#workouts-list")
+      assert has_element?(view, "[data-workout-row]")
+    end
+
     test "Mine filter shows only plans", %{conn: conn, user: user} do
       _plan = plan_fixture(user, %{"name" => "My Plan"})
       _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 600})
