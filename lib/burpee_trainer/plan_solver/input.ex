@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.PlanSolver.Input do
   the solver finds the optimal pace from the level ceiling.
 
   `sec_per_burpee_override` pins the pace exactly when set. The effective
-  LP lower bound is the minimum of the user-level ceiling and the workout-
+  lower bound is the minimum of the user-level ceiling and the workout-
   intensity ceiling derived from `burpee_count_target`.
   """
 

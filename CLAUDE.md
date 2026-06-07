@@ -6,14 +6,23 @@
 - Tailwind CSS + esbuild (no PostCSS, no Sass)
 - No React, no Node server — all server-rendered LiveView
 
+## Intelligence layer
+
+See `INTELLIGENCE_LAYER.md` for the current fixed weekly contract, coach target planner, catch-up planner, deterministic PlanSolver, and removed architecture.
+
 ## Module map
 
 | Module | Responsibility |
 |---|---|
-| `BurpeeTrainer.PlanWizard` | Solver: takes `%PlanInput{}`, returns blocks/sets |
+| `BurpeeTrainer.WeeklyTrainingContract` | Fixed 80 min / 4×20 / 2+2 weekly contract status |
+| `BurpeeTrainer.CoachTargetPlanner` | Deterministic 20-minute target suggestions from active performance goals |
+| `BurpeeTrainer.CatchUpPlanner` | Type-locked long catch-up session planning with duration intensity caps |
+| `BurpeeTrainer.PerformanceModel` | Type-specific 20-minute capacity estimates from history |
+| `BurpeeTrainer.PaceModel` | Type-specific recommended pace ranges by level |
+| `BurpeeTrainer.PlanSolver` | Deterministic session structure generation; no MILP/external solver |
 | `BurpeeTrainer.Planner` | Converts a saved `WorkoutPlan` to a flat timeline of events |
 | `BurpeeTrainer.Workouts` | Ecto context: sessions, plans, blocks, sets, style_performance |
-| `BurpeeTrainer.Goals` | Ecto context: goals CRUD |
+| `BurpeeTrainer.Goals` | Ecto context: goals CRUD and conversion to performance goals |
 | `BurpeeTrainer.Progression` | Pure progression logic: recommend, project_trend, trend_status |
 | `BurpeeTrainer.Scoring` | Pure push-up score (six_count ×1, navy_seal ×3), weekly totals, 40/40 balance |
 | `BurpeeTrainer.Milestones` | Pure celebration-event detection (PRs, level-up, goals, comeback) |

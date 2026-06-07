@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-08 — Deterministic intelligence layer
+
+- Removed the MILP/HiGHS infrastructure and old `PlanSolver.Lp`; `PlanSolver` now uses deterministic candidate/rest placement with rich solution metadata, PaceModel-backed pace bounds, manual pace overrides, and human-shaped non-uniform set patterns.
+- Removed the old Thompson-sampling coach modules and Home coach cards now use `CoachTargetPlanner` with active type-specific performance goals.
+- Added `WeeklyTrainingContract`, `PerformanceModel`, `TrainingState`, `PaceModel`, `CoachTargetPlanner`, and type-locked `CatchUpPlanner`.
+- Catch-up planning now creates one long selected-type session only, with duration intensity factors: 20 min 100%, 30 min 85%, 40 min 75%, 60 min 60%, 80+ min 50%.
+- Home coach and catch-up actions create real workout plans and navigate to the plan editor.
+- Added generated plan metadata (`coach_suggestion_kind`, `coach_target_reps`, `plan_solver_metadata`) and a compact “Why this?” section on plan edit.
+
 ## 2026-05-21 — PlanSolver: joint MILP with solver-chosen pace
 
 - Replaced `BurpeeTrainer.PlanWizard` with `BurpeeTrainer.PlanSolver`.

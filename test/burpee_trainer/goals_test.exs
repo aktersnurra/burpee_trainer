@@ -53,6 +53,40 @@ defmodule BurpeeTrainer.GoalsTest do
     end
   end
 
+  describe "performance goal adapter" do
+    test "get_active_performance_goal/2 maps persisted goal fields" do
+      user = user_fixture()
+      target_date = Date.add(Date.utc_today(), 28)
+      baseline_date = Date.utc_today()
+
+      _goal =
+        goal_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_target" => 180,
+          "duration_sec_target" => 1200,
+          "date_target" => target_date,
+          "burpee_count_baseline" => 150,
+          "duration_sec_baseline" => 1200,
+          "date_baseline" => baseline_date
+        })
+
+      performance_goal = Goals.get_active_performance_goal(user, :six_count)
+
+      assert performance_goal.burpee_type == :six_count
+      assert performance_goal.target_reps == 180
+      assert performance_goal.target_duration_min == 20
+      assert performance_goal.start_reps == 150
+      assert performance_goal.start_date == baseline_date
+      assert performance_goal.target_date == target_date
+      assert performance_goal.status == :active
+    end
+
+    test "get_active_performance_goal/2 returns nil when no active goal exists" do
+      user = user_fixture()
+      assert Goals.get_active_performance_goal(user, :navy_seal) == nil
+    end
+  end
+
   describe "queries" do
     test "get_active_goal/2 returns only the active row" do
       user = user_fixture()

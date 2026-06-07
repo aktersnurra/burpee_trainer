@@ -140,6 +140,25 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert last_set.end_of_set_rest == 99
     end
 
+    test "create_plan/2 persists generated plan metadata" do
+      user = user_fixture()
+
+      plan =
+        plan_fixture(user, %{
+          "coach_suggestion_kind" => "recommended",
+          "coach_target_reps" => 150,
+          "plan_solver_metadata" => %{
+            "solver_version" => "intelligence-v2",
+            "explanation" => ["Generated from coach target."]
+          }
+        })
+
+      assert plan.coach_suggestion_kind == "recommended"
+      assert plan.coach_target_reps == 150
+      assert plan.plan_solver_metadata["solver_version"] == "intelligence-v2"
+      assert plan.plan_solver_metadata["explanation"] == ["Generated from coach target."]
+    end
+
     test "create_plan/2 rejects a plan without a name" do
       user = user_fixture()
 
@@ -225,15 +244,25 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert set.burpee_count == 5
     end
 
-    test "duplicate_plan/1 creates an independent copy with suffixed name" do
+    test "duplicate_plan/1 creates an independent copy with suffixed name and metadata" do
       user = user_fixture()
-      plan = plan_fixture(user, %{"name" => "Original"})
+
+      plan =
+        plan_fixture(user, %{
+          "name" => "Original",
+          "coach_suggestion_kind" => "recommended",
+          "coach_target_reps" => 100,
+          "plan_solver_metadata" => %{"source" => "coach_target"}
+        })
 
       {:ok, copy} = Workouts.duplicate_plan(plan)
 
       assert copy.id != plan.id
       assert copy.name == "Original (copy)"
       assert copy.user_id == user.id
+      assert copy.coach_suggestion_kind == "recommended"
+      assert copy.coach_target_reps == 100
+      assert copy.plan_solver_metadata == %{"source" => "coach_target"}
       assert length(copy.blocks) == length(plan.blocks)
     end
 

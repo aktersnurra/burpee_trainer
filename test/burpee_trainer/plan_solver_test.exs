@@ -4,8 +4,6 @@ defmodule BurpeeTrainer.PlanSolverTest do
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.PlanSolver.{Input, Solution}
 
-  @moduletag :highs
-
   defp input(overrides \\ %{}) do
     Map.merge(
       %{
@@ -22,18 +20,18 @@ defmodule BurpeeTrainer.PlanSolverTest do
     |> then(fn m -> struct!(Input, m) end)
   end
 
-  test "sustainable_ceiling/2 returns correct six_count ceiling per level" do
-    assert PlanSolver.sustainable_ceiling(:six_count, :level_1a) == 8.0
-    assert PlanSolver.sustainable_ceiling(:six_count, :level_1c) == 6.0
-    assert PlanSolver.sustainable_ceiling(:six_count, :level_4) == 4.0
-    assert PlanSolver.sustainable_ceiling(:six_count, :graduated) == 3.70
+  test "sustainable_ceiling/2 delegates to PaceModel for six_count levels" do
+    for level <- [:level_1a, :level_1c, :level_4, :graduated] do
+      assert PlanSolver.sustainable_ceiling(:six_count, level) ==
+               BurpeeTrainer.PaceModel.fastest_recommended_sec_per_rep(:six_count, level)
+    end
   end
 
-  test "sustainable_ceiling/2 returns correct navy_seal ceiling per level" do
-    assert PlanSolver.sustainable_ceiling(:navy_seal, :level_1a) == 22.0
-    assert PlanSolver.sustainable_ceiling(:navy_seal, :level_1c) == 15.0
-    assert PlanSolver.sustainable_ceiling(:navy_seal, :level_1d) == 12.0
-    assert PlanSolver.sustainable_ceiling(:navy_seal, :graduated) == 8.0
+  test "sustainable_ceiling/2 delegates to PaceModel for navy_seal levels" do
+    for level <- [:level_1a, :level_1c, :level_1d, :graduated] do
+      assert PlanSolver.sustainable_ceiling(:navy_seal, level) ==
+               BurpeeTrainer.PaceModel.fastest_recommended_sec_per_rep(:navy_seal, level)
+    end
   end
 
   test "navy_seal ceiling is always slower than six_count at same level" do
@@ -49,16 +47,34 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert PlanSolver.default_reps_per_set(:navy_seal) == 5
   end
 
-  test "solve/1 returns ok with valid solution" do
+  test "solve/1 returns ok with valid rich solution" do
     assert {:ok, %Solution{} = sol} = PlanSolver.solve(input())
 
     assert is_float(sol.sec_per_burpee)
-    assert sol.sec_per_burpee >= 6.0 - 1.0e-6
+
+    assert sol.sec_per_burpee >=
+             BurpeeTrainer.PaceModel.fastest_recommended_sec_per_rep(:six_count, :level_1c) -
+               1.0e-6
+
     assert sol.set_count >= 1
     assert sol.set_size >= 1
-    assert sol.set_size * sol.set_count == 20
+    assert Enum.sum(sol.set_pattern) == 20
+    assert length(sol.rest_pattern_sec) == max(length(sol.set_pattern) - 1, 0)
+    assert sol.burpee_count == 20
+    assert sol.pacing_style == :even
+    assert sol.burpee_type == :six_count
+    assert sol.metadata.solver_version == "deterministic-v2"
     assert is_float(sol.duration_sec)
     assert_in_delta sol.duration_sec, 600.0, 5.0
+  end
+
+  test "solve/1 is deterministic and does not require an external solver" do
+    assert {:ok, %Solution{} = first} = PlanSolver.solve(input())
+    assert {:ok, %Solution{} = second} = PlanSolver.solve(input())
+
+    assert first.sec_per_burpee == second.sec_per_burpee
+    assert first.set_count == second.set_count
+    assert first.rest_sec == second.rest_sec
   end
 
   test "solver chooses pace >= six_count ceiling for each level" do
@@ -106,6 +122,53 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert is_binary(msg)
   end
 
+  test "unbroken supports non-uniform human-shaped set patterns for awkward targets" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :unbroken,
+          reps_per_set: 10,
+          burpee_count_target: 107,
+          target_duration_min: 20,
+          level: :level_3
+        })
+      )
+
+    assert Enum.sum(sol.set_pattern) == 107
+    assert Enum.uniq(sol.set_pattern) |> length() > 1
+    assert List.last(sol.set_pattern) != 0
+    assert Enum.all?(sol.set_pattern, &(&1 in [4, 5, 6, 8, 9, 10, 12, 15]))
+    assert sol.metadata.set_pattern_strategy == :human_shaped
+  end
+
+  test "solution rest pattern excludes final rest" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :unbroken,
+          reps_per_set: 5,
+          burpee_count_target: 20,
+          target_duration_min: 10
+        })
+      )
+
+    assert length(sol.set_pattern) == 4
+    assert length(sol.rest_pattern_sec) == 3
+    plan_sets = List.first(sol.plan.blocks).sets
+    assert List.last(plan_sets).end_of_set_rest == 0
+  end
+
+  test "pace model is the source of pace bounds" do
+    {:ok, sol} = PlanSolver.solve(input(%{burpee_type: :navy_seal, level: :level_1c}))
+
+    assert_in_delta sol.metadata.pace_fastest_sec_per_rep,
+                    BurpeeTrainer.PaceModel.fastest_recommended_sec_per_rep(
+                      :navy_seal,
+                      :level_1c
+                    ),
+                    1.0e-6
+  end
+
   test "workout-level ceiling used when tighter: 200 reps at level_1d gets level_2 pace" do
     # 200 six_count reps = level_2 landmark → ceiling 5.0s
     # level_1d ceiling = 5.5s; workout ceiling (5.0) is tighter
@@ -121,7 +184,10 @@ defmodule BurpeeTrainer.PlanSolverTest do
         })
       )
 
-    assert sol.sec_per_burpee >= 5.0 - 1.0e-4
+    assert sol.sec_per_burpee >=
+             BurpeeTrainer.PaceModel.fastest_recommended_sec_per_rep(:six_count, :level_2) -
+               1.0e-4
+
     # With p=5.0: work=1000s, budget=1200s → 200s rest across 39 gaps ≈ 5s/gap
     assert sol.rest_sec > 0
   end

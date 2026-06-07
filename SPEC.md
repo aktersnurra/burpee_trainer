@@ -3,6 +3,8 @@
 > Read this file thoroughly before doing anything.
 > Generate a plan and wait for my approval before writing any code.
 
+> Intelligence-layer note: the old PlanWizard/MILP/ScheduleSolver direction in this file is superseded by `INTELLIGENCE_LAYER.md`, which documents the current implementation.
+
 ---
 
 ## NAMING CONVENTIONS

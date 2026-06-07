@@ -1,7 +1,7 @@
 defmodule BurpeeTrainerWeb.WorkoutsLive do
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Coach, Levels, Workouts}
+  alias BurpeeTrainer.{Levels, WeeklyTrainingContract, Workouts}
   alias BurpeeTrainer.WorkoutFeed
   alias BurpeeTrainer.WorkoutFeed.WorkoutItem
   alias BurpeeTrainerWeb.{Fmt, Layouts}
@@ -27,7 +27,18 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         items_unfiltered
       end
 
-    {:noreply, assign(socket, filters: filters, items: items, available_levels: available_levels)}
+    weekly_status =
+      socket.assigns.current_user
+      |> Workouts.list_sessions()
+      |> WeeklyTrainingContract.status(Date.utc_today() |> Date.beginning_of_week(:monday))
+
+    {:noreply,
+     assign(socket,
+       filters: filters,
+       items: items,
+       available_levels: available_levels,
+       weekly_complete?: weekly_status.remaining_min <= 0
+     )}
   end
 
   @impl true
@@ -148,14 +159,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       |> Enum.filter(&(&1 in assigns.available_levels))
       |> Enum.map(&{&1, @level_labels[&1]})
 
+    featured_item = if assigns.weekly_complete?, do: nil, else: List.first(assigns.items)
+
     assigns =
       assigns
       |> assign(:level_pills, level_pills)
-      |> assign(:featured_item, List.first(assigns.items))
-      |> assign(
-        :featured_recommendation,
-        featured_recommendation(assigns.current_user, assigns.filters)
-      )
+      |> assign(:featured_item, featured_item)
 
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
@@ -171,7 +180,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           </div>
         </header>
 
-        <.featured_workout item={@featured_item} recommendation={@featured_recommendation} />
+        <.featured_workout :if={@featured_item} item={@featured_item} />
 
         <section id="workouts-options-section" class="space-y-3 pt-1">
           <div class="flex items-end justify-between gap-4 px-1">
@@ -252,64 +261,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     """
   end
 
-  defp featured_recommendation(user, filters) when map_size(filters) == 0 do
-    user
-    |> Coach.suggest_all()
-    |> List.first()
-  end
-
-  defp featured_recommendation(_user, _filters), do: nil
-
   attr(:item, WorkoutItem, default: nil)
-  attr(:recommendation, :any, default: nil)
-
-  defp featured_workout(%{recommendation: recommendation} = assigns)
-       when not is_nil(recommendation) do
-    type_label = if recommendation.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
-    duration_min = max(1, round(recommendation.burpee_count * recommendation.sec_per_burpee / 60))
-
-    assigns =
-      assign(assigns,
-        type_label: type_label,
-        duration_min: duration_min
-      )
-
-    ~H"""
-    <section
-      id="workouts-featured-card"
-      data-featured-source="coach"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5"
-    >
-      <div class="flex items-center gap-6">
-        <div class="flex size-[104px] shrink-0 flex-col items-center justify-center rounded-full border-[7px] border-[var(--session-ring-track)] text-center">
-          <span class="text-4xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)]">
-            {@recommendation.burpee_count}
-          </span>
-          <span class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-            Reps
-          </span>
-        </div>
-        <div class="min-w-0 flex-1 space-y-2">
-          <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-            Recommended today
-          </p>
-          <h2 class="text-2xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
-            {@duration_min} min · {@type_label}
-          </h2>
-          <p class="text-xs text-[var(--session-muted)]">
-            {@recommendation.rationale}
-          </p>
-          <.link
-            navigate={"/workouts/new?count=#{@recommendation.burpee_count}&pace=#{@recommendation.sec_per_burpee}&rest=#{@recommendation.rest_sec}"}
-            class="inline-flex items-center gap-1 pt-1 text-xs font-semibold text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
-          >
-            Build session <.icon name="hero-chevron-right" class="size-3.5" />
-          </.link>
-        </div>
-      </div>
-    </section>
-    """
-  end
 
   defp featured_workout(%{item: nil} = assigns) do
     ~H"""

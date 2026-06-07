@@ -26,9 +26,6 @@ config :swoosh, :api_client, false
 # Print only warnings and errors during test
 config :logger, level: :warning
 
-# Run coach learning synchronously in tests so database sandbox ownership is deterministic.
-config :burpee_trainer, :coach_learning_mode, :sync
-
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
 

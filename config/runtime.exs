@@ -55,8 +55,6 @@ if config_env() == :prod do
 
   config :burpee_trainer, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  config :burpee_trainer, :highs_path, System.get_env("HIGHS_PATH", "/usr/local/bin/highs")
-
   config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [

@@ -20,6 +20,9 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     field :additional_rests, :string, default: "[]"
     field :style_name, :string
     field :fatigue_factor, :float, default: 0.0
+    field :coach_suggestion_kind, :string
+    field :coach_target_reps, :integer
+    field :plan_solver_metadata, :map
 
     belongs_to :user, User
 
@@ -46,7 +49,10 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       :pacing_style,
       :additional_rests,
       :style_name,
-      :fatigue_factor
+      :fatigue_factor,
+      :coach_suggestion_kind,
+      :coach_target_reps,
+      :plan_solver_metadata
     ])
     |> validate_required([:name, :burpee_type])
     |> validate_length(:name, min: 1, max: 80)

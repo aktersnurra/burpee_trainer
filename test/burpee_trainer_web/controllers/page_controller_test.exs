@@ -43,16 +43,24 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
       })
     end
 
+    goal_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_target" => 90,
+      "duration_sec_target" => 1200,
+      "burpee_count_baseline" => 30,
+      "duration_sec_baseline" => 1200
+    })
+
     conn = conn |> init_test_session(%{user_id: user.id}) |> get(~p"/")
     html = html_response(conn, 200)
 
     assert html =~ ~s(id="home-coach-card")
-    assert html =~ ~s(data-home-coach-suggestion)
+    assert html =~ ~s(data-home-weekly-split)
 
     {coach_card_index, _} = :binary.match(html, ~s(id="home-coach-card"))
-    {suggestion_index, _} = :binary.match(html, ~s(data-home-coach-suggestion))
+    {split_index, _} = :binary.match(html, ~s(data-home-weekly-split))
 
-    assert coach_card_index < suggestion_index
+    assert coach_card_index < split_index
   end
 
   test "GET / renders a seven segment weekly rhythm bar", %{conn: conn} do

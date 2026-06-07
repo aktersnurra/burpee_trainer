@@ -7,7 +7,6 @@ defmodule BurpeeTrainer.Workouts do
   import Ecto.Query
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Coach.Learning
   alias BurpeeTrainer.Goals
   alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Milestones
@@ -111,6 +110,9 @@ defmodule BurpeeTrainer.Workouts do
       "pacing_style" => source.pacing_style,
       "additional_rests" => source.additional_rests,
       "style_name" => source.style_name,
+      "coach_suggestion_kind" => source.coach_suggestion_kind,
+      "coach_target_reps" => source.coach_target_reps,
+      "plan_solver_metadata" => source.plan_solver_metadata,
       "blocks" => duplicate_plan_blocks(source.blocks)
     }
 
@@ -375,7 +377,6 @@ defmodule BurpeeTrainer.Workouts do
     case Repo.insert(changeset) do
       {:ok, session} ->
         maybe_upsert_style_performance(session, user_id)
-        Learning.record_session_completed(%User{id: user_id}, session)
         {:ok, session}
 
       error ->
@@ -410,7 +411,6 @@ defmodule BurpeeTrainer.Workouts do
     case Repo.insert(changeset) do
       {:ok, session} ->
         maybe_upsert_style_performance(session, user_id)
-        Learning.record_session_completed(%User{id: user_id}, session)
         {:ok, session}
 
       error ->

@@ -9,7 +9,7 @@ defmodule BurpeeTrainer.Goals do
 
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Goals.Goal
-  alias BurpeeTrainer.Repo
+  alias BurpeeTrainer.{PerformanceGoal, Repo}
 
   @doc """
   Active goals for a user, one per `burpee_type` at most.
@@ -48,6 +48,35 @@ defmodule BurpeeTrainer.Goals do
             goal.burpee_type == ^burpee_type and
             goal.status == :active
     )
+  end
+
+  @doc """
+  Fetch the active persisted goal as a `%PerformanceGoal{}` for coach planning.
+  """
+  @spec get_active_performance_goal(User.t(), atom) :: PerformanceGoal.t() | nil
+  def get_active_performance_goal(%User{} = user, burpee_type) when is_atom(burpee_type) do
+    user
+    |> get_active_goal(burpee_type)
+    |> to_performance_goal()
+  end
+
+  @doc """
+  Convert a persisted goal row to the pure performance-goal struct used by the intelligence layer.
+  """
+  @spec to_performance_goal(Goal.t() | nil) :: PerformanceGoal.t() | nil
+  def to_performance_goal(nil), do: nil
+
+  def to_performance_goal(%Goal{} = goal) do
+    %PerformanceGoal{
+      id: goal.id,
+      burpee_type: goal.burpee_type,
+      target_reps: goal.burpee_count_target,
+      target_duration_min: div(goal.duration_sec_target, 60),
+      start_reps: goal.burpee_count_baseline,
+      start_date: goal.date_baseline,
+      target_date: goal.date_target,
+      status: performance_status(goal.status)
+    }
   end
 
   @doc """
@@ -110,6 +139,10 @@ defmodule BurpeeTrainer.Goals do
   """
   @spec change_goal(Goal.t(), map) :: Ecto.Changeset.t()
   def change_goal(%Goal{} = goal, attrs \\ %{}), do: Goal.changeset(goal, attrs)
+
+  defp performance_status(:active), do: :active
+  defp performance_status(:achieved), do: :completed
+  defp performance_status(:abandoned), do: :paused
 
   defp normalize_burpee_type(value) when is_atom(value), do: value
   defp normalize_burpee_type("six_count"), do: :six_count

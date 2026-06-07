@@ -201,6 +201,11 @@
               </button>
             <% end %>
           </div>
+          <%= if @solver_solution && !@manual_edit do %>
+            <p class="text-xs text-[var(--session-muted)] tabular-nums">
+              {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 1)}s/rep
+            </p>
+          <% end %>
         </div>
       <% end %>
     <% end %>

@@ -50,31 +50,33 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "[data-workout-row]")
     end
 
-    test "featured card uses coach recommendation when history is available", %{
-      conn: conn,
-      user: user
-    } do
-      plan = plan_fixture(user, %{"name" => "Stored Plan", "burpee_type" => "six_count"})
-
-      for _ <- 1..5 do
-        session_from_plan_fixture(user, plan, %{
-          "burpee_count_actual" => 30,
-          "duration_sec_actual" => 180
-        })
-      end
-
-      {:ok, view, _html} = live(conn, ~p"/workouts")
-
-      assert has_element?(view, "#workouts-featured-card[data-featured-source='coach']")
-      assert render(view) =~ "Recommended today"
-      assert has_element?(view, "#workouts-featured-card a[href^='/workouts/new?']")
-    end
-
     test "Workouts page does not render a floating new-plan action", %{conn: conn, user: user} do
       _plan = plan_fixture(user, %{"name" => "My Plan"})
       {:ok, _view, html} = live(conn, ~p"/workouts")
 
       refute html =~ ~s(id="workouts-floating-new-plan")
+    end
+
+    test "completed weekly contract hides featured training but keeps workout list", %{
+      conn: conn,
+      user: user
+    } do
+      _plan = plan_fixture(user, %{"name" => "Coach Navy SEAL", "burpee_type" => "navy_seal"})
+
+      for type <- ["six_count", "six_count", "navy_seal", "navy_seal"] do
+        free_form_session_fixture(user, %{
+          "burpee_type" => type,
+          "burpee_count_actual" => 50,
+          "duration_sec_actual" => 1200
+        })
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/workouts")
+
+      refute has_element?(view, "#workouts-featured-card")
+      assert has_element?(view, "[data-workout-row]")
+      assert render(view) =~ "Coach Navy SEAL"
+      refute render(view) =~ "Featured training"
     end
 
     test "Mine filter shows only plans", %{conn: conn, user: user} do
@@ -195,7 +197,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert html =~ "Set 1"
       assert html =~ "12 reps"
-      assert html =~ "5.50s/rep"
+      assert html =~ "5.5s/rep"
       assert html =~ "20s recovery"
     end
 
@@ -315,6 +317,30 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert expanded_html =~ "+ Add set"
     end
 
+    test "plan edit page shows generated plan metadata", %{conn: conn, user: user} do
+      plan =
+        plan_fixture(user, %{
+          "name" => "Coach Six-count",
+          "coach_suggestion_kind" => "recommended",
+          "coach_target_reps" => 150,
+          "plan_solver_metadata" => %{
+            "source" => "coach_target",
+            "risk" => "normal",
+            "rationale" => ["Your current estimate is 150 six-count burpees in 20 min."]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert has_element?(view, "#plan-metadata")
+      html = render(view)
+      assert html =~ "Why this?"
+      assert html =~ "Coach target"
+      assert html =~ "Recommended · 150 reps"
+      assert html =~ "Risk: normal"
+      assert html =~ "Your current estimate is 150 six-count burpees in 20 min."
+    end
+
     test "plan edit page exposes duplicate and delete actions", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "My Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
@@ -398,6 +424,45 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ">Cadence<"
       refute html =~ ">Rest [s]<"
       refute html =~ ~s(data-fine-tune-card)
+    end
+
+    test "unbroken awkward targets show actual final set reps", %{conn: conn, user: user} do
+      sets =
+        for position <- 1..10 do
+          %{
+            "position" => position,
+            "burpee_count" => 10,
+            "sec_per_rep" => 5.5,
+            "sec_per_burpee" => 5.5,
+            "end_of_set_rest" => 61
+          }
+        end ++
+          [
+            %{
+              "position" => 11,
+              "burpee_count" => 7,
+              "sec_per_rep" => 5.5,
+              "sec_per_burpee" => 5.5,
+              "end_of_set_rest" => 0
+            }
+          ]
+
+      plan =
+        plan_fixture(user, %{
+          "name" => "Awkward 107",
+          "burpee_type" => "six_count",
+          "target_duration_min" => 20,
+          "burpee_count_target" => 107,
+          "pacing_style" => "unbroken",
+          "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert html =~ "10×"
+      assert html =~ "10</span>"
+      assert html =~ "1×"
+      assert html =~ "7</span>"
     end
 
     test "picking Navy SEAL keeps the editor rendered", %{conn: conn} do

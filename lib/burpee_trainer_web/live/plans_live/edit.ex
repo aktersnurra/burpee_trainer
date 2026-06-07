@@ -136,6 +136,52 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  attr(:plan, :any, default: nil)
+
+  defp plan_metadata(%{plan: %WorkoutPlan{plan_solver_metadata: metadata}} = assigns)
+       when is_map(metadata) do
+    assigns =
+      assigns
+      |> assign(:source_label, metadata_source_label(metadata["source"]))
+      |> assign(:kind_label, metadata_kind_label(assigns.plan.coach_suggestion_kind))
+      |> assign(:rationale, List.wrap(metadata["rationale"]))
+      |> assign(:risk, metadata["risk"])
+
+    ~H"""
+    <section
+      id="plan-metadata"
+      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 px-5 py-4"
+    >
+      <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+        Why this?
+      </p>
+      <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
+        {@source_label}
+      </p>
+      <p class="mt-1 text-sm text-[var(--session-muted)]">
+        {@kind_label} · {@plan.coach_target_reps} reps
+      </p>
+      <p :if={@risk} class="mt-1 text-xs text-[var(--session-muted)]">
+        Risk: {@risk}
+      </p>
+      <ul :if={@rationale != []} class="mt-3 space-y-1 text-xs text-[var(--session-muted)]">
+        <li :for={line <- @rationale}>{line}</li>
+      </ul>
+    </section>
+    """
+  end
+
+  defp plan_metadata(assigns),
+    do: ~H"""
+    """
+
+  defp metadata_source_label("coach_target"), do: "Coach target"
+  defp metadata_source_label("catch_up"), do: "Catch-up"
+  defp metadata_source_label(_source), do: "Generated plan"
+
+  defp metadata_kind_label(nil), do: "Generated"
+  defp metadata_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
+
   defp plan_to_attrs(%WorkoutPlan{} = plan) do
     %{
       "name" => plan.name,
@@ -606,12 +652,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp format_sec(nil), do: nil
-  defp format_sec(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2)
-  defp format_sec(v) when is_integer(v), do: :erlang.float_to_binary(v * 1.0, decimals: 2)
+  defp format_sec(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 1)
+  defp format_sec(v) when is_integer(v), do: :erlang.float_to_binary(v * 1.0, decimals: 1)
 
   defp format_sec(v) when is_binary(v) do
     case Float.parse(v) do
-      {f, _} -> :erlang.float_to_binary(f, decimals: 2)
+      {f, _} -> :erlang.float_to_binary(f, decimals: 1)
       _ -> v
     end
   end
@@ -749,6 +795,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp plan_goal_controls(assigns) do
     ~H"""
     <form
+      id="plan-goal-controls"
       phx-change="change_basics"
       class="grid grid-cols-2 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
     >
@@ -931,43 +978,39 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp block_summary(assigns) do
     sets = assigns.sets
     n = length(sets)
-    first = List.first(sets)
-
-    # Summary line: N sets of M reps @ Xs/rep
-    reps = first.burpee_count
-    pace = if first.sec_per_rep && first.sec_per_rep > 0, do: first.sec_per_rep, else: nil
-
-    # Rest rows: group consecutive sets with same rest into ranges
-    rest_groups =
+    # Summary rows: group consecutive sets with the same reps, pace, and rest.
+    set_groups =
       sets
       |> Enum.with_index(1)
-      |> Enum.chunk_by(fn {s, _i} -> s.end_of_set_rest end)
+      |> Enum.chunk_by(fn {s, _i} -> {s.burpee_count, s.sec_per_rep, s.end_of_set_rest} end)
       |> Enum.map(fn chunk ->
         {first_s, first_i} = hd(chunk)
         {_last_s, last_i} = List.last(chunk)
-        {first_i, last_i, first_s.end_of_set_rest}
+
+        pace =
+          if first_s.sec_per_rep && first_s.sec_per_rep > 0, do: first_s.sec_per_rep, else: nil
+
+        {first_i, last_i, first_s.burpee_count, pace, first_s.end_of_set_rest}
       end)
 
     assigns =
       assign(assigns,
         n: n,
-        reps: reps,
-        pace: pace,
-        rest_groups: rest_groups,
+        set_groups: set_groups,
         format_sec: &format_sec/1
       )
 
     ~H"""
     <div class="space-y-1.5">
-      <%= for {from, to, rest} <- @rest_groups do %>
+      <%= for {from, to, reps, pace, rest} <- @set_groups do %>
         <% count = to - from + 1 %>
         <p class="text-sm tabular-nums text-[var(--session-muted)]">
           <span class="text-[var(--session-muted)] w-8 inline-block">{count}×</span>
-          <span class="font-medium text-[var(--session-ink)]">{@reps}</span>
+          <span class="font-medium text-[var(--session-ink)]">{reps}</span>
           <span class="text-[var(--session-muted)]"> reps</span>
-          <%= if @pace do %>
+          <%= if pace do %>
             <span class="text-[var(--session-muted)]"> ·</span>
-            <span class="text-[var(--session-muted)]">{@format_sec.(@pace)}s/rep</span>
+            <span class="text-[var(--session-muted)]">{@format_sec.(pace)}s/rep</span>
           <% end %>
           <%= cond do %>
             <% rest == 0 || is_nil(rest) -> %>

@@ -828,7 +828,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp celebration_headline(%{type: :session_pushup_pr, value: v}), do: "#{v}"
 
   defp celebration_headline(%{type: :pace_pr, value: v}),
-    do: "#{:erlang.float_to_binary(v * 1.0, decimals: 2)}s"
+    do: "#{:erlang.float_to_binary(v * 1.0, decimals: 1)}s"
 
   defp celebration_headline(%{type: :balanced_week}), do: "40 / 40"
   defp celebration_headline(%{type: :comeback, value: v}), do: "#{v} days"

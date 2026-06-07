@@ -7,8 +7,6 @@ defmodule BurpeeTrainer.Application do
 
   @impl true
   def start(_type, _args) do
-    warn_if_highs_missing()
-
     children = [
       BurpeeTrainerWeb.Telemetry,
       BurpeeTrainer.Repo,
@@ -18,7 +16,6 @@ defmodule BurpeeTrainer.Application do
       {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
       # Start a worker by calling: BurpeeTrainer.Worker.start_link(arg)
       # {BurpeeTrainer.Worker, arg},
-      {Task.Supervisor, name: BurpeeTrainer.CoachLearningSupervisor},
       # Start to serve requests, typically the last entry
       BurpeeTrainerWeb.Endpoint
     ]
@@ -40,18 +37,5 @@ defmodule BurpeeTrainer.Application do
   defp skip_migrations?() do
     # By default, sqlite migrations are run when using a release
     System.get_env("RELEASE_NAME") == nil
-  end
-
-  defp warn_if_highs_missing do
-    path = Application.get_env(:burpee_trainer, :highs_path, "highs")
-
-    if System.find_executable(path) == nil do
-      require Logger
-
-      Logger.warning(
-        "HiGHS solver not found on PATH (looked for #{inspect(path)}). " <>
-          "Plan generation will fail until HiGHS is installed."
-      )
-    end
   end
 end
