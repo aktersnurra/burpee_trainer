@@ -159,11 +159,16 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       view |> element("button", "Fine tune") |> render_click()
       html = render(view)
 
-      assert html =~ "2 × 10 reps"
-      assert html =~ "1 × 10 reps"
+      assert has_element?(view, "[data-grouped-set-row]")
+      assert html =~ "2 sets"
+      assert html =~ "10 reps"
+      assert html =~ "30s rest"
+      refute html =~ "+ Add set"
 
       view |> element("button", "Adjust sets") |> render_click()
-      assert render(view) =~ "Set 1"
+      expanded_html = render(view)
+      assert expanded_html =~ "Set 1"
+      assert expanded_html =~ "+ Add set"
     end
 
     test "plan edit page exposes duplicate and delete actions", %{conn: conn, user: user} do

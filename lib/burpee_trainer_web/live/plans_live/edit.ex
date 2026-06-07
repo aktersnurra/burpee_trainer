@@ -751,48 +751,37 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           <p class="text-sm text-[var(--session-muted)]">No planned rests</p>
         <% end %>
         <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
-          <form phx-change="change_rest" class="rounded-2xl bg-[var(--session-bg)] px-3 py-3">
+          <form
+            phx-change="change_rest"
+            data-rest-row
+            class="flex items-center gap-2 text-sm text-[var(--session-muted)]"
+          >
             <input type="hidden" name="rest[index]" value={idx} />
-            <div class="flex items-end gap-4">
-              <div class="space-y-1">
-                <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Rest</p>
-                <div class="flex items-baseline gap-1">
-                  <input
-                    type="number"
-                    name="rest[rest_sec]"
-                    min="1"
-                    value={rest.rest_sec}
-                    class="w-16 bg-transparent text-3xl font-bold leading-none tabular-nums text-[var(--session-ink)] focus:outline-none"
-                  />
-                  <span class="text-sm text-[var(--session-muted)]">s</span>
-                </div>
-              </div>
-              <span class="mb-1 text-xs text-[var(--session-muted)]">at</span>
-              <div class="space-y-1">
-                <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
-                  Minute
-                </p>
-                <div class="flex items-baseline gap-1">
-                  <input
-                    type="number"
-                    name="rest[target_min]"
-                    min="1"
-                    max={@plan_input.target_duration_min - 1}
-                    value={rest.target_min}
-                    class="w-16 bg-transparent text-3xl font-bold leading-none tabular-nums text-[var(--session-ink)] focus:outline-none"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                phx-click="remove_rest"
-                phx-value-index={idx}
-                class="mb-1 ml-auto text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-                aria-label="Remove rest"
-              >
-                <.icon name="hero-x-mark" class="size-3.5" />
-              </button>
-            </div>
+            <input
+              type="number"
+              name="rest[rest_sec]"
+              min="1"
+              value={rest.rest_sec}
+              class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-1 text-center text-sm tabular-nums text-[var(--session-ink)]"
+            />
+            <span>s rest at minute</span>
+            <input
+              type="number"
+              name="rest[target_min]"
+              min="1"
+              max={@plan_input.target_duration_min - 1}
+              value={rest.target_min}
+              class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-1 text-center text-sm tabular-nums text-[var(--session-ink)]"
+            />
+            <button
+              type="button"
+              phx-click="remove_rest"
+              phx-value-index={idx}
+              class="ml-auto text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+              aria-label="Remove rest"
+            >
+              <.icon name="hero-x-mark" class="size-3.5" />
+            </button>
           </form>
         <% end %>
         <div class="pt-1">

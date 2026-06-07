@@ -31,6 +31,16 @@
           </p>
         </div>
         <div class="relative flex items-center gap-3">
+          <%= if @manual_edit && grouped_sets? && !expanded do %>
+            <button
+              type="button"
+              phx-click="toggle_block_expand"
+              phx-value-index={block_f.index}
+              class="text-xs text-[var(--session-ink)] hover:text-[var(--session-muted)] transition"
+            >
+              Adjust sets
+            </button>
+          <% end %>
           <%= if @manual_edit do %>
             <button
               type="button"
@@ -96,27 +106,27 @@
             <%= if grouped_sets? && !expanded do %>
               <div class="flex-1 space-y-1">
                 <%= for group <- set_groups do %>
-                  <p class="text-sm text-[var(--session-muted)]">
-                    {group.count} × {group.burpee_count} reps
-                    <%= if group.sec_per_rep && group.sec_per_rep > 0 do %>
-                      · {format_sec(group.sec_per_rep)}s/rep
-                    <% end %>
-                    <%= if group.end_of_set_rest && group.end_of_set_rest > 0 do %>
-                      · {group.end_of_set_rest}s rest
-                    <% else %>
-                      · no rest
-                    <% end %>
-                  </p>
+                  <div
+                    data-grouped-set-row
+                    class="grid grid-cols-[1fr_1fr_1fr] gap-3 text-sm tabular-nums"
+                  >
+                    <span class="font-medium text-[var(--session-ink)]">
+                      {group.count} {if group.count == 1, do: "set", else: "sets"}
+                    </span>
+                    <span class="text-[var(--session-muted)]">{group.burpee_count} reps</span>
+                    <span class="text-[var(--session-muted)]">
+                      <%= if group.sec_per_rep && group.sec_per_rep > 0 do %>
+                        {format_sec(group.sec_per_rep)}s/rep
+                      <% end %>
+                      <%= if group.end_of_set_rest && group.end_of_set_rest > 0 do %>
+                        · {group.end_of_set_rest}s rest
+                      <% else %>
+                        · no rest
+                      <% end %>
+                    </span>
+                  </div>
                 <% end %>
               </div>
-              <button
-                type="button"
-                phx-click="toggle_block_expand"
-                phx-value-index={block_f.index}
-                class="text-xs text-[var(--session-ink)] hover:text-[var(--session-muted)] transition ml-auto"
-              >
-                Adjust sets
-              </button>
             <% else %>
               <div class="ml-auto flex items-center gap-3">
                 <%= if grouped_sets? do %>
@@ -256,7 +266,7 @@
         <input type="hidden" name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"} />
 
         <%!-- Add set: only in manual_edit, at bottom --%>
-        <%= if @manual_edit do %>
+        <%= if @manual_edit && (!grouped_sets? || expanded) do %>
           <label class="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition">
             + Add set
             <input
