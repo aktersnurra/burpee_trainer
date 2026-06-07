@@ -874,20 +874,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> Enum.zip(block_time_ranges)
       |> Enum.with_index(1)
       |> Enum.flat_map(fn {{block, {range_start, _range_end}}, block_index} ->
-        block.sets
-        |> Enum.sort_by(& &1.position)
-        |> group_equal_sets()
-        |> Enum.with_index()
-        |> Enum.map(fn {group, group_index} ->
-          %{
-            kind: :work,
-            block_index: block_index - 1,
-            time_sec: range_start,
-            marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
-            title: "#{group.count} × #{group.burpee_count} reps",
-            detail: timeline_group_detail(group)
-          }
-        end)
+        {rows, _elapsed} =
+          block.sets
+          |> Enum.sort_by(& &1.position)
+          |> group_equal_sets()
+          |> Enum.with_index()
+          |> Enum.map_reduce(range_start, fn {group, group_index}, elapsed ->
+            row = %{
+              kind: :work,
+              block_index: block_index - 1,
+              time_sec: elapsed,
+              marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
+              title: "#{group.count} × #{group.burpee_count} reps",
+              detail: timeline_group_detail(group)
+            }
+
+            {row, elapsed + timeline_group_duration(group)}
+          end)
+
+        rows
       end)
 
     finish_row = %{
@@ -902,6 +907,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       %{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}
       | block_rows ++ [finish_row]
     ]
+  end
+
+  defp timeline_group_duration(group) do
+    per_set_sec =
+      (group.burpee_count || 0) * (group.sec_per_rep || 0.0) + (group.end_of_set_rest || 0)
+
+    group.count * per_set_sec
   end
 
   defp timeline_group_detail(group) do

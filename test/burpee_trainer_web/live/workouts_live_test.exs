@@ -152,6 +152,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workout-play-plan-#{plan.id}[href='/session/#{plan.id}']")
     end
 
+    test "prescription timeline timestamps grouped work sequentially", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "Timeline Plan"})
+      {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert html =~ ~s(id="plan-prescription-timeline")
+      assert html =~ "0:00"
+      assert html =~ "3:00"
+    end
+
     test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Grouped Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
