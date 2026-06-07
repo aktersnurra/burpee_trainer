@@ -47,6 +47,26 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "[data-workout-row]")
     end
 
+    test "featured card uses coach recommendation when history is available", %{
+      conn: conn,
+      user: user
+    } do
+      plan = plan_fixture(user, %{"name" => "Stored Plan", "burpee_type" => "six_count"})
+
+      for _ <- 1..5 do
+        session_from_plan_fixture(user, plan, %{
+          "burpee_count_actual" => 30,
+          "duration_sec_actual" => 180
+        })
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/workouts")
+
+      assert has_element?(view, "#workouts-featured-card[data-featured-source='coach']")
+      assert render(view) =~ "Recommended today"
+      assert has_element?(view, "#workouts-featured-card a[href^='/workouts/new?']")
+    end
+
     test "Mine filter shows only plans", %{conn: conn, user: user} do
       _plan = plan_fixture(user, %{"name" => "My Plan"})
       _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 600})
