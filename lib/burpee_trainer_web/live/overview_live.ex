@@ -93,7 +93,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
             — train both burpee types this week to keep it.
           </p>
         </div>
-        <.status_strip
+        <.home_coach_card
           this_week={@this_week}
           trained_days={@trained_days}
           today={@today}
@@ -101,8 +101,8 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           goal_min={@goal_min}
           week_pushups={@week_pushups}
           current_level={@current_level}
+          last_plan={@last_plan}
         />
-        <.workout_card last_plan={@last_plan} />
         <%= for suggestion <- @coach_suggestions do %>
           <.coach_suggestion suggestion={suggestion} />
         <% end %>
@@ -153,8 +153,9 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   attr(:goal_min, :float, required: true)
   attr(:week_pushups, :integer, default: 0)
   attr(:current_level, :atom, default: nil)
+  attr(:last_plan, :any, default: nil)
 
-  defp status_strip(assigns) do
+  defp home_coach_card(assigns) do
     min_done = assigns.this_week.minutes |> Float.round(0) |> trunc()
     goal = trunc(assigns.goal_min)
     days = [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday]
@@ -184,6 +185,8 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     level_text =
       if assigns.current_level, do: "Level #{level_label(assigns.current_level)}", else: "Level —"
 
+    primary_action = primary_home_action(assigns.last_plan, min_done, goal)
+
     assigns =
       assign(assigns,
         min_done: min_done,
@@ -192,11 +195,20 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         session_count: session_count,
         pct: pct,
         ring_offset: ring_offset,
-        level_text: level_text
+        level_text: level_text,
+        primary_action: primary_action
       )
 
     ~H"""
-    <div class="space-y-4 border-b border-[var(--session-border)] px-1 pb-5">
+    <section
+      id="home-coach-card"
+      class="space-y-5 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5"
+    >
+      <div class="space-y-1">
+        <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+          What should I do now?
+        </p>
+      </div>
       <div class="flex items-center gap-7">
         <div class="relative size-[108px] shrink-0" aria-label={"#{@min_done} of #{@goal} minutes"}>
           <svg viewBox="0 0 100 100" class="size-full -rotate-90">
@@ -281,83 +293,47 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           <% end %>
         </div>
       </div>
-    </div>
-    """
-  end
 
-  attr(:last_plan, :any, default: nil)
-
-  defp workout_card(%{last_plan: nil} = assigns) do
-    ~H"""
-    <div
-      id="home-workout-card"
-      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-5 py-5 space-y-5"
-    >
-      <div class="space-y-1">
-        <p class="text-xl font-semibold leading-snug tracking-[-0.02em] text-[var(--session-ink)]">
-          Create a plan to begin
-        </p>
-        <p class="text-sm text-[var(--session-muted)]">Set your burpee type, reps, and duration</p>
-      </div>
-      <div class="flex justify-center">
-        <.link
-          navigate={~p"/workouts/new"}
-          class="size-12 border border-[var(--session-ink)] rounded-2xl text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
-          aria-label="Create a plan"
-        >
-          <.icon name="hero-plus" class="size-5" />
-        </.link>
-      </div>
-      <div class="text-center">
-        <.link
-          navigate={~p"/workouts"}
-          class="text-sm text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
-        >
-          Browse workouts →
-        </.link>
-      </div>
-    </div>
-    """
-  end
-
-  defp workout_card(assigns) do
-    type_label = if assigns.last_plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
-    assigns = assign(assigns, :type_label, type_label)
-
-    ~H"""
-    <div
-      id="home-workout-card"
-      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-5 py-4"
-    >
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0 space-y-0.5">
-          <p class="text-base font-semibold leading-snug truncate text-[var(--session-ink)]">
-            {@last_plan.name}
-          </p>
-          <p class="text-sm text-[var(--session-muted)] tabular-nums">
-            {@last_plan.burpee_count_target} {@type_label}
-            <span class="text-[var(--session-muted)]"> · </span>
-            {@last_plan.target_duration_min} min
-          </p>
+      <div class="border-t border-[var(--session-border)] pt-4">
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0 space-y-1">
+            <p class="text-lg font-semibold leading-snug tracking-[-0.02em] text-[var(--session-ink)]">
+              {@primary_action.title}
+            </p>
+            <p class="text-sm text-[var(--session-muted)]">{@primary_action.reason}</p>
+          </div>
+          <.link
+            id="home-primary-action"
+            navigate={@primary_action.path}
+            class="shrink-0 rounded-2xl border border-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)]"
+          >
+            {@primary_action.label}
+          </.link>
         </div>
-        <.link
-          navigate={~p"/session/#{@last_plan.id}"}
-          class="size-11 shrink-0 border border-[var(--session-ink)] rounded-2xl text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
-          aria-label="Start workout"
-        >
-          <.icon name="hero-play" class="size-4" />
-        </.link>
       </div>
-      <div class="mt-3 pt-3 border-t border-[var(--session-border)]">
-        <.link
-          navigate={~p"/workouts"}
-          class="text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
-        >
-          Pick another workout →
-        </.link>
-      </div>
-    </div>
+    </section>
     """
+  end
+
+  defp primary_home_action(nil, _min_done, _goal) do
+    %{
+      title: "Create your first training session",
+      reason: "Set your burpee type, reps, and duration before starting.",
+      label: "Create",
+      path: ~p"/workouts/new"
+    }
+  end
+
+  defp primary_home_action(plan, min_done, goal) do
+    type_label = if plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
+    minutes_left = max(goal - min_done, 0)
+
+    %{
+      title: "Start #{plan.target_duration_min} min · #{type_label}",
+      reason: "#{minutes_left} min left this week. One session now moves the week forward.",
+      label: "Start",
+      path: ~p"/session/#{plan.id}"
+    }
   end
 
   attr(:suggestion, :any, default: nil)
