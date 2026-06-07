@@ -44,12 +44,20 @@
               </p>
               <div id="plan-prescription-timeline" class="mt-5 space-y-0">
                 <%= for row <- @timeline_rows do %>
-                  <div class="grid grid-cols-[3.5rem_1rem_1fr] gap-3 py-2 text-sm">
+                  <div
+                    class="grid grid-cols-[3.5rem_1rem_1fr] gap-3 py-2 text-sm"
+                    data-timeline-work-node={row.kind == :work && "true"}
+                    phx-click={row.kind == :work && "toggle_block_expand"}
+                    phx-value-index={row.kind == :work && row.block_index}
+                  >
                     <span class="text-xs tabular-nums text-[var(--session-muted)]">
                       {Fmt.duration_sec(round(row.time_sec))}
                     </span>
                     <span class="relative flex justify-center">
-                      <span class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--session-border)]" />
+                      <span
+                        data-timeline-edge
+                        class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--session-border)]"
+                      />
                       <span class="relative mt-1 size-2 rounded-full bg-[var(--session-ink)]" />
                     </span>
                     <div class="space-y-0.5">
@@ -60,7 +68,7 @@
                             :if={row.title not in ["", nil]}
                             class="text-[var(--session-muted)]"
                           >
-                             · 
+                            ·
                           </span>
                         <% end %>
                         <span :if={row.title not in ["", nil]}>{row.title}</span>

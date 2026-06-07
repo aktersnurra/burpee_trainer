@@ -881,6 +881,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         |> Enum.map(fn {group, group_index} ->
           %{
             kind: :work,
+            block_index: block_index - 1,
             time_sec: range_start,
             marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
             title: "#{group.count} × #{group.burpee_count} reps",
