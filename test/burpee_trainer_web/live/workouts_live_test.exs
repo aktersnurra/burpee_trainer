@@ -42,7 +42,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/workouts")
 
       assert has_element?(view, "#workouts-featured-card")
+      assert has_element?(view, "#workouts-options-section")
       assert has_element?(view, "#workouts-filter-panel")
+      assert has_element?(view, "#workouts-custom-session[href='/workouts/new']")
       assert has_element?(view, "#workouts-list")
       assert has_element?(view, "[data-workout-row]")
     end
@@ -65,6 +67,13 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workouts-featured-card[data-featured-source='coach']")
       assert render(view) =~ "Recommended today"
       assert has_element?(view, "#workouts-featured-card a[href^='/workouts/new?']")
+    end
+
+    test "Workouts page does not render a floating new-plan action", %{conn: conn, user: user} do
+      _plan = plan_fixture(user, %{"name" => "My Plan"})
+      {:ok, _view, html} = live(conn, ~p"/workouts")
+
+      refute html =~ ~s(id="workouts-floating-new-plan")
     end
 
     test "Mine filter shows only plans", %{conn: conn, user: user} do

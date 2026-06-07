@@ -180,70 +180,80 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
         <.featured_workout item={@featured_item} recommendation={@featured_recommendation} />
 
-        <%!-- Single scrollable filter row --%>
-        <div
-          id="workouts-filter-panel"
-          class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-3"
-        >
-          <div class="flex gap-2 overflow-x-auto no-scrollbar">
-            <.filter_pill
-              label="Mine"
-              value_key="source"
-              value="mine"
-              active={@filters[:source] == :mine}
-            />
-            <.filter_pill
-              label="Videos"
-              value_key="source"
-              value="videos"
-              active={@filters[:source] == :videos}
-            />
-            <.filter_pill
-              label="6-Count"
-              value_key="burpee_type"
-              value="six_count"
-              active={@filters[:burpee_type] == :six_count}
-            />
-            <.filter_pill
-              label="Navy SEAL"
-              value_key="burpee_type"
-              value="navy_seal"
-              active={@filters[:burpee_type] == :navy_seal}
-            />
-            <%= for {level_atom, label} <- @level_pills do %>
+        <section id="workouts-options-section" class="space-y-3 pt-1">
+          <div class="flex items-end justify-between gap-4 px-1">
+            <div class="space-y-0.5">
+              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+                Other options
+              </p>
+              <p class="text-sm text-[var(--session-muted)]">
+                Choose something else or build custom.
+              </p>
+            </div>
+            <.link
+              id="workouts-custom-session"
+              navigate={~p"/workouts/new"}
+              class="shrink-0 text-xs font-semibold text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
+            >
+              Custom session
+            </.link>
+          </div>
+
+          <%!-- Single scrollable filter row --%>
+          <div
+            id="workouts-filter-panel"
+            class="rounded-2xl bg-[var(--session-surface)] px-3 py-3"
+          >
+            <div class="flex gap-2 overflow-x-auto no-scrollbar">
               <.filter_pill
-                label={label}
-                value_key="level"
-                value={Atom.to_string(level_atom)}
-                active={@filters[:level] == level_atom}
+                label="Mine"
+                value_key="source"
+                value="mine"
+                active={@filters[:source] == :mine}
               />
-            <% end %>
-          </div>
-        </div>
-
-        <%!-- List or empty state --%>
-        <%= if @items == [] do %>
-          <.empty_state filters={@filters} />
-        <% else %>
-          <div id="workouts-list" class="space-y-3">
-            <%= for item <- @items do %>
-              <.workout_card
-                item={item}
-                open_menu={@open_menu_id == to_string(item.id) <> to_string(item.kind)}
+              <.filter_pill
+                label="Videos"
+                value_key="source"
+                value="videos"
+                active={@filters[:source] == :videos}
               />
-            <% end %>
+              <.filter_pill
+                label="6-Count"
+                value_key="burpee_type"
+                value="six_count"
+                active={@filters[:burpee_type] == :six_count}
+              />
+              <.filter_pill
+                label="Navy SEAL"
+                value_key="burpee_type"
+                value="navy_seal"
+                active={@filters[:burpee_type] == :navy_seal}
+              />
+              <%= for {level_atom, label} <- @level_pills do %>
+                <.filter_pill
+                  label={label}
+                  value_key="level"
+                  value={Atom.to_string(level_atom)}
+                  active={@filters[:level] == level_atom}
+                />
+              <% end %>
+            </div>
           </div>
-        <% end %>
-      </div>
 
-      <div class="session-surface fixed bottom-20 right-4 z-40 sm:bottom-8 sm:right-6">
-        <.link
-          navigate={~p"/workouts/new"}
-          class="flex size-12 items-center justify-center border border-[var(--session-ink)] rounded-2xl bg-[var(--session-ink)] text-[var(--session-bg)] shadow-lg shadow-black/20 transition active:scale-95 hover:opacity-90"
-          aria-label="New plan"
-        >
-          <.icon name="hero-plus" class="size-5" />
-        </.link>
+          <%!-- List or empty state --%>
+          <%= if @items == [] do %>
+            <.empty_state filters={@filters} />
+          <% else %>
+            <div id="workouts-list" class="space-y-3">
+              <%= for item <- @items do %>
+                <.workout_card
+                  item={item}
+                  open_menu={@open_menu_id == to_string(item.id) <> to_string(item.kind)}
+                />
+              <% end %>
+            </div>
+          <% end %>
+        </section>
       </div>
     </Layouts.app>
     """
