@@ -33,13 +33,45 @@
                     class="text-xs text-[var(--session-muted)] tabular-nums"
                   >
                     {Atom.to_string(@plan_input.pacing_style) |> String.capitalize()} · about {:erlang.float_to_binary(
-                      @solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                      @solver_solution.sec_per_burpee * 1.0,
+                      decimals: 2
+                    )}s/rep
                   </p>
                 </div>
               </div>
               <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
                 Predicted
               </p>
+              <div id="plan-prescription-timeline" class="mt-5 space-y-0">
+                <%= for row <- @timeline_rows do %>
+                  <div class="grid grid-cols-[3.5rem_1rem_1fr] gap-3 py-2 text-sm">
+                    <span class="text-xs tabular-nums text-[var(--session-muted)]">
+                      {Fmt.duration_sec(round(row.time_sec))}
+                    </span>
+                    <span class="relative flex justify-center">
+                      <span class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--session-border)]" />
+                      <span class="relative mt-1 size-2 rounded-full bg-[var(--session-ink)]" />
+                    </span>
+                    <div class="space-y-0.5">
+                      <p class="font-semibold text-[var(--session-ink)]">
+                        <%= if row.marker not in ["", nil] do %>
+                          <span>{row.marker}</span>
+                          <span
+                            :if={row.title not in ["", nil]}
+                            class="text-[var(--session-muted)]"
+                          >
+                             · 
+                          </span>
+                        <% end %>
+                        <span :if={row.title not in ["", nil]}>{row.title}</span>
+                      </p>
+                      <p :if={row.detail} class="text-xs text-[var(--session-muted)]">
+                        {row.detail}
+                      </p>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
             </div>
             <%= if !@manual_edit do %>
               <button

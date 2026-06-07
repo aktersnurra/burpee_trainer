@@ -221,6 +221,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Prescription"
       assert html =~ "Predicted"
       assert html =~ "Advanced"
+      assert html =~ ~s(id="plan-prescription-timeline")
+      assert html =~ "Start"
+      assert html =~ "Finish"
       assert html =~ "Six-Count"
       assert html =~ "Navy SEAL"
       assert html =~ "Create session"

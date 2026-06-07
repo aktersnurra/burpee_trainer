@@ -524,14 +524,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:level, :atom, required: true)
 
   defp plan_solution_card(assigns) do
+    form_plan = Ecto.Changeset.apply_changes(assigns.form.source)
+    block_time_ranges = block_time_ranges(form_plan.blocks, assigns.plan_input)
+
     assigns =
-      assign(
-        assigns,
-        :block_time_ranges,
-        block_time_ranges(
-          Ecto.Changeset.apply_changes(assigns.form.source).blocks,
-          assigns.plan_input
-        )
+      assigns
+      |> assign(:block_time_ranges, block_time_ranges)
+      |> assign(
+        :timeline_rows,
+        prescription_timeline(form_plan.blocks, block_time_ranges, assigns.derived)
       )
 
     plan_solution_card_template(assigns)
@@ -864,6 +865,60 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       <% end %>
     </div>
     """
+  end
+
+  defp prescription_timeline(blocks, block_time_ranges, derived) do
+    block_rows =
+      blocks
+      |> Enum.sort_by(& &1.position)
+      |> Enum.zip(block_time_ranges)
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn {{block, {range_start, _range_end}}, block_index} ->
+        block.sets
+        |> Enum.sort_by(& &1.position)
+        |> group_equal_sets()
+        |> Enum.with_index()
+        |> Enum.map(fn {group, group_index} ->
+          %{
+            kind: :work,
+            time_sec: range_start,
+            marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
+            title: "#{group.count} × #{group.burpee_count} reps",
+            detail: timeline_group_detail(group)
+          }
+        end)
+      end)
+
+    finish_row = %{
+      kind: :finish,
+      time_sec: if(derived, do: derived.duration_sec, else: 0),
+      marker: "Finish",
+      title: "Predicted finish",
+      detail: nil
+    }
+
+    [
+      %{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}
+      | block_rows ++ [finish_row]
+    ]
+  end
+
+  defp timeline_group_detail(group) do
+    pace =
+      if group.sec_per_rep && group.sec_per_rep > 0 do
+        "#{format_sec(group.sec_per_rep)}s/rep"
+      end
+
+    rest =
+      if group.end_of_set_rest && group.end_of_set_rest > 0 do
+        "#{group.end_of_set_rest}s recovery"
+      else
+        "no recovery"
+      end
+
+    [pace, rest]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
   end
 
   defp group_equal_sets(sets) do
