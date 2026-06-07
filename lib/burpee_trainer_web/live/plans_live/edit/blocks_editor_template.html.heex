@@ -6,7 +6,7 @@
     repeat = block_f[:repeat_count].value || 1
     {range_start, range_end} = Enum.at(@block_time_ranges, block_f.index, {0.0, 0.0}) %>
 
-    <div class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-bg)] px-4 py-4 space-y-4">
+    <div class="border-t border-[var(--session-border)] pt-5 space-y-4">
       <input type="hidden" name="workout_plan[blocks_sort][]" value={block_f.index} />
       <input
         type="hidden"
@@ -18,7 +18,7 @@
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 space-y-1">
           <p class="text-base font-semibold tracking-[-0.02em] text-[var(--session-ink)]">
-            Segment {block_f.index + 1}
+            Block {block_f.index + 1}
           </p>
           <p class="text-xs text-[var(--session-muted)] tabular-nums">
             {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
@@ -155,7 +155,7 @@
 
           <%= if @manual_edit do %>
             <div class={[
-              "rounded-2xl bg-[var(--session-surface)] px-3 py-3",
+              "border-t border-[var(--session-border)] py-3",
               hide_row && "hidden"
             ]}>
               <div class="mb-2 flex items-center justify-between gap-3">
@@ -194,7 +194,7 @@
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                     value={set_f[:burpee_count].value}
                     min="0"
-                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-bg)] px-2 py-2 text-sm text-center tabular-nums"
+                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
                 <label class="space-y-1">
@@ -207,7 +207,7 @@
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
                     value={format_sec(set_f[:sec_per_rep].value)}
                     min="0.1"
-                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-bg)] px-2 py-2 text-sm text-center tabular-nums"
+                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
                 <label class="space-y-1">
@@ -219,7 +219,7 @@
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
                     value={set_f[:end_of_set_rest].value}
                     min="0"
-                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-bg)] px-2 py-2 text-sm text-center tabular-nums"
+                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
               </div>

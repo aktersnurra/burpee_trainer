@@ -209,17 +209,18 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ">Pace<"
     end
 
-    test "fine tuning exposes segment-style set editing", %{conn: conn} do
+    test "fine tuning keeps block language without splitting into nested cards", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view |> element("button", "Fine tune") |> render_click()
 
       html = render(view)
-      assert html =~ "Segment 1"
+      assert html =~ "Block 1"
       assert html =~ "Set 1"
-      refute html =~ ">Block 1"
+      refute html =~ "Segment 1"
       refute html =~ ">Cadence<"
       refute html =~ ">Rest [s]<"
+      refute html =~ ~s(data-fine-tune-card)
     end
 
     test "picking Navy SEAL keeps the editor rendered", %{conn: conn} do
