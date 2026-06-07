@@ -546,7 +546,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     <div class="flex items-end justify-between gap-4 border-b border-[var(--session-border)] pb-4">
       <form phx-change="change_basics" class="min-w-0 flex-1 space-y-1">
         <label class="text-[10px] uppercase tracking-[0.24em] text-[var(--session-muted)]">
-          Plan
+          Custom session
         </label>
         <input
           type="text"
