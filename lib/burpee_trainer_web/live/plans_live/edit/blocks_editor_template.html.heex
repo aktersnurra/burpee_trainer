@@ -6,7 +6,7 @@
     repeat = block_f[:repeat_count].value || 1
     {range_start, range_end} = Enum.at(@block_time_ranges, block_f.index, {0.0, 0.0}) %>
 
-    <div class="border-t border-[var(--session-border)] pt-5 space-y-4">
+    <div class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-bg)] px-4 py-4 space-y-4">
       <input type="hidden" name="workout_plan[blocks_sort][]" value={block_f.index} />
       <input
         type="hidden"
@@ -15,18 +15,20 @@
       />
 
       <%!-- Block header --%>
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-[var(--session-muted)]">
-            Block {block_f.index + 1}
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 space-y-1">
+          <p class="text-base font-semibold tracking-[-0.02em] text-[var(--session-ink)]">
+            Segment {block_f.index + 1}
+          </p>
+          <p class="text-xs text-[var(--session-muted)] tabular-nums">
+            {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
+            <span class="px-1 text-[var(--session-muted)]">·</span>
+            {length(sets)} sets
             <%= if repeat && repeat > 1 do %>
-              <span class="font-normal text-[var(--session-muted)]">×{repeat}</span>
+              <span class="px-1 text-[var(--session-muted)]">·</span>repeats ×{repeat}
             <% end %>
-          </span>
+          </p>
         </div>
-        <span class="text-xs text-[var(--session-muted)] tabular-nums">
-          {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
-        </span>
         <div class="relative flex items-center gap-3">
           <%= if @manual_edit do %>
             <button
@@ -69,7 +71,7 @@
       <%!-- Repeat count — only when manual_edit --%>
       <%= if @manual_edit do %>
         <div class="flex items-center gap-2">
-          <label class="text-xs text-[var(--session-muted)] shrink-0">Repeats</label>
+          <label class="text-xs text-[var(--session-muted)] shrink-0">Repeat</label>
           <input
             type="number"
             name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
@@ -89,32 +91,29 @@
       <%!-- Sets --%>
       <div class="space-y-3">
         <%= if @manual_edit do %>
-          <%!-- Editable mode: column headers + input rows --%>
-          <div class="flex items-center gap-3 mb-1">
-            <span class="w-6 shrink-0" />
+          <div class="flex items-center justify-between gap-3">
             <%= if uniform && !expanded && length(sets) > 1 do %>
               <% first = List.first(sets) %>
-              <span class="text-xs text-[var(--session-muted)] flex-1">
-                {length(sets)} × {first.burpee_count} reps
+              <span class="text-sm text-[var(--session-muted)] flex-1">
+                {length(sets)} sets of {first.burpee_count} reps
                 <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>
                   · {format_sec(first.sec_per_rep)}s/rep
                 <% end %>
                 <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
                   · {first.end_of_set_rest}s rest
+                <% else %>
+                  · no rest
                 <% end %>
               </span>
               <button
                 type="button"
                 phx-click="toggle_block_expand"
                 phx-value-index={block_f.index}
-                class="text-xs text-[var(--session-ink)] hover:underline ml-auto"
+                class="text-xs text-[var(--session-ink)] hover:text-[var(--session-muted)] transition ml-auto"
               >
-                Edit sets
+                Adjust sets
               </button>
             <% else %>
-              <span class="w-12 text-xs text-[var(--session-muted)] text-center">Reps</span>
-              <span class="w-12 text-xs text-[var(--session-muted)] text-center">Cadence</span>
-              <span class="w-12 text-xs text-[var(--session-muted)] text-center">Rest [s]</span>
               <div class="ml-auto flex items-center gap-3">
                 <%= if uniform && length(sets) > 1 do %>
                   <button
@@ -156,52 +155,71 @@
 
           <%= if @manual_edit do %>
             <div class={[
-              "flex items-center gap-2 py-1 border-b border-[var(--session-border)] last:border-0",
+              "rounded-2xl bg-[var(--session-surface)] px-3 py-3",
               hide_row && "hidden"
             ]}>
-              <span class="text-xs text-[var(--session-muted)] tabular-nums w-5 shrink-0 text-right">
-                {set_f.index + 1}
-              </span>
-              <input
-                type="number"
-                name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
-                value={set_f[:burpee_count].value}
-                min="0"
-                class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
-              />
-              <input
-                type="number"
-                step="0.1"
-                name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
-                value={format_sec(set_f[:sec_per_rep].value)}
-                min="0.1"
-                class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
-              />
-              <input
-                type="number"
-                name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
-                value={set_f[:end_of_set_rest].value}
-                min="0"
-                class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-1 py-1 text-sm text-center tabular-nums"
-              />
-              <div class="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  phx-click="copy_set"
-                  phx-value-block_index={block_f.index}
-                  phx-value-set_index={set_f.index}
-                  class="text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
-                  aria-label="Copy set"
-                >
-                  <.icon name="hero-document-duplicate" class="size-3.5" />
-                </button>
-                <label class="cursor-pointer text-[var(--session-muted)] hover:text-error transition">
-                  <.icon name="hero-trash" class="size-3.5" />
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <p class="text-xs font-medium text-[var(--session-muted)] tabular-nums">
+                  Set {set_f.index + 1}
+                </p>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    phx-click="copy_set"
+                    phx-value-block_index={block_f.index}
+                    phx-value-set_index={set_f.index}
+                    class="text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
+                    aria-label="Copy set"
+                  >
+                    <.icon name="hero-document-duplicate" class="size-3.5" />
+                  </button>
+                  <label class="cursor-pointer text-[var(--session-muted)] hover:text-error transition">
+                    <.icon name="hero-trash" class="size-3.5" />
+                    <input
+                      type="checkbox"
+                      name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"}
+                      value={set_f.index}
+                      class="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <label class="space-y-1">
+                  <span class="text-[10px] uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                    Reps
+                  </span>
                   <input
-                    type="checkbox"
-                    name={"workout_plan[blocks][#{block_f.index}][sets_drop][]"}
-                    value={set_f.index}
-                    class="hidden"
+                    type="number"
+                    name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
+                    value={set_f[:burpee_count].value}
+                    min="0"
+                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-bg)] px-2 py-2 text-sm text-center tabular-nums"
+                  />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-[10px] uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                    Pace
+                  </span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
+                    value={format_sec(set_f[:sec_per_rep].value)}
+                    min="0.1"
+                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-bg)] px-2 py-2 text-sm text-center tabular-nums"
+                  />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-[10px] uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                    Rest
+                  </span>
+                  <input
+                    type="number"
+                    name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
+                    value={set_f[:end_of_set_rest].value}
+                    min="0"
+                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-bg)] px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
               </div>
