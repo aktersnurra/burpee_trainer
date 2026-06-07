@@ -16,10 +16,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "No workouts yet"
     end
 
-    test "links to tracking test page", %{conn: conn} do
+    test "does not expose diagnostics in the normal workouts header", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/workouts")
-      assert html =~ "Tracking Test"
-      assert html =~ ~s(href="/tracking-test")
+      refute html =~ "Tracking Test"
+      refute html =~ "Diagnostics"
+      refute html =~ ~s(href="/tracking-test")
     end
 
     test "lists plans and videos together", %{conn: conn, user: user} do

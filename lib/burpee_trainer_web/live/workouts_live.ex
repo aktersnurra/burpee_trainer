@@ -160,7 +160,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
       <div class="session-surface mx-auto max-w-lg space-y-5 bg-[var(--session-bg)] text-[var(--session-ink)]">
-        <header class="flex items-end justify-between gap-4 px-1 pt-1">
+        <header class="px-1 pt-1">
           <div class="space-y-1">
             <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
               Workouts
@@ -169,13 +169,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
               Choose training
             </h1>
           </div>
-          <.link
-            navigate={~p"/tracking-test"}
-            class="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-          >
-            <span class="sr-only">Tracking Test</span>
-            <span aria-hidden="true">Diagnostics</span>
-          </.link>
         </header>
 
         <.featured_workout item={@featured_item} recommendation={@featured_recommendation} />
