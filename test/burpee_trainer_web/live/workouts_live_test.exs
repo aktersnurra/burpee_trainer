@@ -156,7 +156,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       plan = plan_fixture(user, %{"name" => "Grouped Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      view |> element("button", "Fine tune") |> render_click()
+      view |> element("button", "Advanced") |> render_click()
       html = render(view)
 
       assert has_element?(view, "[data-grouped-set-row]")
@@ -214,29 +214,29 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "session-surface"
       assert html =~ ~s(id="plan-form")
       assert html =~ "Custom session"
-      assert html =~ "What are you training?"
-      assert html =~ "How long?"
-      assert html =~ "What target?"
-      assert html =~ "How should it feel?"
-      assert html =~ "This creates a"
-      assert html =~ "Fine tune"
+      assert html =~ "Type"
+      assert html =~ "Duration"
+      assert html =~ "Goal"
+      assert html =~ "Style"
+      assert html =~ "Prescription"
+      assert html =~ "Predicted"
+      assert html =~ "Advanced"
       assert html =~ "Six-Count"
       assert html =~ "Navy SEAL"
       assert html =~ "Create session"
-      refute html =~ ">Duration<"
       refute html =~ ">Reps<"
       refute html =~ ">Pace<"
     end
 
-    test "fine tuning keeps block language without splitting into nested cards", %{conn: conn} do
+    test "advanced keeps block language without splitting into nested cards", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view |> element("button", "Fine tune") |> render_click()
+      view |> element("button", "Advanced") |> render_click()
 
       html = render(view)
       assert html =~ "Block 1"
       assert html =~ "Set 1"
-      assert html =~ "Fine tune"
+      assert html =~ "Advanced"
       assert html =~ "Adjust rests and block details"
       assert html =~ "Rest plan"
       assert html =~ "No planned rests"

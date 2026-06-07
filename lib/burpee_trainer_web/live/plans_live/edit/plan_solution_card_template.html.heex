@@ -9,25 +9,36 @@
       <%= if @derived do %>
         <div class="space-y-3">
           <div class="flex items-start justify-between gap-6">
-            <div class="space-y-1">
-              <p class={[
-                "text-lg font-semibold leading-snug tracking-[-0.02em]",
-                if(@derived.both_ok, do: "text-[var(--session-ink)]", else: "text-error")
-              ]}>
-                <%= if @derived.both_ok do %>
-                  This creates a {Fmt.duration_sec(round(@derived.duration_sec))} session with {@derived.burpee_count} reps.
-                <% else %>
-                  Needs adjustment before saving.
-                <% end %>
+            <div class="space-y-3">
+              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+                Prescription
               </p>
-              <p
-                :if={@solver_solution && !@manual_edit}
-                class="text-xs text-[var(--session-muted)] tabular-nums"
-              >
-                {Atom.to_string(@plan_input.pacing_style) |> String.capitalize()} pace · about {:erlang.float_to_binary(
-                  @solver_solution.sec_per_burpee * 1.0,
-                  decimals: 2
-                )}s/rep
+              <div class="flex items-end gap-6">
+                <p class={[
+                  "text-5xl font-semibold leading-none tracking-[-0.06em] tabular-nums",
+                  if(@derived.both_ok, do: "text-[var(--session-ink)]", else: "text-error")
+                ]}>
+                  <%= if @derived.both_ok do %>
+                    {Fmt.duration_sec(round(@derived.duration_sec))}
+                  <% else %>
+                    —
+                  <% end %>
+                </p>
+                <div class="space-y-1 pb-1">
+                  <p class="text-sm font-semibold text-[var(--session-ink)] tabular-nums">
+                    {@derived.burpee_count} reps
+                  </p>
+                  <p
+                    :if={@solver_solution && !@manual_edit}
+                    class="text-xs text-[var(--session-muted)] tabular-nums"
+                  >
+                    {Atom.to_string(@plan_input.pacing_style) |> String.capitalize()} · about {:erlang.float_to_binary(
+                      @solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                  </p>
+                </div>
+              </div>
+              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+                Predicted
               </p>
             </div>
             <%= if !@manual_edit do %>
@@ -36,7 +47,7 @@
                 phx-click="enable_manual_edit"
                 class="shrink-0 text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition pt-1"
               >
-                Fine tune
+                Advanced
               </button>
             <% end %>
           </div>
@@ -54,7 +65,7 @@
   >
     <div id="plan-fine-tune-panel" class={if(@manual_edit, do: "space-y-5", else: "hidden")}>
       <div class="border-t border-[var(--session-border)] pt-5">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Fine tune</p>
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Advanced</p>
         <p class="mt-1 text-xs text-[var(--session-muted)]">
           Adjust rests and block details only if this prescription needs changes.
         </p>

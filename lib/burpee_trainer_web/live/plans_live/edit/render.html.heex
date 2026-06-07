@@ -9,22 +9,22 @@
 
     <section class="space-y-2">
       <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        What are you training?
+        Type
       </p>
       <.plan_type_picker plan_input={@plan_input} />
     </section>
 
     <section class="space-y-2">
       <div class="grid grid-cols-2 px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        <p>How long?</p>
-        <p>What target?</p>
+        <p>Duration</p>
+        <p>Goal</p>
       </div>
       <.plan_goal_controls plan_input={@plan_input} level={@level} />
     </section>
 
     <section class="space-y-2">
       <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        How should it feel?
+        Style
       </p>
       <.plan_pacing_controls plan_input={@plan_input} />
     </section>
