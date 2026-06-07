@@ -159,7 +159,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       view |> element("button", "Fine tune") |> render_click()
       html = render(view)
 
-      assert html =~ "2 sets of 10 reps"
+      assert html =~ "2 × 10 reps"
+      assert html =~ "1 × 10 reps"
 
       view |> element("button", "Adjust sets") |> render_click()
       assert render(view) =~ "Set 1"
@@ -230,7 +231,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert html =~ "Block 1"
       assert html =~ "Set 1"
+      assert html =~ "Fine tune"
+      assert html =~ "Adjust rests and block details"
       assert html =~ "Rest plan"
+      assert html =~ "No planned rests"
       assert has_element?(view, "#plan-fine-tune-panel")
       assert has_element?(view, "#fine-tune-rests")
       refute html =~ "Segment 1"

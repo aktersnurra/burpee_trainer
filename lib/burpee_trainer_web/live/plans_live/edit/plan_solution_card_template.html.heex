@@ -52,7 +52,14 @@
     phx-submit="save"
     class="px-5 pb-5 space-y-4"
   >
-    <div id="plan-fine-tune-panel" class={if(@manual_edit, do: "", else: "hidden")}>
+    <div id="plan-fine-tune-panel" class={if(@manual_edit, do: "space-y-5", else: "hidden")}>
+      <div class="border-t border-[var(--session-border)] pt-5">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Fine tune</p>
+        <p class="mt-1 text-xs text-[var(--session-muted)]">
+          Adjust rests and block details only if this prescription needs changes.
+        </p>
+      </div>
+
       <.plan_rest_controls plan_input={@plan_input} level={@level} />
 
       <.blocks_editor

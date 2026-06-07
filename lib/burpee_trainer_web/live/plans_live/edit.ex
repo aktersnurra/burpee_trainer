@@ -734,7 +734,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_rest_controls(assigns) do
     ~H"""
-    <section id="fine-tune-rests" class="border-t border-[var(--session-border)] pt-5 space-y-3">
+    <section id="fine-tune-rests" class="space-y-3">
       <div class="flex items-center justify-between gap-4">
         <p class="text-sm font-semibold text-[var(--session-ink)]">Rest plan</p>
         <span class="text-xs tabular-nums text-[var(--session-muted)]">
@@ -747,6 +747,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </span>
       </div>
       <div class="space-y-2">
+        <%= if @plan_input.additional_rests == [] do %>
+          <p class="text-sm text-[var(--session-muted)]">No planned rests</p>
+        <% end %>
         <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
           <form phx-change="change_rest" class="rounded-2xl bg-[var(--session-bg)] px-3 py-3">
             <input type="hidden" name="rest[index]" value={idx} />
