@@ -18,7 +18,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   alias BurpeeTrainer.{Levels, Workouts}
   alias BurpeeTrainer.PlanEditor
-  alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
 
@@ -633,10 +632,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <form
       phx-change="change_basics"
-      class="grid grid-cols-3 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
+      class="grid grid-cols-2 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
     >
-      <div class="space-y-1 border-r border-[var(--session-border)] p-5">
-        <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Duration</p>
+      <div class="border-r border-[var(--session-border)] p-5">
         <div class="flex items-baseline gap-1">
           <input
             type="number"
@@ -644,76 +642,19 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             min="1"
             max="120"
             value={@plan_input.target_duration_min}
-            class="w-full bg-transparent text-4xl font-bold leading-none tabular-nums text-[var(--session-ink)] focus:outline-none"
+            class="w-full bg-transparent text-5xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)] focus:outline-none"
           />
           <span class="text-sm text-[var(--session-muted)]">min</span>
         </div>
       </div>
-      <div class="space-y-1 border-r border-[var(--session-border)] p-5">
-        <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Reps</p>
+      <div class="p-5">
         <input
           type="number"
           name="burpee_count_target"
           min="1"
           value={@plan_input.burpee_count_target}
-          class="w-full bg-transparent text-4xl font-bold leading-none tabular-nums text-[var(--session-ink)] focus:outline-none"
+          class="w-full bg-transparent text-5xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)] focus:outline-none"
         />
-      </div>
-      <div class="space-y-1 p-5">
-        <p class={[
-          "text-[10px] uppercase tracking-widest",
-          if(@plan_input.sec_per_burpee_override,
-            do: "text-[var(--session-ink)]",
-            else: "text-[var(--session-muted)]"
-          )
-        ]}>
-          Pace
-        </p>
-        <div class="flex items-baseline gap-1">
-          <input
-            type="number"
-            step="0.1"
-            min="1"
-            phx-change="set_pace_override"
-            phx-debounce="500"
-            name="pace"
-            placeholder={
-              :erlang.float_to_binary(
-                PlanSolver.effective_ceiling(%BurpeeTrainer.PlanSolver.Input{
-                  name: "",
-                  burpee_type: @plan_input.burpee_type,
-                  target_duration_min: @plan_input.target_duration_min,
-                  burpee_count_target: @plan_input.burpee_count_target,
-                  pacing_style: @plan_input.pacing_style,
-                  level: @level
-                }) * 1.0,
-                decimals: 1
-              )
-            }
-            value={
-              if @plan_input.sec_per_burpee_override,
-                do: :erlang.float_to_binary(@plan_input.sec_per_burpee_override * 1.0, decimals: 1),
-                else: ""
-            }
-            class={[
-              "w-full bg-transparent text-4xl font-bold leading-none tabular-nums text-[var(--session-ink)] placeholder:text-[var(--session-muted)] focus:outline-none",
-              if(@plan_input.sec_per_burpee_override, do: "text-[var(--session-ink)]", else: "")
-            ]}
-          />
-          <div class="flex flex-col items-center gap-0.5">
-            <span class="text-sm leading-none text-[var(--session-muted)]">s</span>
-            <%= if @plan_input.sec_per_burpee_override do %>
-              <button
-                type="button"
-                phx-click="set_pace_override"
-                phx-value-pace=""
-                class="text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-              >
-                <.icon name="hero-x-mark" class="size-2.5" />
-              </button>
-            <% end %>
-          </div>
-        </div>
       </div>
     </form>
     """

@@ -15,10 +15,9 @@
     </section>
 
     <section class="space-y-2">
-      <div class="grid grid-cols-3 px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+      <div class="grid grid-cols-2 px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
         <p>How long?</p>
         <p>What target?</p>
-        <p>Pace</p>
       </div>
       <.plan_goal_controls plan_input={@plan_input} level={@level} />
     </section>
@@ -30,7 +29,9 @@
       <.plan_pacing_controls plan_input={@plan_input} />
     </section>
 
-    <.plan_rest_controls plan_input={@plan_input} level={@level} />
+    <%= if @manual_edit do %>
+      <.plan_rest_controls plan_input={@plan_input} level={@level} />
+    <% end %>
 
     <.plan_solution_card
       form={@form}

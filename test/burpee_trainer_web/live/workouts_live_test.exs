@@ -199,16 +199,20 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "How long?"
       assert html =~ "What target?"
       assert html =~ "How should it feel?"
-      assert html =~ "Fine tune blocks"
+      assert html =~ "This creates a"
+      assert html =~ "Fine tune"
       assert html =~ "Six-Count"
       assert html =~ "Navy SEAL"
       assert html =~ "Create session"
+      refute html =~ ">Duration<"
+      refute html =~ ">Reps<"
+      refute html =~ ">Pace<"
     end
 
     test "fine tuning exposes block editing", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view |> element("button", "Fine tune blocks") |> render_click()
+      view |> element("button", "Fine tune") |> render_click()
 
       assert render(view) =~ "Block 1"
     end
