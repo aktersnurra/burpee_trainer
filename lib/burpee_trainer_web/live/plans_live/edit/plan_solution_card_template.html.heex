@@ -25,7 +25,9 @@
                 class="text-xs text-[var(--session-muted)] tabular-nums"
               >
                 {Atom.to_string(@plan_input.pacing_style) |> String.capitalize()} pace · about {:erlang.float_to_binary(
-                  @solver_solution.sec_per_burpee * 1.0, decimals: 2)}s/rep
+                  @solver_solution.sec_per_burpee * 1.0,
+                  decimals: 2
+                )}s/rep
               </p>
             </div>
             <%= if !@manual_edit do %>
@@ -50,7 +52,9 @@
     phx-submit="save"
     class="px-5 pb-5 space-y-4"
   >
-    <div class={if(@manual_edit, do: "", else: "hidden")}>
+    <div id="plan-fine-tune-panel" class={if(@manual_edit, do: "", else: "hidden")}>
+      <.plan_rest_controls plan_input={@plan_input} level={@level} />
+
       <.blocks_editor
         form={@form}
         expanded_blocks={@expanded_blocks}

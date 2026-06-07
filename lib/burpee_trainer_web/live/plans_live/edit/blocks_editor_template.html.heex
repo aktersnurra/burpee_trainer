@@ -2,7 +2,8 @@
   <.inputs_for :let={block_f} field={@form[:blocks]}>
     <% expanded = MapSet.member?(@expanded_blocks, block_f.index)
     sets = Ecto.Changeset.apply_changes(block_f.source).sets |> Enum.sort_by(& &1.position)
-    uniform = sets_uniform?(sets)
+    set_groups = group_equal_sets(sets)
+    grouped_sets? = length(set_groups) < length(sets)
     repeat = block_f[:repeat_count].value || 1
     {range_start, range_end} = Enum.at(@block_time_ranges, block_f.index, {0.0, 0.0}) %>
 
@@ -92,19 +93,22 @@
       <div class="space-y-3">
         <%= if @manual_edit do %>
           <div class="flex items-center justify-between gap-3">
-            <%= if uniform && !expanded && length(sets) > 1 do %>
-              <% first = List.first(sets) %>
-              <span class="text-sm text-[var(--session-muted)] flex-1">
-                {length(sets)} sets of {first.burpee_count} reps
-                <%= if first.sec_per_rep && first.sec_per_rep > 0 do %>
-                  · {format_sec(first.sec_per_rep)}s/rep
+            <%= if grouped_sets? && !expanded do %>
+              <div class="flex-1 space-y-1">
+                <%= for group <- set_groups do %>
+                  <p class="text-sm text-[var(--session-muted)]">
+                    {group.count} {if group.count == 1, do: "set", else: "sets"} of {group.burpee_count} reps
+                    <%= if group.sec_per_rep && group.sec_per_rep > 0 do %>
+                      · {format_sec(group.sec_per_rep)}s/rep
+                    <% end %>
+                    <%= if group.end_of_set_rest && group.end_of_set_rest > 0 do %>
+                      · {group.end_of_set_rest}s rest
+                    <% else %>
+                      · no rest
+                    <% end %>
+                  </p>
                 <% end %>
-                <%= if first.end_of_set_rest && first.end_of_set_rest > 0 do %>
-                  · {first.end_of_set_rest}s rest
-                <% else %>
-                  · no rest
-                <% end %>
-              </span>
+              </div>
               <button
                 type="button"
                 phx-click="toggle_block_expand"
@@ -115,7 +119,7 @@
               </button>
             <% else %>
               <div class="ml-auto flex items-center gap-3">
-                <%= if uniform && length(sets) > 1 do %>
+                <%= if grouped_sets? do %>
                   <button
                     type="button"
                     phx-click="toggle_block_expand"
@@ -136,7 +140,7 @@
         <% end %>
 
         <.inputs_for :let={set_f} field={block_f[:sets]}>
-          <% hide_row = @manual_edit && uniform && !expanded && length(sets) > 1 %>
+          <% hide_row = @manual_edit && grouped_sets? && !expanded %>
           <input
             type="hidden"
             name={"workout_plan[blocks][#{block_f.index}][sets_sort][]"}

@@ -152,6 +152,19 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workout-play-plan-#{plan.id}[href='/session/#{plan.id}']")
     end
 
+    test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "Grouped Plan"})
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      view |> element("button", "Fine tune") |> render_click()
+      html = render(view)
+
+      assert html =~ "2 sets of 10 reps"
+
+      view |> element("button", "Adjust sets") |> render_click()
+      assert render(view) =~ "Set 1"
+    end
+
     test "plan edit page exposes duplicate and delete actions", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "My Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
@@ -217,6 +230,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert html =~ "Block 1"
       assert html =~ "Set 1"
+      assert html =~ "Rest plan"
+      assert has_element?(view, "#plan-fine-tune-panel")
+      assert has_element?(view, "#fine-tune-rests")
       refute html =~ "Segment 1"
       refute html =~ ">Cadence<"
       refute html =~ ">Rest [s]<"

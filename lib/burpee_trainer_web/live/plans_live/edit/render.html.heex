@@ -29,10 +29,6 @@
       <.plan_pacing_controls plan_input={@plan_input} />
     </section>
 
-    <%= if @manual_edit do %>
-      <.plan_rest_controls plan_input={@plan_input} level={@level} />
-    <% end %>
-
     <.plan_solution_card
       form={@form}
       expanded_blocks={@expanded_blocks}
@@ -43,6 +39,7 @@
       solver_error={@solver_error}
       solver_solution={@solver_solution}
       live_action={@live_action}
+      level={@level}
     />
   </div>
 </Layouts.app>

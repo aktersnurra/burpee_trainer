@@ -521,6 +521,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:solver_error, :any, required: true)
   attr(:solver_solution, :any, required: true)
   attr(:live_action, :atom, required: true)
+  attr(:level, :atom, required: true)
 
   defp plan_solution_card(assigns) do
     assigns =
@@ -733,8 +734,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_rest_controls(assigns) do
     ~H"""
-    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
-      <div class="border-b border-[var(--session-border)] px-5 py-3">
+    <section id="fine-tune-rests" class="border-t border-[var(--session-border)] pt-5 space-y-3">
+      <div class="flex items-center justify-between gap-4">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Rest plan</p>
         <span class="text-xs tabular-nums text-[var(--session-muted)]">
           {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
           <span class="mx-1 text-[var(--session-muted)]">·</span>
@@ -744,9 +746,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           )}s/rep
         </span>
       </div>
-      <div class="divide-y divide-[var(--session-border)]">
+      <div class="space-y-2">
         <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
-          <form phx-change="change_rest" class="px-5 py-4">
+          <form phx-change="change_rest" class="rounded-2xl bg-[var(--session-bg)] px-3 py-3">
             <input type="hidden" name="rest[index]" value={idx} />
             <div class="flex items-end gap-4">
               <div class="space-y-1">
@@ -790,7 +792,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             </div>
           </form>
         <% end %>
-        <div class="px-5 py-3">
+        <div class="pt-1">
           <button
             type="button"
             phx-click="add_rest"
@@ -800,7 +802,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           </button>
         </div>
       </div>
-    </div>
+    </section>
     """
   end
 
@@ -872,17 +874,21 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     """
   end
 
-  defp sets_uniform?([]), do: true
-  defp sets_uniform?([_]), do: true
+  defp group_equal_sets(sets) do
+    sets
+    |> Enum.chunk_by(fn set ->
+      {set.burpee_count, set.sec_per_rep, set.sec_per_burpee, set.end_of_set_rest}
+    end)
+    |> Enum.map(fn group ->
+      first = List.first(group)
 
-  defp sets_uniform?(sets) do
-    first = List.first(sets)
-
-    Enum.all?(sets, fn s ->
-      s.burpee_count == first.burpee_count &&
-        s.end_of_set_rest == first.end_of_set_rest &&
-        s.sec_per_rep == first.sec_per_rep &&
-        s.sec_per_burpee == first.sec_per_burpee
+      %{
+        count: length(group),
+        burpee_count: first.burpee_count,
+        sec_per_rep: first.sec_per_rep,
+        sec_per_burpee: first.sec_per_burpee,
+        end_of_set_rest: first.end_of_set_rest
+      }
     end)
   end
 end
