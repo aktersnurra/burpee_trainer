@@ -532,7 +532,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> assign(:block_time_ranges, block_time_ranges)
       |> assign(
         :timeline_rows,
-        prescription_timeline(form_plan.blocks, block_time_ranges, assigns.derived)
+        prescription_timeline(
+          form_plan.blocks,
+          block_time_ranges,
+          assigns.derived,
+          assigns.plan_input
+        )
       )
 
     plan_solution_card_template(assigns)
@@ -867,7 +872,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     """
   end
 
-  defp prescription_timeline(blocks, block_time_ranges, derived) do
+  defp prescription_timeline(blocks, block_time_ranges, derived, plan_input) do
     block_rows =
       blocks
       |> Enum.sort_by(& &1.position)
@@ -917,6 +922,21 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       end)
       |> List.flatten()
 
+    additional_rest_rows =
+      plan_input.additional_rests
+      |> Enum.with_index()
+      |> Enum.map(fn {rest, index} ->
+        %{
+          kind: :rest,
+          rest_index: index,
+          time_sec: rest.target_min * 60,
+          marker: "Rest",
+          title: "+#{rest.rest_sec}s recovery",
+          detail: "at minute #{rest.target_min}",
+          rest: rest
+        }
+      end)
+
     finish_row = %{
       kind: :finish,
       time_sec: if(derived, do: derived.duration_sec, else: 0),
@@ -925,9 +945,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       detail: nil
     }
 
+    body_rows =
+      (block_rows ++ additional_rest_rows)
+      |> Enum.sort_by(& &1.time_sec)
+
     [
       %{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}
-      | block_rows ++ [finish_row]
+      | body_rows ++ [finish_row]
     ]
   end
 

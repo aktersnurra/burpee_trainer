@@ -176,6 +176,27 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Recovery"
     end
 
+    test "timeline add rest handle injects editable rest node", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      assert has_element?(view, "[data-timeline-add-rest]")
+      view |> element("[data-timeline-add-rest]") |> render_click()
+
+      assert has_element?(view, "[data-timeline-rest-node]")
+      assert has_element?(view, "[data-timeline-rest-editor]")
+      html = render(view)
+      assert html =~ "+30s recovery"
+      assert html =~ "at minute"
+
+      view
+      |> element("[data-timeline-rest-editor]")
+      |> render_change(%{"rest" => %{"index" => "0", "rest_sec" => "45", "target_min" => "8"}})
+
+      html = render(view)
+      assert html =~ "+45s recovery"
+      assert html =~ "at minute 8"
+    end
+
     test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Grouped Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
