@@ -157,8 +157,23 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
       assert html =~ ~s(id="plan-prescription-timeline")
+      assert html =~ ~s(data-timeline-rest-node)
       assert html =~ "0:00"
       assert html =~ "3:00"
+      assert html =~ "2 × 30s recovery"
+    end
+
+    test "work timeline node expands inline controls", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "Timeline Edit Plan"})
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      view |> element("[data-timeline-row-index='1'][data-timeline-work-node]") |> render_click()
+
+      assert has_element?(view, "[data-timeline-inline-editor]")
+      html = render(view)
+      assert html =~ "Rounds"
+      assert html =~ "Reps"
+      assert html =~ "Recovery"
     end
 
     test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do

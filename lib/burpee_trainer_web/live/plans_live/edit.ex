@@ -880,20 +880,42 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           |> group_equal_sets()
           |> Enum.with_index()
           |> Enum.map_reduce(range_start, fn {group, group_index}, elapsed ->
-            row = %{
+            work_sec = timeline_group_work_duration(group)
+            rest_sec = timeline_group_rest_duration(group)
+
+            work_row = %{
               kind: :work,
               block_index: block_index - 1,
               time_sec: elapsed,
               marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
               title: "#{group.count} × #{group.burpee_count} reps",
-              detail: timeline_group_detail(group)
+              detail: timeline_group_work_detail(group),
+              group: group
             }
 
-            {row, elapsed + timeline_group_duration(group)}
+            rest_rows =
+              if rest_sec > 0 do
+                [
+                  %{
+                    kind: :rest,
+                    block_index: block_index - 1,
+                    time_sec: elapsed + work_sec,
+                    marker: "Rest",
+                    title: "#{group.count} × #{group.end_of_set_rest}s recovery",
+                    detail: nil,
+                    group: group
+                  }
+                ]
+              else
+                []
+              end
+
+            {[work_row | rest_rows], elapsed + work_sec + rest_sec}
           end)
 
         rows
       end)
+      |> List.flatten()
 
     finish_row = %{
       kind: :finish,
@@ -909,29 +931,18 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ]
   end
 
-  defp timeline_group_duration(group) do
-    per_set_sec =
-      (group.burpee_count || 0) * (group.sec_per_rep || 0.0) + (group.end_of_set_rest || 0)
-
-    group.count * per_set_sec
+  defp timeline_group_work_duration(group) do
+    group.count * (group.burpee_count || 0) * (group.sec_per_rep || 0.0)
   end
 
-  defp timeline_group_detail(group) do
-    pace =
-      if group.sec_per_rep && group.sec_per_rep > 0 do
-        "#{format_sec(group.sec_per_rep)}s/rep"
-      end
+  defp timeline_group_rest_duration(group) do
+    group.count * (group.end_of_set_rest || 0)
+  end
 
-    rest =
-      if group.end_of_set_rest && group.end_of_set_rest > 0 do
-        "#{group.end_of_set_rest}s recovery"
-      else
-        "no recovery"
-      end
-
-    [pace, rest]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" · ")
+  defp timeline_group_work_detail(group) do
+    if group.sec_per_rep && group.sec_per_rep > 0 do
+      "#{format_sec(group.sec_per_rep)}s/rep"
+    end
   end
 
   defp group_equal_sets(sets) do
