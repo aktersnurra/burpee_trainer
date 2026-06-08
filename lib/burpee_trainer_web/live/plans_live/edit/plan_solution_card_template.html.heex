@@ -57,10 +57,10 @@
                   <div
                     class="grid grid-cols-[4rem_1.25rem_1fr] gap-4 py-3 text-base"
                     data-timeline-row-index={row_index}
-                    data-timeline-work-node={row.kind == :work && "true"}
+                    data-timeline-block-node={row.kind == :block && "true"}
                     data-timeline-rest-node={row.kind == :rest && "true"}
-                    phx-click={row.kind == :work && "toggle_timeline_work"}
-                    phx-value-row-index={row.kind == :work && row_index}
+                    phx-click={row.kind == :block && "toggle_timeline_block"}
+                    phx-value-row-index={row.kind == :block && row_index}
                   >
                     <span class="text-sm tabular-nums text-[var(--session-muted)]">
                       {Fmt.duration_sec(round(row.time_sec))}
@@ -88,46 +88,59 @@
                       <p :if={row.detail} class="text-xs text-[var(--session-muted)]">
                         {row.detail}
                       </p>
-                      <form
-                        :if={row.kind == :work && @expanded_timeline_row == row_index}
-                        phx-change="change_timeline_work"
-                        data-timeline-inline-editor
-                        class="mt-4 grid grid-cols-3 gap-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4 text-xs"
+                      <div
+                        :if={row.kind == :block && @expanded_timeline_row == row_index}
+                        class="mt-4 space-y-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4"
                       >
-                        <input type="hidden" name="work[block_index]" value={row.block_index} />
-                        <input type="hidden" name="work[group_index]" value={row.group_index} />
-                        <label>
-                          <span class="text-[var(--session-muted)]">Reps</span>
-                          <input
-                            type="number"
-                            name="work[burpee_count]"
-                            min="1"
-                            value={row.group.burpee_count}
-                            class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                          />
-                        </label>
-                        <label>
-                          <span class="text-[var(--session-muted)]">Pace</span>
-                          <input
-                            type="number"
-                            name="work[sec_per_rep]"
-                            min="0.1"
-                            step="0.1"
-                            value={row.group.sec_per_rep}
-                            class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                          />
-                        </label>
-                        <label>
-                          <span class="text-[var(--session-muted)]">Recovery</span>
-                          <input
-                            type="number"
-                            name="work[end_of_set_rest]"
-                            min="0"
-                            value={row.group.end_of_set_rest || 0}
-                            class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                          />
-                        </label>
-                      </form>
+                        <%= for set_row <- row.sets do %>
+                          <form
+                            phx-change="change_timeline_set"
+                            data-timeline-set-node
+                            data-timeline-set-editor={"#{row.block_index}-#{set_row.index}"}
+                            class="grid grid-cols-[1fr_5rem_5rem_5rem] items-end gap-3 text-xs"
+                          >
+                            <input type="hidden" name="set[block_index]" value={row.block_index} />
+                            <input type="hidden" name="set[set_index]" value={set_row.index} />
+                            <div class="min-w-0">
+                              <p class="font-semibold text-[var(--session-ink)]">
+                                {set_row.title}
+                              </p>
+                              <p class="mt-0.5 text-[var(--session-muted)]">{set_row.detail}</p>
+                            </div>
+                            <label>
+                              <span class="text-[var(--session-muted)]">Reps</span>
+                              <input
+                                type="number"
+                                name="set[burpee_count]"
+                                min="1"
+                                value={set_row.set.burpee_count}
+                                class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                              />
+                            </label>
+                            <label>
+                              <span class="text-[var(--session-muted)]">Pace</span>
+                              <input
+                                type="number"
+                                name="set[sec_per_rep]"
+                                min="0.1"
+                                step="0.1"
+                                value={set_row.set.sec_per_rep}
+                                class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                              />
+                            </label>
+                            <label>
+                              <span class="text-[var(--session-muted)]">Recovery</span>
+                              <input
+                                type="number"
+                                name="set[end_of_set_rest]"
+                                min="0"
+                                value={set_row.set.end_of_set_rest || 0}
+                                class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                              />
+                            </label>
+                          </form>
+                        <% end %>
+                      </div>
                       <form
                         :if={row.kind == :rest && Map.has_key?(row, :rest_index)}
                         phx-change="change_rest"

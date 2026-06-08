@@ -175,31 +175,30 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end)
   end
 
-  defp update_timeline_work_group(blocks, block_index, group_index, work_params) do
+  defp update_timeline_set(blocks, block_index, set_index, set_params) do
     blocks
     |> Enum.sort_by(& &1.position)
     |> Enum.with_index()
     |> Enum.map(fn {block, idx} ->
       if idx == block_index do
-        groups = block.sets |> Enum.sort_by(& &1.position) |> group_equal_sets()
-        group = Enum.at(groups, group_index)
-        positions = MapSet.new(group.positions)
-
         sets =
-          Enum.map(block.sets, fn set ->
-            if MapSet.member?(positions, set.position) do
+          block.sets
+          |> Enum.sort_by(& &1.position)
+          |> Enum.with_index()
+          |> Enum.map(fn {set, set_idx} ->
+            if set_idx == set_index do
               %{
                 set
                 | burpee_count:
                     parse_positive_integer_or(
-                      Map.get(work_params, "burpee_count"),
+                      Map.get(set_params, "burpee_count"),
                       set.burpee_count
                     ),
                   sec_per_rep:
-                    parse_float_or(Map.get(work_params, "sec_per_rep"), set.sec_per_rep),
+                    parse_float_or(Map.get(set_params, "sec_per_rep"), set.sec_per_rep),
                   end_of_set_rest:
                     parse_non_negative_integer_or(
-                      Map.get(work_params, "end_of_set_rest"),
+                      Map.get(set_params, "end_of_set_rest"),
                       set.end_of_set_rest
                     )
               }
@@ -444,7 +443,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, nil)}
   end
 
-  def handle_event("toggle_timeline_work", %{"row-index" => row_index}, socket) do
+  def handle_event("toggle_timeline_block", %{"row-index" => row_index}, socket) do
     expanded_timeline_row = String.to_integer(row_index)
 
     expanded_timeline_row =
@@ -457,12 +456,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, assign(socket, :expanded_timeline_row, expanded_timeline_row)}
   end
 
-  def handle_event("change_timeline_work", %{"work" => work_params}, socket) do
+  def handle_event("change_timeline_set", %{"set" => set_params}, socket) do
     form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
-    block_index = String.to_integer(Map.fetch!(work_params, "block_index"))
-    group_index = String.to_integer(Map.fetch!(work_params, "group_index"))
+    block_index = String.to_integer(Map.fetch!(set_params, "block_index"))
+    set_index = String.to_integer(Map.fetch!(set_params, "set_index"))
 
-    blocks = update_timeline_work_group(form_plan.blocks, block_index, group_index, work_params)
+    blocks = update_timeline_set(form_plan.blocks, block_index, set_index, set_params)
     attrs = form_plan |> plan_to_attrs() |> Map.put("blocks", blocks_to_attrs(blocks))
 
     changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
@@ -990,50 +989,19 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> Enum.sort_by(& &1.position)
       |> Enum.zip(block_time_ranges)
       |> Enum.with_index(1)
-      |> Enum.flat_map(fn {{block, {range_start, _range_end}}, block_index} ->
-        {rows, _elapsed} =
-          block.sets
-          |> Enum.sort_by(& &1.position)
-          |> group_equal_sets()
-          |> Enum.with_index()
-          |> Enum.map_reduce(range_start, fn {group, group_index}, elapsed ->
-            work_sec = timeline_group_work_duration(group)
-            rest_sec = timeline_group_rest_duration(group)
+      |> Enum.map(fn {{block, {range_start, _range_end}}, block_index} ->
+        sets = Enum.sort_by(block.sets, & &1.position)
 
-            work_row = %{
-              kind: :work,
-              block_index: block_index - 1,
-              group_index: group_index,
-              time_sec: elapsed,
-              marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
-              title: "#{group.count} × #{group.burpee_count} reps",
-              detail: timeline_group_work_detail(group),
-              group: group
-            }
-
-            rest_rows =
-              if rest_sec > 0 do
-                [
-                  %{
-                    kind: :rest,
-                    block_index: block_index - 1,
-                    time_sec: elapsed + work_sec,
-                    marker: "Rest",
-                    title: "#{group.count} × #{group.end_of_set_rest}s recovery",
-                    detail: nil,
-                    group: group
-                  }
-                ]
-              else
-                []
-              end
-
-            {[work_row | rest_rows], elapsed + work_sec + rest_sec}
-          end)
-
-        rows
+        %{
+          kind: :block,
+          block_index: block_index - 1,
+          time_sec: range_start,
+          marker: "Block #{block_index}",
+          title: "#{length(sets)} #{if length(sets) == 1, do: "set", else: "sets"}",
+          detail: timeline_block_detail(block),
+          sets: timeline_set_rows(sets)
+        }
       end)
-      |> List.flatten()
 
     additional_rest_rows =
       plan_input.additional_rests
@@ -1074,18 +1042,43 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     max(1, round(midpoint_sec / 60))
   end
 
-  defp timeline_group_work_duration(group) do
-    group.count * (group.burpee_count || 0) * (group.sec_per_rep || 0.0)
-  end
+  defp timeline_block_detail(block) do
+    repeat = block.repeat_count || 1
 
-  defp timeline_group_rest_duration(group) do
-    group.count * (group.end_of_set_rest || 0)
-  end
-
-  defp timeline_group_work_detail(group) do
-    if group.sec_per_rep && group.sec_per_rep > 0 do
-      "#{format_sec(group.sec_per_rep)}s/rep"
+    if repeat > 1 do
+      "repeat ×#{repeat}"
     end
+  end
+
+  defp timeline_set_rows(sets) do
+    sets
+    |> Enum.with_index()
+    |> Enum.map(fn {set, index} ->
+      %{
+        index: index,
+        set: set,
+        title: "Set #{index + 1}",
+        detail: timeline_set_detail(set)
+      }
+    end)
+  end
+
+  defp timeline_set_detail(set) do
+    pace =
+      if set.sec_per_rep && set.sec_per_rep > 0 do
+        "#{format_sec(set.sec_per_rep)}s/rep"
+      end
+
+    rest =
+      if set.end_of_set_rest && set.end_of_set_rest > 0 do
+        "#{set.end_of_set_rest}s recovery"
+      else
+        "no recovery"
+      end
+
+    ["#{set.burpee_count} reps", pace, rest]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
   end
 
   defp group_equal_sets(sets) do

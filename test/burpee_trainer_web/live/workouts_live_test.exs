@@ -152,34 +152,38 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workout-play-plan-#{plan.id}[href='/session/#{plan.id}']")
     end
 
-    test "prescription timeline timestamps grouped work sequentially", %{conn: conn, user: user} do
+    test "prescription timeline renders block nodes with timing", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Timeline Plan"})
       {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
       assert html =~ ~s(id="plan-prescription-timeline")
-      assert html =~ ~s(data-timeline-rest-node)
+      assert html =~ ~s(data-timeline-block-node)
       assert html =~ "0:00"
-      assert html =~ "3:00"
-      assert html =~ "2 × 30s recovery"
+      assert html =~ "Block 1"
+      assert html =~ "3 sets"
+      assert html =~ "4:00"
     end
 
-    test "work timeline node expands and edits inline controls", %{conn: conn, user: user} do
+    test "block timeline node expands set children and edits a set", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Timeline Edit Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      view |> element("[data-timeline-row-index='1'][data-timeline-work-node]") |> render_click()
+      view |> element("[data-timeline-row-index='1'][data-timeline-block-node]") |> render_click()
 
-      assert has_element?(view, "[data-timeline-inline-editor]")
+      assert has_element?(view, "[data-timeline-set-node]")
+      assert has_element?(view, "[data-timeline-set-editor]")
       html = render(view)
+      assert html =~ "Set 1"
       assert html =~ "Reps"
       assert html =~ "Pace"
       assert html =~ "Recovery"
 
       view
-      |> element("[data-timeline-inline-editor]")
+      |> element("[data-timeline-set-editor='0-0']")
       |> render_change(%{
-        "work" => %{
+        "set" => %{
           "block_index" => "0",
+          "set_index" => "0",
           "burpee_count" => "12",
           "sec_per_rep" => "5.5",
           "end_of_set_rest" => "20"
@@ -187,9 +191,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       })
 
       html = render(view)
-      assert html =~ "2 × 12 reps"
+      assert html =~ "Set 1"
+      assert html =~ "12 reps"
       assert html =~ "5.50s/rep"
-      assert html =~ "2 × 20s recovery"
+      assert html =~ "20s recovery"
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
@@ -294,7 +299,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(data-timeline-edge)
       assert html =~ "left-[5.625rem]"
       assert html =~ ~s(data-timeline-edge-action)
-      assert html =~ ~s(data-timeline-work-node)
+      assert html =~ ~s(data-timeline-block-node)
       assert html =~ "Start"
       assert html =~ "Finish"
       assert html =~ "Six-Count"
