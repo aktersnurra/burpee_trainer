@@ -77,15 +77,15 @@ defmodule BurpeeTrainer.PlanSolver do
       min_work > target_sec ->
         {:error,
          [
-           "#{input.burpee_count_target} reps at minimum pace #{Float.round(ceiling, 2)}s/rep requires " <>
-             "#{round(min_work)}s — target is #{round(target_sec)}s"
+           "#{input.burpee_count_target} reps at #{Float.round(ceiling, 1)}s/rep needs " <>
+             "at least #{format_duration(min_work)} of work, but the target is #{format_duration(target_sec)}."
          ]}
 
       min_work + add_rest > target_sec ->
         {:error,
          [
-           "work (#{round(min_work)}s) + additional rests (#{round(add_rest)}s) exceed " <>
-             "target duration (#{round(target_sec)}s)"
+           "Work needs #{format_duration(min_work)} and additional rests add #{format_duration(add_rest)}, " <>
+             "which does not fit in #{format_duration(target_sec)}."
          ]}
 
       true ->
@@ -324,12 +324,25 @@ defmodule BurpeeTrainer.PlanSolver do
 
   defp infeasibility_message(%Input{additional_rests: [_ | _] = rests}) do
     %{target_min: t} = Enum.max_by(rests, & &1.target_min)
-    "Cannot place rest at minute #{t} within 30s of a rep boundary"
+    "Rest at minute #{t} does not land close enough to a set boundary."
   end
 
   defp infeasibility_message(%Input{} = input) do
     target_sec = input.target_duration_min * 60.0
-    "#{input.burpee_count_target} reps cannot fit in #{round(target_sec)}s at your level"
+
+    "#{input.burpee_count_target} reps cannot fit in #{format_duration(target_sec)} at the selected level."
+  end
+
+  defp format_duration(seconds) do
+    seconds = round(seconds)
+    minutes = div(seconds, 60)
+    remainder = rem(seconds, 60)
+
+    cond do
+      minutes > 0 and remainder > 0 -> "#{minutes}m #{remainder}s"
+      minutes > 0 -> "#{minutes}m"
+      true -> "#{remainder}s"
+    end
   end
 
   defp build_solution(plan, %Input{} = input, candidate) do

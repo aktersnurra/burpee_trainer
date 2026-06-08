@@ -434,6 +434,21 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ">Pace<"
     end
 
+    test "impossible prescription shows actionable feedback", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "1", "burpee_count_target" => "200"})
+
+      html = render(view)
+      assert has_element?(view, "#plan-solver-impossible")
+      assert html =~ "No workable prescription"
+      assert html =~ "needs at least"
+      assert html =~ "Increase the duration"
+      assert html =~ "Reduce the rep target"
+    end
+
     test "advanced keeps block language without splitting into nested cards", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 

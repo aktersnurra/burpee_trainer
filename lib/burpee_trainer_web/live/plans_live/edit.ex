@@ -830,6 +830,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     assigns =
       assigns
       |> assign(:block_time_ranges, block_time_ranges)
+      |> assign(:solver_feedback, solver_feedback(assigns.solver_error))
       |> assign(
         :timeline_rows,
         prescription_timeline(
@@ -842,6 +843,26 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       )
 
     plan_solution_card_template(assigns)
+  end
+
+  defp solver_feedback(nil), do: nil
+
+  defp solver_feedback(message) do
+    actions =
+      cond do
+        String.contains?(message, "minimum pace") or String.contains?(message, "needs at least") or
+            String.contains?(message, "cannot fit") ->
+          ["Increase the duration", "Reduce the rep target", "Choose an easier pace/level"]
+
+        String.contains?(message, "additional rests") or
+            String.contains?(message, "Cannot place rest") ->
+          ["Move the rest closer to a set boundary", "Shorten the rest", "Increase the duration"]
+
+        true ->
+          ["Relax one target", "Adjust duration, reps, pace, or rests"]
+      end
+
+    %{title: "No workable prescription", message: message, actions: actions}
   end
 
   attr(:plan_input, :map, required: true)

@@ -1,9 +1,31 @@
 <section class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
   <div class="px-5 py-6 border-b border-[var(--session-border)]">
     <%= if @solver_error do %>
-      <div class="flex items-center gap-2">
-        <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
-        <span class="text-sm text-error">{@solver_error}</span>
+      <div
+        id="plan-solver-impossible"
+        class="space-y-5 rounded-2xl border border-error/40 bg-error/5 p-5"
+      >
+        <div class="flex items-start gap-3">
+          <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-error/40 bg-error/10 text-error">
+            <.icon name="hero-exclamation-triangle" class="size-4" />
+          </span>
+          <div class="min-w-0 space-y-1">
+            <p class="text-sm font-semibold text-[var(--session-ink)]">
+              {@solver_feedback.title}
+            </p>
+            <p class="text-sm leading-6 text-[var(--session-muted)]">
+              {@solver_feedback.message}
+            </p>
+          </div>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <div
+            :for={action <- @solver_feedback.actions}
+            class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-2 text-xs font-medium text-[var(--session-muted)]"
+          >
+            {action}
+          </div>
+        </div>
       </div>
     <% else %>
       <%= if @derived do %>
