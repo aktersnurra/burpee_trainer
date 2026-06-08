@@ -163,7 +163,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "2 × 30s recovery"
     end
 
-    test "work timeline node expands inline controls", %{conn: conn, user: user} do
+    test "work timeline node expands and edits inline controls", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Timeline Edit Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
@@ -171,9 +171,25 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert has_element?(view, "[data-timeline-inline-editor]")
       html = render(view)
-      assert html =~ "Rounds"
       assert html =~ "Reps"
+      assert html =~ "Pace"
       assert html =~ "Recovery"
+
+      view
+      |> element("[data-timeline-inline-editor]")
+      |> render_change(%{
+        "work" => %{
+          "block_index" => "0",
+          "burpee_count" => "12",
+          "sec_per_rep" => "5.5",
+          "end_of_set_rest" => "20"
+        }
+      })
+
+      html = render(view)
+      assert html =~ "2 × 12 reps"
+      assert html =~ "5.50s/rep"
+      assert html =~ "2 × 20s recovery"
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
@@ -267,6 +283,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Predicted"
       assert html =~ "Advanced"
       assert html =~ ~s(id="plan-prescription-timeline")
+      assert html =~ ~s(data-timeline-primary-graph)
       assert html =~ ~s(data-timeline-edge)
       assert html =~ ~s(data-timeline-work-node)
       assert html =~ "Start"

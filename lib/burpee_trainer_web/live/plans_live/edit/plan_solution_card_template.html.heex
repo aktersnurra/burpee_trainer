@@ -1,5 +1,5 @@
 <section class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
-  <div class="px-5 py-4 border-b border-[var(--session-border)]">
+  <div class="px-5 py-6 border-b border-[var(--session-border)]">
     <%= if @solver_error do %>
       <div class="flex items-center gap-2">
         <.icon name="hero-exclamation-triangle" class="size-4 text-error shrink-0" />
@@ -8,12 +8,12 @@
     <% else %>
       <%= if @derived do %>
         <div class="space-y-3">
-          <div class="flex items-start justify-between gap-6">
-            <div class="space-y-3">
+          <div class="relative space-y-6">
+            <div class="text-center space-y-3">
               <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
                 Prescription
               </p>
-              <div class="flex items-end gap-6">
+              <div class="flex items-end justify-center gap-6">
                 <p class={[
                   "text-5xl font-semibold leading-none tracking-[-0.06em] tabular-nums",
                   if(@derived.both_ok, do: "text-[var(--session-ink)]", else: "text-error")
@@ -42,7 +42,11 @@
               <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
                 Predicted
               </p>
-              <div id="plan-prescription-timeline" class="relative mt-5 space-y-0">
+              <div
+                id="plan-prescription-timeline"
+                data-timeline-primary-graph
+                class="relative mx-auto mt-8 max-w-xl space-y-0 text-left"
+              >
                 <span
                   data-timeline-edge
                   class="absolute bottom-4 top-4 left-[4.75rem] w-px bg-[var(--session-muted)]/60"
@@ -58,21 +62,21 @@
                 </button>
                 <%= for {row, row_index} <- Enum.with_index(@timeline_rows) do %>
                   <div
-                    class="grid grid-cols-[3.5rem_1rem_1fr] gap-3 py-2 text-sm"
+                    class="grid grid-cols-[4rem_1.25rem_1fr] gap-4 py-3 text-base"
                     data-timeline-row-index={row_index}
                     data-timeline-work-node={row.kind == :work && "true"}
                     data-timeline-rest-node={row.kind == :rest && "true"}
-                    phx-click={row.kind == :work && "toggle_block_expand"}
-                    phx-value-index={row.kind == :work && row.block_index}
+                    phx-click={row.kind == :work && "toggle_timeline_work"}
+                    phx-value-row-index={row.kind == :work && row_index}
                   >
-                    <span class="text-xs tabular-nums text-[var(--session-muted)]">
+                    <span class="text-sm tabular-nums text-[var(--session-muted)]">
                       {Fmt.duration_sec(round(row.time_sec))}
                     </span>
                     <span class="relative z-10 flex justify-center">
                       <span class={[
                         "relative mt-1 ring-4 ring-[var(--session-surface)]",
-                        row.kind == :rest && "size-2 rotate-45 bg-[var(--session-muted)]",
-                        row.kind != :rest && "size-2 rounded-full bg-[var(--session-ink)]"
+                        row.kind == :rest && "size-3 rotate-45 bg-[var(--session-muted)]",
+                        row.kind != :rest && "size-3 rounded-full bg-[var(--session-ink)]"
                       ]} />
                     </span>
                     <div class="space-y-0.5">
@@ -91,32 +95,46 @@
                       <p :if={row.detail} class="text-xs text-[var(--session-muted)]">
                         {row.detail}
                       </p>
-                      <div
-                        :if={
-                          row.kind == :work && MapSet.member?(@expanded_blocks, row.block_index)
-                        }
+                      <form
+                        :if={row.kind == :work && @expanded_timeline_row == row_index}
+                        phx-change="change_timeline_work"
                         data-timeline-inline-editor
-                        class="mt-3 grid grid-cols-3 gap-2 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-3 text-xs"
+                        class="mt-4 grid grid-cols-3 gap-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4 text-xs"
                       >
-                        <div>
-                          <p class="text-[var(--session-muted)]">Rounds</p>
-                          <p class="mt-1 font-semibold tabular-nums text-[var(--session-ink)]">
-                            {row.group.count}
-                          </p>
-                        </div>
-                        <div>
-                          <p class="text-[var(--session-muted)]">Reps</p>
-                          <p class="mt-1 font-semibold tabular-nums text-[var(--session-ink)]">
-                            {row.group.burpee_count}
-                          </p>
-                        </div>
-                        <div>
-                          <p class="text-[var(--session-muted)]">Recovery</p>
-                          <p class="mt-1 font-semibold tabular-nums text-[var(--session-ink)]">
-                            {row.group.end_of_set_rest || 0}s
-                          </p>
-                        </div>
-                      </div>
+                        <input type="hidden" name="work[block_index]" value={row.block_index} />
+                        <input type="hidden" name="work[group_index]" value={row.group_index} />
+                        <label>
+                          <span class="text-[var(--session-muted)]">Reps</span>
+                          <input
+                            type="number"
+                            name="work[burpee_count]"
+                            min="1"
+                            value={row.group.burpee_count}
+                            class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                          />
+                        </label>
+                        <label>
+                          <span class="text-[var(--session-muted)]">Pace</span>
+                          <input
+                            type="number"
+                            name="work[sec_per_rep]"
+                            min="0.1"
+                            step="0.1"
+                            value={row.group.sec_per_rep}
+                            class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                          />
+                        </label>
+                        <label>
+                          <span class="text-[var(--session-muted)]">Recovery</span>
+                          <input
+                            type="number"
+                            name="work[end_of_set_rest]"
+                            min="0"
+                            value={row.group.end_of_set_rest || 0}
+                            class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                          />
+                        </label>
+                      </form>
                       <form
                         :if={row.kind == :rest && Map.has_key?(row, :rest_index)}
                         phx-change="change_rest"

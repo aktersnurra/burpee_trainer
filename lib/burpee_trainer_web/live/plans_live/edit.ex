@@ -32,6 +32,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
      socket
      |> assign(:live_action, socket.assigns.live_action)
      |> assign(:expanded_blocks, MapSet.new())
+     |> assign(:expanded_timeline_row, nil)
      |> assign(:open_block_menu, nil)
      |> assign(:level, level)
      |> assign(:manual_edit, false)
@@ -172,6 +173,67 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
            end)
        }}
     end)
+  end
+
+  defp update_timeline_work_group(blocks, block_index, group_index, work_params) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Enum.map(fn {block, idx} ->
+      if idx == block_index do
+        groups = block.sets |> Enum.sort_by(& &1.position) |> group_equal_sets()
+        group = Enum.at(groups, group_index)
+        positions = MapSet.new(group.positions)
+
+        sets =
+          Enum.map(block.sets, fn set ->
+            if MapSet.member?(positions, set.position) do
+              %{
+                set
+                | burpee_count:
+                    parse_positive_integer_or(
+                      Map.get(work_params, "burpee_count"),
+                      set.burpee_count
+                    ),
+                  sec_per_rep:
+                    parse_float_or(Map.get(work_params, "sec_per_rep"), set.sec_per_rep),
+                  end_of_set_rest:
+                    parse_non_negative_integer_or(
+                      Map.get(work_params, "end_of_set_rest"),
+                      set.end_of_set_rest
+                    )
+              }
+            else
+              set
+            end
+          end)
+
+        %{block | sets: sets}
+      else
+        block
+      end
+    end)
+  end
+
+  defp parse_positive_integer_or(value, fallback) do
+    case Integer.parse(to_string(value || "")) do
+      {parsed, ""} when parsed > 0 -> parsed
+      _ -> fallback
+    end
+  end
+
+  defp parse_non_negative_integer_or(value, fallback) do
+    case Integer.parse(to_string(value || "")) do
+      {parsed, ""} when parsed >= 0 -> parsed
+      _ -> fallback
+    end
+  end
+
+  defp parse_float_or(value, fallback) do
+    case Float.parse(to_string(value || "")) do
+      {parsed, ""} when parsed > 0 -> parsed
+      _ -> fallback
+    end
   end
 
   defp assign_derived(socket) do
@@ -364,6 +426,37 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, nil)}
   end
 
+  def handle_event("toggle_timeline_work", %{"row-index" => row_index}, socket) do
+    expanded_timeline_row = String.to_integer(row_index)
+
+    expanded_timeline_row =
+      if socket.assigns.expanded_timeline_row == expanded_timeline_row do
+        nil
+      else
+        expanded_timeline_row
+      end
+
+    {:noreply, assign(socket, :expanded_timeline_row, expanded_timeline_row)}
+  end
+
+  def handle_event("change_timeline_work", %{"work" => work_params}, socket) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    block_index = String.to_integer(Map.fetch!(work_params, "block_index"))
+    group_index = String.to_integer(Map.fetch!(work_params, "group_index"))
+
+    blocks = update_timeline_work_group(form_plan.blocks, block_index, group_index, work_params)
+    attrs = form_plan |> plan_to_attrs() |> Map.put("blocks", blocks_to_attrs(blocks))
+
+    changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:form, to_form(changeset))
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
   def handle_event("toggle_block_expand", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
     expanded = socket.assigns.editor.expanded_blocks
@@ -514,6 +607,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   attr(:form, :any, required: true)
   attr(:expanded_blocks, :any, required: true)
+  attr(:expanded_timeline_row, :any, required: true)
   attr(:open_block_menu, :any, required: true)
   attr(:plan_input, :map, required: true)
   attr(:manual_edit, :boolean, required: true)
@@ -891,6 +985,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             work_row = %{
               kind: :work,
               block_index: block_index - 1,
+              group_index: group_index,
               time_sec: elapsed,
               marker: if(group_index == 0, do: "Block #{block_index}", else: ""),
               title: "#{group.count} × #{group.burpee_count} reps",
@@ -982,7 +1077,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         burpee_count: first.burpee_count,
         sec_per_rep: first.sec_per_rep,
         sec_per_burpee: first.sec_per_burpee,
-        end_of_set_rest: first.end_of_set_rest
+        end_of_set_rest: first.end_of_set_rest,
+        positions: Enum.map(group, & &1.position)
       }
     end)
   end
