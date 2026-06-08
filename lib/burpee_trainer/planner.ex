@@ -184,6 +184,41 @@ defmodule BurpeeTrainer.Planner do
   """
   @spec summary(WorkoutPlan.t()) :: map
   def summary(%WorkoutPlan{} = plan) do
+    blocks =
+      plan.blocks
+      |> sort_by_position()
+      |> Enum.map(&summary_block/1)
+
+    {burpee_count_total, duration_sec_total} = execution_totals(plan)
+
+    %{
+      burpee_count_total: burpee_count_total,
+      duration_sec_total: duration_sec_total,
+      blocks: blocks
+    }
+  end
+
+  defp execution_totals(%WorkoutPlan{steps: steps} = plan) when is_list(steps) and steps != [] do
+    blocks_by_position = Map.new(sort_by_position(plan.blocks), &{&1.position, &1})
+
+    steps
+    |> sort_by_position()
+    |> Enum.reduce({0, 0.0}, fn step, {reps_total, duration_total} ->
+      case step.kind do
+        :block_run ->
+          block = Map.fetch!(blocks_by_position, step.block_position)
+          repeat_count = step.repeat_count || 1
+
+          {reps_total + block_reps(block) * repeat_count,
+           duration_total + block_duration(block) * repeat_count}
+
+        :rest ->
+          {reps_total, duration_total + (step.rest_sec || 0)}
+      end
+    end)
+  end
+
+  defp execution_totals(%WorkoutPlan{} = plan) do
     timeline = build_timeline_main(plan)
 
     burpee_count_total =
@@ -192,25 +227,25 @@ defmodule BurpeeTrainer.Planner do
       |> Enum.reduce(0, fn event, acc -> acc + (event.burpee_count || 0) end)
 
     duration_sec_total =
-      Enum.reduce(plan.blocks, 0.0, fn block, acc ->
-        duration_block =
-          Enum.reduce(block.sets, 0.0, fn set, inner ->
-            inner + set.burpee_count * set.sec_per_rep + set.end_of_set_rest
-          end)
-
-        acc + duration_block * block.repeat_count
+      Enum.reduce(sort_by_position(plan.blocks), 0.0, fn block, acc ->
+        acc + block_duration(block) * block.repeat_count
       end)
 
-    blocks =
-      plan.blocks
-      |> sort_by_position()
-      |> Enum.map(&summary_block/1)
+    {burpee_count_total, duration_sec_total}
+  end
 
-    %{
-      burpee_count_total: burpee_count_total,
-      duration_sec_total: duration_sec_total,
-      blocks: blocks
-    }
+  defp block_reps(%Block{} = block) do
+    block.sets
+    |> sort_by_position()
+    |> Enum.reduce(0, fn set, total -> total + set.burpee_count end)
+  end
+
+  defp block_duration(%Block{} = block) do
+    block.sets
+    |> sort_by_position()
+    |> Enum.reduce(0.0, fn set, total ->
+      total + set.burpee_count * set.sec_per_rep + set.end_of_set_rest
+    end)
   end
 
   defp summary_block(%Block{} = block) do
