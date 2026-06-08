@@ -199,6 +199,42 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "20s recovery"
     end
 
+    test "timeline splits repeated block around additional rest", %{conn: conn, user: user} do
+      plan =
+        plan_fixture(user, %{
+          "name" => "Repeated Block Rest Plan",
+          "additional_rests" => Jason.encode!([%{"target_min" => 12, "rest_sec" => 10}]),
+          "blocks" => [
+            %{
+              "position" => 1,
+              "repeat_count" => 10,
+              "sets" => [
+                %{
+                  "position" => 1,
+                  "burpee_count" => 4,
+                  "sec_per_rep" => 15.0,
+                  "sec_per_burpee" => 8.0,
+                  "end_of_set_rest" => 0
+                },
+                %{
+                  "position" => 2,
+                  "burpee_count" => 3,
+                  "sec_per_rep" => 20.0,
+                  "sec_per_burpee" => 8.0,
+                  "end_of_set_rest" => 0
+                }
+              ]
+            }
+          ]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert html =~ "6 × Block 1"
+      assert html =~ "+10s recovery"
+      assert html =~ "4 × Block 1"
+    end
+
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
@@ -222,7 +258,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert html =~ "+45s recovery"
       assert html =~ "at minute 8"
-      assert html =~ "Block 1 continued"
 
       view |> element("[data-timeline-remove-rest]") |> render_click()
       refute render(view) =~ "+45s recovery"

@@ -17,7 +17,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Levels, Workouts}
-  alias BurpeeTrainer.PlanEditor
+  alias BurpeeTrainer.{PlanEditor, PrescriptionGraph}
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
 
@@ -983,78 +983,62 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     """
   end
 
-  defp prescription_timeline(blocks, block_time_ranges, derived, plan_input) do
-    additional_rest_rows =
-      plan_input.additional_rests
-      |> Enum.with_index()
-      |> Enum.map(fn {rest, index} ->
-        %{
-          kind: :rest,
-          rest_index: index,
-          time_sec: rest.target_min * 60,
-          marker: "Rest",
-          title: "+#{rest.rest_sec}s recovery",
-          detail: "at minute #{rest.target_min}",
-          rest: rest
-        }
-      end)
+  defp prescription_timeline(blocks, _block_time_ranges, derived, plan_input) do
+    graph_plan = %WorkoutPlan{blocks: blocks}
+    finish_sec = if(derived, do: derived.duration_sec, else: 0)
 
-    block_rows =
-      blocks
-      |> Enum.sort_by(& &1.position)
-      |> Enum.zip(block_time_ranges)
-      |> Enum.with_index(1)
-      |> Enum.flat_map(fn {{block, {range_start, range_end}}, block_index} ->
-        sets = Enum.sort_by(block.sets, & &1.position)
+    graph_plan
+    |> PrescriptionGraph.build(plan_input.additional_rests, finish_sec)
+    |> Map.fetch!(:nodes)
+    |> Enum.map(&timeline_row_from_graph_node/1)
+  end
 
-        rest_splits =
-          additional_rest_rows
-          |> Enum.filter(fn row -> row.time_sec > range_start && row.time_sec < range_end end)
-          |> Enum.sort_by(& &1.time_sec)
+  defp timeline_row_from_graph_node(%PrescriptionGraph.StartNode{} = node) do
+    %{kind: :start, time_sec: node.starts_at_sec, marker: "Start", title: "Begin", detail: nil}
+  end
 
-        base_row =
-          timeline_block_row(block, sets, block_index, range_start, "Block #{block_index}")
-
-        continuation_rows =
-          Enum.map(rest_splits, fn rest_row ->
-            timeline_block_row(
-              block,
-              sets,
-              block_index,
-              rest_row.time_sec + rest_row.rest.rest_sec,
-              "Block #{block_index} continued"
-            )
-          end)
-
-        [base_row | continuation_rows]
-      end)
-
-    finish_row = %{
+  defp timeline_row_from_graph_node(%PrescriptionGraph.FinishNode{} = node) do
+    %{
       kind: :finish,
-      time_sec: if(derived, do: derived.duration_sec, else: 0),
+      time_sec: node.starts_at_sec,
       marker: "Finish",
       title: "Predicted finish",
       detail: nil
     }
-
-    body_rows =
-      (block_rows ++ additional_rest_rows)
-      |> Enum.sort_by(& &1.time_sec)
-
-    [
-      %{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}
-      | body_rows ++ [finish_row]
-    ]
   end
 
-  defp timeline_block_row(block, sets, block_index, time_sec, marker) do
+  defp timeline_row_from_graph_node(%PrescriptionGraph.RestNode{} = node) do
+    rest = %{rest_sec: node.duration_sec, target_min: div(round(node.starts_at_sec), 60)}
+
+    %{
+      kind: :rest,
+      rest_index: node.source_rest_index,
+      time_sec: node.starts_at_sec,
+      marker: "Rest",
+      title: "+#{node.duration_sec}s recovery",
+      detail: "at minute #{rest.target_min}",
+      rest: rest
+    }
+  end
+
+  defp timeline_row_from_graph_node(%PrescriptionGraph.BlockRunNode{} = node) do
+    sets = Enum.sort_by(node.block.sets, & &1.position)
+    source_block_number = node.source_block_index + 1
+
+    marker =
+      if node.repeat_from == 1 do
+        "Block #{source_block_number}"
+      else
+        "Block #{source_block_number} continued"
+      end
+
     %{
       kind: :block,
-      block_index: block_index - 1,
-      time_sec: time_sec,
+      block_index: node.source_block_index,
+      time_sec: node.starts_at_sec,
       marker: marker,
-      title: "#{timeline_block_reps(block)} reps",
-      detail: timeline_block_detail(block),
+      title: timeline_block_run_title(node),
+      detail: timeline_block_run_detail(node),
       sets: timeline_set_rows(sets)
     }
   end
@@ -1065,22 +1049,29 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     max(1, round(midpoint_sec / 60))
   end
 
-  defp timeline_block_reps(block) do
-    block.sets
-    |> Enum.reduce(0, fn set, total -> total + (set.burpee_count || 0) end)
-    |> Kernel.*(block.repeat_count || 1)
+  defp timeline_block_run_title(%PrescriptionGraph.BlockRunNode{} = node) do
+    reps = block_reps_per_repeat(node.block) * node.repeat_count
+
+    if node.repeat_count > 1 do
+      "#{node.repeat_count} × Block #{node.source_block_index + 1} · #{reps} reps"
+    else
+      "#{reps} reps"
+    end
   end
 
-  defp timeline_block_detail(block) do
-    set_count = length(block.sets || [])
-    repeat = block.repeat_count || 1
+  defp timeline_block_run_detail(%PrescriptionGraph.BlockRunNode{} = node) do
+    set_count = length(node.block.sets || [])
     set_text = "#{set_count} #{if set_count == 1, do: "set", else: "sets"}"
 
-    if repeat > 1 do
-      "#{set_text} · repeat ×#{repeat}"
+    if node.repeat_count > 1 do
+      "#{set_text} · repeats #{node.repeat_from}–#{node.repeat_to}"
     else
       set_text
     end
+  end
+
+  defp block_reps_per_repeat(block) do
+    Enum.reduce(block.sets || [], 0, fn set, total -> total + (set.burpee_count || 0) end)
   end
 
   defp timeline_set_rows(sets) do
