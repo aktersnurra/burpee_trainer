@@ -825,17 +825,21 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_solution_card(assigns) do
     form_plan = Ecto.Changeset.apply_changes(assigns.form.source)
+    steps = loaded_steps(form_plan.steps)
     block_time_ranges = block_time_ranges(form_plan.blocks, assigns.plan_input)
 
     assigns =
       assigns
       |> assign(:block_time_ranges, block_time_ranges)
-      |> assign(:solver_feedback, solver_feedback(assigns.solver_error))
+      |> assign(
+        :plan_feedback,
+        plan_feedback(assigns.solver_error, assigns.derived, assigns.plan_input)
+      )
       |> assign(
         :timeline_rows,
         prescription_timeline(
           form_plan.blocks,
-          form_plan.steps || [],
+          steps,
           block_time_ranges,
           assigns.derived,
           assigns.plan_input
@@ -845,9 +849,38 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     plan_solution_card_template(assigns)
   end
 
-  defp solver_feedback(nil), do: nil
+  defp loaded_steps(%Ecto.Association.NotLoaded{}), do: []
+  defp loaded_steps(steps) when is_list(steps), do: steps
+  defp loaded_steps(_steps), do: []
 
-  defp solver_feedback(message) do
+  defp plan_feedback(solver_error, _derived, _plan_input) when is_binary(solver_error),
+    do: feedback_from_message(solver_error)
+
+  defp plan_feedback(nil, %{both_ok: false} = derived, plan_input) do
+    duration_message =
+      if derived.duration_ok do
+        nil
+      else
+        "Duration is #{Fmt.duration_sec(round(derived.duration_sec))}, target is #{plan_input.target_duration_min}m."
+      end
+
+    count_message =
+      if derived.count_ok do
+        nil
+      else
+        "Reps are #{derived.burpee_count}, target is #{plan_input.burpee_count_target}."
+      end
+
+    %{
+      title: "Prescription does not match target",
+      message: [duration_message, count_message] |> Enum.reject(&is_nil/1) |> Enum.join(" "),
+      actions: ["Adjust the graph", "Regenerate from targets", "Relax duration or reps"]
+    }
+  end
+
+  defp plan_feedback(_solver_error, _derived, _plan_input), do: nil
+
+  defp feedback_from_message(message) do
     actions =
       cond do
         String.contains?(message, "minimum pace") or String.contains?(message, "needs at least") or

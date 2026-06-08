@@ -434,6 +434,40 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ">Pace<"
     end
 
+    test "invalid manual prescription shows actionable feedback", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("button", "Show structure") |> render_click()
+
+      view
+      |> element("#plan-form")
+      |> render_change(%{
+        "workout_plan" => %{
+          "blocks" => %{
+            "0" => %{
+              "position" => "1",
+              "repeat_count" => "1",
+              "sets" => %{
+                "0" => %{
+                  "position" => "1",
+                  "burpee_count" => "1",
+                  "sec_per_rep" => "5.0",
+                  "sec_per_burpee" => "5.0",
+                  "end_of_set_rest" => "0"
+                }
+              }
+            }
+          }
+        }
+      })
+
+      html = render(view)
+      assert has_element?(view, "#plan-solver-impossible")
+      assert html =~ "Prescription does not match target"
+      assert html =~ "Reps are 1"
+      refute html =~ ">—<"
+    end
+
     test "impossible prescription shows actionable feedback", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 

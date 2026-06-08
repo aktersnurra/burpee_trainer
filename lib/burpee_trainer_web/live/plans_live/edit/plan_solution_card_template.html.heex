@@ -1,6 +1,6 @@
 <section class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
   <div class="px-5 py-6 border-b border-[var(--session-border)]">
-    <%= if @solver_error do %>
+    <%= if @plan_feedback do %>
       <div
         id="plan-solver-impossible"
         class="space-y-5 rounded-2xl border border-error/40 bg-error/5 p-5"
@@ -11,241 +11,240 @@
           </span>
           <div class="min-w-0 space-y-1">
             <p class="text-sm font-semibold text-[var(--session-ink)]">
-              {@solver_feedback.title}
+              {@plan_feedback.title}
             </p>
             <p class="text-sm leading-6 text-[var(--session-muted)]">
-              {@solver_feedback.message}
+              {@plan_feedback.message}
             </p>
           </div>
         </div>
         <div class="grid gap-2 sm:grid-cols-3">
           <div
-            :for={action <- @solver_feedback.actions}
+            :for={action <- @plan_feedback.actions}
             class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-2 text-xs font-medium text-[var(--session-muted)]"
           >
             {action}
           </div>
         </div>
       </div>
-    <% else %>
-      <%= if @derived do %>
-        <div class="space-y-3">
-          <div class="relative space-y-6">
-            <div class="text-center space-y-3">
-              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-                Prescription
-              </p>
-              <div class="flex items-end justify-center gap-6">
-                <p class={[
-                  "text-5xl font-semibold leading-none tracking-[-0.06em] tabular-nums",
-                  if(@derived.both_ok, do: "text-[var(--session-ink)]", else: "text-error")
-                ]}>
-                  <%= if @derived.both_ok do %>
-                    {Fmt.duration_sec(round(@derived.duration_sec))}
-                  <% else %>
-                    —
-                  <% end %>
-                </p>
-                <div class="space-y-1 pb-1">
-                  <p class="text-sm font-semibold text-[var(--session-ink)] tabular-nums">
-                    {@derived.burpee_count} reps
-                  </p>
-                  <p
-                    :if={@solver_solution && !@manual_edit}
-                    class="text-xs text-[var(--session-muted)] tabular-nums"
-                  >
-                    {Atom.to_string(@plan_input.pacing_style) |> String.capitalize()} · about {:erlang.float_to_binary(
-                      @solver_solution.sec_per_burpee * 1.0,
-                      decimals: 2
-                    )}s/rep
-                  </p>
-                </div>
-              </div>
-              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-                Predicted
-              </p>
-              <div
-                id="plan-prescription-timeline"
-                data-timeline-primary-graph
-                class="relative mx-auto mt-8 max-w-xl space-y-0 text-left"
-              >
-                <span
-                  data-timeline-edge
-                  class="absolute bottom-4 top-4 left-[5.625rem] w-px bg-[var(--session-muted)]/60"
-                  aria-hidden="true"
-                />
-                <%= for {row, row_index} <- Enum.with_index(@timeline_rows) do %>
-                  <% next_row = Enum.at(@timeline_rows, row_index + 1) %>
-                  <div
-                    class="grid grid-cols-[4rem_1.25rem_1fr] gap-4 py-3 text-base"
-                    data-timeline-row-index={row_index}
-                    data-timeline-block-node={row.kind == :block && "true"}
-                    data-timeline-rest-node={row.kind == :rest && "true"}
-                    phx-click={row.kind == :block && "toggle_timeline_block"}
-                    phx-value-row-index={row.kind == :block && row_index}
-                  >
-                    <span class="text-sm tabular-nums text-[var(--session-muted)]">
-                      {Fmt.duration_sec(round(row.time_sec))}
-                    </span>
-                    <span class="relative z-10 flex justify-center">
-                      <span class={[
-                        "relative mt-1 ring-4 ring-[var(--session-surface)]",
-                        row.kind == :rest && "size-3 rotate-45 bg-[var(--session-muted)]",
-                        row.kind != :rest && "size-3 rounded-full bg-[var(--session-ink)]"
-                      ]} />
-                    </span>
-                    <div class="space-y-0.5">
-                      <p class="font-semibold text-[var(--session-ink)]">
-                        <%= if row.marker not in ["", nil] do %>
-                          <span>{row.marker}</span>
-                          <span
-                            :if={row.title not in ["", nil]}
-                            class="text-[var(--session-muted)]"
-                          >
-                            ·
-                          </span>
-                        <% end %>
-                        <span :if={row.title not in ["", nil]}>{row.title}</span>
-                      </p>
-                      <p :if={row.detail} class="text-xs text-[var(--session-muted)]">
-                        {row.detail}
-                      </p>
-                      <div
-                        :if={row.kind == :block && @expanded_timeline_row == row_index}
-                        class="mt-4 space-y-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4"
-                      >
-                        <%= for set_row <- row.sets do %>
-                          <form
-                            phx-change="change_timeline_set"
-                            data-timeline-set-node
-                            data-timeline-set-editor={"#{row.block_index}-#{set_row.index}"}
-                            class="grid grid-cols-[1fr_5rem_5rem_5rem] items-end gap-3 text-xs"
-                          >
-                            <input type="hidden" name="set[block_index]" value={row.block_index} />
-                            <input type="hidden" name="set[set_index]" value={set_row.index} />
-                            <div class="min-w-0">
-                              <p class="font-semibold text-[var(--session-ink)]">
-                                {set_row.title}
-                              </p>
-                              <p class="mt-0.5 text-[var(--session-muted)]">{set_row.detail}</p>
-                            </div>
-                            <label>
-                              <span class="text-[var(--session-muted)]">Reps</span>
-                              <input
-                                type="number"
-                                name="set[burpee_count]"
-                                min="1"
-                                value={set_row.set.burpee_count}
-                                class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                              />
-                            </label>
-                            <label>
-                              <span class="text-[var(--session-muted)]">Pace</span>
-                              <input
-                                type="number"
-                                name="set[sec_per_rep]"
-                                min="0.1"
-                                step="0.1"
-                                value={format_sec(set_row.set.sec_per_rep)}
-                                class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                              />
-                            </label>
-                            <label>
-                              <span class="text-[var(--session-muted)]">Recovery</span>
-                              <input
-                                type="number"
-                                name="set[end_of_set_rest]"
-                                min="0"
-                                value={set_row.set.end_of_set_rest || 0}
-                                class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                              />
-                            </label>
-                          </form>
-                        <% end %>
-                      </div>
-                      <form
-                        :if={
-                          row.kind == :rest &&
-                            (Map.has_key?(row, :step_index) || Map.has_key?(row, :rest_index))
-                        }
-                        phx-change={
-                          if Map.has_key?(row, :step_index),
-                            do: "change_timeline_rest",
-                            else: "change_rest"
-                        }
-                        data-timeline-rest-editor
-                        class="mt-3 flex items-center gap-2 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-3 text-xs text-[var(--session-muted)]"
-                      >
-                        <input
-                          type="hidden"
-                          name="rest[index]"
-                          value={Map.get(row, :step_index) || Map.get(row, :rest_index)}
-                        />
-                        <input
-                          type="number"
-                          name="rest[rest_sec]"
-                          min="1"
-                          value={row.rest.rest_sec}
-                          class="w-14 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-center tabular-nums text-[var(--session-ink)]"
-                        />
-                        <span>s recovery at minute</span>
-                        <input
-                          type="number"
-                          name="rest[target_min]"
-                          min="1"
-                          max={@plan_input.target_duration_min - 1}
-                          value={row.rest.target_min}
-                          class="w-14 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-center tabular-nums text-[var(--session-ink)]"
-                        />
-                        <button
-                          type="button"
-                          phx-click={
-                            if Map.has_key?(row, :step_index),
-                              do: "remove_timeline_rest",
-                              else: "remove_rest"
-                          }
-                          phx-value-index={Map.get(row, :step_index) || Map.get(row, :rest_index)}
-                          data-timeline-remove-rest
-                          class="ml-auto text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-                          aria-label="Remove rest"
-                        >
-                          <.icon name="hero-x-mark" class="size-3.5" />
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                  <button
-                    :if={row.kind != :finish}
-                    type="button"
-                    phx-click="add_rest_at"
-                    phx-value-target-min={timeline_edge_target_min(row, next_row)}
-                    phx-value-edge-index={row_index}
-                    data-timeline-edge-index={row_index}
-                    data-timeline-edge-action
-                    class="relative z-20 ml-[4.75rem] my-1 inline-flex items-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-[11px] font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-                  >
-                    + Rest
-                  </button>
+    <% end %>
+    <%= if @derived do %>
+      <div class="space-y-3">
+        <div class="relative space-y-6">
+          <div class="text-center space-y-3">
+            <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+              Prescription
+            </p>
+            <div class="flex items-end justify-center gap-6">
+              <p class={[
+                "text-5xl font-semibold leading-none tracking-[-0.06em] tabular-nums",
+                if(@derived.both_ok, do: "text-[var(--session-ink)]", else: "text-error")
+              ]}>
+                <%= if @derived.both_ok do %>
+                  {Fmt.duration_sec(round(@derived.duration_sec))}
+                <% else %>
+                  —
                 <% end %>
+              </p>
+              <div class="space-y-1 pb-1">
+                <p class="text-sm font-semibold text-[var(--session-ink)] tabular-nums">
+                  {@derived.burpee_count} reps
+                </p>
+                <p
+                  :if={@solver_solution && !@manual_edit}
+                  class="text-xs text-[var(--session-muted)] tabular-nums"
+                >
+                  {Atom.to_string(@plan_input.pacing_style) |> String.capitalize()} · about {:erlang.float_to_binary(
+                    @solver_solution.sec_per_burpee * 1.0,
+                    decimals: 2
+                  )}s/rep
+                </p>
               </div>
             </div>
-            <%= if !@manual_edit do %>
-              <button
-                type="button"
-                phx-click="enable_manual_edit"
-                class="mx-auto block text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
-              >
-                Show structure
-              </button>
-            <% end %>
-          </div>
-          <%= if @solver_solution && !@manual_edit do %>
-            <p class="text-xs text-[var(--session-muted)] tabular-nums">
-              {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 1)}s/rep
+            <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+              Predicted
             </p>
+            <div
+              id="plan-prescription-timeline"
+              data-timeline-primary-graph
+              class="relative mx-auto mt-8 max-w-xl space-y-0 text-left"
+            >
+              <span
+                data-timeline-edge
+                class="absolute bottom-4 top-4 left-[5.625rem] w-px bg-[var(--session-muted)]/60"
+                aria-hidden="true"
+              />
+              <%= for {row, row_index} <- Enum.with_index(@timeline_rows) do %>
+                <% next_row = Enum.at(@timeline_rows, row_index + 1) %>
+                <div
+                  class="grid grid-cols-[4rem_1.25rem_1fr] gap-4 py-3 text-base"
+                  data-timeline-row-index={row_index}
+                  data-timeline-block-node={row.kind == :block && "true"}
+                  data-timeline-rest-node={row.kind == :rest && "true"}
+                  phx-click={row.kind == :block && "toggle_timeline_block"}
+                  phx-value-row-index={row.kind == :block && row_index}
+                >
+                  <span class="text-sm tabular-nums text-[var(--session-muted)]">
+                    {Fmt.duration_sec(round(row.time_sec))}
+                  </span>
+                  <span class="relative z-10 flex justify-center">
+                    <span class={[
+                      "relative mt-1 ring-4 ring-[var(--session-surface)]",
+                      row.kind == :rest && "size-3 rotate-45 bg-[var(--session-muted)]",
+                      row.kind != :rest && "size-3 rounded-full bg-[var(--session-ink)]"
+                    ]} />
+                  </span>
+                  <div class="space-y-0.5">
+                    <p class="font-semibold text-[var(--session-ink)]">
+                      <%= if row.marker not in ["", nil] do %>
+                        <span>{row.marker}</span>
+                        <span
+                          :if={row.title not in ["", nil]}
+                          class="text-[var(--session-muted)]"
+                        >
+                          ·
+                        </span>
+                      <% end %>
+                      <span :if={row.title not in ["", nil]}>{row.title}</span>
+                    </p>
+                    <p :if={row.detail} class="text-xs text-[var(--session-muted)]">
+                      {row.detail}
+                    </p>
+                    <div
+                      :if={row.kind == :block && @expanded_timeline_row == row_index}
+                      class="mt-4 space-y-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4"
+                    >
+                      <%= for set_row <- row.sets do %>
+                        <form
+                          phx-change="change_timeline_set"
+                          data-timeline-set-node
+                          data-timeline-set-editor={"#{row.block_index}-#{set_row.index}"}
+                          class="grid grid-cols-[1fr_5rem_5rem_5rem] items-end gap-3 text-xs"
+                        >
+                          <input type="hidden" name="set[block_index]" value={row.block_index} />
+                          <input type="hidden" name="set[set_index]" value={set_row.index} />
+                          <div class="min-w-0">
+                            <p class="font-semibold text-[var(--session-ink)]">
+                              {set_row.title}
+                            </p>
+                            <p class="mt-0.5 text-[var(--session-muted)]">{set_row.detail}</p>
+                          </div>
+                          <label>
+                            <span class="text-[var(--session-muted)]">Reps</span>
+                            <input
+                              type="number"
+                              name="set[burpee_count]"
+                              min="1"
+                              value={set_row.set.burpee_count}
+                              class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                            />
+                          </label>
+                          <label>
+                            <span class="text-[var(--session-muted)]">Pace</span>
+                            <input
+                              type="number"
+                              name="set[sec_per_rep]"
+                              min="0.1"
+                              step="0.1"
+                              value={format_sec(set_row.set.sec_per_rep)}
+                              class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                            />
+                          </label>
+                          <label>
+                            <span class="text-[var(--session-muted)]">Recovery</span>
+                            <input
+                              type="number"
+                              name="set[end_of_set_rest]"
+                              min="0"
+                              value={set_row.set.end_of_set_rest || 0}
+                              class="mt-1 w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                            />
+                          </label>
+                        </form>
+                      <% end %>
+                    </div>
+                    <form
+                      :if={
+                        row.kind == :rest &&
+                          (Map.has_key?(row, :step_index) || Map.has_key?(row, :rest_index))
+                      }
+                      phx-change={
+                        if Map.has_key?(row, :step_index),
+                          do: "change_timeline_rest",
+                          else: "change_rest"
+                      }
+                      data-timeline-rest-editor
+                      class="mt-3 flex items-center gap-2 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-3 text-xs text-[var(--session-muted)]"
+                    >
+                      <input
+                        type="hidden"
+                        name="rest[index]"
+                        value={Map.get(row, :step_index) || Map.get(row, :rest_index)}
+                      />
+                      <input
+                        type="number"
+                        name="rest[rest_sec]"
+                        min="1"
+                        value={row.rest.rest_sec}
+                        class="w-14 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-center tabular-nums text-[var(--session-ink)]"
+                      />
+                      <span>s recovery at minute</span>
+                      <input
+                        type="number"
+                        name="rest[target_min]"
+                        min="1"
+                        max={@plan_input.target_duration_min - 1}
+                        value={row.rest.target_min}
+                        class="w-14 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-center tabular-nums text-[var(--session-ink)]"
+                      />
+                      <button
+                        type="button"
+                        phx-click={
+                          if Map.has_key?(row, :step_index),
+                            do: "remove_timeline_rest",
+                            else: "remove_rest"
+                        }
+                        phx-value-index={Map.get(row, :step_index) || Map.get(row, :rest_index)}
+                        data-timeline-remove-rest
+                        class="ml-auto text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                        aria-label="Remove rest"
+                      >
+                        <.icon name="hero-x-mark" class="size-3.5" />
+                      </button>
+                    </form>
+                  </div>
+                </div>
+                <button
+                  :if={row.kind != :finish}
+                  type="button"
+                  phx-click="add_rest_at"
+                  phx-value-target-min={timeline_edge_target_min(row, next_row)}
+                  phx-value-edge-index={row_index}
+                  data-timeline-edge-index={row_index}
+                  data-timeline-edge-action
+                  class="relative z-20 ml-[4.75rem] my-1 inline-flex items-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-[11px] font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                >
+                  + Rest
+                </button>
+              <% end %>
+            </div>
+          </div>
+          <%= if !@manual_edit do %>
+            <button
+              type="button"
+              phx-click="enable_manual_edit"
+              class="mx-auto block text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
+            >
+              Show structure
+            </button>
           <% end %>
         </div>
-      <% end %>
+        <%= if @solver_solution && !@manual_edit do %>
+          <p class="text-xs text-[var(--session-muted)] tabular-nums">
+            {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 1)}s/rep
+          </p>
+        <% end %>
+      </div>
     <% end %>
   </div>
 
