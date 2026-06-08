@@ -191,8 +191,27 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
       "additional_rests" => plan.additional_rests,
-      "blocks" => blocks_to_attrs(plan.blocks)
+      "blocks" => blocks_to_attrs(plan.blocks),
+      "steps" => steps_to_attrs(plan.steps || [])
     }
+  end
+
+  defp steps_to_attrs(steps) do
+    steps
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Map.new(fn {step, idx} ->
+      attrs = %{
+        "position" => step.position,
+        "kind" => Atom.to_string(step.kind),
+        "block_position" => step.block_position,
+        "repeat_count" => step.repeat_count,
+        "rest_sec" => step.rest_sec
+      }
+
+      attrs = if step.id, do: Map.put(attrs, "id", step.id), else: attrs
+      {to_string(idx), attrs}
+    end)
   end
 
   defp blocks_to_attrs(blocks) do
@@ -219,6 +238,37 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
            end)
        }}
     end)
+  end
+
+  defp insert_rest_step(steps, edge_index, rest_sec) do
+    sorted_steps = Enum.sort_by(steps || [], & &1.position)
+    insert_at = max(edge_index, 0)
+    {before_steps, after_steps} = Enum.split(sorted_steps, insert_at)
+
+    reposition_steps(
+      before_steps ++
+        [%BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}] ++ after_steps
+    )
+  end
+
+  defp update_rest_step(steps, index, rest_sec) do
+    steps
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Enum.map(fn {step, idx} ->
+      if idx == index and step.kind == :rest do
+        %{step | rest_sec: rest_sec}
+      else
+        step
+      end
+    end)
+    |> reposition_steps()
+  end
+
+  defp reposition_steps(steps) do
+    steps
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end
 
   defp update_timeline_set(blocks, block_index, set_index, set_params) do
@@ -385,22 +435,61 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
-  def handle_event("add_rest_at", %{"target-min" => target_min}, socket) do
-    rest = %{rest_sec: 30, target_min: parse_positive_integer_or(target_min, 1)}
-    input = socket.assigns.editor.input
+  def handle_event(
+        "add_rest_at",
+        %{"target-min" => target_min, "edge-index" => edge_index},
+        socket
+      ) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
-    editor = %{
-      socket.assigns.editor
-      | input: %{input | additional_rests: input.additional_rests ++ [rest]}
-    }
+    if (form_plan.steps || []) != [] do
+      steps = insert_rest_step(form_plan.steps, String.to_integer(edge_index), 30)
+      attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
+      changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
 
-    socket =
-      socket
-      |> put_editor(editor)
-      |> regenerate()
-      |> assign_derived()
+      {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+    else
+      rest = %{rest_sec: 30, target_min: parse_positive_integer_or(target_min, 1)}
+      input = socket.assigns.editor.input
 
-    {:noreply, socket}
+      editor = %{
+        socket.assigns.editor
+        | input: %{input | additional_rests: input.additional_rests ++ [rest]}
+      }
+
+      socket =
+        socket
+        |> put_editor(editor)
+        |> regenerate()
+        |> assign_derived()
+
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("change_timeline_rest", %{"rest" => rest_params}, socket) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    index = String.to_integer(Map.fetch!(rest_params, "index"))
+    rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
+    steps = update_rest_step(form_plan.steps, index, rest_sec)
+    attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
+    changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+
+    {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+  end
+
+  def handle_event("remove_timeline_rest", %{"index" => index}, socket) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+    steps =
+      form_plan.steps |> Enum.sort_by(& &1.position) |> List.delete_at(String.to_integer(index))
+
+    attrs =
+      form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(reposition_steps(steps)))
+
+    changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+
+    {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
   end
 
   def handle_event("remove_rest", %{"index" => idx_str}, socket) do
@@ -691,6 +780,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         :timeline_rows,
         prescription_timeline(
           form_plan.blocks,
+          form_plan.steps || [],
           block_time_ranges,
           assigns.derived,
           assigns.plan_input
@@ -1026,14 +1116,100 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     """
   end
 
-  defp prescription_timeline(blocks, _block_time_ranges, derived, plan_input) do
-    graph_plan = %WorkoutPlan{blocks: blocks}
-    finish_sec = if(derived, do: derived.duration_sec, else: 0)
+  defp prescription_timeline(blocks, steps, _block_time_ranges, derived, plan_input) do
+    if steps != [] do
+      timeline_rows_from_steps(blocks, steps)
+    else
+      graph_plan = %WorkoutPlan{blocks: blocks}
+      finish_sec = if(derived, do: derived.duration_sec, else: 0)
 
-    graph_plan
-    |> PrescriptionGraph.build(plan_input.additional_rests, finish_sec)
-    |> Map.fetch!(:nodes)
-    |> Enum.map(&timeline_row_from_graph_node/1)
+      graph_plan
+      |> PrescriptionGraph.build(plan_input.additional_rests, finish_sec)
+      |> Map.fetch!(:nodes)
+      |> Enum.map(&timeline_row_from_graph_node/1)
+    end
+  end
+
+  defp timeline_rows_from_steps(blocks, steps) do
+    blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
+
+    {rows, elapsed} =
+      steps
+      |> Enum.sort_by(& &1.position)
+      |> Enum.with_index()
+      |> Enum.map_reduce(0.0, fn {step, step_index}, elapsed ->
+        row = timeline_row_from_step(step, step_index, blocks_by_position, elapsed)
+        {row, elapsed + timeline_step_duration(step, blocks_by_position)}
+      end)
+
+    [%{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}] ++
+      rows ++
+      [
+        %{
+          kind: :finish,
+          time_sec: elapsed,
+          marker: "Finish",
+          title: "Predicted finish",
+          detail: nil
+        }
+      ]
+  end
+
+  defp timeline_row_from_step(
+         %{kind: :block_run} = step,
+         _step_index,
+         blocks_by_position,
+         elapsed
+       ) do
+    block = Map.fetch!(blocks_by_position, step.block_position)
+    block_index = step.block_position - 1
+    reps = block_reps_per_repeat(block) * (step.repeat_count || 1)
+
+    %{
+      kind: :block,
+      block_index: block_index,
+      time_sec: elapsed,
+      marker: "Block #{step.block_position}",
+      title: "#{step.repeat_count} × Block #{step.block_position} · #{reps} reps",
+      detail: timeline_step_block_detail(block, step),
+      sets: timeline_set_rows(Enum.sort_by(block.sets || [], & &1.position))
+    }
+  end
+
+  defp timeline_row_from_step(%{kind: :rest} = step, step_index, _blocks_by_position, elapsed) do
+    %{
+      kind: :rest,
+      step_index: step_index,
+      time_sec: elapsed,
+      marker: "Rest",
+      title: "+#{step.rest_sec}s recovery",
+      detail: nil,
+      rest: %{rest_sec: step.rest_sec, target_min: div(round(elapsed), 60)}
+    }
+  end
+
+  defp timeline_step_duration(%{kind: :block_run} = step, blocks_by_position) do
+    block = Map.fetch!(blocks_by_position, step.block_position)
+    block_duration(block) * (step.repeat_count || 1)
+  end
+
+  defp timeline_step_duration(%{kind: :rest} = step, _blocks_by_position), do: step.rest_sec || 0
+
+  defp timeline_step_block_detail(block, step) do
+    set_count = length(block.sets || [])
+    set_text = "#{set_count} #{if set_count == 1, do: "set", else: "sets"}"
+
+    if (step.repeat_count || 1) > 1 do
+      "#{set_text} · repeat ×#{step.repeat_count}"
+    else
+      set_text
+    end
+  end
+
+  defp block_duration(block) do
+    Enum.reduce(block.sets || [], 0.0, fn set, total ->
+      total + (set.burpee_count || 0) * (set.sec_per_rep || 0.0) + (set.end_of_set_rest || 0)
+    end)
   end
 
   defp timeline_row_from_graph_node(%PrescriptionGraph.StartNode{} = node) do

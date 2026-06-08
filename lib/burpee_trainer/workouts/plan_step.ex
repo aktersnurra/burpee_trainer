@@ -9,13 +9,13 @@ defmodule BurpeeTrainer.Workouts.PlanStep do
   @type t :: %__MODULE__{}
 
   schema "plan_steps" do
-    field :position, :integer
-    field :kind, Ecto.Enum, values: @kinds
-    field :block_position, :integer
-    field :repeat_count, :integer
-    field :rest_sec, :integer
+    field(:position, :integer)
+    field(:kind, Ecto.Enum, values: @kinds)
+    field(:block_position, :integer)
+    field(:repeat_count, :integer)
+    field(:rest_sec, :integer)
 
-    belongs_to :plan, WorkoutPlan
+    belongs_to(:plan, WorkoutPlan)
 
     timestamps(type: :utc_datetime)
   end

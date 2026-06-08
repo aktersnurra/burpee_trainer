@@ -292,7 +292,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert html =~ "+45s recovery"
-      assert html =~ "at minute 8"
 
       view |> element("[data-timeline-remove-rest]") |> render_click()
       refute render(view) =~ "+45s recovery"
