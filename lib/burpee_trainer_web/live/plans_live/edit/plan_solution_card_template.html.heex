@@ -81,8 +81,6 @@
                   data-timeline-row-index={row_index}
                   data-timeline-block-node={row.kind == :block && "true"}
                   data-timeline-rest-node={row.kind == :rest && "true"}
-                  phx-click={row.kind == :block && "toggle_timeline_block"}
-                  phx-value-row-index={row.kind == :block && row_index}
                 >
                   <span class="text-sm tabular-nums text-[var(--session-muted)]">
                     {Fmt.duration_sec(round(row.time_sec))}
@@ -95,7 +93,26 @@
                     ]} />
                   </span>
                   <div class="space-y-0.5">
-                    <p class="font-semibold text-[var(--session-ink)]">
+                    <button
+                      :if={row.kind == :block}
+                      type="button"
+                      phx-click="toggle_timeline_block"
+                      phx-value-row-index={row_index}
+                      data-timeline-block-toggle
+                      class="block text-left font-semibold text-[var(--session-ink)]"
+                    >
+                      <%= if row.marker not in ["", nil] do %>
+                        <span>{row.marker}</span>
+                        <span
+                          :if={row.title not in ["", nil]}
+                          class="text-[var(--session-muted)]"
+                        >
+                          ·
+                        </span>
+                      <% end %>
+                      <span :if={row.title not in ["", nil]}>{row.title}</span>
+                    </button>
+                    <p :if={row.kind != :block} class="font-semibold text-[var(--session-ink)]">
                       <%= if row.marker not in ["", nil] do %>
                         <span>{row.marker}</span>
                         <span

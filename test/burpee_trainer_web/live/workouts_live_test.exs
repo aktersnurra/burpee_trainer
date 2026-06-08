@@ -172,7 +172,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       plan = plan_fixture(user, %{"name" => "Timeline Edit Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      view |> element("[data-timeline-row-index='1'][data-timeline-block-node]") |> render_click()
+      view
+      |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
+      |> render_click()
 
       assert has_element?(view, "[data-timeline-set-node]")
       assert has_element?(view, "[data-timeline-set-editor]")
@@ -195,6 +197,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       })
 
       html = render(view)
+      assert has_element?(view, "[data-timeline-set-editor='0-0']")
       assert html =~ "Set 1"
       assert html =~ "12 reps"
       assert html =~ "5.5s/rep"
