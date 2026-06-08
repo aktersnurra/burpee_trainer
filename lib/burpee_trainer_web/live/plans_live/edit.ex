@@ -251,18 +251,48 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     )
   end
 
-  defp update_rest_step(steps, index, rest_sec) do
-    steps
-    |> Enum.sort_by(& &1.position)
-    |> Enum.with_index()
-    |> Enum.map(fn {step, idx} ->
-      if idx == index and step.kind == :rest do
-        %{step | rest_sec: rest_sec}
-      else
-        step
-      end
-    end)
-    |> reposition_steps()
+  defp place_rest_step_at_target_min(steps, blocks, target_min, rest_sec) do
+    blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
+    target_sec = target_min * 60.0
+    rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
+
+    {placed_steps, placed?, _elapsed} =
+      steps
+      |> Enum.sort_by(& &1.position)
+      |> Enum.reduce({[], false, 0.0}, fn step, {acc, placed?, elapsed} ->
+        duration = timeline_step_duration(step, blocks_by_position)
+
+        cond do
+          placed? ->
+            {acc ++ [step], true, elapsed + duration}
+
+          step.kind == :block_run and target_sec > elapsed and target_sec < elapsed + duration ->
+            block = Map.fetch!(blocks_by_position, step.block_position)
+            repeat_duration = max(block_duration(block), 1.0e-6)
+
+            before_count =
+              floor((target_sec - elapsed) / repeat_duration)
+              |> max(1)
+              |> min(step.repeat_count - 1)
+
+            after_count = step.repeat_count - before_count
+
+            split_steps =
+              [%{step | repeat_count: before_count}, rest_step] ++
+                if after_count > 0, do: [%{step | repeat_count: after_count}], else: []
+
+            {acc ++ split_steps, true, elapsed + duration}
+
+          target_sec <= elapsed ->
+            {acc ++ [rest_step, step], true, elapsed + duration}
+
+          true ->
+            {acc ++ [step], false, elapsed + duration}
+        end
+      end)
+
+    placed_steps = if placed?, do: placed_steps, else: placed_steps ++ [rest_step]
+    reposition_steps(placed_steps)
   end
 
   defp reposition_steps(steps) do
@@ -471,7 +501,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
     index = String.to_integer(Map.fetch!(rest_params, "index"))
     rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
-    steps = update_rest_step(form_plan.steps, index, rest_sec)
+    target_min = parse_positive_integer_or(Map.get(rest_params, "target_min"), 1)
+
+    steps =
+      form_plan.steps
+      |> Enum.sort_by(& &1.position)
+      |> List.delete_at(index)
+      |> place_rest_step_at_target_min(form_plan.blocks, target_min, rest_sec)
+
     attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
     changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
 

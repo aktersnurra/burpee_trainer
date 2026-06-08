@@ -270,6 +270,33 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ "Block 1 · 6 × Block 1"
     end
 
+    test "generated unbroken timeline renders executable steps", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "200"})
+
+      view
+      |> element("button[phx-value-style='unbroken']")
+      |> render_click()
+
+      render_change(view, "change_basics", %{"reps_per_set" => "5"})
+
+      view
+      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
+      |> render_click()
+
+      view
+      |> element("[data-timeline-rest-editor]")
+      |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
+
+      html = render(view)
+      assert html =~ "36 × Block 1 · 180 reps"
+      assert html =~ "+10s recovery"
+      assert html =~ "4 × Block 1 · 20 reps"
+    end
+
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
