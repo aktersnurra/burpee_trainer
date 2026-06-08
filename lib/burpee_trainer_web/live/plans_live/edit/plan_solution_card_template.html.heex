@@ -151,6 +151,16 @@
                           value={row.rest.target_min}
                           class="w-14 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-center tabular-nums text-[var(--session-ink)]"
                         />
+                        <button
+                          type="button"
+                          phx-click="remove_rest"
+                          phx-value-index={row.rest_index}
+                          data-timeline-remove-rest
+                          class="ml-auto text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                          aria-label="Remove rest"
+                        >
+                          <.icon name="hero-x-mark" class="size-3.5" />
+                        </button>
                       </form>
                     </div>
                   </div>
@@ -172,9 +182,9 @@
               <button
                 type="button"
                 phx-click="enable_manual_edit"
-                class="shrink-0 text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition pt-1"
+                class="mx-auto block text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
               >
-                Advanced
+                Show structure
               </button>
             <% end %>
           </div>
@@ -192,9 +202,9 @@
   >
     <div id="plan-fine-tune-panel" class={if(@manual_edit, do: "space-y-5", else: "hidden")}>
       <div class="border-t border-[var(--session-border)] pt-5">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Advanced</p>
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Structure</p>
         <p class="mt-1 text-xs text-[var(--session-muted)]">
-          Adjust rests and block details only if this prescription needs changes.
+          Inspect block details only if this prescription needs low-level changes.
         </p>
       </div>
 

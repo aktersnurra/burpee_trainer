@@ -203,6 +203,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert has_element?(view, "[data-timeline-rest-node]")
       assert has_element?(view, "[data-timeline-rest-editor]")
+      assert has_element?(view, "[data-timeline-remove-rest]")
       html = render(view)
       assert html =~ "+30s recovery"
       assert html =~ "at minute"
@@ -214,13 +215,16 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert html =~ "+45s recovery"
       assert html =~ "at minute 8"
+
+      view |> element("[data-timeline-remove-rest]") |> render_click()
+      refute render(view) =~ "+45s recovery"
     end
 
     test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Grouped Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      view |> element("button", "Advanced") |> render_click()
+      view |> element("button", "Show structure") |> render_click()
       html = render(view)
 
       assert has_element?(view, "[data-grouped-set-row]")
@@ -284,7 +288,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Style"
       assert html =~ "Prescription"
       assert html =~ "Predicted"
-      assert html =~ "Advanced"
+      assert html =~ "Show structure"
       assert html =~ ~s(id="plan-prescription-timeline")
       assert html =~ ~s(data-timeline-primary-graph)
       assert html =~ ~s(data-timeline-edge)
@@ -303,13 +307,13 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "advanced keeps block language without splitting into nested cards", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view |> element("button", "Advanced") |> render_click()
+      view |> element("button", "Show structure") |> render_click()
 
       html = render(view)
       assert html =~ "Block 1"
       assert html =~ "Set 1"
-      assert html =~ "Advanced"
-      assert html =~ "Adjust rests and block details"
+      assert html =~ "Structure"
+      assert html =~ "Inspect block details"
       assert html =~ "Rest plan"
       assert html =~ "No planned rests"
       assert has_element?(view, "#plan-fine-tune-panel")
