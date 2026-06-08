@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Duration, Mood, Planner, Workouts}
+  alias BurpeeTrainer.{Duration, Mood, Planner, PrescriptionGraph, Workouts}
   alias BurpeeTrainer.Workouts.WorkoutSession
   alias BurpeeTrainerWeb.Fmt
 
@@ -196,6 +196,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp serialize_plan(plan) do
     %{
       sec_per_burpee: plan.sec_per_burpee,
+      timeline: serialize_execution_timeline(plan),
       blocks:
         Enum.map(plan.blocks, fn block ->
           %{
@@ -214,6 +215,80 @@ defmodule BurpeeTrainerWeb.SessionLive do
           }
         end)
     }
+  end
+
+  defp serialize_execution_timeline(plan) do
+    rests = decode_additional_rests(plan.additional_rests)
+    finish_sec = Planner.summary(plan).duration_sec_total
+
+    plan
+    |> PrescriptionGraph.build(rests, finish_sec)
+    |> Map.fetch!(:nodes)
+    |> Enum.flat_map(&serialize_execution_node/1)
+  end
+
+  defp serialize_execution_node(%PrescriptionGraph.BlockRunNode{} = node) do
+    node.block
+    |> Map.put(:repeat_count, node.repeat_count)
+    |> block_events()
+  end
+
+  defp serialize_execution_node(%PrescriptionGraph.RestNode{} = node) do
+    [
+      %{
+        phase: "rest",
+        duration_sec: node.duration_sec,
+        burpee_count: nil,
+        sec_per_burpee: nil,
+        label: "Rest"
+      }
+    ]
+  end
+
+  defp serialize_execution_node(_node), do: []
+
+  defp block_events(block) do
+    sets = Enum.sort_by(block.sets || [], & &1.position)
+
+    for _round <- 1..(block.repeat_count || 1), set <- sets, reduce: [] do
+      events ->
+        work = %{
+          phase: "work",
+          duration_sec: set.burpee_count * set.sec_per_rep,
+          burpee_count: set.burpee_count,
+          sec_per_burpee: set.sec_per_rep,
+          label: "Block #{block.position}"
+        }
+
+        rest =
+          if (set.end_of_set_rest || 0) > 0 do
+            [
+              %{
+                phase: "rest",
+                duration_sec: set.end_of_set_rest,
+                burpee_count: nil,
+                sec_per_burpee: nil,
+                label: "Rest"
+              }
+            ]
+          else
+            []
+          end
+
+        events ++ [work | rest]
+    end
+  end
+
+  defp decode_additional_rests(rests_json) do
+    case Jason.decode(rests_json || "[]") do
+      {:ok, rests} when is_list(rests) ->
+        Enum.map(rests, fn %{"rest_sec" => rest_sec, "target_min" => target_min} ->
+          %{rest_sec: rest_sec, target_min: target_min}
+        end)
+
+      _ ->
+        []
+    end
   end
 
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}

@@ -2,6 +2,10 @@
 // Phoenix sends persisted plan data; this module derives the runnable warmup
 // and workout segments used by the browser FSM.
 export function workoutTimelineFromPlan(plan) {
+	if (Array.isArray(plan?.timeline) && plan.timeline.length > 0) {
+		return plan.timeline;
+	}
+
 	return sortedBlocks(plan).flatMap((block) => blockTimeline(block));
 }
 

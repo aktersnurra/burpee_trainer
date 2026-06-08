@@ -49,4 +49,22 @@ assert.equal(timelineBurpeeCount(workout), 17);
 assert.equal(workout[0].burpee_count, 10);
 assert.equal(workout[2].burpee_count, 7);
 
+const executionPlan = {
+	...plan,
+	timeline: [
+		{ phase: "work", duration_sec: 1080, burpee_count: 180, sec_per_burpee: 6, label: "Block 1" },
+		{ phase: "rest", duration_sec: 10, burpee_count: null, sec_per_burpee: null, label: "Rest" },
+		{ phase: "work", duration_sec: 120, burpee_count: 20, sec_per_burpee: 6, label: "Block 1 continued" },
+	],
+};
+
+const executionWorkout = workoutTimelineFromPlan(executionPlan);
+assert.deepEqual(
+	executionWorkout.map((event) => event.phase),
+	["work", "rest", "work"],
+);
+assert.equal(timelineBurpeeCount(executionWorkout), 200);
+assert.equal(executionWorkout[1].duration_sec, 10);
+assert.equal(executionWorkout[2].label, "Block 1 continued");
+
 console.log("session_plan tests passed");

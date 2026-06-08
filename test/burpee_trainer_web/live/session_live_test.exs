@@ -124,6 +124,44 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Map.has_key?(first_set, :burpee_count)
     assert Map.has_key?(first_set, :sec_per_rep)
     assert Map.has_key?(first_set, :end_of_set_rest)
+    assert is_list(plan_payload.timeline)
+  end
+
+  test "session_ready timeline includes additional rests as first-class events", %{
+    conn: conn,
+    user: user
+  } do
+    sets =
+      for position <- 1..40 do
+        %{
+          "position" => position,
+          "burpee_count" => 5,
+          "sec_per_rep" => 6.0,
+          "sec_per_burpee" => 3.0,
+          "end_of_set_rest" => 0
+        }
+      end
+
+    plan =
+      plan_fixture(user, %{
+        "name" => "Session Rest Plan",
+        "additional_rests" => Jason.encode!([%{"target_min" => 18, "rest_sec" => 10}]),
+        "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    assert_push_event(view, "session_ready", %{plan: plan_payload})
+
+    assert Enum.count(plan_payload.timeline, &(&1.phase == "rest")) == 1
+
+    rest_index = Enum.find_index(plan_payload.timeline, &(&1.phase == "rest"))
+    assert rest_index == 36
+    assert Enum.at(plan_payload.timeline, rest_index).duration_sec == 10
+
+    {before_rest, [_rest | after_rest]} = Enum.split(plan_payload.timeline, rest_index)
+    assert Enum.sum(Enum.map(before_rest, &(&1.burpee_count || 0))) == 180
+    assert Enum.sum(Enum.map(after_rest, &(&1.burpee_count || 0))) == 20
   end
 
   test "session_started transitions phase to running", %{conn: conn, user: user} do
