@@ -52,9 +52,27 @@ assert.equal(workout[2].burpee_count, 7);
 const executionPlan = {
 	...plan,
 	timeline: [
-		{ phase: "work", duration_sec: 1080, burpee_count: 180, sec_per_burpee: 6, label: "Block 1" },
-		{ phase: "rest", duration_sec: 10, burpee_count: null, sec_per_burpee: null, label: "Rest" },
-		{ phase: "work", duration_sec: 120, burpee_count: 20, sec_per_burpee: 6, label: "Block 1 continued" },
+		{
+			phase: "work",
+			duration_sec: 1080,
+			burpee_count: 180,
+			sec_per_burpee: 6,
+			label: "Block 1",
+		},
+		{
+			phase: "rest",
+			duration_sec: 10,
+			burpee_count: null,
+			sec_per_burpee: null,
+			label: "Rest",
+		},
+		{
+			phase: "work",
+			duration_sec: 120,
+			burpee_count: 20,
+			sec_per_burpee: 6,
+			label: "Block 1 continued",
+		},
 	],
 };
 

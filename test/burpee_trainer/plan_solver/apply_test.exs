@@ -108,21 +108,29 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, reservations)
 
-    sets = List.first(plan.blocks).sets
-    assert Enum.max_by(sets, & &1.end_of_set_rest).end_of_set_rest == 5
+    [block] = plan.blocks
+    [set] = block.sets
+    assert set.burpee_count == 5
+    assert set.end_of_set_rest == 5
     assert plan.additional_rests == ~s([{"rest_sec":10,"target_min":18}])
+    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
+    assert Enum.map(plan.steps, & &1.repeat_count) == [36, nil, 4]
+    assert Enum.at(plan.steps, 1).rest_sec == 10
   end
 
-  test ":unbroken — correct set count" do
+  test ":unbroken — reusable block definition plus block-run step" do
     input = unbroken_input(10, 5, 5)
     p = 6.0
     r = List.duplicate(0.0, 9)
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    sets = List.first(plan.blocks).sets
-    assert length(sets) == 2
-    Enum.each(sets, &assert_in_delta(&1.sec_per_burpee, p, 1.0e-6))
+    [block] = plan.blocks
+    [set] = block.sets
+    assert set.burpee_count == 5
+    assert_in_delta set.sec_per_burpee, p, 1.0e-6
+    assert Enum.map(plan.steps, & &1.kind) == [:block_run]
+    assert hd(plan.steps).repeat_count == 2
   end
 
   test "solved p is stored in plan.sec_per_burpee" do

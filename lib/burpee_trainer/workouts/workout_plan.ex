@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Workouts.Block
+  alias BurpeeTrainer.Workouts.{Block, PlanStep}
 
   @burpee_types [:six_count, :navy_seal]
   @pacing_styles [:even, :unbroken]
@@ -11,25 +11,32 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   @type t :: %__MODULE__{}
 
   schema "workout_plans" do
-    field :name, :string
-    field :burpee_type, Ecto.Enum, values: @burpee_types
-    field :target_duration_min, :integer
-    field :burpee_count_target, :integer
-    field :sec_per_burpee, :float
-    field :pacing_style, Ecto.Enum, values: @pacing_styles
-    field :additional_rests, :string, default: "[]"
-    field :style_name, :string
-    field :fatigue_factor, :float, default: 0.0
-    field :coach_suggestion_kind, :string
-    field :coach_target_reps, :integer
-    field :plan_solver_metadata, :map
+    field(:name, :string)
+    field(:burpee_type, Ecto.Enum, values: @burpee_types)
+    field(:target_duration_min, :integer)
+    field(:burpee_count_target, :integer)
+    field(:sec_per_burpee, :float)
+    field(:pacing_style, Ecto.Enum, values: @pacing_styles)
+    field(:additional_rests, :string, default: "[]")
+    field(:style_name, :string)
+    field(:fatigue_factor, :float, default: 0.0)
+    field(:coach_suggestion_kind, :string)
+    field(:coach_target_reps, :integer)
+    field(:plan_solver_metadata, :map)
 
-    belongs_to :user, User
+    belongs_to(:user, User)
 
-    has_many :blocks, Block,
+    has_many(:blocks, Block,
       foreign_key: :plan_id,
       preload_order: [asc: :position],
       on_replace: :delete
+    )
+
+    has_many(:steps, PlanStep,
+      foreign_key: :plan_id,
+      preload_order: [asc: :position],
+      on_replace: :delete
+    )
 
     timestamps(type: :utc_datetime)
   end
@@ -68,6 +75,11 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       sort_param: :blocks_sort,
       drop_param: :blocks_drop,
       required: true
+    )
+    |> cast_assoc(:steps,
+      with: &PlanStep.changeset/2,
+      sort_param: :steps_sort,
+      drop_param: :steps_drop
     )
   end
 end

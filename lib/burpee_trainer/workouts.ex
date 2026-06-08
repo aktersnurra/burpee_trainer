@@ -13,7 +13,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
   alias BurpeeTrainer.Workouts.PaceConsistency
-  alias BurpeeTrainer.Workouts.{Block, StylePerformance, WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{Block, PlanStep, StylePerformance, WorkoutPlan, WorkoutSession}
 
   # A session is eligible to set a pace PR only when it is a genuine effort:
   # a full-length-ish bout (≤ 20 min) of at least this many burpees.
@@ -34,7 +34,7 @@ defmodule BurpeeTrainer.Workouts do
       from(plan in WorkoutPlan,
         where: plan.user_id == ^user_id,
         order_by: [desc: plan.updated_at],
-        preload: [blocks: :sets]
+        preload: [blocks: :sets, steps: []]
       )
     )
   end
@@ -48,7 +48,7 @@ defmodule BurpeeTrainer.Workouts do
     Repo.one!(
       from(plan in WorkoutPlan,
         where: plan.id == ^id and plan.user_id == ^user_id,
-        preload: [blocks: :sets]
+        preload: [blocks: :sets, steps: []]
       )
     )
   end
@@ -99,7 +99,7 @@ defmodule BurpeeTrainer.Workouts do
   @spec duplicate_plan(WorkoutPlan.t()) ::
           {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
   def duplicate_plan(%WorkoutPlan{} = plan) do
-    source = Repo.preload(plan, blocks: :sets)
+    source = Repo.preload(plan, blocks: :sets, steps: [])
 
     attrs = %{
       "name" => source.name <> " (copy)",
@@ -113,7 +113,8 @@ defmodule BurpeeTrainer.Workouts do
       "coach_suggestion_kind" => source.coach_suggestion_kind,
       "coach_target_reps" => source.coach_target_reps,
       "plan_solver_metadata" => source.plan_solver_metadata,
-      "blocks" => duplicate_plan_blocks(source.blocks)
+      "blocks" => duplicate_plan_blocks(source.blocks),
+      "steps" => duplicate_plan_steps(source.steps)
     }
 
     create_plan(%User{id: source.user_id}, attrs)
@@ -137,6 +138,18 @@ defmodule BurpeeTrainer.Workouts do
         "sec_per_rep" => set.sec_per_rep,
         "sec_per_burpee" => set.sec_per_burpee,
         "end_of_set_rest" => set.end_of_set_rest
+      }
+    end
+  end
+
+  defp duplicate_plan_steps(steps) do
+    for %PlanStep{} = step <- Enum.sort_by(steps || [], & &1.position) do
+      %{
+        "position" => step.position,
+        "kind" => Atom.to_string(step.kind),
+        "block_position" => step.block_position,
+        "repeat_count" => step.repeat_count,
+        "rest_sec" => step.rest_sec
       }
     end
   end
@@ -473,7 +486,8 @@ defmodule BurpeeTrainer.Workouts do
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => plan.pacing_style,
       "additional_rests" => plan.additional_rests,
-      "blocks" => save_generated_plan_blocks(plan.blocks)
+      "blocks" => save_generated_plan_blocks(plan.blocks),
+      "steps" => save_generated_plan_steps(plan.steps)
     }
 
     create_plan(user, attrs)
@@ -485,6 +499,18 @@ defmodule BurpeeTrainer.Workouts do
         "position" => block.position,
         "repeat_count" => block.repeat_count,
         "sets" => save_generated_plan_sets(block.sets)
+      }
+    end
+  end
+
+  defp save_generated_plan_steps(steps) do
+    for step <- Enum.sort_by(steps || [], & &1.position) do
+      %{
+        "position" => step.position,
+        "kind" => Atom.to_string(step.kind),
+        "block_position" => step.block_position,
+        "repeat_count" => step.repeat_count,
+        "rest_sec" => step.rest_sec
       }
     end
   end
@@ -502,7 +528,7 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc false
-  def preload_plan(%WorkoutPlan{} = plan), do: Repo.preload(plan, blocks: :sets)
+  def preload_plan(%WorkoutPlan{} = plan), do: Repo.preload(plan, blocks: :sets, steps: [])
 
   @doc """
   Reorder blocks within a plan by supplying `[{block_id, position}, ...]`.

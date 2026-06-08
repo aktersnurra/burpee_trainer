@@ -217,6 +217,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
     }
   end
 
+  defp serialize_execution_timeline(%{steps: steps} = plan) when is_list(steps) and steps != [] do
+    blocks_by_position = Map.new(plan.blocks || [], &{&1.position, &1})
+
+    steps
+    |> Enum.sort_by(& &1.position)
+    |> Enum.flat_map(&serialize_plan_step(&1, blocks_by_position))
+  end
+
   defp serialize_execution_timeline(plan) do
     rests = decode_additional_rests(plan.additional_rests)
     finish_sec = Planner.summary(plan).duration_sec_total
@@ -226,6 +234,30 @@ defmodule BurpeeTrainerWeb.SessionLive do
     |> Map.fetch!(:nodes)
     |> Enum.flat_map(&serialize_execution_node/1)
   end
+
+  defp serialize_plan_step(
+         %{kind: :block_run, block_position: block_position, repeat_count: repeat_count},
+         blocks_by_position
+       ) do
+    case Map.fetch(blocks_by_position, block_position) do
+      {:ok, block} -> block |> Map.put(:repeat_count, repeat_count) |> block_events()
+      :error -> []
+    end
+  end
+
+  defp serialize_plan_step(%{kind: :rest, rest_sec: rest_sec}, _blocks_by_position) do
+    [
+      %{
+        phase: "rest",
+        duration_sec: rest_sec,
+        burpee_count: nil,
+        sec_per_burpee: nil,
+        label: "Rest"
+      }
+    ]
+  end
+
+  defp serialize_plan_step(_step, _blocks_by_position), do: []
 
   defp serialize_execution_node(%PrescriptionGraph.BlockRunNode{} = node) do
     node.block

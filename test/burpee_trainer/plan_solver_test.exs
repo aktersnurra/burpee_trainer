@@ -106,13 +106,15 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert sol_4.sec_per_burpee <= sol_1a.sec_per_burpee
   end
 
-  test ":unbroken solve — one block, set_size respected" do
+  test ":unbroken solve — reusable block plus block-run step" do
     {:ok, sol} =
       PlanSolver.solve(input(%{pacing_style: :unbroken, reps_per_set: 5}))
 
-    sets = List.first(sol.plan.blocks).sets
-    assert length(sets) == 4
-    Enum.each(sets, &assert(&1.burpee_count == 5))
+    [block] = sol.plan.blocks
+    [set] = block.sets
+    assert set.burpee_count == 5
+    assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run]
+    assert hd(sol.plan.steps).repeat_count == 4
   end
 
   test "returns error when work alone exceeds target" do
@@ -154,8 +156,9 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
     assert length(sol.set_pattern) == 4
     assert length(sol.rest_pattern_sec) == 3
-    plan_sets = List.first(sol.plan.blocks).sets
-    assert List.last(plan_sets).end_of_set_rest == 0
+    [block] = sol.plan.blocks
+    assert hd(block.sets).end_of_set_rest == round(hd(sol.rest_pattern_sec))
+    assert hd(sol.plan.steps).repeat_count == 4
   end
 
   test "pace model is the source of pace bounds" do

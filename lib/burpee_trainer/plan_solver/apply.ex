@@ -7,7 +7,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   """
 
   alias BurpeeTrainer.PlanSolver.Input
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
 
   @spec to_workout_plan(Input.t(), float, [float], [map]) :: {:ok, WorkoutPlan.t()}
   def to_workout_plan(%Input{pacing_style: :even} = input, p, _r, reservations) do
@@ -94,22 +94,28 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   # ---------------------------------------------------------------------------
 
   defp build_unbroken(p, set_pattern, rest_pattern) do
-    sets =
-      set_pattern
-      |> Enum.with_index(1)
-      |> Enum.map(fn {reps, i} ->
-        base_rest = Enum.at(rest_pattern, i - 1, 0)
+    grouped = Enum.chunk_by(set_pattern, & &1)
 
-        %Set{
-          position: i,
-          burpee_count: reps,
-          sec_per_rep: p,
-          sec_per_burpee: p,
-          end_of_set_rest: round(base_rest)
-        }
-      end)
+    grouped
+    |> Enum.with_index(1)
+    |> Enum.map(fn {group, position} ->
+      reps = hd(group)
+      base_rest = Enum.at(rest_pattern, 0, 0)
 
-    [%Block{position: 1, repeat_count: 1, sets: sets}]
+      %Block{
+        position: position,
+        repeat_count: 1,
+        sets: [
+          %Set{
+            position: 1,
+            burpee_count: reps,
+            sec_per_rep: p,
+            sec_per_burpee: p,
+            end_of_set_rest: round(base_rest)
+          }
+        ]
+      }
+    end)
   end
 
   defp legacy_unbroken_rest_pattern(input, p, set_pattern, reservations) do
@@ -149,8 +155,76 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       pacing_style: input.pacing_style,
       additional_rests: encode_rests(input.additional_rests || []),
       fatigue_factor: 0.0,
-      blocks: blocks
+      blocks: blocks,
+      steps: build_steps(input, blocks)
     }
+  end
+
+  defp build_steps(%Input{pacing_style: :unbroken} = input, [%Block{} = block | _]) do
+    set_size = input.reps_per_set || input.burpee_count_target
+    full_runs = div(input.burpee_count_target, set_size)
+
+    input.additional_rests
+    |> Enum.sort_by(& &1.target_min)
+    |> Enum.map_reduce({[], full_runs, 1}, fn rest, {steps, remaining_runs, position} ->
+      runs_before_rest =
+        (rest.target_min * 60)
+        |> Kernel./(block_duration(block))
+        |> floor()
+        |> max(0)
+        |> min(remaining_runs)
+
+      steps =
+        if runs_before_rest > 0 do
+          steps ++ [block_run_step(position, block.position, runs_before_rest)]
+        else
+          steps
+        end
+
+      rest_step = %PlanStep{
+        position: position + length(steps),
+        kind: :rest,
+        rest_sec: rest.rest_sec
+      }
+
+      remaining_runs = remaining_runs - runs_before_rest
+      {rest_step, {steps ++ [rest_step], remaining_runs, position + length(steps) + 1}}
+    end)
+    |> elem(1)
+    |> then(fn {steps, remaining_runs, position} ->
+      if remaining_runs > 0 do
+        steps ++ [block_run_step(position, block.position, remaining_runs)]
+      else
+        steps
+      end
+    end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
+  end
+
+  defp build_steps(_input, blocks) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {block, position} ->
+      block_run_step(position, block.position, block.repeat_count || 1)
+    end)
+  end
+
+  defp block_run_step(position, block_position, repeat_count) do
+    %PlanStep{
+      position: position,
+      kind: :block_run,
+      block_position: block_position,
+      repeat_count: repeat_count
+    }
+  end
+
+  defp block_duration(%Block{} = block) do
+    block.sets
+    |> Enum.reduce(0.0, fn set, total ->
+      total + (set.burpee_count || 0) * (set.sec_per_rep || 0.0) + (set.end_of_set_rest || 0)
+    end)
   end
 
   defp encode_rests([]), do: "[]"
