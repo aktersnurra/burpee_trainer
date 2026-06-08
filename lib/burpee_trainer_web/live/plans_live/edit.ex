@@ -340,6 +340,24 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
+  def handle_event("add_rest_at", %{"target-min" => target_min}, socket) do
+    rest = %{rest_sec: 30, target_min: parse_positive_integer_or(target_min, 1)}
+    input = socket.assigns.editor.input
+
+    editor = %{
+      socket.assigns.editor
+      | input: %{input | additional_rests: input.additional_rests ++ [rest]}
+    }
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
   def handle_event("remove_rest", %{"index" => idx_str}, socket) do
     case PlanEditor.remove_rest(socket.assigns.editor, idx_str) do
       {:ok, editor} ->
@@ -1048,6 +1066,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       %{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}
       | body_rows ++ [finish_row]
     ]
+  end
+
+  defp timeline_edge_target_min(row, next_row) do
+    next_sec = if next_row, do: next_row.time_sec, else: row.time_sec + 60
+    midpoint_sec = row.time_sec + max(next_sec - row.time_sec, 60) / 2
+    max(1, round(midpoint_sec / 60))
   end
 
   defp timeline_group_work_duration(group) do

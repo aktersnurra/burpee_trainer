@@ -195,8 +195,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      assert has_element?(view, "[data-timeline-add-rest]")
-      view |> element("[data-timeline-add-rest]") |> render_click()
+      assert has_element?(view, "[data-timeline-edge-action]")
+
+      view
+      |> element("[data-timeline-edge-index='0'][data-timeline-edge-action]")
+      |> render_click()
 
       assert has_element?(view, "[data-timeline-rest-node]")
       assert has_element?(view, "[data-timeline-rest-editor]")
@@ -285,6 +288,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(id="plan-prescription-timeline")
       assert html =~ ~s(data-timeline-primary-graph)
       assert html =~ ~s(data-timeline-edge)
+      assert html =~ "left-[5.625rem]"
+      assert html =~ ~s(data-timeline-edge-action)
       assert html =~ ~s(data-timeline-work-node)
       assert html =~ "Start"
       assert html =~ "Finish"

@@ -49,18 +49,11 @@
               >
                 <span
                   data-timeline-edge
-                  class="absolute bottom-4 top-4 left-[4.75rem] w-px bg-[var(--session-muted)]/60"
+                  class="absolute bottom-4 top-4 left-[5.625rem] w-px bg-[var(--session-muted)]/60"
                   aria-hidden="true"
                 />
-                <button
-                  type="button"
-                  phx-click="add_rest"
-                  data-timeline-add-rest
-                  class="mb-2 ml-[4.15rem] inline-flex items-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-[11px] font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-                >
-                  + Rest
-                </button>
                 <%= for {row, row_index} <- Enum.with_index(@timeline_rows) do %>
+                  <% next_row = Enum.at(@timeline_rows, row_index + 1) %>
                   <div
                     class="grid grid-cols-[4rem_1.25rem_1fr] gap-4 py-3 text-base"
                     data-timeline-row-index={row_index}
@@ -161,6 +154,17 @@
                       </form>
                     </div>
                   </div>
+                  <button
+                    :if={row.kind != :finish}
+                    type="button"
+                    phx-click="add_rest_at"
+                    phx-value-target-min={timeline_edge_target_min(row, next_row)}
+                    data-timeline-edge-index={row_index}
+                    data-timeline-edge-action
+                    class="relative z-20 ml-[4.75rem] my-1 inline-flex items-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-1 text-[11px] font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                  >
+                    + Rest
+                  </button>
                 <% end %>
               </div>
             </div>
