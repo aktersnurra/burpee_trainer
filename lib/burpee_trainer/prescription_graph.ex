@@ -95,10 +95,8 @@ defmodule BurpeeTrainer.PrescriptionGraph do
   end
 
   defp block_run_nodes(%Block{} = block, block_index, starts_at_sec, rest_nodes) do
-    repeat_count = block.repeat_count || 1
-    repeat_duration = block_repeat_duration(block)
-    total_duration = repeat_count * repeat_duration
-    ends_at_sec = starts_at_sec + total_duration
+    units = block_execution_units(block, starts_at_sec)
+    ends_at_sec = units |> List.last() |> Map.fetch!(:ends_at_sec)
 
     split_rests =
       rest_nodes
@@ -107,88 +105,87 @@ defmodule BurpeeTrainer.PrescriptionGraph do
       end)
       |> Enum.sort_by(& &1.starts_at_sec)
 
-    {nodes, repeat_cursor, time_cursor} =
-      Enum.reduce(split_rests, {[], 1, starts_at_sec}, fn rest,
-                                                          {nodes, repeat_cursor, time_cursor} ->
-        repeats_before_rest =
-          rest.starts_at_sec
-          |> Kernel.-(time_cursor)
-          |> Kernel./(repeat_duration)
-          |> floor()
-          |> max(0)
+    {nodes, remaining_units, delay} =
+      Enum.reduce(split_rests, {[], units, 0}, fn rest, {nodes, remaining_units, delay} ->
+        rest_at = rest.starts_at_sec - delay
 
-        repeat_to = min(repeat_count, repeat_cursor + repeats_before_rest - 1)
+        {before_units, after_units} =
+          Enum.split_while(remaining_units, &(&1.ends_at_sec <= rest_at))
 
         nodes =
-          if repeat_to >= repeat_cursor do
-            [
-              block_run_node(
-                block,
-                block_index,
-                repeat_cursor,
-                repeat_to,
-                time_cursor,
-                rest.starts_at_sec
-              )
-              | nodes
-            ]
-          else
+          if before_units == [] do
             nodes
+          else
+            [block_run_node(block, block_index, before_units, delay) | nodes]
           end
 
-        next_repeat = repeat_to + 1
-        next_time = rest.starts_at_sec + rest.duration_sec
-        {nodes, next_repeat, next_time}
+        {nodes, after_units, delay + rest.duration_sec}
       end)
 
     nodes =
-      if repeat_cursor <= repeat_count do
-        [
-          block_run_node(
-            block,
-            block_index,
-            repeat_cursor,
-            repeat_count,
-            time_cursor,
-            ends_at_sec + rest_delay_inside(starts_at_sec, ends_at_sec, rest_nodes)
-          )
-          | nodes
-        ]
-      else
+      if remaining_units == [] do
         nodes
+      else
+        [block_run_node(block, block_index, remaining_units, delay) | nodes]
       end
 
-    {Enum.reverse(nodes),
-     starts_at_sec + total_duration + rest_delay_inside(starts_at_sec, ends_at_sec, rest_nodes)}
+    {Enum.reverse(nodes), ends_at_sec + delay}
   end
 
-  defp block_run_node(block, block_index, repeat_from, repeat_to, starts_at_sec, ends_at_sec) do
+  defp block_run_node(block, block_index, units, delay) do
+    first = List.first(units)
+    last = List.last(units)
+    repeat_from = first.repeat_index
+    repeat_to = last.repeat_index
+
     %BlockRunNode{
       kind: :block_run,
-      id: {:block_run, block_index, repeat_from},
+      id: {:block_run, block_index, repeat_from, first.set_position},
       source_block_index: block_index,
       repeat_from: repeat_from,
       repeat_to: repeat_to,
       repeat_count: repeat_to - repeat_from + 1,
-      starts_at_sec: starts_at_sec,
-      ends_at_sec: ends_at_sec,
-      block: block
+      starts_at_sec: first.starts_at_sec + delay,
+      ends_at_sec: last.ends_at_sec + delay,
+      block: block_segment(block, units)
     }
   end
 
-  defp block_repeat_duration(%Block{sets: sets}) do
-    sets
-    |> Enum.reduce(0.0, fn %Set{} = set, total ->
-      total + (set.burpee_count || 0) * (set.sec_per_rep || 0.0) + (set.end_of_set_rest || 0)
+  defp block_execution_units(%Block{} = block, starts_at_sec) do
+    sets = Enum.sort_by(block.sets || [], & &1.position)
+
+    1..(block.repeat_count || 1)
+    |> Enum.flat_map(fn repeat_index ->
+      Enum.map(sets, fn set -> {repeat_index, set} end)
     end)
+    |> Enum.map_reduce(starts_at_sec, fn {repeat_index, set}, elapsed ->
+      duration = set_duration(set)
+
+      unit = %{
+        repeat_index: repeat_index,
+        set_position: set.position,
+        starts_at_sec: elapsed,
+        ends_at_sec: elapsed + duration
+      }
+
+      {unit, elapsed + duration}
+    end)
+    |> elem(0)
   end
 
-  defp rest_delay_inside(starts_at_sec, ends_at_sec, rest_nodes) do
-    rest_nodes
-    |> Enum.filter(fn rest ->
-      rest.starts_at_sec > starts_at_sec and rest.starts_at_sec < ends_at_sec
-    end)
-    |> Enum.reduce(0, fn rest, total -> total + rest.duration_sec end)
+  defp block_segment(%Block{} = block, units) do
+    positions = units |> Enum.map(& &1.set_position) |> MapSet.new()
+
+    sets =
+      block.sets
+      |> Enum.filter(&MapSet.member?(positions, &1.position))
+      |> Enum.sort_by(& &1.position)
+
+    %{block | sets: sets}
+  end
+
+  defp set_duration(%Set{} = set) do
+    (set.burpee_count || 0) * (set.sec_per_rep || 0.0) + (set.end_of_set_rest || 0)
   end
 
   defp node_order(%RestNode{}), do: 1

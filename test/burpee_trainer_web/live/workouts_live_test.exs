@@ -199,6 +199,35 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "20s recovery"
     end
 
+    test "timeline splits a long single block around additional rest", %{conn: conn, user: user} do
+      sets =
+        for position <- 1..40 do
+          %{
+            "position" => position,
+            "burpee_count" => 5,
+            "sec_per_rep" => 6.0,
+            "sec_per_burpee" => 3.0,
+            "end_of_set_rest" => 0
+          }
+        end
+
+      plan =
+        plan_fixture(user, %{
+          "name" => "Long Block Rest Plan",
+          "additional_rests" => Jason.encode!([%{"target_min" => 18, "rest_sec" => 10}]),
+          "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert html =~ "Block 1"
+      assert html =~ "180 reps"
+      assert html =~ "+10s recovery"
+      assert html =~ "Block 1 continued"
+      assert html =~ "20 reps"
+      assert html =~ "20:10"
+    end
+
     test "timeline splits repeated block around additional rest", %{conn: conn, user: user} do
       plan =
         plan_fixture(user, %{

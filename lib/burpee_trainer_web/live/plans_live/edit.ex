@@ -1026,10 +1026,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     source_block_number = node.source_block_index + 1
 
     marker =
-      if node.repeat_from == 1 do
-        "Block #{source_block_number}"
-      else
+      if timeline_block_run_continued?(node) do
         "Block #{source_block_number} continued"
+      else
+        "Block #{source_block_number}"
       end
 
     %{
@@ -1041,6 +1041,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       detail: timeline_block_run_detail(node),
       sets: timeline_set_rows(sets)
     }
+  end
+
+  defp timeline_block_run_continued?(%PrescriptionGraph.BlockRunNode{} = node) do
+    first_set_position = node.block.sets |> Enum.map(& &1.position) |> Enum.min(fn -> 1 end)
+    node.repeat_from > 1 or first_set_position > 1
   end
 
   defp timeline_edge_target_min(row, next_row) do
