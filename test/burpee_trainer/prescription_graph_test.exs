@@ -31,7 +31,7 @@ defmodule BurpeeTrainer.PrescriptionGraphTest do
         ]
       }
 
-      graph = PrescriptionGraph.build(plan, [%{target_min: 12, rest_sec: 10}], 1210)
+      graph = PrescriptionGraph.build(plan, [%{target_min: 12, rest_sec: 10}], 1200)
 
       assert Enum.map(graph.nodes, & &1.kind) == [:start, :block_run, :rest, :block_run, :finish]
 
@@ -65,6 +65,8 @@ defmodule BurpeeTrainer.PrescriptionGraphTest do
                starts_at_sec: 730,
                ends_at_sec: 1210.0
              } = Enum.at(graph.nodes, 3)
+
+      assert %PrescriptionGraph.FinishNode{starts_at_sec: 1210.0} = Enum.at(graph.nodes, 4)
     end
 
     test "does not turn set recovery into top-level rest nodes" do

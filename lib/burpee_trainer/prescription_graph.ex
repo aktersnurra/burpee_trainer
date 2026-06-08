@@ -71,7 +71,7 @@ defmodule BurpeeTrainer.PrescriptionGraph do
         }
       end)
 
-    {block_nodes, _elapsed} =
+    {block_nodes, execution_finish_sec} =
       plan.blocks
       |> Enum.sort_by(& &1.position)
       |> Enum.with_index()
@@ -79,6 +79,8 @@ defmodule BurpeeTrainer.PrescriptionGraph do
         {nodes, elapsed} = block_run_nodes(block, block_index, elapsed, rest_nodes)
         {nodes, elapsed}
       end)
+
+    finish_sec = max(finish_sec, execution_finish_sec)
 
     body_nodes =
       (List.flatten(block_nodes) ++ rest_nodes)

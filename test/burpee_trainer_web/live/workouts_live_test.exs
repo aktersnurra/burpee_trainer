@@ -231,8 +231,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
       assert html =~ "6 × Block 1"
+      assert html =~ "42 reps"
       assert html =~ "+10s recovery"
       assert html =~ "4 × Block 1"
+      assert html =~ "28 reps"
+      assert html =~ "20:10"
+      refute html =~ "Block 1 · 6 × Block 1"
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
