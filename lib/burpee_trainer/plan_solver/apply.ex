@@ -51,12 +51,14 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       Enum.reduce(splits, {[], 0}, fn {split_at, rest_sec}, {acc, prev} ->
         reps = split_at - prev
 
+        _additional_rest_sec = rest_sec
+
         set = %Set{
           position: 1,
           burpee_count: reps,
           sec_per_rep: cadence,
           sec_per_burpee: p,
-          end_of_set_rest: rest_sec
+          end_of_set_rest: 0
         }
 
         block = %Block{position: length(acc) + 1, repeat_count: 1, sets: [set]}
@@ -85,25 +87,18 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     rest_per_gap =
       if set_count > 1, do: between_rest_total / (set_count - 1), else: 0.0
 
-    extra_by_set =
-      Enum.reduce(reservations, %{}, fn r, acc ->
-        idx = div(r.slot, set_size)
-        Map.update(acc, idx, r.rest_sec, &(&1 + r.rest_sec))
-      end)
-
     sets =
       for i <- 1..set_count do
         is_last = i == set_count
         reps = if is_last and remainder > 0, do: remainder, else: set_size
         base_rest = if is_last, do: 0, else: round(rest_per_gap)
-        extra = Map.get(extra_by_set, i, 0)
 
         %Set{
           position: i,
           burpee_count: reps,
           sec_per_rep: p,
           sec_per_burpee: p,
-          end_of_set_rest: base_rest + extra
+          end_of_set_rest: base_rest
         }
       end
 

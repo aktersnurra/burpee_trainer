@@ -85,8 +85,32 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     [s2] = b2.sets
     assert s1.burpee_count == 5
     assert s2.burpee_count == 5
-    assert_in_delta s1.end_of_set_rest, 60.0, 1.0e-6
+    assert s1.end_of_set_rest == 0
     assert s2.end_of_set_rest == 0
+    assert plan.additional_rests == ~s([{"rest_sec":60,"target_min":5}])
+  end
+
+  test ":unbroken with reservation keeps additional rest separate from set rest" do
+    input = %Input{
+      name: "t",
+      burpee_type: :six_count,
+      target_duration_min: 20,
+      burpee_count_target: 200,
+      pacing_style: :unbroken,
+      level: :level_1c,
+      reps_per_set: 5,
+      additional_rests: [%{rest_sec: 10, target_min: 18}]
+    }
+
+    p = 5.0
+    r = List.duplicate(0.0, 199)
+    reservations = [%{slot: 180, rest_sec: 10.0, target_min: 18}]
+
+    {:ok, plan} = Apply.to_workout_plan(input, p, r, reservations)
+
+    sets = List.first(plan.blocks).sets
+    assert Enum.max_by(sets, & &1.end_of_set_rest).end_of_set_rest == 5
+    assert plan.additional_rests == ~s([{"rest_sec":10,"target_min":18}])
   end
 
   test ":unbroken — correct set count" do
