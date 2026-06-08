@@ -160,8 +160,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(data-timeline-block-node)
       assert html =~ "0:00"
       assert html =~ "Block 1"
+      assert html =~ "30 reps"
       assert html =~ "3 sets"
       assert html =~ "4:00"
+      refute html =~ "2 × 30s recovery"
     end
 
     test "block timeline node expands set children and edits a set", %{conn: conn, user: user} do

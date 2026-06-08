@@ -997,7 +997,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           block_index: block_index - 1,
           time_sec: range_start,
           marker: "Block #{block_index}",
-          title: "#{length(sets)} #{if length(sets) == 1, do: "set", else: "sets"}",
+          title: "#{timeline_block_reps(block)} reps",
           detail: timeline_block_detail(block),
           sets: timeline_set_rows(sets)
         }
@@ -1042,11 +1042,21 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     max(1, round(midpoint_sec / 60))
   end
 
+  defp timeline_block_reps(block) do
+    block.sets
+    |> Enum.reduce(0, fn set, total -> total + (set.burpee_count || 0) end)
+    |> Kernel.*(block.repeat_count || 1)
+  end
+
   defp timeline_block_detail(block) do
+    set_count = length(block.sets || [])
     repeat = block.repeat_count || 1
+    set_text = "#{set_count} #{if set_count == 1, do: "set", else: "sets"}"
 
     if repeat > 1 do
-      "repeat ×#{repeat}"
+      "#{set_text} · repeat ×#{repeat}"
+    else
+      set_text
     end
   end
 
