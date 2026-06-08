@@ -46,10 +46,9 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   # ---------------------------------------------------------------------------
 
   defp build_even(input, p, []) do
-    p = round_pace(p)
     target_sec = input.target_duration_min * 60.0
     n = input.burpee_count_target
-    cadence = round_pace(target_sec / n)
+    cadence = target_sec / n
 
     set = %Set{
       position: 1,
@@ -63,11 +62,10 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   end
 
   defp build_even(input, p, reservations) do
-    p = round_pace(p)
     target_sec = input.target_duration_min * 60.0
     n = input.burpee_count_target
     reservation_total = Enum.reduce(reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
-    cadence = round_pace((target_sec - reservation_total) / n)
+    cadence = (target_sec - reservation_total) / n
 
     sorted = Enum.sort_by(reservations, & &1.slot)
     splits = Enum.map(sorted, &{&1.slot, &1.rest_sec}) ++ [{n, 0}]
@@ -199,6 +197,28 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
         steps ++ [block_run_step(position, block.position, remaining_runs)]
       else
         steps
+      end
+    end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
+  end
+
+  defp build_steps(%Input{pacing_style: :even, additional_rests: rests}, blocks)
+       when is_list(rests) and rests != [] do
+    sorted_blocks = Enum.sort_by(blocks, & &1.position)
+    sorted_rests = Enum.sort_by(rests, & &1.target_min)
+
+    sorted_blocks
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {block, index} ->
+      block_step = block_run_step(0, block.position, block.repeat_count || 1)
+
+      case Enum.at(sorted_rests, index) do
+        %{rest_sec: rest_sec} ->
+          [block_step, %PlanStep{position: 0, kind: :rest, rest_sec: rest_sec}]
+
+        nil ->
+          [block_step]
       end
     end)
     |> Enum.with_index(1)

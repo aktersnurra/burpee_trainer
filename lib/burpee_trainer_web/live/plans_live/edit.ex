@@ -240,6 +240,16 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end)
   end
 
+  defp upsert_editor_rest(rests, index, rest) do
+    rests = rests || []
+
+    if index >= 0 and index < length(rests) do
+      List.replace_at(rests, index, rest)
+    else
+      rests ++ [rest]
+    end
+  end
+
   defp insert_rest_step(steps, edge_index, rest_sec) do
     sorted_steps = Enum.sort_by(steps || [], & &1.position)
     insert_at = max(edge_index, 0)
@@ -588,27 +598,42 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
     target_min = parse_positive_integer_or(Map.get(rest_params, "target_min"), 1)
 
-    case form_plan.steps
-         |> Enum.sort_by(& &1.position)
-         |> List.delete_at(index)
-         |> place_rest_step_at_target_min(form_plan.blocks, target_min, rest_sec) do
-      {:ok, steps, blocks} ->
-        attrs =
-          form_plan
-          |> plan_to_attrs()
-          |> Map.put("blocks", blocks_to_attrs(blocks))
-          |> Map.put("steps", steps_to_attrs(steps))
+    if form_plan.pacing_style == :even do
+      rest = %{target_min: target_min, rest_sec: rest_sec}
+      input = socket.assigns.editor.input
+      rests = upsert_editor_rest(input.additional_rests, index, rest)
+      editor = %{socket.assigns.editor | input: %{input | additional_rests: rests}}
 
-        changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+      socket =
+        socket
+        |> put_editor(editor)
+        |> regenerate()
+        |> assign_derived()
 
-        {:noreply,
-         socket
-         |> assign(:form, to_form(changeset))
-         |> assign(:solver_error, nil)
-         |> assign_derived()}
+      {:noreply, socket}
+    else
+      case form_plan.steps
+           |> Enum.sort_by(& &1.position)
+           |> List.delete_at(index)
+           |> place_rest_step_at_target_min(form_plan.blocks, target_min, rest_sec) do
+        {:ok, steps, blocks} ->
+          attrs =
+            form_plan
+            |> plan_to_attrs()
+            |> Map.put("blocks", blocks_to_attrs(blocks))
+            |> Map.put("steps", steps_to_attrs(steps))
 
-      {:error, message} ->
-        {:noreply, assign(socket, :solver_error, message)}
+          changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+
+          {:noreply,
+           socket
+           |> assign(:form, to_form(changeset))
+           |> assign(:solver_error, nil)
+           |> assign_derived()}
+
+        {:error, message} ->
+          {:noreply, assign(socket, :solver_error, message)}
+      end
     end
   end
 
