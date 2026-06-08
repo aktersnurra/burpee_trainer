@@ -259,6 +259,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {placed_steps, placed?, _elapsed} =
       steps
       |> Enum.sort_by(& &1.position)
+      |> merge_adjacent_block_runs()
       |> Enum.reduce({[], false, 0.0}, fn step, {acc, placed?, elapsed} ->
         duration = timeline_step_duration(step, blocks_by_position)
 
@@ -293,6 +294,22 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     placed_steps = if placed?, do: placed_steps, else: placed_steps ++ [rest_step]
     reposition_steps(placed_steps)
+  end
+
+  defp merge_adjacent_block_runs(steps) do
+    Enum.reduce(steps, [], fn step, acc ->
+      case {List.last(acc), step} do
+        {%{kind: :block_run, block_position: block_position} = previous,
+         %{kind: :block_run, block_position: block_position}} ->
+          List.replace_at(acc, -1, %{
+            previous
+            | repeat_count: previous.repeat_count + step.repeat_count
+          })
+
+        _ ->
+          acc ++ [step]
+      end
+    end)
   end
 
   defp reposition_steps(steps) do

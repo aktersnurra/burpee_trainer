@@ -295,6 +295,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "36 × Block 1 · 180 reps"
       assert html =~ "+10s recovery"
       assert html =~ "4 × Block 1 · 20 reps"
+      refute html =~ "2 × Block 1 · 10 reps"
+      refute html =~ "34 × Block 1 · 170 reps"
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
