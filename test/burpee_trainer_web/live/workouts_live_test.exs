@@ -295,11 +295,39 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
 
       html = render(view)
-      assert html =~ "36 × Block 1 · 180 reps"
+      assert html =~ "180 reps"
       assert html =~ "+10s recovery"
       assert html =~ "4 × Block 1 · 20 reps"
+      assert html =~ "20:00"
+      refute html =~ "20:10"
       refute html =~ "2 × Block 1 · 10 reps"
       refute html =~ "34 × Block 1 · 170 reps"
+    end
+
+    test "generated timeline rejects impossible rest placement", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "200"})
+
+      view
+      |> element("button[phx-value-style='unbroken']")
+      |> render_click()
+
+      render_change(view, "change_basics", %{"reps_per_set" => "7"})
+
+      view
+      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
+      |> render_click()
+
+      view
+      |> element("[data-timeline-rest-editor]")
+      |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
+
+      html = render(view)
+      assert html =~ "Rest cannot be placed at minute 18"
+      refute html =~ "+10s recovery"
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
@@ -323,10 +351,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> render_change(%{"rest" => %{"index" => "0", "rest_sec" => "45", "target_min" => "8"}})
 
       html = render(view)
-      assert html =~ "+45s recovery"
+      assert html =~ "Rest cannot be placed at minute 8"
+      refute html =~ "+45s recovery"
 
       view |> element("[data-timeline-remove-rest]") |> render_click()
-      refute render(view) =~ "+45s recovery"
+      refute render(view) =~ "+30s recovery"
     end
 
     test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do

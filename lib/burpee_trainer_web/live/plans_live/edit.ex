@@ -256,44 +256,112 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     target_sec = target_min * 60.0
     rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
 
-    {placed_steps, placed?, _elapsed} =
-      steps
-      |> Enum.sort_by(& &1.position)
-      |> merge_adjacent_block_runs()
-      |> Enum.reduce({[], false, 0.0}, fn step, {acc, placed?, elapsed} ->
-        duration = timeline_step_duration(step, blocks_by_position)
+    steps = steps |> Enum.sort_by(& &1.position) |> merge_adjacent_block_runs()
 
-        cond do
-          placed? ->
-            {acc ++ [step], true, elapsed + duration}
+    case do_place_rest_step(steps, blocks_by_position, target_sec, rest_step, rest_sec) do
+      {:ok, placed_steps, adjusted_blocks} ->
+        {:ok, reposition_steps(placed_steps),
+         adjusted_blocks |> Map.values() |> Enum.sort_by(& &1.position)}
 
-          step.kind == :block_run and target_sec > elapsed and target_sec < elapsed + duration ->
-            block = Map.fetch!(blocks_by_position, step.block_position)
-            repeat_duration = max(block_duration(block), 1.0e-6)
+      :not_placed ->
+        {:error, "Rest cannot be placed at minute #{round(target_sec / 60)}."}
+    end
+  end
 
-            before_count =
-              floor((target_sec - elapsed) / repeat_duration)
-              |> max(1)
-              |> min(step.repeat_count - 1)
+  defp do_place_rest_step(steps, blocks_by_position, target_sec, rest_step, rest_sec) do
+    steps
+    |> Enum.reduce_while({[], 0.0, blocks_by_position}, fn step,
+                                                           {acc, elapsed, blocks_by_position} ->
+      duration = timeline_step_duration(step, blocks_by_position)
 
+      cond do
+        step.kind == :block_run and target_sec > elapsed and target_sec < elapsed + duration ->
+          block = Map.fetch!(blocks_by_position, step.block_position)
+          repeat_duration = max(block_duration(block), 1.0e-6)
+          exact_repeat_count = (target_sec - elapsed) / repeat_duration
+          before_count = round(exact_repeat_count)
+
+          if abs(before_count - exact_repeat_count) > 1.0e-6 or before_count <= 0 or
+               before_count >= step.repeat_count do
+            {:halt, :not_placed}
+          else
             after_count = step.repeat_count - before_count
 
-            split_steps =
-              [%{step | repeat_count: before_count}, rest_step] ++
-                if after_count > 0, do: [%{step | repeat_count: after_count}], else: []
+            case reclaim_rest_from_prefix(
+                   block,
+                   before_count,
+                   rest_sec,
+                   next_block_position(blocks_by_position)
+                 ) do
+              {:ok, prefix_block} ->
+                blocks_by_position =
+                  Map.put(blocks_by_position, prefix_block.position, prefix_block)
 
-            {acc ++ split_steps, true, elapsed + duration}
+                split_steps =
+                  [
+                    %{step | block_position: prefix_block.position, repeat_count: 1},
+                    rest_step,
+                    %{step | repeat_count: after_count}
+                  ]
 
-          target_sec <= elapsed ->
-            {acc ++ [rest_step, step], true, elapsed + duration}
+                {:halt,
+                 {:ok, acc ++ split_steps ++ remaining_steps_after(steps, step),
+                  blocks_by_position}}
 
-          true ->
-            {acc ++ [step], false, elapsed + duration}
-        end
+              :error ->
+                {:halt, :not_placed}
+            end
+          end
+
+        target_sec <= elapsed ->
+          {:halt,
+           {:ok, acc ++ [rest_step, step] ++ remaining_steps_after(steps, step),
+            blocks_by_position}}
+
+        true ->
+          {:cont, {acc ++ [step], elapsed + duration, blocks_by_position}}
+      end
+    end)
+    |> case do
+      {:ok, _steps, _blocks} = ok -> ok
+      :not_placed -> :not_placed
+      {_acc, _elapsed, _blocks} -> :not_placed
+    end
+  end
+
+  defp remaining_steps_after(steps, current_step) do
+    steps
+    |> Enum.drop_while(&(&1 != current_step))
+    |> tl()
+  end
+
+  defp next_block_position(blocks_by_position) do
+    blocks_by_position
+    |> Map.keys()
+    |> Enum.max(fn -> 0 end)
+    |> Kernel.+(1)
+  end
+
+  defp reclaim_rest_from_prefix(block, repeat_count, rest_sec, position) do
+    sets = Enum.sort_by(block.sets || [], & &1.position)
+    expanded_sets = for _round <- 1..repeat_count, set <- sets, do: set
+
+    {adjusted_sets, remaining_rest} =
+      Enum.map_reduce(expanded_sets, rest_sec, fn set, remaining ->
+        reduction = min(set.end_of_set_rest || 0, remaining)
+        {%{set | end_of_set_rest: (set.end_of_set_rest || 0) - reduction}, remaining - reduction}
       end)
 
-    placed_steps = if placed?, do: placed_steps, else: placed_steps ++ [rest_step]
-    reposition_steps(placed_steps)
+    if remaining_rest == 0 do
+      adjusted_sets =
+        adjusted_sets
+        |> Enum.with_index(1)
+        |> Enum.map(fn {set, position} -> %{set | id: nil, position: position} end)
+
+      {:ok, %{block | id: nil, position: position, repeat_count: 1, sets: adjusted_sets}}
+    else
+      :error
+    end
   end
 
   defp merge_adjacent_block_runs(steps) do
@@ -520,16 +588,28 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
     target_min = parse_positive_integer_or(Map.get(rest_params, "target_min"), 1)
 
-    steps =
-      form_plan.steps
-      |> Enum.sort_by(& &1.position)
-      |> List.delete_at(index)
-      |> place_rest_step_at_target_min(form_plan.blocks, target_min, rest_sec)
+    case form_plan.steps
+         |> Enum.sort_by(& &1.position)
+         |> List.delete_at(index)
+         |> place_rest_step_at_target_min(form_plan.blocks, target_min, rest_sec) do
+      {:ok, steps, blocks} ->
+        attrs =
+          form_plan
+          |> plan_to_attrs()
+          |> Map.put("blocks", blocks_to_attrs(blocks))
+          |> Map.put("steps", steps_to_attrs(steps))
 
-    attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
-    changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+        changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
 
-    {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+        {:noreply,
+         socket
+         |> assign(:form, to_form(changeset))
+         |> assign(:solver_error, nil)
+         |> assign_derived()}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :solver_error, message)}
+    end
   end
 
   def handle_event("remove_timeline_rest", %{"index" => index}, socket) do
