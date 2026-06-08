@@ -984,25 +984,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp prescription_timeline(blocks, block_time_ranges, derived, plan_input) do
-    block_rows =
-      blocks
-      |> Enum.sort_by(& &1.position)
-      |> Enum.zip(block_time_ranges)
-      |> Enum.with_index(1)
-      |> Enum.map(fn {{block, {range_start, _range_end}}, block_index} ->
-        sets = Enum.sort_by(block.sets, & &1.position)
-
-        %{
-          kind: :block,
-          block_index: block_index - 1,
-          time_sec: range_start,
-          marker: "Block #{block_index}",
-          title: "#{timeline_block_reps(block)} reps",
-          detail: timeline_block_detail(block),
-          sets: timeline_set_rows(sets)
-        }
-      end)
-
     additional_rest_rows =
       plan_input.additional_rests
       |> Enum.with_index()
@@ -1016,6 +997,36 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           detail: "at minute #{rest.target_min}",
           rest: rest
         }
+      end)
+
+    block_rows =
+      blocks
+      |> Enum.sort_by(& &1.position)
+      |> Enum.zip(block_time_ranges)
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn {{block, {range_start, range_end}}, block_index} ->
+        sets = Enum.sort_by(block.sets, & &1.position)
+
+        rest_splits =
+          additional_rest_rows
+          |> Enum.filter(fn row -> row.time_sec > range_start && row.time_sec < range_end end)
+          |> Enum.sort_by(& &1.time_sec)
+
+        base_row =
+          timeline_block_row(block, sets, block_index, range_start, "Block #{block_index}")
+
+        continuation_rows =
+          Enum.map(rest_splits, fn rest_row ->
+            timeline_block_row(
+              block,
+              sets,
+              block_index,
+              rest_row.time_sec + rest_row.rest.rest_sec,
+              "Block #{block_index} continued"
+            )
+          end)
+
+        [base_row | continuation_rows]
       end)
 
     finish_row = %{
@@ -1034,6 +1045,18 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       %{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}
       | body_rows ++ [finish_row]
     ]
+  end
+
+  defp timeline_block_row(block, sets, block_index, time_sec, marker) do
+    %{
+      kind: :block,
+      block_index: block_index - 1,
+      time_sec: time_sec,
+      marker: marker,
+      title: "#{timeline_block_reps(block)} reps",
+      detail: timeline_block_detail(block),
+      sets: timeline_set_rows(sets)
+    }
   end
 
   defp timeline_edge_target_min(row, next_row) do
