@@ -46,9 +46,10 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   # ---------------------------------------------------------------------------
 
   defp build_even(input, p, []) do
+    p = round_pace(p)
     target_sec = input.target_duration_min * 60.0
     n = input.burpee_count_target
-    cadence = target_sec / n
+    cadence = round_pace(target_sec / n)
 
     set = %Set{
       position: 1,
@@ -62,10 +63,11 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   end
 
   defp build_even(input, p, reservations) do
+    p = round_pace(p)
     target_sec = input.target_duration_min * 60.0
     n = input.burpee_count_target
     reservation_total = Enum.reduce(reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
-    cadence = (target_sec - reservation_total) / n
+    cadence = round_pace((target_sec - reservation_total) / n)
 
     sorted = Enum.sort_by(reservations, & &1.slot)
     splits = Enum.map(sorted, &{&1.slot, &1.rest_sec}) ++ [{n, 0}]
@@ -94,6 +96,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   # ---------------------------------------------------------------------------
 
   defp build_unbroken(p, set_pattern, rest_pattern) do
+    p = round_pace(p)
     grouped = Enum.chunk_by(set_pattern, & &1)
 
     grouped
@@ -151,7 +154,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       burpee_type: input.burpee_type,
       target_duration_min: input.target_duration_min,
       burpee_count_target: input.burpee_count_target,
-      sec_per_burpee: p,
+      sec_per_burpee: round_pace(p),
       pacing_style: input.pacing_style,
       additional_rests: encode_rests(input.additional_rests || []),
       fatigue_factor: 0.0,
@@ -210,6 +213,9 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       block_run_step(position, block.position, block.repeat_count || 1)
     end)
   end
+
+  defp round_pace(value) when is_float(value), do: Float.round(value, 1)
+  defp round_pace(value), do: value
 
   defp block_run_step(position, block_position, repeat_count) do
     %PlanStep{
