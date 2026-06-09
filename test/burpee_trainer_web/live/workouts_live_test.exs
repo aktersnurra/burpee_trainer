@@ -168,7 +168,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ "2 × 30s recovery"
     end
 
-    test "block timeline node expands set children and edits a set", %{conn: conn, user: user} do
+    test "block timeline node opens pattern inspector", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Timeline Edit Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
@@ -176,32 +176,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
       |> render_click()
 
-      assert has_element?(view, "[data-timeline-set-node]")
-      assert has_element?(view, "[data-timeline-set-editor]")
+      assert has_element?(view, "#block-pattern-inspector")
       html = render(view)
-      assert html =~ "Set 1"
-      assert html =~ "Reps"
-      assert html =~ "Pace"
-      assert html =~ "Recovery"
-
-      view
-      |> element("[data-timeline-set-editor='0-0']")
-      |> render_change(%{
-        "set" => %{
-          "block_index" => "0",
-          "set_index" => "0",
-          "burpee_count" => "12",
-          "sec_per_rep" => "5.5",
-          "end_of_set_rest" => "20"
-        }
-      })
-
-      html = render(view)
-      assert has_element?(view, "[data-timeline-set-editor='0-0']")
-      assert html =~ "Set 1"
-      assert html =~ "12 reps"
-      assert html =~ "5.5s/rep"
-      assert html =~ "20s recovery"
+      assert html =~ "Block pattern"
+      assert html =~ "Edits rerun the solver"
+      refute html =~ "[data-timeline-set-editor]"
     end
 
     test "timeline splits a long single block around additional rest", %{conn: conn, user: user} do
@@ -322,6 +301,26 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "10×"
       assert html =~ ~s(value="4")
       assert html =~ ~s(value="3")
+    end
+
+    test "block inspector edits pattern and stays open", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
+
+      view |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]") |> render_click()
+
+      assert has_element?(view, "#block-pattern-inspector")
+
+      view
+      |> element("#block-pattern-inspector")
+      |> render_change(%{"pattern" => %{"0" => "5", "1" => "2"}})
+
+      html = render(view)
+      assert has_element?(view, "#block-pattern-inspector")
+      assert html =~ "7 reps/block"
+      assert html =~ ~s(value="5")
+      assert html =~ ~s(value="2")
     end
 
     test "generated even timeline accepts rest by recalculating cadence", %{conn: conn} do
