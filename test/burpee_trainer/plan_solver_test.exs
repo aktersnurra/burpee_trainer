@@ -172,6 +172,46 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert hd(sol.plan.steps).repeat_count == 4
   end
 
+  test "unbroken 160 in 20 minutes with 8 reps per set preserves auto recovery" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :unbroken,
+          burpee_type: :six_count,
+          burpee_count_target: 160,
+          target_duration_min: 20,
+          level: :level_1a,
+          reps_per_set: 8
+        })
+      )
+
+    assert sol.set_pattern == List.duplicate(8, 20)
+    assert length(sol.rest_pattern_sec) == 19
+    assert sol.rest_sec >= 8.0
+
+    assert sol.sec_per_burpee >=
+             PlanSolver.effective_ceiling(
+               input(%{burpee_type: :six_count, burpee_count_target: 160, level: :level_1a})
+             )
+
+    assert sol.metadata.recovery_mode == :auto
+    assert sol.metadata.recommendation =~ "20 × 8"
+  end
+
+  test "unbroken rejects repeated sets when recovery would be useless" do
+    assert {:error, [_msg]} =
+             PlanSolver.solve(
+               input(%{
+                 pacing_style: :unbroken,
+                 burpee_type: :six_count,
+                 burpee_count_target: 290,
+                 target_duration_min: 20,
+                 level: :level_4,
+                 reps_per_set: 5
+               })
+             )
+  end
+
   test "returns error when work alone exceeds target" do
     assert {:error, [msg]} =
              PlanSolver.solve(input(%{target_duration_min: 1, level: :level_1a}))

@@ -56,7 +56,8 @@ defmodule BurpeeTrainer.PlanSolver do
              candidate.rest_pattern_sec,
              candidate.reservations
            ) do
-      {:ok, build_solution(plan, %{prepared_input | block_pattern: candidate.block_pattern}, candidate)}
+      {:ok,
+       build_solution(plan, %{prepared_input | block_pattern: candidate.block_pattern}, candidate)}
     end
   end
 
@@ -133,7 +134,8 @@ defmodule BurpeeTrainer.PlanSolver do
            reservations: reservations,
            candidate_count: 1,
            score: score_smart_candidate(input, p, set_pattern, rest_pattern),
-           set_pattern_strategy: if(input.block_pattern, do: :preferred_pattern, else: :smart_even)
+           set_pattern_strategy:
+             if(input.block_pattern, do: :preferred_pattern, else: :smart_even)
          )}
 
       {:error, :invalid_rest_boundary} ->
@@ -220,8 +222,9 @@ defmodule BurpeeTrainer.PlanSolver do
   defp smart_set_sizes(:navy_seal), do: [5, 4, 6, 3]
   defp smart_set_sizes(:six_count), do: [8, 10, 12, 6, 15, 5, 4]
 
-  defp default_even_pattern(%Input{block_pattern: pattern}) when is_list(pattern) and pattern != [],
-    do: pattern
+  defp default_even_pattern(%Input{block_pattern: pattern})
+       when is_list(pattern) and pattern != [],
+       do: pattern
 
   defp default_even_pattern(%Input{} = input) do
     p = pace(input)
@@ -249,7 +252,9 @@ defmodule BurpeeTrainer.PlanSolver do
 
     recovery_penalty =
       rest_pattern
-      |> Enum.map(fn rest -> if rest > 0 and rest < @min_useful_recovery_sec, do: 10.0, else: 0.0 end)
+      |> Enum.map(fn rest ->
+        if rest > 0 and rest < @min_useful_recovery_sec, do: 10.0, else: 0.0
+      end)
       |> Enum.sum()
 
     work_penalty + recovery_penalty + length(set_pattern) * 0.01
@@ -292,7 +297,14 @@ defmodule BurpeeTrainer.PlanSolver do
         {:ok, []}
 
       true ->
-        {:ok, List.duplicate(rest_budget / gap_count, gap_count)}
+        rest_per_gap = rest_budget / gap_count
+
+        if input.pacing_style == :unbroken and gap_count > 0 and
+             rest_per_gap < @min_useful_recovery_sec do
+          {:error, :insufficient_recovery}
+        else
+          {:ok, List.duplicate(rest_per_gap, gap_count)}
+        end
     end
   end
 
@@ -434,10 +446,41 @@ defmodule BurpeeTrainer.PlanSolver do
         score: candidate.score,
         pace_fastest_sec_per_rep: fastest,
         pace_slowest_sec_per_rep: slowest,
-        pace_override?: is_float(input.sec_per_burpee_override)
+        pace_override?: is_float(input.sec_per_burpee_override),
+        recovery_mode: :auto,
+        recommendation: recommendation_text(input, candidate),
+        work_interval_sec: average_work_interval(candidate.set_pattern, candidate.sec_per_burpee),
+        recovery_sec: candidate.rest_sec
       },
       plan: plan
     }
+  end
+
+  defp recommendation_text(%Input{pacing_style: :unbroken}, candidate) do
+    {reps, count} =
+      candidate.set_pattern
+      |> Enum.frequencies()
+      |> Enum.max_by(fn {_reps, count} -> count end)
+
+    "#{count} × #{reps} reps with auto recovery"
+  end
+
+  defp recommendation_text(%Input{pacing_style: :even}, candidate) do
+    {reps, count} =
+      candidate.set_pattern
+      |> Enum.frequencies()
+      |> Enum.max_by(fn {_reps, count} -> count end)
+
+    "#{count} × #{reps} reps at even cadence"
+  end
+
+  defp average_work_interval([], _p), do: 0.0
+
+  defp average_work_interval(set_pattern, p) do
+    set_pattern
+    |> Enum.map(&(&1 * p))
+    |> Enum.sum()
+    |> Kernel./(length(set_pattern))
   end
 
   defp average_rest([]), do: 0.0
