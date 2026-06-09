@@ -99,7 +99,7 @@
               </div>
             </div>
             <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-              Predicted
+              Prescription graph
             </p>
             <div
               id="plan-prescription-timeline"
@@ -164,31 +164,7 @@
                     <p :if={row.detail} class="text-xs text-[var(--session-muted)]">
                       {row.detail}
                     </p>
-                    <form
-                      :if={row.kind == :block && @expanded_timeline_row == row_index}
-                      id="block-pattern-inspector"
-                      phx-change="change_block_pattern"
-                      class="mt-4 space-y-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4"
-                    >
-                      <div class="flex items-center justify-between gap-4">
-                        <p class="text-sm font-semibold text-[var(--session-ink)]">
-                          Block pattern
-                        </p>
-                        <p class="text-xs text-[var(--session-muted)]">Edits rerun the solver</p>
-                      </div>
-                      <%= for {reps, idx} <- Enum.with_index(default_pattern(@plan_input)) do %>
-                        <label class="grid grid-cols-[1fr_5rem] items-center gap-3 text-xs">
-                          <span class="text-[var(--session-muted)]">Set {idx + 1}</span>
-                          <input
-                            type="number"
-                            min="1"
-                            name={"pattern[#{idx}]"}
-                            value={reps}
-                            class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
-                          />
-                        </label>
-                      <% end %>
-                    </form>
+
                     <form
                       :if={
                         row.kind == :rest &&
@@ -254,6 +230,52 @@
                 </button>
               <% end %>
             </div>
+            <form
+              :if={is_integer(@expanded_timeline_row)}
+              id="graph-inspector"
+              data-inspector-kind="block"
+              phx-change="change_block_pattern"
+              class="mt-5 space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4 text-left"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold text-[var(--session-ink)]">Block 1</p>
+                  <p class="mt-1 text-xs text-[var(--session-muted)]">
+                    Auto pace and recovery. Edits rerun the prescription.
+                  </p>
+                </div>
+                <p :if={@solver_solution} class="text-right text-xs text-[var(--session-muted)]">
+                  {@solver_solution.metadata.recommendation}
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <%= for {reps, idx} <- Enum.with_index(default_pattern(@plan_input)) do %>
+                  <label class="grid grid-cols-[1fr_5rem] items-center gap-3 text-xs">
+                    <span class="text-[var(--session-muted)]">Set {idx + 1}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      name={"pattern[#{idx}]"}
+                      value={reps}
+                      class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+                    />
+                  </label>
+                <% end %>
+              </div>
+
+              <div :if={@solver_solution} class="grid gap-2 text-xs text-[var(--session-muted)] sm:grid-cols-3">
+                <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] p-3">
+                  Work · {round(@solver_solution.metadata.work_interval_sec)}s
+                </div>
+                <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] p-3">
+                  Recovery · {round(@solver_solution.metadata.recovery_sec)}s auto
+                </div>
+                <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] p-3">
+                  Pace · {:erlang.float_to_binary(@solver_solution.sec_per_burpee * 1.0, decimals: 1)}s/rep
+                </div>
+              </div>
+            </form>
           </div>
         </div>
         <%= if @solver_solution && !@manual_edit do %>

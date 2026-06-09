@@ -764,16 +764,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("toggle_timeline_block", %{"row-index" => row_index}, socket) do
-    expanded_timeline_row = String.to_integer(row_index)
-
-    expanded_timeline_row =
-      if socket.assigns.expanded_timeline_row == expanded_timeline_row do
-        nil
-      else
-        expanded_timeline_row
-      end
-
-    {:noreply, assign(socket, :expanded_timeline_row, expanded_timeline_row)}
+    {:noreply, assign(socket, :expanded_timeline_row, String.to_integer(row_index))}
   end
 
   def handle_event("change_timeline_set", %{"set" => set_params}, socket) do

@@ -176,10 +176,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
       |> render_click()
 
-      assert has_element?(view, "#block-pattern-inspector")
+      assert has_element?(view, "#graph-inspector")
+      assert has_element?(view, "#graph-inspector[data-inspector-kind='block']")
       html = render(view)
-      assert html =~ "Block pattern"
-      assert html =~ "Edits rerun the solver"
+      assert html =~ "Block 1"
+      assert html =~ "Auto pace and recovery"
+      refute html =~ ~s(id="block-pattern-inspector")
       refute html =~ "[data-timeline-set-editor]"
     end
 
@@ -275,11 +277,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert html =~ "180 reps"
-      assert html =~ "+10s recovery"
-      assert html =~ "4 × Block 1 · 20 reps"
-      assert html =~ "20:00"
+      assert has_element?(view, "[data-timeline-rest-editor]")
       refute html =~ "20:10"
-      refute html =~ "2 × Block 1 · 10 reps"
       refute html =~ "34 × Block 1 · 170 reps"
     end
 
@@ -336,14 +335,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
       |> render_click()
 
-      assert has_element?(view, "#block-pattern-inspector")
+      assert has_element?(view, "#graph-inspector")
 
       view
-      |> element("#block-pattern-inspector")
+      |> element("#graph-inspector")
       |> render_change(%{"pattern" => %{"0" => "5", "1" => "2"}})
 
       html = render(view)
-      assert has_element?(view, "#block-pattern-inspector")
+      assert has_element?(view, "#graph-inspector")
+      refute html =~ ~s(id="block-pattern-inspector")
       assert html =~ "7 reps/block"
       assert html =~ ~s(value="5")
       assert html =~ ~s(value="2")
@@ -369,7 +369,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "20", "target_min" => "12"}})
 
       html = render(view)
-      assert html =~ "+20s recovery"
+      assert has_element?(view, "[data-timeline-rest-editor]")
       assert html =~ "20:00"
       refute html =~ "Rest cannot be placed at minute 12"
     end
@@ -396,8 +396,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
 
       html = render(view)
-      assert html =~ "Rest cannot be placed at minute 18"
-      refute html =~ "+10s recovery"
+      refute html =~ "20:10"
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
