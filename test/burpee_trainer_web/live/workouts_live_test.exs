@@ -267,19 +267,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       render_change(view, "change_basics", %{"reps_per_set" => "5"})
 
-      view
-      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
-      |> render_click()
-
-      view
-      |> element("[data-timeline-rest-editor]")
-      |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
-
       html = render(view)
-      assert html =~ "180 reps"
-      assert has_element?(view, "[data-timeline-rest-editor]")
+      assert has_element?(view, "[data-timeline-block-node]")
+      assert html =~ "200 reps"
+      assert html =~ "20:00"
       refute html =~ "20:10"
-      refute html =~ "34 × Block 1 · 170 reps"
     end
 
     test "block pattern editor reruns solver", %{conn: conn} do
@@ -329,22 +321,51 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "new plan explains smart recommendation and optional reset", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
+      assert has_element?(view, "#planner-goal-header")
+      assert has_element?(view, "#planner-goal-header", "Duration")
+      assert has_element?(view, "#planner-goal-header", "Reps")
+      assert has_element?(view, "#planner-goal-header", "Burpee type")
+      assert has_element?(view, "#planner-goal-header", "Style")
+
       view
       |> element("#plan-goal-controls")
       |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
 
       html = render(view)
       assert html =~ "Recommended"
-      assert html =~ "recovery"
-      assert html =~ "Optional reset"
-      assert has_element?(view, "button[data-accept-rest-suggestion]")
+      assert html =~ "160 reps"
+      assert html =~ "20:00"
+      assert has_element?(view, "[data-timeline-block-node]")
+      refute has_element?(view, "#skeleton-wizard")
+    end
+
+    test "expanded timeline block edits reps pace and set recovery inline", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view
-      |> element("button[data-accept-rest-suggestion]")
+      |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
       |> render_click()
 
-      assert has_element?(view, "[data-timeline-rest-editor]")
-      refute render(view) =~ "Optional reset"
+      assert has_element?(view, "[data-timeline-set-editor]")
+
+      view
+      |> element("[data-timeline-set-editor]")
+      |> render_change(%{
+        "set" => %{
+          "block_index" => "0",
+          "set_index" => "0",
+          "burpee_count" => "9",
+          "sec_per_rep" => "6.5",
+          "end_of_set_rest" => "25"
+        }
+      })
+
+      html = render(view)
+      assert has_element?(view, "[data-timeline-set-editor]")
+      assert html =~ ~s(value="9")
+      assert html =~ ~s(value="6.5")
+      assert html =~ ~s(value="25")
+      assert html =~ "Additional rests stay separate nodes"
     end
 
     test "block inspector edits pattern and stays open", %{conn: conn} do
@@ -381,18 +402,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> element("#plan-goal-controls")
       |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "70"})
 
-      view
-      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
-      |> render_click()
-
-      view
-      |> element("[data-timeline-rest-editor]")
-      |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "20", "target_min" => "12"}})
-
+      assert has_element?(view, "[data-timeline-block-node]")
       html = render(view)
-      assert has_element?(view, "[data-timeline-rest-editor]")
+      assert html =~ "70 reps"
       assert html =~ "20:00"
-      refute html =~ "Rest cannot be placed at minute 12"
     end
 
     test "generated timeline rejects impossible rest placement", %{conn: conn} do
@@ -408,22 +421,23 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       render_change(view, "change_basics", %{"reps_per_set" => "7"})
 
-      view
-      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
-      |> render_click()
-
-      view
-      |> element("[data-timeline-rest-editor]")
-      |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
-
       html = render(view)
-      refute html =~ "20:10"
+      assert has_element?(view, "[data-timeline-block-node]")
+      refute html =~ "Prescription does not match target"
     end
 
-    test "timeline add rest handle injects editable rest node", %{conn: conn} do
+    test "unbroken timeline rest edits explicit rest step", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      assert has_element?(view, "[data-timeline-edge-action]")
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "100"})
+
+      view
+      |> element("button[phx-value-style='unbroken']")
+      |> render_click()
+
+      render_change(view, "change_basics", %{"reps_per_set" => "8"})
 
       view
       |> element("[data-timeline-edge-index='0'][data-timeline-edge-action]")
@@ -431,18 +445,34 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert has_element?(view, "[data-timeline-rest-node]")
       assert has_element?(view, "[data-timeline-rest-editor]")
-      assert has_element?(view, "[data-timeline-remove-rest]")
+
       html = render(view)
-      assert html =~ "+30s recovery"
-      assert html =~ "at minute"
+      assert html =~ "explicit rest at minute"
+    end
+
+    test "timeline add rest creates visible editable explicit rest node", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
+
+      view
+      |> element("[data-timeline-edge-index='0'][data-timeline-edge-action]")
+      |> render_click()
+
+      assert has_element?(view, "[data-timeline-rest-node]")
+      assert has_element?(view, "[data-timeline-rest-editor]")
 
       view
       |> element("[data-timeline-rest-editor]")
-      |> render_change(%{"rest" => %{"index" => "0", "rest_sec" => "45", "target_min" => "8"}})
+      |> render_change(%{"rest" => %{"rest_sec" => "45", "target_min" => "8"}})
 
       html = render(view)
       assert html =~ "+45s recovery"
-      refute html =~ "Rest cannot be placed at minute 8"
+      assert html =~ "explicit rest at minute"
+      assert html =~ "Rest 45s"
+      refute html =~ "+30s recovery"
 
       view |> element("[data-timeline-remove-rest]") |> render_click()
       refute render(view) =~ "+45s recovery"
@@ -527,11 +557,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(id="plan-form")
       assert html =~ "Custom session"
       assert html =~ "Type"
-      assert html =~ "Duration"
-      assert html =~ "Goal"
-      assert html =~ "Style"
-      assert html =~ "Prescription"
-      assert html =~ "Predicted"
+      assert html =~ "Parameters"
+      assert html =~ "Session"
+      assert html =~ "Reps"
+      assert html =~ "Distribution"
+      assert html =~ "Plan"
+      assert html =~ "Add rest node"
       assert html =~ "Block pattern"
       refute html =~ "Show structure"
       assert html =~ ~s(id="plan-prescription-timeline")
@@ -542,11 +573,47 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(data-timeline-block-node)
       assert html =~ "Start"
       assert html =~ "Finish"
-      assert html =~ "Six-Count"
+      assert html =~ "6-Count"
       assert html =~ "Navy SEAL"
-      assert html =~ "Create session"
-      refute html =~ ">Reps<"
-      refute html =~ ">Pace<"
+      assert html =~ "Save"
+      refute html =~ ~s(id="skeleton-wizard")
+    end
+
+    test "new plan uses solver-generated timeline instead of skeleton wizard", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "140",
+        "pacing_style" => "unbroken"
+      })
+
+      html = render(view)
+      assert has_element?(view, "[data-timeline-block-node]")
+      assert html =~ "140 reps"
+      assert html =~ "20:00"
+      refute has_element?(view, "#skeleton-wizard")
+      refute has_element?(view, "[data-skeleton-item]")
+    end
+
+    test "unbroken reps per set stays fixed in generated UI", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "107",
+        "pacing_style" => "unbroken",
+        "reps_per_set" => "10"
+      })
+
+      html = render(view)
+      assert html =~ "10 × Block 1 · 100 reps"
+      assert html =~ "1 × Block 2 · 7 reps"
+      refute html =~ "9 ×"
     end
 
     test "invalid manual prescription shows actionable feedback", %{conn: conn} do
@@ -581,7 +648,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ">—<"
     end
 
-    test "aggressive impossible prescription explains alternatives", %{conn: conn} do
+    test "aggressive unsafe prescription shows solver feedback", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view
@@ -596,7 +663,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
-      assert html =~ "Try lowering reps"
+      assert html =~ "No workable prescription"
+      assert html =~ "pace"
     end
 
     test "impossible prescription shows actionable feedback", %{conn: conn} do
@@ -609,9 +677,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
       assert html =~ "No workable prescription"
-      assert html =~ "needs at least"
-      assert html =~ "Increase the duration"
-      assert html =~ "Reduce the rep target"
+      assert html =~ "pace"
     end
 
     test "new editor uses block pattern instead of show structure", %{conn: conn} do

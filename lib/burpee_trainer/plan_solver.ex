@@ -11,11 +11,10 @@ defmodule BurpeeTrainer.PlanSolver do
   `sec_per_burpee_override` pins it exactly.
   """
 
-  alias BurpeeTrainer.{Levels, PaceModel}
-  alias BurpeeTrainer.PlanSolver.{Apply, Input, Solution}
+  alias BurpeeTrainer.{Levels, PaceModel, Planning}
+  alias BurpeeTrainer.PlanSolver.{Apply, Input, Search, Solution, Validator}
 
   @default_reps_per_set %{six_count: 10, navy_seal: 5}
-  @human_set_sizes [15, 12, 10, 9, 8, 6, 5, 4]
   @normal_work_interval_sec 60.0
   @min_useful_recovery_sec 8.0
 
@@ -43,10 +42,10 @@ defmodule BurpeeTrainer.PlanSolver do
   @doc "Generate a `%Solution{}` from a `%PlanSolver.Input{}`."
   @spec solve(Input.t()) :: {:ok, Solution.t()} | {:error, [String.t()]}
   def solve(%Input{} = input) do
-    with {:ok, reps_per_set} <- resolve_reps_per_set(input),
+    with {:ok, {reps_per_set, reps_per_set_fixed?}} <- resolve_reps_per_set(input),
          :ok <- validate_block_pattern(input.block_pattern),
          :ok <- preflight_check(input),
-         prepared_input = apply_resolved_reps_per_set(input, reps_per_set),
+         prepared_input = apply_resolved_reps_per_set(input, reps_per_set, reps_per_set_fixed?),
          {:ok, candidate} <- solve_candidate(prepared_input, reps_per_set),
          {:ok, plan} <-
            Apply.to_workout_plan(
@@ -56,9 +55,45 @@ defmodule BurpeeTrainer.PlanSolver do
              candidate.rest_pattern_sec,
              candidate.reservations
            ) do
-      {:ok,
-       build_solution(plan, %{prepared_input | block_pattern: candidate.block_pattern}, candidate)}
+      solution =
+        build_solution(
+          plan,
+          %{prepared_input | block_pattern: candidate.block_pattern},
+          candidate
+        )
+
+      with :ok <- Validator.validate(solution, prepared_input) do
+        {:ok, solution}
+      else
+        {:error, reason} -> {:error, [validator_error_message(reason)]}
+      end
     end
+  end
+
+  @doc "Bridge a solver input into the planning facade and return a draft."
+  @spec solve_draft(Input.t()) :: {:ok, BurpeeTrainer.Planning.Draft.t()} | {:error, term()}
+  def solve_draft(%Input{} = input) do
+    input
+    |> input_to_goal_attrs()
+    |> Planning.solve()
+  end
+
+  defp input_to_goal_attrs(%Input{} = input) do
+    attrs = %{
+      duration_sec: round(input.target_duration_min * 60),
+      target_reps: input.burpee_count_target,
+      burpee_type: input.burpee_type,
+      style: input.pacing_style
+    }
+
+    attrs =
+      if input.pacing_style == :unbroken do
+        Map.put(attrs, :max_reps_per_set, input.max_reps_per_set || input.reps_per_set)
+      else
+        attrs
+      end
+
+    attrs
   end
 
   defp validate_block_pattern(nil), do: :ok
@@ -75,14 +110,15 @@ defmodule BurpeeTrainer.PlanSolver do
   defp validate_block_pattern(_pattern),
     do: {:error, ["block pattern must contain 1 to 12 positive rep counts"]}
 
-  defp resolve_reps_per_set(%Input{pacing_style: :even}), do: {:ok, nil}
+  defp resolve_reps_per_set(%Input{pacing_style: :even}), do: {:ok, {nil, false}}
 
   defp resolve_reps_per_set(%Input{pacing_style: :unbroken} = input) do
-    rps = input.reps_per_set || default_reps_per_set(input.burpee_type)
+    fixed? = is_integer(input.max_reps_per_set) || is_integer(input.reps_per_set)
+    rps = input.max_reps_per_set || input.reps_per_set || default_reps_per_set(input.burpee_type)
 
     if is_integer(rps) and rps > 0,
-      do: {:ok, rps},
-      else: {:error, ["reps_per_set must be a positive integer"]}
+      do: {:ok, {rps, fixed?}},
+      else: {:error, ["max_reps_per_set must be a positive integer"]}
   end
 
   defp preflight_check(%Input{} = input) do
@@ -111,10 +147,14 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
-  defp apply_resolved_reps_per_set(%Input{pacing_style: :unbroken} = input, reps_per_set),
-    do: %{input | reps_per_set: reps_per_set}
+  defp apply_resolved_reps_per_set(
+         %Input{pacing_style: :unbroken} = input,
+         reps_per_set,
+         fixed?
+       ),
+       do: %{input | reps_per_set: reps_per_set, reps_per_set_fixed?: fixed?}
 
-  defp apply_resolved_reps_per_set(%Input{} = input, _reps_per_set), do: input
+  defp apply_resolved_reps_per_set(%Input{} = input, _reps_per_set, _fixed?), do: input
 
   defp solve_candidate(%Input{pacing_style: :even} = input, _reps_per_set) do
     p = pace(input)
@@ -144,38 +184,39 @@ defmodule BurpeeTrainer.PlanSolver do
   end
 
   defp solve_candidate(%Input{pacing_style: :unbroken} = input, reps_per_set) do
-    p = pace(input)
+    case Search.solve(%{
+           burpee_type: input.burpee_type,
+           pacing_style: input.pacing_style,
+           target_reps: input.burpee_count_target,
+           target_sec: input.target_duration_min * 60 - additional_rest_total(input),
+           min_sec_per_rep: pace(input),
+           max_sec_per_rep: PaceModel.slowest_useful_sec_per_rep(input.burpee_type, input.level),
+           preferred_reps_per_set: if(input.reps_per_set_fixed?, do: reps_per_set, else: nil),
+           block_pattern: input.block_pattern,
+           additional_rests: input.additional_rests
+         }) do
+      {:ok, exact} ->
+        solved_candidate =
+          candidate(input,
+            sec_per_burpee: exact.sec_per_burpee,
+            set_pattern: exact.set_pattern,
+            rest_pattern_sec: exact.rest_pattern_sec,
+            reservations: [],
+            candidate_count: 1,
+            score: exact.score,
+            set_pattern_strategy: exact.set_pattern_strategy
+          )
+          |> Map.put(:recommendation, exact.recommendation)
 
-    candidates =
-      input.burpee_count_target
-      |> set_pattern_candidates(input.burpee_type, reps_per_set)
-      |> Enum.flat_map(fn set_pattern ->
-        with {:ok, reservations} <- place_additional_rests(input, p, set_pattern),
-             {:ok, rest_pattern} <- derive_rest_pattern(input, p, set_pattern, reservations) do
-          [
-            candidate(input,
-              sec_per_burpee: p,
-              set_pattern: set_pattern,
-              rest_pattern_sec: rest_pattern,
-              reservations: reservations,
-              candidate_count: 0,
-              score: score_set_pattern(set_pattern, reps_per_set),
-              set_pattern_strategy: :human_shaped
-            )
-          ]
-        else
-          _ -> []
-        end
-      end)
+        {:ok, solved_candidate}
 
-    case candidates do
-      [] ->
-        {:error, [infeasibility_message(input)]}
-
-      candidates ->
-        winner = Enum.min_by(candidates, & &1.score)
-        {:ok, %{winner | candidate_count: length(candidates)}}
+      {:error, reasons} ->
+        {:error, reasons}
     end
+  end
+
+  defp additional_rest_total(%Input{} = input) do
+    Enum.reduce(input.additional_rests, 0, fn rest, total -> total + rest.rest_sec end)
   end
 
   defp pace(%Input{sec_per_burpee_override: override}) when is_float(override), do: override
@@ -203,21 +244,6 @@ defmodule BurpeeTrainer.PlanSolver do
       block_pattern: input.block_pattern
     }
   end
-
-  defp set_pattern_candidates(total_reps, burpee_type, reps_per_set) do
-    preferred = preferred_set_sizes(burpee_type, reps_per_set)
-
-    preferred
-    |> Enum.flat_map(&set_pattern_for(total_reps, &1))
-    |> Enum.uniq()
-    |> Enum.filter(&(Enum.sum(&1) == total_reps))
-  end
-
-  defp preferred_set_sizes(:navy_seal, reps_per_set),
-    do: [reps_per_set, 6, 5, 4] |> Enum.uniq() |> Enum.filter(&(&1 > 0))
-
-  defp preferred_set_sizes(_type, reps_per_set),
-    do: [reps_per_set | @human_set_sizes] |> Enum.uniq() |> Enum.filter(&(&1 > 0))
 
   defp smart_set_sizes(:navy_seal), do: [5, 4, 6, 3]
   defp smart_set_sizes(:six_count), do: [8, 10, 12, 6, 15, 5, 4]
@@ -260,70 +286,6 @@ defmodule BurpeeTrainer.PlanSolver do
     work_penalty + recovery_penalty + length(set_pattern) * 0.01
   end
 
-  defp set_pattern_for(total_reps, size) when total_reps <= size, do: [[total_reps]]
-
-  defp set_pattern_for(total_reps, size) do
-    full_count = div(total_reps, size)
-    remainder = rem(total_reps, size)
-    base = List.duplicate(size, full_count)
-
-    cond do
-      remainder == 0 ->
-        [base]
-
-      remainder in @human_set_sizes ->
-        [base ++ [remainder]]
-
-      full_count > 0 and (size - 1) in @human_set_sizes and (remainder + 1) in @human_set_sizes ->
-        [List.duplicate(size, full_count - 1) ++ [size - 1, remainder + 1]]
-
-      true ->
-        []
-    end
-  end
-
-  defp derive_rest_pattern(input, p, set_pattern, reservations) do
-    reservation_total = Enum.reduce(reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
-    work_sec = Enum.sum(set_pattern) * p
-    target_sec = input.target_duration_min * 60.0
-    gap_count = max(length(set_pattern) - 1, 0)
-    rest_budget = target_sec - work_sec - reservation_total
-
-    cond do
-      rest_budget < -1.0e-6 ->
-        {:error, :negative_rest}
-
-      gap_count == 0 ->
-        {:ok, []}
-
-      true ->
-        rest_per_gap = rest_budget / gap_count
-
-        if input.pacing_style == :unbroken and gap_count > 0 and
-             rest_per_gap < @min_useful_recovery_sec do
-          {:error, :insufficient_recovery}
-        else
-          {:ok, List.duplicate(rest_per_gap, gap_count)}
-        end
-    end
-  end
-
-  defp score_set_pattern(set_pattern, reps_per_set) do
-    size_penalty =
-      set_pattern
-      |> Enum.map(fn reps ->
-        cond do
-          reps == reps_per_set -> 0
-          reps in @human_set_sizes -> 1
-          true -> 10
-        end
-      end)
-      |> Enum.sum()
-
-    variance_penalty = Enum.max(set_pattern) - Enum.min(set_pattern)
-    length(set_pattern) * 0.01 + size_penalty + variance_penalty * 0.1
-  end
-
   defp place_additional_rests(%Input{additional_rests: []}, _p, _set_pattern), do: {:ok, []}
 
   defp place_additional_rests(%Input{pacing_style: :even} = input, _p, _set_pattern) do
@@ -357,50 +319,36 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
-  defp place_additional_rests(%Input{pacing_style: :unbroken} = input, p, set_pattern) do
-    with {:ok, rest_pattern} <- derive_rest_pattern(input, p, set_pattern, []) do
-      boundaries = set_boundaries(set_pattern, p, rest_pattern)
-
-      reservations =
-        input.additional_rests
-        |> Enum.sort_by(& &1.target_min)
-        |> Enum.map(fn rest ->
-          target_sec = rest.target_min * 60.0
-
-          {slot, boundary_sec} =
-            Enum.min_by(boundaries, fn {_slot, sec} -> abs(sec - target_sec) end)
-
-          if slot < input.burpee_count_target and abs(boundary_sec - target_sec) <= 30 do
-            {:ok, %{slot: slot, rest_sec: rest.rest_sec, target_min: rest.target_min}}
-          else
-            :error
-          end
-        end)
-
-      if Enum.any?(reservations, &(&1 == :error)) do
-        {:error, :invalid_rest_boundary}
-      else
-        {:ok, Enum.map(reservations, fn {:ok, reservation} -> reservation end)}
-      end
-    end
-  end
-
   defp even_rest_block_total(%Input{block_pattern: pattern})
        when is_list(pattern) and pattern != [],
        do: Enum.sum(pattern)
 
   defp even_rest_block_total(_input), do: 1
 
-  defp set_boundaries(set_pattern, p, rest_pattern) do
-    set_pattern
-    |> Enum.drop(-1)
-    |> Enum.with_index(1)
-    |> Enum.map(fn {_reps, index} ->
-      reps_done = set_pattern |> Enum.take(index) |> Enum.sum()
-      rest_done = rest_pattern |> Enum.take(index - 1) |> Enum.sum()
-      {reps_done, reps_done * p + rest_done}
-    end)
-  end
+  defp validator_error_message({:rep_mismatch, %{expected: expected, actual: actual}}),
+    do: "Prescription has #{actual} reps, but target is #{expected}."
+
+  defp validator_error_message(
+         {:duration_mismatch, %{expected_sec: expected, actual_sec: actual}}
+       ),
+       do:
+         "Prescription duration is #{format_duration(actual)}, but target is #{format_duration(expected)}."
+
+  defp validator_error_message({:pace_too_fast, %{fastest_sec_per_rep: fastest}}),
+    do:
+      "Prescription requires pace faster than #{Float.round(fastest, 1)}s/rep. Try lowering reps or increasing duration."
+
+  defp validator_error_message({:pace_too_slow, %{slowest_sec_per_rep: slowest}}),
+    do:
+      "Prescription requires pace slower than #{Float.round(slowest, 1)}s/rep. Try adding recovery, increasing reps, or shortening duration."
+
+  defp validator_error_message(:hidden_final_rest),
+    do: "Prescription includes hidden rest after the final set."
+
+  defp validator_error_message({:unbroken_reps_per_set_changed, %{expected: expected}}),
+    do: "Unbroken sets must stay at #{expected} reps per set."
+
+  defp validator_error_message(reason), do: "Invalid prescription: #{inspect(reason)}"
 
   defp infeasibility_message(%Input{additional_rests: [_ | _] = rests}) do
     %{target_min: t} = Enum.max_by(rests, & &1.target_min)
@@ -446,7 +394,7 @@ defmodule BurpeeTrainer.PlanSolver do
       pacing_style: input.pacing_style,
       burpee_type: input.burpee_type,
       metadata: %{
-        solver_version: "deterministic-v2",
+        solver_version: "milp-v1",
         set_pattern_strategy: candidate.set_pattern_strategy,
         candidate_count: candidate.candidate_count,
         score: candidate.score,
@@ -462,6 +410,10 @@ defmodule BurpeeTrainer.PlanSolver do
       plan: plan
     }
   end
+
+  defp recommendation_text(_input, %{recommendation: recommendation})
+       when is_binary(recommendation),
+       do: recommendation
 
   defp recommendation_text(%Input{pacing_style: :unbroken}, candidate) do
     {reps, count} =

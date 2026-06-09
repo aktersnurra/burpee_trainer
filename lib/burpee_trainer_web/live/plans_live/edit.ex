@@ -31,7 +31,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:ok,
      socket
      |> assign(:live_action, socket.assigns.live_action)
+     |> assign(:draft, nil)
+     |> assign(:draft_feedback, nil)
      |> assign(:expanded_blocks, MapSet.new())
+     |> assign(:expanded_timeline_item_id, nil)
      |> assign(:expanded_timeline_row, nil)
      |> assign(:open_block_menu, nil)
      |> assign(:level, level)
@@ -77,6 +80,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:solver_error, editor.solver_error)
     |> assign(:solver_solution, editor.solver_solution)
     |> assign(:manual_edit, editor.manual_edit?)
+    |> assign(:structure_notation, structure_notation(editor))
     |> assign(:expanded_blocks, editor.expanded_blocks)
     |> assign(:open_block_menu, editor.open_block_menu)
     |> assign(:derived, derived_assign(editor))
@@ -84,6 +88,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp derived_assign(%{derived: %{summary: summary}}), do: summary
   defp derived_assign(_editor), do: nil
+
+  defp structure_notation(%{structure: %{nodes: [_ | _]} = structure}),
+    do: BurpeeTrainer.PlanEditor.Structure.notation(structure)
+
+  defp structure_notation(_editor), do: nil
 
   defp preload_duration_min(%WorkoutPlan{blocks: blocks} = plan) when is_list(blocks) do
     %{plan | blocks: Enum.map(blocks, &preload_block_duration_min/1)}
@@ -121,18 +130,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     socket = put_editor(socket, editor)
 
-    if editor.solver_solution do
-      base = editor.plan || %WorkoutPlan{}
+    cond do
+      editor.solver_solution ->
+        base = editor.plan || %WorkoutPlan{}
 
-      changeset =
-        Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(editor.solver_solution.plan))
+        changeset =
+          Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(editor.solver_solution.plan))
 
-      assign(socket, :form, to_form(changeset))
-    else
-      existing_form =
-        socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+        assign(socket, :form, to_form(changeset))
 
-      assign(socket, :form, existing_form)
+      editor.form_plan ->
+        base = editor.plan || %WorkoutPlan{}
+        changeset = Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(editor.form_plan))
+        assign(socket, :form, to_form(changeset))
+
+      true ->
+        existing_form =
+          socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+
+        assign(socket, :form, existing_form)
     end
   end
 
@@ -148,32 +164,28 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> assign(:risk, metadata["risk"])
 
     ~H"""
-    <section
-      id="plan-metadata"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 px-5 py-4"
-    >
-      <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+    <section id="plan-metadata" class="border-b border-[var(--session-border)] px-4 py-3 text-xs">
+      <p class="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--session-muted)]">
         Why this?
       </p>
-      <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
-        {@source_label}
-      </p>
-      <p class="mt-1 text-sm text-[var(--session-muted)]">
-        {@kind_label} · {@plan.coach_target_reps} reps
-      </p>
-      <p :if={@risk} class="mt-1 text-xs text-[var(--session-muted)]">
-        Risk: {@risk}
-      </p>
-      <ul :if={@rationale != []} class="mt-3 space-y-1 text-xs text-[var(--session-muted)]">
+      <div class="mt-2 flex items-center justify-between gap-3">
+        <p class="font-semibold text-[var(--session-ink)]">{@source_label}</p>
+        <p class="tabular-nums text-[var(--session-muted)]">
+          {@kind_label} · {@plan.coach_target_reps} reps
+        </p>
+      </div>
+      <p :if={@risk} class="mt-1 text-[var(--session-muted)]">Risk: {@risk}</p>
+      <ul :if={@rationale != []} class="mt-2 space-y-1 text-[var(--session-muted)]">
         <li :for={line <- @rationale}>{line}</li>
       </ul>
     </section>
     """
   end
 
-  defp plan_metadata(assigns),
-    do: ~H"""
+  defp plan_metadata(assigns) do
+    ~H"""
     """
+  end
 
   defp metadata_source_label("coach_target"), do: "Coach target"
   defp metadata_source_label("catch_up"), do: "Catch-up"
@@ -181,6 +193,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp metadata_kind_label(nil), do: "Generated"
   defp metadata_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
+
+  defp burpee_type_label(:six_count), do: "6-Count"
+  defp burpee_type_label(:navy_seal), do: "Navy SEAL"
+  defp burpee_type_label(other), do: to_string(other)
+
+  defp style_label(:even), do: "Even"
+  defp style_label(:unbroken), do: "Unbroken"
+  defp style_label(other), do: to_string(other)
 
   defp plan_to_attrs(%WorkoutPlan{} = plan) do
     %{
@@ -516,6 +536,23 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
+  def handle_event("adjust_basic", %{"field" => field, "delta" => delta}, socket)
+      when field in ["target_duration_min", "burpee_count_target", "reps_per_set"] do
+    input = socket.assigns.plan_input
+    current = Map.fetch!(input, String.to_existing_atom(field)) || 1
+    {delta, _} = Integer.parse(delta)
+    value = max(1, current + delta)
+
+    params = %{
+      "name" => input.name,
+      "target_duration_min" => input.target_duration_min,
+      "burpee_count_target" => input.burpee_count_target,
+      "reps_per_set" => input.reps_per_set
+    }
+
+    handle_event("change_basics", Map.put(params, field, value), socket)
+  end
+
   def handle_event("pick_type", %{"type" => type}, socket) do
     case PlanEditor.pick_type(socket.assigns.editor, type) do
       {:ok, editor} ->
@@ -617,7 +654,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       ) do
     form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
-    if (form_plan.steps || []) != [] do
+    if (form_plan.steps || []) != [] and
+         (socket.assigns.editor.manual_edit? || form_plan.pacing_style == :unbroken) do
       steps = insert_rest_step(form_plan.steps, String.to_integer(edge_index), 30)
       attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
       changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
@@ -973,6 +1011,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:derived, :any, required: true)
   attr(:solver_error, :any, required: true)
   attr(:solver_solution, :any, required: true)
+  attr(:structure_notation, :string, default: nil)
   attr(:live_action, :atom, required: true)
   attr(:level, :atom, required: true)
 
@@ -1074,25 +1113,30 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_editor_header(assigns) do
     ~H"""
-    <div class="flex items-end justify-between gap-4 border-b border-[var(--session-border)] pb-4">
-      <form phx-change="change_basics" class="min-w-0 flex-1 space-y-1">
-        <label class="text-[10px] uppercase tracking-[0.24em] text-[var(--session-muted)]">
-          Custom session
-        </label>
+    <header class="grid grid-cols-[1fr_auto_1fr] items-center border-b border-[var(--session-border)] px-4 py-3">
+      <.link
+        navigate={~p"/workouts"}
+        class="text-[10px] uppercase tracking-[0.22em] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+      >
+        ‹ Workouts
+      </.link>
+      <form phx-change="change_basics" class="min-w-0 text-center">
+        <label class="sr-only">Custom session</label>
         <input
           type="text"
           name="name"
           value={@plan_input.name}
-          class="w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 pb-1 text-3xl font-semibold tracking-tight text-[var(--session-ink)] transition placeholder:text-[var(--session-muted)] focus:border-[var(--session-ink)] focus:outline-none"
+          aria-label="Session name"
+          class="w-36 border-0 bg-transparent text-center text-sm font-semibold text-[var(--session-ink)] transition placeholder:text-[var(--session-muted)] focus:outline-none"
         />
       </form>
-      <div class="flex shrink-0 items-center gap-2">
+      <div class="flex items-center justify-end gap-1">
         <%= if @live_action == :edit do %>
           <button
             id="plan-duplicate"
             type="button"
             phx-click="duplicate_plan"
-            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
           >
             Copy
           </button>
@@ -1101,19 +1145,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             type="button"
             phx-click="delete_plan"
             data-confirm={"Delete '#{@plan.name}'? This cannot be undone."}
-            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--session-muted)] transition hover:text-error"
           >
             Delete
           </button>
         <% end %>
-        <.link
-          navigate={~p"/workouts"}
-          class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+        <button
+          type="submit"
+          form="plan-form"
+          class="bg-[var(--session-ink)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-bg)] transition hover:opacity-90"
         >
-          Cancel
-        </.link>
+          Save
+        </button>
       </div>
-    </div>
+    </header>
     """
   end
 
@@ -1121,38 +1166,40 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_type_picker(assigns) do
     ~H"""
-    <div class="flex border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
-      <button
-        type="button"
-        phx-click="pick_type"
-        phx-value-type="six_count"
-        class={[
-          "flex-1 py-3 text-sm font-medium tracking-wide transition",
-          if(@plan_input.burpee_type == :six_count,
-            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-            else:
-              "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
-          )
-        ]}
-      >
-        Six-Count
-      </button>
-      <div class="w-px bg-[var(--session-border)]" />
-      <button
-        type="button"
-        phx-click="pick_type"
-        phx-value-type="navy_seal"
-        class={[
-          "flex-1 py-3 text-sm font-medium tracking-wide transition",
-          if(@plan_input.burpee_type == :navy_seal,
-            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-            else:
-              "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
-          )
-        ]}
-      >
-        Navy SEAL
-      </button>
+    <div class="grid grid-cols-[1fr_auto] items-center gap-4">
+      <p class="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--session-muted)]">
+        Type
+      </p>
+      <div class="inline-grid grid-cols-2 border border-[var(--session-border)] bg-[var(--session-surface)]">
+        <button
+          type="button"
+          phx-click="pick_type"
+          phx-value-type="six_count"
+          class={[
+            "px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] transition",
+            if(@plan_input.burpee_type == :six_count,
+              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              else: "text-[var(--session-muted)] hover:text-[var(--session-ink)]"
+            )
+          ]}
+        >
+          6-Count
+        </button>
+        <button
+          type="button"
+          phx-click="pick_type"
+          phx-value-type="navy_seal"
+          class={[
+            "border-l border-[var(--session-border)] px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] transition",
+            if(@plan_input.burpee_type == :navy_seal,
+              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              else: "text-[var(--session-muted)] hover:text-[var(--session-ink)]"
+            )
+          ]}
+        >
+          Navy SEAL
+        </button>
+      </div>
     </div>
     """
   end
@@ -1165,29 +1212,77 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     <form
       id="plan-goal-controls"
       phx-change="change_basics"
-      class="grid grid-cols-2 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
+      class="divide-y divide-[var(--session-border)] border-b border-[var(--session-border)]"
     >
-      <div class="border-r border-[var(--session-border)] p-5">
-        <div class="flex items-baseline gap-1">
+      <div class="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3">
+        <div>
+          <p class="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--session-muted)]">
+            Session
+          </p>
+          <p class="text-[9px] text-[var(--session-muted)]">min</p>
+        </div>
+        <div class="inline-grid grid-cols-[2rem_4rem_2rem] border border-[var(--session-border)] bg-[var(--session-surface)]">
+          <button
+            type="button"
+            phx-click="adjust_basic"
+            phx-value-field="target_duration_min"
+            phx-value-delta="-1"
+            class="border-r border-[var(--session-border)] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            −
+          </button>
           <input
             type="number"
             name="target_duration_min"
             min="1"
             max="120"
             value={@plan_input.target_duration_min}
-            class="w-full bg-transparent text-5xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)] focus:outline-none"
+            aria-label="Session minutes"
+            class="bg-transparent px-2 py-2 text-center text-sm font-semibold tabular-nums text-[var(--session-ink)] focus:outline-none"
           />
-          <span class="text-sm text-[var(--session-muted)]">min</span>
+          <button
+            type="button"
+            phx-click="adjust_basic"
+            phx-value-field="target_duration_min"
+            phx-value-delta="1"
+            class="border-l border-[var(--session-border)] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            +
+          </button>
         </div>
       </div>
-      <div class="p-5">
-        <input
-          type="number"
-          name="burpee_count_target"
-          min="1"
-          value={@plan_input.burpee_count_target}
-          class="w-full bg-transparent text-5xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)] focus:outline-none"
-        />
+      <div class="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3">
+        <p class="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--session-muted)]">
+          Reps
+        </p>
+        <div class="inline-grid grid-cols-[2rem_4rem_2rem] border border-[var(--session-border)] bg-[var(--session-surface)]">
+          <button
+            type="button"
+            phx-click="adjust_basic"
+            phx-value-field="burpee_count_target"
+            phx-value-delta="-1"
+            class="border-r border-[var(--session-border)] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            name="burpee_count_target"
+            min="1"
+            value={@plan_input.burpee_count_target}
+            aria-label="Target reps"
+            class="bg-transparent px-2 py-2 text-center text-sm font-semibold tabular-nums text-[var(--session-ink)] focus:outline-none"
+          />
+          <button
+            type="button"
+            phx-click="adjust_basic"
+            phx-value-field="burpee_count_target"
+            phx-value-delta="1"
+            class="border-l border-[var(--session-border)] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            +
+          </button>
+        </div>
       </div>
     </form>
     """
@@ -1197,66 +1292,79 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_pacing_controls(assigns) do
     ~H"""
-    <form
-      phx-change="change_basics"
-      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
-    >
-      <div class="flex">
-        <button
-          type="button"
-          phx-click="pick_pacing"
-          phx-value-style="even"
-          class={[
-            "flex-1 py-3 text-sm font-medium tracking-wide transition",
-            if(@plan_input.pacing_style == :even,
-              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-              else:
-                "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
-            )
-          ]}
-        >
-          Even
-        </button>
-        <div class="w-px bg-[var(--session-border)]" />
-        <button
-          type="button"
-          phx-click="pick_pacing"
-          phx-value-style="unbroken"
-          class={[
-            "flex-1 py-3 text-sm font-medium tracking-wide transition",
-            if(@plan_input.pacing_style == :unbroken,
-              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-              else:
-                "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
-            )
-          ]}
-        >
-          Unbroken
-        </button>
-      </div>
-      <%= if @plan_input.pacing_style == :unbroken do %>
-        <div class="flex items-baseline justify-between border-t border-[var(--session-border)] px-6 py-5">
-          <div class="space-y-1">
-            <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Per set</p>
-            <div class="flex items-baseline gap-1.5">
-              <input
-                type="number"
-                name="reps_per_set"
-                min="1"
-                value={@plan_input.reps_per_set}
-                class="w-20 bg-transparent text-3xl font-bold leading-none tabular-nums text-[var(--session-ink)] focus:outline-none"
-              />
-              <span class="text-sm text-[var(--session-muted)]">reps</span>
-            </div>
-          </div>
-          <span class="text-sm tabular-nums text-[var(--session-muted)]">
-            → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
-            <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do %>
-              <span class="text-[var(--session-muted)]">+ 1</span>
-            <% end %>
-          </span>
+    <form phx-change="change_basics" class="space-y-3">
+      <div class="grid grid-cols-[1fr_auto] items-center gap-4">
+        <p class="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--session-muted)]">
+          Distribution
+        </p>
+        <div class="inline-grid grid-cols-2 border border-[var(--session-border)] bg-[var(--session-surface)]">
+          <button
+            type="button"
+            phx-click="pick_pacing"
+            phx-value-style="even"
+            class={[
+              "px-5 py-2 text-[10px] font-medium uppercase tracking-[0.18em] transition",
+              if(@plan_input.pacing_style == :even,
+                do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+                else: "text-[var(--session-muted)] hover:text-[var(--session-ink)]"
+              )
+            ]}
+          >
+            Even
+          </button>
+          <button
+            type="button"
+            phx-click="pick_pacing"
+            phx-value-style="unbroken"
+            class={[
+              "border-l border-[var(--session-border)] px-5 py-2 text-[10px] font-medium uppercase tracking-[0.18em] transition",
+              if(@plan_input.pacing_style == :unbroken,
+                do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+                else: "text-[var(--session-muted)] hover:text-[var(--session-ink)]"
+              )
+            ]}
+          >
+            Unbroken
+          </button>
         </div>
-      <% end %>
+      </div>
+      <div
+        :if={@plan_input.pacing_style == :unbroken}
+        class="grid grid-cols-[1fr_auto] items-center gap-4 border-t border-[var(--session-border)] pt-3"
+      >
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.22em] text-[var(--session-muted)]">Per set</p>
+          <p class="text-[9px] text-[var(--session-muted)]">fixed reps</p>
+        </div>
+        <div class="inline-grid grid-cols-[2rem_4rem_2rem] border border-[var(--session-border)] bg-[var(--session-surface)]">
+          <button
+            type="button"
+            phx-click="adjust_basic"
+            phx-value-field="reps_per_set"
+            phx-value-delta="-1"
+            class="border-r border-[var(--session-border)] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            name="reps_per_set"
+            min="1"
+            value={@plan_input.reps_per_set}
+            aria-label="Reps per set"
+            class="bg-transparent px-2 py-2 text-center text-sm font-semibold tabular-nums text-[var(--session-ink)] focus:outline-none"
+          />
+          <button
+            type="button"
+            phx-click="adjust_basic"
+            phx-value-field="reps_per_set"
+            phx-value-delta="1"
+            class="border-l border-[var(--session-border)] text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            +
+          </button>
+        </div>
+      </div>
     </form>
     """
   end
@@ -1333,13 +1441,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp timeline_rows_from_steps(blocks, steps) do
     blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
 
-    {rows, elapsed} =
+    {rows, {elapsed, _rest_index}} =
       steps
       |> Enum.sort_by(& &1.position)
       |> Enum.with_index()
-      |> Enum.map_reduce(0.0, fn {step, step_index}, elapsed ->
-        row = timeline_row_from_step(step, step_index, blocks_by_position, elapsed)
-        {row, elapsed + timeline_step_duration(step, blocks_by_position)}
+      |> Enum.map_reduce({0.0, 0}, fn {step, step_index}, {elapsed, rest_index} ->
+        row = timeline_row_from_step(step, step_index, rest_index, blocks_by_position, elapsed)
+        elapsed = elapsed + timeline_step_duration(step, blocks_by_position)
+        rest_index = if step.kind == :rest, do: rest_index + 1, else: rest_index
+        {row, {elapsed, rest_index}}
       end)
 
     [%{kind: :start, time_sec: 0, marker: "Start", title: "Begin", detail: nil}] ++
@@ -1358,6 +1468,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp timeline_row_from_step(
          %{kind: :block_run} = step,
          _step_index,
+         _rest_index,
          blocks_by_position,
          elapsed
        ) do
@@ -1376,10 +1487,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     }
   end
 
-  defp timeline_row_from_step(%{kind: :rest} = step, step_index, _blocks_by_position, elapsed) do
+  defp timeline_row_from_step(
+         %{kind: :rest} = step,
+         step_index,
+         rest_index,
+         _blocks_by_position,
+         elapsed
+       ) do
     %{
       kind: :rest,
       step_index: step_index,
+      rest_index: rest_index,
       time_sec: elapsed,
       marker: "Rest",
       title: "+#{step.rest_sec}s recovery",

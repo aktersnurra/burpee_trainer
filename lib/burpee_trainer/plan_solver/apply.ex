@@ -159,20 +159,14 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   # ---------------------------------------------------------------------------
 
   defp build_unbroken(p, set_pattern, rest_pattern) do
-    p = round_pace(p)
-    grouped = Enum.chunk_by(set_pattern, & &1)
+    integer_rests = integer_rest_pattern(rest_pattern)
 
-    last_position = length(grouped)
-
-    grouped
+    set_pattern
+    |> Enum.zip(integer_rests ++ [0])
+    |> Enum.chunk_by(fn {reps, rest} -> {reps, rest} end)
     |> Enum.with_index(1)
     |> Enum.map(fn {group, position} ->
-      reps = hd(group)
-
-      base_rest =
-        if last_position > 1 and position == last_position,
-          do: 0,
-          else: Enum.at(rest_pattern, 0, 0)
+      {reps, rest} = hd(group)
 
       %Block{
         position: position,
@@ -183,10 +177,24 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
             burpee_count: reps,
             sec_per_rep: p,
             sec_per_burpee: p,
-            end_of_set_rest: round(base_rest)
+            end_of_set_rest: rest
           }
         ]
       }
+    end)
+  end
+
+  defp integer_rest_pattern([]), do: []
+
+  defp integer_rest_pattern(rest_pattern) do
+    floors = Enum.map(rest_pattern, &floor/1)
+    target_total = rest_pattern |> Enum.sum() |> round()
+    missing = target_total - Enum.sum(floors)
+
+    floors
+    |> Enum.with_index()
+    |> Enum.map(fn {rest, index} ->
+      if index < missing, do: rest + 1, else: rest
     end)
   end
 

@@ -24,9 +24,11 @@ defmodule BurpeeTrainer.PlanSolver.Input do
     :pacing_style,
     :level,
     reps_per_set: nil,
+    max_reps_per_set: nil,
     additional_rests: [],
     sec_per_burpee_override: nil,
-    block_pattern: nil
+    block_pattern: nil,
+    reps_per_set_fixed?: false
   ]
 
   @type burpee_type :: :six_count | :navy_seal
@@ -50,8 +52,10 @@ defmodule BurpeeTrainer.PlanSolver.Input do
           pacing_style: pacing_style,
           level: level,
           reps_per_set: pos_integer | nil,
+          max_reps_per_set: pos_integer | nil,
           additional_rests: [additional_rest],
           sec_per_burpee_override: float | nil,
-          block_pattern: [pos_integer] | nil
+          block_pattern: [pos_integer] | nil,
+          reps_per_set_fixed?: boolean
         }
 end

@@ -4,32 +4,61 @@
   current_level={@current_level}
   current_page={:plans}
 >
-  <div class="session-surface mx-auto max-w-3xl space-y-5 pb-24 text-[var(--session-ink)]">
+  <div class="session-surface mx-auto min-h-screen max-w-[390px] bg-[var(--session-bg)] pb-16 text-[var(--session-ink)] shadow-2xl shadow-black/20 sm:my-6 sm:min-h-0 sm:border sm:border-[var(--session-border)]">
     <.plan_editor_header plan_input={@plan_input} live_action={@live_action} plan={@plan} />
+    <.plan_metadata plan={@plan} />
+    <section id="planner-goal-header" class="border-b border-[var(--session-border)] px-4 py-3">
+      <p class="text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--session-muted)]">
+        Goal
+      </p>
+      <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <div>
+          <dt class="text-[10px] uppercase tracking-[0.18em] text-[var(--session-muted)]">
+            Duration
+          </dt>
+          <dd class="font-semibold tabular-nums text-[var(--session-ink)]">
+            {@plan_input.target_duration_min} min
+          </dd>
+        </div>
+        <div>
+          <dt class="text-[10px] uppercase tracking-[0.18em] text-[var(--session-muted)]">
+            Reps
+          </dt>
+          <dd class="font-semibold tabular-nums text-[var(--session-ink)]">
+            {@plan_input.burpee_count_target}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-[10px] uppercase tracking-[0.18em] text-[var(--session-muted)]">
+            Burpee type
+          </dt>
+          <dd class="font-semibold text-[var(--session-ink)]">
+            {burpee_type_label(@plan_input.burpee_type)}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-[10px] uppercase tracking-[0.18em] text-[var(--session-muted)]">
+            Style
+          </dt>
+          <dd class="font-semibold text-[var(--session-ink)]">
+            {style_label(@plan_input.pacing_style)}
+          </dd>
+        </div>
+      </dl>
+    </section>
 
-    <section class="space-y-2">
-      <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        Type
+    <section class="border-b border-[var(--session-border)] px-4 py-3">
+      <p class="mb-3 text-[10px] font-medium uppercase tracking-[0.28em] text-[var(--session-muted)]">
+        Parameters
       </p>
       <.plan_type_picker plan_input={@plan_input} />
     </section>
 
-    <section class="space-y-2">
-      <div class="grid grid-cols-2 px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        <p>Duration</p>
-        <p>Goal</p>
-      </div>
-      <.plan_goal_controls plan_input={@plan_input} level={@level} />
-    </section>
+    <.plan_goal_controls plan_input={@plan_input} level={@level} />
 
-    <section class="space-y-2">
-      <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        Style
-      </p>
+    <section class="border-b border-[var(--session-border)] px-4 py-3">
       <.plan_pacing_controls plan_input={@plan_input} />
     </section>
-
-    <.plan_metadata plan={@plan} />
 
     <.plan_solution_card
       form={@form}
@@ -41,6 +70,7 @@
       derived={@derived}
       solver_error={@solver_error}
       solver_solution={@solver_solution}
+      structure_notation={@structure_notation}
       live_action={@live_action}
       level={@level}
     />

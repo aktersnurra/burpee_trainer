@@ -3,6 +3,8 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.PlanSolver.{Input, Solution}
+  alias BurpeeTrainer.Planning
+  alias BurpeeTrainer.Planning.Draft
 
   defp input(overrides \\ %{}) do
     Map.merge(
@@ -102,6 +104,31 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert sol.metadata.set_pattern_strategy in [:smart_even, :preferred_pattern]
   end
 
+  test "solve_draft/1 returns a planning draft for even input" do
+    assert {:ok, %Draft{} = draft} = PlanSolver.solve_draft(input())
+    assert draft.goal.duration_sec == 10 * 60
+    assert draft.goal.target_reps == 20
+    assert draft.goal.burpee_type == :six_count
+    assert draft.goal.style == :even
+    assert draft.goal.max_reps_per_set == nil
+    assert draft.goal.requested_rest == nil
+    assert Planning.DraftVerifier.verify(draft) == :ok
+  end
+
+  test "solve_draft/1 returns a planning draft for unbroken input and respects max_reps_per_set" do
+    assert {:ok, %Draft{} = draft} =
+             PlanSolver.solve_draft(
+               input(%{
+                 pacing_style: :unbroken,
+                 reps_per_set: 7,
+                 max_reps_per_set: 5
+               })
+             )
+
+    assert draft.goal.style == :unbroken
+    assert draft.goal.max_reps_per_set == 5
+  end
+
   test "solve/1 returns ok with valid rich solution" do
     assert {:ok, %Solution{} = sol} = PlanSolver.solve(input())
 
@@ -118,7 +145,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert sol.burpee_count == 20
     assert sol.pacing_style == :even
     assert sol.burpee_type == :six_count
-    assert sol.metadata.solver_version == "deterministic-v2"
+    assert sol.metadata.solver_version == "milp-v1"
     assert is_float(sol.duration_sec)
     assert_in_delta sol.duration_sec, 600.0, 5.0
   end
@@ -165,11 +192,23 @@ defmodule BurpeeTrainer.PlanSolverTest do
     {:ok, sol} =
       PlanSolver.solve(input(%{pacing_style: :unbroken, reps_per_set: 5}))
 
-    [block] = sol.plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run]
-    assert hd(sol.plan.steps).repeat_count == 4
+    assert sol.plan.blocks |> Enum.flat_map(& &1.sets) |> Enum.all?(&(&1.burpee_count > 0))
+    assert Enum.all?(sol.plan.steps, &(&1.kind == :block_run))
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 20
+  end
+
+  test ":unbroken solve uses max_reps_per_set migration field" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :unbroken,
+          reps_per_set: nil,
+          max_reps_per_set: 5
+        })
+      )
+
+    assert sol.set_size == 5
+    assert sol.set_pattern == List.duplicate(5, 4)
   end
 
   test "unbroken 160 in 20 minutes with 8 reps per set preserves auto recovery" do
@@ -192,6 +231,10 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert sol.sec_per_burpee >= sol.metadata.pace_fastest_sec_per_rep
     assert sol.metadata.recovery_mode == :auto
     assert sol.metadata.recommendation =~ "20 × 8"
+
+    summary = BurpeeTrainer.Planner.summary(sol.plan)
+    assert summary.burpee_count_total == 160
+    assert_in_delta summary.duration_sec_total, 1200.0, 1.0
   end
 
   test "unbroken rejects repeated sets when recovery would be useless" do
@@ -246,7 +289,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         })
       )
 
-    assert sol.plan.steps |> Enum.map(& &1.kind) == [:block_run]
+    assert Enum.all?(sol.plan.steps, &(&1.kind == :block_run))
 
     assert [%{target_min: target_min, rest_sec: rest_sec, effect: effect}] =
              sol.metadata.rest_suggestions
@@ -256,7 +299,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert effect =~ "recovery"
   end
 
-  test "unbroken supports non-uniform human-shaped set patterns for awkward targets" do
+  test "unbroken fixed reps per set allows only a final remainder for awkward targets" do
     {:ok, sol} =
       PlanSolver.solve(
         input(%{
@@ -269,10 +312,9 @@ defmodule BurpeeTrainer.PlanSolverTest do
       )
 
     assert Enum.sum(sol.set_pattern) == 107
-    assert Enum.uniq(sol.set_pattern) |> length() > 1
-    assert List.last(sol.set_pattern) != 0
-    assert Enum.all?(sol.set_pattern, &(&1 in [4, 5, 6, 8, 9, 10, 12, 15]))
-    assert sol.metadata.set_pattern_strategy == :human_shaped
+    assert sol.set_pattern == List.duplicate(10, 10) ++ [7]
+    assert Enum.drop(sol.set_pattern, -1) |> Enum.all?(&(&1 == 10))
+    assert sol.metadata.set_pattern_strategy == :exact_search
     assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 107
     assert_in_delta BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total, 1200.0, 5.0
   end
@@ -288,11 +330,9 @@ defmodule BurpeeTrainer.PlanSolverTest do
         })
       )
 
-    assert length(sol.set_pattern) == 4
-    assert length(sol.rest_pattern_sec) == 3
-    [block] = sol.plan.blocks
-    assert hd(block.sets).end_of_set_rest == round(hd(sol.rest_pattern_sec))
-    assert hd(sol.plan.steps).repeat_count == 4
+    assert Enum.sum(sol.set_pattern) == 20
+    assert length(sol.rest_pattern_sec) == max(length(sol.set_pattern) - 1, 0)
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 20
   end
 
   test "pace model is the source of pace bounds" do

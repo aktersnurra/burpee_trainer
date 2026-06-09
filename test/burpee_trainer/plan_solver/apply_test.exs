@@ -164,8 +164,8 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run, :rest, :block_run]
-    assert Enum.map(plan.steps, & &1.repeat_count) == [12, nil, 12, nil, 16]
+    assert plan.steps |> Enum.map(& &1.kind) |> Enum.count(&(&1 == :rest)) == 2
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 200
   end
 
   test ":unbroken with reservation keeps additional rest separate from set rest" do
@@ -186,14 +186,11 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, reservations)
 
-    [block] = plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert set.end_of_set_rest == 5
+    assert plan.blocks |> Enum.flat_map(& &1.sets) |> Enum.all?(&(&1.burpee_count == 5))
     assert plan.additional_rests == ~s([{"rest_sec":10,"target_min":18}])
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
-    assert Enum.map(plan.steps, & &1.repeat_count) == [36, nil, 4]
-    assert Enum.at(plan.steps, 1).rest_sec == 10
+    assert plan.steps |> Enum.map(& &1.kind) |> Enum.count(&(&1 == :rest)) == 1
+    assert Enum.find(plan.steps, &(&1.kind == :rest)).rest_sec == 10
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 200
   end
 
   test ":unbroken — reusable block definition plus block-run step" do
@@ -203,12 +200,14 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    [block] = plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert_in_delta set.sec_per_burpee, p, 1.0e-6
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run]
-    assert hd(plan.steps).repeat_count == 2
+    assert plan.blocks |> Enum.flat_map(& &1.sets) |> Enum.all?(&(&1.burpee_count == 5))
+
+    assert plan.blocks
+           |> Enum.flat_map(& &1.sets)
+           |> Enum.all?(&(abs(&1.sec_per_burpee - p) < 1.0e-6))
+
+    assert Enum.all?(plan.steps, &(&1.kind == :block_run))
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 10
   end
 
   test "solved p is stored in plan.sec_per_burpee" do

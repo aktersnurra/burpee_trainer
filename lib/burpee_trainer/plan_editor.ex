@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.PlanEditor do
   """
 
   alias BurpeeTrainer.BurpeeType
-  alias BurpeeTrainer.PlanEditor.{Derived, State}
+  alias BurpeeTrainer.PlanEditor.{Derived, State, Structure}
   alias BurpeeTrainer.{Planner, PlanSolver}
   alias BurpeeTrainer.PlanSolver.Input
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
@@ -29,7 +29,7 @@ defmodule BurpeeTrainer.PlanEditor do
       level: level
     }
 
-    {:ok, state}
+    regenerate(state)
   end
 
   @spec from_plan(WorkoutPlan.t(), atom()) :: {:ok, State.t()}
@@ -37,6 +37,7 @@ defmodule BurpeeTrainer.PlanEditor do
     state = %State{
       plan: plan,
       form_plan: plan,
+      structure: Structure.from_plan(plan),
       input: input_from_plan(plan),
       level: level
     }
@@ -76,7 +77,8 @@ defmodule BurpeeTrainer.PlanEditor do
             reps_per_set: PlanSolver.default_reps_per_set(burpee_type)
         }
 
-        {:ok, %{state | input: input}}
+        %{state | input: input}
+        |> regenerate()
 
       {:error, reason} ->
         {:error, reason, state}
@@ -86,7 +88,9 @@ defmodule BurpeeTrainer.PlanEditor do
   @spec pick_pacing(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def pick_pacing(%State{} = state, style) when style in ["even", "unbroken", :even, :unbroken] do
     pacing_style = if is_binary(style), do: String.to_existing_atom(style), else: style
-    {:ok, %{state | input: %{state.input | pacing_style: pacing_style}}}
+
+    %{state | input: %{state.input | pacing_style: pacing_style}}
+    |> regenerate()
   end
 
   def pick_pacing(%State{} = state, style), do: {:error, {:invalid_pacing_style, style}, state}
@@ -96,7 +100,13 @@ defmodule BurpeeTrainer.PlanEditor do
     pattern =
       params
       |> Map.get("pattern", %{})
-      |> Enum.sort_by(fn {idx, _} -> String.to_integer(idx) end)
+      |> Enum.flat_map(fn {idx, value} ->
+        case Integer.parse(idx) do
+          {position, ""} -> [{position, value}]
+          _ -> []
+        end
+      end)
+      |> Enum.sort_by(fn {idx, _value} -> idx end)
       |> Enum.map(fn {_idx, value} -> parse_positive_integer(value) end)
       |> Enum.reject(&is_nil/1)
 
@@ -183,6 +193,7 @@ defmodule BurpeeTrainer.PlanEditor do
            | solver_error: nil,
              solver_solution: solution,
              form_plan: solution.plan,
+             structure: Structure.from_plan(solution.plan),
              manual_edit?: false,
              derived: derived(solution.plan, state.input)
          }}
@@ -342,11 +353,19 @@ defmodule BurpeeTrainer.PlanEditor do
         _ -> current.reps_per_set
       end
 
+    pacing_style =
+      case Map.get(params, "pacing_style") do
+        "even" -> :even
+        "unbroken" -> :unbroken
+        _ -> current.pacing_style
+      end
+
     %{
       current
       | name: name,
         target_duration_min: target_duration_min,
         burpee_count_target: burpee_count_target,
+        pacing_style: pacing_style,
         reps_per_set: reps_per_set
     }
   end
