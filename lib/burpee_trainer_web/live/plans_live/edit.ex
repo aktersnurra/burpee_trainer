@@ -604,6 +604,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     socket =
       socket
       |> put_editor(editor)
+      |> regenerate()
       |> assign_derived()
 
     {:noreply, socket}

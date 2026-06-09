@@ -338,6 +338,13 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "recovery"
       assert html =~ "Optional reset"
       assert has_element?(view, "button[data-accept-rest-suggestion]")
+
+      view
+      |> element("button[data-accept-rest-suggestion]")
+      |> render_click()
+
+      assert has_element?(view, "[data-timeline-rest-editor]")
+      refute render(view) =~ "Optional reset"
     end
 
     test "block inspector edits pattern and stays open", %{conn: conn} do
