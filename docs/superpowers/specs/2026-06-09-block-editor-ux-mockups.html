@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Block Editor UX Mockups</title>
+<style>
+  :root { color-scheme: dark; --bg:#171717; --panel:#202020; --panel2:#282828; --line:#3a3a3a; --muted:#9a9a9a; --text:#ededed; --accent:#f04f5f; }
+  body { margin:0; background:#111; color:var(--text); font:14px/1.45 Inter, ui-sans-serif, system-ui; padding:32px; }
+  .wrap { max-width:1100px; margin:0 auto; display:grid; gap:28px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 14px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; }
+  .card { background:var(--bg); border:1px solid var(--line); border-radius:22px; padding:20px; box-shadow:0 24px 80px #0008; }
+  .pill { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:4px 9px; color:var(--muted); font-size:12px; }
+  .big { font-size:40px; letter-spacing:-.06em; font-weight:650; }
+  .muted { color:var(--muted); }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); padding:12px 0; }
+  .row:first-of-type { border-top:0; }
+  .block { border:1px solid var(--line); background:var(--panel); border-radius:18px; padding:14px; display:grid; gap:12px; }
+  .sets { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .set { background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:10px; }
+  .input { background:#121212; border:1px solid var(--line); border-radius:12px; padding:9px 10px; color:var(--text); min-width:0; }
+  .inline { display:grid; grid-template-columns:1fr 76px 76px 76px; gap:8px; align-items:end; }
+  .timeline { display:grid; grid-template-columns:56px 18px 1fr; gap:14px; }
+  .time { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--text); margin-top:6px; }
+  .rail { border-left:1px solid #777; min-height:50px; margin-left:5px; }
+  .btn { border:1px solid var(--line); background:var(--panel2); color:var(--text); border-radius:14px; padding:9px 12px; font-weight:600; }
+  .btn.primary { background:var(--text); color:#111; }
+  .accent { color:var(--accent); }
+  .note { border-left:3px solid var(--accent); padding-left:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Block editing UX mockups</h1>
+    <p class="muted">Goal: make structure preferences editable without making the graph feel like a spreadsheet.</p>
+  </header>
+
+  <section class="grid">
+    <article class="card">
+      <h2>Option A · Pattern preference</h2>
+      <div class="row"><span>Goal</span><strong>70 Navy SEALs · 20:00</strong></div>
+      <div class="row"><span>Style</span><strong>Even</strong></div>
+      <div class="block">
+        <div><span class="pill">Preferred block</span></div>
+        <div class="sets">
+          <div class="set"><strong>Set 1</strong><br><span class="big">4</span> <span class="muted">reps</span></div>
+          <div class="set"><strong>Set 2</strong><br><span class="big">3</span> <span class="muted">reps</span></div>
+        </div>
+        <div class="row"><span>Auto repeat</span><strong>10× = 70 reps</strong></div>
+        <div class="row"><span>Auto pace/rest</span><strong>solver computes</strong></div>
+      </div>
+      <p class="note">Best for your example. You express the block pattern; solver decides repeat count, pace, and rest to satisfy goal/time.</p>
+    </article>
+
+    <article class="card">
+      <h2>Option B · Graph inspector</h2>
+      <div class="timeline">
+        <div class="time">0:00</div><div><div class="dot"></div><div class="rail"></div></div>
+        <div><strong>Block 1 · 10× · 70 reps</strong><br><span class="muted">Pattern: 4 + 3</span></div>
+        <div class="time">12:00</div><div><div class="dot" style="transform:rotate(45deg);border-radius:0;background:#aaa"></div><div class="rail"></div></div>
+        <div><strong>Rest · 20s</strong><br><span class="muted">cadence recalculated</span></div>
+        <div class="time">20:00</div><div><div class="dot"></div></div>
+        <div><strong>Finish</strong></div>
+      </div>
+      <div style="height:14px"></div>
+      <div class="block">
+        <strong>Inspector: Block 1</strong>
+        <div class="inline"><span class="muted">Set 1</span><input class="input" value="4"/><input class="input" value="auto"/><input class="input" value="auto"/></div>
+        <div class="inline"><span class="muted">Set 2</span><input class="input" value="3"/><input class="input" value="auto"/><input class="input" value="auto"/></div>
+      </div>
+      <p class="note">Graph remains primary, but editing happens in a stable inspector so inputs never collapse or jitter.</p>
+    </article>
+
+    <article class="card">
+      <h2>Option C · Direct block builder</h2>
+      <div class="block">
+        <div class="row"><strong>Block pattern</strong><button class="btn">+ Set</button></div>
+        <div class="inline"><span>Set 1</span><input class="input" value="4 reps"/><input class="input" value="auto pace"/><input class="input" value="auto rest"/></div>
+        <div class="inline"><span>Set 2</span><input class="input" value="3 reps"/><input class="input" value="auto pace"/><input class="input" value="auto rest"/></div>
+        <div class="row"><span>Repeat</span><strong>auto · 10×</strong></div>
+        <button class="btn primary">Apply pattern</button>
+      </div>
+      <p class="note">Most explicit. Good as an advanced mode, but risks becoming a form-first editor rather than a training instrument.</p>
+    </article>
+  </section>
+</div>
+</body>
+</html>
