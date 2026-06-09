@@ -451,7 +451,8 @@ defmodule BurpeeTrainer.PlanSolver do
         recovery_mode: :auto,
         recommendation: recommendation_text(input, candidate),
         work_interval_sec: average_work_interval(candidate.set_pattern, candidate.sec_per_burpee),
-        recovery_sec: candidate.rest_sec
+        recovery_sec: candidate.rest_sec,
+        rest_suggestions: rest_suggestions(input, candidate)
       },
       plan: plan
     }
@@ -482,6 +483,43 @@ defmodule BurpeeTrainer.PlanSolver do
     |> Enum.map(&(&1 * p))
     |> Enum.sum()
     |> Kernel./(length(set_pattern))
+  end
+
+  defp rest_suggestions(%Input{additional_rests: [_ | _]}, _candidate), do: []
+  defp rest_suggestions(%Input{target_duration_min: duration}, _candidate) when duration < 15, do: []
+
+  defp rest_suggestions(%Input{} = input, candidate) do
+    target_min = midpoint_rest_minute(input.target_duration_min)
+    rest_sec = 30
+    gap_count = max(length(candidate.set_pattern) - 1, 0)
+
+    if gap_count > 0 do
+      adjusted_recovery =
+        (candidate.target_sec -
+           Enum.sum(candidate.set_pattern) * candidate.sec_per_burpee - rest_sec) / gap_count
+
+      if adjusted_recovery >= @min_useful_recovery_sec do
+        [
+          %{
+            target_min: target_min,
+            rest_sec: rest_sec,
+            effect: "set recovery becomes about #{round(adjusted_recovery)}s"
+          }
+        ]
+      else
+        []
+      end
+    else
+      []
+    end
+  end
+
+  defp midpoint_rest_minute(duration_min) do
+    duration_min
+    |> Kernel.*(0.6)
+    |> round()
+    |> max(10)
+    |> min(16)
   end
 
   defp average_rest([]), do: 0.0

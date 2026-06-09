@@ -215,6 +215,26 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert is_binary(msg)
   end
 
+  test "solver suggests feasible midpoint reset rest without forcing it" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :unbroken,
+          burpee_type: :six_count,
+          burpee_count_target: 160,
+          target_duration_min: 20,
+          level: :level_1a,
+          reps_per_set: 8
+        })
+      )
+
+    assert sol.plan.steps |> Enum.map(& &1.kind) == [:block_run]
+    assert [%{target_min: target_min, rest_sec: rest_sec, effect: effect}] = sol.metadata.rest_suggestions
+    assert target_min in 10..16
+    assert rest_sec in [20, 30]
+    assert effect =~ "recovery"
+  end
+
   test "unbroken supports non-uniform human-shaped set patterns for awkward targets" do
     {:ok, sol} =
       PlanSolver.solve(
