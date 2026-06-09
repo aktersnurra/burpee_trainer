@@ -326,6 +326,20 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert [%{kind: :block_run, repeat_count: 10}] = plan.steps
     end
 
+    test "new plan explains smart recommendation and optional reset", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
+
+      html = render(view)
+      assert html =~ "Recommended"
+      assert html =~ "recovery"
+      assert html =~ "Optional reset"
+      assert has_element?(view, "button[data-accept-rest-suggestion]")
+    end
+
     test "block inspector edits pattern and stays open", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 

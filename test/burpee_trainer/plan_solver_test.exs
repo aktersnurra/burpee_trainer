@@ -229,7 +229,10 @@ defmodule BurpeeTrainer.PlanSolverTest do
       )
 
     assert sol.plan.steps |> Enum.map(& &1.kind) == [:block_run]
-    assert [%{target_min: target_min, rest_sec: rest_sec, effect: effect}] = sol.metadata.rest_suggestions
+
+    assert [%{target_min: target_min, rest_sec: rest_sec, effect: effect}] =
+             sol.metadata.rest_suggestions
+
     assert target_min in 10..16
     assert rest_sec in [20, 30]
     assert effect =~ "recovery"

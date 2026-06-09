@@ -587,6 +587,29 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event(
+        "accept_rest_suggestion",
+        %{"target-min" => target_min, "rest-sec" => rest_sec},
+        socket
+      ) do
+    rest = %{target_min: String.to_integer(target_min), rest_sec: String.to_integer(rest_sec)}
+    input = socket.assigns.editor.input
+
+    editor = %{
+      socket.assigns.editor
+      | input: %{input | additional_rests: input.additional_rests ++ [rest]}
+    }
+
+    {:ok, editor} = PlanEditor.regenerate(editor)
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
+  def handle_event(
         "add_rest_at",
         %{"target-min" => target_min, "edge-index" => edge_index},
         socket

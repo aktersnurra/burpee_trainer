@@ -98,6 +98,44 @@
                 </p>
               </div>
             </div>
+            <div
+              :if={@solver_solution}
+              class="mt-5 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4 text-left"
+            >
+              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+                Recommended
+              </p>
+              <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
+                {@solver_solution.metadata.recommendation}
+              </p>
+              <p class="mt-1 text-xs text-[var(--session-muted)]">
+                Pace and recovery are auto-balanced for your level.
+              </p>
+
+              <div :if={@solver_solution.metadata.rest_suggestions != []} class="mt-4 space-y-2">
+                <%= for suggestion <- @solver_solution.metadata.rest_suggestions do %>
+                  <div class="flex items-center justify-between gap-3 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] p-3">
+                    <div>
+                      <p class="text-xs font-semibold text-[var(--session-ink)]">Optional reset</p>
+                      <p class="text-xs text-[var(--session-muted)]">
+                        {suggestion.rest_sec}s at {suggestion.target_min}:00 · {suggestion.effect}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      phx-click="accept_rest_suggestion"
+                      phx-value-target-min={suggestion.target_min}
+                      phx-value-rest-sec={suggestion.rest_sec}
+                      data-accept-rest-suggestion
+                      class="rounded-xl border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                    >
+                      Add
+                    </button>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+
             <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
               Prescription graph
             </p>

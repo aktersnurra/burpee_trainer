@@ -486,7 +486,9 @@ defmodule BurpeeTrainer.PlanSolver do
   end
 
   defp rest_suggestions(%Input{additional_rests: [_ | _]}, _candidate), do: []
-  defp rest_suggestions(%Input{target_duration_min: duration}, _candidate) when duration < 15, do: []
+
+  defp rest_suggestions(%Input{target_duration_min: duration}, _candidate) when duration < 15,
+    do: []
 
   defp rest_suggestions(%Input{} = input, candidate) do
     target_min = midpoint_rest_minute(input.target_duration_min)

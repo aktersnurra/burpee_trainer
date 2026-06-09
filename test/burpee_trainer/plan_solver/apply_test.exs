@@ -35,6 +35,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
     assert %WorkoutPlan{} = plan
+
     assert Enum.map(plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
              [8],
              [2]
