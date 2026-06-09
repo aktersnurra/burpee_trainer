@@ -171,7 +171,9 @@
                       class="mt-4 space-y-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-4"
                     >
                       <div class="flex items-center justify-between gap-4">
-                        <p class="text-sm font-semibold text-[var(--session-ink)]">Block pattern</p>
+                        <p class="text-sm font-semibold text-[var(--session-ink)]">
+                          Block pattern
+                        </p>
                         <p class="text-xs text-[var(--session-muted)]">Edits rerun the solver</p>
                       </div>
                       <%= for {reps, idx} <- Enum.with_index(default_pattern(@plan_input)) do %>
