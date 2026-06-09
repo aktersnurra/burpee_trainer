@@ -27,7 +27,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     }
   end
 
-  test ":even, no reservations — one block, one set, all reps" do
+  test ":even, no reservations — defaults to human-sized block runs" do
     input = even_input(10, 5)
     p = 6.0
     r = List.duplicate(0.0, 9)
@@ -35,15 +35,18 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
     assert %WorkoutPlan{} = plan
-    assert length(plan.blocks) == 1
-    [block] = plan.blocks
-    assert length(block.sets) == 1
-    [set] = block.sets
-    assert set.burpee_count == 10
-    assert_in_delta set.sec_per_burpee, 6.0, 1.0e-6
+    assert Enum.map(plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
+             [8],
+             [2]
+           ]
+
+    assert Enum.map(plan.steps, &{&1.kind, &1.block_position, &1.repeat_count}) == [
+             {:block_run, 1, 1},
+             {:block_run, 2, 1}
+           ]
   end
 
-  test ":even — total duration matches target within 1s" do
+  test ":even — executable total duration matches target within 1s" do
     input = even_input(20, 10)
     target_sec = 600.0
     p = 6.0
@@ -52,14 +55,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    sets = Enum.flat_map(plan.blocks, & &1.sets)
-
-    duration =
-      Enum.reduce(sets, 0.0, fn s, acc ->
-        acc + s.burpee_count * s.sec_per_rep + s.end_of_set_rest
-      end)
-
-    assert_in_delta duration, target_sec, 1.0
+    assert_in_delta BurpeeTrainer.Planner.summary(plan).duration_sec_total, target_sec, 1.0
   end
 
   test ":even with preferred block pattern — reusable block-run step" do

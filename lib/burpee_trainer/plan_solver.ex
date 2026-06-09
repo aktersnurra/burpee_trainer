@@ -16,6 +16,8 @@ defmodule BurpeeTrainer.PlanSolver do
 
   @default_reps_per_set %{six_count: 10, navy_seal: 5}
   @human_set_sizes [15, 12, 10, 9, 8, 6, 5, 4]
+  @normal_work_interval_sec 60.0
+  @min_useful_recovery_sec 8.0
 
   @doc "Type- and level-derived fastest recommended pace (sec/rep)."
   @spec sustainable_ceiling(atom, atom) :: float
@@ -48,13 +50,13 @@ defmodule BurpeeTrainer.PlanSolver do
          {:ok, candidate} <- solve_candidate(prepared_input, reps_per_set),
          {:ok, plan} <-
            Apply.to_workout_plan(
-             prepared_input,
+             %{prepared_input | block_pattern: candidate.block_pattern},
              candidate.sec_per_burpee,
              candidate.set_pattern,
              candidate.rest_pattern_sec,
              candidate.reservations
            ) do
-      {:ok, build_solution(plan, prepared_input, candidate)}
+      {:ok, build_solution(plan, %{prepared_input | block_pattern: candidate.block_pattern}, candidate)}
     end
   end
 
@@ -115,18 +117,23 @@ defmodule BurpeeTrainer.PlanSolver do
 
   defp solve_candidate(%Input{pacing_style: :even} = input, _reps_per_set) do
     p = pace(input)
+    pattern = default_even_pattern(input)
+    prepared_input = %{input | block_pattern: pattern}
 
-    case place_additional_rests(input, p, nil) do
+    case place_additional_rests(prepared_input, p, nil) do
       {:ok, reservations} ->
+        set_pattern = expand_pattern(input.burpee_count_target, pattern)
+        rest_pattern = List.duplicate(0.0, max(length(set_pattern) - 1, 0))
+
         {:ok,
-         candidate(input,
+         candidate(prepared_input,
            sec_per_burpee: p,
-           set_pattern: [input.burpee_count_target],
-           rest_pattern_sec: [],
+           set_pattern: set_pattern,
+           rest_pattern_sec: rest_pattern,
            reservations: reservations,
            candidate_count: 1,
-           score: 0.0,
-           set_pattern_strategy: :even_single_set
+           score: score_smart_candidate(input, p, set_pattern, rest_pattern),
+           set_pattern_strategy: if(input.block_pattern, do: :preferred_pattern, else: :smart_even)
          )}
 
       {:error, :invalid_rest_boundary} ->
@@ -190,7 +197,8 @@ defmodule BurpeeTrainer.PlanSolver do
       target_sec: target_sec,
       candidate_count: Keyword.fetch!(opts, :candidate_count),
       score: Keyword.fetch!(opts, :score),
-      set_pattern_strategy: Keyword.fetch!(opts, :set_pattern_strategy)
+      set_pattern_strategy: Keyword.fetch!(opts, :set_pattern_strategy),
+      block_pattern: input.block_pattern
     }
   end
 
@@ -208,6 +216,44 @@ defmodule BurpeeTrainer.PlanSolver do
 
   defp preferred_set_sizes(_type, reps_per_set),
     do: [reps_per_set | @human_set_sizes] |> Enum.uniq() |> Enum.filter(&(&1 > 0))
+
+  defp smart_set_sizes(:navy_seal), do: [5, 4, 6, 3]
+  defp smart_set_sizes(:six_count), do: [8, 10, 12, 6, 15, 5, 4]
+
+  defp default_even_pattern(%Input{block_pattern: pattern}) when is_list(pattern) and pattern != [],
+    do: pattern
+
+  defp default_even_pattern(%Input{} = input) do
+    p = pace(input)
+
+    input.burpee_type
+    |> smart_set_sizes()
+    |> Enum.min_by(fn reps -> abs(reps * p - @normal_work_interval_sec) end)
+    |> then(&[&1])
+  end
+
+  defp expand_pattern(total_reps, pattern) do
+    {full_repeats, remainder_pattern} = Apply.split_pattern_for_solver(total_reps, pattern)
+
+    pattern
+    |> List.duplicate(full_repeats)
+    |> List.flatten()
+    |> Kernel.++(remainder_pattern)
+  end
+
+  defp score_smart_candidate(_input, p, set_pattern, rest_pattern) do
+    work_penalty =
+      set_pattern
+      |> Enum.map(fn reps -> abs(reps * p - @normal_work_interval_sec) / 60.0 end)
+      |> Enum.sum()
+
+    recovery_penalty =
+      rest_pattern
+      |> Enum.map(fn rest -> if rest > 0 and rest < @min_useful_recovery_sec, do: 10.0, else: 0.0 end)
+      |> Enum.sum()
+
+    work_penalty + recovery_penalty + length(set_pattern) * 0.01
+  end
 
   defp set_pattern_for(total_reps, size) when total_reps <= size, do: [[total_reps]]
 

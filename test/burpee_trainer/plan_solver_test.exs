@@ -79,6 +79,29 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert msg =~ "block pattern"
   end
 
+  test "even solve recommends human-sized repeated sets for high rep targets" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :even,
+          burpee_type: :six_count,
+          burpee_count_target: 160,
+          target_duration_min: 20,
+          level: :level_1a
+        })
+      )
+
+    assert sol.burpee_count == 160
+    assert sol.plan.blocks != []
+    refute match?([%{sets: [%{burpee_count: 160}]}], sol.plan.blocks)
+
+    [block | _] = sol.plan.blocks
+    assert Enum.all?(block.sets, &(&1.burpee_count in [15, 12, 10, 9, 8, 6, 5, 4]))
+    assert [%{kind: :block_run, repeat_count: repeats} | _] = sol.plan.steps
+    assert repeats > 1
+    assert sol.metadata.set_pattern_strategy in [:smart_even, :preferred_pattern]
+  end
+
   test "solve/1 returns ok with valid rich solution" do
     assert {:ok, %Solution{} = sol} = PlanSolver.solve(input())
 
@@ -249,6 +272,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
       })
 
     {:ok, sol} = PlanSolver.solve(inp)
-    assert length(sol.plan.blocks) == 2
+    assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
+    assert Enum.at(sol.plan.steps, 1).rest_sec == 60
   end
 end

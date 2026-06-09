@@ -50,7 +50,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     n = input.burpee_count_target
     cadence = target_sec / n
     pattern = preferred_pattern(input)
-    {_full_repeats, remainder_pattern} = split_pattern(n, pattern)
+    {_full_repeats, remainder_pattern} = split_pattern_for_solver(n, pattern)
 
     blocks = [pattern_block(1, pattern, cadence, p)]
 
@@ -67,7 +67,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     n = input.burpee_count_target
     reservation_total = Enum.reduce(reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
     cadence = (target_sec - reservation_total) / n
-    {_full_repeats, remainder_pattern} = split_pattern(n, pattern)
+    {_full_repeats, remainder_pattern} = split_pattern_for_solver(n, pattern)
 
     blocks = [pattern_block(1, pattern, cadence, p)]
 
@@ -109,9 +109,11 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   defp preferred_pattern(%Input{block_pattern: pattern}) when is_list(pattern) and pattern != [],
     do: pattern
 
-  defp preferred_pattern(%Input{burpee_count_target: reps}), do: [reps]
+  defp preferred_pattern(%Input{burpee_type: :navy_seal}), do: [5]
+  defp preferred_pattern(%Input{burpee_type: :six_count}), do: [8]
 
-  defp split_pattern(total_reps, pattern) do
+  @spec split_pattern_for_solver(pos_integer(), [pos_integer()]) :: {non_neg_integer(), [pos_integer()]}
+  def split_pattern_for_solver(total_reps, pattern) do
     block_total = Enum.sum(pattern)
     full_repeats = div(total_reps, block_total)
     remainder = rem(total_reps, block_total)
@@ -269,7 +271,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
          block | _blocks
        ])
        when is_list(pattern) and pattern != [] and is_list(rests) and rests != [] do
-    {full_repeats, remainder_pattern} = split_pattern(input.burpee_count_target, pattern)
+    {full_repeats, remainder_pattern} = split_pattern_for_solver(input.burpee_count_target, pattern)
     block_sec = block_duration(block)
 
     {steps, remaining_repeats, _elapsed} =
@@ -317,9 +319,9 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end
 
-  defp build_steps(%Input{block_pattern: pattern, additional_rests: []} = input, _blocks)
-       when is_list(pattern) and pattern != [] do
-    {full_repeats, remainder_pattern} = split_pattern(input.burpee_count_target, pattern)
+  defp build_steps(%Input{pacing_style: :even, additional_rests: []} = input, _blocks) do
+    pattern = preferred_pattern(input)
+    {full_repeats, remainder_pattern} = split_pattern_for_solver(input.burpee_count_target, pattern)
 
     steps =
       if full_repeats > 0 do
