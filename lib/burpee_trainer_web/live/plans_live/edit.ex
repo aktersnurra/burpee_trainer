@@ -824,13 +824,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
-  def handle_event("save", %{"workout_plan" => params}, socket) do
+  def handle_event("save", params, socket) do
+    submitted_params = Map.get(params, "workout_plan", %{})
     form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
     full_params =
       form_plan
       |> plan_to_attrs()
-      |> Map.merge(merge_basics(params, socket.assigns.editor.input))
+      |> Map.merge(merge_basics(submitted_params, socket.assigns.editor.input))
 
     save_plan(socket, socket.assigns.live_action, full_params)
   end
@@ -1244,84 +1245,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     </form>
     """
   end
-
-  attr(:plan_input, :map, required: true)
-  attr(:level, :atom, required: true)
-
-  defp plan_rest_controls(assigns) do
-    ~H"""
-    <section id="fine-tune-rests" class="space-y-3">
-      <div class="flex items-center justify-between gap-4">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Rest plan</p>
-        <span class="text-xs tabular-nums text-[var(--session-muted)]">
-          {Atom.to_string(@level) |> String.replace("_", " ") |> String.upcase()}
-          <span class="mx-1 text-[var(--session-muted)]">·</span>
-          min {:erlang.float_to_binary(
-            BurpeeTrainer.PlanSolver.sustainable_ceiling(@plan_input.burpee_type, @level) * 1.0,
-            decimals: 1
-          )}s/rep
-        </span>
-      </div>
-      <div class="space-y-2">
-        <%= if @plan_input.additional_rests == [] do %>
-          <p class="text-sm text-[var(--session-muted)]">No planned rests</p>
-        <% end %>
-        <%= for {rest, idx} <- Enum.with_index(@plan_input.additional_rests) do %>
-          <form
-            phx-change="change_rest"
-            data-rest-row
-            class="flex items-center gap-2 text-sm text-[var(--session-muted)]"
-          >
-            <input type="hidden" name="rest[index]" value={idx} />
-            <input
-              type="number"
-              name="rest[rest_sec]"
-              min="1"
-              value={rest.rest_sec}
-              class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-1 text-center text-sm tabular-nums text-[var(--session-ink)]"
-            />
-            <span>s rest at minute</span>
-            <input
-              type="number"
-              name="rest[target_min]"
-              min="1"
-              max={@plan_input.target_duration_min - 1}
-              value={rest.target_min}
-              class="w-12 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-1 text-center text-sm tabular-nums text-[var(--session-ink)]"
-            />
-            <button
-              type="button"
-              phx-click="remove_rest"
-              phx-value-index={idx}
-              class="ml-auto text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-              aria-label="Remove rest"
-            >
-              <.icon name="hero-x-mark" class="size-3.5" />
-            </button>
-          </form>
-        <% end %>
-        <div class="pt-1">
-          <button
-            type="button"
-            phx-click="add_rest"
-            class="flex items-center gap-1.5 text-xs text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-          >
-            <.icon name="hero-plus" class="size-3" /> Add rest
-          </button>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  attr(:form, :any, required: true)
-  attr(:expanded_blocks, :any, required: true)
-  attr(:open_block_menu, :any, required: true)
-  attr(:plan_input, :map, required: true)
-  attr(:manual_edit, :boolean, required: true)
-  attr(:block_time_ranges, :list, required: true)
-
-  defp blocks_editor(assigns), do: blocks_editor_template(assigns)
 
   attr(:sets, :list, required: true)
 

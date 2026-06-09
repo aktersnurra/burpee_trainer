@@ -268,36 +268,8 @@
     id="plan-form"
     phx-change="validate"
     phx-submit="save"
-    class="px-5 pb-5 space-y-4"
+    class="hidden"
   >
-    <div id="plan-fine-tune-panel" class={if(@manual_edit, do: "space-y-5", else: "hidden")}>
-      <div class="border-t border-[var(--session-border)] pt-5">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Structure</p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">
-          Inspect block details only if this prescription needs low-level changes.
-        </p>
-      </div>
-
-      <.plan_rest_controls plan_input={@plan_input} level={@level} />
-
-      <.blocks_editor
-        form={@form}
-        expanded_blocks={@expanded_blocks}
-        open_block_menu={@open_block_menu}
-        plan_input={@plan_input}
-        manual_edit={@manual_edit}
-        block_time_ranges={@block_time_ranges}
-      />
-    </div>
-
-    <%= if @manual_edit do %>
-      <div class="border-t border-[var(--session-border)] pt-4">
-        <label class="cursor-pointer text-xs text-[var(--session-muted)] hover:text-[var(--session-ink)] transition flex items-center gap-1">
-          <.icon name="hero-plus" class="size-3.5" /> Add block
-          <input type="checkbox" name="workout_plan[blocks_sort][]" class="hidden" />
-        </label>
-      </div>
-    <% end %>
   </.form>
 </section>
 

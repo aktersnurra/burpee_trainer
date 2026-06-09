@@ -616,12 +616,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
         })
 
-      {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      assert html =~ "10×"
-      assert html =~ "10</span>"
-      assert html =~ "1×"
-      assert html =~ "7</span>"
+      assert html =~ "Block pattern"
+      assert has_element?(view, "[data-timeline-primary-graph]")
+      refute html =~ "Show structure"
     end
 
     test "picking Navy SEAL keeps the editor rendered", %{conn: conn} do
