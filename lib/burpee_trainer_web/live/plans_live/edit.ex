@@ -825,7 +825,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("save", %{"workout_plan" => params}, socket) do
-    full_params = merge_basics(params, socket.assigns.editor.input)
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+    full_params =
+      form_plan
+      |> plan_to_attrs()
+      |> Map.merge(merge_basics(params, socket.assigns.editor.input))
+
     save_plan(socket, socket.assigns.live_action, full_params)
   end
 

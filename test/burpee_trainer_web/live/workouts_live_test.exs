@@ -303,12 +303,38 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(value="3")
     end
 
+    test "saves generated pattern plan and reloads steps", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("button[phx-value-type='navy_seal']") |> render_click()
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "70"})
+
+      render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
+
+      view |> element("#plan-form") |> render_submit(%{"workout_plan" => %{}})
+      assert_redirect(view, ~p"/workouts")
+
+      [plan | _] = BurpeeTrainer.Workouts.list_plans(user)
+      plan = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
+
+      assert Enum.map(plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
+               [4, 3]
+             ]
+
+      assert [%{kind: :block_run, repeat_count: 10}] = plan.steps
+    end
+
     test "block inspector edits pattern and stays open", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
 
-      view |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]") |> render_click()
+      view
+      |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
+      |> render_click()
 
       assert has_element?(view, "#block-pattern-inspector")
 
