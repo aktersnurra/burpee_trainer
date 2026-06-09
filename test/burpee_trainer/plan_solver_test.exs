@@ -196,6 +196,8 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert List.last(sol.set_pattern) != 0
     assert Enum.all?(sol.set_pattern, &(&1 in [4, 5, 6, 8, 9, 10, 12, 15]))
     assert sol.metadata.set_pattern_strategy == :human_shaped
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 107
+    assert_in_delta BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total, 1200.0, 5.0
   end
 
   test "solution rest pattern excludes final rest" do

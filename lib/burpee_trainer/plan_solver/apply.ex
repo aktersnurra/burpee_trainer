@@ -161,15 +161,17 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     p = round_pace(p)
     grouped = Enum.chunk_by(set_pattern, & &1)
 
+    last_position = length(grouped)
+
     grouped
     |> Enum.with_index(1)
     |> Enum.map(fn {group, position} ->
       reps = hd(group)
-      base_rest = Enum.at(rest_pattern, 0, 0)
+      base_rest = if last_position > 1 and position == last_position, do: 0, else: Enum.at(rest_pattern, 0, 0)
 
       %Block{
         position: position,
-        repeat_count: 1,
+        repeat_count: length(group),
         sets: [
           %Set{
             position: 1,
@@ -225,44 +227,27 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     }
   end
 
-  defp build_steps(%Input{pacing_style: :unbroken} = input, [%Block{} = block | _]) do
-    set_size = input.reps_per_set || input.burpee_count_target
-    full_runs = div(input.burpee_count_target, set_size)
+  defp build_steps(%Input{pacing_style: :unbroken, additional_rests: []}, blocks) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.map(fn block -> block_run_step(0, block.position, block.repeat_count || 1) end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
+  end
 
-    input.additional_rests
-    |> Enum.sort_by(& &1.target_min)
-    |> Enum.map_reduce({[], full_runs, 1}, fn rest, {steps, remaining_runs, position} ->
-      runs_before_rest =
-        (rest.target_min * 60)
-        |> Kernel./(block_duration(block))
-        |> floor()
-        |> max(0)
-        |> min(remaining_runs)
+  defp build_steps(%Input{pacing_style: :unbroken} = input, blocks) do
+    units = unbroken_run_units(blocks)
 
-      steps =
-        if runs_before_rest > 0 do
-          steps ++ [block_run_step(position, block.position, runs_before_rest)]
-        else
-          steps
-        end
+    {steps, remaining_units} =
+      input.additional_rests
+      |> Enum.sort_by(& &1.target_min)
+      |> Enum.reduce({[], units}, fn rest, {steps, remaining_units} ->
+        {before_rest, after_rest} = split_units_near_target(remaining_units, rest.target_min * 60.0)
+        rest_step = %PlanStep{position: 0, kind: :rest, rest_sec: rest.rest_sec}
+        {steps ++ block_run_steps_for_units(before_rest) ++ [rest_step], after_rest}
+      end)
 
-      rest_step = %PlanStep{
-        position: position + length(steps),
-        kind: :rest,
-        rest_sec: rest.rest_sec
-      }
-
-      remaining_runs = remaining_runs - runs_before_rest
-      {rest_step, {steps ++ [rest_step], remaining_runs, position + length(steps) + 1}}
-    end)
-    |> elem(1)
-    |> then(fn {steps, remaining_runs, position} ->
-      if remaining_runs > 0 do
-        steps ++ [block_run_step(position, block.position, remaining_runs)]
-      else
-        steps
-      end
-    end)
+    (steps ++ block_run_steps_for_units(remaining_units))
     |> Enum.with_index(1)
     |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end
@@ -370,6 +355,45 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     |> Enum.with_index(1)
     |> Enum.map(fn {block, position} ->
       block_run_step(position, block.position, block.repeat_count || 1)
+    end)
+  end
+
+  defp unbroken_run_units(blocks) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.flat_map(fn block ->
+      repeat_count = block.repeat_count || 1
+      duration = block_duration(block)
+
+      for _ <- 1..repeat_count do
+        %{block_position: block.position, duration_sec: duration}
+      end
+    end)
+  end
+
+  defp split_units_near_target(units, target_sec) do
+    {_elapsed, best_index, _best_delta} =
+      units
+      |> Enum.with_index(1)
+      |> Enum.reduce({0.0, 0, abs(target_sec)}, fn {unit, index}, {elapsed, best_index, best_delta} ->
+        elapsed = elapsed + unit.duration_sec
+        delta = abs(elapsed - target_sec)
+
+        if delta < best_delta do
+          {elapsed, index, delta}
+        else
+          {elapsed, best_index, best_delta}
+        end
+      end)
+
+    Enum.split(units, best_index)
+  end
+
+  defp block_run_steps_for_units(units) do
+    units
+    |> Enum.chunk_by(& &1.block_position)
+    |> Enum.map(fn group ->
+      block_run_step(0, hd(group).block_position, length(group))
     end)
   end
 
