@@ -574,6 +574,24 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ ">—<"
     end
 
+    test "aggressive impossible prescription explains alternatives", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "300"})
+
+      view
+      |> element("button[phx-value-style='unbroken']")
+      |> render_click()
+
+      render_change(view, "change_basics", %{"reps_per_set" => "8"})
+
+      html = render(view)
+      assert has_element?(view, "#plan-solver-impossible")
+      assert html =~ "Try lowering reps"
+    end
+
     test "impossible prescription shows actionable feedback", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 

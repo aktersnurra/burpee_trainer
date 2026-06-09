@@ -208,6 +208,24 @@ defmodule BurpeeTrainer.PlanSolverTest do
              )
   end
 
+  test "solver explains impossible aggressive prescription with actionable alternatives" do
+    assert {:error, [msg]} =
+             PlanSolver.solve(
+               input(%{
+                 pacing_style: :unbroken,
+                 burpee_type: :six_count,
+                 burpee_count_target: 300,
+                 target_duration_min: 20,
+                 level: :level_1a,
+                 reps_per_set: 8
+               })
+             )
+
+    assert msg =~ "requires"
+    assert msg =~ "Try"
+    assert msg =~ "lowering reps"
+  end
+
   test "returns error when work alone exceeds target" do
     assert {:error, [msg]} =
              PlanSolver.solve(input(%{target_duration_min: 1, level: :level_1a}))

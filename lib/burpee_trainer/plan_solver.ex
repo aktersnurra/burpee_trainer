@@ -409,8 +409,13 @@ defmodule BurpeeTrainer.PlanSolver do
 
   defp infeasibility_message(%Input{} = input) do
     target_sec = input.target_duration_min * 60.0
+    required_pace = target_sec / input.burpee_count_target
+    fastest = PaceModel.fastest_recommended_sec_per_rep(input.burpee_type, input.level)
 
-    "#{input.burpee_count_target} reps cannot fit in #{format_duration(target_sec)} at the selected level."
+    "#{input.burpee_count_target} reps in #{format_duration(target_sec)} requires " <>
+      "about #{Float.round(required_pace, 1)}s/rep before useful recovery. " <>
+      "Your level target is #{Float.round(fastest, 1)}s/rep or slower. " <>
+      "Try lowering reps, increasing duration, using larger sets, or removing extra rests."
   end
 
   defp format_duration(seconds) do
