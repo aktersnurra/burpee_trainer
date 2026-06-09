@@ -62,6 +62,36 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     assert_in_delta duration, target_sec, 1.0
   end
 
+  test ":even with preferred block pattern — reusable block-run step" do
+    input = %{even_input(70, 20) | burpee_type: :navy_seal, block_pattern: [4, 3]}
+
+    {:ok, plan} = Apply.to_workout_plan(input, 8.0, [70], [], [])
+
+    [block] = plan.blocks
+    assert Enum.map(block.sets, & &1.burpee_count) == [4, 3]
+    assert [%{kind: :block_run, block_position: 1, repeat_count: 10}] = plan.steps
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 70
+    assert round(BurpeeTrainer.Planner.summary(plan).duration_sec_total) == 1200
+  end
+
+  test ":even with preferred block pattern — automatic remainder block" do
+    input = %{even_input(75, 20) | burpee_type: :navy_seal, block_pattern: [4, 3]}
+
+    {:ok, plan} = Apply.to_workout_plan(input, 8.0, [75], [], [])
+
+    assert Enum.map(plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
+             [4, 3],
+             [4, 1]
+           ]
+
+    assert Enum.map(plan.steps, &{&1.kind, &1.block_position, &1.repeat_count}) == [
+             {:block_run, 1, 10},
+             {:block_run, 2, 1}
+           ]
+
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 75
+  end
+
   test ":even with one reservation — two blocks" do
     input = %Input{
       name: "t",

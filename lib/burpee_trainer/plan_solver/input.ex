@@ -25,7 +25,8 @@ defmodule BurpeeTrainer.PlanSolver.Input do
     :level,
     reps_per_set: nil,
     additional_rests: [],
-    sec_per_burpee_override: nil
+    sec_per_burpee_override: nil,
+    block_pattern: nil
   ]
 
   @type burpee_type :: :six_count | :navy_seal
@@ -50,6 +51,7 @@ defmodule BurpeeTrainer.PlanSolver.Input do
           level: level,
           reps_per_set: pos_integer | nil,
           additional_rests: [additional_rest],
-          sec_per_burpee_override: float | nil
+          sec_per_burpee_override: float | nil,
+          block_pattern: [pos_integer] | nil
         }
 end

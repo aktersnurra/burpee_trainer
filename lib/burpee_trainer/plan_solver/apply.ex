@@ -49,16 +49,16 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     target_sec = input.target_duration_min * 60.0
     n = input.burpee_count_target
     cadence = target_sec / n
+    pattern = preferred_pattern(input)
+    {_full_repeats, remainder_pattern} = split_pattern(n, pattern)
 
-    set = %Set{
-      position: 1,
-      burpee_count: n,
-      sec_per_rep: cadence,
-      sec_per_burpee: p,
-      end_of_set_rest: 0
-    }
+    blocks = [pattern_block(1, pattern, cadence, p)]
 
-    [%Block{position: 1, repeat_count: 1, sets: [set]}]
+    if remainder_pattern == [] do
+      blocks
+    else
+      blocks ++ [pattern_block(2, remainder_pattern, cadence, p)]
+    end
   end
 
   defp build_even(input, p, reservations) do
@@ -87,6 +87,51 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       end)
 
     Enum.reverse(blocks)
+  end
+
+  defp preferred_pattern(%Input{block_pattern: pattern}) when is_list(pattern) and pattern != [],
+    do: pattern
+
+  defp preferred_pattern(%Input{burpee_count_target: reps}), do: [reps]
+
+  defp split_pattern(total_reps, pattern) do
+    block_total = Enum.sum(pattern)
+    full_repeats = div(total_reps, block_total)
+    remainder = rem(total_reps, block_total)
+
+    remainder_pattern =
+      if remainder > 0 do
+        pattern
+        |> Enum.reduce_while({[], remainder}, fn reps, {acc, remaining} ->
+          cond do
+            remaining == 0 -> {:halt, {acc, 0}}
+            reps <= remaining -> {:cont, {acc ++ [reps], remaining - reps}}
+            true -> {:halt, {acc ++ [remaining], 0}}
+          end
+        end)
+        |> elem(0)
+      else
+        []
+      end
+
+    {full_repeats, remainder_pattern}
+  end
+
+  defp pattern_block(position, pattern, cadence, p) do
+    sets =
+      pattern
+      |> Enum.with_index(1)
+      |> Enum.map(fn {reps, set_position} ->
+        %Set{
+          position: set_position,
+          burpee_count: reps,
+          sec_per_rep: cadence,
+          sec_per_burpee: p,
+          end_of_set_rest: 0
+        }
+      end)
+
+    %Block{position: position, repeat_count: 1, sets: sets}
   end
 
   # ---------------------------------------------------------------------------
@@ -199,6 +244,29 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
         steps
       end
     end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
+  end
+
+  defp build_steps(%Input{block_pattern: pattern, additional_rests: []} = input, _blocks)
+       when is_list(pattern) and pattern != [] do
+    {full_repeats, remainder_pattern} = split_pattern(input.burpee_count_target, pattern)
+
+    steps =
+      if full_repeats > 0 do
+        [block_run_step(1, 1, full_repeats)]
+      else
+        []
+      end
+
+    steps =
+      if remainder_pattern == [] do
+        steps
+      else
+        steps ++ [block_run_step(length(steps) + 1, 2, 1)]
+      end
+
+    steps
     |> Enum.with_index(1)
     |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end

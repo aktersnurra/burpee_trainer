@@ -47,6 +47,38 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert PlanSolver.default_reps_per_set(:navy_seal) == 5
   end
 
+  test "even solve accepts preferred block pattern" do
+    {:ok, sol} =
+      PlanSolver.solve(
+        input(%{
+          pacing_style: :even,
+          burpee_type: :navy_seal,
+          burpee_count_target: 70,
+          target_duration_min: 20,
+          block_pattern: [4, 3]
+        })
+      )
+
+    assert Enum.map(sol.plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
+             [4, 3]
+           ]
+
+    assert [%{kind: :block_run, repeat_count: 10}] = sol.plan.steps
+  end
+
+  test "rejects non-positive preferred block pattern entries" do
+    assert {:error, [msg]} =
+             PlanSolver.solve(
+               input(%{
+                 pacing_style: :even,
+                 burpee_count_target: 70,
+                 block_pattern: [4, 0]
+               })
+             )
+
+    assert msg =~ "block pattern"
+  end
+
   test "solve/1 returns ok with valid rich solution" do
     assert {:ok, %Solution{} = sol} = PlanSolver.solve(input())
 

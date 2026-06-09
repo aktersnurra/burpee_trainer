@@ -42,6 +42,7 @@ defmodule BurpeeTrainer.PlanSolver do
   @spec solve(Input.t()) :: {:ok, Solution.t()} | {:error, [String.t()]}
   def solve(%Input{} = input) do
     with {:ok, reps_per_set} <- resolve_reps_per_set(input),
+         :ok <- validate_block_pattern(input.block_pattern),
          :ok <- preflight_check(input),
          prepared_input = apply_resolved_reps_per_set(input, reps_per_set),
          {:ok, candidate} <- solve_candidate(prepared_input, reps_per_set),
@@ -56,6 +57,19 @@ defmodule BurpeeTrainer.PlanSolver do
       {:ok, build_solution(plan, prepared_input, candidate)}
     end
   end
+
+  defp validate_block_pattern(nil), do: :ok
+
+  defp validate_block_pattern(pattern) when is_list(pattern) and pattern != [] and length(pattern) <= 12 do
+    if Enum.all?(pattern, &(is_integer(&1) and &1 > 0)) do
+      :ok
+    else
+      {:error, ["block pattern must contain positive rep counts"]}
+    end
+  end
+
+  defp validate_block_pattern(_pattern),
+    do: {:error, ["block pattern must contain 1 to 12 positive rep counts"]}
 
   defp resolve_reps_per_set(%Input{pacing_style: :even}), do: {:ok, nil}
 
