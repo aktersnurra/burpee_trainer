@@ -238,13 +238,15 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   defp build_steps(%Input{pacing_style: :unbroken} = input, blocks) do
     units = unbroken_run_units(blocks)
 
-    {steps, remaining_units} =
+    {steps, remaining_units, _elapsed} =
       input.additional_rests
       |> Enum.sort_by(& &1.target_min)
-      |> Enum.reduce({[], units}, fn rest, {steps, remaining_units} ->
-        {before_rest, after_rest} = split_units_near_target(remaining_units, rest.target_min * 60.0)
+      |> Enum.reduce({[], units, 0.0}, fn rest, {steps, remaining_units, elapsed} ->
+        target_delta = rest.target_min * 60.0 - elapsed
+        {before_rest, after_rest} = split_units_near_target(remaining_units, target_delta)
         rest_step = %PlanStep{position: 0, kind: :rest, rest_sec: rest.rest_sec}
-        {steps ++ block_run_steps_for_units(before_rest) ++ [rest_step], after_rest}
+        elapsed = elapsed + units_duration(before_rest) + rest.rest_sec
+        {steps ++ block_run_steps_for_units(before_rest) ++ [rest_step], after_rest, elapsed}
       end)
 
     (steps ++ block_run_steps_for_units(remaining_units))
@@ -395,6 +397,10 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     |> Enum.map(fn group ->
       block_run_step(0, hd(group).block_position, length(group))
     end)
+  end
+
+  defp units_duration(units) do
+    Enum.reduce(units, 0.0, fn unit, total -> total + unit.duration_sec end)
   end
 
   defp round_pace(value) when is_float(value), do: Float.round(value, 1)

@@ -146,6 +146,27 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     assert plan.additional_rests == ~s([{"rest_sec":60,"target_min":5}])
   end
 
+  test ":unbroken with multiple reservations places rests against absolute timeline" do
+    input = %Input{
+      name: "t",
+      burpee_type: :six_count,
+      target_duration_min: 20,
+      burpee_count_target: 200,
+      pacing_style: :unbroken,
+      level: :level_1c,
+      reps_per_set: 5,
+      additional_rests: [%{rest_sec: 10, target_min: 6}, %{rest_sec: 10, target_min: 12}]
+    }
+
+    p = 5.0
+    r = List.duplicate(5.0, 39)
+
+    {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
+
+    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run, :rest, :block_run]
+    assert Enum.map(plan.steps, & &1.repeat_count) == [12, nil, 12, nil, 16]
+  end
+
   test ":unbroken with reservation keeps additional rest separate from set rest" do
     input = %Input{
       name: "t",
