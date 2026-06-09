@@ -60,7 +60,8 @@ defmodule BurpeeTrainer.PlanSolver do
 
   defp validate_block_pattern(nil), do: :ok
 
-  defp validate_block_pattern(pattern) when is_list(pattern) and pattern != [] and length(pattern) <= 12 do
+  defp validate_block_pattern(pattern)
+       when is_list(pattern) and pattern != [] and length(pattern) <= 12 do
     if Enum.all?(pattern, &(is_integer(&1) and &1 > 0)) do
       :ok
     else
@@ -326,8 +327,9 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
-  defp even_rest_block_total(%Input{block_pattern: pattern}) when is_list(pattern) and pattern != [],
-    do: Enum.sum(pattern)
+  defp even_rest_block_total(%Input{block_pattern: pattern})
+       when is_list(pattern) and pattern != [],
+       do: Enum.sum(pattern)
 
   defp even_rest_block_total(_input), do: 1
 

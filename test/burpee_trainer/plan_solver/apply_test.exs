@@ -113,7 +113,10 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
            ]
 
     assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
-    assert [%{repeat_count: before_count}, %{rest_sec: 20}, %{repeat_count: after_count}] = sol.plan.steps
+
+    assert [%{repeat_count: before_count}, %{rest_sec: 20}, %{repeat_count: after_count}] =
+             sol.plan.steps
+
     assert before_count + after_count == 10
     assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 70
     assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 1200

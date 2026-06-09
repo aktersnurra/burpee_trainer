@@ -265,7 +265,9 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end
 
-  defp build_steps(%Input{block_pattern: pattern, additional_rests: rests} = input, [block | _blocks])
+  defp build_steps(%Input{block_pattern: pattern, additional_rests: rests} = input, [
+         block | _blocks
+       ])
        when is_list(pattern) and pattern != [] and is_list(rests) and rests != [] do
     {full_repeats, remainder_pattern} = split_pattern(input.burpee_count_target, pattern)
     block_sec = block_duration(block)

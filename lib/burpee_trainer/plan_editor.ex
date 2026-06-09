@@ -17,7 +17,8 @@ defmodule BurpeeTrainer.PlanEditor do
           pacing_style: PlanSolver.Input.pacing_style(),
           reps_per_set: pos_integer() | nil,
           additional_rests: [PlanSolver.Input.additional_rest()],
-          sec_per_burpee_override: float() | nil
+          sec_per_burpee_override: float() | nil,
+          block_pattern: [pos_integer()] | nil
         }
 
   @spec new(atom(), map()) :: {:ok, State.t()}
@@ -53,7 +54,8 @@ defmodule BurpeeTrainer.PlanEditor do
       pacing_style: :even,
       reps_per_set: PlanSolver.default_reps_per_set(:six_count),
       additional_rests: [],
-      sec_per_burpee_override: nil
+      sec_per_burpee_override: nil,
+      block_pattern: nil
     }
   end
 
@@ -88,6 +90,20 @@ defmodule BurpeeTrainer.PlanEditor do
   end
 
   def pick_pacing(%State{} = state, style), do: {:error, {:invalid_pacing_style, style}, state}
+
+  @spec change_block_pattern(State.t(), map()) :: {:ok, State.t()}
+  def change_block_pattern(%State{} = state, params) do
+    pattern =
+      params
+      |> Map.get("pattern", %{})
+      |> Enum.sort_by(fn {idx, _} -> String.to_integer(idx) end)
+      |> Enum.map(fn {_idx, value} -> parse_positive_integer(value) end)
+      |> Enum.reject(&is_nil/1)
+
+    state
+    |> put_input(%{state.input | block_pattern: pattern})
+    |> regenerate()
+  end
 
   @spec set_pace_override(State.t(), term()) :: {:ok, State.t()}
   def set_pace_override(%State{} = state, pace) do
@@ -155,7 +171,8 @@ defmodule BurpeeTrainer.PlanEditor do
       level: state.level,
       reps_per_set: state.input.reps_per_set,
       additional_rests: state.input.additional_rests,
-      sec_per_burpee_override: state.input.sec_per_burpee_override
+      sec_per_burpee_override: state.input.sec_per_burpee_override,
+      block_pattern: state.input.block_pattern
     }
 
     case PlanSolver.solve(solver_input) do
@@ -297,7 +314,8 @@ defmodule BurpeeTrainer.PlanEditor do
       pacing_style: plan.pacing_style || :even,
       reps_per_set: infer_reps_per_set(plan),
       additional_rests: rests,
-      sec_per_burpee_override: nil
+      sec_per_burpee_override: nil,
+      block_pattern: infer_block_pattern(plan)
     }
   end
 
@@ -372,6 +390,13 @@ defmodule BurpeeTrainer.PlanEditor do
 
   defp parse_non_negative_integer(value), do: {:error, {:invalid_index, value}}
 
+  defp parse_positive_integer(value) do
+    case Integer.parse(to_string(value || "")) do
+      {integer, ""} when integer > 0 -> integer
+      _ -> nil
+    end
+  end
+
   defp parse_positive_integer_or(value, default) do
     case Integer.parse(to_string(value || "")) do
       {integer, ""} when integer > 0 -> integer
@@ -393,6 +418,25 @@ defmodule BurpeeTrainer.PlanEditor do
   end
 
   defp can_summarize?(_), do: false
+
+  defp infer_block_pattern(plan) do
+    plan.blocks
+    |> Enum.sort_by(& &1.position)
+    |> List.first()
+    |> case do
+      %Block{sets: sets} ->
+        sets
+        |> Enum.sort_by(& &1.position)
+        |> Enum.map(& &1.burpee_count)
+        |> case do
+          [] -> nil
+          pattern -> pattern
+        end
+
+      _ ->
+        nil
+    end
+  end
 
   defp infer_reps_per_set(plan) do
     first_set =

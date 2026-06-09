@@ -548,6 +548,32 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  def handle_event("change_block_pattern", params, socket) do
+    {:ok, editor} = PlanEditor.change_block_pattern(socket.assigns.editor, params)
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("add_pattern_set", _params, socket) do
+    input = socket.assigns.editor.input
+    pattern = default_pattern(input)
+    editor = %{socket.assigns.editor | input: %{input | block_pattern: pattern ++ [1]}}
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
   def handle_event("add_rest", _, socket) do
     {:ok, editor} = PlanEditor.add_rest(socket.assigns.editor)
 
@@ -940,6 +966,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         :plan_feedback,
         plan_feedback(assigns.solver_error, assigns.derived, assigns.plan_input)
       )
+      |> assign(:pattern_summary, pattern_summary(assigns.plan_input, assigns.derived))
       |> assign(
         :timeline_rows,
         prescription_timeline(
@@ -952,6 +979,22 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       )
 
     plan_solution_card_template(assigns)
+  end
+
+  defp default_pattern(%{block_pattern: pattern}) when is_list(pattern) and pattern != [],
+    do: pattern
+
+  defp default_pattern(%{reps_per_set: reps}) when is_integer(reps) and reps > 0, do: [reps]
+  defp default_pattern(_), do: [1]
+
+  defp pattern_summary(plan_input, derived) do
+    pattern = default_pattern(plan_input)
+    reps_per_block = Enum.sum(pattern)
+    repeats = div(plan_input.burpee_count_target, max(reps_per_block, 1))
+    remainder = rem(plan_input.burpee_count_target, max(reps_per_block, 1))
+    finish = if derived, do: Fmt.duration_sec(round(derived.duration_sec)), else: "—"
+    suffix = if remainder > 0, do: " + remainder #{remainder}", else: ""
+    "#{reps_per_block} reps/block · #{repeats}×#{suffix} · #{finish}"
   end
 
   defp loaded_steps(%Ecto.Association.NotLoaded{}), do: []

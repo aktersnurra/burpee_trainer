@@ -304,6 +304,26 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ "34 × Block 1 · 170 reps"
     end
 
+    test "block pattern editor reruns solver", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("button[phx-value-type='navy_seal']") |> render_click()
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "70"})
+
+      render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
+
+      html = render(view)
+      assert html =~ "70 reps"
+      assert html =~ "20:00"
+      assert html =~ "7 reps/block"
+      assert html =~ "10×"
+      assert html =~ ~s(value="4")
+      assert html =~ ~s(value="3")
+    end
+
     test "generated even timeline accepts rest by recalculating cadence", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
@@ -383,23 +403,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute render(view) =~ "+45s recovery"
     end
 
-    test "fine tune groups equal sets before expanding details", %{conn: conn, user: user} do
+    test "existing grouped plan shows block pattern editor", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Grouped Plan"})
-      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      view |> element("button", "Show structure") |> render_click()
-      html = render(view)
-
-      assert has_element?(view, "[data-grouped-set-row]")
-      assert html =~ "2 sets"
-      assert html =~ "10 reps"
-      assert html =~ "30s rest"
-      refute html =~ "+ Add set"
-
-      view |> element("button", "Adjust sets") |> render_click()
-      expanded_html = render(view)
-      assert expanded_html =~ "Set 1"
-      assert expanded_html =~ "+ Add set"
+      assert has_element?(view, "#block-pattern-editor")
+      assert html =~ "Block pattern"
+      assert html =~ "30 reps/block"
+      refute html =~ "Show structure"
+      refute html =~ "Adjust sets"
     end
 
     test "plan edit page shows generated plan metadata", %{conn: conn, user: user} do
@@ -475,7 +487,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Style"
       assert html =~ "Prescription"
       assert html =~ "Predicted"
-      assert html =~ "Show structure"
+      assert html =~ "Block pattern"
+      refute html =~ "Show structure"
       assert html =~ ~s(id="plan-prescription-timeline")
       assert html =~ ~s(data-timeline-primary-graph)
       assert html =~ ~s(data-timeline-edge)
@@ -493,8 +506,6 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
     test "invalid manual prescription shows actionable feedback", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
-
-      view |> element("button", "Show structure") |> render_click()
 
       view
       |> element("#plan-form")
@@ -540,24 +551,13 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Reduce the rep target"
     end
 
-    test "advanced keeps block language without splitting into nested cards", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+    test "new editor uses block pattern instead of show structure", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/workouts/new")
 
-      view |> element("button", "Show structure") |> render_click()
-
-      html = render(view)
-      assert html =~ "Block 1"
-      assert html =~ "Set 1"
-      assert html =~ "Structure"
-      assert html =~ "Inspect block details"
-      assert html =~ "Rest plan"
-      assert html =~ "No planned rests"
-      assert has_element?(view, "#plan-fine-tune-panel")
-      assert has_element?(view, "#fine-tune-rests")
+      assert has_element?(view, "#block-pattern-editor")
+      assert html =~ "Block pattern"
+      refute html =~ "Show structure"
       refute html =~ "Segment 1"
-      refute html =~ ">Cadence<"
-      refute html =~ ">Rest [s]<"
-      refute html =~ ~s(data-fine-tune-card)
     end
 
     test "unbroken awkward targets show actual final set reps", %{conn: conn, user: user} do
