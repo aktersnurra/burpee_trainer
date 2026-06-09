@@ -426,7 +426,8 @@ defmodule BurpeeTrainer.PlanSolver do
   end
 
   defp build_solution(plan, %Input{} = input, candidate) do
-    {fastest, slowest} = PaceModel.pace_range_sec_per_rep(input.burpee_type, input.level)
+    {_fastest, slowest} = PaceModel.pace_range_sec_per_rep(input.burpee_type, input.level)
+    effective_fastest = effective_ceiling(input)
 
     %Solution{
       sec_per_burpee: candidate.sec_per_burpee,
@@ -444,7 +445,7 @@ defmodule BurpeeTrainer.PlanSolver do
         set_pattern_strategy: candidate.set_pattern_strategy,
         candidate_count: candidate.candidate_count,
         score: candidate.score,
-        pace_fastest_sec_per_rep: fastest,
+        pace_fastest_sec_per_rep: effective_fastest,
         pace_slowest_sec_per_rep: slowest,
         pace_override?: is_float(input.sec_per_burpee_override),
         recovery_mode: :auto,

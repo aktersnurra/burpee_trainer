@@ -189,11 +189,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert length(sol.rest_pattern_sec) == 19
     assert sol.rest_sec >= 8.0
 
-    assert sol.sec_per_burpee >=
-             PlanSolver.effective_ceiling(
-               input(%{burpee_type: :six_count, burpee_count_target: 160, level: :level_1a})
-             )
-
+    assert sol.sec_per_burpee >= sol.metadata.pace_fastest_sec_per_rep
     assert sol.metadata.recovery_mode == :auto
     assert sol.metadata.recommendation =~ "20 × 8"
   end
