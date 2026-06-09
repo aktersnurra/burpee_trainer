@@ -274,13 +274,14 @@ defmodule BurpeeTrainer.PlanSolver do
       Enum.reduce(input.additional_rests || [], 0.0, fn rest, acc -> acc + rest.rest_sec end)
 
     cadence = (target_sec - reservation_total) / input.burpee_count_target
+    block_total = even_rest_block_total(input)
 
     reservations =
       input.additional_rests
       |> Enum.sort_by(& &1.target_min)
       |> Enum.map(fn rest ->
         target_sec = rest.target_min * 60.0
-        slot = round(target_sec / cadence)
+        slot = round(target_sec / cadence / block_total) * block_total
         boundary_sec = slot * cadence
 
         if slot > 0 and slot < input.burpee_count_target and abs(boundary_sec - target_sec) <= 30 do
@@ -324,6 +325,11 @@ defmodule BurpeeTrainer.PlanSolver do
       end
     end
   end
+
+  defp even_rest_block_total(%Input{block_pattern: pattern}) when is_list(pattern) and pattern != [],
+    do: Enum.sum(pattern)
+
+  defp even_rest_block_total(_input), do: 1
 
   defp set_boundaries(set_pattern, p, rest_pattern) do
     set_pattern

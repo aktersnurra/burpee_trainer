@@ -92,6 +92,33 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 75
   end
 
+  test ":even with preferred block pattern and rest — split around first-class rest" do
+    input = %Input{
+      name: "Pattern rest",
+      burpee_type: :navy_seal,
+      level: :level_1a,
+      target_duration_min: 20,
+      burpee_count_target: 70,
+      pacing_style: :even,
+      reps_per_set: nil,
+      block_pattern: [4, 3],
+      additional_rests: [%{target_min: 12, rest_sec: 20}],
+      sec_per_burpee_override: nil
+    }
+
+    {:ok, sol} = BurpeeTrainer.PlanSolver.solve(input)
+
+    assert Enum.map(sol.plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
+             [4, 3]
+           ]
+
+    assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
+    assert [%{repeat_count: before_count}, %{rest_sec: 20}, %{repeat_count: after_count}] = sol.plan.steps
+    assert before_count + after_count == 10
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 70
+    assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 1200
+  end
+
   test ":even with one reservation — two blocks" do
     input = %Input{
       name: "t",

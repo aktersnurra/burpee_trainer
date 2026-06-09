@@ -61,6 +61,23 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     end
   end
 
+  defp build_even(%Input{block_pattern: pattern} = input, p, reservations)
+       when is_list(pattern) and pattern != [] do
+    target_sec = input.target_duration_min * 60.0
+    n = input.burpee_count_target
+    reservation_total = Enum.reduce(reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
+    cadence = (target_sec - reservation_total) / n
+    {_full_repeats, remainder_pattern} = split_pattern(n, pattern)
+
+    blocks = [pattern_block(1, pattern, cadence, p)]
+
+    if remainder_pattern == [] do
+      blocks
+    else
+      blocks ++ [pattern_block(2, remainder_pattern, cadence, p)]
+    end
+  end
+
   defp build_even(input, p, reservations) do
     target_sec = input.target_duration_min * 60.0
     n = input.burpee_count_target
@@ -244,6 +261,56 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
         steps
       end
     end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
+  end
+
+  defp build_steps(%Input{block_pattern: pattern, additional_rests: rests} = input, [block | _blocks])
+       when is_list(pattern) and pattern != [] and is_list(rests) and rests != [] do
+    {full_repeats, remainder_pattern} = split_pattern(input.burpee_count_target, pattern)
+    block_sec = block_duration(block)
+
+    {steps, remaining_repeats, _elapsed} =
+      rests
+      |> Enum.sort_by(& &1.target_min)
+      |> Enum.reduce({[], full_repeats, 0.0}, fn rest, {steps, remaining_repeats, elapsed} ->
+        repeats_before =
+          rest.target_min
+          |> Kernel.*(60.0)
+          |> Kernel.-(elapsed)
+          |> Kernel./(block_sec)
+          |> round()
+          |> max(0)
+          |> min(remaining_repeats)
+
+        steps =
+          if repeats_before > 0 do
+            steps ++ [block_run_step(0, block.position, repeats_before)]
+          else
+            steps
+          end
+
+        rest_step = %PlanStep{position: 0, kind: :rest, rest_sec: rest.rest_sec}
+        remaining_repeats = remaining_repeats - repeats_before
+        elapsed = elapsed + repeats_before * block_sec + rest.rest_sec
+        {steps ++ [rest_step], remaining_repeats, elapsed}
+      end)
+
+    steps =
+      if remaining_repeats > 0 do
+        steps ++ [block_run_step(0, block.position, remaining_repeats)]
+      else
+        steps
+      end
+
+    steps =
+      if remainder_pattern == [] do
+        steps
+      else
+        steps ++ [block_run_step(0, 2, 1)]
+      end
+
+    steps
     |> Enum.with_index(1)
     |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end
