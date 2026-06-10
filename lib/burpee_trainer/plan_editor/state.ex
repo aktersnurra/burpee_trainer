@@ -15,10 +15,7 @@ defmodule BurpeeTrainer.PlanEditor.State do
     :solver_error,
     :solver_solution,
     :derived,
-    :form_plan,
-    manual_edit?: false,
-    expanded_blocks: MapSet.new(),
-    open_block_menu: nil
+    :form_plan
   ]
 
   @type t :: %__MODULE__{
@@ -28,9 +25,6 @@ defmodule BurpeeTrainer.PlanEditor.State do
           solver_error: String.t() | nil,
           solver_solution: PlanSolver.Solution.t() | nil,
           derived: Derived.t() | nil,
-          form_plan: WorkoutPlan.t() | nil,
-          manual_edit?: boolean(),
-          expanded_blocks: MapSet.t(),
-          open_block_menu: String.t() | nil
+          form_plan: WorkoutPlan.t() | nil
         }
 end

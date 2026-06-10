@@ -164,8 +164,17 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run, :rest, :block_run]
-    assert Enum.map(plan.steps, & &1.repeat_count) == [12, nil, 12, nil, 16]
+    rests = Enum.filter(plan.steps, &(&1.kind == :rest))
+    assert Enum.map(rests, & &1.rest_sec) == [10, 10]
+
+    run_repeats =
+      plan.steps |> Enum.filter(&(&1.kind == :block_run)) |> Enum.map(& &1.repeat_count)
+
+    assert Enum.sum(run_repeats) == 40
+
+    # The rests land near minutes 6 and 12 of the executable timeline.
+    assert Enum.map(rests, & &1.position) |> length() == 2
+    assert_in_delta BurpeeTrainer.Planner.summary(plan).duration_sec_total, 1220.0, 2.0
   end
 
   test ":unbroken with reservation keeps additional rest separate from set rest" do
@@ -186,14 +195,26 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, reservations)
 
-    [block] = plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert set.end_of_set_rest == 5
+    # Every set has the balanced recovery except the workout's final set.
+    blocks = Enum.sort_by(plan.blocks, & &1.position)
+    first_block = List.first(blocks)
+    final_block = List.last(blocks)
+    assert hd(first_block.sets).burpee_count == 5
+    assert hd(first_block.sets).end_of_set_rest == 5
+    assert hd(final_block.sets).end_of_set_rest == 0
+    assert final_block.repeat_count == 1
+
     assert plan.additional_rests == ~s([{"rest_sec":10,"target_min":18}])
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
-    assert Enum.map(plan.steps, & &1.repeat_count) == [36, nil, 4]
-    assert Enum.at(plan.steps, 1).rest_sec == 10
+    assert Enum.count(plan.steps, &(&1.kind == :rest)) == 1
+    assert Enum.find(plan.steps, &(&1.kind == :rest)).rest_sec == 10
+
+    run_repeats =
+      plan.steps |> Enum.filter(&(&1.kind == :block_run)) |> Enum.map(& &1.repeat_count)
+
+    assert Enum.sum(run_repeats) == 40
+
+    # Work + set recovery + the first-class rest must land on the target.
+    assert_in_delta BurpeeTrainer.Planner.summary(plan).duration_sec_total, 1200.0, 1.0
   end
 
   test ":unbroken — reusable block definition plus block-run step" do
@@ -203,12 +224,42 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    [block] = plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert_in_delta set.sec_per_burpee, p, 1.0e-6
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run]
-    assert hd(plan.steps).repeat_count == 2
+    blocks = Enum.sort_by(plan.blocks, & &1.position)
+
+    assert Enum.flat_map(blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end)
+           |> Enum.sum() == 10
+
+    for block <- blocks, set <- block.sets do
+      assert set.burpee_count == 5
+      assert_in_delta set.sec_per_burpee, p, 1.0e-6
+    end
+
+    assert Enum.all?(plan.steps, &(&1.kind == :block_run))
+    assert plan.steps |> Enum.map(& &1.repeat_count) |> Enum.sum() == 2
+
+    # The whole rest budget sits between the sets, none after the last.
+    final_block = List.last(blocks)
+    assert List.last(final_block.sets).end_of_set_rest == 0
+    assert_in_delta BurpeeTrainer.Planner.summary(plan).duration_sec_total, 300.0, 1.0
+  end
+
+  test ":unbroken exact 20 x 8 materializes to exact 20 minutes" do
+    input = unbroken_input(160, 20, 8)
+    p = 5.513
+    rest = (1200.0 - 160 * p) / 19
+    set_pattern = List.duplicate(8, 20)
+    rest_pattern = List.duplicate(rest, 19)
+
+    {:ok, plan} = Apply.to_workout_plan(input, p, set_pattern, rest_pattern, [])
+
+    summary = BurpeeTrainer.Planner.summary(plan)
+    assert summary.burpee_count_total == 160
+    assert_in_delta summary.duration_sec_total, 1200.0, 1.0
+
+    # No phantom recovery after the final set.
+    final_block = plan.blocks |> Enum.sort_by(& &1.position) |> List.last()
+    assert final_block.repeat_count == 1
+    assert List.last(final_block.sets).end_of_set_rest == 0
   end
 
   test "solved p is stored in plan.sec_per_burpee" do

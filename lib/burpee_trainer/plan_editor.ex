@@ -91,20 +91,6 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def pick_pacing(%State{} = state, style), do: {:error, {:invalid_pacing_style, style}, state}
 
-  @spec change_block_pattern(State.t(), map()) :: {:ok, State.t()}
-  def change_block_pattern(%State{} = state, params) do
-    pattern =
-      params
-      |> Map.get("pattern", %{})
-      |> Enum.sort_by(fn {idx, _} -> String.to_integer(idx) end)
-      |> Enum.map(fn {_idx, value} -> parse_positive_integer(value) end)
-      |> Enum.reject(&is_nil/1)
-
-    state
-    |> put_input(%{state.input | block_pattern: pattern})
-    |> regenerate()
-  end
-
   @spec set_pace_override(State.t(), term()) :: {:ok, State.t()}
   def set_pace_override(%State{} = state, pace) do
     override =
@@ -114,50 +100,6 @@ defmodule BurpeeTrainer.PlanEditor do
       end
 
     {:ok, %{state | input: %{state.input | sec_per_burpee_override: override}}}
-  end
-
-  @spec add_rest(State.t()) :: {:ok, State.t()}
-  def add_rest(%State{} = state) do
-    current = state.input
-    count = length(current.additional_rests) + 1
-    target_min = max(1, div(current.target_duration_min * count, count + 1))
-    rest = %{rest_sec: 30, target_min: target_min}
-
-    {:ok, %{state | input: %{current | additional_rests: current.additional_rests ++ [rest]}}}
-  end
-
-  @spec remove_rest(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
-  def remove_rest(%State{} = state, index) do
-    case parse_non_negative_integer(index) do
-      {:ok, index} ->
-        rests = List.delete_at(state.input.additional_rests, index)
-        {:ok, %{state | input: %{state.input | additional_rests: rests}}}
-
-      {:error, reason} ->
-        {:error, reason, state}
-    end
-  end
-
-  @spec change_rest(State.t(), map()) :: {:ok, State.t()} | {:error, term(), State.t()}
-  def change_rest(%State{} = state, rest_params) do
-    with {:ok, index} <- parse_non_negative_integer(Map.get(rest_params, "index", "0")) do
-      existing = Enum.at(state.input.additional_rests, index, %{rest_sec: 30, target_min: 10})
-
-      rest_sec =
-        parse_positive_integer_or(Map.get(rest_params, "rest_sec", ""), existing.rest_sec)
-
-      target_min =
-        parse_positive_integer_or(Map.get(rest_params, "target_min", ""), existing.target_min)
-
-      rests =
-        List.update_at(state.input.additional_rests, index, fn _ ->
-          %{rest_sec: rest_sec, target_min: target_min}
-        end)
-
-      {:ok, %{state | input: %{state.input | additional_rests: rests}}}
-    else
-      {:error, reason} -> {:error, reason, state}
-    end
   end
 
   @spec regenerate(State.t()) :: {:ok, State.t()}
@@ -183,7 +125,6 @@ defmodule BurpeeTrainer.PlanEditor do
            | solver_error: nil,
              solver_solution: solution,
              form_plan: solution.plan,
-             manual_edit?: false,
              derived: derived(solution.plan, state.input)
          }}
 
@@ -237,61 +178,6 @@ defmodule BurpeeTrainer.PlanEditor do
       _ -> %Derived{}
     end
   end
-
-  @spec enable_manual_edit(State.t()) :: {:ok, State.t()}
-  def enable_manual_edit(%State{} = state), do: {:ok, %{state | manual_edit?: true}}
-
-  @spec copy_block(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
-  def copy_block(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, index) do
-    with {:ok, index} <- parse_non_negative_integer(index),
-         blocks <- Enum.sort_by(blocks || [], & &1.position),
-         %Block{} = source_block <- Enum.at(blocks, index) do
-      copied_block = %{source_block | position: length(blocks) + 1}
-      form_plan = %{state.form_plan | blocks: blocks ++ [copied_block]}
-
-      {:ok,
-       %{
-         state
-         | form_plan: form_plan,
-           manual_edit?: true,
-           derived: derived(form_plan, state.input)
-       }}
-    else
-      nil -> {:error, {:missing_block, index}, state}
-      {:error, reason} -> {:error, reason, state}
-    end
-  end
-
-  def copy_block(%State{} = state, _index), do: {:error, :missing_form_plan, state}
-
-  @spec copy_set(State.t(), term(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
-  def copy_set(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, block_index, set_index) do
-    with {:ok, block_index} <- parse_non_negative_integer(block_index),
-         {:ok, set_index} <- parse_non_negative_integer(set_index),
-         blocks <- Enum.sort_by(blocks || [], & &1.position),
-         %Block{} = block <- Enum.at(blocks, block_index),
-         sets <- Enum.sort_by(block.sets || [], & &1.position),
-         %Set{} = source_set <- Enum.at(sets, set_index) do
-      copied_set = %{source_set | position: length(sets) + 1}
-      updated_block = %{block | sets: sets ++ [copied_set]}
-      updated_blocks = List.replace_at(blocks, block_index, updated_block)
-      form_plan = %{state.form_plan | blocks: updated_blocks}
-
-      {:ok,
-       %{
-         state
-         | form_plan: form_plan,
-           manual_edit?: true,
-           derived: derived(form_plan, state.input)
-       }}
-    else
-      nil -> {:error, :missing_item, state}
-      {:error, reason} -> {:error, reason, state}
-    end
-  end
-
-  def copy_set(%State{} = state, _block_index, _set_index),
-    do: {:error, :missing_form_plan, state}
 
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(plan) do
@@ -378,31 +264,6 @@ defmodule BurpeeTrainer.PlanEditor do
 
   defp parse_positive_float(value) when is_number(value) and value > 0, do: {:ok, value * 1.0}
   defp parse_positive_float(value), do: {:error, {:invalid_pace, value}}
-
-  defp parse_non_negative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
-
-  defp parse_non_negative_integer(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {integer, ""} when integer >= 0 -> {:ok, integer}
-      _ -> {:error, {:invalid_index, value}}
-    end
-  end
-
-  defp parse_non_negative_integer(value), do: {:error, {:invalid_index, value}}
-
-  defp parse_positive_integer(value) do
-    case Integer.parse(to_string(value || "")) do
-      {integer, ""} when integer > 0 -> integer
-      _ -> nil
-    end
-  end
-
-  defp parse_positive_integer_or(value, default) do
-    case Integer.parse(to_string(value || "")) do
-      {integer, ""} when integer > 0 -> integer
-      _ -> default
-    end
-  end
 
   defp can_summarize?(%WorkoutPlan{blocks: blocks}) when is_list(blocks) and blocks != [] do
     Enum.all?(blocks, fn block ->

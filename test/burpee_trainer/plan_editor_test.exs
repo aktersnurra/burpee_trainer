@@ -123,53 +123,6 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
-  describe "rest transitions" do
-    test "add_rest appends a rest at the next evenly spaced target" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-
-      {:ok, state} = PlanEditor.add_rest(state)
-
-      assert [%{target_min: 10, rest_sec: 30}] = state.input.additional_rests
-    end
-
-    test "remove_rest drops rest by index" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-      {:ok, state} = PlanEditor.add_rest(state)
-
-      {:ok, state} = PlanEditor.remove_rest(state, "0")
-
-      assert state.input.additional_rests == []
-    end
-
-    test "change_rest updates a rest by index" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-      {:ok, state} = PlanEditor.add_rest(state)
-
-      {:ok, state} =
-        PlanEditor.change_rest(state, %{
-          "index" => "0",
-          "target_min" => "12",
-          "rest_sec" => "90"
-        })
-
-      assert [%{target_min: 12, rest_sec: 90}] = state.input.additional_rests
-    end
-
-    test "change_rest preserves existing values for invalid input" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-      {:ok, state} = PlanEditor.add_rest(state)
-
-      {:ok, state} =
-        PlanEditor.change_rest(state, %{
-          "index" => "0",
-          "target_min" => "bad",
-          "rest_sec" => ""
-        })
-
-      assert [%{target_min: 10, rest_sec: 30}] = state.input.additional_rests
-    end
-  end
-
   describe "regeneration and derived state" do
     test "regenerate creates a solver solution and derived summary" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
@@ -201,40 +154,6 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
-  describe "manual edit transitions" do
-    test "enable_manual_edit marks state manual" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-
-      {:ok, state} = PlanEditor.enable_manual_edit(state)
-
-      assert state.manual_edit? == true
-    end
-
-    test "copy_block returns manual state with another block" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-      {:ok, state} = PlanEditor.regenerate(state)
-      block_count = length(state.form_plan.blocks)
-
-      {:ok, state} = PlanEditor.copy_block(state, "0")
-
-      assert state.manual_edit? == true
-      assert length(state.form_plan.blocks) == block_count + 1
-    end
-
-    test "copy_set returns manual state with another set" do
-      {:ok, state} = PlanEditor.new(:level_1a, %{})
-      {:ok, state} = PlanEditor.regenerate(state)
-      [first_block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
-      set_count = length(first_block.sets)
-
-      {:ok, state} = PlanEditor.copy_set(state, "0", "0")
-      [first_block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
-
-      assert state.manual_edit? == true
-      assert length(first_block.sets) == set_count + 1
-    end
-  end
-
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
@@ -244,9 +163,6 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert state.level == :level_1a
       assert state.input.name == "New plan"
       assert state.input.burpee_type == :six_count
-      assert state.manual_edit? == false
-      assert state.expanded_blocks == MapSet.new()
-      assert state.open_block_menu == nil
     end
 
     test "new/2 applies coach params" do

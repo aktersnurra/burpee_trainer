@@ -172,15 +172,18 @@ Solution output includes:
 - solver metadata
 - generated `%WorkoutPlan{}`
 
-For `:unbroken` plans, the solver can create non-uniform human-shaped set patterns for awkward targets, such as `107` reps becoming mostly `10`s plus a human-sized adjustment instead of requiring `set_size * set_count == total_reps`.
+For `:unbroken` plans, candidate set structures come from `PlanSolver.Search`: the rep target is split into `k` sets sized `base`/`base + 1`, never exceeding the preferred reps per set, so awkward targets taper down instead of leaving an orphan set (e.g. `140` reps at `8`/set becomes `14×[8] 4×[7]`, and `107` reps at `10`/set becomes `8×[10] 3×[9]`). When no within-preference split leaves useful recovery, larger sets up to a per-type maximum are tried as a scored-down fallback before the solver reports infeasibility. `BurpeeTrainer.PlanNotation` renders these structures in the compact `N×[reps,…]` notation used across the editor.
 
 It preserves these invariants:
 
 - total reps match the target
-- duration is within tolerance
+- the executable duration is exact: every set carries an integer recovery except the workout's final set, which carries none (the rest budget is distributed as `base`/`base + 1` seconds across the gaps)
 - pace respects type-specific level bounds from `PaceModel`
-- final rest is not counted unless represented in set duration
 - additional rests must land near valid boundaries
+
+## Plan editor
+
+The plan editor (`BurpeeTrainerWeb.PlansLive.Edit`) edits a `BurpeeTrainer.PlanEditor.Segments` list — work segments (`N×[reps,…]`) and rest segments — rather than raw blocks. Target changes re-run the solver; structure edits mark the plan custom and only re-balance pace and recovery against the targets. `Segments.balance/3` reports blocking problems (rep mismatch, impossible duration) and warnings (thin recovery) with one-tap fixes, and `Segments.to_plan_attrs/3` materializes segments into `blocks` + `steps` for saving.
 
 ## Plan metadata
 

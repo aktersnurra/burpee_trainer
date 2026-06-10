@@ -158,22 +158,18 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   # :unbroken
   # ---------------------------------------------------------------------------
 
+  # Every set gets an integer trailing recovery except the final set, which
+  # gets none — so the executable duration matches the prescription exactly
+  # (the rest budget is distributed as base/base+1 seconds across the gaps).
   defp build_unbroken(p, set_pattern, rest_pattern) do
     p = round_pace(p)
-    grouped = Enum.chunk_by(set_pattern, & &1)
+    set_rests = integer_set_rests(rest_pattern) ++ [0]
 
-    last_position = length(grouped)
-
-    grouped
+    set_pattern
+    |> Enum.zip(set_rests)
+    |> Enum.chunk_by(& &1)
     |> Enum.with_index(1)
-    |> Enum.map(fn {group, position} ->
-      reps = hd(group)
-
-      base_rest =
-        if last_position > 1 and position == last_position,
-          do: 0,
-          else: Enum.at(rest_pattern, 0, 0)
-
+    |> Enum.map(fn {[{reps, rest} | _] = group, position} ->
       %Block{
         position: position,
         repeat_count: length(group),
@@ -183,11 +179,21 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
             burpee_count: reps,
             sec_per_rep: p,
             sec_per_burpee: p,
-            end_of_set_rest: round(base_rest)
+            end_of_set_rest: rest
           }
         ]
       }
     end)
+  end
+
+  defp integer_set_rests([]), do: []
+
+  defp integer_set_rests(rest_pattern) do
+    slots = length(rest_pattern)
+    total = round(Enum.sum(rest_pattern))
+    base = div(total, slots)
+    extra = rem(total, slots)
+    List.duplicate(base + 1, extra) ++ List.duplicate(base, slots - extra)
   end
 
   defp legacy_unbroken_rest_pattern(input, p, set_pattern, reservations) do
@@ -413,7 +419,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     Enum.reduce(units, 0.0, fn unit, total -> total + unit.duration_sec end)
   end
 
-  defp round_pace(value) when is_float(value), do: Float.round(value, 1)
+  defp round_pace(value) when is_float(value), do: Float.round(value, 3)
   defp round_pace(value), do: value
 
   defp block_run_step(position, block_position, repeat_count) do

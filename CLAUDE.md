@@ -19,7 +19,9 @@ See `INTELLIGENCE_LAYER.md` for the current fixed weekly contract, coach target 
 | `BurpeeTrainer.CatchUpPlanner` | Type-locked long catch-up session planning with duration intensity caps |
 | `BurpeeTrainer.PerformanceModel` | Type-specific 20-minute capacity estimates from history |
 | `BurpeeTrainer.PaceModel` | Type-specific recommended pace ranges by level |
-| `BurpeeTrainer.PlanSolver` | Deterministic session structure generation; no MILP/external solver |
+| `BurpeeTrainer.PlanSolver` | Deterministic session structure generation; exact-duration `Search` candidates, no MILP/external solver |
+| `BurpeeTrainer.PlanNotation` | Compact `N×[reps,…]` workout notation (e.g. `14×[8] 4×[7]`) |
+| `BurpeeTrainer.PlanEditor.Segments` | Plan-editor segment model: balance/validate structures with one-tap fixes, materialize to blocks+steps |
 | `BurpeeTrainer.Planner` | Converts a saved `WorkoutPlan` to a flat timeline of events |
 | `BurpeeTrainer.Workouts` | Ecto context: sessions, plans, blocks, sets, style_performance |
 | `BurpeeTrainer.Goals` | Ecto context: goals CRUD and conversion to performance goals |
