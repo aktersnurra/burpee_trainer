@@ -23,11 +23,11 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
 
     assert html =~ "session-surface"
     assert html =~ "text-[var(--session-ink)]"
-    assert html =~ ~s(id="home-coach-card")
-    assert html =~ ~s(id="home-week-rhythm")
+    assert html =~ ~s(id="home-page")
+    assert html =~ ~s(id="home-status-strip")
   end
 
-  test "GET / puts the coach card before secondary suggestions", %{conn: conn} do
+  test "GET / puts the primary workout before secondary suggestions", %{conn: conn} do
     user = user_fixture(%{"username" => "home_order_user"})
     plan = plan_fixture(user, %{"name" => "Resume Plan"})
 
@@ -54,27 +54,23 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     conn = conn |> init_test_session(%{user_id: user.id}) |> get(~p"/")
     html = html_response(conn, 200)
 
-    assert html =~ ~s(id="home-coach-card")
+    assert html =~ ~s(id="home-primary-workout")
     assert html =~ ~s(data-home-weekly-split)
 
-    {coach_card_index, _} = :binary.match(html, ~s(id="home-coach-card"))
+    {primary_index, _} = :binary.match(html, ~s(id="home-primary-workout"))
     {split_index, _} = :binary.match(html, ~s(data-home-weekly-split))
 
-    assert coach_card_index < split_index
+    assert primary_index < split_index
   end
 
-  test "GET / renders a seven segment weekly rhythm bar", %{conn: conn} do
+  test "GET / renders a quiet weekly status strip", %{conn: conn} do
     user = user_fixture(%{"username" => "home_rhythm_user"})
 
     conn = conn |> init_test_session(%{user_id: user.id}) |> get(~p"/")
     html = html_response(conn, 200)
 
-    assert html =~ ~s(id="home-week-rhythm")
-    assert html =~ ~s(/ 80 min)
-    assert html =~ ~s(data-week-rhythm-segment)
-    assert html =~ ~s(aria-label="Monday:)
-    refute html =~ ~s(data-week-dot)
-    assert length(Regex.scan(~r/data-week-rhythm-segment/, html)) == 7
+    assert html =~ ~s(id="home-status-strip")
+    assert html =~ ~s(/ 80 min this week)
   end
 
   test "GET / presents a primary start action when a plan exists", %{conn: conn} do
@@ -89,8 +85,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     conn = conn |> init_test_session(%{user_id: user.id}) |> get(~p"/")
     html = html_response(conn, 200)
 
-    assert html =~ ~s(id="home-primary-action")
+    assert html =~ ~s(id="home-start-workout")
     assert html =~ ~s(href="/session/#{plan.id}")
-    assert html =~ "What should I do now?"
   end
 end

@@ -73,6 +73,22 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute html =~ "Create your first training session"
   end
 
+  test "home renders quiet action-first structure", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Default Work"})
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#home-status-strip")
+    assert has_element?(view, "#home-primary-workout")
+    assert has_element?(view, "#home-start-workout[href='/session/#{plan.id}']")
+    assert has_element?(view, "#home-log-session")
+
+    html = render(view)
+    assert html =~ "Default Work"
+    refute html =~ "12-week"
+    refute html =~ "Dashboard"
+  end
+
   test "catch-up panel requires the user to choose the burpee type", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
