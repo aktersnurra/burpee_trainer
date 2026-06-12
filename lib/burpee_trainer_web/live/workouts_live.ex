@@ -172,25 +172,24 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         id="workouts-page"
         class="session-surface mx-auto max-w-lg space-y-8 pb-24 text-[var(--session-ink)]"
       >
-        <header class="px-1 pt-1">
+        <.qs_surface class="px-5 py-5">
           <div class="space-y-1">
-            <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-              Workouts
-            </p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Workouts</p>
             <h1 class="text-3xl font-semibold leading-none tracking-[-0.05em] text-[var(--session-ink)]">
               Choose training
             </h1>
+            <p class="text-sm leading-6 text-[var(--session-muted)]">
+              Pick the next session, edit a plan, or start from a video.
+            </p>
           </div>
-        </header>
+        </.qs_surface>
 
         <.featured_workout :if={@featured_item} item={@featured_item} />
 
         <section id="workouts-options-section" class="space-y-3 pt-1">
-          <div class="flex items-end justify-between gap-4 px-1">
+          <div class="flex items-end justify-between gap-4">
             <div class="space-y-0.5">
-              <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-                Other options
-              </p>
+              <p class="text-sm font-medium text-[var(--session-muted)]">Other options</p>
               <p class="text-sm text-[var(--session-muted)]">
                 Choose something else or build custom.
               </p>
@@ -198,14 +197,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             <.link
               id="workouts-custom-session"
               navigate={~p"/workouts/new"}
-              class="shrink-0 text-xs font-semibold text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
+              class="shrink-0 rounded-md border border-[var(--session-border)] bg-[var(--session-surface)]/55 px-3 py-2 text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70"
             >
-              Custom session
+              Custom
             </.link>
           </div>
 
           <%!-- Single scrollable filter row --%>
-          <div id="workouts-filter-panel" class="px-1">
+          <div id="workouts-filter-panel">
             <div class="flex gap-2 overflow-x-auto no-scrollbar">
               <.filter_pill
                 label="Mine"
@@ -246,14 +245,17 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <%= if @items == [] do %>
             <.empty_state filters={@filters} />
           <% else %>
-            <div id="workouts-list" class="border-t border-[var(--session-border)]">
+            <.qs_surface
+              id="workouts-list"
+              class="overflow-hidden divide-y divide-[var(--session-border)] bg-[var(--session-surface)]/45"
+            >
               <%= for item <- @items do %>
                 <.workout_card
                   item={item}
                   open_menu={@open_menu_id == to_string(item.id) <> to_string(item.kind)}
                 />
               <% end %>
-            </div>
+            </.qs_surface>
           <% end %>
         </section>
       </div>
@@ -265,40 +267,34 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   defp featured_workout(%{item: nil} = assigns) do
     ~H"""
-    <section
-      id="workouts-featured-card"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5 text-center"
-    >
-      <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        Ready when you are
-      </p>
-      <p class="qs-section-tight mt-2 text-lg font-semibold tracking-[-0.02em] text-[var(--session-ink)]">
-        Build a plan to start training
-      </p>
-      <.link
+    <.qs_surface id="workouts-featured-card" class="bg-[var(--session-surface)]/60">
+      <div class="space-y-2 px-5 py-5">
+        <p class="text-sm font-medium text-[var(--session-muted)]">Ready when you are</p>
+        <p class="qs-section-tight text-xl font-semibold tracking-[-0.03em] text-[var(--session-ink)]">
+          Build a plan to start training
+        </p>
+      </div>
+      <.qs_action_row
         navigate={~p"/workouts/new"}
-        class="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-bg)] transition hover:opacity-90"
-      >
-        New plan <.icon name="hero-plus" class="size-3.5" />
-      </.link>
-    </section>
+        icon="hero-plus"
+        label="New plan"
+        class="border-t border-[var(--session-border)]"
+      />
+    </.qs_surface>
     """
   end
 
   defp featured_workout(assigns) do
     ~H"""
-    <section
-      id="workouts-featured-card"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5"
-    >
-      <div class="flex items-center gap-6">
-        <div class="flex size-[104px] shrink-0 flex-col items-center justify-center rounded-full border-[7px] border-[var(--session-ring-track)] text-center">
+    <.qs_surface id="workouts-featured-card" class="bg-[var(--session-surface)]/60">
+      <div class="flex items-center gap-5 px-5 py-5">
+        <div class="flex size-24 shrink-0 flex-col items-center justify-center rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 text-center">
           <%= if @item.burpee_count do %>
             <span class="text-4xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)]">
               {@item.burpee_count}
             </span>
-            <span class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-              Reps
+            <span class="mt-1 text-xs font-medium text-[var(--session-muted)]">
+              reps
             </span>
           <% else %>
             <span class="text-2xl font-semibold leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]">
@@ -307,36 +303,36 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <% end %>
         </div>
         <div class="min-w-0 flex-1 space-y-2">
-          <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+          <p class="text-sm font-medium text-[var(--session-muted)]">
             Featured training
           </p>
           <h2 class="qs-section-tight truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
             {@item.title}
           </h2>
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--session-muted)]">
+          <p class="text-sm font-medium text-[var(--session-muted)]">
             {Fmt.burpee_type(@item.burpee_type)}
             <%= if @item.level do %>
               <span class="px-1 text-[var(--session-muted)]">·</span>{Fmt.level(@item.level)}
             <% end %>
           </p>
-          <div class="flex items-center gap-4 pt-1">
-            <.link
-              navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}
-              class="text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-            >
-              {if @item.kind == :plan, do: "Edit plan", else: "View video"}
-            </.link>
-            <.link
-              navigate={@item.start_path}
-              class="inline-flex items-center gap-1 rounded-full bg-[var(--session-ink)] px-3 py-1.5 text-xs font-semibold text-[var(--session-bg)] transition hover:opacity-90"
-              aria-label={"Start #{@item.title}"}
-            >
-              Start <.icon name="hero-chevron-right" class="size-3.5" />
-            </.link>
-          </div>
         </div>
       </div>
-    </section>
+      <div class="grid grid-cols-2 divide-x divide-[var(--session-border)] border-t border-[var(--session-border)]">
+        <.link
+          navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}
+          class="px-5 py-4 text-sm font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-bg)]/45 hover:text-[var(--session-ink)]"
+        >
+          {if @item.kind == :plan, do: "Edit plan", else: "View video"}
+        </.link>
+        <.qs_action_row
+          navigate={@item.start_path}
+          icon="hero-play-solid"
+          label="Start"
+          class="justify-end py-4"
+          aria-label={"Start #{@item.title}"}
+        />
+      </div>
+    </.qs_surface>
     """
   end
 
@@ -354,10 +350,13 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       phx-value-burpee_type={if @value_key == "burpee_type", do: @value}
       phx-value-level={if @value_key == "level", do: @value}
       class={[
-        "rounded-full border px-3 py-1.5 text-sm transition whitespace-nowrap",
-        @active && "border-[var(--session-ink)] text-[var(--session-ink)]",
+        "border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap",
+        @active && @value_key == "source" &&
+          "border-[var(--session-info-border)] bg-[var(--session-info-bg)] text-[var(--session-info-ink)]",
+        @active && @value_key != "source" &&
+          "border-[var(--session-toggle-border)] bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)]",
         !@active &&
-          "border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)]"
+          "border-[var(--session-border)] bg-[var(--session-surface)]/45 text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
       ]}
     >
       {@label}
@@ -375,9 +374,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <div
       data-workout-row
-      class="group border-t border-[var(--session-border)] py-4 first:border-t-0"
+      class="group px-5 py-4"
     >
-      <div class="flex items-center gap-3 transition">
+      <div class="flex items-center gap-4 transition">
         <.link
           id={"workout-card-#{@item.kind}-#{@item.id}"}
           navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}
@@ -390,12 +389,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                   {@item.title}
                 </p>
                 <%= if @item.kind == :video do %>
-                  <span class="border border-[var(--session-border)] rounded-2xl px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
+                  <.qs_property_tag>
                     Video
-                  </span>
+                  </.qs_property_tag>
                 <% end %>
               </div>
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--session-soft-muted)]">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-[var(--session-muted)]">
                 <span>{Fmt.burpee_type(@item.burpee_type)}</span>
                 <%= if @item.level do %>
                   <span>{Fmt.level(@item.level)}</span>
@@ -408,7 +407,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
                 <p class="text-3xl font-black leading-none tracking-[-0.05em] text-[var(--session-ink)]">
                   {@item.burpee_count}
                 </p>
-                <p class="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--session-soft-muted)]">
+                <p class="mt-1 text-xs font-medium text-[var(--session-muted)]">
                   {Fmt.duration_sec(@item.duration_sec)}
                 </p>
               <% else %>
@@ -423,10 +422,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         <.link
           id={"workout-play-#{@item.kind}-#{@item.id}"}
           navigate={@item.start_path}
-          class="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--session-surface)] text-[var(--session-ink)] transition hover:opacity-90 active:scale-95"
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/70 text-[var(--session-ink)] transition-colors hover:bg-[var(--session-track)]/70"
           aria-label={"Start #{@item.title}"}
         >
-          <.icon name="hero-chevron-right" class="size-4" />
+          <.icon name="hero-play-solid" class="size-4" />
         </.link>
       </div>
     </div>
@@ -437,8 +436,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   defp empty_state(%{filters: %{source: :mine}} = assigns) do
     ~H"""
-    <div class="border-y border-[var(--session-border)] px-6 py-14 text-center">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--session-soft-muted)]">
+    <.qs_surface class="bg-[var(--session-surface)]/45 px-6 py-14 text-center">
+      <p class="text-base font-semibold text-[var(--session-ink)]">
         No plans yet
       </p>
       <p class="mt-3 text-sm text-[var(--session-muted)]">
@@ -446,38 +445,38 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       </p>
       <.link
         navigate={~p"/workouts/new"}
-        class="mt-6 inline-flex items-center border border-[var(--session-ink)] rounded-2xl px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)]"
+        class="mt-6 inline-flex items-center rounded-md border border-[var(--session-border)] bg-[var(--session-surface)]/55 px-4 py-3 text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70"
       >
         New plan
       </.link>
-    </div>
+    </.qs_surface>
     """
   end
 
   defp empty_state(%{filters: filters} = assigns) when map_size(filters) > 0 do
     ~H"""
-    <div class="border-y border-[var(--session-border)] px-6 py-14 text-center">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--session-soft-muted)]">
+    <.qs_surface class="bg-[var(--session-surface)]/45 px-6 py-14 text-center">
+      <p class="text-base font-semibold text-[var(--session-ink)]">
         No matching sessions
       </p>
       <.link
         patch="/workouts"
-        class="mt-5 inline-flex text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
+        class="mt-5 inline-flex text-sm font-medium text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
       >
         Clear filters
       </.link>
-    </div>
+    </.qs_surface>
     """
   end
 
   defp empty_state(assigns) do
     ~H"""
-    <div class="border-y border-[var(--session-border)] px-6 py-14 text-center">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--session-soft-muted)]">
+    <.qs_surface class="bg-[var(--session-surface)]/45 px-6 py-14 text-center">
+      <p class="text-base font-semibold text-[var(--session-ink)]">
         No workouts yet
       </p>
       <p class="mt-3 text-sm text-[var(--session-muted)]">Tap + to build your first plan.</p>
-    </div>
+    </.qs_surface>
     """
   end
 end

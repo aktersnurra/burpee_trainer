@@ -150,9 +150,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <section
       id="plan-metadata"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 px-5 py-4"
+      class="border border-[var(--session-border)] bg-[var(--session-track)]/25 px-5 py-4"
     >
-      <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+      <p class="text-sm font-medium text-[var(--session-muted)]">
         Why this?
       </p>
       <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
@@ -1076,7 +1076,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <div class="flex items-end justify-between gap-4 border-b border-[var(--session-border)] pb-4">
       <form phx-change="change_basics" class="min-w-0 flex-1 space-y-1">
-        <label class="text-[10px] uppercase tracking-[0.24em] text-[var(--session-muted)]">
+        <label class="text-sm font-medium text-[var(--session-muted)]">
           Custom session
         </label>
         <input
@@ -1092,7 +1092,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             id="plan-duplicate"
             type="button"
             phx-click="duplicate_plan"
-            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
           >
             Copy
           </button>
@@ -1101,14 +1101,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             type="button"
             phx-click="delete_plan"
             data-confirm={"Delete '#{@plan.name}'? This cannot be undone."}
-            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
           >
             Delete
           </button>
         <% end %>
         <.link
           navigate={~p"/workouts"}
-          class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+          class="border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
         >
           Cancel
         </.link>
@@ -1121,7 +1121,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_type_picker(assigns) do
     ~H"""
-    <div class="flex border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
+    <div class="flex border border-[var(--session-border)] bg-[var(--session-surface)]/60">
       <button
         type="button"
         phx-click="pick_type"
@@ -1129,7 +1129,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         class={[
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :six_count,
-            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+            do:
+              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
             else:
               "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
@@ -1145,7 +1146,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         class={[
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :navy_seal,
-            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+            do:
+              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
             else:
               "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
@@ -1165,7 +1167,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     <form
       id="plan-goal-controls"
       phx-change="change_basics"
-      class="grid grid-cols-2 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
+      class="grid grid-cols-2 border border-[var(--session-border)] bg-[var(--session-surface)]/60"
     >
       <div class="border-r border-[var(--session-border)] p-5">
         <div class="flex items-baseline gap-1">
@@ -1199,7 +1201,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <form
       phx-change="change_basics"
-      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
+      class="border border-[var(--session-border)] bg-[var(--session-surface)]/60"
     >
       <div class="flex">
         <button
@@ -1209,7 +1211,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class={[
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :even,
-              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              do:
+                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
               else:
                 "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
@@ -1225,7 +1228,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class={[
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :unbroken,
-              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              do:
+                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
               else:
                 "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
@@ -1237,7 +1241,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       <%= if @plan_input.pacing_style == :unbroken do %>
         <div class="flex items-baseline justify-between border-t border-[var(--session-border)] px-6 py-5">
           <div class="space-y-1">
-            <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Per set</p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Per set</p>
             <div class="flex items-baseline gap-1.5">
               <input
                 type="number"

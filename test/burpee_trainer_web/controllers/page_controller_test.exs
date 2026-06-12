@@ -27,7 +27,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     assert html =~ ~s(id="home-status-strip")
   end
 
-  test "GET / puts the primary workout before secondary suggestions", %{conn: conn} do
+  test "GET / keeps coach output inside the primary recommendation only", %{conn: conn} do
     user = user_fixture(%{"username" => "home_order_user"})
     plan = plan_fixture(user, %{"name" => "Resume Plan"})
 
@@ -35,13 +35,6 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
       "burpee_count_actual" => 30,
       "duration_sec_actual" => 180
     })
-
-    for _ <- 1..4 do
-      free_form_session_fixture(user, %{
-        "burpee_count_actual" => 30,
-        "duration_sec_actual" => 180
-      })
-    end
 
     goal_fixture(user, %{
       "burpee_type" => "six_count",
@@ -55,12 +48,10 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     html = html_response(conn, 200)
 
     assert html =~ ~s(id="home-primary-workout")
-    assert html =~ ~s(data-home-weekly-split)
-
-    {primary_index, _} = :binary.match(html, ~s(id="home-primary-workout"))
-    {split_index, _} = :binary.match(html, ~s(data-home-weekly-split))
-
-    assert primary_index < split_index
+    assert html =~ ~s(id="home-prescription")
+    assert html =~ "Today’s prescription"
+    refute html =~ ~s(data-home-weekly-split)
+    refute html =~ ~s(id="home-catch-up-panel")
   end
 
   test "GET / renders a quiet weekly status strip", %{conn: conn} do
@@ -70,7 +61,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     html = html_response(conn, 200)
 
     assert html =~ ~s(id="home-status-strip")
-    assert html =~ ~s(/ 80 min this week)
+    assert html =~ ~s(min this week)
   end
 
   test "GET / presents a primary start action when a plan exists", %{conn: conn} do

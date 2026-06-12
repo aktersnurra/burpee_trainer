@@ -1,4 +1,4 @@
-<div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] p-4">
+<div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] p-4">
   <svg viewBox={"0 0 #{@chart_w} 96"} class="w-full" aria-hidden="true">
     <%!-- y-axis: 0 only --%>
     <text x={@y_axis_w - 2} y="76" text-anchor="end" font-size="7" fill="var(--session-muted)">
@@ -11,7 +11,7 @@
       x = cx - @bar_w / 2
       height = max(min(week.minutes / @max_m * 70, 70), if(week.minutes > 0, do: 1, else: 0))
       y = 75 - height
-      color = if week.met_goal, do: "var(--session-ink)", else: "var(--session-track)" %>
+      color = if week.met_goal, do: "var(--session-progress)", else: "var(--session-track)" %>
       <%= if height > 0 do %>
         <rect x={x} y={y} width={@bar_w} height={height} fill={color} rx="2" />
       <% end %>

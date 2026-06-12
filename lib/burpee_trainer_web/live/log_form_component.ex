@@ -111,23 +111,29 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="session-surface space-y-3 text-[var(--session-ink)]">
+    <div class="session-surface space-y-4 text-[var(--session-ink)]">
       <%!-- Header --%>
-      <div class="flex items-center justify-between border-b border-[var(--session-border)] pb-3">
-        <h2 class="text-sm font-semibold text-[var(--session-muted)] uppercase tracking-widest">
-          Log session
-        </h2>
+      <.qs_surface class="flex items-start justify-between gap-4 px-5 py-4">
+        <div class="space-y-1">
+          <h2 class="text-xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
+            Log past session
+          </h2>
+          <p class="text-sm leading-6 text-[var(--session-muted)]">
+            Add work you already completed so your week and level stay accurate.
+          </p>
+        </div>
         <button
           type="button"
           phx-click="close_log_modal"
-          class="text-[var(--session-muted)] hover:text-[var(--session-ink)] transition"
+          class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/70 text-[var(--session-muted)] transition-colors hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+          aria-label="Close log session"
         >
           <.icon name="hero-x-mark" class="size-4" />
         </button>
-      </div>
+      </.qs_surface>
 
-      <%!-- Card 1: Type --%>
-      <div class="flex border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
+      <%!-- Type --%>
+      <div class="grid grid-cols-2 overflow-hidden rounded-xl divide-x divide-[var(--session-border)] border border-[var(--session-border)] bg-[var(--session-surface)]/55">
         <%= for {label, val} <- [{"6-Count", :six_count}, {"Navy SEAL", :navy_seal}] do %>
           <button
             type="button"
@@ -135,21 +141,19 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
             phx-value-type={val}
             phx-target={@myself}
             class={[
-              "flex-1 py-3 text-sm font-medium tracking-wide transition",
-              @burpee_type == val && "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              "py-4 text-sm font-semibold transition-colors",
+              @burpee_type == val &&
+                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
               @burpee_type != val &&
-                "text-[var(--session-muted)] hover:bg-[var(--session-track)] hover:text-[var(--session-ink)]"
+                "text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
             ]}
           >
             {label}
           </button>
-          <%= if val == :six_count do %>
-            <div class="w-px bg-[var(--session-border)]" />
-          <% end %>
         <% end %>
       </div>
 
-      <%!-- Card 2: Reps + Duration + Date --%>
+      <%!-- Reps + Duration + Date --%>
       <.form
         for={@form}
         id={"log-form-#{@id}"}
@@ -157,45 +161,45 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
         phx-change="validate"
         phx-target={@myself}
       >
-        <div class="grid grid-cols-3 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
-          <div class="p-5 space-y-1 border-r border-[var(--session-border)]">
-            <p class="text-[10px] text-[var(--session-muted)] uppercase tracking-widest">Reps</p>
+        <div class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/55 sm:grid-cols-3">
+          <div class="space-y-2 border-r border-[var(--session-border)] p-5">
+            <p class="text-sm font-medium text-[var(--session-muted)]">Reps</p>
             <input
               type="text"
               inputmode="numeric"
               pattern="[0-9]*"
               name="workout_session[burpee_count_actual]"
               value={@form[:burpee_count_actual].value}
-              class="w-full bg-transparent text-4xl font-bold tabular-nums text-[var(--session-ink)] focus:outline-none leading-none placeholder:text-[var(--session-muted)]"
+              class="w-full bg-transparent text-5xl font-semibold leading-none tabular-nums text-[var(--session-ink)] placeholder:text-[var(--session-muted)] focus:outline-none"
               placeholder="—"
             />
           </div>
-          <div class="p-5 space-y-1 border-r border-[var(--session-border)]">
-            <p class="text-[10px] text-[var(--session-muted)] uppercase tracking-widest">Min</p>
+          <div class="space-y-2 border-r-0 border-[var(--session-border)] p-5 sm:border-r">
+            <p class="text-sm font-medium text-[var(--session-muted)]">Minutes</p>
             <input
               type="text"
               inputmode="numeric"
               pattern="[0-9]*"
               name="workout_session[duration_sec_actual]"
               value={@form[:duration_sec_actual].value}
-              class="w-full bg-transparent text-4xl font-bold tabular-nums text-[var(--session-ink)] focus:outline-none leading-none placeholder:text-[var(--session-muted)]"
+              class="w-full bg-transparent text-5xl font-semibold leading-none tabular-nums text-[var(--session-ink)] placeholder:text-[var(--session-muted)] focus:outline-none"
               placeholder="—"
             />
           </div>
-          <div class="p-5 space-y-1">
-            <p class="text-[10px] text-[var(--session-muted)] uppercase tracking-widest">Date</p>
+          <div class="col-span-2 space-y-2 border-t border-[var(--session-border)] p-5 sm:col-span-1 sm:border-t-0">
+            <p class="text-sm font-medium text-[var(--session-muted)]">Date</p>
             <input
               type="date"
               name="workout_session[log_date]"
               value={Date.to_iso8601(@log_date)}
               max={Date.to_iso8601(Date.utc_today())}
-              class="w-full bg-transparent text-sm tabular-nums text-[var(--session-ink)] focus:outline-none leading-none"
+              class="w-full bg-transparent text-base tabular-nums text-[var(--session-ink)] focus:outline-none"
             />
           </div>
         </div>
 
-        <%!-- Card 3: Mood --%>
-        <div class="mt-3 flex border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
+        <%!-- Mood --%>
+        <div class="mt-4 grid grid-cols-3 overflow-hidden rounded-xl divide-x divide-[var(--session-border)] border border-[var(--session-border)] bg-[var(--session-surface)]/55">
           <%= for {icon, label, val} <- @mood_options do %>
             <button
               type="button"
@@ -203,23 +207,20 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
               phx-value-mood={val}
               phx-target={@myself}
               class={[
-                "flex-1 flex flex-col items-center gap-1.5 py-4 text-[10px] uppercase tracking-widest transition",
+                "flex flex-col items-center gap-2 py-4 text-xs font-medium transition-colors",
                 @mood == val && "bg-[var(--session-ink)] text-[var(--session-bg)]",
                 @mood != val &&
-                  "text-[var(--session-muted)] hover:bg-[var(--session-track)] hover:text-[var(--session-ink)]"
+                  "text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
               ]}
             >
               <.icon name={icon} class="size-5" />
               {label}
             </button>
-            <%= if val != 1 do %>
-              <div class="w-px bg-[var(--session-border)] self-stretch" />
-            <% end %>
           <% end %>
         </div>
 
-        <%!-- Card 4: Tags --%>
-        <div class="mt-3 flex flex-wrap gap-2 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-4 py-3">
+        <%!-- Tags --%>
+        <div class="mt-4 flex flex-wrap gap-2 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/55 px-4 py-3">
           <%= for tag <- @tag_options do %>
             <button
               type="button"
@@ -227,11 +228,11 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
               phx-value-tag={tag}
               phx-target={@myself}
               class={[
-                "border px-3 py-1 text-xs transition",
+                "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
                 tag in @log_tags &&
-                  "border-[var(--session-ink)] bg-[var(--session-ink)] text-[var(--session-bg)]",
+                  "border-[var(--session-tag-border)] bg-[var(--session-tag-bg)] text-[var(--session-tag-ink)]",
                 tag not in @log_tags &&
-                  "border-[var(--session-border)] text-[var(--session-muted)] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+                  "border-[var(--session-border)] bg-[var(--session-bg)]/45 text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
               ]}
             >
               {String.replace(tag, "_", " ")}
@@ -239,13 +240,15 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
           <% end %>
         </div>
 
-        <%!-- Save --%>
-        <button
-          type="submit"
-          class="mt-3 flex w-full items-center justify-center gap-2 bg-[var(--session-ink)] py-4 text-sm font-semibold tracking-wide text-[var(--session-bg)] transition hover:opacity-90"
-        >
-          Save session <.icon name="hero-arrow-right" class="size-4" />
-        </button>
+        <%!-- Form footer --%>
+        <div class="mt-4 flex justify-end border-t border-[var(--session-border)] pt-4">
+          <button
+            type="submit"
+            class="rounded-md bg-[var(--session-ink)] px-4 py-2 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90"
+          >
+            Save session
+          </button>
+        </div>
       </.form>
     </div>
     """

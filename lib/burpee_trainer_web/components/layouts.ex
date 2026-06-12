@@ -169,7 +169,7 @@ defmodule BurpeeTrainerWeb.Layouts do
         !@session_nav? &&
           "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised"
       ]}
-      aria-label="Toggle light and dark theme"
+      aria-label="Toggle color theme"
     >
       <.icon name="hero-moon" class="size-4 dark:hidden" />
       <.icon name="hero-sun" class="hidden size-4 dark:block" />

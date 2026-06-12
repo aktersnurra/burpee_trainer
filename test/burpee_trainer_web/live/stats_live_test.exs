@@ -21,8 +21,8 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
 
     test "renders two goal slots always", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stats")
-      assert html =~ "6-COUNT"
-      assert html =~ "NAVY SEAL"
+      assert html =~ "6-Count"
+      assert html =~ "Navy SEAL"
     end
 
     test "empty goal slot shows No sessions yet when no sessions exist", %{conn: conn} do

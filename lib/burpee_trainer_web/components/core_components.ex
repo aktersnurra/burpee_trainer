@@ -117,6 +117,155 @@ defmodule BurpeeTrainerWeb.CoreComponents do
   end
 
   @doc """
+  Renders a Quiet Stone surface block.
+  """
+  attr :id, :string, default: nil
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, required: true
+
+  def qs_surface(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/55",
+        @class
+      ]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a Notion-like action row with optional icon and chevron.
+  """
+  attr :id, :string, default: nil
+  attr :navigate, :string, default: nil
+  attr :patch, :string, default: nil
+  attr :type, :string, default: "button"
+  attr :label, :string, required: true
+  attr :description, :string, default: nil
+  attr :icon, :string, default: nil
+  attr :chevron, :boolean, default: true
+  attr :class, :any, default: nil
+  attr :rest, :global, include: ~w(phx-click phx-value-type phx-value-id phx-target aria-label)
+
+  def qs_action_row(assigns) do
+    content = ~H"""
+    <span
+      :if={@icon}
+      class="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/70 text-[var(--session-ink)] transition-colors group-hover:bg-[var(--session-track)]/70"
+    >
+      <.icon name={@icon} class="size-5" />
+    </span>
+    <span class="min-w-0 flex-1">
+      <span class="block text-base font-semibold text-[var(--session-ink)]">{@label}</span>
+      <span
+        :if={@description}
+        class="mt-0.5 block text-sm leading-5 text-[var(--session-muted)] group-hover:text-[var(--session-ink)]"
+      >
+        {@description}
+      </span>
+    </span>
+    <.icon
+      :if={@chevron}
+      name="hero-chevron-right"
+      class="ml-auto size-5 shrink-0 text-[var(--session-muted)]"
+    />
+    """
+
+    assigns = assign(assigns, :content, content)
+
+    if assigns.navigate || assigns.patch do
+      ~H"""
+      <.link
+        id={@id}
+        navigate={@navigate}
+        patch={@patch}
+        class={[
+          "group flex min-h-14 items-center gap-4 px-5 py-4 text-left transition hover:bg-[var(--session-bg)]/45",
+          @class
+        ]}
+        {@rest}
+      >
+        {@content}
+      </.link>
+      """
+    else
+      ~H"""
+      <button
+        id={@id}
+        type={@type}
+        class={[
+          "group flex min-h-14 w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-[var(--session-bg)]/45",
+          @class
+        ]}
+        {@rest}
+      >
+        {@content}
+      </button>
+      """
+    end
+  end
+
+  @doc """
+  Renders an informational note. Use the left accent only for info/note cards.
+  """
+  attr :id, :string, default: nil
+  attr :title, :string, required: true
+  attr :icon, :string, default: "hero-pencil-square"
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, required: true
+
+  def qs_info_note(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "flex gap-4 rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/50 px-4 py-4",
+        @class
+      ]}
+      style="box-shadow: inset 2px 0 0 color-mix(in srgb, var(--session-accent) 32%, transparent);"
+      {@rest}
+    >
+      <.icon name={@icon} class="mt-0.5 size-6 shrink-0 text-[var(--session-muted)]" />
+      <div class="space-y-1.5">
+        <p class="text-base font-semibold text-[var(--session-ink)]">{@title}</p>
+        <p class="text-sm leading-6 text-[var(--session-muted)]">{render_slot(@inner_block)}</p>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a small property tag.
+  """
+  attr :tone, :string, default: "neutral", values: ~w(neutral tag info)
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  def qs_property_tag(assigns) do
+    ~H"""
+    <span class={[
+      "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+      @tone == "neutral" &&
+        "border-[var(--session-border)] bg-[var(--session-track)] text-[var(--session-ink)]",
+      @tone == "tag" &&
+        "border-[var(--session-tag-border)] bg-[var(--session-tag-bg)] text-[var(--session-tag-ink)]",
+      @tone == "info" &&
+        "border-[var(--session-info-border)] bg-[var(--session-info-bg)] text-[var(--session-info-ink)]",
+      @class
+    ]}>
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
+
+  @doc """
   Renders an input with label and error messages.
 
   A `Phoenix.HTML.FormField` may be passed as argument,

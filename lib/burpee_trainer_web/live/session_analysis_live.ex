@@ -23,37 +23,40 @@ defmodule BurpeeTrainerWeb.SessionAnalysisLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
-      <div class="space-y-5 pb-20">
-        <div class="flex items-center justify-between">
-          <.link navigate={~p"/stats"} class="text-sm text-base-content/50 hover:text-base-content">
+      <div class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]">
+        <div class="flex items-center justify-between gap-4">
+          <.link
+            navigate={~p"/stats"}
+            class="text-sm font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
             ← Stats
           </.link>
-          <span class="rounded-full border border-primary/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary">
-            Tracked
-          </span>
+          <.qs_property_tag tone="info">Tracked</.qs_property_tag>
         </div>
 
-        <section class="rounded-[10px] bg-base-300 p-5 space-y-4">
+        <.qs_surface class="space-y-4 bg-[var(--session-surface)]/60 p-5">
           <div class="space-y-1">
-            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
-              Session analysis
-            </p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Session analysis</p>
             <div class="flex items-end justify-between gap-4">
               <div>
-                <p class="text-4xl font-bold tabular-nums">{@session.burpee_count_actual}</p>
-                <p class="text-sm text-base-content/50">{Fmt.burpee_type(@session.burpee_type)}</p>
+                <p class="qs-tabular text-4xl font-semibold tracking-[-0.05em] tabular-nums text-[var(--session-ink)]">
+                  {@session.burpee_count_actual}
+                </p>
+                <p class="text-sm text-[var(--session-muted)]">
+                  {Fmt.burpee_type(@session.burpee_type)}
+                </p>
               </div>
               <div class="text-right">
-                <p class="text-lg font-semibold tabular-nums">
+                <p class="text-lg font-semibold tabular-nums text-[var(--session-ink)]">
                   {Fmt.duration_sec(@session.duration_sec_actual)}
                 </p>
-                <p class="text-xs text-base-content/40">
+                <p class="text-xs text-[var(--session-muted)]">
                   {Calendar.strftime(DateTime.to_date(@session.inserted_at), "%d %b %Y")}
                 </p>
               </div>
             </div>
           </div>
-        </section>
+        </.qs_surface>
 
         <section class="grid grid-cols-2 gap-3">
           <.metric_card label="Avg pace" value={format_seconds(@analytics.avg_pace_sec)} />
@@ -67,28 +70,29 @@ defmodule BurpeeTrainerWeb.SessionAnalysisLive do
           <.metric_card label="Pace drift" value={format_percent(@analytics.drift)} />
         </section>
 
-        <section class="rounded-[10px] bg-base-300 p-5 space-y-4">
+        <.qs_surface class="space-y-4 bg-[var(--session-surface)]/60 p-5">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/40">
-              Pace by rep
-            </p>
-            <p class="text-sm text-base-content/50">Seconds between detected reps</p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Pace by rep</p>
+            <p class="text-sm text-[var(--session-muted)]">Seconds between detected reps</p>
           </div>
 
           <div class="space-y-2">
             <%= for point <- @analytics.points do %>
               <div class="grid grid-cols-[2.5rem_1fr_4rem] items-center gap-3">
-                <span class="text-xs text-base-content/40 tabular-nums">#{point.rep}</span>
-                <div class="h-2 rounded-full bg-base-border overflow-hidden">
-                  <div class="h-full rounded-full bg-primary" style={"width: #{point.width}%"}></div>
+                <span class="text-xs tabular-nums text-[var(--session-muted)]">#{point.rep}</span>
+                <div class="h-2 overflow-hidden rounded-full bg-[var(--session-track)]">
+                  <div
+                    class="h-full rounded-full bg-[var(--session-progress)]"
+                    style={"width: #{point.width}%"}
+                  />
                 </div>
-                <span class="text-right text-xs tabular-nums text-base-content/60">
+                <span class="text-right text-xs tabular-nums text-[var(--session-muted)]">
                   {format_seconds(point.seconds)}
                 </span>
               </div>
             <% end %>
           </div>
-        </section>
+        </.qs_surface>
       </div>
     </Layouts.app>
     """
@@ -99,10 +103,10 @@ defmodule BurpeeTrainerWeb.SessionAnalysisLive do
 
   defp metric_card(assigns) do
     ~H"""
-    <div class="rounded-[10px] bg-base-300 p-4">
-      <p class="text-[10px] uppercase tracking-widest text-base-content/40">{@label}</p>
-      <p class="mt-1 text-2xl font-bold tabular-nums">{@value}</p>
-    </div>
+    <.qs_surface class="bg-[var(--session-surface)]/60 p-4">
+      <p class="text-xs font-medium text-[var(--session-muted)]">{@label}</p>
+      <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--session-ink)]">{@value}</p>
+    </.qs_surface>
     """
   end
 
