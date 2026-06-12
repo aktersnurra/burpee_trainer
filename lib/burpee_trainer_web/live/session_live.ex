@@ -569,7 +569,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
               0
             </div>
             <div class="mt-1 text-[8px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
-              Done / <span id="total-plan" class="qs-tabular tabular-nums">{@summary.burpee_count_total}</span>
+              Done /
+              <span id="total-plan" class="qs-tabular tabular-nums">
+                {@summary.burpee_count_total}
+              </span>
             </div>
           </div>
           <div class="px-2 py-4">
@@ -806,10 +809,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
     <div
       id="celebration-overlay"
       class="fixed inset-0 z-50 flex flex-col items-center justify-center px-6"
-      style="background-color: #0C0E14;"
+      style="background-color: var(--color-base-100);"
     >
       <div class="flex w-full max-w-[420px] flex-col items-center gap-6">
-        <p class="text-xs font-semibold uppercase tracking-[0.3em]" style="color: #4A9EFF;">
+        <p
+          class="text-xs font-semibold uppercase tracking-[0.3em]"
+          style="color: var(--color-accent);"
+        >
           {if length(@events) > 1, do: "New achievements", else: "New achievement"}
         </p>
 
@@ -817,12 +823,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <%= for {event, idx} <- Enum.with_index(@events) do %>
             <div
               class="rounded-[10px] bg-base-300 p-5 text-center"
-              style={if idx == 0, do: "border: 1px solid #4A9EFF;", else: ""}
+              style={if idx == 0, do: "border: 1px solid var(--color-accent);", else: ""}
             >
               <p class="text-[10px] uppercase tracking-widest text-base-content/40">
                 {celebration_title(event)}
               </p>
-              <p class="mt-2 text-3xl font-bold tabular-nums" style="color: #C8D8F0;">
+              <p
+                class="mt-2 text-3xl font-bold tabular-nums"
+                style="color: var(--color-base-content);"
+              >
                 {celebration_headline(event)}
               </p>
               <p class="mt-1 text-sm text-base-content/60">

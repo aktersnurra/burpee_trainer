@@ -361,7 +361,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       current_level={@current_level}
       current_page={:home}
     >
-      <div id="home-page" class="session-surface mx-auto max-w-lg space-y-7 pb-24 text-[var(--session-ink)]">
+      <div
+        id="home-page"
+        class="session-surface mx-auto max-w-lg space-y-7 pb-24 text-[var(--session-ink)]"
+      >
         <div
           :if={@level_status.at_risk?}
           class="flex items-start gap-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/40 px-4 py-3"
@@ -746,5 +749,4 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   defp level_label(l),
     do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
-
 end

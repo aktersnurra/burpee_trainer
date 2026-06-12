@@ -49,7 +49,7 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
         )
 
       assert html =~ "phx:toggle-theme"
-      assert html =~ "Toggle light and dark theme"
+      assert html =~ "Toggle color theme"
     end
 
     test "session screens without current page omit theme toggle" do
