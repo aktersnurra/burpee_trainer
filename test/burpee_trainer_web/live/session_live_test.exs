@@ -175,10 +175,11 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute html =~ "How do you feel?"
   end
 
-  test "runner renders warm-paper instrument shell", %{conn: conn, user: user} do
+  test "runner renders quiet stone instrument shell", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
+    assert has_element?(view, "#burpee-session.session-surface")
     assert has_element?(view, "#session-runner-client[phx-update=ignore]")
     assert has_element?(view, "#ring-container[aria-label='Pause or resume session']")
     assert has_element?(view, "svg#ring-svg")

@@ -379,7 +379,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       <div
         id="burpee-session"
         phx-hook="SessionHook"
-        class="fixed inset-0 z-[60] flex flex-col bg-[var(--session-bg)] text-[var(--session-ink)]"
+        class="session-surface fixed inset-0 z-[60] flex min-h-dvh flex-col bg-[var(--session-bg)] text-[var(--session-ink)]"
       >
         <div class="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 pt-5 text-[var(--session-muted)] sm:px-8 sm:pt-8">
           <.link
@@ -564,18 +564,18 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <div class="border-r border-[var(--session-border)] px-2 py-4">
             <div
               id="total-done"
-              class="text-[40px] font-medium leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]"
+              class="qs-tabular text-[40px] font-medium leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]"
             >
               0
             </div>
             <div class="mt-1 text-[8px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
-              Done / <span id="total-plan">{@summary.burpee_count_total}</span>
+              Done / <span id="total-plan" class="qs-tabular tabular-nums">{@summary.burpee_count_total}</span>
             </div>
           </div>
           <div class="px-2 py-4">
             <div
               id="time-left"
-              class="text-[40px] font-medium leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]"
+              class="qs-tabular text-[40px] font-medium leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]"
             >
               {Fmt.duration_sec(round(@summary.duration_sec_total))}
             </div>
