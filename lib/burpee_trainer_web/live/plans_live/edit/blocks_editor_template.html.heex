@@ -55,7 +55,7 @@
           <%= if @open_block_menu == block_f.index do %>
             <div
               phx-click-away="close_block_menu"
-              class="absolute right-0 top-7 z-50 min-w-[140px] border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] py-1"
+              class="absolute right-0 top-7 z-50 min-w-[140px] border border-[var(--session-border)] bg-[var(--session-surface)]/60 py-1"
             >
               <button
                 type="button"
@@ -88,7 +88,7 @@
             name={"workout_plan[blocks][#{block_f.index}][repeat_count]"}
             min="1"
             value={block_f[:repeat_count].value}
-            class="w-16 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-1 text-sm text-center"
+            class="w-16 border border-[var(--session-border)] bg-[var(--session-surface)]/60 px-2 py-1 text-sm text-center"
           />
         </div>
       <% else %>
@@ -200,7 +200,7 @@
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <label class="space-y-1">
-                  <span class="text-[10px] uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                  <span class="text-sm font-medium text-[var(--session-muted)]">
                     Reps
                   </span>
                   <input
@@ -208,11 +208,11 @@
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][burpee_count]"}
                     value={set_f[:burpee_count].value}
                     min="0"
-                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-2 text-sm text-center tabular-nums"
+                    class="w-full border border-[var(--session-border)] bg-[var(--session-surface)]/60 px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
                 <label class="space-y-1">
-                  <span class="text-[10px] uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                  <span class="text-sm font-medium text-[var(--session-muted)]">
                     Pace
                   </span>
                   <input
@@ -221,11 +221,11 @@
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][sec_per_rep]"}
                     value={format_sec(set_f[:sec_per_rep].value)}
                     min="0.1"
-                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-2 text-sm text-center tabular-nums"
+                    class="w-full border border-[var(--session-border)] bg-[var(--session-surface)]/60 px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
                 <label class="space-y-1">
-                  <span class="text-[10px] uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                  <span class="text-sm font-medium text-[var(--session-muted)]">
                     Rest
                   </span>
                   <input
@@ -233,7 +233,7 @@
                     name={"workout_plan[blocks][#{block_f.index}][sets][#{set_f.index}][end_of_set_rest]"}
                     value={set_f[:end_of_set_rest].value}
                     min="0"
-                    class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-2 py-2 text-sm text-center tabular-nums"
+                    class="w-full border border-[var(--session-border)] bg-[var(--session-surface)]/60 px-2 py-2 text-sm text-center tabular-nums"
                   />
                 </label>
               </div>

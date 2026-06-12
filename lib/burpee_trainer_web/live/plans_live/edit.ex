@@ -150,9 +150,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <section
       id="plan-metadata"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 px-5 py-4"
+      class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/45 px-5 py-4"
     >
-      <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+      <p class="text-sm font-medium text-[var(--session-muted)]">
         Why this?
       </p>
       <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
@@ -574,6 +574,33 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
+  def handle_event("remove_pattern_set", %{"index" => index}, socket) do
+    input = socket.assigns.editor.input
+    pattern = default_pattern(input)
+
+    next_pattern =
+      if length(pattern) > 1 do
+        pattern
+        |> List.delete_at(String.to_integer(index))
+        |> case do
+          [] -> [1]
+          pattern -> pattern
+        end
+      else
+        pattern
+      end
+
+    editor = %{socket.assigns.editor | input: %{input | block_pattern: next_pattern}}
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
   def handle_event("add_rest", _, socket) do
     {:ok, editor} = PlanEditor.add_rest(socket.assigns.editor)
 
@@ -617,13 +644,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       ) do
     form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
-    if (form_plan.steps || []) != [] do
-      steps = insert_rest_step(form_plan.steps, String.to_integer(edge_index), 30)
-      attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
-      changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
-
-      {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
-    else
+    if (socket.assigns.live_action == :new and form_plan.pacing_style == :even) or
+         (form_plan.steps || []) == [] do
       rest = %{rest_sec: 30, target_min: parse_positive_integer_or(target_min, 1)}
       input = socket.assigns.editor.input
 
@@ -639,6 +661,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         |> assign_derived()
 
       {:noreply, socket}
+    else
+      steps = insert_rest_step(form_plan.steps, String.to_integer(edge_index), 30)
+      attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
+      changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+
+      {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
     end
   end
 
@@ -840,15 +868,19 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("save", params, socket) do
-    submitted_params = Map.get(params, "workout_plan", %{})
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    if feasible_prescription?(socket.assigns.derived) do
+      submitted_params = Map.get(params, "workout_plan", %{})
+      form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
-    full_params =
-      form_plan
-      |> plan_to_attrs()
-      |> Map.merge(merge_basics(submitted_params, socket.assigns.editor.input))
+      full_params =
+        form_plan
+        |> plan_to_attrs()
+        |> Map.merge(merge_basics(submitted_params, socket.assigns.editor.input))
 
-    save_plan(socket, socket.assigns.live_action, full_params)
+      save_plan(socket, socket.assigns.live_action, full_params)
+    else
+      {:noreply, assign(socket, :solver_error, "Fix prescription before saving")}
+    end
   end
 
   def handle_event("duplicate_plan", _, %{assigns: %{live_action: :edit, plan: plan}} = socket) do
@@ -895,6 +927,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     {:noreply, socket}
   end
+
+  defp feasible_prescription?(%{both_ok: true}), do: true
+  defp feasible_prescription?(_derived), do: false
 
   defp save_plan(socket, :new, params) do
     case Workouts.create_plan(socket.assigns.current_user, params) do
@@ -989,6 +1024,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         plan_feedback(assigns.solver_error, assigns.derived, assigns.plan_input)
       )
       |> assign(:pattern_summary, pattern_summary(assigns.plan_input, assigns.derived))
+      |> assign(:prescription_blocked?, is_binary(assigns.solver_error))
       |> assign(
         :timeline_rows,
         prescription_timeline(
@@ -1074,25 +1110,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_editor_header(assigns) do
     ~H"""
-    <div class="flex items-end justify-between gap-4 border-b border-[var(--session-border)] pb-4">
-      <form phx-change="change_basics" class="min-w-0 flex-1 space-y-1">
-        <label class="text-[10px] uppercase tracking-[0.24em] text-[var(--session-muted)]">
-          Custom session
-        </label>
-        <input
-          type="text"
-          name="name"
-          value={@plan_input.name}
-          class="w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 pb-1 text-3xl font-semibold tracking-tight text-[var(--session-ink)] transition placeholder:text-[var(--session-muted)] focus:border-[var(--session-ink)] focus:outline-none"
-        />
-      </form>
-      <div class="flex shrink-0 items-center gap-2">
-        <%= if @live_action == :edit do %>
+    <.qs_surface class="bg-[var(--session-surface)]/55 px-5 py-5">
+      <div class="flex items-start justify-between gap-4">
+        <form phx-change="change_basics" class="min-w-0 flex-1 space-y-2">
+          <label class="text-sm font-medium text-[var(--session-muted)]">
+            Custom session
+          </label>
+          <input
+            type="text"
+            name="name"
+            value={@plan_input.name}
+            class="w-full border-0 bg-transparent px-0 text-3xl font-semibold tracking-[-0.045em] text-[var(--session-ink)] transition placeholder:text-[var(--session-muted)] focus:outline-none"
+          />
+        </form>
+        <div :if={@live_action == :edit} class="flex shrink-0 items-center gap-2">
           <button
             id="plan-duplicate"
             type="button"
             phx-click="duplicate_plan"
-            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="rounded-md border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
           >
             Copy
           </button>
@@ -1101,19 +1137,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             type="button"
             phx-click="delete_plan"
             data-confirm={"Delete '#{@plan.name}'? This cannot be undone."}
-            class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="rounded-md border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
           >
             Delete
           </button>
-        <% end %>
-        <.link
-          navigate={~p"/workouts"}
-          class="border border-[var(--session-border)] rounded-2xl px-3 py-2 text-sm font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
-        >
-          Cancel
-        </.link>
+        </div>
       </div>
-    </div>
+    </.qs_surface>
     """
   end
 
@@ -1121,7 +1151,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_type_picker(assigns) do
     ~H"""
-    <div class="flex border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
+    <div class="flex bg-[var(--session-surface)]/40">
       <button
         type="button"
         phx-click="pick_type"
@@ -1129,7 +1159,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         class={[
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :six_count,
-            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+            do:
+              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
             else:
               "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
@@ -1145,7 +1176,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         class={[
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :navy_seal,
-            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+            do:
+              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
             else:
               "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
@@ -1165,9 +1197,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     <form
       id="plan-goal-controls"
       phx-change="change_basics"
-      class="grid grid-cols-2 border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
+      class="grid grid-cols-2 bg-[var(--session-surface)]/40"
     >
       <div class="border-r border-[var(--session-border)] p-5">
+        <p class="mb-3 text-xs font-medium text-[var(--session-muted)]">Duration</p>
         <div class="flex items-baseline gap-1">
           <input
             type="number"
@@ -1181,6 +1214,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         </div>
       </div>
       <div class="p-5">
+        <p class="mb-3 text-xs font-medium text-[var(--session-muted)]">Goal</p>
         <input
           type="number"
           name="burpee_count_target"
@@ -1197,10 +1231,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp plan_pacing_controls(assigns) do
     ~H"""
-    <form
-      phx-change="change_basics"
-      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]"
-    >
+    <form phx-change="change_basics" class="bg-[var(--session-surface)]/40">
       <div class="flex">
         <button
           type="button"
@@ -1209,7 +1240,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class={[
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :even,
-              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              do:
+                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
               else:
                 "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
@@ -1225,7 +1257,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class={[
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :unbroken,
-              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              do:
+                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
               else:
                 "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
@@ -1237,7 +1270,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       <%= if @plan_input.pacing_style == :unbroken do %>
         <div class="flex items-baseline justify-between border-t border-[var(--session-border)] px-6 py-5">
           <div class="space-y-1">
-            <p class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">Per set</p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Per set</p>
             <div class="flex items-baseline gap-1.5">
               <input
                 type="number"
@@ -1370,7 +1403,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       block_index: block_index,
       time_sec: elapsed,
       marker: "Block #{step.block_position}",
-      title: "#{step.repeat_count} × Block #{step.block_position} · #{reps} reps",
+      title: timeline_block_step_title(step.repeat_count || 1, reps),
       detail: timeline_step_block_detail(block, step),
       sets: timeline_set_rows(Enum.sort_by(block.sets || [], & &1.position))
     }
@@ -1394,6 +1427,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp timeline_step_duration(%{kind: :rest} = step, _blocks_by_position), do: step.rest_sec || 0
+
+  defp timeline_block_step_title(repeat_count, reps) when repeat_count > 1,
+    do: "#{repeat_count}× · #{reps} reps"
+
+  defp timeline_block_step_title(_repeat_count, reps), do: "#{reps} reps"
 
   defp timeline_step_block_detail(block, step) do
     set_count = length(block.sets || [])
@@ -1477,7 +1515,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     reps = block_reps_per_repeat(node.block) * node.repeat_count
 
     if node.repeat_count > 1 do
-      "#{node.repeat_count} × Block #{node.source_block_index + 1} · #{reps} reps"
+      "#{node.repeat_count}× · #{reps} reps"
     else
       "#{reps} reps"
     end

@@ -8,16 +8,21 @@
       streak={@streak}
       today={@today}
       current_level={@current_level}
-      week_pushups={@week_pushups}
-      best_week_pushups={@best_week_pushups}
       week_balanced={@week_balanced}
+    />
+    <.period_selector period={@period} period_options={@period_options} />
+    <.pushups_section
+      period_label={@period_label}
+      period_pushups={@period_pushups}
+      all_time_pushups={@all_time_pushups}
+      best_week_pushups={@best_week_pushups}
     />
     <.goals_section
       goals={@goals}
       six_progress={@six_progress}
       seal_progress={@seal_progress}
-      six_has_sessions={@six_count_sessions != []}
-      seal_has_sessions={@navy_seal_sessions != []}
+      six_has_sessions={@six_has_sessions}
+      seal_has_sessions={@seal_has_sessions}
     />
     <.trends_section
       weekly_data={@weekly_data}
@@ -25,7 +30,11 @@
       navy_seal_sessions={@navy_seal_sessions}
       goals={@goals}
     />
-    <.sessions_section sessions={@sessions} has_more={@sessions_has_more} />
+    <.sessions_section
+      sessions={@sessions}
+      has_more={@sessions_has_more}
+      period_label={@period_label}
+    />
   </div>
 
   <%!-- FAB --%>
@@ -56,7 +65,7 @@
       />
       <div
         id="log-modal-sheet"
-        class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-2xl rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
+        class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-xl rounded-t-xl sm:rounded-xl p-5 sm:p-6"
       >
         <.live_component
           module={BurpeeTrainerWeb.LogFormComponent}
@@ -81,7 +90,7 @@
         class="absolute inset-0 bg-black/60"
       >
       </button>
-      <div class="session-surface relative w-full sm:max-w-md bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-2xl rounded-t-2xl sm:rounded-2xl p-6">
+      <div class="session-surface relative w-full sm:max-w-md bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-xl rounded-t-xl sm:rounded-xl p-6">
         <.live_component
           module={BurpeeTrainerWeb.GoalFormComponent}
           id="goal-form"

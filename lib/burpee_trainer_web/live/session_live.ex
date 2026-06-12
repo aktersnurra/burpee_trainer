@@ -381,46 +381,56 @@ defmodule BurpeeTrainerWeb.SessionLive do
         phx-hook="SessionHook"
         class="session-surface fixed inset-0 z-[60] flex min-h-dvh flex-col bg-[var(--session-bg)] text-[var(--session-ink)]"
       >
-        <div class="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 pt-5 text-[var(--session-muted)] sm:px-8 sm:pt-8">
-          <.link
-            navigate={~p"/workouts"}
-            class="pointer-events-auto flex size-9 items-center justify-center rounded-full text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-            aria-label="Back to workouts"
+        <div
+          id="session-pause-actions"
+          class="pointer-events-none absolute inset-x-0 bottom-7 z-20 translate-y-2 px-5 opacity-0 transition duration-150"
+          aria-hidden="true"
+        >
+          <div
+            class="mx-auto flex w-full max-w-[360px] items-center justify-center gap-1.5 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)]/95 p-1.5 shadow-[0_18px_45px_rgba(32,32,29,0.10)] backdrop-blur-sm"
+            aria-label="Paused session actions"
           >
-            <.icon name="hero-chevron-left" class="size-5" />
-          </.link>
-          <span aria-hidden="true"></span>
-          <button
-            id="finish-early-btn"
-            type="button"
-            class="pointer-events-auto flex size-9 items-center justify-center rounded-full text-[var(--session-muted)] opacity-0 transition enabled:opacity-60 enabled:hover:text-[var(--session-ink)] disabled:cursor-not-allowed"
-            disabled
-            aria-label="Finish session early"
-          >
-            <.icon name="hero-flag" class="size-4" />
-          </button>
+            <.link
+              id="session-abort-btn"
+              navigate={~p"/workouts"}
+              class="flex flex-1 items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-3 text-sm font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+              aria-label="Abort session without saving"
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+              <span>Abort</span>
+            </.link>
+            <button
+              id="finish-early-btn"
+              type="button"
+              class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--session-ink)] px-4 py-3 text-sm font-medium text-[var(--session-bg)] transition enabled:hover:opacity-90 disabled:hidden"
+              disabled
+            >
+              <.icon name="hero-flag" class="size-4" />
+              <span>Finish early</span>
+            </button>
+          </div>
         </div>
 
         <%= case @phase do %>
           <% :not_runnable -> %>
             <.not_runnable_panel />
           <% :done -> %>
-            <div
+            <.qs_surface
               :if={@tracking_state == :review}
               id="tracked-review"
-              class="mx-auto mt-24 w-full max-w-[430px] border-y border-[var(--session-border)] px-6 py-6 text-center font-mono text-[var(--session-ink)]"
+              class="mx-auto mt-24 w-full max-w-[430px] bg-[var(--session-surface)]/45 px-6 py-6 text-center text-[var(--session-ink)]"
             >
-              <h2 class="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]">
+              <h2 class="text-sm font-medium text-[var(--session-muted)]">
                 Review tracked session
               </h2>
-              <p class="mt-3 text-5xl font-black tracking-[-0.06em] tabular-nums">
+              <p class="qs-tabular mt-3 text-5xl font-semibold tracking-[-0.06em] tabular-nums">
                 {@tracked_finish.reps}
               </p>
-              <p class="mt-1 text-[8px] uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
+              <p class="mt-1 text-xs text-[var(--session-muted)]">
                 Reps
               </p>
               <span class="sr-only">{@tracked_finish.reps} reps</span>
-            </div>
+            </.qs_surface>
             <.completion_panel
               plan={@plan}
               summary={@summary}
@@ -452,14 +462,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp not_runnable_panel(assigns) do
     ~H"""
     <div class="flex min-h-dvh items-center justify-center bg-[var(--session-bg)] px-8 text-center text-[var(--session-ink)]">
-      <div class="max-w-xs border-y border-[var(--session-border)] py-8 font-mono">
-        <p class="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]">
+      <.qs_surface class="max-w-xs bg-[var(--session-surface)]/45 px-6 py-8">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">
           No timed events
         </p>
-        <p class="mt-4 text-sm leading-relaxed text-[var(--session-ink)]">
+        <p class="mt-3 text-sm leading-relaxed text-[var(--session-muted)]">
           Add at least one block with one set before running.
         </p>
-      </div>
+      </.qs_surface>
     </div>
     """
   end
@@ -475,7 +485,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       class="relative flex min-h-dvh w-full overflow-hidden bg-[var(--session-bg)] px-5 py-8 text-[var(--session-ink)]"
       phx-update="ignore"
     >
-      <div class="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col items-center justify-start pt-[8vh]">
+      <div class="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col items-center justify-start pt-[10vh] sm:pt-[9vh]">
         <div
           id="phase-label"
           class="mx-auto mb-6 hidden w-fit font-mono uppercase leading-none text-[var(--session-ink)]"
@@ -533,7 +543,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
             </span>
             <span
               id="down-word"
-              class="absolute mt-28 font-mono text-[10px] font-semibold uppercase tracking-[0.32em] text-[var(--session-soft-muted)]"
+              class="absolute mt-28 text-xs font-medium text-[var(--session-muted)]"
               style="display: none;"
             >
               Down
@@ -555,32 +565,30 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
         <div
           id="set-glyphs"
-          class="mt-6 flex min-h-7 w-full items-end justify-center gap-5"
+          class="mt-8 flex min-h-7 w-full items-end justify-center gap-5"
           aria-label="Workout sets"
         >
         </div>
 
-        <div class="mt-8 grid w-full grid-cols-2 border-y border-[var(--session-border)] text-center font-mono">
-          <div class="border-r border-[var(--session-border)] px-2 py-4">
-            <div
-              id="total-done"
-              class="qs-tabular text-[40px] font-medium leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]"
-            >
-              0
+        <div id="session-status-line" class="mt-12 w-full max-w-[340px] px-2">
+          <div class="flex items-baseline justify-between gap-10 tabular-nums text-[var(--session-ink)]">
+            <div class="flex items-baseline gap-1.5">
+              <span
+                id="total-done"
+                data-total-plan={@summary.burpee_count_total}
+                class="qs-tabular text-[28px] font-semibold leading-none tracking-[-0.045em]"
+              >
+                0
+              </span>
+              <span class="text-sm font-medium text-[var(--session-muted)]">
+                / <span id="total-plan" class="qs-tabular">{@summary.burpee_count_total}</span> reps
+              </span>
             </div>
-            <div class="mt-1 text-[8px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
-              Done / <span id="total-plan" class="qs-tabular tabular-nums">{@summary.burpee_count_total}</span>
-            </div>
-          </div>
-          <div class="px-2 py-4">
             <div
               id="time-left"
-              class="qs-tabular text-[40px] font-medium leading-none tracking-[-0.04em] tabular-nums text-[var(--session-ink)]"
+              class="qs-tabular text-[28px] font-semibold leading-none tracking-[-0.045em] tabular-nums text-[var(--session-ink)]"
             >
               {Fmt.duration_sec(round(@summary.duration_sec_total))}
-            </div>
-            <div class="mt-1 text-[8px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
-              Time left
             </div>
           </div>
         </div>
@@ -602,27 +610,27 @@ defmodule BurpeeTrainerWeb.SessionLive do
       class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] text-center text-[var(--session-ink)]"
     >
       <%= if not @warmup_asked do %>
-        <span class="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]">
+        <span class="text-sm font-medium text-[var(--session-muted)]">
           Warmup?
         </span>
         <div class="flex gap-2">
           <button
             type="button"
             id="warmup-yes-btn"
-            class="min-w-24 border border-[var(--session-border)] rounded-2xl px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--session-ink)] transition active:scale-[0.98] hover:border-[var(--session-ink)]"
+            class="min-w-24 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-6 py-4 text-sm font-medium text-[var(--session-ink)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70"
           >
             Yes
           </button>
           <button
             type="button"
             id="warmup-skip-btn"
-            class="min-w-24 border border-[var(--session-border)] rounded-2xl px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--session-soft-muted)] transition active:scale-[0.98] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+            class="min-w-24 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-6 py-4 text-sm font-medium text-[var(--session-muted)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
           >
             Skip
           </button>
         </div>
       <% else %>
-        <span class="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]">
+        <span class="text-sm font-medium text-[var(--session-muted)]">
           How do you feel?
         </span>
         <div class="flex gap-2">
@@ -631,7 +639,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               type="button"
               phx-click="session_started"
               phx-value-mood={value}
-              class="min-w-20 border border-[var(--session-border)] rounded-2xl px-4 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--session-ink)] transition active:scale-[0.98] hover:border-[var(--session-ink)]"
+              class="min-w-20 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-4 py-4 text-sm font-medium text-[var(--session-ink)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70"
             >
               {label}
             </button>
@@ -665,27 +673,29 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col justify-start bg-[var(--session-bg)] px-5 pb-10 pt-[12vh] text-[var(--session-ink)]">
       <%!-- Header --%>
-      <div class="text-center font-mono">
-        <p class="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]">
+      <div class="text-center">
+        <p class="text-lg font-semibold text-[var(--session-ink)]">
           Session complete
         </p>
-        <p class="mt-3 text-[10px] uppercase tracking-[0.2em] text-[var(--session-soft-muted)] tabular-nums">
+        <p class="mt-2 text-sm tabular-nums text-[var(--session-muted)]">
           {@summary.burpee_count_total} reps · {Fmt.duration_sec(round(@summary.duration_sec_total))} planned
         </p>
       </div>
 
       <%!-- Mood --%>
-      <div class="mt-8 flex border-y border-[var(--session-border)] font-mono">
+      <div class="mt-8 flex overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/45">
         <%= for {icon, label, value} <- @mood_options do %>
           <button
             type="button"
             phx-click="set_mood"
             phx-value-mood={value}
             class={[
-              "flex flex-1 flex-col items-center py-4 text-[10px] uppercase tracking-[0.2em] transition",
+              "flex flex-1 flex-col items-center py-4 text-sm font-medium transition",
               if(@mood == value,
-                do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
-                else: "text-[var(--session-soft-muted)] hover:text-[var(--session-ink)]"
+                do:
+                  "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
+                else:
+                  "text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
               )
             ]}
           >
@@ -705,9 +715,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
         class="mt-6 space-y-4"
       >
         <%!-- Reps + Duration dials --%>
-        <div class="grid grid-cols-2 overflow-hidden border-y border-[var(--session-border)] font-mono">
+        <div class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/45">
           <div class="space-y-1 border-r border-[var(--session-border)] p-5">
-            <p class="text-[8px] uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
+            <p class="text-sm font-medium text-[var(--session-muted)]">
               Reps
             </p>
             <input
@@ -720,7 +730,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
             />
           </div>
           <div class="space-y-1 p-5">
-            <p class="text-[8px] uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">Min</p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Min</p>
             <input
               type="number"
               name="workout_session[duration_min]"
@@ -738,18 +748,18 @@ defmodule BurpeeTrainerWeb.SessionLive do
         </div>
 
         <%!-- Tags --%>
-        <div class="flex flex-wrap gap-2 font-mono">
+        <div class="flex flex-wrap gap-2">
           <%= for tag <- @tag_options do %>
             <button
               type="button"
               phx-click="toggle_tag"
               phx-value-tag={tag}
               class={[
-                "border px-3 py-2 text-[9px] uppercase tracking-[0.16em] transition",
+                "rounded-md border px-3 py-2 text-xs transition",
                 tag in @completion_tags &&
-                  "border-[var(--session-ink)] bg-[var(--session-ink)] text-[var(--session-bg)]",
+                  "border-[var(--session-tag-border)] bg-[var(--session-tag-bg)] font-medium text-[var(--session-tag-ink)]",
                 tag not in @completion_tags &&
-                  "border-[var(--session-border)] text-[var(--session-soft-muted)] hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
+                  "border-[var(--session-border)] text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
               ]}
             >
               {String.replace(tag, "_", " ")}
@@ -758,8 +768,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
         </div>
 
         <%!-- Note --%>
-        <div class="border-y border-[var(--session-border)] p-4 font-mono">
-          <p class="mb-2 text-[8px] uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
+        <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/45 p-4">
+          <p class="mb-2 text-sm font-medium text-[var(--session-muted)]">
             Note
           </p>
           <textarea
@@ -780,7 +790,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         <%!-- Actions --%>
         <button
           type="submit"
-          class="flex w-full items-center justify-center border border-[var(--session-ink)] rounded-2xl bg-[var(--session-ink)] py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.99]"
+          class="flex w-full items-center justify-center rounded-md border border-[var(--session-ink)] bg-[var(--session-ink)] py-3 text-sm font-semibold text-[var(--session-bg)] transition active:scale-[0.99] hover:opacity-90"
         >
           Save session
         </button>
@@ -789,7 +799,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
             type="button"
             phx-click="discard"
             data-confirm="Discard this session without saving?"
-            class="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--session-soft-muted)] transition hover:text-[var(--session-ink)]"
+            class="text-sm font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
           >
             Discard
           </button>
@@ -805,37 +815,36 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <div
       id="celebration-overlay"
-      class="fixed inset-0 z-50 flex flex-col items-center justify-center px-6"
-      style="background-color: #0C0E14;"
+      class="session-surface fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--session-bg)] px-6 text-[var(--session-ink)]"
     >
       <div class="flex w-full max-w-[420px] flex-col items-center gap-6">
-        <p class="text-xs font-semibold uppercase tracking-[0.3em]" style="color: #4A9EFF;">
+        <p class="text-sm font-medium text-[var(--session-muted)]">
           {if length(@events) > 1, do: "New achievements", else: "New achievement"}
         </p>
 
         <div class="flex w-full flex-col gap-3">
           <%= for {event, idx} <- Enum.with_index(@events) do %>
-            <div
-              class="rounded-[10px] bg-base-300 p-5 text-center"
-              style={if idx == 0, do: "border: 1px solid #4A9EFF;", else: ""}
-            >
-              <p class="text-[10px] uppercase tracking-widest text-base-content/40">
+            <.qs_surface class={[
+              "bg-[var(--session-surface)]/60 p-5 text-center",
+              idx == 0 && "border-[var(--session-accent)]"
+            ]}>
+              <p class="text-sm font-medium text-[var(--session-muted)]">
                 {celebration_title(event)}
               </p>
-              <p class="mt-2 text-3xl font-bold tabular-nums" style="color: #C8D8F0;">
+              <p class="mt-2 text-3xl font-semibold tabular-nums text-[var(--session-ink)]">
                 {celebration_headline(event)}
               </p>
-              <p class="mt-1 text-sm text-base-content/60">
+              <p class="mt-1 text-sm text-[var(--session-muted)]">
                 {celebration_detail(event)}
               </p>
-            </div>
+            </.qs_surface>
           <% end %>
         </div>
 
         <button
           type="button"
           phx-click="dismiss_celebration"
-          class="w-full max-w-[420px] py-4 rounded-[10px] text-sm font-semibold tracking-wide bg-primary/75 text-primary-content hover:bg-primary/85 transition"
+          class="w-full max-w-[420px] rounded-md bg-[var(--session-ink)] py-3 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
         >
           Continue
         </button>

@@ -16,7 +16,7 @@ A personal burpee training app with structured workout plans, live session track
 
 - **Elixir / Phoenix 1.8** with LiveView
 - **SQLite** via `ecto_sqlite3` — raw SQL throughout, no Ecto schemas
-- **Tailwind CSS** — Scandinavian dark theme, electric blue accent
+- **Tailwind CSS** — Quiet stone light theme by default, with an optional warm charcoal dark mode and muted clay accent
 - **Vanilla JS hooks** — `SessionHook` (state machine + `requestAnimationFrame` clock), `ChartHook`, `VideoHook`
 - **bcrypt** session auth, single-user
 
@@ -73,7 +73,7 @@ lib/
     videos.ex
   burpee_trainer_web/
     live/
-      overview_live.ex  # / — weekly streak + calendar
+      overview_live.ex  # / — action-first Home
       session_live.ex   # /session/:plan_id
       history_live.ex   # /history
       goals_live.ex     # /goals

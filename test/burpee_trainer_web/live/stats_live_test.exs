@@ -21,8 +21,8 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
 
     test "renders two goal slots always", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stats")
-      assert html =~ "6-COUNT"
-      assert html =~ "NAVY SEAL"
+      assert html =~ "6-Count"
+      assert html =~ "Navy SEAL"
     end
 
     test "empty goal slot shows No sessions yet when no sessions exist", %{conn: conn} do
@@ -62,6 +62,45 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       _session = session_from_plan_fixture(user, plan)
       {:ok, _view, html} = live(conn, ~p"/stats")
       assert html =~ "My Plan"
+    end
+
+    test "period selector scopes push-ups and recent sessions", %{conn: conn, user: user} do
+      today = Date.utc_today()
+
+      recent_plan = plan_fixture(user, %{"name" => "Recent Plan"})
+      old_plan = plan_fixture(user, %{"name" => "Old Plan"})
+
+      recent =
+        session_from_plan_fixture(user, recent_plan, %{
+          "burpee_count_actual" => 10,
+          "duration_sec_actual" => 600
+        })
+
+      old =
+        session_from_plan_fixture(user, old_plan, %{
+          "burpee_type" => "navy_seal",
+          "burpee_count_actual" => 20,
+          "duration_sec_actual" => 600
+        })
+
+      BurpeeTrainer.Repo.update!(
+        Ecto.Changeset.change(recent,
+          inserted_at: DateTime.new!(Date.add(today, -3), ~T[12:00:00], "Etc/UTC")
+        )
+      )
+
+      BurpeeTrainer.Repo.update!(
+        Ecto.Changeset.change(old,
+          inserted_at: DateTime.new!(Date.add(today, -40), ~T[12:00:00], "Etc/UTC")
+        )
+      )
+
+      {:ok, view, html} = live(conn, ~p"/stats?period=30d")
+
+      assert html =~ "Recent Plan"
+      refute html =~ "Old Plan"
+      assert has_element?(view, "#stats-pushups-period", "10")
+      assert has_element?(view, "#stats-pushups-all-time", "70")
     end
 
     test "tracked sessions show consistency badge and link", %{conn: conn, user: user} do

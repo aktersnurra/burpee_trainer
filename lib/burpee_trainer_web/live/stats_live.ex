@@ -9,33 +9,71 @@ defmodule BurpeeTrainerWeb.StatsLive do
   embed_templates("stats_live/*")
 
   @page_size 5
+  @period_options [{"7d", "7d"}, {"30d", "30d"}, {"90d", "90d"}, {"All", "all"}]
 
   @impl true
   def mount(_params, _session, socket) do
+    {:ok,
+     assign(socket,
+       log_modal_open: false,
+       goal_modal_type: nil,
+       goal_baseline_session: nil,
+       sessions_visible_count: @page_size
+     )}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    period = decode_period(params["period"])
+    {:noreply, assign_stats(socket, period, @page_size)}
+  end
+
+  defp assign_stats(socket, period, visible_count) do
     user = socket.assigns.current_user
     today = Date.utc_today()
-    {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
+    all_sessions = Workouts.list_sessions(user)
+    {detailed_sessions, _has_more} = Workouts.list_sessions_page(user, 5_000)
+    period_start = period_start_date(period, today)
+    period_sessions = filter_sessions(all_sessions, period_start)
+    period_detailed_sessions = filter_sessions(detailed_sessions, period_start)
+    goals = Goals.list_current_goals(user)
+    all_six_sessions = Workouts.list_sessions_for_chart(user, :six_count)
+    all_seal_sessions = Workouts.list_sessions_for_chart(user, :navy_seal)
 
-    {:ok,
-     socket
-     |> assign(:streak, Streak.compute(user, today))
-     |> assign(:today, today)
-     |> assign(:goals, Goals.list_current_goals(user))
-     |> then(&compute_goal_progress(&1, user, &1.assigns.goals))
-     |> assign(:sessions, sessions)
-     |> assign(:sessions_has_more, has_more)
-     |> assign(:log_modal_open, false)
-     |> assign(:goal_modal_type, nil)
-     |> assign(:goal_baseline_session, nil)
-     |> assign(:weekly_data, Workouts.weekly_minutes(user))
-     |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
-     |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
-     |> assign_gamification(user, today)}
+    socket
+    |> assign(:streak, Streak.compute(user, today))
+    |> assign(:today, today)
+    |> assign(:period, period)
+    |> assign(:period_label, period_label(period))
+    |> assign(:period_options, @period_options)
+    |> assign(:period_start, period_start)
+    |> assign(:period_pushups, Scoring.total_pushups(period_sessions))
+    |> assign(:all_time_pushups, Scoring.total_pushups(all_sessions))
+    |> assign(:goals, goals)
+    |> assign(:sessions_visible_count, visible_count)
+    |> assign_period_sessions(period_detailed_sessions, visible_count)
+    |> assign(:log_modal_open, socket.assigns[:log_modal_open] || false)
+    |> assign(:goal_modal_type, socket.assigns[:goal_modal_type])
+    |> assign(:goal_baseline_session, socket.assigns[:goal_baseline_session])
+    |> assign(:weekly_data, Workouts.weekly_minutes(user) |> filter_weekly_data(period_start))
+    |> assign(:six_count_sessions, all_six_sessions |> filter_sessions(period_start))
+    |> assign(:navy_seal_sessions, all_seal_sessions |> filter_sessions(period_start))
+    |> assign(:six_has_sessions, all_six_sessions != [])
+    |> assign(:seal_has_sessions, all_seal_sessions != [])
+    |> compute_goal_progress(user, goals)
+    |> assign_gamification(all_sessions, today)
+  end
+
+  defp assign_period_sessions(socket, period_detailed_sessions, visible_count) do
+    assign(socket,
+      period_detailed_sessions: period_detailed_sessions,
+      sessions: Enum.take(period_detailed_sessions, visible_count),
+      sessions_has_more: length(period_detailed_sessions) > visible_count
+    )
   end
 
   # Push-up score, personal best, balance, and level-maintenance status.
-  defp assign_gamification(socket, user, today) do
-    sessions = Workouts.list_sessions(user)
+  defp assign_gamification(socket, sessions, today) do
     week_start = Date.beginning_of_week(today, :monday)
 
     this_week =
@@ -46,11 +84,16 @@ defmodule BurpeeTrainerWeb.StatsLive do
         ) == :eq
       end)
 
+    best_week_pushups =
+      sessions
+      |> Scoring.weekly_pushups()
+      |> Enum.map(& &1.pushups)
+      |> Enum.max(fn -> 0 end)
+
     socket
     |> assign(:level_status, Levels.level_status(sessions, today))
-    |> assign(:week_pushups, Scoring.total_pushups(this_week))
-    |> assign(:best_week_pushups, Workouts.gamification_stats(user).best_week_pushups)
     |> assign(:week_balanced, Scoring.balanced_week?(this_week))
+    |> assign(:best_week_pushups, best_week_pushups)
   end
 
   @impl true
@@ -63,14 +106,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   def handle_event("load_more_sessions", _, socket) do
-    user = socket.assigns.current_user
-    cursor = socket.assigns.sessions |> List.last() |> Map.get(:inserted_at)
-    {new_sessions, has_more} = Workouts.list_sessions_page(user, @page_size, before: cursor)
+    visible_count = socket.assigns.sessions_visible_count + @page_size
 
     {:noreply,
      socket
-     |> update(:sessions, &(&1 ++ new_sessions))
-     |> assign(:sessions_has_more, has_more)}
+     |> assign(:sessions_visible_count, visible_count)
+     |> assign_period_sessions(socket.assigns.period_detailed_sessions, visible_count)}
   end
 
   def handle_event("open_goal_modal", %{"type" => type_str}, socket) do
@@ -101,34 +142,17 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   def handle_info(:goal_saved, socket) do
-    user = socket.assigns.current_user
-    goals = Goals.list_current_goals(user)
-
     {:noreply,
      socket
      |> assign(:goal_modal_type, nil)
      |> assign(:goal_baseline_session, nil)
-     |> assign(:goals, goals)
-     |> compute_goal_progress(user, goals)}
+     |> assign_stats(socket.assigns.period, socket.assigns.sessions_visible_count)}
   end
 
   defp refresh_after_session_save(socket, events) do
-    user = socket.assigns.current_user
-    today = socket.assigns.today
-    {sessions, has_more} = Workouts.list_sessions_page(user, @page_size)
-    goals = Goals.list_current_goals(user)
-
     socket
     |> assign(:log_modal_open, false)
-    |> assign(:streak, Streak.compute(user, today))
-    |> assign(:sessions, sessions)
-    |> assign(:sessions_has_more, has_more)
-    |> assign(:weekly_data, Workouts.weekly_minutes(user))
-    |> assign(:six_count_sessions, Workouts.list_sessions_for_chart(user, :six_count))
-    |> assign(:navy_seal_sessions, Workouts.list_sessions_for_chart(user, :navy_seal))
-    |> assign(:goals, goals)
-    |> compute_goal_progress(user, goals)
-    |> assign_gamification(user, today)
+    |> assign_stats(socket.assigns.period, @page_size)
     |> put_milestone_flashes(events)
   end
 
@@ -145,101 +169,106 @@ defmodule BurpeeTrainerWeb.StatsLive do
   defp goal_type_label(:six_count), do: "6-Count"
   defp goal_type_label(:navy_seal), do: "Navy SEAL"
 
+  defp decode_period(period) when period in ["7d", "30d", "90d", "all"], do: period
+  defp decode_period(_), do: "30d"
+
+  defp period_start_date("7d", today), do: Date.add(today, -6)
+  defp period_start_date("30d", today), do: Date.add(today, -29)
+  defp period_start_date("90d", today), do: Date.add(today, -89)
+  defp period_start_date("all", _today), do: nil
+
+  defp period_label("7d"), do: "Last 7 days"
+  defp period_label("30d"), do: "Last 30 days"
+  defp period_label("90d"), do: "Last 90 days"
+  defp period_label("all"), do: "All time"
+
+  defp filter_sessions(sessions, nil), do: sessions
+
+  defp filter_sessions(sessions, start_date) do
+    Enum.filter(sessions, fn session ->
+      Date.compare(DateTime.to_date(session.inserted_at), start_date) in [:gt, :eq]
+    end)
+  end
+
+  defp filter_weekly_data(weekly_data, nil), do: weekly_data
+
+  defp filter_weekly_data(weekly_data, start_date) do
+    start_week = Date.beginning_of_week(start_date, :monday)
+
+    Enum.filter(weekly_data, fn week ->
+      Date.compare(week.week_start, start_week) in [:gt, :eq]
+    end)
+  end
+
   attr(:status, :map, required: true)
 
   defp at_risk_banner(assigns) do
     ~H"""
-    <div
+    <.qs_info_note
       :if={@status.at_risk?}
-      class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)]/40 px-4 py-3 flex items-start gap-3"
+      title={"Level #{level_label(@status.level)} expires in #{@status.days_left}d"}
+      icon="hero-exclamation-triangle"
+      class="bg-[var(--session-track)]/40"
     >
-      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-[var(--session-ink)]" />
-      <div class="space-y-0.5">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">
-          Level {level_label(@status.level)} expires in {@status.days_left}d
-        </p>
-        <p class="text-xs text-[var(--session-muted)]">
-          Do a six-count and a navy seal landmark this week to keep it.
-        </p>
-      </div>
-    </div>
+      Do a six-count and a navy seal landmark this week to keep it.
+    </.qs_info_note>
     """
   end
 
   attr(:streak, State, required: true)
   attr(:today, Date, required: true)
   attr(:current_level, :atom, default: nil)
-  attr(:week_pushups, :integer, default: 0)
-  attr(:best_week_pushups, :integer, default: 0)
   attr(:week_balanced, :boolean, default: false)
 
   defp streak_card(assigns) do
     week_start = Date.beginning_of_week(assigns.today, :monday)
     minutes_done = trunc(assigns.streak.current_week_minutes)
     pct = max(min(assigns.streak.current_week_minutes / 80 * 100, 100), 0)
-    ring_offset = 264 - pct * 2.64
     minutes_left = max(80 - minutes_done, 0)
 
     assigns =
       assign(assigns,
         week_days: Enum.map(0..6, &Date.add(week_start, &1)),
         minutes_done: minutes_done,
-        ring_offset: ring_offset,
-        minutes_left: minutes_left
+        minutes_left: minutes_left,
+        progress_pct: pct
       )
 
     ~H"""
-    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-5 py-5 space-y-5">
-      <div class="flex items-center gap-7">
-        <div class="relative size-[108px] shrink-0" aria-label={"#{@minutes_done} of 80 minutes"}>
-          <svg viewBox="0 0 100 100" class="size-full -rotate-90">
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="var(--session-ring-track)"
-              stroke-width="7"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="var(--session-ink)"
-              stroke-width="7"
-              stroke-linecap="butt"
-              stroke-dasharray="264"
-              stroke-dashoffset={@ring_offset}
-            />
-          </svg>
-          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span class="text-4xl font-semibold leading-none tracking-[-0.05em] tabular-nums">
-              {@minutes_done}
-            </span>
-            <span class="mt-1 text-xs font-medium text-[var(--session-muted)]">/ 80 min</span>
+    <.qs_surface class="space-y-6 bg-[var(--session-surface)]/60 px-5 py-5">
+      <div class="space-y-3">
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm font-medium text-[var(--session-muted)]">This week</p>
+            <p class="qs-tabular text-3xl font-semibold tracking-[-0.05em] text-[var(--session-ink)]">
+              {@minutes_done} <span class="text-[var(--session-muted)]">/ 80 min</span>
+            </p>
           </div>
-        </div>
-        <div class="min-w-0 flex-1 space-y-2">
-          <%= if @current_level do %>
-            <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
+          <div class="shrink-0 text-right">
+            <p class="text-base font-medium tabular-nums text-[var(--session-ink)]">
+              {@minutes_left} min left
+            </p>
+            <p :if={@current_level} class="mt-1 text-sm text-[var(--session-muted)]">
               Level {level_label(@current_level)}
             </p>
-          <% end %>
-          <p class="text-lg font-semibold text-[var(--session-ink)] tabular-nums">
-            {@minutes_left} min left
-          </p>
-          <p class="text-xs text-[var(--session-muted)]">
-            <%= if @streak.streak_weeks == 0 do %>
-              No active streak
-            <% else %>
-              {@streak.streak_weeks} week streak
-            <% end %>
-          </p>
+          </div>
         </div>
+        <div class="h-1.5 overflow-hidden rounded-full bg-[var(--session-border)]">
+          <div
+            class="h-full rounded-full bg-[var(--session-progress)]"
+            style={"width: #{@progress_pct}%"}
+          />
+        </div>
+        <p class="text-sm text-[var(--session-muted)]">
+          <%= if @streak.streak_weeks == 0 do %>
+            No active streak
+          <% else %>
+            {@streak.streak_weeks} week streak
+          <% end %>
+        </p>
       </div>
 
-      <div class="flex justify-between">
+      <div class="grid grid-cols-7 gap-2 text-center">
         <%= for day <- @week_days do %>
           <div class="flex flex-col items-center gap-1">
             <span class={[
@@ -250,40 +279,96 @@ defmodule BurpeeTrainerWeb.StatsLive do
               {Calendar.strftime(day, "%a") |> String.slice(0, 1)}
             </span>
             <div class={[
-              "rounded-full",
-              day in @streak.days_active_this_week && "w-4 h-4 bg-[var(--session-ink)]",
+              "mx-auto block size-2 rounded-full",
+              day in @streak.days_active_this_week && "bg-[var(--session-progress)]",
               day == @today && day not in @streak.days_active_this_week &&
-                "w-4 h-4 ring-2 ring-[var(--session-muted)] ring-offset-2 ring-offset-[var(--session-bg)] bg-transparent",
-              day > @today && "w-3 h-3 bg-[var(--session-track)]",
+                "ring-2 ring-[var(--session-muted)] ring-offset-2 ring-offset-[var(--session-bg)] bg-transparent",
+              day > @today && "bg-[var(--session-track)]",
               day < @today && day not in @streak.days_active_this_week &&
-                "w-3 h-3 bg-[var(--session-track)]"
+                "bg-[var(--session-track)]"
             ]} />
           </div>
         <% end %>
       </div>
 
-      <div class="flex items-center justify-between border-t border-[var(--session-border)] pt-3">
-        <div class="flex items-baseline gap-1.5 tabular-nums">
-          <span class="text-lg font-bold text-[var(--session-ink)]">{@week_pushups}</span>
-          <span class="text-xs text-[var(--session-muted)]">push-ups this week</span>
-          <span :if={@best_week_pushups > 0} class="text-xs text-[var(--session-muted)]">
-            · best {@best_week_pushups}
-          </span>
-        </div>
-        <span
-          :if={@week_balanced}
-          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--session-track)] text-[var(--session-ink)] text-[10px] font-medium shrink-0"
-        >
-          <.icon name="hero-scale" class="size-2.5" /> Balanced
-        </span>
-      </div>
+      <.qs_property_tag :if={@week_balanced} class="gap-1 w-fit">
+        <.icon name="hero-scale" class="size-2.5" /> Balanced week
+      </.qs_property_tag>
 
       <%= if @streak.streak_weeks == 0 && @streak.previous_best_weeks > 0 do %>
         <p class="text-xs text-[var(--session-muted)]">
           Previous best: {@streak.previous_best_weeks} weeks
         </p>
       <% end %>
+    </.qs_surface>
+    """
+  end
+
+  attr(:period, :string, required: true)
+  attr(:period_options, :list, required: true)
+
+  defp period_selector(assigns) do
+    ~H"""
+    <div id="stats-period-selector" class="space-y-2">
+      <p class="text-sm font-medium text-[var(--session-muted)]">Period</p>
+      <div class="grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)]/45">
+        <.link
+          :for={{label, value} <- @period_options}
+          patch={~p"/stats?period=#{value}"}
+          class={[
+            "border-r border-[var(--session-border)] px-3 py-2 text-center text-sm font-medium transition last:border-r-0",
+            @period == value &&
+              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
+            @period != value &&
+              "text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+          ]}
+        >
+          {label}
+        </.link>
+      </div>
     </div>
+    """
+  end
+
+  attr(:period_label, :string, required: true)
+  attr(:period_pushups, :integer, required: true)
+  attr(:all_time_pushups, :integer, required: true)
+  attr(:best_week_pushups, :integer, required: true)
+
+  defp pushups_section(assigns) do
+    ~H"""
+    <.qs_surface id="stats-pushups-card" class="space-y-4 bg-[var(--session-surface)]/60 px-5 py-5">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-medium text-[var(--session-muted)]">Push-ups</p>
+          <p class="mt-1 text-xs text-[var(--session-muted)]">Six-count = 1, Navy SEAL = 3</p>
+        </div>
+        <.qs_property_tag>{@period_label}</.qs_property_tag>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <p class="text-xs text-[var(--session-muted)]">This period</p>
+          <p
+            id="stats-pushups-period"
+            class="qs-tabular mt-1 text-3xl font-semibold tracking-[-0.05em] tabular-nums text-[var(--session-ink)]"
+          >
+            {@period_pushups}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-[var(--session-muted)]">All time</p>
+          <p
+            id="stats-pushups-all-time"
+            class="qs-tabular mt-1 text-3xl font-semibold tracking-[-0.05em] tabular-nums text-[var(--session-ink)]"
+          >
+            {@all_time_pushups}
+          </p>
+        </div>
+      </div>
+      <p :if={@best_week_pushups > 0} class="text-xs text-[var(--session-muted)]">
+        Best week: {@best_week_pushups} push-ups
+      </p>
+    </.qs_surface>
     """
   end
 
@@ -301,18 +386,18 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="space-y-3">
-      <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">Goals</p>
+      <p class="text-sm font-medium text-[var(--session-muted)]">Goals</p>
       <div class="grid grid-cols-2 gap-3">
         <.goal_slot
           burpee_type={:six_count}
-          label="6-COUNT"
+          label="6-Count"
           goal={@six}
           progress={@six_progress}
           has_sessions={@six_has_sessions}
         />
         <.goal_slot
           burpee_type={:navy_seal}
-          label="NAVY SEAL"
+          label="Navy SEAL"
           goal={@seal}
           progress={@seal_progress}
           has_sessions={@seal_has_sessions}
@@ -362,41 +447,35 @@ defmodule BurpeeTrainerWeb.StatsLive do
       )
 
     ~H"""
-    <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-4 py-4 flex flex-col gap-3">
+    <.qs_surface class="flex flex-col gap-3 bg-[var(--session-surface)]/60 px-4 py-4">
       <%= cond do %>
         <% @goal && @goal.status == :achieved -> %>
-          <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-            {@label}
-          </p>
+          <p class="text-sm font-medium text-[var(--session-muted)]">{@label}</p>
           <div class="flex items-baseline gap-1.5 tabular-nums">
             <span class="text-2xl font-semibold tracking-[-0.03em] text-[var(--session-ink)]">
               {@goal.burpee_count_target}
             </span>
             <span class="text-xs text-[var(--session-muted)]">reps</span>
           </div>
-          <div class="flex items-center gap-1.5 text-[var(--session-ink)]">
-            <.icon name="hero-trophy" class="size-3.5 shrink-0" />
-            <span class="text-xs font-medium">
-              Reached {Calendar.strftime(DateTime.to_date(@goal.updated_at), "%-d %b %Y")}
-            </span>
-          </div>
+          <.qs_property_tag class="gap-1 w-fit">
+            <.icon name="hero-trophy" class="size-2.5 shrink-0" />
+            Reached {Calendar.strftime(DateTime.to_date(@goal.updated_at), "%-d %b %Y")}
+          </.qs_property_tag>
           <button
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] py-2 text-sm text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+            class="mt-auto w-full rounded-md border border-[var(--session-border)] bg-[var(--session-bg)]/55 py-2 text-center text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70"
           >
             Set new goal
           </button>
         <% @goal && @goal.status == :active -> %>
           <div class="flex items-start justify-between gap-2">
-            <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-              {@label}
-            </p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">{@label}</p>
             <%= if @weekly_pace && @days_left > 0 do %>
-              <span class="text-[10px] text-[var(--session-muted)] tabular-nums shrink-0">
+              <.qs_property_tag class="shrink-0 tabular-nums">
                 ~{@weekly_pace}/wk
-              </span>
+              </.qs_property_tag>
             <% end %>
           </div>
           <div class="tabular-nums">
@@ -407,9 +486,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
               <span class="text-xs text-[var(--session-muted)]">/ {@goal.burpee_count_target}</span>
             </div>
           </div>
-          <div class="h-1.5 bg-[var(--session-track)] overflow-hidden">
+          <div class="h-1.5 overflow-hidden rounded-full bg-[var(--session-track)]">
             <div
-              class="h-full bg-[var(--session-ink)] transition-all duration-500"
+              class="h-full rounded-full bg-[var(--session-progress)] transition-all duration-500"
               style={"width: #{@pct}%"}
             />
           </div>
@@ -428,59 +507,69 @@ defmodule BurpeeTrainerWeb.StatsLive do
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] py-2 text-sm text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+            class="mt-auto w-full rounded-md border border-[var(--session-border)] bg-[var(--session-bg)]/55 py-2 text-center text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70"
           >
             Update goal
           </button>
         <% @has_sessions -> %>
-          <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-            {@label}
-          </p>
+          <p class="text-sm font-medium text-[var(--session-muted)]">{@label}</p>
           <p class="text-sm text-[var(--session-muted)]">No goal set</p>
           <button
             type="button"
             phx-click="open_goal_modal"
             phx-value-type={@burpee_type}
-            class="mt-auto w-full border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] py-2 text-sm font-medium text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+            class="mt-auto w-full rounded-md border border-[var(--session-border)] bg-[var(--session-bg)]/55 py-2 text-center text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70"
           >
             Set goal
           </button>
         <% true -> %>
-          <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-            {@label}
-          </p>
+          <p class="text-sm font-medium text-[var(--session-muted)]">{@label}</p>
           <p class="text-sm text-[var(--session-muted)]">No sessions yet</p>
           <p class="text-xs text-[var(--session-muted)] opacity-70">Log a session first</p>
       <% end %>
-    </div>
+    </.qs_surface>
     """
   end
 
   attr(:sessions, :list, required: true)
   attr(:has_more, :boolean, required: true)
+  attr(:period_label, :string, required: true)
 
   defp sessions_section(assigns) do
     ~H"""
     <div class="space-y-3">
-      <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-        Recent sessions
-      </p>
+      <div class="flex items-end justify-between gap-4">
+        <p class="text-sm font-medium text-[var(--session-muted)]">
+          Recent sessions
+        </p>
+        <p class="text-xs text-[var(--session-muted)]">{@period_label}</p>
+      </div>
       <%= if @sessions == [] do %>
-        <p class="text-sm text-[var(--session-muted)]">No sessions yet.</p>
+        <.qs_surface class="bg-[var(--session-surface)]/45 px-5 py-8 text-center">
+          <p class="text-sm text-[var(--session-muted)]">No sessions yet.</p>
+        </.qs_surface>
       <% else %>
-        <div class="divide-y divide-[var(--session-border)] border-y border-[var(--session-border)]">
-          <%= for session <- @sessions do %>
-            <.session_row session={session} />
-          <% end %>
+        <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/45">
+          <div class="grid grid-cols-[3.75rem_4rem_1fr_4.25rem] gap-3 border-b border-[var(--session-border)] px-4 py-2 text-xs font-medium text-[var(--session-muted)]">
+            <span>Reps</span>
+            <span>Duration</span>
+            <span>Style & tags</span>
+            <span class="text-right">Date</span>
+          </div>
+          <div class="divide-y divide-[var(--session-border)]">
+            <%= for session <- @sessions do %>
+              <.session_row session={session} />
+            <% end %>
+          </div>
           <%= if @has_more do %>
             <button
               phx-click="load_more_sessions"
-              class="w-full py-3 text-xs text-[var(--session-ink)] hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition text-center"
+              class="w-full border-t border-[var(--session-border)] py-3 text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-bg)]/45"
             >
               Load more
             </button>
           <% end %>
-        </div>
+        </.qs_surface>
       <% end %>
     </div>
     """
@@ -497,10 +586,15 @@ defmodule BurpeeTrainerWeb.StatsLive do
         do: Calendar.strftime(date, "%-d %b"),
         else: Calendar.strftime(date, "%-d %b %Y")
 
-    assigns = assign(assigns, date_str: date_str, capture_badge: capture_badge(assigns.session))
+    assigns =
+      assign(assigns,
+        date_str: date_str,
+        capture_badge: capture_badge(assigns.session),
+        session_tags: session_tags(assigns.session)
+      )
 
     ~H"""
-    <div class="relative flex items-start justify-between gap-3 py-4">
+    <div class="relative grid grid-cols-[3.75rem_4rem_1fr_4.25rem] items-start gap-3 px-4 py-3 transition hover:bg-[var(--session-bg)]/45">
       <.link
         :if={@capture_badge && @capture_badge.label == "Tracked"}
         navigate={~p"/stats/sessions/#{@session.id}"}
@@ -509,38 +603,41 @@ defmodule BurpeeTrainerWeb.StatsLive do
       >
         <span class="sr-only">Open session analysis</span>
       </.link>
-      <div class="min-w-0 space-y-0.5">
-        <div class="flex items-baseline gap-2">
-          <span class="text-base font-semibold tabular-nums leading-none text-[var(--session-ink)]">
-            {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
-          </span>
-          <span class="text-xs text-[var(--session-ink)]">
+
+      <p class="text-lg font-semibold leading-none tabular-nums text-[var(--session-ink)]">
+        {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
+      </p>
+
+      <p class="text-sm tabular-nums text-[var(--session-muted)]">
+        {Fmt.duration_sec(@session.duration_sec_actual)}
+      </p>
+
+      <div class="min-w-0 space-y-1.5">
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="text-sm font-medium text-[var(--session-ink)]">
             {Fmt.burpee_type(@session.burpee_type)}
           </span>
-          <span class="text-xs text-[var(--session-muted)] tabular-nums">
-            {Fmt.duration_sec(@session.duration_sec_actual)}
+          <span :if={@session.plan} class="truncate text-xs text-[var(--session-muted)]">
+            {@session.plan.name}
           </span>
         </div>
-        <div class="flex items-center gap-2 min-w-0">
-          <%= if @session.plan do %>
-            <span class="text-xs text-[var(--session-muted)] truncate">{@session.plan.name}</span>
-          <% end %>
-          <%= if @session.goal do %>
-            <span class="inline-flex items-center gap-1 border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)] px-1.5 py-0.5 text-[var(--session-ink)] text-[10px] font-medium shrink-0">
-              <.icon name="hero-trophy" class="size-2.5" /> Goal
-            </span>
-          <% end %>
-          <%= if @capture_badge do %>
-            <span class="inline-flex items-center border border-[var(--session-border)] rounded-2xl bg-[var(--session-track)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[var(--session-ink)]">
-              {@capture_badge.label}
-            </span>
-            <span :if={@capture_badge.detail} class="text-xs text-[var(--session-muted)]">
-              {@capture_badge.detail}
-            </span>
-          <% end %>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <.qs_property_tag :for={tag <- @session_tags} tone={tag.tone} class="gap-1">
+            <.icon :if={tag[:icon]} name={tag.icon} class="size-2.5" />
+            {tag.label}
+          </.qs_property_tag>
+          <span
+            :if={@capture_badge && @capture_badge.detail}
+            class="text-xs text-[var(--session-muted)]"
+          >
+            {@capture_badge.detail}
+          </span>
         </div>
       </div>
-      <span class="text-xs text-[var(--session-muted)] shrink-0 pt-0.5">{@date_str}</span>
+
+      <span class="shrink-0 pt-0.5 text-right text-xs text-[var(--session-muted)]">
+        {@date_str}
+      </span>
     </div>
     """
   end
@@ -550,8 +647,48 @@ defmodule BurpeeTrainerWeb.StatsLive do
     %{label: "Tracked", detail: "#{round(consistency * 100)}% consistent"}
   end
 
-  defp capture_badge(%{capture_mode: :timed}), do: %{label: "Timed", detail: nil}
+  defp capture_badge(%{capture_mode: :tracked}), do: %{label: "Tracked", detail: nil}
+  defp capture_badge(%{capture_mode: :timed}), do: %{label: "Plan", detail: nil}
+  defp capture_badge(%{capture_mode: :logged}), do: %{label: "Manual", detail: nil}
   defp capture_badge(_), do: nil
+
+  defp session_tags(session) do
+    base =
+      []
+      |> maybe_add_tag(session.goal, %{label: "Goal reached", tone: "tag", icon: "hero-trophy"})
+      |> maybe_add_tag(session.plan == nil, %{
+        label: "Manual",
+        tone: "neutral",
+        icon: "hero-pencil-square"
+      })
+      |> maybe_add_tag(session.capture_mode == :tracked, %{
+        label: "Tracked",
+        tone: "info",
+        icon: "hero-camera"
+      })
+      |> maybe_add_tag(session.capture_mode == :timed, %{
+        label: "Plan",
+        tone: "neutral",
+        icon: "hero-clock"
+      })
+
+    session.tags
+    |> split_tags()
+    |> Enum.reduce(base, fn tag, acc ->
+      [%{label: tag_label(tag), tone: if(tag == "video", do: "info", else: "tag")} | acc]
+    end)
+    |> Enum.reverse()
+  end
+
+  defp maybe_add_tag(tags, nil, _tag), do: tags
+  defp maybe_add_tag(tags, false, _tag), do: tags
+  defp maybe_add_tag(tags, _present, tag), do: [tag | tags]
+
+  defp split_tags(nil), do: []
+  defp split_tags(""), do: []
+  defp split_tags(tags), do: tags |> String.split(",", trim: true)
+
+  defp tag_label(tag), do: tag |> String.replace("_", " ") |> String.capitalize()
 
   attr(:weekly_data, :list, required: true)
   attr(:six_count_sessions, :list, required: true)
@@ -566,7 +703,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
     ~H"""
     <div class="space-y-3">
-      <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+      <p class="text-sm font-medium text-[var(--session-muted)]">
         Trends
       </p>
       <.weekly_minutes_chart weekly_data={@weekly_data} />

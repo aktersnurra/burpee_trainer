@@ -142,8 +142,10 @@ const PoseDebug = {
 		this.ctx.scale(-1, 1);
 		this.ctx.translate(-rect.width, 0);
 
+		const ink = getComputedStyle(document.documentElement).getPropertyValue("--color-base-content").trim() || "#20201D";
+
 		this.ctx.lineWidth = 3;
-		this.ctx.strokeStyle = "#4A9EFF";
+		this.ctx.strokeStyle = ink;
 		for (const [aName, bName] of EDGES) {
 			const a = points.get(aName);
 			const b = points.get(bName);
@@ -162,7 +164,7 @@ const PoseDebug = {
 
 		for (const point of pose.keypoints) {
 			if (!visible(point)) continue;
-			this.ctx.fillStyle = "#C8D8F0";
+			this.ctx.fillStyle = ink;
 			this.ctx.beginPath();
 			this.ctx.arc(
 				scaleX(point.x, this.video, rect),

@@ -352,6 +352,20 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   defp trained_day_count(%MapSet{} = trained_days), do: MapSet.size(trained_days)
   defp trained_day_count(trained_days) when is_list(trained_days), do: length(trained_days)
 
+  defp week_complete?(this_week, goal_min), do: this_week.minutes >= goal_min
+
+  defp week_progress_pct(this_week, goal_min) when goal_min > 0 do
+    this_week.minutes
+    |> Kernel./(goal_min)
+    |> Kernel.*(100)
+    |> min(100)
+    |> max(0)
+  end
+
+  defp week_progress_pct(_this_week, _goal_min), do: 0
+
+  defp minutes_left(this_week, goal_min), do: max(round(goal_min - this_week.minutes), 0)
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -361,100 +375,168 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       current_level={@current_level}
       current_page={:home}
     >
-      <div id="home-page" class="session-surface mx-auto max-w-lg space-y-7 pb-24 text-[var(--session-ink)]">
-        <div
+      <div
+        id="home-page"
+        class="session-surface mx-auto max-w-lg space-y-7 pb-24 text-[var(--session-ink)]"
+      >
+        <.qs_info_note
           :if={@level_status.at_risk?}
-          class="flex items-start gap-3 rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/40 px-4 py-3"
+          title={"Level #{level_label(@level_status.level)} expires in #{@level_status.days_left}d"}
+          icon="hero-exclamation-triangle"
+          class="bg-[var(--session-track)]/40"
         >
-          <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 text-[var(--session-ink)]" />
-          <p class="text-sm text-[var(--session-muted)]">
-            <span class="font-semibold text-[var(--session-ink)]">
-              Level {level_label(@level_status.level)} expires in {@level_status.days_left}d
-            </span>
-            — train both burpee types this week to keep it.
-          </p>
-        </div>
+          Train both burpee types this week to keep it.
+        </.qs_info_note>
 
-        <section id="home-status-strip" class="mb-10 space-y-3 text-sm text-[var(--session-muted)]">
-          <div class="flex items-center justify-between gap-4">
-            <p class="qs-tabular">
-              <span class="text-[var(--session-ink)]">{round(@this_week.minutes)}</span>
-              <span>/ {round(@goal_min)} min this week</span>
+        <% week_complete? = week_complete?(@this_week, @goal_min) %>
+        <% progress_pct = week_progress_pct(@this_week, @goal_min) %>
+
+        <.qs_surface
+          id="home-status-strip"
+          class="space-y-6 px-5 py-5 text-sm text-[var(--session-muted)]"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <p class="qs-tabular text-xl font-medium tracking-[-0.03em] text-[var(--session-ink)]">
+              {round(@this_week.minutes)}
+              <span class="text-[var(--session-muted)]">/ {round(@goal_min)} min this week</span>
             </p>
-            <p class="text-right">{trained_day_count(@trained_days)} trained days</p>
+            <p class="shrink-0 text-right text-base tabular-nums">
+              {if week_complete?,
+                do: "Complete",
+                else: "#{minutes_left(@this_week, @goal_min)} min left"}
+            </p>
           </div>
-          <div class="flex items-center justify-between gap-4 border-t border-[var(--session-border)] pt-3">
-            <p>Training rhythm</p>
-            <p class="qs-meta text-[11px] text-[var(--session-soft-muted)]">
+          <div
+            id="home-week-progress"
+            class="h-1.5 overflow-hidden rounded-full bg-[var(--session-border)]"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax={round(@goal_min)}
+            aria-valuenow={min(round(@this_week.minutes), round(@goal_min))}
+            aria-label="Weekly training minutes"
+          >
+            <div
+              class="h-full rounded-full bg-[var(--session-progress)]"
+              style={"width: #{progress_pct}%"}
+            />
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <p class="text-base">{trained_day_count(@trained_days)} trained days</p>
+            <p class="qs-meta text-sm tracking-[0.14em] text-[var(--session-muted)]">
               Level {level_label(@level_status.level)}
             </p>
           </div>
-        </section>
-
-        <section id="home-primary-workout" class="space-y-5">
-          <p class="text-xs text-[var(--session-muted)]">Ready</p>
-          <h1 class="qs-heading-tight text-4xl font-semibold leading-none text-[var(--session-ink)]">
-            Start before<br />you think.
-          </h1>
-
-          <%= if @last_plan do %>
-            <% action = primary_home_action(@last_plan, round(@this_week.minutes), round(@goal_min)) %>
-            <div class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5">
-              <p class="mb-2 text-sm text-[var(--session-muted)]">Default workout</p>
-              <h2 class="qs-section-tight text-2xl font-semibold text-[var(--session-ink)]">
-                {action.title}
-              </h2>
-              <p class="mt-1 text-sm text-[var(--session-muted)]">{action.reason}</p>
-              <.link
-                id="home-start-workout"
-                navigate={action.path}
-                class="mt-5 flex h-12 items-center justify-center rounded-xl bg-[var(--session-ink)] px-4 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
-              >
-                {action.label}
-              </.link>
+          <div class="grid grid-cols-7 gap-2 pt-1 text-center text-sm">
+            <div :for={day <- ~w(M T W T F S S)} class="space-y-2">
+              <p>{day}</p>
+              <span class="mx-auto block size-2 rounded-full bg-[var(--session-border)]" />
             </div>
-          <% end %>
-
-          <div
-            :if={!@last_plan}
-            class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5"
-          >
-            <p class="mb-2 text-sm text-[var(--session-muted)]">Default workout</p>
-            <h2 class="qs-section-tight text-2xl font-semibold text-[var(--session-ink)]">
-              No workout yet
-            </h2>
-            <p class="mt-1 text-sm text-[var(--session-muted)]">Choose a workout to get moving.</p>
-            <.link
-              id="home-start-workout"
-              navigate={~p"/workouts"}
-              class="mt-5 flex h-12 items-center justify-center rounded-xl bg-[var(--session-ink)] px-4 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
-            >
-              Choose a workout
-            </.link>
           </div>
+        </.qs_surface>
 
-          <div class="flex items-center gap-4 text-sm text-[var(--session-muted)]">
-            <.link navigate={~p"/workouts"} class="hover:text-[var(--session-ink)]">
-              Change workout
-            </.link>
+        <%= if week_complete? do %>
+          <.qs_surface
+            id="home-week-complete"
+            class="space-y-4 bg-[var(--session-surface)]/60 px-5 py-6"
+          >
+            <div class="space-y-2">
+              <h1 class="qs-heading-tight text-4xl font-semibold leading-none text-[var(--session-ink)]">
+                Week complete
+              </h1>
+              <p id="home-coach-guidance" class="text-sm leading-6 text-[var(--session-muted)]">
+                Coach says: You’re done for the week. Come back Monday.
+              </p>
+            </div>
             <button
               id="home-log-session"
               type="button"
               phx-click="open_log_modal"
-              class="hover:text-[var(--session-ink)]"
+              class="text-sm font-medium text-[var(--session-ink)] hover:text-[var(--session-muted)]"
             >
               Log past session
             </button>
-          </div>
-        </section>
+          </.qs_surface>
+        <% else %>
+          <section id="home-primary-workout" class="space-y-6">
+            <%= if @last_plan do %>
+              <% action = primary_home_action(@last_plan, round(@this_week.minutes), round(@goal_min)) %>
+              <.qs_surface id="home-prescription" class="bg-[var(--session-surface)]/60">
+                <div class="space-y-6 px-5 py-6">
+                  <div class="space-y-3">
+                    <p class="text-lg text-[var(--session-muted)]">Today’s prescription</p>
+                    <div class="space-y-1.5">
+                      <h2 class="qs-heading-tight text-5xl font-semibold leading-none text-[var(--session-ink)] md:text-6xl">
+                        {action.title}
+                      </h2>
+                      <p class="text-base tabular-nums text-[var(--session-muted)]">
+                        {action.detail}
+                      </p>
+                    </div>
+                  </div>
 
-        <.weekly_split_panel suggestions={@weekly_split_suggestions} />
-        <.catch_up_panel
-          weekly_status={@weekly_status}
-          catch_up_available?={WeeklyTrainingContract.catch_up_available?(@today)}
-          catch_up_plan={@catch_up_plan}
-          catch_up_selected_type={@catch_up_selected_type}
-        />
+                  <.qs_info_note id="home-coach-guidance" title="Coach note">
+                    {action.reason}
+                  </.qs_info_note>
+                </div>
+
+                <.qs_action_row
+                  id="home-start-workout"
+                  navigate={action.path}
+                  icon="hero-play-solid"
+                  label={action.label}
+                  class="border-t border-[var(--session-border)]"
+                />
+              </.qs_surface>
+            <% end %>
+
+            <.qs_surface
+              :if={!@last_plan}
+              id="home-prescription"
+              class="bg-[var(--session-surface)]/60"
+            >
+              <div class="space-y-6 px-5 py-6">
+                <div class="space-y-3">
+                  <p class="text-lg text-[var(--session-muted)]">Today’s prescription</p>
+                  <h2 class="qs-heading-tight text-5xl font-semibold leading-none text-[var(--session-ink)]">
+                    No workout yet
+                  </h2>
+                </div>
+
+                <.qs_info_note id="home-coach-guidance" title="Coach note">
+                  Choose a workout to get moving.
+                </.qs_info_note>
+              </div>
+
+              <.qs_action_row
+                id="home-start-workout"
+                navigate={~p"/workouts"}
+                icon="hero-play-solid"
+                label="Choose workout"
+                class="border-t border-[var(--session-border)]"
+              />
+            </.qs_surface>
+
+            <.qs_surface
+              id="home-secondary-actions"
+              class="overflow-hidden divide-y divide-[var(--session-border)] bg-[var(--session-surface)]/45"
+            >
+              <.qs_action_row
+                id="home-change-workout"
+                navigate={~p"/workouts"}
+                icon="hero-arrows-right-left"
+                label="Change workout"
+                description="Choose a different session"
+              />
+              <.qs_action_row
+                id="home-log-session"
+                icon="hero-document-text"
+                label="Log past session"
+                description="Add a session you already completed"
+                phx-click="open_log_modal"
+              />
+            </.qs_surface>
+          </section>
+        <% end %>
       </div>
 
       <%= if @log_modal_open do %>
@@ -471,7 +553,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           />
           <div
             id="home-log-modal-sheet"
-            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-2xl rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
+            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-xl rounded-t-xl sm:rounded-xl p-5 sm:p-6"
           >
             <.live_component
               module={LogFormComponent}
@@ -486,165 +568,15 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     """
   end
 
-  attr(:weekly_status, :any, required: true)
-  attr(:catch_up_available?, :boolean, required: true)
-  attr(:catch_up_plan, :any, default: nil)
-  attr(:catch_up_selected_type, :atom, default: nil)
-
-  defp catch_up_panel(assigns) do
-    remaining = assigns.weekly_status.remaining_min
-    assigns = assign(assigns, :remaining, remaining)
-
-    ~H"""
-    <section
-      id="home-catch-up-panel"
-      class="space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5"
-    >
-      <div class="space-y-1">
-        <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-          Plan remaining work
-        </p>
-        <p class="text-sm text-[var(--session-muted)]">
-          {@remaining} min left this week. Choose the burpee type first.
-        </p>
-      </div>
-
-      <div
-        :if={@remaining <= 0}
-        id="home-catch-up-complete"
-        class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/30 px-4 py-4"
-      >
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Weekly work is complete.</p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">
-          Catch-up planning appears again when there is time left in the weekly contract.
-        </p>
-      </div>
-
-      <div
-        :if={@remaining > 0 and !@catch_up_available?}
-        id="home-catch-up-too-early"
-        class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/30 px-4 py-4"
-      >
-        <p class="text-sm font-semibold text-[var(--session-ink)]">
-          Stay with the weekly split for now.
-        </p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">
-          Catch-up opens on Saturday when there are 2 days left or less.
-        </p>
-      </div>
-
-      <div :if={@remaining > 0 and @catch_up_available?} class="grid grid-cols-2 gap-2">
-        <button
-          id="catch-up-six-count"
-          type="button"
-          phx-click="plan_catch_up"
-          phx-value-type="six_count"
-          class="rounded-2xl border border-[var(--session-border)] px-3 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--session-ink)] transition hover:border-[var(--session-ink)]"
-        >
-          Six-count
-        </button>
-        <button
-          id="catch-up-navy-seal"
-          type="button"
-          phx-click="plan_catch_up"
-          phx-value-type="navy_seal"
-          class="rounded-2xl border border-[var(--session-border)] px-3 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--session-ink)] transition hover:border-[var(--session-ink)]"
-        >
-          Navy SEAL
-        </button>
-      </div>
-
-      <%= if is_nil(@catch_up_plan) and @catch_up_selected_type do %>
-        <div
-          id="home-catch-up-no-goal"
-          data-selected-type={@catch_up_selected_type}
-          class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/30 px-4 py-4"
-        >
-          <p class="text-sm font-semibold text-[var(--session-ink)]">
-            Set a {catch_up_type_label(@catch_up_selected_type)} performance goal first.
-          </p>
-          <p class="mt-1 text-xs text-[var(--session-muted)]">
-            Catch-up targets need a real type-specific goal; no temporary goal is used.
-          </p>
-        </div>
-      <% end %>
-
-      <%= if @catch_up_plan do %>
-        <div
-          id="home-catch-up-result"
-          data-selected-type={@catch_up_plan.selected_burpee_type}
-          class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/30 px-4 py-4"
-        >
-          <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-            Maintenance catch-up
-          </p>
-          <p class="mt-2 text-lg font-semibold tracking-[-0.03em] text-[var(--session-ink)]">
-            {catch_up_type_label(@catch_up_plan.selected_burpee_type)} · {@catch_up_plan.total_duration_min} min
-          </p>
-          <p class="mt-1 text-sm text-[var(--session-muted)]">
-            One {@catch_up_plan.total_duration_min} min session · Split: {catch_up_split_label(
-              @catch_up_plan.weekly_split_effect
-            )}
-          </p>
-          <ol class="mt-3 space-y-2 text-sm text-[var(--session-muted)]">
-            <li :for={{session, index} <- Enum.with_index(@catch_up_plan.selected_sessions, 1)}>
-              {index}. {session.target_reps} reps · {catch_up_kind_label(session.suggestion_kind)}
-            </li>
-          </ol>
-          <p class="mt-3 text-xs text-[var(--session-muted)]">
-            {catch_up_intensity_copy(@catch_up_plan.total_duration_min)}
-          </p>
-          <p class="mt-2 text-xs text-[var(--session-muted)]">
-            {List.first(@catch_up_plan.rationale)}
-          </p>
-          <button
-            id="use-catch-up-plan"
-            type="button"
-            phx-click="use_catch_up_plan"
-            class="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-bg)] transition active:scale-95 hover:opacity-90"
-          >
-            Use this plan
-          </button>
-        </div>
-      <% end %>
-    </section>
-    """
-  end
-
   defp catch_up_type_label(:six_count), do: "Six-count"
   defp catch_up_type_label(:navy_seal), do: "Navy SEAL"
 
-  defp catch_up_intensity_copy(duration_min) when duration_min <= 20,
-    do: "Standard 20-minute target based on your current capacity."
-
-  defp catch_up_intensity_copy(duration_min) when duration_min <= 30,
-    do:
-      "Reduced for longer catch-up work — targets use about 85% of your current 20-minute capacity."
-
-  defp catch_up_intensity_copy(duration_min) when duration_min <= 40,
-    do:
-      "Reduced for longer catch-up work — targets use about 75% of your current 20-minute capacity."
-
-  defp catch_up_intensity_copy(duration_min) when duration_min <= 60,
-    do:
-      "Reduced for longer catch-up work — targets use about 60% of your current 20-minute capacity."
-
-  defp catch_up_intensity_copy(_duration_min),
-    do:
-      "Reduced for longer catch-up work — targets use about 50% of your current 20-minute capacity."
-
-  defp catch_up_split_label(:preserves_contract), do: "standard"
-  defp catch_up_split_label(:counts_but_non_standard), do: "non-standard"
-  defp catch_up_split_label(:over_target), do: "over target"
-
-  defp catch_up_kind_label(:safe_progress), do: "small step"
-  defp catch_up_kind_label(kind), do: kind |> Atom.to_string() |> String.replace("_", " ")
-
   defp primary_home_action(nil, _min_done, _goal) do
     %{
-      title: "Create your first training session",
+      title: "No workout yet",
+      detail: "Choose a saved workout first",
       reason: "Set your burpee type, reps, and duration before starting.",
-      label: "Create",
+      label: "Choose workout",
       path: ~p"/workouts/new"
     }
   end
@@ -653,10 +585,11 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     type_label = if plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
 
     %{
-      title: "Weekly work is complete",
+      title: "#{plan.target_duration_min} min · #{type_label}",
+      detail: "#{plan.burpee_count_target} reps",
       reason:
-        "#{plan.name} · #{plan.burpee_count_target} reps · #{plan.target_duration_min} min · #{type_label} is ready if you want extra work.",
-      label: "Start",
+        "#{plan.name} is ready, but the weekly target is already complete. No extra work is needed — only log a missed session if your history is incomplete.",
+      label: "Start session",
       path: ~p"/session/#{plan.id}"
     }
   end
@@ -666,85 +599,17 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     minutes_left = max(goal - min_done, 0)
 
     %{
-      title: "Start #{plan.target_duration_min} min · #{type_label}",
+      title: "#{plan.target_duration_min} min · #{type_label}",
+      detail: "#{plan.burpee_count_target} reps",
       reason:
-        "#{plan.name} · #{plan.burpee_count_target} reps · #{minutes_left} min left this week.",
-      label: "Start",
+        "#{plan.name} is the next planned session. Start with this #{plan.target_duration_min}-minute #{type_label} workout to move the week forward; you still have #{minutes_left} min left right now.",
+      label: "Start session",
       path: ~p"/session/#{plan.id}"
     }
-  end
-
-  attr(:suggestions, :list, required: true)
-
-  defp weekly_split_panel(%{suggestions: []} = assigns), do: ~H""
-
-  defp weekly_split_panel(assigns) do
-    ~H"""
-    <section
-      id="home-weekly-split-panel"
-      data-home-weekly-split
-      class="space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5"
-    >
-      <div class="space-y-1">
-        <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-          This week's split
-        </p>
-        <p class="text-sm text-[var(--session-muted)]">
-          Aim for one harder session and one easier session per burpee type.
-        </p>
-      </div>
-
-      <div class="space-y-4">
-        <div :for={split <- @suggestions} class="space-y-2">
-          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--session-ink)]">
-            {catch_up_type_label(split.burpee_type)}
-          </p>
-          <div class="grid grid-cols-2 gap-2">
-            <.weekly_split_action split={split} role="hard" suggestion={split.hard} />
-            <.weekly_split_action split={split} role="easy" suggestion={split.easy} />
-          </div>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  attr(:split, :map, required: true)
-  attr(:role, :string, required: true)
-  attr(:suggestion, :any, required: true)
-
-  defp weekly_split_action(assigns) do
-    label = if assigns.role == "easy", do: "Easier", else: "Harder"
-    assigns = assign(assigns, :label, label)
-
-    ~H"""
-    <div class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 px-3 py-3">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--session-muted)]">
-        {@label}
-      </p>
-      <p class="mt-1 text-lg font-semibold tabular-nums text-[var(--session-ink)]">
-        {@suggestion.burpee_count_target} reps
-      </p>
-      <p class="text-xs text-[var(--session-muted)]">
-        {@suggestion.target_duration_min} min · {catch_up_kind_label(@suggestion.kind)}
-      </p>
-      <button
-        id={"use-coach-target-#{Atom.to_string(@split.burpee_type) |> String.replace("_", "-")}-#{@role}"}
-        type="button"
-        phx-click="use_coach_target"
-        phx-value-type={@split.burpee_type}
-        phx-value-role={@role}
-        class="mt-3 text-sm text-[var(--session-ink)] hover:text-[var(--session-muted)] transition font-medium whitespace-nowrap"
-      >
-        Plan {@label |> String.downcase()} →
-      </button>
-    </div>
-    """
   end
 
   defp level_label(:graduated), do: "Grad"
 
   defp level_label(l),
     do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
-
 end

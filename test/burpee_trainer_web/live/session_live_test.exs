@@ -184,11 +184,20 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#ring-container[aria-label='Pause or resume session']")
     assert has_element?(view, "svg#ring-svg")
     assert has_element?(view, "#set-glyphs[aria-label='Workout sets']")
+    assert has_element?(view, "#session-status-line")
+    assert has_element?(view, "#session-pause-actions[aria-hidden=true]")
+    refute has_element?(view, "#resume-session-btn")
+    assert has_element?(view, "#session-abort-btn")
+    assert has_element?(view, "#finish-early-btn")
+    refute has_element?(view, "#session-progress-card")
+    refute has_element?(view, "#session-progress-fill")
     assert has_element?(view, "#total-done")
     assert has_element?(view, "#total-plan")
     assert has_element?(view, "#time-left")
 
     html = render(view)
+    refute html =~ "Back to workouts"
+    refute html =~ "Progress"
     refute html =~ "REPS LEFT"
     refute html =~ "RUNNING"
     refute html =~ "BEAT"

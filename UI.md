@@ -2,7 +2,7 @@
 
 > Single source of truth for all visual and interaction decisions.
 > Read this before touching any template or CSS.
-> Design directive: sleek, classy, tasteful. Scandinavian dark. Blue replaces green everywhere.
+> Design directive: quiet, warm, tasteful. Light Quiet stone is the default; optional dark mode is warm charcoal. Typography, whitespace, and thin rules carry the interface. Muted clay replaces saturated blue as the rare accent.
 
 ---
 
@@ -10,8 +10,8 @@
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
 - **Hierarchy through scale and weight**, not color and decoration.
-- **Cool dark, not warm dark.** Blacks have a blue-gray tint, not brown or charcoal.
-- **One accent color.** Electric blue is the sole accent. Orange (navy seal series) is data only.
+- **Warm light by default.** Quiet stone carries the app; optional dark mode shifts to warm charcoal rather than cool blue-gray.
+- **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
 - **No shadows, no gradients.** Flat surfaces separated by subtle borders and opacity.
 - **Generous whitespace.** Breathing room is a feature, not waste.
 - **Typography carries the load.** Large numbers, small labels, clear contrast ratios.
@@ -23,70 +23,72 @@
 ### Base surfaces
 
 ```
---color-base-100:    #0C0E14   background — deepest, cool near-black
---color-base-200:    #11141C   card/panel surface
---color-base-300:    #181C26   elevated surface (modal, dropdown)
---color-base-border: #1E2535   border — barely visible seam
+--color-base-100:    #F4F2EE   background — warm stone
+--color-base-200:    #FAF8F3   card/panel surface — soft paper
+--color-base-300:    #EFECE4   elevated surface (modal, dropdown)
+--color-base-border: #DAD6CE   border — warm quiet seam
 ```
 
 ### Text
 
 ```
---color-base-content:      #E2E8F4   primary text
---color-base-content/70:   #9BA8BF   secondary/muted labels
---color-base-content/40:   #596170   tertiary / placeholder
+--color-base-content:      #20201D   primary text
+--color-base-content/70:   #74716A   secondary/muted labels
+--color-base-content/40:   #9A9489   tertiary / placeholder
 ```
 
-### Primary accent — electric blue
+### Core interactive ink
 
 ```
---color-primary:         #4A9EFF   interactive elements, active state, chart line
---color-primary-subtle:  #1A2D4A   blue tint background (badges, highlights)
---color-primary-content: #E6F1FF   text on blue backgrounds
+--color-primary:         #20201D   interactive text, active state, chart line
+--color-primary-content: #FAF8F3   text on primary fills
+
+--color-accent:          #A77B5D   muted clay accent for rare emphasis
+--color-accent-content:  #FFF8F0   text on accent fills
 ```
 
 ### Phase colors (session runner)
 
 ```
---phase-work:          #4A9EFF   work set — electric blue (NOT green)
---phase-work-bg:       #1A2D4A
---phase-work-content:  #E6F1FF
+--phase-work:          #20201D   work set — ink emphasis
+--phase-work-bg:       #EFECE4
+--phase-work-content:  #20201D
 
---phase-warmup:        #F59E0B   warmup — amber
---phase-warmup-bg:     #2D1F08
---phase-warmup-content:#FEF3C7
+--phase-warmup:        #A77B5D   warmup — muted clay
+--phase-warmup-bg:     #FFF8F0
+--phase-warmup-content:#20201D
 
---phase-rest:          #6B8FA8   rest — desaturated steel blue
---phase-rest-bg:       #141E28
---phase-rest-content:  #D4E4EF
+--phase-rest:          #6F7F8F   rest — softened slate
+--phase-rest-bg:       #F2F0EA
+--phase-rest-content:  #20201D
 
---phase-done:          #8B77DB   done — soft purple
---phase-done-bg:       #1E1A35
---phase-done-content:  #EDE9FE
+--phase-done:          #6F7D55   done — subdued olive
+--phase-done-bg:       #EEF1E6
+--phase-done-content:  #20201D
 ```
 
 ### Data series (chart only)
 
 ```
-six_count: #4A9EFF   (primary blue)
-navy_seal: #F97316   (orange — data-only, never UI chrome)
+six_count: #20201D   (primary ink)
+navy_seal: #A77B5D   (muted clay — data-only, never UI chrome)
 ```
 
 ### Status colors
 
 ```
-success:  #22C55E   (goal met, level unlock)
-warning:  #F59E0B   (amber)
-error:    #EF4444
+success:  #6F7D55   (goal met, level unlock)
+warning:  #A77B5D   (muted clay)
+error:    #A55643
 ```
 
 ---
 
 ## 3. Typography
 
-Font stack: `ui-sans-serif, system-ui, -apple-system, sans-serif`
+Font stack: `Geist, ui-sans-serif, system-ui, -apple-system, sans-serif`
 
-No custom web fonts. System fonts render crisply on mobile in bright light.
+Geist is the app font. Keep the type system restrained: most text uses 400 / 500 / 600 weights, with large headings using careful negative tracking.
 
 | Role                  | Size   | Weight | Color              |
 |-----------------------|--------|--------|--------------------|
@@ -120,7 +122,7 @@ Component gap inside card: 16px
 
 ## 5. Navigation
 
-Top bar. No bottom tab bar (app is web, not native).
+Desktop uses a quiet top nav. Mobile uses a restrained bottom tab bar for reachability.
 
 ```
 BurpeeTrainer    Plans   Log   History   Goals
@@ -128,7 +130,7 @@ BurpeeTrainer    Plans   Log   History   Goals
 
 - `BurpeeTrainer` — wordmark, 15px, font-weight 600, base-content, links to `/`
 - Nav links — 14px, base-content/60, hover: base-content, transition 150ms
-- Active link — base-content, with a 2px blue underline offset 4px below the text
+- Active link — base-content, with a 2px muted-clay underline offset 4px below the text
 - No background on the nav bar — transparent, just a 1px bottom border (base-border)
 - Height: 52px. Content max-width: 680px, centered.
 
@@ -141,9 +143,10 @@ New root route. Landing page after login.
 ### Layout (top to bottom)
 
 ```
-[1] Weekly streak — current streak count + this week's progress bar
-[2] Weekly calendar — last 12 weeks as a grid, goal-met highlighted
-[3] Quick actions — two buttons: Run a plan, Log session
+[1] Ambient weekly status strip — minutes, trained days, current level
+[2] Primary workout action — one dominant start surface
+[3] Secondary actions — change workout, log past session
+[4] Weekly split / catch-up support — below the primary action
 ```
 
 ### 6.1 Weekly Streak
@@ -251,20 +254,20 @@ Burpees over time                        [6-count ▾]
 Chart.js configuration:
 ```
 Background: transparent
-Grid lines: 1px, rgba(255,255,255,0.04)
-Axis labels: 11px, #596170
-Main series: #4A9EFF, tension 0.3, pointRadius 4
+Grid lines: 1px, rgba(32,32,29,0.08)
+Axis labels: 11px, #9A9489
+Main series: #20201D, tension 0.3, pointRadius 4
 Goal line: dashed [6,4], borderWidth 1, pointRadius 0
 Trend line: dashed [2,2], opacity 0.4
-Tooltips: bg #181C26, border #1E2535, borderWidth 1, padding 10,
-          titleColor #E2E8F4, bodyColor #9BA8BF, cornerRadius 6
+Tooltips: bg #FAF8F3, border #DAD6CE, borderWidth 1, padding 10,
+          titleColor #20201D, bodyColor #74716A, cornerRadius 6
 ```
 
 **Time range tabs** (below canvas, inside card):
 ```
   4W    3M   [6M]   1Y    All
 ```
-- 12px, base-content/50. Active: base-content with 2px blue underline.
+- 12px, base-content/50. Active: base-content with 2px muted-clay underline.
 - `phx-click="set_range"` — default: 6M.
 
 ### 7.3 Recent Sessions List
@@ -289,7 +292,7 @@ Show 5 most recent by default. "View all sessions" expands to full list (toggle,
 - Hover: bg base-300, transition 100ms
 - Plain `<ul>/<li>` with flex rows — not a table
 
-**Level unlock badge:** if the session unlocked a level, show a small blue pill `Level 1D`
+**Level unlock badge:** if the session unlocked a level, show a small muted-clay pill `Level 1D`
 inline after the date.
 
 **"View all sessions" footer:** `phx-click="toggle_show_all"` — shows "Show less" when expanded.
@@ -336,18 +339,18 @@ The server is idle during the workout and only involved at save time.
 Left side: phase badge (pill shape).
 Right side: "Block 2 · Set 1 of 3" label (muted text).
 
-Phase badge colors (blue replaces the old green for work):
+Phase badge colors follow the Quiet stone role tokens:
 ```
-:work_burpee   → --phase-work    blue  (#4A9EFF bg, #E6F1FF text)
-:warmup_burpee → --phase-warmup  amber (#F59E0B bg, #FEF3C7 text)
-:work_rest     → --phase-rest    steel blue (#6B8FA8 bg, #D4E4EF text)
-:warmup_rest   → --phase-rest    steel blue
-:rest_block    → --phase-rest    steel blue — label "Rest"
-:done          → --phase-done    purple (#8B77DB bg, #EDE9FE text)
+:work_burpee   → --phase-work    ink emphasis (#EFECE4 bg, #20201D text)
+:warmup_burpee → --phase-warmup  muted clay (#FFF8F0 bg, #20201D text)
+:work_rest     → --phase-rest    softened slate (#F2F0EA bg, #20201D text)
+:warmup_rest   → --phase-rest    softened slate
+:rest_block    → --phase-rest    softened slate — label "Rest"
+:done          → --phase-done    subdued olive (#EEF1E6 bg, #20201D text)
 ```
 
 Badge text: uppercase, letter-spacing 0.06em, font-size 13px, font-weight 500.
-The color shift between work (blue) and rest (steel blue) is the primary visual cue.
+The contrast between work, warmup, rest, and done is intentionally quiet; shape, label, and position carry more meaning than saturated color.
 
 ### 8.2 Analog Clock (centerpiece)
 
@@ -477,7 +480,7 @@ Grid of plan cards. Each card: plan name, burpee_type badge, derived duration, t
 "+ New Plan" button at top.
 
 Card styling: base-200 bg, base-border border, radius-card.
-No green accents — use blue for active/primary states.
+Use ink for primary actions and muted clay only for rare emphasis.
 
 ### Three-layer editor — `/plans/new` and `/plans/:id/edit`
 
@@ -490,10 +493,10 @@ Pace input shows floor value: "Min: 3.7s (graduation pace)". Immediate error if 
 Entries: `[__] seconds at min [__]   [× remove]`. Inline error on unplaceable rest.
 
 **Layer 3 — Blocks** (auto-generated from solver, user-editable):
-Live derived duration at top of section, color-coded:
-- Green: both constraints satisfied
-- Amber: duration within ±5s
-- Red: constraint violated
+Live derived duration at top of section, state-coded without loud panel borders:
+- Ink: both constraints satisfied
+- Muted clay: duration within ±5s
+- Muted error text/icon: constraint violated
 
 Save validation: reps exact, duration ±5s, pace ≥ floor. Blocked until all pass.
 
@@ -513,14 +516,14 @@ Submit button: primary style.
 
 Level display section, goal card, recommendation panel. No redesign in current pass.
 
-Color updates only: replace any green accents with blue.
+Color updates only: use ink for primary actions and muted clay for rare emphasis.
 
 ---
 
 ## 12. What We Are NOT Doing
 
-- No bottom tab bar (web app, not native)
+- No heavy dashboard treatment on Home
 - No Goals or Log page full redesign in this pass
-- No font changes (system fonts are fine)
+- No new font family beyond the existing Geist setup
 - No animation beyond ring pulse and progress transitions
-- No dark/light mode toggle — always dark
+- No mandatory dark-first experience — light Quiet stone is default, with optional warm charcoal dark mode

@@ -281,8 +281,7 @@ const SessionHook = {
 		overlay.replaceChildren();
 
 		const title = document.createElement("span");
-		title.className =
-			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
+		title.className = "text-sm font-medium text-[var(--session-muted)]";
 		title.textContent = "Track with camera?";
 
 		const buttons = document.createElement("div");
@@ -292,15 +291,15 @@ const SessionHook = {
 		yes.type = "button";
 		yes.id = "capture-tracked-btn";
 		yes.className =
-			"min-w-24 border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.98]";
-		yes.textContent = "Yes";
+			"min-w-32 rounded-xl border border-[var(--session-toggle-border)] bg-[var(--session-toggle-bg)] px-5 py-4 text-sm font-medium text-[var(--session-toggle-ink)] transition active:scale-[0.98] hover:opacity-90";
+		yes.textContent = "Use camera";
 
 		const no = document.createElement("button");
 		no.type = "button";
 		no.id = "capture-timed-btn";
 		no.className =
-			"min-w-24 border border-[var(--session-border)] px-6 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-soft-muted)] transition active:scale-[0.98]";
-		no.textContent = "No";
+			"min-w-32 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-5 py-4 text-sm font-medium text-[var(--session-muted)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]";
+		no.textContent = "Timer only";
 
 		buttons.append(yes, no);
 		overlay.append(title, buttons);
@@ -484,14 +483,7 @@ const SessionHook = {
 			now: performance.now(),
 		});
 
-		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
-		if (finishEarlyBtn) {
-			if (this.activeSegment === "workout") {
-				finishEarlyBtn.removeAttribute("disabled");
-			} else {
-				finishEarlyBtn.setAttribute("disabled", "disabled");
-			}
-		}
+		this.updatePauseActionsVisibility();
 
 		this.countdownRingEl = null;
 		this.startTime = this.segment.clock.startTime;
@@ -593,12 +585,14 @@ const SessionHook = {
 		this.countdownRafId = null;
 		this.audio.stop();
 		this.renderer.updatePauseButton(true);
+		this.updatePauseActionsVisibility();
 	},
 
 	resumeCountdown() {
 		this.dispatchSegment({ type: "COUNTDOWN_RESUME", now: performance.now() });
 		this.countdownPaused = false;
 		this.renderer.updatePauseButton(false);
+		this.updatePauseActionsVisibility();
 
 		const n = this.countdownCount;
 		if (n === null) return;
@@ -621,6 +615,7 @@ const SessionHook = {
 		this.rafId = null;
 		this.audio.stop();
 		this.renderer.updatePauseButton(true);
+		this.updatePauseActionsVisibility();
 	},
 
 	resume() {
@@ -631,6 +626,28 @@ const SessionHook = {
 		this.hiddenAt = null;
 		if (!this.rafId) this.rafId = requestAnimationFrame(() => this.tick());
 		this.renderer.updatePauseButton(false);
+		this.updatePauseActionsVisibility();
+	},
+
+	updatePauseActionsVisibility() {
+		const actions = this.el.querySelector("#session-pause-actions");
+		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
+		if (!actions) return;
+
+		const isPaused = this.paused || this.countdownPaused;
+		const canFinishEarly = isPaused && this.activeSegment === "workout";
+		actions.style.opacity = isPaused ? "1" : "0";
+		actions.style.transform = isPaused ? "translateY(0)" : "";
+		actions.style.pointerEvents = isPaused ? "auto" : "none";
+		actions.setAttribute("aria-hidden", isPaused ? "false" : "true");
+
+		if (finishEarlyBtn) {
+			if (canFinishEarly) {
+				finishEarlyBtn.removeAttribute("disabled");
+			} else {
+				finishEarlyBtn.setAttribute("disabled", "disabled");
+			}
+		}
 	},
 
 	pushTrackedFinish(payload) {

@@ -133,19 +133,21 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       current_level={@current_level}
       current_page={:videos}
     >
-      <div class="space-y-6">
+      <div class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]">
         <div class="flex items-center gap-3">
           <.link
             navigate={~p"/workouts"}
-            class="text-sm text-base-content/50 hover:text-base-content transition-colors"
+            class="text-sm font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
           >
             ← Videos
           </.link>
-          <span class="text-base-content/20">/</span>
-          <h1 class="text-lg font-semibold tracking-tight">{@video.name}</h1>
+          <span class="text-[var(--session-muted)]/40">/</span>
+          <h1 class="text-lg font-semibold tracking-[-0.03em] text-[var(--session-ink)]">
+            {@video.name}
+          </h1>
         </div>
 
-        <div class="rounded-lg overflow-hidden border border-base-300 bg-black">
+        <div class="overflow-hidden rounded-xl border border-[var(--session-border)] bg-black">
           <video
             id="workout-video"
             phx-hook="VideoHook"
@@ -157,20 +159,22 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         </div>
 
         <%= if not @log_visible do %>
-          <div class="rounded-lg border border-base-300 bg-base-100 p-5 flex items-center justify-between">
+          <.qs_surface class="flex items-center justify-between gap-4 bg-[var(--session-surface)]/55 p-5">
             <div>
-              <p class="text-sm font-medium">{@video.name}</p>
-              <p class="text-xs text-base-content/50 mt-0.5">
+              <p class="text-sm font-medium text-[var(--session-ink)]">{@video.name}</p>
+              <p class="mt-0.5 text-xs text-[var(--session-muted)]">
                 {burpee_label(@video.burpee_type)} · {format_duration(@video.duration_sec)}
               </p>
             </div>
-            <p class="text-xs text-base-content/40">Log form appears when video ends</p>
-          </div>
+            <p class="text-right text-xs text-[var(--session-muted)]">
+              Log form appears when video ends
+            </p>
+          </.qs_surface>
         <% else %>
-          <div class="rounded-lg border border-primary/30 bg-base-100 p-6 space-y-5">
+          <.qs_surface class="space-y-5 bg-[var(--session-surface)]/55 p-6">
             <div>
-              <h2 class="text-base font-semibold">Log this session</h2>
-              <p class="text-sm text-base-content/50">
+              <h2 class="text-base font-semibold text-[var(--session-ink)]">Log this session</h2>
+              <p class="text-sm text-[var(--session-muted)]">
                 Pre-filled from the video — adjust if needed.
               </p>
             </div>
@@ -207,18 +211,20 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
               </div>
 
               <div class="space-y-1.5">
-                <p class="text-sm font-medium">Mood</p>
-                <div class="flex gap-2">
+                <p class="text-sm font-medium text-[var(--session-ink)]">Mood</p>
+                <div class="flex flex-wrap gap-2">
                   <%= for {icon, label, value} <- @mood_options do %>
                     <button
                       type="button"
                       phx-click="set_mood"
                       phx-value-mood={value}
                       class={[
-                        "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition",
+                        "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition",
                         if(@mood == value,
-                          do: "border-primary bg-primary/10 font-medium",
-                          else: "border-base-300 hover:bg-base-200"
+                          do:
+                            "border-[var(--session-toggle-border)] bg-[var(--session-toggle-bg)] font-medium text-[var(--session-toggle-ink)]",
+                          else:
+                            "border-[var(--session-border)] bg-[var(--session-bg)]/45 text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
                         )
                       ]}
                     >
@@ -229,7 +235,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
               </div>
 
               <div class="space-y-1.5">
-                <p class="text-sm font-medium">Tags</p>
+                <p class="text-sm font-medium text-[var(--session-ink)]">Tags</p>
                 <div class="flex flex-wrap gap-2">
                   <%= for tag <- @tag_options do %>
                     <button
@@ -237,10 +243,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
                       phx-click="toggle_tag"
                       phx-value-tag={tag}
                       class={[
-                        "rounded-full border px-3 py-1 text-xs transition",
+                        "rounded-md border px-3 py-1 text-xs transition",
                         if(tag in @log_tags,
-                          do: "border-primary bg-primary/10 font-medium",
-                          else: "border-base-300 hover:bg-base-200"
+                          do:
+                            "border-[var(--session-tag-border)] bg-[var(--session-tag-bg)] font-medium text-[var(--session-tag-ink)]",
+                          else:
+                            "border-[var(--session-border)] bg-[var(--session-bg)]/45 text-[var(--session-muted)] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
                         )
                       ]}
                     >
@@ -256,19 +264,19 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
               <div class="flex justify-end gap-2 pt-2">
                 <.link
                   navigate={~p"/workouts"}
-                  class="rounded-md border border-base-300 px-4 py-2 text-sm hover:bg-base-200 transition"
+                  class="rounded-md border border-[var(--session-border)] px-4 py-2 text-sm text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
                 >
                   Skip
                 </.link>
                 <button
                   type="submit"
-                  class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 transition"
+                  class="rounded-md bg-[var(--session-ink)] px-4 py-2 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90"
                 >
                   Save session
                 </button>
               </div>
             </.form>
-          </div>
+          </.qs_surface>
         <% end %>
       </div>
     </Layouts.app>

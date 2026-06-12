@@ -111,7 +111,7 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
           class="space-y-4"
         >
           <label class="block space-y-1">
-            <span class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
+            <span class="text-sm font-medium text-[var(--session-muted)]">
               Target burpees (max {@ceiling})
             </span>
             <input
@@ -120,11 +120,11 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
               pattern="[0-9]*"
               name={@form[:burpee_count_target].name}
               value={@form[:burpee_count_target].value}
-              class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-3 py-3 text-lg font-semibold tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
+              class="w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-3 text-lg font-semibold tabular-nums text-[var(--session-ink)] focus:border-[var(--session-progress)] focus:outline-none"
             />
           </label>
           <label class="block space-y-1">
-            <span class="text-[10px] uppercase tracking-widest text-[var(--session-muted)]">
+            <span class="text-sm font-medium text-[var(--session-muted)]">
               Target date
             </span>
             <input
@@ -132,7 +132,7 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
               name={@form[:date_target].name}
               value={@form[:date_target].value}
               min={Date.to_iso8601(Date.add(Date.utc_today(), 1))}
-              class="w-full border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-3 py-3 text-sm tabular-nums text-[var(--session-ink)] focus:border-[var(--session-ink)] focus:outline-none"
+              class="w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-3 py-3 text-sm tabular-nums text-[var(--session-ink)] focus:border-[var(--session-progress)] focus:outline-none"
             />
           </label>
           <p class="text-xs text-[var(--session-muted)]">
@@ -140,7 +140,7 @@ defmodule BurpeeTrainerWeb.GoalFormComponent do
           </p>
           <button
             type="submit"
-            class="w-full bg-[var(--session-ink)] py-3 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
+            class="w-full rounded-md bg-[var(--session-ink)] py-3 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
           >
             Save goal
           </button>

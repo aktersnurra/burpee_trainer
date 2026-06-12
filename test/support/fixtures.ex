@@ -14,12 +14,15 @@ defmodule BurpeeTrainer.Fixtures do
   test.
   """
   def user_fixture(attrs \\ %{}) do
-    n = System.unique_integer([:positive])
+    suffix =
+      [System.system_time(:nanosecond), System.unique_integer([:positive, :monotonic])]
+      |> Enum.map(&Integer.to_string(&1, 36))
+      |> Enum.join("_")
 
     {:ok, user} =
       attrs
       |> Enum.into(%{
-        "username" => "user_#{n}",
+        "username" => "user_#{suffix}",
         "password" => "correct-horse-battery-staple"
       })
       |> Accounts.register_user()

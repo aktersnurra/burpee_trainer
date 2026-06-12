@@ -4,30 +4,32 @@
   current_level={@current_level}
   current_page={:plans}
 >
-  <div class="session-surface mx-auto max-w-2xl space-y-8 pb-24 text-[var(--session-ink)]">
+  <div class="session-surface mx-auto max-w-2xl space-y-5 pb-24 text-[var(--session-ink)]">
     <.plan_editor_header plan_input={@plan_input} live_action={@live_action} plan={@plan} />
 
-    <section class="space-y-4 border-t border-[var(--session-border)] pt-6">
-      <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        Type
-      </p>
+    <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
+      <div class="border-b border-[var(--session-border)] px-5 py-4">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Type</p>
+        <p class="mt-1 text-xs text-[var(--session-muted)]">Choose the movement pattern.</p>
+      </div>
       <.plan_type_picker plan_input={@plan_input} />
-    </section>
+    </.qs_surface>
 
-    <section class="space-y-4 border-t border-[var(--session-border)] pt-6">
-      <div class="grid grid-cols-2 px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        <p>Duration</p>
-        <p>Goal</p>
+    <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
+      <div class="border-b border-[var(--session-border)] px-5 py-4">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Target</p>
+        <p class="mt-1 text-xs text-[var(--session-muted)]">Set the time box and rep goal.</p>
       </div>
       <.plan_goal_controls plan_input={@plan_input} level={@level} />
-    </section>
+    </.qs_surface>
 
-    <section class="space-y-4 border-t border-[var(--session-border)] pt-6">
-      <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
-        Style
-      </p>
+    <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
+      <div class="border-b border-[var(--session-border)] px-5 py-4">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Style</p>
+        <p class="mt-1 text-xs text-[var(--session-muted)]">Pick how the work should be split.</p>
+      </div>
       <.plan_pacing_controls plan_input={@plan_input} />
-    </section>
+    </.qs_surface>
 
     <.plan_metadata plan={@plan} />
 

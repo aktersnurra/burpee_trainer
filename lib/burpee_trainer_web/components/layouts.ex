@@ -163,13 +163,13 @@ defmodule BurpeeTrainerWeb.Layouts do
       type="button"
       phx-click={JS.dispatch("phx:toggle-theme")}
       class={[
-        "fixed right-4 top-4 z-40 flex size-8 items-center justify-center rounded-full border transition sm:right-[calc(50%_-_16rem)] sm:top-16",
+        "fixed bottom-28 right-4 z-40 flex size-9 items-center justify-center rounded-xl border transition sm:bottom-auto sm:right-4 sm:top-3",
         @session_nav? &&
           "session-surface border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-surface-alt)]",
         !@session_nav? &&
           "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised"
       ]}
-      aria-label="Toggle light and dark theme"
+      aria-label="Toggle color theme"
     >
       <.icon name="hero-moon" class="size-4 dark:hidden" />
       <.icon name="hero-sun" class="hidden size-4 dark:block" />

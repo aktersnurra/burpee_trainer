@@ -287,11 +287,17 @@ export class SessionRenderer {
 		if (!el) return;
 		el.textContent = n;
 		el.style.color = "";
+
 	}
 
 	updateTotalGoal(n) {
+		const counter = this.root.querySelector("#total-done");
+		if (counter) {
+			counter.dataset.totalPlan = n;
+		}
 		const el = this.root.querySelector("#total-plan");
 		if (el) el.textContent = n;
+		this.updateTotalCounter(Number.parseInt(counter?.textContent || "0", 10) || 0);
 	}
 
 	renderCountdownDots({ count, faded }) {

@@ -16,11 +16,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "No workouts yet"
     end
 
-    test "does not expose diagnostics in the normal workouts header", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/workouts")
-      refute html =~ "Tracking Test"
-      refute html =~ "Diagnostics"
-      refute html =~ ~s(href="/tracking-test")
+    test "exposes camera debug as a quiet utility action", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/workouts")
+      assert html =~ "Camera debug"
+      assert has_element?(view, "#workouts-camera-debug[href='/tracking-test']")
     end
 
     test "lists plans and videos together", %{conn: conn, user: user} do
@@ -46,7 +45,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workouts-featured-card")
       assert has_element?(view, "#workouts-options-section")
       assert has_element?(view, "#workouts-filter-panel")
-      assert has_element?(view, "#workouts-custom-session[href='/workouts/new']")
+      assert has_element?(view, "#workouts-new-workout[href='/workouts/new']")
+      assert render(view) =~ "Saved plans"
       assert has_element?(view, "#workouts-list")
       assert has_element?(view, "[data-workout-row]")
     end
@@ -80,7 +80,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute render(view) =~ "Featured training"
     end
 
-    test "Mine filter shows only plans", %{conn: conn, user: user} do
+    test "Saved plans filter shows only plans", %{conn: conn, user: user} do
       _plan = plan_fixture(user, %{"name" => "My Plan"})
       _video = video_fixture(%{name: "BDT Video", burpee_type: :six_count, duration_sec: 600})
 
@@ -209,6 +209,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert html =~ "Block 1"
       assert html =~ "180 reps"
+      refute html =~ "Block 1 · 36 × Block 1"
       assert html =~ "+10s recovery"
       assert html =~ "Block 1 continued"
       assert html =~ "20 reps"
@@ -246,11 +247,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      assert html =~ "6 × Block 1"
-      assert html =~ "42 reps"
+      assert html =~ "6× · 42 reps"
       assert html =~ "+10s recovery"
-      assert html =~ "4 × Block 1"
-      assert html =~ "28 reps"
+      assert html =~ "4× · 28 reps"
       assert html =~ "20:10"
       refute html =~ "Block 1 · 6 × Block 1"
     end
@@ -301,6 +300,42 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "10×"
       assert html =~ ~s(value="4")
       assert html =~ ~s(value="3")
+    end
+
+    test "block pattern set can be removed", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
+      assert has_element?(view, "button[data-remove-pattern-set][phx-value-index='1']")
+
+      view
+      |> element("button[data-remove-pattern-set][phx-value-index='1']")
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "4 reps/block"
+      refute html =~ ~s(name="pattern[1]")
+    end
+
+    test "block inspector exposes editable pace override", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
+
+      view
+      |> element("[data-timeline-row-index='1'] [data-timeline-block-toggle]")
+      |> render_click()
+
+      assert has_element?(view, "#graph-inspector")
+      assert has_element?(view, "#graph-pace-form input[name='pace']")
+
+      view
+      |> element("#graph-pace-form")
+      |> render_change(%{"pace" => "6.4"})
+
+      html = render(view)
+      assert html =~ "Manual pace"
+      assert html =~ ~s(value="6.4")
     end
 
     test "saves generated pattern plan and reloads steps", %{conn: conn, user: user} do
@@ -360,7 +395,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#graph-inspector")
 
       view
-      |> element("#graph-inspector")
+      |> element("#graph-pattern-form")
       |> render_change(%{"pattern" => %{"0" => "5", "1" => "2"}})
 
       html = render(view)
@@ -427,7 +462,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "[data-timeline-edge-action]")
 
       view
-      |> element("[data-timeline-edge-index='0'][data-timeline-edge-action]")
+      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
       |> render_click()
 
       assert has_element?(view, "[data-timeline-rest-node]")
@@ -598,6 +633,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
       assert html =~ "Try lowering reps"
+      assert html =~ "No runnable prescription yet"
+      refute html =~ "Recommended"
+      refute html =~ "Prescription graph"
+      refute html =~ "Predicted finish"
     end
 
     test "impossible prescription shows actionable feedback", %{conn: conn} do
@@ -613,6 +652,28 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "needs at least"
       assert html =~ "Increase the duration"
       assert html =~ "Reduce the rep target"
+      assert html =~ "No runnable prescription yet"
+      refute html =~ "Recommended"
+      refute html =~ "Prescription graph"
+      refute html =~ "Predicted finish"
+    end
+
+    test "impossible prescription cannot be saved", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view
+      |> element("#plan-goal-controls")
+      |> render_change(%{"target_duration_min" => "1", "burpee_count_target" => "200"})
+
+      assert has_element?(view, "button[form='plan-form'][disabled]")
+
+      html =
+        view
+        |> element("#plan-form")
+        |> render_submit(%{"workout_plan" => %{}})
+
+      assert html =~ "Fix prescription before saving"
+      assert has_element?(view, "#plan-form")
     end
 
     test "new editor uses block pattern instead of show structure", %{conn: conn} do
