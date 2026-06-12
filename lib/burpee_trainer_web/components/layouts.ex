@@ -27,10 +27,10 @@ defmodule BurpeeTrainerWeb.Layouts do
     <%= if @current_user do %>
       <%!-- Desktop top nav — hidden on mobile --%>
       <nav class={[
-        "hidden sm:flex items-center justify-center gap-1 px-4 py-2 border-b",
+        "hidden sm:flex items-center justify-center gap-2 px-4 py-3 border-b",
         @session_surface_page? &&
-          "session-surface border-[var(--session-border)] bg-[var(--session-bg)]",
-        !@session_surface_page? && "border-base-border bg-base-nav"
+          "session-surface border-[var(--session-border)] bg-[var(--session-bg)]/95 text-[var(--session-ink)]",
+        !@session_surface_page? && "border-base-border bg-base-nav text-base-content"
       ]}>
         <.nav_icon
           navigate={~p"/"}
@@ -74,10 +74,10 @@ defmodule BurpeeTrainerWeb.Layouts do
 
       <%!-- Mobile bottom tab bar --%>
       <nav class={[
-        "fixed bottom-0 inset-x-0 z-50 sm:hidden flex justify-around border-t pb-safe",
+        "fixed bottom-0 inset-x-0 z-50 sm:hidden flex justify-around border-t pb-safe backdrop-blur",
         @session_surface_page? &&
-          "session-surface h-[92px] items-start border-[var(--session-border)] bg-[var(--session-bg)]",
-        !@session_surface_page? && "border-base-border bg-base-nav"
+          "session-surface h-[84px] items-start border-[var(--session-border)] bg-[var(--session-bg)]/95",
+        !@session_surface_page? && "h-16 border-base-border bg-base-nav/95"
       ]}>
         <.bottom_tab
           navigate={~p"/"}
@@ -135,7 +135,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       <div class={[
         "sm:hidden",
         @session_surface_page? &&
-          "session-surface h-[92px] bg-[var(--session-bg)]",
+          "session-surface h-[84px] bg-[var(--session-bg)]",
         !@session_surface_page? && "h-16"
       ]} />
     <% end %>
@@ -163,11 +163,11 @@ defmodule BurpeeTrainerWeb.Layouts do
       type="button"
       phx-click={JS.dispatch("phx:toggle-theme")}
       class={[
-        "fixed right-4 top-4 z-40 flex size-9 items-center justify-center transition sm:right-[calc(50%_-_16rem)] sm:top-14",
+        "fixed right-4 top-4 z-40 flex size-8 items-center justify-center rounded-full border transition sm:right-[calc(50%_-_16rem)] sm:top-16",
         @session_nav? &&
-          "session-surface text-[var(--session-muted)] hover:text-[var(--session-ink)]",
+          "session-surface border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-surface-alt)]",
         !@session_nav? &&
-          "text-base-muted hover:text-base-content"
+          "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised"
       ]}
       aria-label="Toggle light and dark theme"
     >
@@ -189,18 +189,18 @@ defmodule BurpeeTrainerWeb.Layouts do
       navigate={@navigate}
       title={@title}
       class={[
-        "relative inline-flex items-center justify-center w-9 h-9 transition-colors",
+        "relative inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors",
         @session_nav? && @active && "text-[var(--session-ink)]",
         @session_nav? && !@active &&
-          "text-[var(--session-muted)] hover:text-[var(--session-ink)]",
-        !@session_nav? && @active && "rounded text-[#C8D8F0] bg-base-raised",
+          "text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-surface-alt)]/60",
+        !@session_nav? && @active && "text-base-content bg-base-raised",
         !@session_nav? && !@active &&
-          "rounded text-base-muted hover:text-[#6B8FA8] hover:bg-base-raised"
+          "text-base-muted hover:text-base-content hover:bg-base-raised"
       ]}
     >
       <span
         :if={@session_nav? && @active}
-        class="absolute left-1/2 top-[-9px] h-1 w-8 -translate-x-1/2 bg-[var(--session-ink)]"
+        class="absolute left-1/2 top-[-13px] h-0.5 w-7 -translate-x-1/2 rounded-full bg-[var(--session-accent)]"
         aria-hidden="true"
       />
       {render_slot(@inner_block)}
@@ -220,23 +220,23 @@ defmodule BurpeeTrainerWeb.Layouts do
       navigate={@navigate}
       class={[
         "relative inline-flex flex-col items-center transition-colors",
-        @session_nav? && "h-[92px] min-w-0 flex-1 justify-start gap-2 pt-6",
+        @session_nav? && "h-[84px] min-w-0 flex-1 justify-start gap-1.5 pt-5",
         !@session_nav? && "h-14 w-16 shrink-0 justify-center gap-0.5",
-        @session_nav? && @active && "font-bold text-[var(--session-ink)]",
+        @session_nav? && @active && "font-medium text-[var(--session-ink)]",
         @session_nav? && !@active && "font-medium text-[var(--session-muted)]",
-        !@session_nav? && @active && "text-[#4A9EFF]",
+        !@session_nav? && @active && "text-base-content",
         !@session_nav? && !@active && "text-base-muted"
       ]}
     >
       <span
         :if={@session_nav? && @active}
-        class="absolute left-1/2 top-0 h-1 w-8 -translate-x-1/2 bg-[var(--session-ink)]"
+        class="absolute left-1/2 top-0 h-0.5 w-7 -translate-x-1/2 rounded-full bg-[var(--session-accent)]"
         aria-hidden="true"
       />
-      <span class={[@session_nav? && "[&_svg]:size-8", !@session_nav? && ""]}>
+      <span class={[@session_nav? && "[&_svg]:size-6", !@session_nav? && ""]}>
         {render_slot(@inner_block)}
       </span>
-      <span class={[@session_nav? && "text-base", !@session_nav? && "text-[10px] font-medium"]}>
+      <span class={[@session_nav? && "text-xs", !@session_nav? && "text-[10px] font-medium"]}>
         {@label}
       </span>
     </.link>
