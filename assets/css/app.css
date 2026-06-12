@@ -22,35 +22,34 @@
   themes: false;
 }
 
-/* Dark theme — subtle blue-gray tint, electric blue accent. */
 @plugin "../vendor/daisyui-theme" {
-  name: "dark";
+  name: "light";
   default: true;
-  prefersdark: true;
-  color-scheme: "dark";
-  --color-base-100: #151515;
-  --color-base-200: #1C1C1C;
-  --color-base-300: #1C1C1C;
-  --color-base-content: #F5F5F5;
-  --color-primary: #4A9EFF;
-  --color-primary-content: #E6F1FF;
-  --color-secondary: #7E97AB;
-  --color-secondary-content: #D4E4EF;
-  --color-accent: #AA749F;
-  --color-accent-content: #EDE9FE;
-  --color-neutral: #2C2C2C;
-  --color-neutral-content: #F5F5F5;
-  --color-info: #4A9EFF;
-  --color-info-content: #E6F1FF;
-  --color-success: #22C55E;
-  --color-success-content: #151515;
-  --color-warning: #F59E0B;
-  --color-warning-content: #151515;
-  --color-error: #EF4444;
-  --color-error-content: #151515;
-  --radius-selector: 0.375rem;
-  --radius-field: 0.375rem;
-  --radius-box: 0.625rem;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: #F4F2EE;
+  --color-base-200: #FAF8F3;
+  --color-base-300: #EFECE4;
+  --color-base-content: #20201D;
+  --color-primary: #20201D;
+  --color-primary-content: #FAF8F3;
+  --color-secondary: #A77B5D;
+  --color-secondary-content: #FFF8F0;
+  --color-accent: #A77B5D;
+  --color-accent-content: #FFF8F0;
+  --color-neutral: #DAD6CE;
+  --color-neutral-content: #20201D;
+  --color-info: #6F7F8F;
+  --color-info-content: #F8F6F1;
+  --color-success: #6F7D55;
+  --color-success-content: #F8F6F1;
+  --color-warning: #A77B5D;
+  --color-warning-content: #FFF8F0;
+  --color-error: #A55643;
+  --color-error-content: #FFF8F0;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.875rem;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1px;
@@ -59,16 +58,37 @@
 }
 
 /* Semantic colour tokens for Tailwind utility classes.
-   Values reference the CSS vars so palette changes in the daisyUI theme block above
-   flow through automatically — no more hardcoded hex in templates. */
+   Values reference CSS variables so palette changes flow through the app shell. */
 @theme {
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --color-base-nav:          var(--color-base-100);
-  --color-base-raised:       #1C1C1C;
+  --color-base-raised:       var(--color-base-200);
   --color-base-border:       var(--color-neutral);
-  --color-base-border-hover: #2C2C2C;
-  --color-base-muted:        #A0A0A0;
+  --color-base-border-hover: var(--color-base-border-hover-token);
+  --color-base-muted:        var(--color-base-muted-token);
+}
+
+:root {
+  --color-base-border-hover-token: #CFC8BC;
+  --color-base-muted-token: #74716A;
+}
+
+[data-theme="dark"] {
+  --color-base-100: #181614;
+  --color-base-200: #211F1B;
+  --color-base-300: #2A2722;
+  --color-base-content: #F3EEE6;
+  --color-primary: #F3EEE6;
+  --color-primary-content: #181614;
+  --color-secondary: #C08A68;
+  --color-secondary-content: #181614;
+  --color-accent: #C08A68;
+  --color-accent-content: #181614;
+  --color-neutral: #39342D;
+  --color-neutral-content: #F3EEE6;
+  --color-base-border-hover-token: #4A443A;
+  --color-base-muted-token: #B8AEA1;
 }
 
 /* Add variants based on LiveView classes */
@@ -85,85 +105,87 @@
 /* Keep the document chrome/background aligned with the selected app theme. */
 :root {
   color-scheme: light;
-  background: #f4f5f6;
+  background: #F4F2EE;
 }
 
 body {
-  background: #f4f5f6;
+  background: #F4F2EE;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  background: #151515;
+  background: #181614;
 }
 
 [data-theme="dark"] body {
-  background: #151515;
+  background: #181614;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    color-scheme: dark;
-    background: #151515;
+    color-scheme: light;
+    background: #F4F2EE;
   }
 
-  :root:not([data-theme]) body {
-    background: #151515;
+  html:not([data-theme]) body {
+    background: #F4F2EE;
   }
 }
 
 #burpee-session,
 .session-surface {
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --session-bg: #f4f5f6;
-  --session-surface: #fafbfc;
-  --session-surface-alt: #fafbfc;
-  --session-ink: #16181a;
-  --session-muted: #72777d;
-  --session-soft-muted: #72777d;
-  --session-border: #e3e5e7;
-  --session-track: #e3e5e7;
-  --session-ring-track: #e3e5e7;
+  --session-bg: #F4F2EE;
+  --session-surface: #FAF8F3;
+  --session-surface-alt: #EFECE4;
+  --session-ink: #20201D;
+  --session-muted: #74716A;
+  --session-soft-muted: #9A9489;
+  --session-border: #DAD6CE;
+  --session-track: #DAD6CE;
+  --session-ring-track: #DAD6CE;
+  --session-accent: #A77B5D;
+  --session-accent-strong: #8F5F46;
   --session-series-six: var(--session-ink);
-  --session-series-seal: #8f6a50;
+  --session-series-seal: var(--session-accent);
   --session-countin-bg: var(--session-ink);
-  --session-countin-ink: #ffffff;
+  --session-countin-ink: #FAF8F3;
 }
 
 [data-theme="dark"] #burpee-session,
 [data-theme="dark"] .session-surface {
-  --session-bg: #151515;
-  --session-surface: #1c1c1c;
-  --session-surface-alt: #1c1c1c;
-  --session-ink: #f5f5f5;
-  --session-muted: #a0a0a0;
-  --session-soft-muted: #a0a0a0;
-  --session-border: #2c2c2c;
-  --session-track: #222222;
-  --session-ring-track: #303030;
+  --session-bg: #181614;
+  --session-surface: #211F1B;
+  --session-surface-alt: #2A2722;
+  --session-ink: #F3EEE6;
+  --session-muted: #B8AEA1;
+  --session-soft-muted: #8F867A;
+  --session-border: #39342D;
+  --session-track: #39342D;
+  --session-ring-track: #39342D;
+  --session-accent: #C08A68;
+  --session-accent-strong: #D09A78;
   --session-series-six: var(--session-ink);
-  --session-series-seal: #d6a071;
+  --session-series-seal: var(--session-accent);
   --session-countin-bg: var(--session-ink);
-  --session-countin-ink: #070707;
+  --session-countin-ink: #181614;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) #burpee-session,
-  :root:not([data-theme]) .session-surface {
-    --session-bg: #151515;
-    --session-surface: #1c1c1c;
-    --session-surface-alt: #1c1c1c;
-    --session-ink: #f5f5f5;
-    --session-muted: #a0a0a0;
-    --session-soft-muted: #a0a0a0;
-    --session-border: #2c2c2c;
-    --session-track: #222222;
-    --session-ring-track: #303030;
-    --session-series-six: var(--session-ink);
-    --session-series-seal: #d6a071;
-    --session-countin-bg: var(--session-ink);
-    --session-countin-ink: #070707;
-  }
+.qs-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.qs-heading-tight {
+  letter-spacing: -0.045em;
+}
+
+.qs-section-tight {
+  letter-spacing: -0.025em;
+}
+
+.qs-meta {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 
