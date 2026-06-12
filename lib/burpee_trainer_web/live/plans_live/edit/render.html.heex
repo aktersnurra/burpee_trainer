@@ -4,17 +4,17 @@
   current_level={@current_level}
   current_page={:plans}
 >
-  <div class="session-surface mx-auto max-w-3xl space-y-5 pb-24 text-[var(--session-ink)]">
+  <div class="session-surface mx-auto max-w-2xl space-y-8 pb-24 text-[var(--session-ink)]">
     <.plan_editor_header plan_input={@plan_input} live_action={@live_action} plan={@plan} />
 
-    <section class="space-y-2">
+    <section class="space-y-4 border-t border-[var(--session-border)] pt-6">
       <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
         Type
       </p>
       <.plan_type_picker plan_input={@plan_input} />
     </section>
 
-    <section class="space-y-2">
+    <section class="space-y-4 border-t border-[var(--session-border)] pt-6">
       <div class="grid grid-cols-2 px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
         <p>Duration</p>
         <p>Goal</p>
@@ -22,7 +22,7 @@
       <.plan_goal_controls plan_input={@plan_input} level={@level} />
     </section>
 
-    <section class="space-y-2">
+    <section class="space-y-4 border-t border-[var(--session-border)] pt-6">
       <p class="px-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
         Style
       </p>

@@ -1,12 +1,12 @@
-<section class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)]">
-  <div class="px-5 py-6 border-b border-[var(--session-border)]">
+<section class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5">
+  <div class="space-y-5">
     <%= if @plan_feedback do %>
       <div
         id="plan-solver-impossible"
-        class="space-y-5 rounded-2xl border border-error/40 bg-error/5 p-5"
+        class="space-y-5 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface-alt)] p-5"
       >
         <div class="flex items-start gap-3">
-          <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-error/40 bg-error/10 text-error">
+          <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] text-[var(--session-ink)]">
             <.icon name="hero-exclamation-triangle" class="size-4" />
           </span>
           <div class="min-w-0 space-y-1">
