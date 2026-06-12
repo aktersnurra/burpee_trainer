@@ -168,7 +168,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_page={:workouts}>
-      <div class="session-surface mx-auto max-w-lg space-y-5 bg-[var(--session-bg)] text-[var(--session-ink)]">
+      <div
+        id="workouts-page"
+        class="session-surface mx-auto max-w-lg space-y-8 pb-24 text-[var(--session-ink)]"
+      >
         <header class="px-1 pt-1">
           <div class="space-y-1">
             <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
@@ -202,10 +205,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           </div>
 
           <%!-- Single scrollable filter row --%>
-          <div
-            id="workouts-filter-panel"
-            class="rounded-2xl bg-[var(--session-surface)] px-3 py-3"
-          >
+          <div id="workouts-filter-panel" class="px-1">
             <div class="flex gap-2 overflow-x-auto no-scrollbar">
               <.filter_pill
                 label="Mine"
@@ -246,7 +246,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <%= if @items == [] do %>
             <.empty_state filters={@filters} />
           <% else %>
-            <div id="workouts-list" class="space-y-3">
+            <div id="workouts-list" class="border-t border-[var(--session-border)]">
               <%= for item <- @items do %>
                 <.workout_card
                   item={item}
@@ -267,17 +267,17 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <section
       id="workouts-featured-card"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-6 text-center"
+      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5 text-center"
     >
       <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
         Ready when you are
       </p>
-      <p class="mt-2 text-lg font-semibold tracking-[-0.02em] text-[var(--session-ink)]">
+      <p class="qs-section-tight mt-2 text-lg font-semibold tracking-[-0.02em] text-[var(--session-ink)]">
         Build a plan to start training
       </p>
       <.link
         navigate={~p"/workouts/new"}
-        class="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-ink)] transition hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)]"
+        class="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[var(--session-ink)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--session-bg)] transition hover:opacity-90"
       >
         New plan <.icon name="hero-plus" class="size-3.5" />
       </.link>
@@ -289,7 +289,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <section
       id="workouts-featured-card"
-      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] px-5 py-5"
+      class="rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)] p-5"
     >
       <div class="flex items-center gap-6">
         <div class="flex size-[104px] shrink-0 flex-col items-center justify-center rounded-full border-[7px] border-[var(--session-ring-track)] text-center">
@@ -310,7 +310,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <p class="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--session-muted)]">
             Featured training
           </p>
-          <h2 class="truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
+          <h2 class="qs-section-tight truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
             {@item.title}
           </h2>
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--session-muted)]">
@@ -328,7 +328,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             </.link>
             <.link
               navigate={@item.start_path}
-              class="inline-flex items-center gap-1 text-xs font-semibold text-[var(--session-ink)] transition hover:text-[var(--session-muted)]"
+              class="inline-flex items-center gap-1 rounded-full bg-[var(--session-ink)] px-3 py-1.5 text-xs font-semibold text-[var(--session-bg)] transition hover:opacity-90"
               aria-label={"Start #{@item.title}"}
             >
               Start <.icon name="hero-chevron-right" class="size-3.5" />
@@ -354,10 +354,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
       phx-value-burpee_type={if @value_key == "burpee_type", do: @value}
       phx-value-level={if @value_key == "level", do: @value}
       class={[
-        "shrink-0 border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] transition whitespace-nowrap",
-        @active && "border-[var(--session-ink)] bg-[var(--session-ink)] text-[var(--session-bg)]",
+        "rounded-full border px-3 py-1.5 text-sm transition whitespace-nowrap",
+        @active && "border-[var(--session-ink)] text-[var(--session-ink)]",
         !@active &&
-          "border-transparent text-[var(--session-soft-muted)] hover:border-[var(--session-border)] hover:text-[var(--session-ink)]"
+          "border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)]"
       ]}
     >
       {@label}
@@ -375,9 +375,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     ~H"""
     <div
       data-workout-row
-      class="relative rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)]"
+      class="group border-t border-[var(--session-border)] py-4 first:border-t-0"
     >
-      <div class="flex items-center gap-3 px-4 py-4 transition hover:bg-[var(--session-track)]/40 rounded-2xl">
+      <div class="flex items-center gap-3 transition">
         <.link
           id={"workout-card-#{@item.kind}-#{@item.id}"}
           navigate={if @item.kind == :plan, do: @item.edit_path, else: @item.start_path}
@@ -386,7 +386,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
           <div class="flex items-center justify-between gap-4">
             <div class="min-w-0 space-y-2">
               <div class="flex items-center gap-2">
-                <p class="truncate text-lg font-bold leading-tight tracking-[-0.02em] text-[var(--session-ink)]">
+                <p class="qs-section-tight truncate text-lg font-semibold leading-tight tracking-[-0.02em] text-[var(--session-ink)]">
                   {@item.title}
                 </p>
                 <%= if @item.kind == :video do %>
@@ -423,7 +423,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
         <.link
           id={"workout-play-#{@item.kind}-#{@item.id}"}
           navigate={@item.start_path}
-          class="flex size-10 shrink-0 items-center justify-center text-[var(--session-muted)] transition hover:text-[var(--session-ink)] active:scale-95"
+          class="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--session-surface)] text-[var(--session-ink)] transition hover:opacity-90 active:scale-95"
           aria-label={"Start #{@item.title}"}
         >
           <.icon name="hero-chevron-right" class="size-4" />

@@ -42,6 +42,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/workouts")
 
+      assert has_element?(view, "#workouts-page.session-surface")
       assert has_element?(view, "#workouts-featured-card")
       assert has_element?(view, "#workouts-options-section")
       assert has_element?(view, "#workouts-filter-panel")
