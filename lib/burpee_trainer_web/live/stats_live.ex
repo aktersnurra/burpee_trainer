@@ -468,7 +468,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <%= if @sessions == [] do %>
         <p class="text-sm text-[var(--session-muted)]">No sessions yet.</p>
       <% else %>
-        <div class="border border-[var(--session-border)] rounded-2xl bg-[var(--session-surface)] px-4">
+        <div class="divide-y divide-[var(--session-border)] border-y border-[var(--session-border)]">
           <%= for session <- @sessions do %>
             <.session_row session={session} />
           <% end %>
@@ -500,7 +500,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     assigns = assign(assigns, date_str: date_str, capture_badge: capture_badge(assigns.session))
 
     ~H"""
-    <div class="relative flex items-start justify-between gap-3 border-b border-[var(--session-border)] py-4 last:border-b-0">
+    <div class="relative flex items-start justify-between gap-3 py-4">
       <.link
         :if={@capture_badge && @capture_badge.label == "Tracked"}
         navigate={~p"/stats/sessions/#{@session.id}"}

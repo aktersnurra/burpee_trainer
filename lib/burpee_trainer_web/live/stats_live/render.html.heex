@@ -1,7 +1,7 @@
 <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
   <div
     data-stats-page
-    class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]"
+    class="session-surface mx-auto max-w-lg space-y-8 pb-24 text-[var(--session-ink)]"
   >
     <.at_risk_banner status={@level_status} />
     <.streak_card
@@ -34,7 +34,7 @@
       type="button"
       phx-click="open_log_modal"
       id="stats-log-button"
-      class="size-12 border border-[var(--session-ink)] rounded-2xl bg-[var(--session-surface)] text-[var(--session-ink)] flex items-center justify-center hover:bg-[var(--session-ink)] hover:text-[var(--session-bg)] transition"
+      class="flex size-11 items-center justify-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
       aria-label="Log session"
     >
       <.icon name="hero-plus" class="size-5" />
