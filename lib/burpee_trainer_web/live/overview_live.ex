@@ -571,16 +571,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   defp catch_up_type_label(:six_count), do: "Six-count"
   defp catch_up_type_label(:navy_seal), do: "Navy SEAL"
 
-  defp primary_home_action(nil, _min_done, _goal) do
-    %{
-      title: "No workout yet",
-      detail: "Choose a saved workout first",
-      reason: "Set your burpee type, reps, and duration before starting.",
-      label: "Choose workout",
-      path: ~p"/workouts/new"
-    }
-  end
-
   defp primary_home_action(plan, min_done, goal) when min_done >= goal do
     type_label = if plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
 

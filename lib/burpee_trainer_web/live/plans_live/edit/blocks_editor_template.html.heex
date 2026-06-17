@@ -25,7 +25,7 @@
             {Fmt.duration_sec(round(range_start))}–{Fmt.duration_sec(round(range_end))}
             <span class="px-1 text-[var(--session-muted)]">·</span>
             {length(sets)} sets
-            <%= if repeat && repeat > 1 do %>
+            <%= if repeat > 1 do %>
               <span class="px-1 text-[var(--session-muted)]">·</span>repeats ×{repeat}
             <% end %>
           </p>
