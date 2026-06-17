@@ -4,22 +4,12 @@ defmodule BurpeeTrainer.PlanEditor do
   """
 
   alias BurpeeTrainer.BurpeeType
-  alias BurpeeTrainer.PlanEditor.{Derived, State}
+  alias BurpeeTrainer.PlanEditor.{Derived, Input, State}
   alias BurpeeTrainer.{Planner, PlanSolver}
-  alias BurpeeTrainer.PlanSolver.Input
+  alias BurpeeTrainer.PlanSolver.Input, as: SolverInput
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
 
-  @type input :: %{
-          name: String.t(),
-          burpee_type: PlanSolver.Input.burpee_type(),
-          target_duration_min: pos_integer(),
-          burpee_count_target: pos_integer(),
-          pacing_style: PlanSolver.Input.pacing_style(),
-          reps_per_set: pos_integer() | nil,
-          additional_rests: [PlanSolver.Input.additional_rest()],
-          sec_per_burpee_override: float() | nil,
-          block_pattern: [pos_integer()] | nil
-        }
+  @type input :: Input.t()
 
   @spec new(atom(), map()) :: {:ok, State.t()}
   def new(level, params) do
@@ -46,24 +36,12 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec default_input() :: input()
   def default_input do
-    %{
-      name: "New plan",
-      burpee_type: :six_count,
-      target_duration_min: 20,
-      burpee_count_target: 100,
-      pacing_style: :even,
-      reps_per_set: PlanSolver.default_reps_per_set(:six_count),
-      additional_rests: [],
-      sec_per_burpee_override: nil,
-      block_pattern: nil
-    }
+    Input.default()
   end
 
   @spec apply_coach_params(input(), map()) :: input()
-  def apply_coach_params(plan_input, params) do
-    plan_input
-    |> maybe_put_count(params)
-    |> maybe_put_pace(params)
+  def apply_coach_params(%Input{} = plan_input, params) do
+    Input.apply_coach_params(plan_input, params)
   end
 
   @spec pick_type(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
@@ -93,27 +71,17 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec change_block_pattern(State.t(), map()) :: {:ok, State.t()}
   def change_block_pattern(%State{} = state, params) do
-    pattern =
-      params
-      |> Map.get("pattern", %{})
-      |> Enum.sort_by(fn {idx, _} -> String.to_integer(idx) end)
-      |> Enum.map(fn {_idx, value} -> parse_positive_integer(value) end)
-      |> Enum.reject(&is_nil/1)
+    {:ok, input} = Input.change_block_pattern(state.input, params)
 
     state
-    |> put_input(%{state.input | block_pattern: pattern})
+    |> put_input(input)
     |> regenerate()
   end
 
   @spec set_pace_override(State.t(), term()) :: {:ok, State.t()}
   def set_pace_override(%State{} = state, pace) do
-    override =
-      case parse_positive_float(pace) do
-        {:ok, pace} -> pace
-        {:error, _reason} -> nil
-      end
-
-    {:ok, %{state | input: %{state.input | sec_per_burpee_override: override}}}
+    {:ok, input} = Input.set_pace_override(state.input, pace)
+    {:ok, %{state | input: input}}
   end
 
   @spec add_rest(State.t()) :: {:ok, State.t()}
@@ -128,7 +96,7 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec remove_rest(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def remove_rest(%State{} = state, index) do
-    case parse_non_negative_integer(index) do
+    case Input.parse_non_negative_index(index) do
       {:ok, index} ->
         rests = List.delete_at(state.input.additional_rests, index)
         {:ok, %{state | input: %{state.input | additional_rests: rests}}}
@@ -140,29 +108,15 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec change_rest(State.t(), map()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def change_rest(%State{} = state, rest_params) do
-    with {:ok, index} <- parse_non_negative_integer(Map.get(rest_params, "index", "0")) do
-      existing = Enum.at(state.input.additional_rests, index, %{rest_sec: 30, target_min: 10})
-
-      rest_sec =
-        parse_positive_integer_or(Map.get(rest_params, "rest_sec", ""), existing.rest_sec)
-
-      target_min =
-        parse_positive_integer_or(Map.get(rest_params, "target_min", ""), existing.target_min)
-
-      rests =
-        List.update_at(state.input.additional_rests, index, fn _ ->
-          %{rest_sec: rest_sec, target_min: target_min}
-        end)
-
-      {:ok, %{state | input: %{state.input | additional_rests: rests}}}
-    else
+    case Input.change_rest(state.input, rest_params) do
+      {:ok, input} -> {:ok, %{state | input: input}}
       {:error, reason} -> {:error, reason, state}
     end
   end
 
   @spec regenerate(State.t()) :: {:ok, State.t()}
   def regenerate(%State{} = state) do
-    solver_input = %Input{
+    solver_input = %SolverInput{
       name: state.input.name,
       burpee_type: state.input.burpee_type,
       target_duration_min: state.input.target_duration_min,
@@ -194,8 +148,10 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec change_basics(State.t(), map()) :: {:ok, State.t()}
   def change_basics(%State{} = state, params) do
+    {:ok, input} = Input.change_basics(state.input, params)
+
     state
-    |> put_input(parse_basics(params, state.input))
+    |> put_input(input)
     |> regenerate()
   end
 
@@ -321,64 +277,6 @@ defmodule BurpeeTrainer.PlanEditor do
 
   defp put_input(%State{} = state, input), do: %{state | input: input}
 
-  defp parse_basics(params, current) do
-    name = Map.get(params, "name", current.name)
-
-    target_duration_min =
-      case Integer.parse(Map.get(params, "target_duration_min", "")) do
-        {count, ""} when count > 0 -> count
-        _ -> current.target_duration_min
-      end
-
-    burpee_count_target =
-      case Integer.parse(Map.get(params, "burpee_count_target", "")) do
-        {count, ""} when count > 0 -> count
-        _ -> current.burpee_count_target
-      end
-
-    reps_per_set =
-      case Integer.parse(Map.get(params, "reps_per_set", "")) do
-        {count, ""} when count > 0 -> count
-        _ -> current.reps_per_set
-      end
-
-    %{
-      current
-      | name: name,
-        target_duration_min: target_duration_min,
-        burpee_count_target: burpee_count_target,
-        reps_per_set: reps_per_set
-    }
-  end
-
-  defp maybe_put_count(plan_input, %{"count" => count_str}) do
-    case Integer.parse(count_str) do
-      {count, ""} when count > 0 -> %{plan_input | burpee_count_target: count}
-      _ -> plan_input
-    end
-  end
-
-  defp maybe_put_count(plan_input, _params), do: plan_input
-
-  defp maybe_put_pace(plan_input, %{"pace" => pace_str}) do
-    case Float.parse(pace_str) do
-      {pace, _} when pace > 0 -> %{plan_input | sec_per_burpee_override: pace}
-      _ -> plan_input
-    end
-  end
-
-  defp maybe_put_pace(plan_input, _params), do: plan_input
-
-  defp parse_positive_float(value) when is_binary(value) do
-    case Float.parse(value) do
-      {number, _rest} when number > 0 -> {:ok, number}
-      _ -> {:error, {:invalid_pace, value}}
-    end
-  end
-
-  defp parse_positive_float(value) when is_number(value) and value > 0, do: {:ok, value * 1.0}
-  defp parse_positive_float(value), do: {:error, {:invalid_pace, value}}
-
   defp parse_non_negative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
 
   defp parse_non_negative_integer(value) when is_binary(value) do
@@ -389,20 +287,6 @@ defmodule BurpeeTrainer.PlanEditor do
   end
 
   defp parse_non_negative_integer(value), do: {:error, {:invalid_index, value}}
-
-  defp parse_positive_integer(value) do
-    case Integer.parse(to_string(value || "")) do
-      {integer, ""} when integer > 0 -> integer
-      _ -> nil
-    end
-  end
-
-  defp parse_positive_integer_or(value, default) do
-    case Integer.parse(to_string(value || "")) do
-      {integer, ""} when integer > 0 -> integer
-      _ -> default
-    end
-  end
 
   defp can_summarize?(%WorkoutPlan{blocks: blocks}) when is_list(blocks) and blocks != [] do
     Enum.all?(blocks, fn block ->

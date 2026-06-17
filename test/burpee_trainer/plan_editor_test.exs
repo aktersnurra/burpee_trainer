@@ -4,11 +4,13 @@ defmodule BurpeeTrainer.PlanEditorTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.PlanEditor
+  alias BurpeeTrainer.PlanEditor.Input
   alias BurpeeTrainer.PlanSolver
 
-  test "default_input contains the new-plan defaults" do
+  test "default_input returns typed new-plan defaults" do
     input = PlanEditor.default_input()
 
+    assert %Input{} = input
     assert input.name == "New plan"
     assert input.burpee_type == :six_count
     assert input.target_duration_min == 20
@@ -17,6 +19,126 @@ defmodule BurpeeTrainer.PlanEditorTest do
     assert input.reps_per_set == PlanSolver.default_reps_per_set(:six_count)
     assert input.additional_rests == []
     assert input.sec_per_burpee_override == nil
+    assert input.block_pattern == nil
+  end
+
+  describe "PlanEditor.Input boundary" do
+    test "default/0 returns typed defaults" do
+      assert %Input{} = input = Input.default()
+      assert input.name == "New plan"
+      assert input.burpee_type == :six_count
+      assert input.target_duration_min == 20
+      assert input.burpee_count_target == 100
+      assert input.pacing_style == :even
+    end
+
+    test "apply_coach_params/2 accepts positive count and pace" do
+      input =
+        Input.default()
+        |> Input.apply_coach_params(%{"count" => "75", "pace" => "2.5"})
+
+      assert input.burpee_count_target == 75
+      assert input.sec_per_burpee_override == 2.5
+    end
+
+    test "apply_coach_params/2 ignores invalid values" do
+      input =
+        Input.default()
+        |> Input.apply_coach_params(%{"count" => "0", "pace" => "bad"})
+
+      assert input.burpee_count_target == 100
+      assert input.sec_per_burpee_override == nil
+    end
+
+    test "change_basics/2 updates positive numeric fields and name" do
+      {:ok, input} =
+        Input.default()
+        |> Input.change_basics(%{
+          "name" => "Changed",
+          "target_duration_min" => "25",
+          "burpee_count_target" => "120",
+          "reps_per_set" => "10"
+        })
+
+      assert input.name == "Changed"
+      assert input.target_duration_min == 25
+      assert input.burpee_count_target == 120
+      assert input.reps_per_set == 10
+    end
+
+    test "change_basics/2 preserves existing numbers for invalid partial input" do
+      {:ok, input} =
+        Input.default()
+        |> Input.change_basics(%{
+          "name" => "Changed",
+          "target_duration_min" => "bad",
+          "burpee_count_target" => "0",
+          "reps_per_set" => ""
+        })
+
+      assert input.name == "Changed"
+      assert input.target_duration_min == 20
+      assert input.burpee_count_target == 100
+      assert input.reps_per_set == PlanSolver.default_reps_per_set(:six_count)
+    end
+
+    test "change_block_pattern/2 normalizes sorted positive pattern values" do
+      {:ok, input} =
+        Input.default()
+        |> Input.change_block_pattern(%{"pattern" => %{"1" => "7", "0" => "5", "2" => "bad"}})
+
+      assert input.block_pattern == [5, 7]
+    end
+
+    test "set_pace_override/2 stores positive numeric pace" do
+      {:ok, input} = Input.set_pace_override(Input.default(), "2.5")
+      assert input.sec_per_burpee_override == 2.5
+
+      {:ok, input} = Input.set_pace_override(input, 3)
+      assert input.sec_per_burpee_override == 3.0
+    end
+
+    test "set_pace_override/2 clears invalid or empty pace" do
+      {:ok, input} = Input.set_pace_override(Input.default(), "2.5")
+      {:ok, input} = Input.set_pace_override(input, "")
+      assert input.sec_per_burpee_override == nil
+
+      {:ok, input} = Input.set_pace_override(%{input | sec_per_burpee_override: 2.5}, "bad")
+      assert input.sec_per_burpee_override == nil
+    end
+
+    test "parse_non_negative_index/1 returns tagged errors" do
+      assert {:ok, 0} = Input.parse_non_negative_index("0")
+      assert {:ok, 3} = Input.parse_non_negative_index(3)
+      assert {:error, {:invalid_index, "bad"}} = Input.parse_non_negative_index("bad")
+      assert {:error, {:invalid_index, -1}} = Input.parse_non_negative_index(-1)
+    end
+
+    test "change_rest/2 updates rest by parsed index" do
+      input = %{Input.default() | additional_rests: [%{rest_sec: 30, target_min: 10}]}
+
+      {:ok, input} =
+        Input.change_rest(input, %{
+          "index" => "0",
+          "target_min" => "12",
+          "rest_sec" => "90"
+        })
+
+      assert input.additional_rests == [%{target_min: 12, rest_sec: 90}]
+    end
+
+    test "change_rest/2 preserves existing rest values for invalid partial input" do
+      input = %{Input.default() | additional_rests: [%{rest_sec: 30, target_min: 10}]}
+
+      {:ok, input} =
+        Input.change_rest(input, %{
+          "index" => "0",
+          "target_min" => "bad",
+          "rest_sec" => ""
+        })
+
+      assert input.additional_rests == [%{target_min: 10, rest_sec: 30}]
+    end
   end
 
   test "apply_coach_params accepts positive count and pace" do
