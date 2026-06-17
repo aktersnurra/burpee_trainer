@@ -250,29 +250,8 @@ defmodule BurpeeTrainer.PlanEditor do
     do: {:error, :missing_form_plan, state}
 
   @spec input_from_plan(WorkoutPlan.t()) :: input()
-  def input_from_plan(plan) do
-    rests =
-      case Jason.decode(plan.additional_rests || "[]") do
-        {:ok, list} when is_list(list) ->
-          Enum.map(list, fn %{"rest_sec" => rest_sec, "target_min" => target_min} ->
-            %{rest_sec: rest_sec, target_min: target_min}
-          end)
-
-        _ ->
-          []
-      end
-
-    %{
-      name: plan.name,
-      burpee_type: plan.burpee_type,
-      target_duration_min: plan.target_duration_min || 20,
-      burpee_count_target: plan.burpee_count_target || 100,
-      pacing_style: plan.pacing_style || :even,
-      reps_per_set: infer_reps_per_set(plan),
-      additional_rests: rests,
-      sec_per_burpee_override: nil,
-      block_pattern: infer_block_pattern(plan)
-    }
+  def input_from_plan(%WorkoutPlan{} = plan) do
+    Input.from_plan(plan)
   end
 
   defp put_input(%State{} = state, input), do: %{state | input: input}
@@ -302,37 +281,4 @@ defmodule BurpeeTrainer.PlanEditor do
   end
 
   defp can_summarize?(_), do: false
-
-  defp infer_block_pattern(plan) do
-    plan.blocks
-    |> Enum.sort_by(& &1.position)
-    |> List.first()
-    |> case do
-      %Block{sets: sets} ->
-        sets
-        |> Enum.sort_by(& &1.position)
-        |> Enum.map(& &1.burpee_count)
-        |> case do
-          [] -> nil
-          pattern -> pattern
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  defp infer_reps_per_set(plan) do
-    first_set =
-      plan.blocks
-      |> Enum.sort_by(& &1.position)
-      |> List.first()
-      |> case do
-        nil -> nil
-        %Block{sets: sets} -> sets |> Enum.sort_by(& &1.position) |> List.first()
-      end
-
-    (match?(%Set{}, first_set) && first_set.burpee_count) ||
-      PlanSolver.default_reps_per_set(plan.burpee_type)
-  end
 end

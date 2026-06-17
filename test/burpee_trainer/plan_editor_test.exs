@@ -139,6 +139,19 @@ defmodule BurpeeTrainer.PlanEditorTest do
 
       assert input.additional_rests == [%{target_min: 10, rest_sec: 30}]
     end
+
+    test "from_plan/1 converts a persisted workout plan into typed input" do
+      user = user_fixture()
+      plan = plan_fixture(user, %{"name" => "Persisted", "burpee_count_target" => 42})
+
+      input = Input.from_plan(plan)
+
+      assert %Input{} = input
+      assert input.name == "Persisted"
+      assert input.burpee_count_target == 42
+      assert input.burpee_type == plan.burpee_type
+      assert input.target_duration_min == (plan.target_duration_min || 20)
+    end
   end
 
   test "apply_coach_params accepts positive count and pace" do
@@ -165,6 +178,7 @@ defmodule BurpeeTrainer.PlanEditorTest do
 
     input = PlanEditor.input_from_plan(plan)
 
+    assert %Input{} = input
     assert input.name == "Persisted"
     assert input.burpee_count_target == 42
     assert input.burpee_type == plan.burpee_type

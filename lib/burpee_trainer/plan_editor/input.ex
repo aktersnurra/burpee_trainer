@@ -7,6 +7,7 @@ defmodule BurpeeTrainer.PlanEditor.Input do
   """
 
   alias BurpeeTrainer.PlanSolver
+  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
 
   @type additional_rest :: PlanSolver.Input.additional_rest()
 
@@ -68,6 +69,21 @@ defmodule BurpeeTrainer.PlanEditor.Input do
     input
     |> maybe_put_count(params)
     |> maybe_put_pace(params)
+  end
+
+  @spec from_plan(WorkoutPlan.t()) :: t()
+  def from_plan(%WorkoutPlan{} = plan) do
+    %__MODULE__{
+      name: plan.name,
+      burpee_type: plan.burpee_type,
+      target_duration_min: plan.target_duration_min || 20,
+      burpee_count_target: plan.burpee_count_target || 100,
+      pacing_style: plan.pacing_style || :even,
+      reps_per_set: infer_reps_per_set(plan),
+      additional_rests: decode_additional_rests(plan.additional_rests),
+      sec_per_burpee_override: nil,
+      block_pattern: infer_block_pattern(plan)
+    }
   end
 
   @spec change_basics(t(), map()) :: {:ok, t()}
@@ -144,6 +160,56 @@ defmodule BurpeeTrainer.PlanEditor.Input do
 
       {:ok, %{input | additional_rests: rests}}
     end
+  end
+
+  defp decode_additional_rests(json) do
+    case Jason.decode(json || "[]") do
+      {:ok, list} when is_list(list) ->
+        Enum.flat_map(list, fn
+          %{"rest_sec" => rest_sec, "target_min" => target_min}
+          when is_number(rest_sec) and is_number(target_min) ->
+            [%{rest_sec: rest_sec, target_min: target_min}]
+
+          _other ->
+            []
+        end)
+
+      _ ->
+        []
+    end
+  end
+
+  defp infer_block_pattern(%WorkoutPlan{} = plan) do
+    plan.blocks
+    |> Enum.sort_by(& &1.position)
+    |> List.first()
+    |> case do
+      %Block{sets: sets} ->
+        sets
+        |> Enum.sort_by(& &1.position)
+        |> Enum.map(& &1.burpee_count)
+        |> case do
+          [] -> nil
+          pattern -> pattern
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp infer_reps_per_set(%WorkoutPlan{} = plan) do
+    first_set =
+      plan.blocks
+      |> Enum.sort_by(& &1.position)
+      |> List.first()
+      |> case do
+        nil -> nil
+        %Block{sets: sets} -> sets |> Enum.sort_by(& &1.position) |> List.first()
+      end
+
+    (match?(%Set{}, first_set) && first_set.burpee_count) ||
+      PlanSolver.default_reps_per_set(plan.burpee_type)
   end
 
   defp maybe_put_count(%__MODULE__{} = input, %{"count" => count_str}) do
