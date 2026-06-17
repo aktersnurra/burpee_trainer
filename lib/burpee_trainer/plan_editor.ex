@@ -44,7 +44,7 @@ defmodule BurpeeTrainer.PlanEditor do
     Input.apply_coach_params(plan_input, params)
   end
 
-  @spec pick_type(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  @spec pick_type(State.t(), term()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
   def pick_type(%State{} = state, type) do
     case BurpeeType.parse(type) do
       {:ok, burpee_type} ->
@@ -61,7 +61,7 @@ defmodule BurpeeTrainer.PlanEditor do
     end
   end
 
-  @spec pick_pacing(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  @spec pick_pacing(State.t(), term()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
   def pick_pacing(%State{} = state, style) when style in ["even", "unbroken", :even, :unbroken] do
     pacing_style = if is_binary(style), do: String.to_existing_atom(style), else: style
     {:ok, %{state | input: %{state.input | pacing_style: pacing_style}}}
@@ -94,7 +94,7 @@ defmodule BurpeeTrainer.PlanEditor do
     {:ok, %{state | input: %{current | additional_rests: current.additional_rests ++ [rest]}}}
   end
 
-  @spec remove_rest(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  @spec remove_rest(State.t(), term()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
   def remove_rest(%State{} = state, index) do
     case Input.parse_non_negative_index(index) do
       {:ok, index} ->
@@ -106,7 +106,7 @@ defmodule BurpeeTrainer.PlanEditor do
     end
   end
 
-  @spec change_rest(State.t(), map()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  @spec change_rest(State.t(), map()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
   def change_rest(%State{} = state, rest_params) do
     case Input.change_rest(state.input, rest_params) do
       {:ok, input} -> {:ok, %{state | input: input}}
@@ -199,7 +199,7 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec copy_block(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def copy_block(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, index) do
-    with {:ok, index} <- parse_non_negative_integer(index),
+    with {:ok, index} <- Input.parse_non_negative_index(index),
          blocks <- Enum.sort_by(blocks || [], & &1.position),
          %Block{} = source_block <- Enum.at(blocks, index) do
       copied_block = %{source_block | position: length(blocks) + 1}
@@ -222,8 +222,8 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec copy_set(State.t(), term(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def copy_set(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, block_index, set_index) do
-    with {:ok, block_index} <- parse_non_negative_integer(block_index),
-         {:ok, set_index} <- parse_non_negative_integer(set_index),
+    with {:ok, block_index} <- Input.parse_non_negative_index(block_index),
+         {:ok, set_index} <- Input.parse_non_negative_index(set_index),
          blocks <- Enum.sort_by(blocks || [], & &1.position),
          %Block{} = block <- Enum.at(blocks, block_index),
          sets <- Enum.sort_by(block.sets || [], & &1.position),
@@ -255,17 +255,6 @@ defmodule BurpeeTrainer.PlanEditor do
   end
 
   defp put_input(%State{} = state, input), do: %{state | input: input}
-
-  defp parse_non_negative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
-
-  defp parse_non_negative_integer(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {integer, ""} when integer >= 0 -> {:ok, integer}
-      _ -> {:error, {:invalid_index, value}}
-    end
-  end
-
-  defp parse_non_negative_integer(value), do: {:error, {:invalid_index, value}}
 
   defp can_summarize?(%WorkoutPlan{blocks: blocks}) when is_list(blocks) and blocks != [] do
     Enum.all?(blocks, fn block ->

@@ -3,8 +3,7 @@ defmodule BurpeeTrainer.PlanEditor.State do
   Plan editor state shared by the LiveView and pure editor transitions.
   """
 
-  alias BurpeeTrainer.PlanEditor
-  alias BurpeeTrainer.PlanEditor.Derived
+  alias BurpeeTrainer.PlanEditor.{Derived, Input}
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
@@ -23,7 +22,7 @@ defmodule BurpeeTrainer.PlanEditor.State do
 
   @type t :: %__MODULE__{
           plan: WorkoutPlan.t() | nil,
-          input: PlanEditor.input() | nil,
+          input: Input.t() | nil,
           level: atom() | nil,
           solver_error: String.t() | nil,
           solver_solution: PlanSolver.Solution.t() | nil,
