@@ -535,6 +535,92 @@ defmodule BurpeeTrainerWeb.OverviewLive do
                 phx-click="open_log_modal"
               />
             </.qs_surface>
+
+            <.qs_surface
+              id="home-catch-up-panel"
+              class="space-y-5 bg-[var(--session-surface)]/35 px-5 py-5"
+            >
+              <div class="space-y-2">
+                <p class="qs-meta text-xs tracking-[0.16em] text-[var(--session-muted)]">
+                  Finish the week
+                </p>
+                <h2 class="qs-heading-tight text-2xl font-semibold text-[var(--session-ink)]">
+                  Build catch-up sessions
+                </h2>
+                <p class="text-sm leading-6 text-[var(--session-muted)]">
+                  Turn the remaining weekly minutes into standard training sessions you can edit before starting.
+                </p>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  id="catch-up-six-count"
+                  type="button"
+                  phx-click="plan_catch_up"
+                  phx-value-type="six_count"
+                  class={[
+                    "rounded-xl border px-4 py-3 text-left text-sm transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]",
+                    if(@catch_up_selected_type == :six_count,
+                      do:
+                        "border-[var(--session-ink)] bg-[var(--session-track)]/45 text-[var(--session-ink)]",
+                      else: "border-[var(--session-border)] text-[var(--session-muted)]"
+                    )
+                  ]}
+                >
+                  <span class="block font-medium">Six-count</span>
+                  <span class="block text-xs opacity-80">Bodyweight volume</span>
+                </button>
+                <button
+                  id="catch-up-navy-seal"
+                  type="button"
+                  phx-click="plan_catch_up"
+                  phx-value-type="navy_seal"
+                  class={[
+                    "rounded-xl border px-4 py-3 text-left text-sm transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]",
+                    if(@catch_up_selected_type == :navy_seal,
+                      do:
+                        "border-[var(--session-ink)] bg-[var(--session-track)]/45 text-[var(--session-ink)]",
+                      else: "border-[var(--session-border)] text-[var(--session-muted)]"
+                    )
+                  ]}
+                >
+                  <span class="block font-medium">Navy SEAL</span>
+                  <span class="block text-xs opacity-80">Push-up focused</span>
+                </button>
+              </div>
+
+              <%= if @catch_up_plan do %>
+                <div
+                  id="home-catch-up-preview"
+                  class="space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 p-4"
+                >
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-sm text-[var(--session-muted)]">Catch-up preview</p>
+                      <p class="qs-tabular text-xl font-medium text-[var(--session-ink)]">
+                        {length(@catch_up_plan.selected_sessions)} sessions · {@catch_up_plan.total_duration_min} min
+                      </p>
+                    </div>
+                    <p class="qs-meta text-xs tracking-[0.14em] text-[var(--session-muted)]">
+                      {String.replace(Atom.to_string(@catch_up_plan.risk), "_", " ")}
+                    </p>
+                  </div>
+
+                  <ul class="space-y-2 text-sm leading-6 text-[var(--session-muted)]">
+                    <li :for={reason <- @catch_up_plan.rationale}>{reason}</li>
+                  </ul>
+
+                  <button
+                    id="home-create-catch-up"
+                    type="button"
+                    phx-click="use_catch_up_plan"
+                    class="w-full rounded-xl bg-[var(--session-ink)] px-4 py-3 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90"
+                  >
+                    Create catch-up plan
+                  </button>
+                </div>
+              <% end %>
+            </.qs_surface>
           </section>
         <% end %>
       </div>

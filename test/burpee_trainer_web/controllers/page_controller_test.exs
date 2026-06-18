@@ -27,7 +27,9 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     assert html =~ ~s(id="home-status-strip")
   end
 
-  test "GET / keeps coach output inside the primary recommendation only", %{conn: conn} do
+  test "GET / keeps coach output inside the primary recommendation and catch-up separate", %{
+    conn: conn
+  } do
     user = user_fixture(%{"username" => "home_order_user"})
     plan = plan_fixture(user, %{"name" => "Resume Plan"})
 
@@ -51,7 +53,8 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     assert html =~ ~s(id="home-prescription")
     assert html =~ "Today’s prescription"
     refute html =~ ~s(data-home-weekly-split)
-    refute html =~ ~s(id="home-catch-up-panel")
+    assert html =~ ~s(id="home-catch-up-panel")
+    assert html =~ "Build catch-up sessions"
   end
 
   test "GET / renders a quiet weekly status strip", %{conn: conn} do

@@ -106,7 +106,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute html =~ "Dashboard"
   end
 
-  test "incomplete home integrates coach guidance without separate coach or catch-up surfaces", %{
+  test "incomplete home integrates coach guidance with catch-up preview action", %{
     conn: conn,
     user: user
   } do
@@ -130,10 +130,45 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-coach-guidance")
     html = render(view)
     assert html =~ "Coach"
-    refute has_element?(view, "#home-catch-up-panel")
-    refute has_element?(view, "#catch-up-six-count")
+    assert has_element?(view, "#home-catch-up-panel")
+    assert has_element?(view, "#catch-up-six-count")
     refute has_element?(view, "[data-home-coach-suggestion]")
     refute has_element?(view, "[data-home-weekly-split]")
+  end
+
+  test "catch-up panel previews split sessions and creates plans", %{conn: conn, user: user} do
+    free_form_session_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 150,
+      "duration_sec_actual" => 1200
+    })
+
+    goal_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_target" => 200,
+      "duration_sec_target" => 1200,
+      "burpee_count_baseline" => 150,
+      "duration_sec_baseline" => 1200
+    })
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#home-catch-up-panel")
+
+    view
+    |> element("#catch-up-six-count")
+    |> render_click()
+
+    assert has_element?(view, "#home-catch-up-preview")
+    assert render(view) =~ "Creates 3 × 20 min Six-count sessions"
+    assert has_element?(view, "#home-create-catch-up")
+
+    view
+    |> element("#home-create-catch-up")
+    |> render_click()
+
+    {path, _flash} = assert_redirect(view)
+    assert path =~ ~r"/workouts/\d+/edit"
   end
 
   test "non-standard completed week hides catch-up choices and coach suggestions", %{
