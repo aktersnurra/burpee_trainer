@@ -1,6 +1,7 @@
 defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
+  import ExUnit.CaptureIO
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
@@ -461,27 +462,34 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert has_element?(view, "[data-timeline-edge-action]")
 
-      view
-      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
-      |> render_click()
+      stderr =
+        capture_io(:stderr, fn ->
+          view
+          |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
+          |> render_click()
 
-      assert has_element?(view, "[data-timeline-rest-node]")
-      assert has_element?(view, "[data-timeline-rest-editor]")
-      assert has_element?(view, "[data-timeline-remove-rest]")
-      html = render(view)
-      assert html =~ "+30s recovery"
-      assert html =~ "at minute"
+          assert has_element?(view, "[data-timeline-rest-node]")
+          assert has_element?(view, "[data-timeline-rest-editor]")
+          assert has_element?(view, "[data-timeline-remove-rest]")
+          html = render(view)
+          assert html =~ "+30s recovery"
+          assert html =~ "at minute"
 
-      view
-      |> element("[data-timeline-rest-editor]")
-      |> render_change(%{"rest" => %{"index" => "0", "rest_sec" => "45", "target_min" => "8"}})
+          view
+          |> element("[data-timeline-rest-editor]")
+          |> render_change(%{
+            "rest" => %{"index" => "0", "rest_sec" => "45", "target_min" => "8"}
+          })
 
-      html = render(view)
-      assert html =~ "+45s recovery"
-      refute html =~ "Rest cannot be placed at minute 8"
+          html = render(view)
+          assert html =~ "+45s recovery"
+          refute html =~ "Rest cannot be placed at minute 8"
 
-      view |> element("[data-timeline-remove-rest]") |> render_click()
-      refute render(view) =~ "+45s recovery"
+          view |> element("[data-timeline-remove-rest]") |> render_click()
+          refute render(view) =~ "+45s recovery"
+        end)
+
+      refute stderr =~ "found duplicate primary keys"
     end
 
     test "existing grouped plan shows block pattern editor", %{conn: conn, user: user} do

@@ -182,6 +182,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp metadata_kind_label(nil), do: "Generated"
   defp metadata_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
 
+  defp change_form_plan(%WorkoutPlan{id: nil} = plan, attrs) do
+    plan
+    |> Map.put(:blocks, [])
+    |> Map.put(:steps, [])
+    |> Workouts.change_plan(attrs)
+  end
+
+  defp change_form_plan(%WorkoutPlan{} = plan, attrs), do: Workouts.change_plan(plan, attrs)
+
   defp plan_to_attrs(%WorkoutPlan{} = plan) do
     %{
       "name" => plan.name,
@@ -664,7 +673,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     else
       steps = insert_rest_step(form_plan.steps, String.to_integer(edge_index), 30)
       attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
-      changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+      changeset = change_form_plan(form_plan, attrs) |> Map.put(:action, :validate)
 
       {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
     end
@@ -701,7 +710,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             |> Map.put("blocks", blocks_to_attrs(blocks))
             |> Map.put("steps", steps_to_attrs(steps))
 
-          changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+          changeset = change_form_plan(form_plan, attrs) |> Map.put(:action, :validate)
 
           {:noreply,
            socket
@@ -724,7 +733,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     attrs =
       form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(reposition_steps(steps)))
 
-    changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+    changeset = change_form_plan(form_plan, attrs) |> Map.put(:action, :validate)
 
     {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
   end
@@ -827,7 +836,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     blocks = update_timeline_set(form_plan.blocks, block_index, set_index, set_params)
     attrs = form_plan |> plan_to_attrs() |> Map.put("blocks", blocks_to_attrs(blocks))
 
-    changeset = Workouts.change_plan(form_plan, attrs) |> Map.put(:action, :validate)
+    changeset = change_form_plan(form_plan, attrs) |> Map.put(:action, :validate)
 
     socket =
       socket
