@@ -220,6 +220,56 @@ If LiveView payload limits become awkward, switch chunk upload to regular HTTP e
 
 Chunk acceptance should be idempotent by `(capture_run_id, chunk_index)` so retries do not duplicate samples.
 
+## Export and preprocessing bundles
+
+The canonical app storage is SQLite capture runs plus compressed trace chunks. For labelling and training, add a preprocessing/export step that materializes a portable dataset bundle.
+
+Suggested command shapes:
+
+```text
+mix pose.export --capture-run-id 123 --out /tmp/pose-export-123/
+mix pose.export --since 2026-06-01 --out /tmp/pose-export-june/
+```
+
+The export bundle should contain:
+
+```text
+pose-export-123/
+  manifest.json
+  dataset.sqlite3
+  traces/
+    capture-123-warmup.json.zst
+    capture-123-main.json.zst
+  labels/
+    capture-123-labels.json.zst
+```
+
+`dataset.sqlite3` carries the relational slice needed for lookup and round-tripping:
+
+- capture runs
+- chunk metadata
+- linked workout session/plan metadata
+- existing labels
+- existing analysis runs/reps when present
+
+The `*.json.zst` files are preprocessed, decompressed/reassembled trace streams optimized for labelling and Python training. They should preserve stable source identifiers such as `source_capture_run_id`, `source_chunk_id`, `segment`, and sample timestamps so labels can be imported back later.
+
+This means the app can keep ingestion simple while the export task handles heavier transformations:
+
+1. read matching SQLite chunks
+2. decompress payload blobs
+3. normalize sample shape/version
+4. split by capture and segment
+5. write `json.zst` trace files
+6. write manifest counts, hashes, model metadata, and source IDs
+7. optionally include labels and analysis outputs as `json.zst`
+
+A future import task can consume labelled bundles:
+
+```text
+mix pose.import_labels /tmp/pose-export-123/
+```
+
 ## Labelling tool
 
 Build the labelling tool as a Bonsai web app, served from the Phoenix app.
@@ -250,11 +300,11 @@ Implementation should keep application logic in OCaml/Bonsai. Small FFI modules 
 
 Training should remain Python-based.
 
-A future export task can emit trace/label datasets:
+A future export task can emit trace/label datasets. The training workflow should consume the preprocessed `json.zst` bundle format rather than reading app chunks directly:
 
 ```text
-mix pose.export_training_data --capture-run-id ...
-python train_tcn.py data/pose_exports/...
+mix pose.export --capture-run-id ... --out data/pose_exports/session-...
+python train_tcn.py data/pose_exports/session-...
 ```
 
 Likely model inputs:
