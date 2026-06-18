@@ -1,8 +1,9 @@
 defmodule BurpeeTrainerWeb.LogFormComponent do
   use BurpeeTrainerWeb, :live_component
 
+  alias BurpeeTrainer.BurpeeType
   alias BurpeeTrainer.Workouts
-  alias BurpeeTrainer.Workouts.WorkoutSession
+  alias BurpeeTrainer.Workouts.{SessionLog, WorkoutSession}
 
   @mood_options [
     {"hero-face-frown", "Tired", -1},
@@ -38,7 +39,12 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
 
   @impl true
   def handle_event("set_type", %{"type" => type_str}, socket) do
-    burpee_type = String.to_existing_atom(type_str)
+    burpee_type =
+      case BurpeeType.parse(type_str) do
+        {:ok, burpee_type} -> burpee_type
+        {:error, _reason} -> socket.assigns.burpee_type
+      end
+
     {:noreply, assign(socket, :burpee_type, burpee_type)}
   end
 
@@ -59,11 +65,7 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
   end
 
   def handle_event("validate", %{"workout_session" => params}, socket) do
-    log_date =
-      case Date.from_iso8601(params["log_date"] || "") do
-        {:ok, d} -> d
-        _ -> socket.assigns.log_date
-      end
+    log_date = SessionLog.parse_log_date(params, socket.assigns.log_date)
 
     changeset =
       %WorkoutSession{}
@@ -75,27 +77,16 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
 
   def handle_event("save", %{"workout_session" => params}, socket) do
     user = socket.assigns.current_user
-    tags_str = socket.assigns.log_tags |> Enum.sort() |> Enum.join(",")
-
-    duration_sec =
-      case Integer.parse(params["duration_sec_actual"] || "") do
-        {min, ""} -> to_string(min * 60)
-        _ -> params["duration_sec_actual"]
-      end
-
-    log_date =
-      case Date.from_iso8601(params["log_date"] || "") do
-        {:ok, d} -> d
-        _ -> socket.assigns.log_date
-      end
+    log_date = SessionLog.parse_log_date(params, socket.assigns.log_date)
 
     full_params =
-      params
-      |> Map.put("burpee_type", to_string(socket.assigns.burpee_type))
-      |> Map.put("mood", to_string(socket.assigns.mood))
-      |> Map.put("tags", tags_str)
-      |> Map.put("duration_sec_actual", duration_sec)
-      |> Map.put("inserted_at", DateTime.new!(log_date, ~T[12:00:00], "Etc/UTC"))
+      SessionLog.to_attrs(
+        params,
+        socket.assigns.burpee_type,
+        socket.assigns.mood,
+        socket.assigns.log_tags,
+        log_date
+      )
 
     case Workouts.create_free_form_session(user, full_params) do
       {:ok, session} ->
