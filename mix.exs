@@ -87,7 +87,7 @@ defmodule BurpeeTrainer.MixProject do
       "assets.setup": [
         "tailwind.install --if-missing",
         "esbuild.install --if-missing",
-        "cmd --cd assets npm install"
+        "cmd --cd assets npm ci"
       ],
       "assets.build": ["compile", "tailwind burpee_trainer", "esbuild burpee_trainer"],
       "assets.deploy": [
