@@ -64,6 +64,14 @@ defmodule BurpeeTrainer.CatchUpPlanner do
 
   def plan(%Input{}), do: {:error, %{reason: :invalid_selected_burpee_type}}
 
+  defp session_durations(duration_min) when is_integer(duration_min) and duration_min > 20 do
+    if rem(duration_min, 20) == 0 do
+      List.duplicate(20, div(duration_min, 20))
+    else
+      [duration_min]
+    end
+  end
+
   defp session_durations(duration_min), do: [duration_min]
 
   defp candidate_sessions(input, session_durations) do

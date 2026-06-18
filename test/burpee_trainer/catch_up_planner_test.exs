@@ -29,7 +29,8 @@ defmodule BurpeeTrainer.CatchUpPlannerTest do
     assert {:ok, %Plan{} = plan} = CatchUpPlanner.plan(input)
     assert plan.selected_burpee_type == :navy_seal
     assert plan.total_duration_min == 40
-    assert length(plan.selected_sessions) == 1
+    assert length(plan.selected_sessions) == 2
+    assert Enum.all?(plan.selected_sessions, &(&1.duration_min == 20))
     assert Enum.all?(plan.selected_sessions, &(&1.burpee_type == :navy_seal))
     refute Enum.any?(plan.selected_sessions, &(&1.burpee_type == :mixed))
   end
@@ -64,7 +65,7 @@ defmodule BurpeeTrainer.CatchUpPlannerTest do
     assert "This completes your 80 min week, but does not preserve the normal 2+2 split." in plan.rationale
   end
 
-  test "always uses one long 40 minute catch-up session" do
+  test "splits 40 minute catch-up into two standard sessions" do
     week_start = ~D[2026-06-01]
     history = [session(:six_count, 150, 20, ~U[2026-06-01 10:00:00Z])]
 
@@ -84,11 +85,10 @@ defmodule BurpeeTrainer.CatchUpPlannerTest do
     }
 
     assert {:ok, plan} = CatchUpPlanner.plan(input)
-    assert length(plan.selected_sessions) == 1
-    [session] = plan.selected_sessions
-    assert session.duration_min == 40
-    assert session.target_reps == 225
-    assert session.suggestion_kind == :maintenance
+    assert length(plan.selected_sessions) == 2
+    assert Enum.map(plan.selected_sessions, & &1.duration_min) == [20, 20]
+    assert Enum.map(plan.selected_sessions, & &1.target_reps) == [113, 113]
+    assert Enum.all?(plan.selected_sessions, &(&1.suggestion_kind == :maintenance))
   end
 
   test "uses duration-specific intensity factors for long manual sessions" do
@@ -113,12 +113,22 @@ defmodule BurpeeTrainer.CatchUpPlannerTest do
 
       assert {:ok, plan} = CatchUpPlanner.plan(input)
 
-      assert [%{duration_min: ^duration_min, target_reps: ^expected_reps}] =
-               plan.selected_sessions
+      expected_sessions =
+        case duration_min do
+          30 -> [%{duration_min: 30, target_reps: expected_reps}]
+          40 -> [%{duration_min: 20, target_reps: 113}, %{duration_min: 20, target_reps: 113}]
+          60 -> List.duplicate(%{duration_min: 20, target_reps: 90}, 3)
+          80 -> List.duplicate(%{duration_min: 20, target_reps: 75}, 4)
+        end
+
+      assert expected_sessions ==
+               Enum.map(plan.selected_sessions, fn session ->
+                 %{duration_min: session.duration_min, target_reps: session.target_reps}
+               end)
     end
   end
 
-  test "derates 40 minute catch-up target instead of repeating a 20 minute max effort" do
+  test "derates split 40 minute catch-up targets instead of repeating 20 minute max efforts" do
     week_start = ~D[2026-06-01]
     history = [session(:six_count, 150, 20, ~U[2026-06-01 10:00:00Z])]
 
@@ -139,8 +149,10 @@ defmodule BurpeeTrainer.CatchUpPlannerTest do
 
     assert {:ok, plan} = CatchUpPlanner.plan(input)
 
-    assert [%{duration_min: 40, target_reps: 225, suggestion_kind: :maintenance}] =
-             plan.selected_sessions
+    assert [
+             %{duration_min: 20, target_reps: 113, suggestion_kind: :maintenance},
+             %{duration_min: 20, target_reps: 113, suggestion_kind: :maintenance}
+           ] = plan.selected_sessions
   end
 
   test "returns structured error when no performance goal exists" do
