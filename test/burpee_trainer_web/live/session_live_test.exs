@@ -149,8 +149,9 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
         "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+    {:ok, view, html} = live(conn, ~p"/session/#{plan.id}")
 
+    assert html =~ "20:10"
     assert_push_event(view, "session_ready", %{plan: plan_payload})
 
     assert Enum.count(plan_payload.timeline, &(&1.phase == "rest")) == 1
@@ -162,6 +163,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {before_rest, [_rest | after_rest]} = Enum.split(plan_payload.timeline, rest_index)
     assert Enum.sum(Enum.map(before_rest, &(&1.burpee_count || 0))) == 180
     assert Enum.sum(Enum.map(after_rest, &(&1.burpee_count || 0))) == 20
+    assert Enum.sum(Enum.map(plan_payload.timeline, & &1.duration_sec)) == 1210
   end
 
   test "session_started transitions phase to running", %{conn: conn, user: user} do

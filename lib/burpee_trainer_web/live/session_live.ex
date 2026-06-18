@@ -26,7 +26,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
     case Integer.parse(plan_id) do
       {id, ""} ->
         plan = Workouts.get_plan!(user, id)
-        summary = Planner.summary(plan)
+        summary = session_summary(plan)
 
         socket =
           socket
@@ -191,6 +191,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("discard", _, socket) do
     {:noreply, push_navigate(socket, to: ~p"/workouts")}
+  end
+
+  defp session_summary(plan) do
+    summary = Planner.summary(plan)
+    timeline = serialize_execution_timeline(plan)
+
+    case Enum.sum(Enum.map(timeline, &(&1.duration_sec || 0))) do
+      0 -> summary
+      duration_sec_total -> %{summary | duration_sec_total: duration_sec_total}
+    end
   end
 
   defp serialize_plan(plan) do
