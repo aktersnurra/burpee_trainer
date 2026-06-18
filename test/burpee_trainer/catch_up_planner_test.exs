@@ -89,6 +89,7 @@ defmodule BurpeeTrainer.CatchUpPlannerTest do
     assert Enum.map(plan.selected_sessions, & &1.duration_min) == [20, 20]
     assert Enum.map(plan.selected_sessions, & &1.target_reps) == [113, 113]
     assert Enum.all?(plan.selected_sessions, &(&1.suggestion_kind == :maintenance))
+    assert "Creates 2 × 20 min Six-count sessions: 113 reps each." in plan.rationale
   end
 
   test "uses duration-specific intensity factors for long manual sessions" do

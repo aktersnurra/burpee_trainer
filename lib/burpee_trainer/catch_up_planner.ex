@@ -49,7 +49,7 @@ defmodule BurpeeTrainer.CatchUpPlanner do
        risk: plan_risk(selected),
        canonical?: split_effect == :preserves_contract,
        weekly_split_effect: split_effect,
-       rationale: rationale(split_effect),
+       rationale: rationale(split_effect, selected),
        metadata: %Metadata{
          selected_candidate_count: length(selected),
          rejected_candidate_count: max(length(candidates) - length(selected), 0),
@@ -260,13 +260,44 @@ defmodule BurpeeTrainer.CatchUpPlanner do
     end
   end
 
-  defp rationale(:preserves_contract),
-    do: ["Completes remaining work while preserving the normal 2+2 split."]
+  defp rationale(:preserves_contract, selected),
+    do: [
+      session_summary(selected),
+      "Completes remaining work while preserving the normal 2+2 split."
+    ]
 
-  defp rationale(:counts_but_non_standard) do
-    ["This completes your 80 min week, but does not preserve the normal 2+2 split."]
+  defp rationale(:counts_but_non_standard, selected) do
+    [
+      session_summary(selected),
+      "This completes your 80 min week, but does not preserve the normal 2+2 split."
+    ]
   end
 
-  defp rationale(:over_target),
-    do: ["Counts toward training history, but puts this week over the 80 min target."]
+  defp rationale(:over_target, selected),
+    do: [
+      session_summary(selected),
+      "Counts toward training history, but puts this week over the 80 min target."
+    ]
+
+  defp session_summary([]), do: "No catch-up sessions selected."
+
+  defp session_summary([session]) do
+    "Creates 1 × #{session.duration_min} min #{format_type(session.burpee_type)} session: #{session.target_reps} reps."
+  end
+
+  defp session_summary(selected) do
+    first = List.first(selected)
+    same_duration? = Enum.all?(selected, &(&1.duration_min == first.duration_min))
+    same_reps? = Enum.all?(selected, &(&1.target_reps == first.target_reps))
+    same_type? = Enum.all?(selected, &(&1.burpee_type == first.burpee_type))
+
+    if same_duration? and same_reps? and same_type? do
+      "Creates #{length(selected)} × #{first.duration_min} min #{format_type(first.burpee_type)} sessions: #{first.target_reps} reps each."
+    else
+      "Creates #{length(selected)} catch-up sessions totaling #{Enum.sum(Enum.map(selected, & &1.duration_min))} min."
+    end
+  end
+
+  defp format_type(:six_count), do: "Six-count"
+  defp format_type(:navy_seal), do: "Navy SEAL"
 end
