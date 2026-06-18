@@ -75,6 +75,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:plan, editor.plan)
     |> assign(:plan_input, editor.input)
     |> assign(:solver_error, editor.solver_error)
+    |> assign(:timeline_error, nil)
     |> assign(:solver_solution, editor.solver_solution)
     |> assign(:manual_edit, editor.manual_edit?)
     |> assign(:expanded_blocks, editor.expanded_blocks)
@@ -716,10 +717,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
            socket
            |> assign(:form, to_form(changeset))
            |> assign(:solver_error, nil)
+           |> assign(:timeline_error, nil)
            |> assign_derived()}
 
         {:error, message} ->
-          {:noreply, assign(socket, :solver_error, message)}
+          {:noreply, assign(socket, :timeline_error, message)}
       end
     end
   end
@@ -1016,6 +1018,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:manual_edit, :boolean, required: true)
   attr(:derived, :any, required: true)
   attr(:solver_error, :any, required: true)
+  attr(:timeline_error, :any, required: true)
   attr(:solver_solution, :any, required: true)
   attr(:live_action, :atom, required: true)
   attr(:level, :atom, required: true)
@@ -1030,10 +1033,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> assign(:block_time_ranges, block_time_ranges)
       |> assign(
         :plan_feedback,
-        plan_feedback(assigns.solver_error, assigns.derived, assigns.plan_input)
+        plan_feedback(
+          assigns.timeline_error || assigns.solver_error,
+          assigns.derived,
+          assigns.plan_input
+        )
       )
       |> assign(:pattern_summary, pattern_summary(assigns.plan_input, assigns.derived))
-      |> assign(:prescription_blocked?, is_binary(assigns.solver_error))
+      |> assign(
+        :prescription_blocked?,
+        prescription_blocked?(assigns.solver_error, assigns.derived)
+      )
       |> assign(
         :timeline_rows,
         prescription_timeline(
@@ -1067,6 +1077,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp loaded_steps(%Ecto.Association.NotLoaded{}), do: []
   defp loaded_steps(steps) when is_list(steps), do: steps
   defp loaded_steps(_steps), do: []
+
+  defp prescription_blocked?(solver_error, nil), do: is_binary(solver_error)
+
+  defp prescription_blocked?(solver_error, %{both_ok: both_ok}),
+    do: is_binary(solver_error) and not both_ok
+
+  defp prescription_blocked?(_solver_error, _derived), do: false
 
   defp plan_feedback(solver_error, _derived, _plan_input) when is_binary(solver_error),
     do: feedback_from_message(solver_error)

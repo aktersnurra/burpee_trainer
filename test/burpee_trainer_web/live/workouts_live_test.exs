@@ -432,29 +432,45 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute html =~ "Rest cannot be placed at minute 12"
     end
 
-    test "generated timeline rejects impossible rest placement", %{conn: conn} do
+    test "generated timeline keeps rest editor usable after impossible placement", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view
       |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "200"})
+      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
 
       view
       |> element("button[phx-value-style='unbroken']")
       |> render_click()
 
-      render_change(view, "change_basics", %{"reps_per_set" => "7"})
+      render_change(view, "change_basics", %{"reps_per_set" => "8"})
 
       view
-      |> element("[data-timeline-edge-index='1'][data-timeline-edge-action]")
+      |> element("[data-accept-rest-suggestion]")
       |> render_click()
 
       view
-      |> element("[data-timeline-rest-editor]")
-      |> render_change(%{"rest" => %{"index" => "1", "rest_sec" => "10", "target_min" => "18"}})
+      |> element("[data-timeline-edge-index='3'][data-timeline-edge-action]")
+      |> render_click()
+
+      view
+      |> element("[data-timeline-rest-editor][data-timeline-rest-index='3']")
+      |> render_change(%{"rest" => %{"index" => "3", "rest_sec" => "1", "target_min" => "20"}})
 
       html = render(view)
-      refute html =~ "20:10"
+      assert html =~ "Rest cannot be placed at minute 20"
+      assert has_element?(view, "#plan-prescription-timeline")
+      assert has_element?(view, "[data-timeline-rest-editor]")
+      refute has_element?(view, "#plan-prescription-blocked")
+
+      view
+      |> element("[data-timeline-rest-editor][data-timeline-rest-index='3']")
+      |> render_change(%{"rest" => %{"index" => "3", "rest_sec" => "10", "target_min" => "18"}})
+
+      html = render(view)
+      refute html =~ "Rest cannot be placed at minute 20"
+      assert has_element?(view, "#plan-prescription-timeline")
+      assert has_element?(view, "[data-timeline-rest-editor][data-timeline-rest-index='3']")
     end
 
     test "timeline add rest handle injects editable rest node", %{conn: conn} do
@@ -641,10 +657,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
       assert html =~ "Try lowering reps"
-      assert html =~ "No runnable prescription yet"
-      refute html =~ "Recommended"
-      refute html =~ "Prescription graph"
-      refute html =~ "Predicted finish"
+      refute html =~ "No runnable prescription yet"
+      assert html =~ "Prescription graph"
+      assert html =~ "Predicted finish"
     end
 
     test "impossible prescription shows actionable feedback", %{conn: conn} do

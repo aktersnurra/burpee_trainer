@@ -255,6 +255,9 @@
                           else: "change_rest"
                       }
                       data-timeline-rest-editor
+                      data-timeline-rest-index={
+                        Map.get(row, :step_index) || Map.get(row, :rest_index)
+                      }
                       class="mt-3 flex items-center gap-2 border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-3 text-xs text-[var(--session-muted)]"
                     >
                       <input

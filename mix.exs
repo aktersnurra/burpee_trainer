@@ -89,9 +89,18 @@ defmodule BurpeeTrainer.MixProject do
         "esbuild.install --if-missing",
         "cmd --cd assets npm ci"
       ],
-      "assets.build": ["compile", "tailwind burpee_trainer", "esbuild burpee_trainer"],
+      "assets.fonts": [
+        "cmd --cd assets sh -c 'mkdir -p ../priv/static/assets/css/files && cp node_modules/@fontsource/geist/files/* ../priv/static/assets/css/files/'"
+      ],
+      "assets.build": [
+        "compile",
+        "tailwind burpee_trainer",
+        "assets.fonts",
+        "esbuild burpee_trainer"
+      ],
       "assets.deploy": [
         "tailwind burpee_trainer --minify",
+        "assets.fonts",
         "esbuild burpee_trainer --minify",
         "phx.digest"
       ],
