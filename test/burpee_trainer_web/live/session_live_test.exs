@@ -34,7 +34,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute has_element?(view, "#pose-tracker")
   end
 
-  test "tracked capture event creates capture run and shows camera setup gate", %{conn: conn, user: user} do
+  test "tracked capture event creates capture run and shows camera setup gate", %{
+    conn: conn,
+    user: user
+  } do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 

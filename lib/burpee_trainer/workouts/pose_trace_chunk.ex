@@ -49,7 +49,9 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
     |> validate_number(:ended_at_ms, greater_than_or_equal_to: 0)
     |> validate_number(:sample_count, greater_than: 0)
     |> validate_ended_after_started()
-    |> unique_constraint(:chunk_index, name: :pose_trace_chunks_pose_capture_run_id_chunk_index_index)
+    |> unique_constraint(:chunk_index,
+      name: :pose_trace_chunks_pose_capture_run_id_chunk_index_index
+    )
   end
 
   defp validate_ended_after_started(changeset) do

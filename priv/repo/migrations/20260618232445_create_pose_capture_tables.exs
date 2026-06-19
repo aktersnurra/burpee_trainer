@@ -22,7 +22,9 @@ defmodule BurpeeTrainer.Repo.Migrations.CreatePoseCaptureTables do
     create index(:pose_capture_runs, [:status])
 
     create table(:pose_trace_chunks) do
-      add :pose_capture_run_id, references(:pose_capture_runs, on_delete: :delete_all), null: false
+      add :pose_capture_run_id, references(:pose_capture_runs, on_delete: :delete_all),
+        null: false
+
       add :segment, :string, null: false
       add :chunk_index, :integer, null: false
       add :started_at_ms, :integer, null: false

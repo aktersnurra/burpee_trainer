@@ -13,6 +13,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
   alias BurpeeTrainer.Workouts.PaceConsistency
+
   alias BurpeeTrainer.Workouts.{
     Block,
     PlanStep,
@@ -171,7 +172,11 @@ defmodule BurpeeTrainer.Workouts do
   """
   @spec start_pose_capture_run(User.t(), WorkoutPlan.t(), map()) ::
           {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t()}
-  def start_pose_capture_run(%User{id: user_id}, %WorkoutPlan{id: plan_id, user_id: user_id}, attrs \\ %{}) do
+  def start_pose_capture_run(
+        %User{id: user_id},
+        %WorkoutPlan{id: plan_id, user_id: user_id},
+        attrs \\ %{}
+      ) do
     attrs = Map.put_new(attrs, "started_at", DateTime.utc_now(:second))
 
     %PoseCaptureRun{user_id: user_id, plan_id: plan_id, status: :active}
