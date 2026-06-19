@@ -13,7 +13,15 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
   alias BurpeeTrainer.Workouts.PaceConsistency
-  alias BurpeeTrainer.Workouts.{Block, PlanStep, StylePerformance, WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{
+    Block,
+    PlanStep,
+    PoseCaptureRun,
+    PoseTraceChunk,
+    StylePerformance,
+    WorkoutPlan,
+    WorkoutSession
+  }
 
   # A session is eligible to set a pace PR only when it is a genuine effort:
   # a full-length-ish bout (≤ 20 min) of at least this many burpees.
@@ -152,6 +160,101 @@ defmodule BurpeeTrainer.Workouts do
         "rest_sec" => step.rest_sec
       }
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Pose capture
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Start a pose capture run for a user's plan.
+  """
+  @spec start_pose_capture_run(User.t(), WorkoutPlan.t(), map()) ::
+          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t()}
+  def start_pose_capture_run(%User{id: user_id}, %WorkoutPlan{id: plan_id, user_id: user_id}, attrs \\ %{}) do
+    attrs = Map.put_new(attrs, "started_at", DateTime.utc_now(:second))
+
+    %PoseCaptureRun{user_id: user_id, plan_id: plan_id, status: :active}
+    |> PoseCaptureRun.start_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Append one raw-ish pose trace chunk to an active capture run.
+  """
+  @spec append_pose_trace_chunk(User.t(), PoseCaptureRun.t(), map()) ::
+          {:ok, PoseTraceChunk.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def append_pose_trace_chunk(%User{id: user_id}, %PoseCaptureRun{id: run_id}, attrs) do
+    case get_user_pose_capture_run(user_id, run_id) do
+      %PoseCaptureRun{status: :active} = run ->
+        %PoseTraceChunk{pose_capture_run_id: run.id}
+        |> PoseTraceChunk.changeset(attrs)
+        |> Repo.insert()
+
+      %PoseCaptureRun{} ->
+        {:error, :not_found}
+
+      nil ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Mark a capture run as completed and link it to the saved workout session.
+  """
+  @spec complete_pose_capture_run(User.t(), PoseCaptureRun.t(), WorkoutSession.t()) ::
+          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def complete_pose_capture_run(
+        %User{id: user_id},
+        %PoseCaptureRun{id: run_id},
+        %WorkoutSession{id: session_id, user_id: user_id}
+      ) do
+    case get_user_pose_capture_run(user_id, run_id) do
+      %PoseCaptureRun{status: :active} = run ->
+        run
+        |> PoseCaptureRun.complete_changeset(%{
+          "workout_session_id" => session_id,
+          "completed_at" => DateTime.utc_now(:second)
+        })
+        |> Repo.update()
+
+      %PoseCaptureRun{} ->
+        {:error, :not_found}
+
+      nil ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Mark a capture run as aborted while preserving any uploaded chunks.
+  """
+  @spec abort_pose_capture_run(User.t(), PoseCaptureRun.t(), String.t() | nil) ::
+          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def abort_pose_capture_run(%User{id: user_id}, %PoseCaptureRun{id: run_id}, reason) do
+    case get_user_pose_capture_run(user_id, run_id) do
+      %PoseCaptureRun{status: :active} = run ->
+        run
+        |> PoseCaptureRun.abort_changeset(%{
+          "abort_reason" => reason,
+          "aborted_at" => DateTime.utc_now(:second)
+        })
+        |> Repo.update()
+
+      %PoseCaptureRun{} ->
+        {:error, :not_found}
+
+      nil ->
+        {:error, :not_found}
+    end
+  end
+
+  defp get_user_pose_capture_run(user_id, run_id) do
+    Repo.one(
+      from(run in PoseCaptureRun,
+        where: run.id == ^run_id and run.user_id == ^user_id
+      )
+    )
   end
 
   # ---------------------------------------------------------------------------
