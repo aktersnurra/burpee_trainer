@@ -4,7 +4,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.Workouts
+  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Workouts.PoseCaptureRun
 
   defp submit_completion(view, params) do
     result =
@@ -33,13 +34,31 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute has_element?(view, "#pose-tracker")
   end
 
-  test "tracked capture event renders pose tracker", %{conn: conn, user: user} do
+  test "tracked capture event creates capture run and shows camera setup gate", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(view, "choose_tracked", %{})
 
     assert has_element?(view, "#pose-tracker[phx-hook='PoseTracker']")
+    assert has_element?(view, "#camera-setup-panel")
+    assert render(view) =~ "Adjust your camera"
+
+    [run] = Repo.all(PoseCaptureRun)
+    assert run.user_id == user.id
+    assert run.plan_id == plan.id
+    assert run.status == :active
+  end
+
+  test "tracker_ready marks camera setup ready", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+    render_hook(view, "tracker_ready", %{})
+
+    assert has_element?(view, "#camera-setup-panel[data-setup-state='ready']")
+    assert render(view) =~ "Camera ready"
   end
 
   test "timed mode keeps pose tracker absent after normal session completion", %{
@@ -99,6 +118,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     [session] = Workouts.list_sessions(user)
     assert session.capture_mode == :tracked
     assert session.cadence_ms == "[5000,10000,15000]"
+
+    [run] = Repo.all(PoseCaptureRun)
+    assert run.status == :completed
+    assert run.workout_session_id == session.id
   end
 
   test "idle state shows warmup prompt", %{conn: conn, user: user} do

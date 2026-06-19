@@ -39,6 +39,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:completion_form, nil)
           |> assign(:celebration, nil)
           |> assign(:capture_mode, :timed)
+          |> assign(:capture_setup_state, :idle)
+          |> assign(:pose_capture_run, nil)
           |> assign(:tracking_state, :idle)
           |> assign(:tracked_finish, nil)
           |> assign(:tracking_error, nil)
@@ -59,11 +61,67 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("choose_tracked", _, socket) do
-    {:noreply, socket |> assign(:capture_mode, :tracked) |> assign(:tracking_state, :arming)}
+    %{current_user: user, plan: plan} = socket.assigns
+
+    case Workouts.start_pose_capture_run(user, plan) do
+      {:ok, run} ->
+        {:noreply,
+         socket
+         |> assign(:capture_mode, :tracked)
+         |> assign(:capture_setup_state, :arming)
+         |> assign(:pose_capture_run, run)
+         |> assign(:tracking_state, :arming)}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:capture_mode, :timed)
+         |> assign(:capture_setup_state, :idle)
+         |> put_flash(:error, "Could not start camera capture. Use timer mode for this session.")}
+    end
   end
 
   def handle_event("tracker_ready", _, socket) do
-    {:noreply, assign(socket, :tracking_state, :ready)}
+    {:noreply,
+     socket
+     |> assign(:capture_setup_state, :ready)
+     |> assign(:tracking_state, :ready)}
+  end
+
+  def handle_event("pose_capture_chunk", params, socket) do
+    %{current_user: user, pose_capture_run: run} = socket.assigns
+
+    if run do
+      case Workouts.append_pose_trace_chunk(user, run, normalize_pose_chunk_params(params)) do
+        {:ok, _chunk} ->
+          {:noreply, socket}
+
+        {:error, _reason} ->
+          {:noreply, assign(socket, :tracking_error, "capture_chunk_failed")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("pose_capture_abort", params, socket) do
+    %{current_user: user, pose_capture_run: run} = socket.assigns
+    reason = Map.get(params, "reason") || "client_aborted"
+
+    if run do
+      case Workouts.abort_pose_capture_run(user, run, reason) do
+        {:ok, aborted_run} ->
+          {:noreply,
+           socket
+           |> assign(:pose_capture_run, aborted_run)
+           |> assign(:capture_setup_state, :aborted)}
+
+        {:error, _reason} ->
+          {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("track", %{"state" => "lost"}, socket) do
@@ -169,6 +227,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
     case create_session do
       {:ok, session} ->
+        maybe_complete_pose_capture_run(socket, session)
+
         case Workouts.session_milestones(user, session) do
           [] ->
             {:noreply,
@@ -191,6 +251,31 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("discard", _, socket) do
     {:noreply, push_navigate(socket, to: ~p"/workouts")}
+  end
+
+  defp maybe_complete_pose_capture_run(socket, session) do
+    %{current_user: user, pose_capture_run: run, capture_mode: capture_mode} = socket.assigns
+
+    if capture_mode == :tracked && run do
+      Workouts.complete_pose_capture_run(user, run, session)
+    else
+      :ok
+    end
+  end
+
+  defp normalize_pose_chunk_params(params) do
+    payload = Map.get(params, "payload_json") || Map.get(params, "payload") || %{}
+
+    payload_json =
+      if is_binary(payload) do
+        payload
+      else
+        Jason.encode!(payload)
+      end
+
+    params
+    |> Map.take(["segment", "chunk_index", "started_at_ms", "ended_at_ms", "sample_count"])
+    |> Map.put("payload_json", payload_json)
   end
 
   defp session_summary(plan) do
@@ -456,6 +541,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 phx-update="ignore"
                 data-target-pace-sec={@plan.sec_per_burpee}
               />
+              <.camera_setup_panel setup_state={@capture_setup_state} />
             <% end %>
 
             <.session_runner
@@ -466,6 +552,34 @@ defmodule BurpeeTrainerWeb.SessionLive do
         <% end %>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr(:setup_state, :atom, required: true)
+
+  defp camera_setup_panel(assigns) do
+    ~H"""
+    <div
+      id="camera-setup-panel"
+      data-setup-state={@setup_state}
+      class="pointer-events-none absolute inset-x-0 top-8 z-20 mx-auto w-full max-w-[430px] px-5 text-[var(--session-ink)]"
+    >
+      <.qs_surface class="bg-[var(--session-surface)]/80 px-5 py-4 shadow-[0_18px_45px_rgba(32,32,29,0.12)] backdrop-blur-sm">
+        <p class="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
+          Camera setup
+        </p>
+        <p class="mt-2 text-sm font-medium text-[var(--session-ink)]">
+          <%= if @setup_state == :ready do %>
+            Camera ready
+          <% else %>
+            Adjust your camera
+          <% end %>
+        </p>
+        <p class="mt-1 text-xs leading-relaxed text-[var(--session-muted)]">
+          Make sure your full body is visible. We’ll save pose traces for warmup and main workout.
+        </p>
+      </.qs_surface>
+    </div>
     """
   end
 
