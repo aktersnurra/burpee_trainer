@@ -18,7 +18,10 @@ function sample(tMs) {
 test("flushes a chunk when the interval elapses", () => {
 	let state = initialPoseCaptureRecorder({ flushIntervalMs: 3000 });
 
-	let result = recordPoseSample(state, sample(0), { segment: "warmup", nowMs: 0 });
+	let result = recordPoseSample(state, sample(0), {
+		segment: "warmup",
+		nowMs: 0,
+	});
 	state = result.state;
 	assert.deepEqual(result.chunks, []);
 
@@ -50,7 +53,10 @@ test("flushes a chunk when the interval elapses", () => {
 test("flushes the previous segment before recording a new segment", () => {
 	let state = initialPoseCaptureRecorder({ flushIntervalMs: 3000 });
 
-	state = recordPoseSample(state, sample(0), { segment: "warmup", nowMs: 0 }).state;
+	state = recordPoseSample(state, sample(0), {
+		segment: "warmup",
+		nowMs: 0,
+	}).state;
 	const result = recordPoseSample(state, sample(100), {
 		segment: "main",
 		nowMs: 100,
@@ -68,11 +74,23 @@ test("flushes the previous segment before recording a new segment", () => {
 test("final flush emits remaining samples with monotonically increasing chunk index", () => {
 	let state = initialPoseCaptureRecorder({ flushIntervalMs: 3000 });
 
-	state = recordPoseSample(state, sample(0), { segment: "main", nowMs: 0 }).state;
-	state = recordPoseSample(state, sample(3000), { segment: "main", nowMs: 3000 }).state;
-	state = recordPoseSample(state, sample(3500), { segment: "main", nowMs: 3500 }).state;
+	state = recordPoseSample(state, sample(0), {
+		segment: "main",
+		nowMs: 0,
+	}).state;
+	state = recordPoseSample(state, sample(3000), {
+		segment: "main",
+		nowMs: 3000,
+	}).state;
+	state = recordPoseSample(state, sample(3500), {
+		segment: "main",
+		nowMs: 3500,
+	}).state;
 
-	const result = flushPoseCaptureRecorder(state, { reason: "finish", nowMs: 3600 });
+	const result = flushPoseCaptureRecorder(state, {
+		reason: "finish",
+		nowMs: 3600,
+	});
 
 	assert.equal(result.chunks.length, 1);
 	assert.equal(result.chunks[0].chunk_index, 1);

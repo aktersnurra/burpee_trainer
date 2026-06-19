@@ -110,10 +110,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
     if run do
       case Workouts.abort_pose_capture_run(user, run, reason) do
-        {:ok, aborted_run} ->
+        :ok ->
           {:noreply,
            socket
-           |> assign(:pose_capture_run, aborted_run)
+           |> assign(:pose_capture_run, nil)
            |> assign(:capture_setup_state, :aborted)}
 
         {:error, _reason} ->

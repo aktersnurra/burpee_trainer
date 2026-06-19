@@ -84,7 +84,7 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureTest do
       assert completed.completed_at
     end
 
-    test "aborts a capture run without deleting chunks" do
+    test "aborts a capture run by deleting the run and chunks" do
       user = user_fixture()
       plan = plan_fixture(user)
       {:ok, run} = Workouts.start_pose_capture_run(user, plan)
@@ -99,12 +99,10 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureTest do
           "payload_json" => Jason.encode!(%{"samples" => [%{"tMs" => 0}]})
         })
 
-      assert {:ok, aborted} = Workouts.abort_pose_capture_run(user, run, "user_discarded")
+      assert :ok = Workouts.abort_pose_capture_run(user, run, "user_discarded")
 
-      assert aborted.status == :aborted
-      assert aborted.abort_reason == "user_discarded"
-      assert aborted.aborted_at
-      assert Repo.get!(PoseTraceChunk, chunk.id)
+      refute Repo.get(PoseCaptureRun, run.id)
+      refute Repo.get(PoseTraceChunk, chunk.id)
     end
   end
 end

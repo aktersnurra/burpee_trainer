@@ -21,7 +21,9 @@ export function recordPoseSample(state, sample, { segment, nowMs }) {
 	}
 
 	const pendingStartedAtMs =
-		current.pendingSamples.length === 0 ? sample.tMs : current.pendingStartedAtMs;
+		current.pendingSamples.length === 0
+			? sample.tMs
+			: current.pendingStartedAtMs;
 
 	current = {
 		...current,

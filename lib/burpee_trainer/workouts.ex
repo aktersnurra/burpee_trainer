@@ -232,19 +232,19 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Mark a capture run as aborted while preserving any uploaded chunks.
+  Abort a capture run by deleting the run and all uploaded chunks.
+
+  Aborted tracked workouts must not retain pose data.
   """
   @spec abort_pose_capture_run(User.t(), PoseCaptureRun.t(), String.t() | nil) ::
-          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def abort_pose_capture_run(%User{id: user_id}, %PoseCaptureRun{id: run_id}, reason) do
+          :ok | {:error, Ecto.Changeset.t() | :not_found}
+  def abort_pose_capture_run(%User{id: user_id}, %PoseCaptureRun{id: run_id}, _reason) do
     case get_user_pose_capture_run(user_id, run_id) do
       %PoseCaptureRun{status: :active} = run ->
-        run
-        |> PoseCaptureRun.abort_changeset(%{
-          "abort_reason" => reason,
-          "aborted_at" => DateTime.utc_now(:second)
-        })
-        |> Repo.update()
+        case Repo.delete(run) do
+          {:ok, _run} -> :ok
+          {:error, changeset} -> {:error, changeset}
+        end
 
       %PoseCaptureRun{} ->
         {:error, :not_found}
