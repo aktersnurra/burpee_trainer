@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{PoseTraceChunk, WorkoutPlan, WorkoutSession}
 
   @statuses [:active, :completed, :aborted]
 
@@ -20,6 +20,7 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
     belongs_to(:user, User)
     belongs_to(:plan, WorkoutPlan)
     belongs_to(:workout_session, WorkoutSession)
+    has_many(:pose_trace_chunks, PoseTraceChunk)
 
     timestamps(type: :utc_datetime)
   end

@@ -13,16 +13,17 @@ let result = flowTransition(initialFlowState(), {
 	workoutTimeline,
 	blockCount: 1,
 });
-assert.equal(result.state.mode, "warmup_prompt");
-assert.deepEqual(result.commands, [{ type: "renderPrompt" }]);
-
-result = flowTransition(result.state, { type: "WARMUP_SKIP" });
 assert.equal(result.state.mode, "capture_prompt");
 assert.deepEqual(result.commands, [{ type: "showCapturePrompt" }]);
 
 result = flowTransition(result.state, { type: "CAPTURE_TIMED" });
 assert.equal(result.state.captureMode, "timed");
-assert.deepEqual(result.commands, []);
+assert.equal(result.state.mode, "warmup_prompt");
+assert.deepEqual(result.commands, [{ type: "renderPrompt" }]);
+
+result = flowTransition(result.state, { type: "WARMUP_SKIP" });
+assert.equal(result.state.mode, "workout_ready_prompt");
+assert.deepEqual(result.commands, [{ type: "showWarmupDonePrompt" }]);
 
 result = flowTransition(result.state, { type: "WORKOUT_READY" });
 assert.equal(result.state.mode, "workout_countdown");
@@ -40,6 +41,18 @@ result = flowTransition(initialFlowState(), {
 	workoutTimeline,
 	blockCount: 1,
 });
+result = flowTransition(result.state, { type: "CAPTURE_TRACKED" });
+assert.equal(result.state.captureMode, "tracked");
+assert.equal(result.state.mode, "camera_setup");
+assert.deepEqual(result.commands, [
+	{ type: "chooseTrackedCapture" },
+	{ type: "showCameraSetupPrompt" },
+]);
+
+result = flowTransition(result.state, { type: "CAMERA_SETUP_READY" });
+assert.equal(result.state.mode, "warmup_prompt");
+assert.deepEqual(result.commands, [{ type: "renderPrompt" }]);
+
 result = flowTransition(result.state, {
 	type: "WARMUP_READY",
 	warmupTimeline,
@@ -61,12 +74,8 @@ result = flowTransition(result.state, {
 	segment: "warmup",
 	result: { burpeeCountDone: 3, durationSec: 6 },
 });
-assert.equal(result.state.mode, "capture_prompt");
-assert.deepEqual(result.commands, [{ type: "showCapturePrompt" }]);
-
-result = flowTransition(result.state, { type: "CAPTURE_TRACKED" });
-assert.equal(result.state.captureMode, "tracked");
-assert.deepEqual(result.commands, [{ type: "chooseTrackedCapture" }]);
+assert.equal(result.state.mode, "workout_ready_prompt");
+assert.deepEqual(result.commands, [{ type: "showWarmupDonePrompt" }]);
 
 result = flowTransition(result.state, { type: "WORKOUT_READY" });
 assert.equal(result.state.mode, "workout_countdown");

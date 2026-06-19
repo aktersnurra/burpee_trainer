@@ -3,6 +3,11 @@ import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
+import {
+	flushPoseCaptureRecorder,
+	initialPoseCaptureRecorder,
+	recordPoseSample,
+} from "./pose_capture_recorder.mjs";
 
 export function createPoseTracker(hook) {
 	let stream = null;
@@ -15,9 +20,15 @@ export function createPoseTracker(hook) {
 	let mounted = true;
 	let lastPoseMs = -Infinity;
 	let lastFeature = null;
+	let captureSegment = null;
+	let captureRecorder = initialPoseCaptureRecorder({ flushIntervalMs: 3000 });
+	const onCaptureSegment = (event) => {
+		captureSegment = event.detail?.segment || null;
+	};
 
 	async function mountedHook() {
 		hook.el.addEventListener("pose-tracker:finish", finish);
+		document.addEventListener("pose-capture:segment", onCaptureSegment);
 
 		try {
 			stream = await navigator.mediaDevices.getUserMedia({
@@ -65,6 +76,15 @@ export function createPoseTracker(hook) {
 		);
 		lastFeature = sample.features;
 
+		if (captureSegment) {
+			const recorded = recordPoseSample(captureRecorder, sample, {
+				segment: captureSegment,
+				nowMs: sample.tMs,
+			});
+			captureRecorder = recorded.state;
+			recorded.chunks.forEach(pushCaptureChunk);
+		}
+
 		if (sample.confidence < 0.5 && trackingState !== "lost") {
 			trackingState = "lost";
 			hook.pushEvent("track", { state: "lost" });
@@ -89,6 +109,13 @@ export function createPoseTracker(hook) {
 	}
 
 	function finish(event) {
+		const flushed = flushPoseCaptureRecorder(captureRecorder, {
+			reason: "finish",
+			nowMs: performance.now() - (startedAt || performance.now()),
+		});
+		captureRecorder = flushed.state;
+		flushed.chunks.forEach(pushCaptureChunk);
+
 		const durationMs = event.detail?.durationMs;
 		try {
 			hook.pushEvent(
@@ -100,9 +127,14 @@ export function createPoseTracker(hook) {
 		}
 	}
 
+	function pushCaptureChunk(chunk) {
+		hook.pushEvent("pose_capture_chunk", chunk);
+	}
+
 	function destroyed() {
 		mounted = false;
 		hook.el.removeEventListener("pose-tracker:finish", finish);
+		document.removeEventListener("pose-capture:segment", onCaptureSegment);
 		if (raf) cancelAnimationFrame(raf);
 		if (stream) stream.getTracks().forEach((track) => track.stop());
 		if (detector?.dispose) detector.dispose();

@@ -61,6 +61,29 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert render(view) =~ "Camera ready"
   end
 
+  test "tracked capture chunk event persists pose trace chunk", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+
+    render_hook(view, "pose_capture_chunk", %{
+      "segment" => "warmup",
+      "chunk_index" => 0,
+      "started_at_ms" => 0,
+      "ended_at_ms" => 3_000,
+      "sample_count" => 1,
+      "payload" => %{"version" => 1, "samples" => [%{"tMs" => 0}]}
+    })
+
+    [run] = Repo.all(PoseCaptureRun)
+    [chunk] = Repo.preload(run, :pose_trace_chunks).pose_trace_chunks
+    assert chunk.segment == :warmup
+    assert chunk.chunk_index == 0
+    assert chunk.sample_count == 1
+    assert Jason.decode!(chunk.payload_json)["samples"] == [%{"tMs" => 0}]
+  end
+
   test "timed mode keeps pose tracker absent after normal session completion", %{
     conn: conn,
     user: user

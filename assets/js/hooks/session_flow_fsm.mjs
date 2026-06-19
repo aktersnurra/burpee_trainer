@@ -16,21 +16,21 @@ export function flowTransition(state, event) {
 			return {
 				state: {
 					...state,
-					mode: "warmup_prompt",
+					mode: "capture_prompt",
 					workoutTimeline: event.workoutTimeline || [],
 					blockCount: event.blockCount || 0,
 				},
-				commands: [{ type: "renderPrompt" }],
+				commands: [{ type: "showCapturePrompt" }],
 			};
 
 		case "WARMUP_SKIP":
 			return {
 				state: {
 					...state,
-					mode: "capture_prompt",
+					mode: "workout_ready_prompt",
 					activeSegment: null,
 				},
-				commands: [{ type: "showCapturePrompt" }],
+				commands: [{ type: "showWarmupDonePrompt" }],
 			};
 
 		case "WARMUP_READY":
@@ -56,11 +56,11 @@ export function flowTransition(state, event) {
 				return {
 					state: {
 						...state,
-						mode: "capture_prompt",
+						mode: "workout_ready_prompt",
 						activeSegment: null,
 						warmupResult: event.result || state.warmupResult,
 					},
-					commands: [{ type: "showCapturePrompt" }],
+					commands: [{ type: "showWarmupDonePrompt" }],
 				};
 			}
 
@@ -93,14 +93,23 @@ export function flowTransition(state, event) {
 
 		case "CAPTURE_TIMED":
 			return {
-				state: { ...state, captureMode: "timed" },
-				commands: [],
+				state: { ...state, captureMode: "timed", mode: "warmup_prompt" },
+				commands: [{ type: "renderPrompt" }],
 			};
 
 		case "CAPTURE_TRACKED":
 			return {
-				state: { ...state, captureMode: "tracked" },
-				commands: [{ type: "chooseTrackedCapture" }],
+				state: { ...state, captureMode: "tracked", mode: "camera_setup" },
+				commands: [
+					{ type: "chooseTrackedCapture" },
+					{ type: "showCameraSetupPrompt" },
+				],
+			};
+
+		case "CAMERA_SETUP_READY":
+			return {
+				state: { ...state, mode: "warmup_prompt" },
+				commands: [{ type: "renderPrompt" }],
 			};
 
 		case "WORKOUT_READY":

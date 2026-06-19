@@ -100,6 +100,7 @@ const SessionHook = {
 			const workoutReady = e.target.closest("#workout-ready-btn");
 			const captureTracked = e.target.closest("#capture-tracked-btn");
 			const captureTimed = e.target.closest("#capture-timed-btn");
+			const cameraSetupStart = e.target.closest("#camera-setup-start-btn");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
 
@@ -108,6 +109,7 @@ const SessionHook = {
 			if (workoutReady) this.onWorkoutReady();
 			if (captureTracked) this.onCaptureTracked();
 			if (captureTimed) this.onCaptureTimed();
+			if (cameraSetupStart) this.onCameraSetupStart();
 			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
 		});
@@ -160,6 +162,9 @@ const SessionHook = {
 				break;
 			case "showCapturePrompt":
 				this.showCapturePrompt();
+				break;
+			case "showCameraSetupPrompt":
+				this.showCameraSetupPrompt();
 				break;
 			case "chooseTrackedCapture":
 				this.pushEvent("choose_tracked", {});
@@ -306,6 +311,48 @@ const SessionHook = {
 		parent.appendChild(overlay);
 	},
 
+	showCameraSetupPrompt() {
+		this.renderer.resetReady();
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		this.rafId = null;
+		this.audio.stop();
+		this.startTime = null;
+		this.countdownCount = null;
+		this.countdownPaused = false;
+
+		const parent = this.el.querySelector("#session-runner-client") || this.el;
+		let overlay = this.el.querySelector("#start-overlay");
+
+		if (!overlay) {
+			overlay = document.createElement("div");
+			overlay.id = "start-overlay";
+		}
+
+		overlay.className =
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-[var(--session-bg)] p-6 text-center text-[var(--session-ink)]";
+		overlay.replaceChildren();
+
+		const title = document.createElement("span");
+		title.className =
+			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
+		title.textContent = "Adjust camera";
+
+		const description = document.createElement("p");
+		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
+		description.textContent =
+			"Place the camera so your full body is visible before recording warmup and workout traces.";
+
+		const button = document.createElement("button");
+		button.type = "button";
+		button.id = "camera-setup-start-btn";
+		button.className =
+			"border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.98]";
+		button.textContent = "Start tracked session";
+
+		overlay.append(title, description, button);
+		parent.appendChild(overlay);
+	},
+
 	showWarmupDonePrompt() {
 		this.renderer.resetReady();
 		if (this.rafId) cancelAnimationFrame(this.rafId);
@@ -367,12 +414,14 @@ const SessionHook = {
 
 	onCaptureTracked() {
 		this.dispatchFlow({ type: "CAPTURE_TRACKED" });
-		this.onWorkoutReady();
 	},
 
 	onCaptureTimed() {
 		this.dispatchFlow({ type: "CAPTURE_TIMED" });
-		this.onWorkoutReady();
+	},
+
+	onCameraSetupStart() {
+		this.dispatchFlow({ type: "CAMERA_SETUP_READY" });
 	},
 
 	startCountdown() {
@@ -491,6 +540,11 @@ const SessionHook = {
 
 	startSegment({ segment, timeline, blockCount, burpeeCountTarget }) {
 		this.activeSegment = segment;
+		document.dispatchEvent(
+			new CustomEvent("pose-capture:segment", {
+				detail: { segment: segment === "workout" ? "main" : segment },
+			}),
+		);
 		this.lastDownCueKey = null;
 		this.segment = initialSegmentState();
 		this.dispatchSegment({
