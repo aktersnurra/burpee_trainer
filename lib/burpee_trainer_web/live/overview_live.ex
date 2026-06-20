@@ -534,6 +534,21 @@ defmodule BurpeeTrainerWeb.OverviewLive do
                 description="Add a session you already completed"
                 phx-click="open_log_modal"
               />
+              <div
+                id="home-theme-action"
+                class="flex items-center justify-between gap-4 px-5 py-4"
+              >
+                <div class="space-y-1">
+                  <p class="text-sm font-medium text-[var(--session-ink)]">Theme</p>
+                  <p class="text-sm text-[var(--session-muted)]">Switch light or dark mode</p>
+                </div>
+                <Layouts.theme_button
+                  id="home-theme-toggle"
+                  label={false}
+                  session_nav?={true}
+                  class="shrink-0"
+                />
+              </div>
             </.qs_surface>
 
             <.qs_surface

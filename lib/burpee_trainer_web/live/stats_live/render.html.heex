@@ -37,46 +37,6 @@
     />
   </div>
 
-  <%!-- FAB --%>
-  <div class="fixed bottom-28 right-4 sm:bottom-8 sm:right-6 z-40">
-    <button
-      type="button"
-      phx-click="open_log_modal"
-      id="stats-log-button"
-      class="flex size-11 items-center justify-center rounded-full border border-[var(--session-border)] bg-[var(--session-surface)] text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]"
-      aria-label="Log session"
-    >
-      <.icon name="hero-plus" class="size-5" />
-    </button>
-  </div>
-
-  <%!-- Log modal --%>
-  <%= if @log_modal_open do %>
-    <div
-      id="log-modal"
-      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6"
-    >
-      <button
-        id="log-modal-backdrop"
-        type="button"
-        phx-click="close_log_modal"
-        class="absolute inset-0 bg-black/60"
-        aria-label="Close log session"
-      />
-      <div
-        id="log-modal-sheet"
-        class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-xl rounded-t-xl sm:rounded-xl p-5 sm:p-6"
-      >
-        <.live_component
-          module={BurpeeTrainerWeb.LogFormComponent}
-          id="log-form"
-          current_user={@current_user}
-          on_save={:session_saved}
-        />
-      </div>
-    </div>
-  <% end %>
-
   <%!-- Goal modal --%>
   <%= if @goal_modal_type do %>
     <div

@@ -15,7 +15,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
   def mount(_params, _session, socket) do
     {:ok,
      assign(socket,
-       log_modal_open: false,
        goal_modal_type: nil,
        goal_baseline_session: nil,
        sessions_visible_count: @page_size
@@ -52,7 +51,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
     |> assign(:goals, goals)
     |> assign(:sessions_visible_count, visible_count)
     |> assign_period_sessions(period_detailed_sessions, visible_count)
-    |> assign(:log_modal_open, socket.assigns[:log_modal_open] || false)
     |> assign(:goal_modal_type, socket.assigns[:goal_modal_type])
     |> assign(:goal_baseline_session, socket.assigns[:goal_baseline_session])
     |> assign(:weekly_data, Workouts.weekly_minutes(user) |> filter_weekly_data(period_start))
@@ -97,14 +95,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   @impl true
-  def handle_event("open_log_modal", _, socket) do
-    {:noreply, assign(socket, :log_modal_open, true)}
-  end
-
-  def handle_event("close_log_modal", _, socket) do
-    {:noreply, assign(socket, :log_modal_open, false)}
-  end
-
   def handle_event("load_more_sessions", _, socket) do
     visible_count = socket.assigns.sessions_visible_count + @page_size
 
@@ -133,14 +123,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   @impl true
-  def handle_info(:session_saved, socket) do
-    {:noreply, refresh_after_session_save(socket, [])}
-  end
-
-  def handle_info({:session_saved, events}, socket) do
-    {:noreply, refresh_after_session_save(socket, events)}
-  end
-
   def handle_info(:goal_saved, socket) do
     {:noreply,
      socket
@@ -148,26 +130,6 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign(:goal_baseline_session, nil)
      |> assign_stats(socket.assigns.period, socket.assigns.sessions_visible_count)}
   end
-
-  defp refresh_after_session_save(socket, events) do
-    socket
-    |> assign(:log_modal_open, false)
-    |> assign_stats(socket.assigns.period, @page_size)
-    |> put_milestone_flashes(events)
-  end
-
-  defp put_milestone_flashes(socket, events) do
-    Enum.reduce(events, socket, fn
-      %{type: :goal_reached, value: %{burpee_type: type}}, acc ->
-        put_flash(acc, :info, "#{goal_type_label(type)} goal reached!")
-
-      _event, acc ->
-        acc
-    end)
-  end
-
-  defp goal_type_label(:six_count), do: "6-Count"
-  defp goal_type_label(:navy_seal), do: "Navy SEAL"
 
   defp decode_period(period) when period in ["7d", "30d", "90d", "all"], do: period
   defp decode_period(_), do: "30d"

@@ -38,7 +38,7 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
       end
     end
 
-    test "authenticated app pages render theme toggle" do
+    test "authenticated app pages render theme toggle in desktop navigation only" do
       html =
         render_to_string(BurpeeTrainerWeb.Layouts, "app", "html",
           flash: %{},
@@ -50,6 +50,8 @@ defmodule BurpeeTrainerWeb.LayoutsTest do
 
       assert html =~ "phx:toggle-theme"
       assert html =~ "Toggle color theme"
+      refute html =~ "fixed bottom-28 right-4"
+      refute html =~ "theme-bottom-button"
     end
 
     test "session screens without current page omit theme toggle" do

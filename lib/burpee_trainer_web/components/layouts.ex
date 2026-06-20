@@ -70,6 +70,13 @@ defmodule BurpeeTrainerWeb.Layouts do
           />
           <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
         </.nav_icon>
+
+        <.theme_button
+          :if={@theme_toggle?}
+          id="desktop-theme-toggle"
+          session_nav?={@session_surface_page?}
+          class="hidden sm:inline-flex"
+        />
       </nav>
 
       <%!-- Mobile bottom tab bar --%>
@@ -120,8 +127,6 @@ defmodule BurpeeTrainerWeb.Layouts do
       </nav>
     <% end %>
 
-    <.theme_toggle :if={@theme_toggle?} session_nav?={@session_surface_page?} />
-
     <main class={[
       "px-4 py-8 sm:px-6",
       @session_surface_page? &&
@@ -155,24 +160,32 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp theme_toggle?(_user, nil), do: false
   defp theme_toggle?(_user, _page), do: true
 
+  attr(:id, :string, default: "theme-toggle")
   attr(:session_nav?, :boolean, default: false)
+  attr(:label, :boolean, default: false)
+  attr(:class, :any, default: nil)
 
-  defp theme_toggle(assigns) do
+  def theme_button(assigns) do
     ~H"""
     <button
+      id={@id}
       type="button"
       phx-click={JS.dispatch("phx:toggle-theme")}
       class={[
-        "fixed bottom-28 right-4 z-40 flex size-9 items-center justify-center rounded-xl border transition sm:bottom-auto sm:right-4 sm:top-3",
+        "items-center justify-center gap-2 rounded-xl border transition",
+        @label && "px-3 py-2 text-sm font-medium",
+        !@label && "size-9",
         @session_nav? &&
           "session-surface border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-surface-alt)]",
         !@session_nav? &&
-          "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised"
+          "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised",
+        @class
       ]}
       aria-label="Toggle color theme"
     >
       <.icon name="hero-moon" class="size-4 dark:hidden" />
       <.icon name="hero-sun" class="hidden size-4 dark:block" />
+      <span :if={@label}>Theme</span>
     </button>
     """
   end

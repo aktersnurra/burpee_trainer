@@ -3,6 +3,7 @@ import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
+import { waitForVideoFrame, webglAvailable } from "./pose_video.mjs";
 import {
 	flushPoseCaptureRecorder,
 	initialPoseCaptureRecorder,
@@ -31,6 +32,10 @@ export function createPoseTracker(hook) {
 		document.addEventListener("pose-capture:segment", onCaptureSegment);
 
 		try {
+			if (!webglAvailable()) {
+				throw new Error("WebGL is unavailable; BlazePose cannot start in this browser/context");
+			}
+
 			stream = await navigator.mediaDevices.getUserMedia({
 				video: { facingMode: "user" },
 				audio: false,
@@ -41,6 +46,7 @@ export function createPoseTracker(hook) {
 			video.playsInline = true;
 			video.srcObject = stream;
 			await video.play();
+			await waitForVideoFrame(video);
 
 			detector = await createBlazePoseDetector();
 
@@ -67,7 +73,17 @@ export function createPoseTracker(hook) {
 		}
 		lastPoseMs = now;
 
-		const poses = await detector.estimatePoses(video);
+		let poses = [];
+		try {
+			poses = await detector.estimatePoses(video);
+		} catch (error) {
+			console.error("BlazePose frame failed", error);
+			hook.pushEvent("track", {
+				state: "lost",
+				reason: error?.message || "blazepose_frame_failed",
+			});
+			return;
+		}
 		const sample = sampleFromPose(
 			poses[0],
 			now - startedAt,

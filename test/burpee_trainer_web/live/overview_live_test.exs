@@ -93,10 +93,12 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-secondary-actions")
     assert has_element?(view, "#home-change-workout")
     assert has_element?(view, "#home-log-session")
+    assert has_element?(view, "#home-theme-toggle[phx-click]")
 
     html = render(view)
     assert html =~ "Choose a different session"
     assert html =~ "Add a session you already completed"
+    assert html =~ "Theme"
     assert html =~ "Today’s prescription"
     assert html =~ "Coach note"
     assert html =~ "Level"

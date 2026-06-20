@@ -167,8 +167,8 @@ body {
   --session-progress: #2383E2;
   --session-series-six: var(--session-ink);
   --session-series-seal: var(--session-accent);
-  --session-countin-bg: var(--session-ink);
-  --session-countin-ink: #FAF8F3;
+  --session-countin-bg: var(--session-bg);
+  --session-countin-ink: var(--session-ink);
 }
 
 [data-theme="dark"] #burpee-session,
@@ -199,8 +199,8 @@ body {
   --session-progress: #5AA9F5;
   --session-series-six: var(--session-ink);
   --session-series-seal: var(--session-accent);
-  --session-countin-bg: var(--session-ink);
-  --session-countin-ink: #111318;
+  --session-countin-bg: var(--session-bg);
+  --session-countin-ink: var(--session-ink);
 }
 
 .qs-tabular {

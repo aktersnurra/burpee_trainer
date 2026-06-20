@@ -147,63 +147,15 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       refute render(view) =~ "Load more"
     end
 
-    test "uses session surface visual system", %{conn: conn} do
+    test "uses session surface visual system without stats log action", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stats")
+      html = render(view)
 
       assert has_element?(view, "[data-stats-page].session-surface")
-      assert has_element?(view, "#stats-log-button")
-      assert render(view) =~ "text-[var(--session-ink)]"
-    end
-
-    test "FAB opens log modal", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/stats")
-      view |> element("button[phx-click='open_log_modal']") |> render_click()
-      assert render(view) =~ "Log session"
-    end
-
-    test "log modal surfaces goal milestone feedback", %{conn: conn, user: user} do
-      today = Date.utc_today()
-
-      {:ok, goal} =
-        Goals.create_goal(user, %{
-          "burpee_type" => "six_count",
-          "burpee_count_target" => 60,
-          "duration_sec_target" => 1200,
-          "date_target" => Date.add(today, 30),
-          "burpee_count_baseline" => 0,
-          "duration_sec_baseline" => 0,
-          "date_baseline" => today
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/stats")
-      view |> element("button[phx-click='open_log_modal']") |> render_click()
-
-      view
-      |> form("#log-form-log-form", %{
-        "workout_session" => %{
-          "burpee_count_actual" => "60",
-          "duration_sec_actual" => "20",
-          "log_date" => Date.to_iso8601(today)
-        }
-      })
-      |> render_submit()
-
-      assert render(view) =~ "6-Count goal reached!"
-      assert %{status: :achieved} = Goals.get_goal!(user, goal.id)
-    end
-
-    test "log modal uses separate backdrop so mobile input taps stay open", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/stats")
-      view |> element("button[phx-click='open_log_modal']") |> render_click()
-
-      assert has_element?(view, "#log-modal-backdrop[phx-click='close_log_modal']")
-
-      assert has_element?(
-               view,
-               "#log-modal-sheet input[name='workout_session[burpee_count_actual]']"
-             )
-
-      refute has_element?(view, "#log-modal[phx-click='close_log_modal']")
+      refute has_element?(view, "#stats-log-button")
+      refute has_element?(view, "button[phx-click='open_log_modal']")
+      refute html =~ "fixed bottom-28 right-4"
+      assert html =~ "text-[var(--session-ink)]"
     end
   end
 

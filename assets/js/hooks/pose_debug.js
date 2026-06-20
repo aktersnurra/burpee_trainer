@@ -2,6 +2,7 @@ import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
+import { waitForVideoFrame, webglAvailable } from "./pose_video.mjs";
 import { decodeBurpeePhases } from "./pose_phase_decoder.mjs";
 import { extractBurpeeCandidates } from "./pose_candidate_extractor.mjs";
 import { formatDecoderDiagnostics } from "./pose_decoder_diagnostics.mjs";
@@ -63,12 +64,17 @@ const PoseDebug = {
 		this.status("Requesting camera");
 
 		try {
+			if (!webglAvailable()) {
+				throw new Error("WebGL is unavailable; BlazePose cannot start in this browser/context");
+			}
+
 			this.stream = await navigator.mediaDevices.getUserMedia({
 				video: { facingMode: "user" },
 				audio: false,
 			});
 			this.video.srcObject = this.stream;
 			await this.video.play();
+			await waitForVideoFrame(this.video);
 			this.resizeCanvas();
 
 			this.status("Loading BlazePose full");
@@ -99,7 +105,14 @@ const PoseDebug = {
 		}
 		this.lastPoseAt = now;
 
-		const poses = await this.detector.estimatePoses(this.video);
+		let poses = [];
+		try {
+			poses = await this.detector.estimatePoses(this.video);
+		} catch (error) {
+			console.error("BlazePose frame failed", error);
+			this.status(error?.message || "BlazePose frame failed");
+			return;
+		}
 		const pose = poses[0];
 		const sample = sampleFromPose(
 			pose,
