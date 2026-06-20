@@ -12,13 +12,8 @@ copy_mediapipe() {
 	dest="$MEDIAPIPE_DIR/$name"
 
 	if [ ! -e "$src" ]; then
-		echo "ERROR: missing MediaPipe Pose asset $src; run npm --prefix assets install" >&2
+		echo "ERROR: missing MediaPipe Pose asset $src; run mix assets.setup" >&2
 		exit 1
-	fi
-
-	if [ -e "$dest" ]; then
-		echo "exists $dest"
-		return 0
 	fi
 
 	echo "copy $name"
