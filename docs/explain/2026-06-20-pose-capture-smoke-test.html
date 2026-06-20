@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>2026-06-20-pose-capture-smoke-test</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="/Users/aktersnurra/.pi/agent/skills/explain/assets/style.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">2026-06-20-pose-capture-smoke-test</h1>
+</header>
+<section id="pose-capture-smoke-test" class="level1">
+<h1>Pose Capture Smoke Test</h1>
+<section id="summary" class="level2">
+<h2>Summary</h2>
+<p>Use this checklist after changes to camera tracking, pose capture
+storage, MediaPipe assets, or session flow. The goal is to verify that
+tracked sessions can start, capture warmup and main pose chunks, save
+completed capture data, and delete pose data when the user aborts.</p>
+</section>
+<section id="prerequisites" class="level2">
+<h2>Prerequisites</h2>
+<p>From the app repo:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ~/projects/vibe/burpee_trainer</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">mix</span> assets.pose</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">mix</span> phx.server</span></code></pre></div>
+<p>Open the app in a browser with WebGL enabled. If pose tracking fails
+in LibreWolf or another hardened browser, retry in Safari/Chrome/Firefox
+and check WebGL availability:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode js"><code class="sourceCode javascript"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">document</span><span class="op">.</span><span class="fu">createElement</span>(<span class="st">&quot;canvas&quot;</span>)<span class="op">.</span><span class="fu">getContext</span>(<span class="st">&quot;webgl2&quot;</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">document</span><span class="op">.</span><span class="fu">createElement</span>(<span class="st">&quot;canvas&quot;</span>)<span class="op">.</span><span class="fu">getContext</span>(<span class="st">&quot;webgl&quot;</span>)</span></code></pre></div>
+<p>At least one of those should return a context object, not
+<code>null</code>.</p>
+</section>
+<section id="mediapipe-asset-check" class="level2">
+<h2>1. MediaPipe asset check</h2>
+<p>Open the browser devtools Network tab and start the camera
+debug/tracked flow.</p>
+<p>Confirm these requests return <code>200</code>, not
+<code>404</code>:</p>
+<pre class="text"><code>/models/mediapipe_pose/pose_landmark_full.tflite
+/models/mediapipe_pose/pose_solution_packed_assets_loader.js
+/models/mediapipe_pose/pose_solution_packed_assets.data
+/models/mediapipe_pose/pose_solution_simd_wasm_bin.js
+/models/mediapipe_pose/pose_solution_simd_wasm_bin.wasm
+/models/mediapipe_pose/pose_web.binarypb</code></pre>
+<p>If any are missing, run:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">mix</span> assets.pose</span></code></pre></div>
+</section>
+<section id="camera-debug-smoke-test" class="level2">
+<h2>2. Camera debug smoke test</h2>
+<ol type="1">
+<li>Go to <code>/tracking-test</code>.</li>
+<li>Allow camera permission.</li>
+<li>Confirm the status reaches <code>Live</code>.</li>
+<li>Move in frame and confirm the skeleton/pose display updates.</li>
+<li>Confirm there is no browser alert like:</li>
+</ol>
+<pre class="text"><code>Failed to create WebGL canvas context when passing video frame</code></pre>
+<p>If that appears, try another browser or enable hardware
+acceleration/WebGL.</p>
+</section>
+<section id="completed-tracked-session-smoke-test" class="level2">
+<h2>3. Completed tracked session smoke test</h2>
+<ol type="1">
+<li>Go to a runnable workout plan.</li>
+<li>Start a session.</li>
+<li>Choose camera/tracked mode.</li>
+<li>Confirm the camera setup step appears before warmup.</li>
+<li>Confirm the setup panel changes to ready when the tracker
+loads.</li>
+<li>Start the tracked session.</li>
+<li>Complete at least part of warmup.</li>
+<li>Continue into the main workout.</li>
+<li>Finish and save the session.</li>
+</ol>
+<p>Expected behavior:</p>
+<ul>
+<li>Camera setup appears before tracked work starts.</li>
+<li>The session records pose chunks during warmup and main.</li>
+<li>Saving creates a tracked <code>workout_session</code>.</li>
+<li>The <code>pose_capture_run</code> is marked completed and linked to
+that saved session.</li>
+</ul>
+</section>
+<section id="database-checks-after-saving" class="level2">
+<h2>4. Database checks after saving</h2>
+<p>In an IEx session or database browser, verify:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">alias</span> <span class="cn">BurpeeTrainer</span><span class="op">.</span><span class="cn">Repo</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">alias</span> <span class="cn">BurpeeTrainer</span><span class="op">.</span><span class="cn">Workouts</span><span class="op">.</span><span class="fu">{</span><span class="cn">PoseCaptureRun</span>, <span class="cn">PoseTraceChunk</span>, <span class="cn">WorkoutSession</span><span class="fu">}</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Query</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>session <span class="op">=</span> <span class="cn">Repo</span><span class="op">.</span>one!<span class="fu">(</span>from s <span class="kw">in</span> <span class="cn">WorkoutSession</span>, <span class="va">order_by:</span> <span class="ot">[</span><span class="va">desc:</span> s<span class="op">.</span>id<span class="ot">]</span>, <span class="va">limit:</span> <span class="dv">1</span><span class="fu">)</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>run <span class="op">=</span> <span class="cn">Repo</span><span class="op">.</span>one!<span class="fu">(</span>from r <span class="kw">in</span> <span class="cn">PoseCaptureRun</span>, <span class="va">where:</span> r<span class="op">.</span>workout_session_id <span class="op">==</span> <span class="op">^</span>session<span class="op">.</span>id<span class="fu">)</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>chunks <span class="op">=</span> <span class="cn">Repo</span><span class="op">.</span>all<span class="fu">(</span>from c <span class="kw">in</span> <span class="cn">PoseTraceChunk</span>, <span class="va">where:</span> c<span class="op">.</span>pose_capture_run_id <span class="op">==</span> <span class="op">^</span>run<span class="op">.</span>id<span class="fu">)</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>session<span class="op">.</span>capture_mode</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>run<span class="op">.</span>status</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="cn">Enum</span><span class="op">.</span>map<span class="fu">(</span>chunks, <span class="op">&amp;</span> <span class="op">&amp;</span><span class="dv">1</span><span class="op">.</span>segment<span class="fu">)</span> <span class="op">|&gt;</span> <span class="cn">Enum</span><span class="op">.</span>uniq<span class="fu">()</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>length<span class="fu">(</span>chunks<span class="fu">)</span></span></code></pre></div>
+<p>Expected:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>session<span class="op">.</span>capture_mode <span class="op">==</span> <span class="va">:tracked</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>run<span class="op">.</span>status <span class="op">==</span> <span class="va">:completed</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="va">:warmup</span> <span class="kw">in</span> <span class="cn">Enum</span><span class="op">.</span>map<span class="fu">(</span>chunks, <span class="op">&amp;</span> <span class="op">&amp;</span><span class="dv">1</span><span class="op">.</span>segment<span class="fu">)</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="va">:main</span> <span class="kw">in</span> <span class="cn">Enum</span><span class="op">.</span>map<span class="fu">(</span>chunks, <span class="op">&amp;</span> <span class="op">&amp;</span><span class="dv">1</span><span class="op">.</span>segment<span class="fu">)</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>length<span class="fu">(</span>chunks<span class="fu">)</span> <span class="op">&gt;</span> <span class="dv">0</span></span></code></pre></div>
+</section>
+<section id="abortdiscard-smoke-test" class="level2">
+<h2>5. Abort/discard smoke test</h2>
+<ol type="1">
+<li>Start another tracked session.</li>
+<li>Allow the camera to start.</li>
+<li>Let it run long enough to capture at least one chunk.</li>
+<li>Abort/discard the session instead of saving.</li>
+</ol>
+<p>Expected behavior:</p>
+<ul>
+<li>The app does not retain pose data from the aborted attempt.</li>
+<li>The related <code>pose_capture_run</code> and
+<code>pose_trace_chunks</code> are deleted.</li>
+</ul>
+<p>Useful check before and after abort:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="cn">Repo</span><span class="op">.</span>aggregate<span class="fu">(</span><span class="cn">PoseCaptureRun</span>, <span class="va">:count</span><span class="fu">)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cn">Repo</span><span class="op">.</span>aggregate<span class="fu">(</span><span class="cn">PoseTraceChunk</span>, <span class="va">:count</span><span class="fu">)</span></span></code></pre></div>
+<p>The counts should not increase after an aborted tracked attempt.</p>
+</section>
+<section id="timer-only-fallback-smoke-test" class="level2">
+<h2>6. Timer-only fallback smoke test</h2>
+<ol type="1">
+<li>Start a session.</li>
+<li>Choose timer-only mode.</li>
+<li>Complete/save normally.</li>
+</ol>
+<p>Expected behavior:</p>
+<ul>
+<li>No <code>#pose-tracker</code> is active.</li>
+<li>No new <code>pose_capture_run</code> is created.</li>
+<li>Saved session has <code>capture_mode == :timed</code>.</li>
+</ul>
+</section>
+<section id="themecount-in-visual-check" class="level2">
+<h2>7. Theme/count-in visual check</h2>
+<p>Run one session in light mode and one in dark mode.</p>
+<p>During count-in before a set starts, verify:</p>
+<ul>
+<li>The session background matches the selected theme.</li>
+<li>The header/count-in label does not invert to the opposite
+theme.</li>
+<li>The bottom nav/theme controls do not float over the session UI.</li>
+</ul>
+</section>
+<section id="final-automated-checks" class="level2">
+<h2>8. Final automated checks</h2>
+<p>After manual smoke testing, run:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">mix</span> precommit</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> assets <span class="kw">&amp;&amp;</span> <span class="ex">npm</span> test</span></code></pre></div>
+<p>Expected current baselines after the P0 capture work:</p>
+<pre class="text"><code>mix precommit: all tests pass
+assets npm test: all tests pass</code></pre>
+</section>
+</section>
+</body>
+</html>
