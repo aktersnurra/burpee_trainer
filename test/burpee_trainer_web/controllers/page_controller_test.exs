@@ -35,7 +35,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
 
     session_from_plan_fixture(user, plan, %{
       "burpee_count_actual" => 30,
-      "duration_sec_actual" => 180
+      "duration_sec_actual" => 1200
     })
 
     goal_fixture(user, %{
@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
     assert html =~ "Today’s prescription"
     refute html =~ ~s(data-home-weekly-split)
     assert html =~ ~s(id="home-catch-up-panel")
-    assert html =~ "Build catch-up sessions"
+    assert html =~ "Catch-up sessions"
   end
 
   test "GET / renders a quiet weekly status strip", %{conn: conn} do

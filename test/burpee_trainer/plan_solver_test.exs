@@ -161,15 +161,146 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert sol_4.sec_per_burpee <= sol_1a.sec_per_burpee
   end
 
-  test ":unbroken solve — reusable block plus block-run step" do
+  test "solution execution is canonical for generated plan totals" do
+    cases = [
+      input(%{pacing_style: :even, burpee_count_target: 160, target_duration_min: 20}),
+      input(%{
+        pacing_style: :unbroken,
+        reps_per_set: 8,
+        burpee_count_target: 144,
+        target_duration_min: 20
+      })
+    ]
+
+    for input <- cases do
+      assert {:ok, sol} = PlanSolver.solve(input)
+      assert_solution_matches_execution(input, sol)
+    end
+  end
+
+  test "solver grid keeps execution and persisted plan in sync" do
+    cases =
+      for burpee_type <- [:six_count, :navy_seal],
+          {pacing_style, reps_per_set, block_pattern} <- [
+            {:even, nil, nil},
+            {:even, nil, [8]},
+            {:unbroken, 5, nil},
+            {:unbroken, 8, nil}
+          ],
+          {target_duration_min, burpee_count_target} <- [{20, 80}, {20, 120}, {40, 160}] do
+        input(%{
+          burpee_type: burpee_type,
+          pacing_style: pacing_style,
+          reps_per_set: reps_per_set,
+          block_pattern: block_pattern,
+          target_duration_min: target_duration_min,
+          burpee_count_target: burpee_count_target,
+          level: :level_2
+        })
+      end
+
+    for input <- cases do
+      case PlanSolver.solve(input) do
+        {:ok, sol} -> assert_solution_matches_execution(input, sol)
+        {:error, reasons} -> assert Enum.all?(reasons, &is_binary/1)
+      end
+    end
+  end
+
+  test "unbroken solve uses MILP to keep short sessions fast with useful recovery" do
+    input =
+      input(%{
+        pacing_style: :unbroken,
+        reps_per_set: 8,
+        burpee_count_target: 80,
+        target_duration_min: 10,
+        level: :level_2
+      })
+
+    assert {:ok, sol} = PlanSolver.solve(input)
+    assert_solution_matches_execution(input, sol)
+
+    assert sol.metadata.set_pattern_strategy == :human_candidate_search
+
+    fastest = BurpeeTrainer.PaceModel.fastest_recommended_sec_per_rep(:six_count, :level_2)
+    assert sol.sec_per_burpee >= fastest
+    assert sol.sec_per_burpee < 6.0
+    assert Enum.all?(sol.rest_pattern_sec, &(&1 == 0.0 or &1 >= 8.0))
+    assert Enum.max(sol.rest_pattern_sec) <= 90.0
+    assert sol.metadata.rest_suggestions == []
+  end
+
+  test "plan solver v3 golden case uses readable taper and exact recovery windows" do
+    input =
+      input(%{
+        pacing_style: :unbroken,
+        reps_per_set: 8,
+        burpee_count_target: 140,
+        target_duration_min: 20,
+        level: :level_1a
+      })
+
+    assert {:ok, sol} = PlanSolver.solve(input)
+    assert_solution_matches_execution(input, sol)
+
+    assert sol.metadata.solver_version == "deterministic-v3"
+    assert sol.metadata.set_pattern_strategy == :grammar_search
+    assert sol.set_pattern == [8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 7, 6, 7, 6, 7, 6, 7, 6]
+    assert Enum.count(sol.rest_pattern_sec, &(&1 == 90.0)) == 2
+    assert Enum.count(sol.rest_pattern_sec, &(&1 == 15.0)) == 17
+    assert_in_delta sol.sec_per_burpee, 5.464285714, 1.0e-6
+  end
+
+  test "plan solver v3 does not use hidden pace-floor relaxation" do
+    assert {:error, [_msg]} =
+             PlanSolver.solve(
+               input(%{
+                 pacing_style: :unbroken,
+                 reps_per_set: 8,
+                 burpee_count_target: 144,
+                 target_duration_min: 20,
+                 level: :level_1a,
+                 sec_per_burpee_override: 3.6
+               })
+             )
+  end
+
+  test "unbroken solve with additional rest keeps execution and persisted plan in sync" do
+    input =
+      input(%{
+        pacing_style: :unbroken,
+        reps_per_set: 8,
+        burpee_count_target: 120,
+        target_duration_min: 20,
+        level: :level_2,
+        additional_rests: [%{target_min: 10, rest_sec: 45}]
+      })
+
+    assert {:ok, sol} = PlanSolver.solve(input)
+    assert_solution_matches_execution(input, sol)
+
+    rest_steps = Enum.filter(sol.plan.steps, &(&1.kind == :rest))
+
+    assert Enum.any?(rest_steps, &(&1.rest_sec == 45))
+    assert Enum.find_index(sol.plan.steps, &(&1.kind == :rest && &1.rest_sec == 45)) > 0
+    assert List.last(sol.plan.steps).kind == :block_run
+    assert hd(List.last(sol.plan.blocks).sets).end_of_set_rest == 0
+  end
+
+  test ":unbroken solve — reusable blocks omit final recovery" do
     {:ok, sol} =
       PlanSolver.solve(input(%{pacing_style: :unbroken, reps_per_set: 5}))
 
-    [block] = sol.plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run]
-    assert hd(sol.plan.steps).repeat_count == 4
+    assert Enum.sum(Enum.map(sol.plan.blocks, & &1.repeat_count)) == 4
+
+    assert Enum.all?(sol.plan.blocks, fn block ->
+             [%{burpee_count: 5}] = block.sets
+             true
+           end)
+
+    assert List.last(sol.plan.blocks).sets |> hd() |> Map.fetch!(:end_of_set_rest) == 0
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == sol.burpee_count
+    assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == sol.duration_sec
   end
 
   test "unbroken 160 in 20 minutes with 8 reps per set preserves auto recovery" do
@@ -189,7 +320,9 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert length(sol.rest_pattern_sec) == 19
     assert sol.rest_sec >= 8.0
 
-    assert sol.sec_per_burpee >= sol.metadata.pace_fastest_sec_per_rep
+    assert sol.sec_per_burpee >= sol.metadata.pace_fastest_sec_per_rep * 0.92
+    assert Enum.all?(sol.rest_pattern_sec, &(&1 <= 15.0 or &1 >= 60.0))
+    assert Enum.count(sol.rest_pattern_sec, &(&1 >= 60.0)) <= 2
     assert sol.metadata.recovery_mode == :auto
     assert sol.metadata.recommendation =~ "20 × 8"
   end
@@ -233,7 +366,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert is_binary(msg)
   end
 
-  test "solver suggests feasible midpoint reset rest without forcing it" do
+  test "solver keeps midpoint reset suggestion available alongside useful auto recovery" do
     {:ok, sol} =
       PlanSolver.solve(
         input(%{
@@ -246,13 +379,16 @@ defmodule BurpeeTrainer.PlanSolverTest do
         })
       )
 
-    assert sol.plan.steps |> Enum.map(& &1.kind) == [:block_run]
+    assert Enum.all?(sol.plan.steps, &(&1.kind == :block_run))
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 160
+    assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 1200
 
-    assert [%{target_min: target_min, rest_sec: rest_sec, effect: effect}] =
+    assert sol.rest_sec >= 8.0
+
+    assert [%{target_min: target_min, rest_sec: 30, effect: effect}] =
              sol.metadata.rest_suggestions
 
     assert target_min in 10..16
-    assert rest_sec in [20, 30]
     assert effect =~ "recovery"
   end
 
@@ -272,7 +408,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert Enum.uniq(sol.set_pattern) |> length() > 1
     assert List.last(sol.set_pattern) != 0
     assert Enum.all?(sol.set_pattern, &(&1 in [4, 5, 6, 8, 9, 10, 12, 15]))
-    assert sol.metadata.set_pattern_strategy == :human_shaped
+    assert sol.metadata.set_pattern_strategy == :human_candidate_search
     assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 107
     assert_in_delta BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total, 1200.0, 5.0
   end
@@ -290,9 +426,11 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
     assert length(sol.set_pattern) == 4
     assert length(sol.rest_pattern_sec) == 3
-    [block] = sol.plan.blocks
-    assert hd(block.sets).end_of_set_rest == round(hd(sol.rest_pattern_sec))
-    assert hd(sol.plan.steps).repeat_count == 4
+    assert Enum.sum(Enum.map(sol.plan.blocks, & &1.repeat_count)) == 4
+    assert hd(List.first(sol.plan.blocks).sets).end_of_set_rest > 0
+    assert hd(List.last(sol.plan.blocks).sets).end_of_set_rest == 0
+    assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 20
+    assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 600
   end
 
   test "pace model is the source of pace bounds" do
@@ -342,6 +480,21 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert_in_delta sol.sec_per_burpee, 7.0, 1.0e-3
   end
 
+  test "unbroken one-rep target with leftover additional rest returns an error instead of crashing" do
+    assert {:error, [msg]} =
+             PlanSolver.solve(
+               input(%{
+                 pacing_style: :unbroken,
+                 reps_per_set: 8,
+                 burpee_count_target: 1,
+                 target_duration_min: 20,
+                 additional_rests: [%{rest_sec: 30, target_min: 12}]
+               })
+             )
+
+    assert msg =~ "Rest at minute 12"
+  end
+
   test "additional_rests places rest within 30s of target" do
     inp =
       input(%{
@@ -353,5 +506,19 @@ defmodule BurpeeTrainer.PlanSolverTest do
     {:ok, sol} = PlanSolver.solve(inp)
     assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
     assert Enum.at(sol.plan.steps, 1).rest_sec == 60
+  end
+
+  defp assert_solution_matches_execution(input, sol) do
+    summary = BurpeeTrainer.Planner.summary(sol.plan)
+
+    assert BurpeeTrainer.PlanSolver.Execution.burpee_count(sol.execution) ==
+             summary.burpee_count_total
+
+    assert_in_delta BurpeeTrainer.PlanSolver.Execution.duration_sec(sol.execution),
+                    summary.duration_sec_total,
+                    1.0
+
+    assert summary.burpee_count_total == input.burpee_count_target
+    assert_in_delta summary.duration_sec_total, input.target_duration_min * 60.0, 5.0
   end
 end

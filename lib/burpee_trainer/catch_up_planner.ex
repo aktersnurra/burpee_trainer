@@ -22,16 +22,6 @@ defmodule BurpeeTrainer.CatchUpPlanner do
      }}
   end
 
-  def plan(%Input{selected_burpee_type: selected_burpee_type, performance_goal: nil})
-      when selected_burpee_type in @valid_types do
-    {:error,
-     %{
-       reason: :performance_goal_required,
-       burpee_type: selected_burpee_type,
-       message: "Set an active performance goal before planning catch-up work."
-     }}
-  end
-
   def plan(%Input{selected_burpee_type: selected_burpee_type} = input)
       when selected_burpee_type in @valid_types do
     session_durations = session_durations(input.duration_min)
@@ -63,14 +53,6 @@ defmodule BurpeeTrainer.CatchUpPlanner do
   end
 
   def plan(%Input{}), do: {:error, %{reason: :invalid_selected_burpee_type}}
-
-  defp session_durations(duration_min) when is_integer(duration_min) and duration_min > 20 do
-    if rem(duration_min, 20) == 0 do
-      List.duplicate(20, div(duration_min, 20))
-    else
-      [duration_min]
-    end
-  end
 
   defp session_durations(duration_min), do: [duration_min]
 

@@ -19,9 +19,7 @@ defmodule BurpeeTrainerWeb.Layouts do
 
   def app(assigns) do
     assigns =
-      assigns
-      |> Map.put(:session_surface_page?, session_surface_page?(assigns.current_page))
-      |> Map.put(:theme_toggle?, theme_toggle?(assigns.current_user, assigns.current_page))
+      Map.put(assigns, :session_surface_page?, session_surface_page?(assigns.current_page))
 
     ~H"""
     <%= if @current_user do %>
@@ -70,13 +68,6 @@ defmodule BurpeeTrainerWeb.Layouts do
           />
           <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
         </.nav_icon>
-
-        <.theme_button
-          :if={@theme_toggle?}
-          id="desktop-theme-toggle"
-          session_nav?={@session_surface_page?}
-          class="hidden sm:inline-flex"
-        />
       </nav>
 
       <%!-- Mobile bottom tab bar --%>
@@ -155,10 +146,6 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp session_surface_page?(:plans), do: true
   defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false
-
-  defp theme_toggle?(nil, _page), do: false
-  defp theme_toggle?(_user, nil), do: false
-  defp theme_toggle?(_user, _page), do: true
 
   attr(:id, :string, default: "theme-toggle")
   attr(:session_nav?, :boolean, default: false)

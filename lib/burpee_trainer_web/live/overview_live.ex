@@ -15,6 +15,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     Workouts
   }
 
+  alias BurpeeTrainer.CatchUpPlanner.{Plan, SelectedSession}
   alias BurpeeTrainer.CatchUpPlanner.Input, as: CatchUpInput
   alias BurpeeTrainer.CoachTargetPlanner.Input, as: CoachTargetInput
   alias BurpeeTrainerWeb.{Layouts, LogFormComponent}
@@ -27,8 +28,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      socket
      |> assign_overview()
      |> assign(:log_modal_open, false)
-     |> assign(:catch_up_plan, nil)
-     |> assign(:catch_up_selected_type, nil)}
+     |> assign_auto_catch_up_plan()}
   end
 
   @impl true
@@ -38,21 +38,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   def handle_event("close_log_modal", _, socket) do
     {:noreply, assign(socket, :log_modal_open, false)}
-  end
-
-  def handle_event("plan_catch_up", %{"type" => type}, socket) do
-    case parse_burpee_type(type) do
-      {:ok, burpee_type} ->
-        plan = build_catch_up_plan(socket.assigns, burpee_type)
-
-        {:noreply,
-         socket
-         |> assign(:catch_up_selected_type, burpee_type)
-         |> assign(:catch_up_plan, plan)}
-
-      :error ->
-        {:noreply, put_flash(socket, :error, "Choose Six-count or Navy SEAL.")}
-    end
   end
 
   def handle_event("use_coach_target", %{"type" => type} = params, socket) do
@@ -94,7 +79,8 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   @impl true
   def handle_info(:session_saved, socket) do
-    {:noreply, socket |> assign_overview() |> assign(:log_modal_open, false)}
+    {:noreply,
+     socket |> assign_overview() |> assign(:log_modal_open, false) |> assign_auto_catch_up_plan()}
   end
 
   def handle_info({:session_saved, events}, socket) do
@@ -102,6 +88,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      socket
      |> assign_overview()
      |> assign(:log_modal_open, false)
+     |> assign_auto_catch_up_plan()
      |> put_milestone_flashes(events)}
   end
 
@@ -210,24 +197,102 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   defp goal_type_label(:six_count), do: "6-Count"
   defp goal_type_label(:navy_seal), do: "Navy SEAL"
 
-  defp build_catch_up_plan(assigns, burpee_type) do
-    duration_min = max(assigns.weekly_status.remaining_min, 20)
+  defp assign_auto_catch_up_plan(socket) do
+    assign(socket, :catch_up_plan, build_auto_catch_up_plan(socket.assigns))
+  end
 
-    input = %CatchUpInput{
-      weekly_status: assigns.weekly_status,
-      remaining_slots: assigns.remaining_slots,
-      selected_burpee_type: burpee_type,
-      performance_goal: Goals.get_active_performance_goal(assigns.current_user, burpee_type),
-      training_state: assigns.training_state,
-      history: assigns.sessions,
-      duration_min: duration_min,
-      today: assigns.today
-    }
+  defp build_auto_catch_up_plan(%{weekly_status: %{remaining_min: remaining_min}})
+       when remaining_min <= 0,
+       do: nil
 
-    case CatchUpPlanner.plan(input) do
-      {:ok, plan} -> plan
-      {:error, _reason} -> nil
+  defp build_auto_catch_up_plan(assigns) do
+    eligible_types = eligible_catch_up_types(assigns.training_state)
+    duration_min = max(round(assigns.weekly_status.remaining_min), 20)
+
+    with true <- eligible_types != [],
+         allocations <- catch_up_allocations(eligible_types, duration_min),
+         selected_sessions <- build_catch_up_sessions(assigns, allocations),
+         true <- selected_sessions != [] do
+      %Plan{
+        selected_burpee_type: nil,
+        total_duration_min: Enum.sum(Enum.map(selected_sessions, & &1.duration_min)),
+        selected_sessions: selected_sessions,
+        expected_progress_value: length(selected_sessions) * 1.0,
+        fatigue_cost: length(selected_sessions) * 1.0,
+        risk: if(length(selected_sessions) > 1, do: :normal, else: :low),
+        canonical?: false,
+        weekly_split_effect: :counts_but_non_standard,
+        rationale: catch_up_rationale(selected_sessions)
+      }
+    else
+      _ -> nil
     end
+  end
+
+  defp eligible_catch_up_types(training_state) do
+    [:six_count, :navy_seal]
+    |> Enum.filter(fn burpee_type ->
+      capacity = training_state.current_capacity_by_type[burpee_type]
+      capacity && capacity.estimated_reps > 0
+    end)
+  end
+
+  defp catch_up_allocations([burpee_type], duration_min), do: [{burpee_type, duration_min}]
+
+  defp catch_up_allocations(eligible_types, duration_min) do
+    session_count = min(length(eligible_types), max(div(duration_min, 20), 1))
+    selected_types = Enum.take(eligible_types, session_count)
+    base = div(duration_min, session_count)
+    remainder = rem(duration_min, session_count)
+
+    selected_types
+    |> Enum.with_index()
+    |> Enum.map(fn {burpee_type, index} ->
+      extra = if index < remainder, do: 1, else: 0
+      {burpee_type, base + extra}
+    end)
+  end
+
+  defp build_catch_up_sessions(assigns, allocations) do
+    allocations
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {{burpee_type, duration_min}, slot_index} ->
+      input = %CatchUpInput{
+        weekly_status: assigns.weekly_status,
+        remaining_slots: assigns.remaining_slots,
+        selected_burpee_type: burpee_type,
+        performance_goal: Goals.get_active_performance_goal(assigns.current_user, burpee_type),
+        training_state: assigns.training_state,
+        history: assigns.sessions,
+        duration_min: duration_min,
+        today: assigns.today
+      }
+
+      case CatchUpPlanner.plan(input) do
+        {:ok, %Plan{selected_sessions: [%SelectedSession{} = session | _]}} ->
+          [%{session | plan_input: %{session.plan_input | name: "Catch-up #{slot_index}"}}]
+
+        _ ->
+          []
+      end
+    end)
+  end
+
+  defp catch_up_rationale([session]) do
+    [
+      "Creates 1 × #{session.duration_min} min #{catch_up_type_label(session.burpee_type)} session: #{session.target_reps} reps.",
+      "Uses your logged #{catch_up_type_label(session.burpee_type)} capacity; no active goal is required."
+    ]
+  end
+
+  defp catch_up_rationale(selected_sessions) do
+    total_min = Enum.sum(Enum.map(selected_sessions, & &1.duration_min))
+
+    ["Creates #{length(selected_sessions)} catch-up sessions totaling #{total_min} min."] ++
+      Enum.map(selected_sessions, fn session ->
+        "#{session.duration_min} min #{catch_up_type_label(session.burpee_type)} · #{session.target_reps} reps"
+      end) ++
+      ["Uses logged capacity by type; no active goal is required."]
   end
 
   defp create_coach_plan(_user, _training_state, nil), do: {:error, :no_coach_suggestion}
@@ -327,7 +392,18 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       "pacing_style" => Atom.to_string(plan.pacing_style),
       "additional_rests" => plan.additional_rests,
       "fatigue_factor" => plan.fatigue_factor,
-      "blocks" => Enum.map(plan.blocks, &block_attrs/1)
+      "blocks" => Enum.map(plan.blocks, &block_attrs/1),
+      "steps" => Enum.map(plan.steps || [], &step_attrs/1)
+    }
+  end
+
+  defp step_attrs(step) do
+    %{
+      "position" => step.position,
+      "kind" => Atom.to_string(step.kind),
+      "block_position" => step.block_position,
+      "repeat_count" => step.repeat_count,
+      "rest_sec" => step.rest_sec
     }
   end
 
@@ -534,24 +610,26 @@ defmodule BurpeeTrainerWeb.OverviewLive do
                 description="Add a session you already completed"
                 phx-click="open_log_modal"
               />
-              <div
-                id="home-theme-action"
-                class="flex items-center justify-between gap-4 px-5 py-4"
-              >
-                <div class="space-y-1">
-                  <p class="text-sm font-medium text-[var(--session-ink)]">Theme</p>
-                  <p class="text-sm text-[var(--session-muted)]">Switch light or dark mode</p>
-                </div>
-                <Layouts.theme_button
-                  id="home-theme-toggle"
-                  label={false}
-                  session_nav?={true}
-                  class="shrink-0"
-                />
-              </div>
             </.qs_surface>
 
             <.qs_surface
+              id="home-appearance-card"
+              class="flex items-center justify-between gap-4 bg-[var(--session-surface)]/35 px-5 py-4"
+            >
+              <div class="space-y-1">
+                <p class="text-sm font-medium text-[var(--session-ink)]">Appearance</p>
+                <p class="text-sm text-[var(--session-muted)]">Light or dark mode</p>
+              </div>
+              <Layouts.theme_button
+                id="home-theme-toggle"
+                label={false}
+                session_nav?={true}
+                class="shrink-0"
+              />
+            </.qs_surface>
+
+            <.qs_surface
+              :if={@catch_up_plan}
               id="home-catch-up-panel"
               class="space-y-5 bg-[var(--session-surface)]/35 px-5 py-5"
             >
@@ -560,81 +638,42 @@ defmodule BurpeeTrainerWeb.OverviewLive do
                   Finish the week
                 </p>
                 <h2 class="qs-heading-tight text-2xl font-semibold text-[var(--session-ink)]">
-                  Build catch-up sessions
+                  Catch-up sessions
                 </h2>
                 <p class="text-sm leading-6 text-[var(--session-muted)]">
-                  Turn the remaining weekly minutes into standard training sessions you can edit before starting.
+                  Coach-built sessions from your logged capacity, ready to edit before starting.
                 </p>
               </div>
 
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  id="catch-up-six-count"
-                  type="button"
-                  phx-click="plan_catch_up"
-                  phx-value-type="six_count"
-                  class={[
-                    "rounded-xl border px-4 py-3 text-left text-sm transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]",
-                    if(@catch_up_selected_type == :six_count,
-                      do:
-                        "border-[var(--session-ink)] bg-[var(--session-track)]/45 text-[var(--session-ink)]",
-                      else: "border-[var(--session-border)] text-[var(--session-muted)]"
-                    )
-                  ]}
-                >
-                  <span class="block font-medium">Six-count</span>
-                  <span class="block text-xs opacity-80">Bodyweight volume</span>
-                </button>
-                <button
-                  id="catch-up-navy-seal"
-                  type="button"
-                  phx-click="plan_catch_up"
-                  phx-value-type="navy_seal"
-                  class={[
-                    "rounded-xl border px-4 py-3 text-left text-sm transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)]",
-                    if(@catch_up_selected_type == :navy_seal,
-                      do:
-                        "border-[var(--session-ink)] bg-[var(--session-track)]/45 text-[var(--session-ink)]",
-                      else: "border-[var(--session-border)] text-[var(--session-muted)]"
-                    )
-                  ]}
-                >
-                  <span class="block font-medium">Navy SEAL</span>
-                  <span class="block text-xs opacity-80">Push-up focused</span>
-                </button>
-              </div>
-
-              <%= if @catch_up_plan do %>
-                <div
-                  id="home-catch-up-preview"
-                  class="space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 p-4"
-                >
-                  <div class="flex items-start justify-between gap-4">
-                    <div>
-                      <p class="text-sm text-[var(--session-muted)]">Catch-up preview</p>
-                      <p class="qs-tabular text-xl font-medium text-[var(--session-ink)]">
-                        {length(@catch_up_plan.selected_sessions)} sessions · {@catch_up_plan.total_duration_min} min
-                      </p>
-                    </div>
-                    <p class="qs-meta text-xs tracking-[0.14em] text-[var(--session-muted)]">
-                      {String.replace(Atom.to_string(@catch_up_plan.risk), "_", " ")}
+              <div
+                id="home-catch-up-preview"
+                class="space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 p-4"
+              >
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <p class="text-sm text-[var(--session-muted)]">Catch-up preview</p>
+                    <p class="qs-tabular text-xl font-medium text-[var(--session-ink)]">
+                      {length(@catch_up_plan.selected_sessions)} sessions · {@catch_up_plan.total_duration_min} min
                     </p>
                   </div>
-
-                  <ul class="space-y-2 text-sm leading-6 text-[var(--session-muted)]">
-                    <li :for={reason <- @catch_up_plan.rationale}>{reason}</li>
-                  </ul>
-
-                  <button
-                    id="home-create-catch-up"
-                    type="button"
-                    phx-click="use_catch_up_plan"
-                    class="w-full rounded-xl bg-[var(--session-ink)] px-4 py-3 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90"
-                  >
-                    Create catch-up plan
-                  </button>
+                  <p class="qs-meta text-xs tracking-[0.14em] text-[var(--session-muted)]">
+                    {String.replace(Atom.to_string(@catch_up_plan.risk), "_", " ")}
+                  </p>
                 </div>
-              <% end %>
+
+                <ul class="space-y-2 text-sm leading-6 text-[var(--session-muted)]">
+                  <li :for={reason <- @catch_up_plan.rationale}>{reason}</li>
+                </ul>
+
+                <button
+                  id="home-create-catch-up"
+                  type="button"
+                  phx-click="use_catch_up_plan"
+                  class="w-full rounded-xl bg-[var(--session-ink)] px-4 py-3 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90"
+                >
+                  Create catch-up plan
+                </button>
+              </div>
             </.qs_surface>
           </section>
         <% end %>

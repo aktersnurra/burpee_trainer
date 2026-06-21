@@ -17,7 +17,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Levels, Workouts}
-  alias BurpeeTrainer.{PlanEditor, PrescriptionGraph}
+  alias BurpeeTrainer.{PlanEditor, PlanPresentation, PlanSolver, PrescriptionGraph}
+  alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
 
@@ -253,11 +254,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp upsert_editor_rest(rests, index, rest) do
     rests = rests || []
 
-    if index >= 0 and index < length(rests) do
-      List.replace_at(rests, index, rest)
-    else
-      rests ++ [rest]
+    cond do
+      index >= 0 and index < length(rests) ->
+        List.replace_at(rests, index, rest) |> dedupe_rests_by_target_min()
+
+      true ->
+        (rests ++ [rest]) |> dedupe_rests_by_target_min()
     end
+  end
+
+  defp dedupe_rests_by_target_min(rests) do
+    rests
+    |> Enum.reverse()
+    |> Enum.uniq_by(& &1.target_min)
+    |> Enum.reverse()
   end
 
   defp insert_rest_step(steps, edge_index, rest_sec) do
@@ -265,10 +275,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     insert_at = max(edge_index, 0)
     {before_steps, after_steps} = Enum.split(sorted_steps, insert_at)
 
-    reposition_steps(
-      before_steps ++
-        [%BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}] ++ after_steps
-    )
+    before_steps
+    |> Kernel.++([%BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}])
+    |> Kernel.++(after_steps)
+    |> merge_adjacent_rest_steps()
+    |> reposition_steps()
   end
 
   defp place_rest_step_at_target_min(steps, blocks, target_min, rest_sec) do
@@ -284,8 +295,54 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
          adjusted_blocks |> Map.values() |> Enum.sort_by(& &1.position)}
 
       :not_placed ->
-        {:error, "Rest cannot be placed at minute #{round(target_sec / 60)}."}
+        {:error, rest_placement_error(steps, blocks, target_min, rest_sec)}
     end
+  end
+
+  defp rest_placement_error(steps, blocks, target_min, rest_sec) do
+    case nearest_workable_rest(steps, blocks, target_min, rest_sec) do
+      %{target_min: alt_min, rest_sec: alt_sec} ->
+        "Rest cannot be placed at minute #{target_min}. Try #{alt_sec}s at minute #{alt_min} instead."
+
+      nil ->
+        "Rest cannot be placed at minute #{target_min}. Try less rest or move it closer to a set boundary."
+    end
+  end
+
+  defp nearest_workable_rest(steps, blocks, target_min, rest_sec) do
+    candidates =
+      for minute_delta <- 0..4,
+          minute <- candidate_minutes(target_min, minute_delta),
+          seconds <- candidate_rest_seconds(rest_sec),
+          minute > 0 do
+        %{target_min: minute, rest_sec: seconds}
+      end
+
+    Enum.find(candidates, fn candidate ->
+      rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: candidate.rest_sec}
+      blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
+      sorted_steps = steps |> Enum.sort_by(& &1.position) |> merge_adjacent_block_runs()
+
+      case do_place_rest_step(
+             sorted_steps,
+             blocks_by_position,
+             candidate.target_min * 60.0,
+             rest_step,
+             candidate.rest_sec
+           ) do
+        {:ok, _steps, _blocks} -> true
+        :not_placed -> false
+      end
+    end)
+  end
+
+  defp candidate_minutes(target_min, 0), do: [target_min]
+  defp candidate_minutes(target_min, delta), do: [target_min - delta, target_min + delta]
+
+  defp candidate_rest_seconds(rest_sec) do
+    [rest_sec, min(rest_sec, 60), min(rest_sec, 45), min(rest_sec, 30), min(rest_sec, 20), 10]
+    |> Enum.uniq()
+    |> Enum.filter(&(&1 > 0))
   end
 
   defp do_place_rest_step(steps, blocks_by_position, target_sec, rest_step, rest_sec) do
@@ -382,6 +439,18 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     else
       :error
     end
+  end
+
+  defp merge_adjacent_rest_steps(steps) do
+    Enum.reduce(steps, [], fn step, acc ->
+      case {List.last(acc), step} do
+        {%{kind: :rest} = previous, %{kind: :rest}} ->
+          List.replace_at(acc, -1, %{previous | rest_sec: previous.rest_sec + step.rest_sec})
+
+        _ ->
+          acc ++ [step]
+      end
+    end)
   end
 
   defp merge_adjacent_block_runs(steps) do
@@ -633,10 +702,16 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     editor = %{
       socket.assigns.editor
-      | input: %{input | additional_rests: input.additional_rests ++ [rest]}
+      | input: %{
+          input
+          | additional_rests:
+              upsert_editor_rest(
+                input.additional_rests,
+                length(input.additional_rests || []),
+                rest
+              )
+        }
     }
-
-    {:ok, editor} = PlanEditor.regenerate(editor)
 
     socket =
       socket
@@ -661,7 +736,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
       editor = %{
         socket.assigns.editor
-        | input: %{input | additional_rests: input.additional_rests ++ [rest]}
+        | input: %{
+            input
+            | additional_rests:
+                upsert_editor_rest(
+                  input.additional_rests,
+                  length(input.additional_rests || []),
+                  rest
+                )
+          }
       }
 
       socket =
@@ -1010,6 +1093,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # Render
   # ---------------------------------------------------------------------------
 
+  attr(:plan, :any, required: true)
   attr(:form, :any, required: true)
   attr(:expanded_blocks, :any, required: true)
   attr(:expanded_timeline_row, :any, required: true)
@@ -1028,6 +1112,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     steps = loaded_steps(form_plan.steps)
     block_time_ranges = block_time_ranges(form_plan.blocks, assigns.plan_input)
 
+    timeline_rows =
+      prescription_timeline(
+        form_plan.blocks,
+        steps,
+        block_time_ranges,
+        assigns.derived,
+        assigns.plan_input
+      )
+
+    timeline_rest_edges = timeline_rest_edges(assigns.plan_input, assigns.level, timeline_rows)
+
     assigns =
       assigns
       |> assign(:block_time_ranges, block_time_ranges)
@@ -1039,24 +1134,26 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           assigns.plan_input
         )
       )
+      |> assign(:presentation_outline, PlanPresentation.outline(form_plan))
       |> assign(:pattern_summary, pattern_summary(assigns.plan_input, assigns.derived))
       |> assign(
         :prescription_blocked?,
         prescription_blocked?(assigns.solver_error, assigns.derived)
       )
-      |> assign(
-        :timeline_rows,
-        prescription_timeline(
-          form_plan.blocks,
-          steps,
-          block_time_ranges,
-          assigns.derived,
-          assigns.plan_input
-        )
-      )
+      |> assign(:timeline_rows, timeline_rows)
+      |> assign(:timeline_rest_edges, timeline_rest_edges)
+
+    assigns = assign(assigns, :selected_timeline_row, selected_timeline_row(assigns))
 
     plan_solution_card_template(assigns)
   end
+
+  defp selected_timeline_row(%{expanded_timeline_row: row_index, timeline_rows: rows})
+       when is_integer(row_index) do
+    Enum.at(rows, row_index)
+  end
+
+  defp selected_timeline_row(_assigns), do: nil
 
   defp default_pattern(%{block_pattern: pattern}) when is_list(pattern) and pattern != [],
     do: pattern
@@ -1389,6 +1486,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  defp outline_range_label(%{from_set: from, to_set: to}) when from == to, do: "Set #{from}"
+  defp outline_range_label(%{from_set: from, to_set: to}), do: "Sets #{from}–#{to}"
+
+  defp outline_row_note(%{recovery_sec: 0}, _block), do: "Finish"
+
+  defp outline_row_note(%{recovery_sec: recovery}, %{default_recovery_sec: recovery}),
+    do: "Normal recovery"
+
+  defp outline_row_note(_row, _block), do: "Reset recovery"
+
+  defp outline_rhythm_label(:unbroken), do: "Unbroken"
+  defp outline_rhythm_label(:even), do: "Cadenced"
+  defp outline_rhythm_label(style), do: Phoenix.Naming.humanize(to_string(style))
+
   defp timeline_rows_from_steps(blocks, steps) do
     blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
 
@@ -1529,6 +1640,37 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp timeline_block_run_continued?(%PrescriptionGraph.BlockRunNode{} = node) do
     first_set_position = node.block.sets |> Enum.map(& &1.position) |> Enum.min(fn -> 1 end)
     node.repeat_from > 1 or first_set_position > 1
+  end
+
+  defp timeline_rest_edges(plan_input, level, rows) do
+    rows
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {row, row_index}, edges ->
+      next_row = Enum.at(rows, row_index + 1)
+      Map.put(edges, row_index, timeline_rest_edge_available?(plan_input, level, row, next_row))
+    end)
+  end
+
+  defp timeline_rest_edge_available?(_plan_input, _level, %{kind: :finish}, _next_row), do: false
+
+  defp timeline_rest_edge_available?(plan_input, level, row, next_row) do
+    target_min = timeline_edge_target_min(row, next_row)
+    rest = %{target_min: target_min, rest_sec: 30}
+
+    solver_input = %PlanSolverInput{
+      name: plan_input.name,
+      burpee_type: plan_input.burpee_type,
+      target_duration_min: plan_input.target_duration_min,
+      burpee_count_target: plan_input.burpee_count_target,
+      pacing_style: plan_input.pacing_style,
+      level: level,
+      reps_per_set: plan_input.reps_per_set,
+      additional_rests: plan_input.additional_rests ++ [rest],
+      sec_per_burpee_override: plan_input.sec_per_burpee_override,
+      block_pattern: plan_input.block_pattern
+    }
+
+    match?({:ok, _solution}, PlanSolver.solve(solver_input))
   end
 
   defp timeline_edge_target_min(row, next_row) do

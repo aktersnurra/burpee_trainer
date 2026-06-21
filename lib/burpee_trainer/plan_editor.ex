@@ -24,15 +24,42 @@ defmodule BurpeeTrainer.PlanEditor do
 
   @spec from_plan(WorkoutPlan.t(), atom()) :: {:ok, State.t()}
   def from_plan(%WorkoutPlan{} = plan, level) do
+    input = input_from_plan(plan)
+    solver_solution = generated_solver_solution(plan, input, level)
+
     state = %State{
       plan: plan,
       form_plan: plan,
-      input: input_from_plan(plan),
-      level: level
+      input: input,
+      level: level,
+      solver_solution: solver_solution
     }
 
     {:ok, state}
   end
+
+  defp generated_solver_solution(%WorkoutPlan{plan_solver_metadata: metadata}, input, level)
+       when is_map(metadata) do
+    solver_input = %SolverInput{
+      name: input.name,
+      burpee_type: input.burpee_type,
+      target_duration_min: input.target_duration_min,
+      burpee_count_target: input.burpee_count_target,
+      pacing_style: input.pacing_style,
+      level: level,
+      reps_per_set: input.reps_per_set,
+      additional_rests: input.additional_rests,
+      sec_per_burpee_override: input.sec_per_burpee_override,
+      block_pattern: input.block_pattern
+    }
+
+    case PlanSolver.solve(solver_input) do
+      {:ok, solution} -> solution
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp generated_solver_solution(_plan, _input, _level), do: nil
 
   @spec default_input() :: input()
   def default_input do

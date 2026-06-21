@@ -12,7 +12,7 @@ defmodule BurpeeTrainer.PlanSolver do
   """
 
   alias BurpeeTrainer.{Levels, PaceModel}
-  alias BurpeeTrainer.PlanSolver.{Apply, Input, Solution}
+  alias BurpeeTrainer.PlanSolver.{Apply, CandidateSearch, Execution, Input, Solution}
 
   @default_reps_per_set %{six_count: 10, navy_seal: 5}
   @human_set_sizes [15, 12, 10, 9, 8, 6, 5, 4]
@@ -48,16 +48,14 @@ defmodule BurpeeTrainer.PlanSolver do
          :ok <- preflight_check(input),
          prepared_input = apply_resolved_reps_per_set(input, reps_per_set),
          {:ok, candidate} <- solve_candidate(prepared_input, reps_per_set),
-         {:ok, plan} <-
-           Apply.to_workout_plan(
-             %{prepared_input | block_pattern: candidate.block_pattern},
-             candidate.sec_per_burpee,
-             candidate.set_pattern,
-             candidate.rest_pattern_sec,
-             candidate.reservations
-           ) do
-      {:ok,
-       build_solution(plan, %{prepared_input | block_pattern: candidate.block_pattern}, candidate)}
+         prepared_input = %{prepared_input | block_pattern: candidate.block_pattern},
+         execution = build_execution(prepared_input, candidate),
+         {:ok, plan} <- Apply.from_execution(prepared_input, execution, candidate.sec_per_burpee) do
+      solution = build_solution(plan, prepared_input, candidate, execution)
+
+      with :ok <- validate_solution_plan(solution) do
+        {:ok, solution}
+      end
     end
   end
 
@@ -144,29 +142,21 @@ defmodule BurpeeTrainer.PlanSolver do
   end
 
   defp solve_candidate(%Input{pacing_style: :unbroken} = input, reps_per_set) do
-    p = pace(input)
+    preferred_candidates =
+      input.burpee_count_target
+      |> set_pattern_for(reps_per_set)
+      |> solve_milp_candidates(input, reps_per_set)
 
     candidates =
-      input.burpee_count_target
-      |> set_pattern_candidates(input.burpee_type, reps_per_set)
-      |> Enum.flat_map(fn set_pattern ->
-        with {:ok, reservations} <- place_additional_rests(input, p, set_pattern),
-             {:ok, rest_pattern} <- derive_rest_pattern(input, p, set_pattern, reservations) do
-          [
-            candidate(input,
-              sec_per_burpee: p,
-              set_pattern: set_pattern,
-              rest_pattern_sec: rest_pattern,
-              reservations: reservations,
-              candidate_count: 0,
-              score: score_set_pattern(set_pattern, reps_per_set),
-              set_pattern_strategy: :human_shaped
-            )
-          ]
-        else
-          _ -> []
-        end
-      end)
+      case preferred_candidates do
+        [] ->
+          input.burpee_count_target
+          |> set_pattern_candidates(input.burpee_type, reps_per_set)
+          |> solve_milp_candidates(input, reps_per_set)
+
+        candidates ->
+          candidates
+      end
 
     case candidates do
       [] ->
@@ -176,6 +166,45 @@ defmodule BurpeeTrainer.PlanSolver do
         winner = Enum.min_by(candidates, & &1.score)
         {:ok, %{winner | candidate_count: length(candidates)}}
     end
+  end
+
+  defp solve_milp_pattern(%Input{} = input, set_pattern) do
+    {_fastest, slowest} = PaceModel.pace_range_sec_per_rep(input.burpee_type, input.level)
+    pace_min = effective_ceiling(input)
+    target_sec = input.target_duration_min * 60.0
+    pace_needed_without_recovery = target_sec / input.burpee_count_target
+    pace_max = [slowest, pace_min, pace_needed_without_recovery] |> Enum.max()
+
+    CandidateSearch.solve_fixed_pattern(set_pattern,
+      target_sec: target_sec,
+      pace_min: pace_min,
+      pace_max: pace_max,
+      explicit_rest_total: Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2)),
+      min_useful_rest: @min_useful_recovery_sec
+    )
+  end
+
+  defp solve_milp_candidates(set_patterns, input, reps_per_set) do
+    set_patterns
+    |> Enum.flat_map(fn set_pattern ->
+      with {:ok, milp_solution} <- solve_milp_pattern(input, set_pattern),
+           {:ok, reservations} <-
+             place_additional_rests(input, milp_solution.sec_per_burpee, set_pattern) do
+        [
+          candidate(input,
+            sec_per_burpee: milp_solution.sec_per_burpee,
+            set_pattern: set_pattern,
+            rest_pattern_sec: milp_solution.rest_pattern_sec,
+            reservations: reservations,
+            candidate_count: 0,
+            score: milp_solution.objective + score_set_pattern(set_pattern, reps_per_set),
+            set_pattern_strategy: :human_candidate_search
+          )
+        ]
+      else
+        _ -> []
+      end
+    end)
   end
 
   defp pace(%Input{sec_per_burpee_override: override}) when is_float(override), do: override
@@ -361,26 +390,30 @@ defmodule BurpeeTrainer.PlanSolver do
     with {:ok, rest_pattern} <- derive_rest_pattern(input, p, set_pattern, []) do
       boundaries = set_boundaries(set_pattern, p, rest_pattern)
 
-      reservations =
-        input.additional_rests
-        |> Enum.sort_by(& &1.target_min)
-        |> Enum.map(fn rest ->
-          target_sec = rest.target_min * 60.0
-
-          {slot, boundary_sec} =
-            Enum.min_by(boundaries, fn {_slot, sec} -> abs(sec - target_sec) end)
-
-          if slot < input.burpee_count_target and abs(boundary_sec - target_sec) <= 30 do
-            {:ok, %{slot: slot, rest_sec: rest.rest_sec, target_min: rest.target_min}}
-          else
-            :error
-          end
-        end)
-
-      if Enum.any?(reservations, &(&1 == :error)) do
+      if boundaries == [] do
         {:error, :invalid_rest_boundary}
       else
-        {:ok, Enum.map(reservations, fn {:ok, reservation} -> reservation end)}
+        reservations =
+          input.additional_rests
+          |> Enum.sort_by(& &1.target_min)
+          |> Enum.map(fn rest ->
+            target_sec = rest.target_min * 60.0
+
+            {slot, boundary_sec} =
+              Enum.min_by(boundaries, fn {_slot, sec} -> abs(sec - target_sec) end)
+
+            if slot < input.burpee_count_target and abs(boundary_sec - target_sec) <= 30 do
+              {:ok, %{slot: slot, rest_sec: rest.rest_sec, target_min: rest.target_min}}
+            else
+              :error
+            end
+          end)
+
+        if Enum.any?(reservations, &(&1 == :error)) do
+          {:error, :invalid_rest_boundary}
+        else
+          {:ok, Enum.map(reservations, fn {:ok, reservation} -> reservation end)}
+        end
       end
     end
   end
@@ -418,6 +451,67 @@ defmodule BurpeeTrainer.PlanSolver do
       "Try lowering reps, increasing duration, using larger sets, or removing extra rests."
   end
 
+  defp validate_solution_plan(%Solution{} = solution) do
+    plan_summary = BurpeeTrainer.Planner.summary(solution.plan)
+    execution_count = Execution.burpee_count(solution.execution)
+    execution_duration = Execution.duration_sec(solution.execution)
+
+    cond do
+      plan_summary.burpee_count_total != execution_count ->
+        {:error,
+         [
+           "Generated plan reps #{plan_summary.burpee_count_total} did not match solved reps #{execution_count}."
+         ]}
+
+      abs(plan_summary.duration_sec_total - execution_duration) > 1.0 ->
+        {:error,
+         [
+           "Generated plan duration #{format_duration(plan_summary.duration_sec_total)} did not match solved duration #{format_duration(execution_duration)}."
+         ]}
+
+      plan_summary.burpee_count_total != solution.burpee_count ->
+        {:error,
+         [
+           "Generated plan reps #{plan_summary.burpee_count_total} did not match target reps #{solution.burpee_count}."
+         ]}
+
+      abs(plan_summary.duration_sec_total - solution.duration_sec) > 5.0 ->
+        {:error,
+         [
+           "Generated plan duration #{format_duration(plan_summary.duration_sec_total)} did not match target duration #{format_duration(solution.duration_sec)}."
+         ]}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp build_execution(%Input{pacing_style: :even} = input, candidate) do
+    reservation_total =
+      Enum.reduce(candidate.reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
+
+    target_sec = input.target_duration_min * 60.0
+    sec_per_rep = (target_sec - reservation_total) / input.burpee_count_target
+
+    Execution.build(
+      candidate.set_pattern,
+      candidate.rest_pattern_sec,
+      candidate.reservations,
+      sec_per_rep,
+      candidate.sec_per_burpee
+    )
+  end
+
+  defp build_execution(%Input{pacing_style: :unbroken}, candidate) do
+    Execution.build(
+      candidate.set_pattern,
+      candidate.rest_pattern_sec,
+      candidate.reservations,
+      candidate.sec_per_burpee,
+      candidate.sec_per_burpee
+    )
+  end
+
   defp format_duration(seconds) do
     seconds = round(seconds)
     minutes = div(seconds, 60)
@@ -430,7 +524,7 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
-  defp build_solution(plan, %Input{} = input, candidate) do
+  defp build_solution(plan, %Input{} = input, candidate, execution) do
     {_fastest, slowest} = PaceModel.pace_range_sec_per_rep(input.burpee_type, input.level)
     effective_fastest = effective_ceiling(input)
 
@@ -445,6 +539,7 @@ defmodule BurpeeTrainer.PlanSolver do
       burpee_count: Enum.sum(candidate.set_pattern),
       pacing_style: input.pacing_style,
       burpee_type: input.burpee_type,
+      execution: execution,
       metadata: %{
         solver_version: "deterministic-v2",
         set_pattern_strategy: candidate.set_pattern_strategy,

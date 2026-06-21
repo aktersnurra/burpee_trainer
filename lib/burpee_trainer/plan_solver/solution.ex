@@ -1,6 +1,10 @@
 defmodule BurpeeTrainer.PlanSolver.Solution do
   @moduledoc """
   Output of `BurpeeTrainer.PlanSolver.solve/1`.
+
+  `execution` is the canonical solved prescription. The persisted `plan` is a
+  derived representation for storage/editing and is validated against execution
+  before a solution is returned.
   """
 
   alias BurpeeTrainer.Workouts.WorkoutPlan
@@ -17,6 +21,7 @@ defmodule BurpeeTrainer.PlanSolver.Solution do
     :pacing_style,
     :burpee_type,
     :metadata,
+    :execution,
     :plan
   ]
   defstruct [
@@ -31,6 +36,7 @@ defmodule BurpeeTrainer.PlanSolver.Solution do
     :pacing_style,
     :burpee_type,
     :metadata,
+    :execution,
     :plan
   ]
 
@@ -56,6 +62,7 @@ defmodule BurpeeTrainer.PlanSolver.Solution do
           pacing_style: atom,
           burpee_type: atom,
           metadata: metadata,
+          execution: BurpeeTrainer.PlanSolver.Execution.t(),
           plan: WorkoutPlan.t()
         }
 end

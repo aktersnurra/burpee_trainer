@@ -93,12 +93,16 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-secondary-actions")
     assert has_element?(view, "#home-change-workout")
     assert has_element?(view, "#home-log-session")
+    assert has_element?(view, "#home-appearance-card")
     assert has_element?(view, "#home-theme-toggle[phx-click]")
+    refute has_element?(view, "#home-theme-action")
+    refute has_element?(view, "#desktop-theme-toggle")
 
     html = render(view)
     assert html =~ "Choose a different session"
     assert html =~ "Add a session you already completed"
-    assert html =~ "Theme"
+    assert html =~ "Appearance"
+    assert html =~ "Light or dark mode"
     assert html =~ "Today’s prescription"
     assert html =~ "Coach note"
     assert html =~ "Level"
@@ -133,37 +137,29 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     html = render(view)
     assert html =~ "Coach"
     assert has_element?(view, "#home-catch-up-panel")
-    assert has_element?(view, "#catch-up-six-count")
+    assert has_element?(view, "#home-catch-up-preview")
+    refute has_element?(view, "#catch-up-six-count")
     refute has_element?(view, "[data-home-coach-suggestion]")
     refute has_element?(view, "[data-home-weekly-split]")
   end
 
-  test "catch-up panel previews split sessions and creates plans", %{conn: conn, user: user} do
+  test "catch-up panel suggests goal-free sessions for logged types and creates plans", %{
+    conn: conn,
+    user: user
+  } do
     free_form_session_fixture(user, %{
       "burpee_type" => "six_count",
       "burpee_count_actual" => 150,
       "duration_sec_actual" => 1200
     })
 
-    goal_fixture(user, %{
-      "burpee_type" => "six_count",
-      "burpee_count_target" => 200,
-      "duration_sec_target" => 1200,
-      "burpee_count_baseline" => 150,
-      "duration_sec_baseline" => 1200
-    })
-
     {:ok, view, _html} = live(conn, ~p"/")
 
     assert has_element?(view, "#home-catch-up-panel")
-
-    view
-    |> element("#catch-up-six-count")
-    |> render_click()
-
     assert has_element?(view, "#home-catch-up-preview")
-    assert render(view) =~ "Creates 3 × 20 min Six-count sessions"
+    assert render(view) =~ "Creates 1 × 60 min Six-count session"
     assert has_element?(view, "#home-create-catch-up")
+    refute has_element?(view, "#catch-up-navy-seal")
 
     view
     |> element("#home-create-catch-up")
@@ -171,6 +167,89 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     {path, _flash} = assert_redirect(view)
     assert path =~ ~r"/workouts/\d+/edit"
+  end
+
+  test "catch-up panel balances eighty remaining minutes across two logged types", %{
+    conn: conn,
+    user: user
+  } do
+    historical_inserted_at =
+      Date.utc_today()
+      |> Date.beginning_of_week(:monday)
+      |> Date.add(-7)
+      |> DateTime.new!(~T[12:00:00], "Etc/UTC")
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 150,
+      "duration_sec_actual" => 1200,
+      "inserted_at" => historical_inserted_at
+    })
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "navy_seal",
+      "burpee_count_actual" => 80,
+      "duration_sec_actual" => 1200,
+      "inserted_at" => historical_inserted_at
+    })
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#home-catch-up-panel")
+    html = render(view)
+    assert html =~ "Creates 2 catch-up sessions totaling 80 min."
+    assert html =~ "40 min Six-count"
+    assert html =~ "40 min Navy SEAL"
+    refute has_element?(view, "#catch-up-six-count")
+    refute has_element?(view, "#catch-up-navy-seal")
+  end
+
+  test "catch-up panel never creates sub-20 minute sessions", %{conn: conn, user: user} do
+    historical_inserted_at =
+      Date.utc_today()
+      |> Date.beginning_of_week(:monday)
+      |> Date.add(-7)
+      |> DateTime.new!(~T[12:00:00], "Etc/UTC")
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 150,
+      "duration_sec_actual" => 1200,
+      "inserted_at" => historical_inserted_at
+    })
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "navy_seal",
+      "burpee_count_actual" => 80,
+      "duration_sec_actual" => 1200,
+      "inserted_at" => historical_inserted_at
+    })
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 120,
+      "duration_sec_actual" => 2400
+    })
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "navy_seal",
+      "burpee_count_actual" => 60,
+      "duration_sec_actual" => 1200
+    })
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#home-catch-up-panel")
+    html = render(view)
+    assert html =~ "Creates 1 × 20 min Six-count session"
+    refute html =~ "10 min"
+  end
+
+  test "catch-up panel is hidden when no burpee type has logged history", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    refute has_element?(view, "#home-catch-up-panel")
+    refute has_element?(view, "#home-create-catch-up")
   end
 
   test "non-standard completed week hides catch-up choices and coach suggestions", %{

@@ -65,16 +65,34 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     {:ok, plan} = Apply.to_workout_plan(input, 8.0, [70], [], [])
 
     [block] = plan.blocks
+    assert block.repeat_count == 10
     assert Enum.map(block.sets, & &1.burpee_count) == [4, 3]
     assert [%{kind: :block_run, block_position: 1, repeat_count: 10}] = plan.steps
     assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 70
     assert round(BurpeeTrainer.Planner.summary(plan).duration_sec_total) == 1200
   end
 
+  test ":even solved six-count catch-up preserves editable block totals" do
+    input = %{even_input(120, 20) | block_pattern: [12]}
+
+    {:ok, solution} = BurpeeTrainer.PlanSolver.solve(input)
+
+    [block] = solution.plan.blocks
+    assert block.repeat_count == 10
+    assert Enum.map(block.sets, & &1.burpee_count) == [12]
+    assert BurpeeTrainer.Planner.summary(solution.plan).burpee_count_total == 120
+
+    [block_summary] = BurpeeTrainer.Planner.summary(solution.plan).blocks
+    assert block_summary.burpee_count_total == 120
+    assert round(block_summary.duration_sec_work) == 1200
+  end
+
   test ":even with preferred block pattern — automatic remainder block" do
     input = %{even_input(75, 20) | burpee_type: :navy_seal, block_pattern: [4, 3]}
 
     {:ok, plan} = Apply.to_workout_plan(input, 8.0, [75], [], [])
+
+    assert Enum.map(plan.blocks, & &1.repeat_count) == [10, 1]
 
     assert Enum.map(plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
              [4, 3],
@@ -105,9 +123,9 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, sol} = BurpeeTrainer.PlanSolver.solve(input)
 
-    assert Enum.map(sol.plan.blocks, fn block -> Enum.map(block.sets, & &1.burpee_count) end) == [
-             [4, 3]
-           ]
+    assert Enum.all?(sol.plan.blocks, fn block ->
+             Enum.map(block.sets, & &1.burpee_count) == [4, 3]
+           end)
 
     assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
 
@@ -160,12 +178,20 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     }
 
     p = 5.0
-    r = List.duplicate(5.0, 39)
 
-    {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
+    reservations = [
+      %{slot: 60, rest_sec: 10.0, target_min: 6},
+      %{slot: 120, rest_sec: 10.0, target_min: 12}
+    ]
 
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run, :rest, :block_run]
-    assert Enum.map(plan.steps, & &1.repeat_count) == [12, nil, 12, nil, 16]
+    r = List.duplicate(0.0, 39)
+
+    {:ok, plan} = Apply.to_workout_plan(input, p, r, reservations)
+
+    assert Enum.count(plan.steps, &(&1.kind == :rest)) == 2
+    assert Enum.map(Enum.filter(plan.steps, &(&1.kind == :rest)), & &1.rest_sec) == [10, 10]
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 200
+    assert round(BurpeeTrainer.Planner.summary(plan).duration_sec_total) == 1200
   end
 
   test ":unbroken with reservation keeps additional rest separate from set rest" do
@@ -186,14 +212,11 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, reservations)
 
-    [block] = plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert set.end_of_set_rest == 5
+    assert Enum.sum(Enum.map(plan.blocks, & &1.repeat_count)) == 40
+    assert List.last(plan.blocks).sets |> hd() |> Map.fetch!(:end_of_set_rest) == 0
     assert plan.additional_rests == ~s([{"rest_sec":10,"target_min":18}])
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
-    assert Enum.map(plan.steps, & &1.repeat_count) == [36, nil, 4]
-    assert Enum.at(plan.steps, 1).rest_sec == 10
+    assert Enum.count(plan.steps, &(&1.kind == :rest)) == 1
+    assert Enum.at(Enum.filter(plan.steps, &(&1.kind == :rest)), 0).rest_sec == 10
   end
 
   test ":unbroken — reusable block definition plus block-run step" do
@@ -203,12 +226,41 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
-    [block] = plan.blocks
-    [set] = block.sets
-    assert set.burpee_count == 5
-    assert_in_delta set.sec_per_burpee, p, 1.0e-6
-    assert Enum.map(plan.steps, & &1.kind) == [:block_run]
-    assert hd(plan.steps).repeat_count == 2
+    assert Enum.sum(Enum.map(plan.blocks, & &1.repeat_count)) == 2
+
+    assert Enum.all?(plan.blocks, fn block ->
+             [%{burpee_count: 5, sec_per_burpee: sec_per_burpee}] = block.sets
+             abs(sec_per_burpee - p) < 1.0e-6
+           end)
+
+    assert List.last(plan.blocks).sets |> hd() |> Map.fetch!(:end_of_set_rest) == 0
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 10
+    assert round(BurpeeTrainer.Planner.summary(plan).duration_sec_total) == 300
+  end
+
+  test ":unbroken does not count recovery after the final repeated set" do
+    input = unbroken_input(144, 20, 8)
+
+    {:ok, solution} = BurpeeTrainer.PlanSolver.solve(input)
+
+    assert solution.set_pattern == List.duplicate(8, 18)
+    assert round(BurpeeTrainer.Planner.summary(solution.plan).duration_sec_total) == 1200
+
+    assert Enum.sum(Enum.map(solution.plan.blocks, & &1.repeat_count)) == 18
+
+    assert Enum.all?(solution.plan.blocks, fn block ->
+             [%{burpee_count: 8}] = block.sets
+             true
+           end)
+
+    final_block = List.last(solution.plan.blocks)
+    assert final_block.repeat_count == 1
+    assert [%{end_of_set_rest: 0}] = final_block.sets
+
+    assert Enum.any?(Enum.drop(solution.plan.blocks, -1), fn block ->
+             [%{end_of_set_rest: rest_after_set}] = block.sets
+             rest_after_set > 0
+           end)
   end
 
   test "solved p is stored in plan.sec_per_burpee" do
