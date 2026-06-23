@@ -7,6 +7,7 @@ defmodule BurpeeTrainer.PlanSolver.Solution do
   before a solution is returned.
   """
 
+  alias BurpeeTrainer.PlanSolver.{Execution, Prescription}
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @enforce_keys [
@@ -37,18 +38,11 @@ defmodule BurpeeTrainer.PlanSolver.Solution do
     :burpee_type,
     :metadata,
     :execution,
+    :prescription,
     :plan
   ]
 
-  @type metadata :: %{
-          solver_version: String.t(),
-          set_pattern_strategy: atom,
-          candidate_count: non_neg_integer,
-          score: float,
-          pace_fastest_sec_per_rep: float,
-          pace_slowest_sec_per_rep: float,
-          pace_override?: boolean
-        }
+  @type metadata :: map
 
   @type t :: %__MODULE__{
           sec_per_burpee: float,
@@ -62,7 +56,36 @@ defmodule BurpeeTrainer.PlanSolver.Solution do
           pacing_style: atom,
           burpee_type: atom,
           metadata: metadata,
-          execution: BurpeeTrainer.PlanSolver.Execution.t(),
+          execution: Execution.t(),
+          prescription: Prescription.t() | nil,
           plan: WorkoutPlan.t()
         }
+
+  @spec from(Prescription.t(), Execution.t(), WorkoutPlan.t()) :: t()
+  def from(%Prescription{} = prescription, execution, %WorkoutPlan{} = plan) do
+    rest_pattern_sec =
+      execution
+      |> Enum.filter(&match?(%Execution.RestEvent{}, &1))
+      |> Enum.map(& &1.rest_sec)
+
+    %__MODULE__{
+      sec_per_burpee: prescription.sec_per_rep,
+      set_size: Enum.max(prescription.set_pattern),
+      set_count: length(prescription.set_pattern),
+      rest_sec: average_rest(rest_pattern_sec),
+      duration_sec: prescription.target_duration_sec,
+      set_pattern: prescription.set_pattern,
+      rest_pattern_sec: rest_pattern_sec,
+      burpee_count: prescription.burpee_count,
+      pacing_style: prescription.pacing_style,
+      burpee_type: prescription.burpee_type,
+      metadata: prescription.metadata,
+      execution: execution,
+      prescription: prescription,
+      plan: plan
+    }
+  end
+
+  defp average_rest([]), do: 0.0
+  defp average_rest(rest_pattern_sec), do: Enum.sum(rest_pattern_sec) / length(rest_pattern_sec)
 end

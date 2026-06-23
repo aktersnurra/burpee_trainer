@@ -1,7 +1,15 @@
 defmodule BurpeeTrainer.PlanSolver.ApplyTest do
   use ExUnit.Case, async: true
 
-  alias BurpeeTrainer.PlanSolver.{Apply, Input}
+  alias BurpeeTrainer.PlanSolver.{
+    Apply,
+    Execution,
+    Input,
+    PacePolicy,
+    StructureSearch,
+    UnbrokenSolver
+  }
+
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
   defp even_input(n, dur_min) do
@@ -271,5 +279,27 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     {:ok, plan} = Apply.to_workout_plan(input, p, r, [])
 
     assert_in_delta plan.sec_per_burpee, 7.3, 1.0e-6
+  end
+
+  test "persists v3 prescription metadata and matches execution summary" do
+    input = %Input{
+      name: "140",
+      burpee_type: :six_count,
+      target_duration_sec: 1_200,
+      target_duration_min: 20,
+      burpee_count_target: 140,
+      pacing_style: :unbroken,
+      max_unbroken_reps: 8,
+      explicit_rests: []
+    }
+
+    {:ok, prescription} = UnbrokenSolver.solve(input, PacePolicy.for(:six_count))
+    execution = Execution.build(prescription)
+
+    assert {:ok, plan} = Apply.from_execution(input, execution, prescription)
+    assert plan.plan_solver_metadata.solver_version == 3
+    assert plan.plan_solver_metadata.structure_key == StructureSearch.encode(prescription.blocks)
+    assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 140
+    assert abs(BurpeeTrainer.Planner.summary(plan).duration_sec_total - 1_200) <= 1
   end
 end

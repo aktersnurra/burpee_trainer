@@ -6,10 +6,18 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   are not folded into set recovery.
   """
 
-  alias BurpeeTrainer.PlanSolver.{Execution, Input}
+  alias BurpeeTrainer.PlanSolver.{Execution, Input, Prescription, StructureSearch}
   alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
 
-  @spec from_execution(Input.t(), Execution.t(), float) :: {:ok, WorkoutPlan.t()}
+  @spec from_execution(Input.t(), Execution.t(), Prescription.t() | float) ::
+          {:ok, WorkoutPlan.t()}
+  def from_execution(%Input{} = input, execution, %Prescription{} = prescription)
+      when is_list(execution) do
+    execution = normalize_auto_rests(input, execution)
+    {blocks, steps} = blocks_and_steps_from_execution(input, execution)
+    {:ok, wrap_plan(input, prescription.sec_per_rep, blocks, steps, prescription)}
+  end
+
   def from_execution(%Input{} = input, execution, p) when is_list(execution) do
     execution = normalize_auto_rests(input, execution)
     {blocks, steps} = blocks_and_steps_from_execution(input, execution)
@@ -59,21 +67,32 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     explicit_rest_sec =
       execution
       |> Enum.reduce(0.0, fn
-        %Execution.RestEvent{source: :auto}, total -> total
-        %Execution.RestEvent{} = event, total -> total + event.rest_sec
-        _event, total -> total
+        %Execution.RestEvent{} = event, total ->
+          if auto_rest_source?(event.source), do: total, else: total + event.rest_sec
+
+        _event, total ->
+          total
       end)
 
-    auto_rests = Enum.filter(execution, &match?(%Execution.RestEvent{source: :auto}, &1))
-    target_auto_rest_sec = round(input.target_duration_min * 60.0 - work_sec - explicit_rest_sec)
+    auto_rests =
+      Enum.filter(execution, fn
+        %Execution.RestEvent{} = event -> auto_rest_source?(event.source)
+        _event -> false
+      end)
+
+    target_auto_rest_sec = round(target_duration_sec(input) - work_sec - explicit_rest_sec)
 
     integer_rests =
       integer_rest_pattern_with_total(Enum.map(auto_rests, & &1.rest_sec), target_auto_rest_sec)
 
     {normalized, _index} =
       Enum.map_reduce(execution, 0, fn
-        %Execution.RestEvent{source: :auto} = event, index ->
-          {Map.put(event, :rest_sec, Enum.at(integer_rests, index, 0)), index + 1}
+        %Execution.RestEvent{} = event, index ->
+          if auto_rest_source?(event.source) do
+            {Map.put(event, :rest_sec, Enum.at(integer_rests, index, 0)), index + 1}
+          else
+            {event, index}
+          end
 
         event, index ->
           {event, index}
@@ -81,6 +100,17 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
 
     normalized
   end
+
+  defp auto_rest_source?(:auto), do: true
+  defp auto_rest_source?(:auto_normal), do: true
+  defp auto_rest_source?({:auto_reset, _kind}), do: true
+  defp auto_rest_source?(_source), do: false
+
+  defp target_duration_sec(%Input{target_duration_sec: seconds}) when is_integer(seconds),
+    do: seconds
+
+  defp target_duration_sec(%Input{target_duration_min: minutes}) when is_number(minutes),
+    do: minutes * 60.0
 
   defp integer_rest_pattern_with_total([], _target_total), do: []
 
@@ -233,29 +263,25 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     execution_units(rest, units, pending_set)
   end
 
-  defp execution_units([%Execution.RestEvent{source: :auto} = auto_rest | rest], units, nil) do
-    execution_units(rest, [{:rest, auto_rest} | units], nil)
+  defp execution_units([%Execution.RestEvent{} = rest_event | rest], units, nil) do
+    if auto_rest_source?(rest_event.source) do
+      execution_units(rest, [{:rest, rest_event} | units], nil)
+    else
+      execution_units(rest, [{:rest, rest_event} | units], nil)
+    end
   end
 
-  defp execution_units(
-         [%Execution.RestEvent{source: :auto} = auto_rest | rest],
-         units,
-         pending_set
-       ) do
-    execution_units(
-      rest,
-      [{:set, %{pending_set | end_of_set_rest: round(auto_rest.rest_sec)}} | units],
-      nil
-    )
-  end
-
-  defp execution_units([%Execution.RestEvent{} = explicit_rest | rest], units, nil) do
-    execution_units(rest, [{:rest, explicit_rest} | units], nil)
-  end
-
-  defp execution_units([%Execution.RestEvent{} = explicit_rest | rest], units, pending_set) do
-    units = [{:rest, explicit_rest}, {:set, pending_set} | units]
-    execution_units(rest, units, nil)
+  defp execution_units([%Execution.RestEvent{} = rest_event | rest], units, pending_set) do
+    if auto_rest_source?(rest_event.source) do
+      execution_units(
+        rest,
+        [{:set, %{pending_set | end_of_set_rest: round(rest_event.rest_sec)}} | units],
+        nil
+      )
+    else
+      units = [{:rest, rest_event}, {:set, pending_set} | units]
+      execution_units(rest, units, nil)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -473,7 +499,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     %WorkoutPlan{
       name: input.name,
       burpee_type: input.burpee_type,
-      target_duration_min: input.target_duration_min,
+      target_duration_min: duration_min(input),
       burpee_count_target: input.burpee_count_target,
       sec_per_burpee: round_pace(p),
       pacing_style: input.pacing_style,
@@ -483,6 +509,38 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       steps: steps
     }
   end
+
+  defp wrap_plan(input, p, blocks, steps, %Prescription{} = prescription) do
+    %WorkoutPlan{
+      name: input.name || "Generated workout",
+      burpee_type: input.burpee_type,
+      target_duration_min: duration_min(input),
+      burpee_count_target: input.burpee_count_target,
+      sec_per_burpee: round_pace(p),
+      pacing_style: input.pacing_style,
+      additional_rests: encode_rests(input.additional_rests || []),
+      fatigue_factor: 0.0,
+      blocks: blocks,
+      steps: steps,
+      plan_solver_metadata:
+        Map.merge(prescription.metadata, %{
+          solver_version: 3,
+          structure_key: StructureSearch.encode(prescription.blocks),
+          sec_per_rep: prescription.sec_per_rep,
+          target_duration_sec: prescription.target_duration_sec,
+          burpee_count: prescription.burpee_count,
+          blocks: Enum.map(prescription.blocks, &%{repeat: &1.repeat, motif: &1.motif})
+        })
+    }
+  end
+
+  defp duration_min(%Input{target_duration_min: minutes}) when is_integer(minutes), do: minutes
+
+  defp duration_min(%Input{target_duration_sec: seconds}) when is_integer(seconds),
+    do: round(seconds / 60)
+
+  defp duration_min(%Input{target_duration_min: minutes}) when is_number(minutes),
+    do: round(minutes)
 
   defp build_steps(%Input{pacing_style: :unbroken, additional_rests: []}, blocks) do
     blocks

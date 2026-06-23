@@ -27,8 +27,69 @@ defmodule BurpeeTrainer.PlanSolver.Execution do
     defstruct @enforce_keys
   end
 
+  alias BurpeeTrainer.PlanSolver.{Prescription, Recovery}
+
   @type event :: SetEvent.t() | RestEvent.t()
   @type t :: [event()]
+
+  @spec build(Prescription.t()) :: t()
+  def build(%Prescription{pacing_style: :unbroken} = prescription) do
+    recoveries_by_set = Enum.group_by(prescription.recoveries, & &1.after_set)
+
+    {_elapsed, events} =
+      prescription.set_pattern
+      |> Enum.with_index(1)
+      |> Enum.reduce({0.0, []}, fn {reps, set_index}, {elapsed, events} ->
+        set_duration = reps * prescription.sec_per_rep
+
+        set = %SetEvent{
+          kind: :set,
+          index: set_index,
+          burpee_count: reps,
+          sec_per_rep: prescription.sec_per_rep,
+          sec_per_burpee: prescription.sec_per_rep,
+          starts_at_sec: elapsed,
+          duration_sec: set_duration
+        }
+
+        elapsed = elapsed + set_duration
+        events = [set | events]
+
+        recoveries = Map.get(recoveries_by_set, set_index, [])
+
+        Enum.reduce(recoveries, {elapsed, events}, fn
+          %Recovery{total_sec: total_sec} = recovery, {elapsed, events} when total_sec > 0 ->
+            rest = %RestEvent{
+              kind: :rest,
+              index: length(events) + 1,
+              rest_sec: total_sec,
+              starts_at_sec: elapsed,
+              source: recovery.source
+            }
+
+            {elapsed + total_sec, [rest | events]}
+
+          _recovery, acc ->
+            acc
+        end)
+      end)
+
+    Enum.reverse(events)
+  end
+
+  def build(%Prescription{pacing_style: :even} = prescription) do
+    [
+      %SetEvent{
+        kind: :set,
+        index: 1,
+        burpee_count: prescription.burpee_count,
+        sec_per_rep: prescription.sec_per_rep,
+        sec_per_burpee: prescription.sec_per_rep,
+        starts_at_sec: 0.0,
+        duration_sec: prescription.target_duration_sec
+      }
+    ]
+  end
 
   @spec build([pos_integer()], [number()], [map()], number(), number()) :: t()
   def build(set_pattern, rest_pattern, reservations, sec_per_rep, sec_per_burpee) do
