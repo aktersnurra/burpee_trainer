@@ -47,7 +47,7 @@ defmodule BurpeeTrainer.PlanSolver.BoundaryPlacement do
 
     windows = reset_windows(target_sec)
 
-    [[]] ++
+    no_reset_templates(reset_durations_sec) ++
       single_reset_templates(
         set_pattern,
         sec_per_rep,
@@ -63,6 +63,9 @@ defmodule BurpeeTrainer.PlanSolver.BoundaryPlacement do
         reset_durations_sec
       )
   end
+
+  defp no_reset_templates([]), do: [[]]
+  defp no_reset_templates(_reset_durations_sec), do: []
 
   defp single_reset_templates(
          set_pattern,
