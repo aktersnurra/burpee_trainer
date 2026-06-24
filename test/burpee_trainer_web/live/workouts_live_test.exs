@@ -303,7 +303,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#workout-outline")
       assert html =~ "200 reps"
-      assert html =~ "15s recovery"
+      assert html =~ "8s recovery"
       refute html =~ ~s(id="plan-prescription-timeline")
     end
 
@@ -420,14 +420,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#workout-outline")
       assert html =~ "20:00 · 144 reps · 18 sets"
-      assert html =~ "Block 1"
-      assert html =~ "Sets 1–12"
-      assert html =~ "Set 13"
-      assert html =~ "Sets 14–16"
+      assert html =~ "18 sets × 8 reps"
+      assert html =~ "Sets 1–11"
+      assert html =~ "Set 12"
+      assert html =~ "Sets 13–16"
+      assert html =~ "Set 17"
       assert html =~ "No recovery"
     end
 
-    test "new plan explains smart recommendation and optional reset", %{conn: conn} do
+    test "new even plan explains cadence recommendation without reset suggestions", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view
@@ -436,49 +437,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert html =~ "Recommended"
-      assert html =~ "recovery"
-      assert html =~ "Optional reset"
-      assert has_element?(view, "button[data-accept-rest-suggestion]")
-
-      view
-      |> element("button[data-accept-rest-suggestion]")
-      |> render_click()
-
+      assert html =~ "even cadence"
+      refute html =~ "Optional reset"
+      refute has_element?(view, "button[data-accept-rest-suggestion]")
       assert has_element?(view, "#workout-outline")
       refute has_element?(view, "#plan-prescription-timeline")
-      refute render(view) =~ "Optional reset"
     end
 
-    test "changing to one rep after accepting rest suggestion shows an error instead of crashing",
-         %{
-           conn: conn
-         } do
-      {:ok, view, _html} = live(conn, ~p"/workouts/new")
-
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "144"})
-
-      view
-      |> element("button[phx-value-style='unbroken']")
-      |> render_click()
-
-      render_change(view, "change_basics", %{"reps_per_set" => "8"})
-
-      view
-      |> element("button[data-accept-rest-suggestion]")
-      |> render_click()
-
-      html =
-        view
-        |> element("#plan-goal-controls")
-        |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "1"})
-
-      assert has_element?(view, "#plan-solver-impossible")
-      assert html =~ "Rest at minute 12"
-    end
-
-    test "accepting reset suggestion twice does not create duplicate same-minute rests", %{
+    test "even recommendation does not expose duplicate reset suggestions", %{
       conn: conn
     } do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
@@ -487,12 +453,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       |> element("#plan-goal-controls")
       |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
 
-      view
-      |> element("button[data-accept-rest-suggestion]")
-      |> render_click()
-
       html = render(view)
       assert has_element?(view, "#workout-outline")
+      refute has_element?(view, "button[data-accept-rest-suggestion]")
       refute html =~ ~s(id="plan-prescription-timeline")
     end
 
@@ -512,8 +475,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#workout-outline")
       assert html =~ "20:00 · 144 reps · 18 sets"
-      assert html =~ "15s recovery"
-      assert html =~ "90s recovery"
+      assert html =~ "20s recovery"
+      assert html =~ "60s recovery"
       refute html =~ ~s(id="plan-prescription-timeline")
       refute html =~ ~s(id="graph-inspector")
       refute html =~ "[data-timeline-rest-editor]"
@@ -582,10 +545,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      assert has_element?(view, "#plan-prescription-pace", "6.0s")
+      assert has_element?(view, "#plan-prescription-pace", "5.3s")
       refute has_element?(view, "#plan-prescription-pace", "—")
 
-      assert has_element?(view, ~s(#plan-pace-form input[name="pace"][value="6.0"]))
+      assert has_element?(view, ~s(#plan-pace-form input[name="pace"][value="5.3"]))
       refute has_element?(view, ~s(#plan-pace-form input[name="pace"][value=""]))
       assert has_element?(view, "#workout-outline")
     end
@@ -724,7 +687,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
-      assert html =~ "Try lowering reps"
+      assert html =~ "Reduce the rep target"
       refute html =~ "No runnable prescription yet"
       assert html =~ "Workout"
       refute html =~ "Predicted finish"
@@ -740,7 +703,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
       assert html =~ "No workable prescription"
-      assert html =~ "needs at least"
+      assert html =~ "hard pace bounds"
       assert html =~ "Increase the duration"
       assert html =~ "Reduce the rep target"
       assert html =~ "No runnable prescription yet"

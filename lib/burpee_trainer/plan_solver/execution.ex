@@ -78,17 +78,34 @@ defmodule BurpeeTrainer.PlanSolver.Execution do
   end
 
   def build(%Prescription{pacing_style: :even} = prescription) do
-    [
-      %SetEvent{
-        kind: :set,
-        index: 1,
-        burpee_count: prescription.burpee_count,
-        sec_per_rep: prescription.sec_per_rep,
-        sec_per_burpee: prescription.sec_per_rep,
-        starts_at_sec: 0.0,
-        duration_sec: prescription.target_duration_sec
-      }
-    ]
+    set_pattern =
+      case prescription.set_pattern do
+        pattern when is_list(pattern) and pattern != [] -> pattern
+        _other -> [prescription.burpee_count]
+      end
+
+    cadence_sec = prescription.target_duration_sec / prescription.burpee_count
+
+    {_elapsed, events} =
+      set_pattern
+      |> Enum.with_index(1)
+      |> Enum.reduce({0.0, []}, fn {reps, set_index}, {elapsed, events} ->
+        duration_sec = reps * cadence_sec
+
+        event = %SetEvent{
+          kind: :set,
+          index: set_index,
+          burpee_count: reps,
+          sec_per_rep: cadence_sec,
+          sec_per_burpee: prescription.sec_per_rep,
+          starts_at_sec: elapsed,
+          duration_sec: duration_sec
+        }
+
+        {elapsed + duration_sec, [event | events]}
+      end)
+
+    Enum.reverse(events)
   end
 
   @spec build([pos_integer()], [number()], [map()], number(), number()) :: t()

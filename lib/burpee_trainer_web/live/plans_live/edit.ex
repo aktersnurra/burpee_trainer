@@ -1213,7 +1213,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     actions =
       cond do
         String.contains?(message, "minimum pace") or String.contains?(message, "needs at least") or
-            String.contains?(message, "cannot fit") ->
+          String.contains?(message, "cannot fit") or
+          String.contains?(message, "hard pace bounds") or
+          String.contains?(message, "Work alone does not fit") or
+            String.contains?(message, "No human-shaped recovery allocation") ->
           ["Increase the duration", "Reduce the rep target", "Choose an easier pace/level"]
 
         String.contains?(message, "additional rests") or

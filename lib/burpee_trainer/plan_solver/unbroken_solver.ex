@@ -76,6 +76,11 @@ defmodule BurpeeTrainer.PlanSolver.UnbrokenSolver do
         hard_slowest_sec_per_rep: policy.hard_slowest_sec_per_rep
       },
       score_key: candidate.score_key,
+      recommendation: "#{StructureSearch.encode(candidate.structure)} with auto recovery",
+      rest_suggestions: [],
+      recovery_mode: :auto,
+      recovery_sec: candidate.normal_recovery_sec,
+      work_interval_sec: candidate.sec_per_rep * (candidate.set_pattern |> Enum.max()),
       normal_recovery_sec: candidate.normal_recovery_sec,
       auto_resets:
         Enum.map(candidate.placement.auto_resets, fn reset ->

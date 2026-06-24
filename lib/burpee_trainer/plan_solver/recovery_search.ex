@@ -96,10 +96,7 @@ defmodule BurpeeTrainer.PlanSolver.RecoverySearch do
       true ->
         [[]] ++
           Enum.map(@reset_recovery_candidates_sec, &[&1]) ++
-          for mid <- @reset_recovery_candidates_sec,
-              late <- @reset_recovery_candidates_sec do
-            [mid, late]
-          end
+          Enum.map(@reset_recovery_candidates_sec, &[&1, &1])
     end
   end
 

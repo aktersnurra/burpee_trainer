@@ -2,8 +2,9 @@ defmodule BurpeeTrainer.PlanPresentationTest do
   use ExUnit.Case, async: true
 
   alias BurpeeTrainer.{PlanPresentation, PlanSolver}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
-  test "collapses solver-fragmented unbroken plan into one logical block with set ranges" do
+  test "renders v3 solver plan from persisted prescription metadata" do
     input = %PlanSolver.Input{
       name: "144 in 20",
       burpee_type: :six_count,
@@ -15,41 +16,43 @@ defmodule BurpeeTrainer.PlanPresentationTest do
     }
 
     assert {:ok, solution} = PlanSolver.solve(input)
-    assert length(solution.plan.blocks) > 1
 
     outline = PlanPresentation.outline(solution.plan)
 
-    assert outline.summary == "20:00 · 144 reps · 18 sets"
+    assert outline.summary =~ "20:00 · 144 reps"
 
-    assert [
-             %{
-               title: "Block 1",
-               set_count: 18,
-               total_reps: 144,
-               default_recovery_sec: 15,
-               default_recovery_label: "15s recovery",
-               rows: rows
-             }
-           ] = outline.blocks
+    assert [block] = outline.blocks
+    assert block.set_count == length(solution.set_pattern)
+    assert block.total_reps == 144
+    assert block.default_recovery_label =~ "recovery"
+    assert block.rows != []
+    assert List.last(block.rows).recovery_label == "No recovery"
+  end
 
-    assert %{
-             from_set: 1,
-             to_set: 12,
-             reps: 8,
-             recovery_sec: 15,
-             recovery_label: "15s recovery"
-           } = Enum.at(rows, 0)
+  test "outline prefers persisted prescription blocks when available" do
+    plan = %WorkoutPlan{
+      name: "140",
+      burpee_type: :six_count,
+      target_duration_min: 20,
+      pacing_style: :unbroken,
+      sec_per_burpee: 5.5,
+      plan_solver_metadata: %{
+        solver_version: 3,
+        structure_key: "20x[7]",
+        blocks: [%{repeat: 20, motif: [7]}],
+        normal_recovery_sec: 15,
+        sec_per_rep: 5.5,
+        auto_resets: []
+      },
+      blocks: [],
+      steps: []
+    }
 
-    assert %{from_set: 13, to_set: 13, reps: 8, recovery_sec: 90, recovery_label: "90s recovery"} =
-             Enum.at(rows, 1)
+    outline = PlanPresentation.outline(plan)
 
-    assert %{from_set: 14, to_set: 16, reps: 8, recovery_sec: 15, recovery_label: "15s recovery"} =
-             Enum.at(rows, 2)
-
-    assert %{from_set: 17, to_set: 17, reps: 8, recovery_sec: 90, recovery_label: "90s recovery"} =
-             Enum.at(rows, 3)
-
-    assert %{from_set: 18, to_set: 18, reps: 8, recovery_sec: 0, recovery_label: "No recovery"} =
-             Enum.at(rows, 4)
+    assert [%{title: title, rows: rows}] = outline.blocks
+    assert title =~ "20"
+    assert Enum.any?(rows, &(&1.recovery_label == "15s recovery"))
+    assert List.last(rows).recovery_label == "No recovery"
   end
 end

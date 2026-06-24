@@ -15,7 +15,18 @@ defmodule BurpeeTrainer.PlanPresentation do
         }
 
   @spec outline(WorkoutPlan.t()) :: outline
-  def outline(%WorkoutPlan{} = plan) do
+  def outline(%WorkoutPlan{plan_solver_metadata: metadata} = plan) when is_map(metadata) do
+    if metadata_value(metadata, :solver_version) == 3 and
+         is_list(metadata_value(metadata, :blocks)) do
+      outline_from_prescription_metadata(plan, metadata)
+    else
+      outline_from_persisted_atoms(plan)
+    end
+  end
+
+  def outline(%WorkoutPlan{} = plan), do: outline_from_persisted_atoms(plan)
+
+  defp outline_from_persisted_atoms(%WorkoutPlan{} = plan) do
     set_atoms = expand_sets(plan)
     default_recovery_sec = standard_recovery(set_atoms)
     rows = range_rows(set_atoms)
@@ -38,6 +49,93 @@ defmodule BurpeeTrainer.PlanPresentation do
       ]
     }
   end
+
+  defp outline_from_prescription_metadata(%WorkoutPlan{} = plan, metadata) do
+    set_atoms = expand_metadata_sets(plan, metadata)
+
+    default_recovery_sec =
+      metadata_value(metadata, :normal_recovery_sec) || standard_recovery(set_atoms)
+
+    rows = range_rows(set_atoms)
+    structure_key = metadata_value(metadata, :structure_key) || "Block 1"
+
+    %{
+      summary: summary(plan, set_atoms),
+      blocks: [
+        %{
+          title: structure_title(structure_key),
+          set_count: length(set_atoms),
+          total_reps: Enum.reduce(set_atoms, 0, &(&1.reps + &2)),
+          reps_per_set: common_value(set_atoms, :reps),
+          sec_per_rep: common_value(set_atoms, :sec_per_rep),
+          sec_per_burpee: common_value(set_atoms, :sec_per_burpee),
+          pacing_style: plan.pacing_style,
+          default_recovery_sec: default_recovery_sec,
+          default_recovery_label: recovery_label(default_recovery_sec, default_recovery_sec),
+          rows: rows
+        }
+      ]
+    }
+  end
+
+  defp expand_metadata_sets(%WorkoutPlan{} = plan, metadata) do
+    blocks = metadata_value(metadata, :blocks) || []
+    normal_recovery_sec = metadata_value(metadata, :normal_recovery_sec) || 0
+
+    reset_by_set =
+      metadata
+      |> metadata_value(:auto_resets)
+      |> List.wrap()
+      |> Map.new(fn reset ->
+        {metadata_value(reset, :after_set), metadata_value(reset, :duration_sec)}
+      end)
+
+    sec_per_rep = metadata_value(metadata, :sec_per_rep) || plan.sec_per_burpee || 0.0
+    sec_per_burpee = plan.sec_per_burpee || sec_per_rep
+
+    set_pattern =
+      blocks
+      |> Enum.flat_map(fn block ->
+        repeat = metadata_value(block, :repeat) || 1
+        motif = metadata_value(block, :motif) || []
+        List.duplicate(motif, repeat) |> List.flatten()
+      end)
+
+    set_count = length(set_pattern)
+
+    set_pattern
+    |> Enum.with_index(1)
+    |> Enum.map(fn {reps, set_index} ->
+      recovery_sec =
+        cond do
+          set_index == set_count -> 0
+          Map.has_key?(reset_by_set, set_index) -> Map.fetch!(reset_by_set, set_index)
+          true -> normal_recovery_sec
+        end
+
+      %{
+        set_index: set_index,
+        reps: reps,
+        sec_per_rep: sec_per_rep,
+        sec_per_burpee: sec_per_burpee,
+        recovery_sec: recovery_sec
+      }
+    end)
+  end
+
+  defp structure_title(structure_key) when is_binary(structure_key) do
+    structure_key
+    |> String.split("|")
+    |> Enum.map(&String.replace(&1, "x", " × "))
+    |> Enum.join(" · ")
+  end
+
+  defp structure_title(_structure_key), do: "Block 1"
+
+  defp metadata_value(nil, _key), do: nil
+
+  defp metadata_value(map, key) when is_map(map),
+    do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
 
   defp expand_sets(%WorkoutPlan{} = plan) do
     blocks_by_position = Map.new(plan.blocks || [], &{&1.position, &1})

@@ -6,7 +6,7 @@ defmodule BurpeeTrainer.PlanSolver.StructureSearch do
   alias BurpeeTrainer.PlanSolver.{BlockSpec, Infeasible, Input}
 
   @max_blocks 4
-  @max_complete_structures 64
+  @max_complete_structures 16
 
   @spec structures(Input.t()) :: {:ok, [[BlockSpec.t()]]} | {:error, Infeasible.t()}
   def structures(%Input{block_structure: blocks} = input) when is_list(blocks) and blocks != [] do

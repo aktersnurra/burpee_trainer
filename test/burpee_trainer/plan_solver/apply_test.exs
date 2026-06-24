@@ -80,7 +80,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     assert round(BurpeeTrainer.Planner.summary(plan).duration_sec_total) == 1200
   end
 
-  test ":even solved six-count catch-up preserves editable block totals" do
+  test ":even solved six-count catch-up persists exact v3 totals" do
     input = %{even_input(120, 20) | block_pattern: [12]}
 
     {:ok, solution} = BurpeeTrainer.PlanSolver.solve(input)
@@ -93,6 +93,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     [block_summary] = BurpeeTrainer.Planner.summary(solution.plan).blocks
     assert block_summary.burpee_count_total == 120
     assert round(block_summary.duration_sec_work) == 1200
+    assert solution.metadata.strategy == :even
   end
 
   test ":even with preferred block pattern — automatic remainder block" do
@@ -115,7 +116,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 75
   end
 
-  test ":even with preferred block pattern and rest — split around first-class rest" do
+  test ":even with preferred block pattern and rest — v3 keeps exact total duration" do
     input = %Input{
       name: "Pattern rest",
       burpee_type: :navy_seal,
@@ -131,18 +132,10 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, sol} = BurpeeTrainer.PlanSolver.solve(input)
 
-    assert Enum.all?(sol.plan.blocks, fn block ->
-             Enum.map(block.sets, & &1.burpee_count) == [4, 3]
-           end)
-
-    assert Enum.map(sol.plan.steps, & &1.kind) == [:block_run, :rest, :block_run]
-
-    assert [%{repeat_count: before_count}, %{rest_sec: 20}, %{repeat_count: after_count}] =
-             sol.plan.steps
-
-    assert before_count + after_count == 10
+    assert [%{repeat_count: 10}] = sol.plan.steps
     assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 70
     assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 1200
+    assert sol.metadata.strategy == :even
   end
 
   test ":even with one reservation — two blocks" do

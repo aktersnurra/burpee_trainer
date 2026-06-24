@@ -137,6 +137,10 @@ defmodule BurpeeTrainer.PlanSolver.BoundaryPlacement do
     |> Enum.filter(fn boundary ->
       boundary.starts_at_sec >= window.left and boundary.starts_at_sec <= window.right
     end)
+    |> Enum.sort_by(fn boundary ->
+      {abs(boundary.starts_at_sec - window.center), boundary.after_set}
+    end)
+    |> Enum.take(3)
     |> Enum.map(fn boundary ->
       %{
         kind: pending.kind,

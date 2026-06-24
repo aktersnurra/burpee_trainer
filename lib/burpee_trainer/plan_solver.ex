@@ -2,22 +2,26 @@ defmodule BurpeeTrainer.PlanSolver do
   @moduledoc """
   Public entry point for session plan generation.
 
-  Given a `%PlanSolver.Input{}` (burpee count, type, duration, pacing style,
-  user level), generates a human-shaped session plan via deterministic
-  candidate scoring and returns a `%PlanSolver.Solution{}` wrapping the
-  `%WorkoutPlan{}`.
-
-  `sec_per_burpee` is solver-chosen from `BurpeeTrainer.PaceModel` unless
-  `sec_per_burpee_override` pins it exactly.
+  Plan Solver v3 normalizes editor input, solves the selected pacing style, then
+  validates canonical execution and persisted plan totals before returning a
+  `%PlanSolver.Solution{}`.
   """
 
   alias BurpeeTrainer.{Levels, PaceModel}
-  alias BurpeeTrainer.PlanSolver.{Apply, CandidateSearch, Execution, Input, Solution}
+
+  alias BurpeeTrainer.PlanSolver.{
+    Apply,
+    EvenSolver,
+    Execution,
+    Infeasible,
+    Input,
+    PacePolicy,
+    Solution,
+    UnbrokenSolver,
+    Validator
+  }
 
   @default_reps_per_set %{six_count: 10, navy_seal: 5}
-  @human_set_sizes [15, 12, 10, 9, 8, 6, 5, 4]
-  @normal_work_interval_sec 60.0
-  @min_useful_recovery_sec 8.0
 
   @doc "Type- and level-derived fastest recommended pace (sec/rep)."
   @spec sustainable_ceiling(atom, atom) :: float
@@ -28,7 +32,7 @@ defmodule BurpeeTrainer.PlanSolver do
   @spec default_reps_per_set(atom) :: pos_integer
   def default_reps_per_set(type), do: Map.get(@default_reps_per_set, type, 10)
 
-  @doc "Effective lower bound for pace. Override takes precedence."
+  @doc "Compatibility lower bound for legacy callers."
   @spec effective_ceiling(Input.t()) :: float
   def effective_ceiling(%Input{sec_per_burpee_override: override}) when is_float(override),
     do: override
@@ -42,27 +46,34 @@ defmodule BurpeeTrainer.PlanSolver do
 
   @doc "Generate a `%Solution{}` from a `%PlanSolver.Input{}`."
   @spec solve(Input.t()) :: {:ok, Solution.t()} | {:error, [String.t()]}
-  def solve(%Input{} = input) do
-    with {:ok, reps_per_set} <- resolve_reps_per_set(input),
-         :ok <- validate_block_pattern(input.block_pattern),
-         :ok <- preflight_check(input),
-         prepared_input = apply_resolved_reps_per_set(input, reps_per_set),
-         {:ok, candidate} <- solve_candidate(prepared_input, reps_per_set),
-         prepared_input = %{prepared_input | block_pattern: candidate.block_pattern},
-         execution = build_execution(prepared_input, candidate),
-         {:ok, plan} <- Apply.from_execution(prepared_input, execution, candidate.sec_per_burpee) do
-      solution = build_solution(plan, prepared_input, candidate, execution)
-
-      with :ok <- validate_solution_plan(solution) do
-        {:ok, solution}
-      end
+  def solve(%Input{} = raw_input) do
+    with :ok <- validate_legacy_block_pattern(raw_input),
+         {:ok, input} <- Input.normalize_and_validate(raw_input),
+         policy = PacePolicy.for(input.burpee_type),
+         :ok <- validate_pace_override(input, policy),
+         {:ok, prescription} <- solve_style(input, policy),
+         execution = Execution.build(prescription),
+         prescription = %{prescription | execution: execution},
+         :ok <- Validator.validate_execution(input, prescription, execution),
+         {:ok, plan} <- Apply.from_execution(input, execution, prescription),
+         :ok <- Validator.validate_persisted_plan(input, execution, plan) do
+      {:ok, Solution.from(prescription, execution, plan)}
+    else
+      {:error, %Infeasible{} = error} -> {:error, infeasible_messages(error)}
+      {:error, messages} when is_list(messages) -> {:error, messages}
     end
   end
 
-  defp validate_block_pattern(nil), do: :ok
+  defp solve_style(%Input{pacing_style: :even} = input, policy),
+    do: EvenSolver.solve(input, policy)
 
-  defp validate_block_pattern(pattern)
-       when is_list(pattern) and pattern != [] and length(pattern) <= 12 do
+  defp solve_style(%Input{pacing_style: :unbroken} = input, policy),
+    do: UnbrokenSolver.solve(input, policy)
+
+  defp validate_legacy_block_pattern(%Input{block_pattern: nil}), do: :ok
+
+  defp validate_legacy_block_pattern(%Input{block_pattern: pattern})
+       when is_list(pattern) and pattern != [] do
     if Enum.all?(pattern, &(is_integer(&1) and &1 > 0)) do
       :ok
     else
@@ -70,560 +81,62 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
-  defp validate_block_pattern(_pattern),
+  defp validate_legacy_block_pattern(%Input{block_pattern: _pattern}),
     do: {:error, ["block pattern must contain 1 to 12 positive rep counts"]}
 
-  defp resolve_reps_per_set(%Input{pacing_style: :even}), do: {:ok, nil}
+  defp validate_pace_override(%Input{sec_per_rep_override: override}, _policy)
+       when is_nil(override),
+       do: :ok
 
-  defp resolve_reps_per_set(%Input{pacing_style: :unbroken} = input) do
-    rps = input.reps_per_set || default_reps_per_set(input.burpee_type)
-
-    if is_integer(rps) and rps > 0,
-      do: {:ok, rps},
-      else: {:error, ["reps_per_set must be a positive integer"]}
-  end
-
-  defp preflight_check(%Input{} = input) do
-    ceiling = effective_ceiling(input)
-    min_work = input.burpee_count_target * ceiling
-    target_sec = input.target_duration_min * 60.0
-    add_rest = Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2))
-
-    cond do
-      min_work > target_sec ->
-        {:error,
-         [
-           "#{input.burpee_count_target} reps at #{Float.round(ceiling, 1)}s/rep needs " <>
-             "at least #{format_duration(min_work)} of work, but the target is #{format_duration(target_sec)}."
-         ]}
-
-      min_work + add_rest > target_sec ->
-        {:error,
-         [
-           "Work needs #{format_duration(min_work)} and additional rests add #{format_duration(add_rest)}, " <>
-             "which does not fit in #{format_duration(target_sec)}."
-         ]}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp apply_resolved_reps_per_set(%Input{pacing_style: :unbroken} = input, reps_per_set),
-    do: %{input | reps_per_set: reps_per_set}
-
-  defp apply_resolved_reps_per_set(%Input{} = input, _reps_per_set), do: input
-
-  defp solve_candidate(%Input{pacing_style: :even} = input, _reps_per_set) do
-    p = pace(input)
-    pattern = default_even_pattern(input)
-    prepared_input = %{input | block_pattern: pattern}
-
-    case place_additional_rests(prepared_input, p, nil) do
-      {:ok, reservations} ->
-        set_pattern = expand_pattern(input.burpee_count_target, pattern)
-        rest_pattern = List.duplicate(0.0, max(length(set_pattern) - 1, 0))
-
-        {:ok,
-         candidate(prepared_input,
-           sec_per_burpee: p,
-           set_pattern: set_pattern,
-           rest_pattern_sec: rest_pattern,
-           reservations: reservations,
-           candidate_count: 1,
-           score: score_smart_candidate(input, p, set_pattern, rest_pattern),
-           set_pattern_strategy:
-             if(input.block_pattern, do: :preferred_pattern, else: :smart_even)
-         )}
-
-      {:error, :invalid_rest_boundary} ->
-        {:error, [infeasibility_message(input)]}
-    end
-  end
-
-  defp solve_candidate(%Input{pacing_style: :unbroken} = input, reps_per_set) do
-    preferred_candidates =
-      input.burpee_count_target
-      |> set_pattern_for(reps_per_set)
-      |> solve_milp_candidates(input, reps_per_set)
-
-    candidates =
-      case preferred_candidates do
-        [] ->
-          input.burpee_count_target
-          |> set_pattern_candidates(input.burpee_type, reps_per_set)
-          |> solve_milp_candidates(input, reps_per_set)
-
-        candidates ->
-          candidates
-      end
-
-    case candidates do
-      [] ->
-        {:error, [infeasibility_message(input)]}
-
-      candidates ->
-        winner = Enum.min_by(candidates, & &1.score)
-        {:ok, %{winner | candidate_count: length(candidates)}}
-    end
-  end
-
-  defp solve_milp_pattern(%Input{} = input, set_pattern) do
-    {_fastest, slowest} = PaceModel.pace_range_sec_per_rep(input.burpee_type, input.level)
-    pace_min = effective_ceiling(input)
-    target_sec = input.target_duration_min * 60.0
-    pace_needed_without_recovery = target_sec / input.burpee_count_target
-    pace_max = [slowest, pace_min, pace_needed_without_recovery] |> Enum.max()
-
-    CandidateSearch.solve_fixed_pattern(set_pattern,
-      target_sec: target_sec,
-      pace_min: pace_min,
-      pace_max: pace_max,
-      explicit_rest_total: Enum.reduce(input.additional_rests || [], 0.0, &(&1.rest_sec + &2)),
-      min_useful_rest: @min_useful_recovery_sec
-    )
-  end
-
-  defp solve_milp_candidates(set_patterns, input, reps_per_set) do
-    set_patterns
-    |> Enum.flat_map(fn set_pattern ->
-      with {:ok, milp_solution} <- solve_milp_pattern(input, set_pattern),
-           {:ok, reservations} <-
-             place_additional_rests(input, milp_solution.sec_per_burpee, set_pattern) do
-        [
-          candidate(input,
-            sec_per_burpee: milp_solution.sec_per_burpee,
-            set_pattern: set_pattern,
-            rest_pattern_sec: milp_solution.rest_pattern_sec,
-            reservations: reservations,
-            candidate_count: 0,
-            score: milp_solution.objective + score_set_pattern(set_pattern, reps_per_set),
-            set_pattern_strategy: :human_candidate_search
-          )
-        ]
-      else
-        _ -> []
-      end
-    end)
-  end
-
-  defp pace(%Input{sec_per_burpee_override: override}) when is_float(override), do: override
-  defp pace(%Input{} = input), do: effective_ceiling(input)
-
-  defp candidate(input, opts) do
-    p = Keyword.fetch!(opts, :sec_per_burpee)
-    set_pattern = Keyword.fetch!(opts, :set_pattern)
-    rest_pattern = Keyword.fetch!(opts, :rest_pattern_sec)
-    reservations = Keyword.fetch!(opts, :reservations)
-    target_sec = input.target_duration_min * 60.0
-    add_rest = Enum.reduce(reservations, 0.0, &(&1.rest_sec + &2))
-
-    %{
-      sec_per_burpee: p,
-      set_pattern: set_pattern,
-      rest_pattern_sec: rest_pattern,
-      reservations: reservations,
-      duration_sec: Enum.sum(set_pattern) * p + Enum.sum(rest_pattern) + add_rest,
-      rest_sec: average_rest(rest_pattern),
-      target_sec: target_sec,
-      candidate_count: Keyword.fetch!(opts, :candidate_count),
-      score: Keyword.fetch!(opts, :score),
-      set_pattern_strategy: Keyword.fetch!(opts, :set_pattern_strategy),
-      block_pattern: input.block_pattern
-    }
-  end
-
-  defp set_pattern_candidates(total_reps, burpee_type, reps_per_set) do
-    preferred = preferred_set_sizes(burpee_type, reps_per_set)
-
-    preferred
-    |> Enum.flat_map(&set_pattern_for(total_reps, &1))
-    |> Enum.uniq()
-    |> Enum.filter(&(Enum.sum(&1) == total_reps))
-  end
-
-  defp preferred_set_sizes(:navy_seal, reps_per_set),
-    do: [reps_per_set, 6, 5, 4] |> Enum.uniq() |> Enum.filter(&(&1 > 0))
-
-  defp preferred_set_sizes(_type, reps_per_set),
-    do: [reps_per_set | @human_set_sizes] |> Enum.uniq() |> Enum.filter(&(&1 > 0))
-
-  defp smart_set_sizes(:navy_seal), do: [5, 4, 6, 3]
-  defp smart_set_sizes(:six_count), do: [8, 10, 12, 6, 15, 5, 4]
-
-  defp default_even_pattern(%Input{block_pattern: pattern})
-       when is_list(pattern) and pattern != [],
-       do: pattern
-
-  defp default_even_pattern(%Input{} = input) do
-    p = pace(input)
-
-    input.burpee_type
-    |> smart_set_sizes()
-    |> Enum.min_by(fn reps -> abs(reps * p - @normal_work_interval_sec) end)
-    |> then(&[&1])
-  end
-
-  defp expand_pattern(total_reps, pattern) do
-    {full_repeats, remainder_pattern} = Apply.split_pattern_for_solver(total_reps, pattern)
-
-    pattern
-    |> List.duplicate(full_repeats)
-    |> List.flatten()
-    |> Kernel.++(remainder_pattern)
-  end
-
-  defp score_smart_candidate(_input, p, set_pattern, rest_pattern) do
-    work_penalty =
-      set_pattern
-      |> Enum.map(fn reps -> abs(reps * p - @normal_work_interval_sec) / 60.0 end)
-      |> Enum.sum()
-
-    recovery_penalty =
-      rest_pattern
-      |> Enum.map(fn rest ->
-        if rest > 0 and rest < @min_useful_recovery_sec, do: 10.0, else: 0.0
-      end)
-      |> Enum.sum()
-
-    work_penalty + recovery_penalty + length(set_pattern) * 0.01
-  end
-
-  defp set_pattern_for(total_reps, size) when total_reps <= size, do: [[total_reps]]
-
-  defp set_pattern_for(total_reps, size) do
-    full_count = div(total_reps, size)
-    remainder = rem(total_reps, size)
-    base = List.duplicate(size, full_count)
-
-    cond do
-      remainder == 0 ->
-        [base]
-
-      remainder in @human_set_sizes ->
-        [base ++ [remainder]]
-
-      full_count > 0 and (size - 1) in @human_set_sizes and (remainder + 1) in @human_set_sizes ->
-        [List.duplicate(size, full_count - 1) ++ [size - 1, remainder + 1]]
-
-      true ->
-        []
-    end
-  end
-
-  defp derive_rest_pattern(input, p, set_pattern, reservations) do
-    reservation_total = Enum.reduce(reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
-    work_sec = Enum.sum(set_pattern) * p
-    target_sec = input.target_duration_min * 60.0
-    gap_count = max(length(set_pattern) - 1, 0)
-    rest_budget = target_sec - work_sec - reservation_total
-
-    cond do
-      rest_budget < -1.0e-6 ->
-        {:error, :negative_rest}
-
-      gap_count == 0 ->
-        {:ok, []}
-
-      true ->
-        rest_per_gap = rest_budget / gap_count
-
-        if input.pacing_style == :unbroken and gap_count > 0 and
-             rest_per_gap < @min_useful_recovery_sec do
-          {:error, :insufficient_recovery}
-        else
-          {:ok, List.duplicate(rest_per_gap, gap_count)}
-        end
-    end
-  end
-
-  defp score_set_pattern(set_pattern, reps_per_set) do
-    size_penalty =
-      set_pattern
-      |> Enum.map(fn reps ->
-        cond do
-          reps == reps_per_set -> 0
-          reps in @human_set_sizes -> 1
-          true -> 10
-        end
-      end)
-      |> Enum.sum()
-
-    variance_penalty = Enum.max(set_pattern) - Enum.min(set_pattern)
-    length(set_pattern) * 0.01 + size_penalty + variance_penalty * 0.1
-  end
-
-  defp place_additional_rests(%Input{additional_rests: []}, _p, _set_pattern), do: {:ok, []}
-
-  defp place_additional_rests(%Input{pacing_style: :even} = input, _p, _set_pattern) do
-    target_sec = input.target_duration_min * 60.0
-
-    reservation_total =
-      Enum.reduce(input.additional_rests || [], 0.0, fn rest, acc -> acc + rest.rest_sec end)
-
-    cadence = (target_sec - reservation_total) / input.burpee_count_target
-    block_total = even_rest_block_total(input)
-
-    reservations =
-      input.additional_rests
-      |> Enum.sort_by(& &1.target_min)
-      |> Enum.map(fn rest ->
-        target_sec = rest.target_min * 60.0
-        slot = round(target_sec / cadence / block_total) * block_total
-        boundary_sec = slot * cadence
-
-        if slot > 0 and slot < input.burpee_count_target and abs(boundary_sec - target_sec) <= 30 do
-          {:ok, %{slot: slot, rest_sec: rest.rest_sec, target_min: rest.target_min}}
-        else
-          :error
-        end
-      end)
-
-    if Enum.any?(reservations, &(&1 == :error)) do
-      {:error, :invalid_rest_boundary}
+  defp validate_pace_override(%Input{sec_per_rep_override: override}, policy) do
+    if override >= policy.hard_fastest_sec_per_rep and override <= policy.hard_slowest_sec_per_rep do
+      :ok
     else
-      {:ok, Enum.map(reservations, fn {:ok, reservation} -> reservation end)}
+      {:error,
+       %Infeasible{
+         reason: :no_pace_within_hard_bounds,
+         details: %{
+           sec_per_rep_override: override,
+           hard_fastest_sec_per_rep: policy.hard_fastest_sec_per_rep,
+           hard_slowest_sec_per_rep: policy.hard_slowest_sec_per_rep
+         },
+         suggestions: ["Choose a pace inside the hard bounds", "Use Auto pace"]
+       }}
     end
   end
 
-  defp place_additional_rests(%Input{pacing_style: :unbroken} = input, p, set_pattern) do
-    with {:ok, rest_pattern} <- derive_rest_pattern(input, p, set_pattern, []) do
-      boundaries = set_boundaries(set_pattern, p, rest_pattern)
+  defp infeasible_messages(%Infeasible{
+         reason: reason,
+         suggestions: suggestions,
+         details: details
+       }) do
+    base =
+      case reason do
+        :invalid_input ->
+          "Invalid solver input: #{inspect(details)}."
 
-      if boundaries == [] do
-        {:error, :invalid_rest_boundary}
-      else
-        reservations =
-          input.additional_rests
-          |> Enum.sort_by(& &1.target_min)
-          |> Enum.map(fn rest ->
-            target_sec = rest.target_min * 60.0
+        :advanced_structure_rep_mismatch ->
+          "Manual block structure does not match target reps."
 
-            {slot, boundary_sec} =
-              Enum.min_by(boundaries, fn {_slot, sec} -> abs(sec - target_sec) end)
+        :set_exceeds_max_unbroken ->
+          "Manual block structure exceeds the max unbroken set size."
 
-            if slot < input.burpee_count_target and abs(boundary_sec - target_sec) <= 30 do
-              {:ok, %{slot: slot, rest_sec: rest.rest_sec, target_min: rest.target_min}}
-            else
-              :error
-            end
-          end)
+        :work_alone_exceeds_duration ->
+          "Work alone does not fit in the target duration."
 
-        if Enum.any?(reservations, &(&1 == :error)) do
-          {:error, :invalid_rest_boundary}
-        else
-          {:ok, Enum.map(reservations, fn {:ok, reservation} -> reservation end)}
-        end
+        :no_pace_within_hard_bounds ->
+          "Target cannot be solved within hard pace bounds."
+
+        :cannot_place_explicit_rest ->
+          "Explicit rest cannot be placed on a valid boundary."
+
+        :no_human_shaped_recovery_allocation ->
+          "No human-shaped recovery allocation fits this target."
       end
+
+    case suggestions do
+      [] -> [base]
+      _ -> [base <> " " <> Enum.join(suggestions, "; ") <> "."]
     end
   end
-
-  defp even_rest_block_total(%Input{block_pattern: pattern})
-       when is_list(pattern) and pattern != [],
-       do: Enum.sum(pattern)
-
-  defp even_rest_block_total(_input), do: 1
-
-  defp set_boundaries(set_pattern, p, rest_pattern) do
-    set_pattern
-    |> Enum.drop(-1)
-    |> Enum.with_index(1)
-    |> Enum.map(fn {_reps, index} ->
-      reps_done = set_pattern |> Enum.take(index) |> Enum.sum()
-      rest_done = rest_pattern |> Enum.take(index - 1) |> Enum.sum()
-      {reps_done, reps_done * p + rest_done}
-    end)
-  end
-
-  defp infeasibility_message(%Input{additional_rests: [_ | _] = rests}) do
-    %{target_min: t} = Enum.max_by(rests, & &1.target_min)
-    "Rest at minute #{t} does not land close enough to a set boundary."
-  end
-
-  defp infeasibility_message(%Input{} = input) do
-    target_sec = input.target_duration_min * 60.0
-    required_pace = target_sec / input.burpee_count_target
-    fastest = PaceModel.fastest_recommended_sec_per_rep(input.burpee_type, input.level)
-
-    "#{input.burpee_count_target} reps in #{format_duration(target_sec)} requires " <>
-      "about #{Float.round(required_pace, 1)}s/rep before useful recovery. " <>
-      "Your level target is #{Float.round(fastest, 1)}s/rep or slower. " <>
-      "Try lowering reps, increasing duration, using larger sets, or removing extra rests."
-  end
-
-  defp validate_solution_plan(%Solution{} = solution) do
-    plan_summary = BurpeeTrainer.Planner.summary(solution.plan)
-    execution_count = Execution.burpee_count(solution.execution)
-    execution_duration = Execution.duration_sec(solution.execution)
-
-    cond do
-      plan_summary.burpee_count_total != execution_count ->
-        {:error,
-         [
-           "Generated plan reps #{plan_summary.burpee_count_total} did not match solved reps #{execution_count}."
-         ]}
-
-      abs(plan_summary.duration_sec_total - execution_duration) > 1.0 ->
-        {:error,
-         [
-           "Generated plan duration #{format_duration(plan_summary.duration_sec_total)} did not match solved duration #{format_duration(execution_duration)}."
-         ]}
-
-      plan_summary.burpee_count_total != solution.burpee_count ->
-        {:error,
-         [
-           "Generated plan reps #{plan_summary.burpee_count_total} did not match target reps #{solution.burpee_count}."
-         ]}
-
-      abs(plan_summary.duration_sec_total - solution.duration_sec) > 5.0 ->
-        {:error,
-         [
-           "Generated plan duration #{format_duration(plan_summary.duration_sec_total)} did not match target duration #{format_duration(solution.duration_sec)}."
-         ]}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp build_execution(%Input{pacing_style: :even} = input, candidate) do
-    reservation_total =
-      Enum.reduce(candidate.reservations, 0.0, fn r, acc -> acc + r.rest_sec end)
-
-    target_sec = input.target_duration_min * 60.0
-    sec_per_rep = (target_sec - reservation_total) / input.burpee_count_target
-
-    Execution.build(
-      candidate.set_pattern,
-      candidate.rest_pattern_sec,
-      candidate.reservations,
-      sec_per_rep,
-      candidate.sec_per_burpee
-    )
-  end
-
-  defp build_execution(%Input{pacing_style: :unbroken}, candidate) do
-    Execution.build(
-      candidate.set_pattern,
-      candidate.rest_pattern_sec,
-      candidate.reservations,
-      candidate.sec_per_burpee,
-      candidate.sec_per_burpee
-    )
-  end
-
-  defp format_duration(seconds) do
-    seconds = round(seconds)
-    minutes = div(seconds, 60)
-    remainder = rem(seconds, 60)
-
-    cond do
-      minutes > 0 and remainder > 0 -> "#{minutes}m #{remainder}s"
-      minutes > 0 -> "#{minutes}m"
-      true -> "#{remainder}s"
-    end
-  end
-
-  defp build_solution(plan, %Input{} = input, candidate, execution) do
-    {_fastest, slowest} = PaceModel.pace_range_sec_per_rep(input.burpee_type, input.level)
-    effective_fastest = effective_ceiling(input)
-
-    %Solution{
-      sec_per_burpee: candidate.sec_per_burpee,
-      set_size: Enum.max(candidate.set_pattern),
-      set_count: length(candidate.set_pattern),
-      rest_sec: candidate.rest_sec,
-      duration_sec: input.target_duration_min * 60.0,
-      set_pattern: candidate.set_pattern,
-      rest_pattern_sec: candidate.rest_pattern_sec,
-      burpee_count: Enum.sum(candidate.set_pattern),
-      pacing_style: input.pacing_style,
-      burpee_type: input.burpee_type,
-      execution: execution,
-      metadata: %{
-        solver_version: "deterministic-v2",
-        set_pattern_strategy: candidate.set_pattern_strategy,
-        candidate_count: candidate.candidate_count,
-        score: candidate.score,
-        pace_fastest_sec_per_rep: effective_fastest,
-        pace_slowest_sec_per_rep: slowest,
-        pace_override?: is_float(input.sec_per_burpee_override),
-        recovery_mode: :auto,
-        recommendation: recommendation_text(input, candidate),
-        work_interval_sec: average_work_interval(candidate.set_pattern, candidate.sec_per_burpee),
-        recovery_sec: candidate.rest_sec,
-        rest_suggestions: rest_suggestions(input, candidate)
-      },
-      plan: plan
-    }
-  end
-
-  defp recommendation_text(%Input{pacing_style: :unbroken}, candidate) do
-    {reps, count} =
-      candidate.set_pattern
-      |> Enum.frequencies()
-      |> Enum.max_by(fn {_reps, count} -> count end)
-
-    "#{count} × #{reps} reps with auto recovery"
-  end
-
-  defp recommendation_text(%Input{pacing_style: :even}, candidate) do
-    {reps, count} =
-      candidate.set_pattern
-      |> Enum.frequencies()
-      |> Enum.max_by(fn {_reps, count} -> count end)
-
-    "#{count} × #{reps} reps at even cadence"
-  end
-
-  defp average_work_interval([], _p), do: 0.0
-
-  defp average_work_interval(set_pattern, p) do
-    set_pattern
-    |> Enum.map(&(&1 * p))
-    |> Enum.sum()
-    |> Kernel./(length(set_pattern))
-  end
-
-  defp rest_suggestions(%Input{additional_rests: [_ | _]}, _candidate), do: []
-
-  defp rest_suggestions(%Input{target_duration_min: duration}, _candidate) when duration < 15,
-    do: []
-
-  defp rest_suggestions(%Input{} = input, candidate) do
-    target_min = midpoint_rest_minute(input.target_duration_min)
-    rest_sec = 30
-    gap_count = max(length(candidate.set_pattern) - 1, 0)
-
-    if gap_count > 0 do
-      adjusted_recovery =
-        (candidate.target_sec -
-           Enum.sum(candidate.set_pattern) * candidate.sec_per_burpee - rest_sec) / gap_count
-
-      if adjusted_recovery >= @min_useful_recovery_sec do
-        [
-          %{
-            target_min: target_min,
-            rest_sec: rest_sec,
-            effect: "set recovery becomes about #{round(adjusted_recovery)}s"
-          }
-        ]
-      else
-        []
-      end
-    else
-      []
-    end
-  end
-
-  defp midpoint_rest_minute(duration_min) do
-    duration_min
-    |> Kernel.*(0.6)
-    |> round()
-    |> max(10)
-    |> min(16)
-  end
-
-  defp average_rest([]), do: 0.0
-  defp average_rest(rest_pattern), do: Enum.sum(rest_pattern) / length(rest_pattern)
 end
