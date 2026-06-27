@@ -5,6 +5,8 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
   alias BurpeeTrainer.Workouts.PoseCaptureRun
 
   @segments [:warmup, :main]
+  @max_payload_json_bytes 250_000
+  @max_sample_count 600
 
   @type t :: %__MODULE__{}
 
@@ -47,11 +49,46 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
     |> validate_number(:chunk_index, greater_than_or_equal_to: 0)
     |> validate_number(:started_at_ms, greater_than_or_equal_to: 0)
     |> validate_number(:ended_at_ms, greater_than_or_equal_to: 0)
-    |> validate_number(:sample_count, greater_than: 0)
+    |> validate_number(:sample_count, greater_than: 0, less_than_or_equal_to: @max_sample_count)
     |> validate_ended_after_started()
+    |> validate_payload_json()
     |> unique_constraint(:chunk_index,
       name: :pose_trace_chunks_pose_capture_run_id_chunk_index_index
     )
+  end
+
+  defp validate_payload_json(changeset) do
+    payload_json = get_field(changeset, :payload_json)
+
+    cond do
+      not is_binary(payload_json) ->
+        changeset
+
+      byte_size(payload_json) > @max_payload_json_bytes ->
+        add_error(changeset, :payload_json, "is too large")
+
+      true ->
+        validate_payload_samples(changeset, payload_json)
+    end
+  end
+
+  defp validate_payload_samples(changeset, payload_json) do
+    case Jason.decode(payload_json) do
+      {:ok, %{"samples" => samples}} when is_list(samples) ->
+        sample_count = get_field(changeset, :sample_count)
+
+        if is_integer(sample_count) and length(samples) != sample_count do
+          add_error(changeset, :payload_json, "sample count must match samples length")
+        else
+          changeset
+        end
+
+      {:ok, _payload} ->
+        add_error(changeset, :payload_json, "must contain samples")
+
+      {:error, _reason} ->
+        add_error(changeset, :payload_json, "must be valid JSON")
+    end
   end
 
   defp validate_ended_after_started(changeset) do

@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.PlanEditor do
   alias BurpeeTrainer.PlanEditor.{Derived, Input, State}
   alias BurpeeTrainer.{Planner, PlanSolver}
   alias BurpeeTrainer.PlanSolver.Input, as: SolverInput
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanSolver.PacePolicy
+  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
 
   @type input :: Input.t()
 
@@ -73,6 +74,32 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def pick_pacing(%State{} = state, style), do: {:error, {:invalid_pacing_style, style}, state}
 
+  @spec set_pace_bias(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def set_pace_bias(%State{} = state, bias) when bias in ["slower", "balanced", "faster"] do
+    {:ok, input} = Input.set_pace_bias(state.input, bias)
+    {:ok, %{state | input: input}}
+  end
+
+  def set_pace_bias(%State{} = state, bias) when bias in [:slower, :balanced, :faster] do
+    {:ok, input} = Input.set_pace_bias(state.input, bias)
+    {:ok, %{state | input: input}}
+  end
+
+  def set_pace_bias(%State{} = state, bias), do: {:error, {:invalid_pace_bias, bias}, state}
+
+  @spec set_load_shape(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def set_load_shape(%State{} = state, shape)
+      when shape in ["even", "front_loaded", "back_loaded"] do
+    {:ok, %{state | input: %{state.input | load_shape: String.to_existing_atom(shape)}}}
+  end
+
+  def set_load_shape(%State{} = state, shape)
+      when shape in [:even, :front_loaded, :back_loaded] do
+    {:ok, %{state | input: %{state.input | load_shape: shape}}}
+  end
+
+  def set_load_shape(%State{} = state, shape), do: {:error, {:invalid_load_shape, shape}, state}
+
   @spec change_block_pattern(State.t(), map()) :: {:ok, State.t()}
   def change_block_pattern(%State{} = state, params) do
     {:ok, input} = Input.change_block_pattern(state.input, params)
@@ -129,34 +156,60 @@ defmodule BurpeeTrainer.PlanEditor do
       level: state.level,
       reps_per_set: state.input.reps_per_set,
       additional_rests: state.input.additional_rests,
-      sec_per_burpee_override: state.input.sec_per_burpee_override,
-      block_pattern: state.input.block_pattern
+      sec_per_burpee_override:
+        state.input.sec_per_burpee_override || pace_bias_override(state.input),
+      block_pattern: if(state.input.manual_structure?, do: state.input.block_pattern, else: nil),
+      pace_bias: state.input.pace_bias,
+      load_shape: state.input.load_shape
     }
+
+    locked_blocks = locked_blocks_by_index(state.form_plan, state.locked_block_indexes)
+    preserve_manual_plan? = preserve_manual_plan?(state)
 
     case PlanSolver.solve(solver_input) do
       {:ok, solution} ->
+        form_plan =
+          if preserve_manual_plan? do
+            merge_manual_plan(solution.plan, state.form_plan)
+          else
+            restore_locked_blocks(solution.plan, locked_blocks)
+          end
+
+        manual_edit? =
+          state.manual_edit? and (preserve_manual_plan? or map_size(locked_blocks) > 0)
+
         {:ok,
          %{
            state
            | solver_error: nil,
              solver_solution: solution,
-             form_plan: solution.plan,
-             manual_edit?: false,
-             derived: derived(solution.plan, state.input)
+             form_plan: form_plan,
+             manual_edit?: manual_edit?,
+             derived: derived(form_plan, state.input)
          }}
 
       {:error, reasons} ->
-        {:ok, %{state | solver_error: Enum.join(reasons, "; "), solver_solution: nil}}
+        {:ok,
+         %{
+           state
+           | solver_error: Enum.join(reasons, "; "),
+             solver_solution: nil,
+             derived: %Derived{}
+         }}
     end
   end
 
   @spec change_basics(State.t(), map()) :: {:ok, State.t()}
   def change_basics(%State{} = state, params) do
     {:ok, input} = Input.change_basics(state.input, params)
+    state = put_input(state, input)
 
-    state
-    |> put_input(input)
-    |> regenerate()
+    if solver_basic_params?(params) do
+      regenerate(state)
+    else
+      form_plan = rename_form_plan(state.form_plan, input.name)
+      {:ok, %{state | form_plan: form_plan, derived: derived_or_empty(form_plan, input)}}
+    end
   end
 
   @spec derived(WorkoutPlan.t(), input()) :: Derived.t()
@@ -262,8 +315,9 @@ defmodule BurpeeTrainer.PlanEditor do
     with {:ok, index} <- Input.parse_non_negative_index(index),
          blocks <- Enum.sort_by(blocks || [], & &1.position),
          %Block{} = source_block <- Enum.at(blocks, index) do
-      copied_block = %{source_block | position: length(blocks) + 1}
-      form_plan = %{state.form_plan | blocks: blocks ++ [copied_block]}
+      copied_block = copy_block_as_new(source_block, length(blocks) + 1)
+      steps = schedule_copied_block(state.form_plan.steps, copied_block.position)
+      form_plan = %{state.form_plan | blocks: blocks ++ [copied_block], steps: steps}
 
       {:ok,
        %{
@@ -288,7 +342,7 @@ defmodule BurpeeTrainer.PlanEditor do
          %Block{} = block <- Enum.at(blocks, block_index),
          sets <- Enum.sort_by(block.sets || [], & &1.position),
          %Set{} = source_set <- Enum.at(sets, set_index) do
-      copied_set = %{source_set | position: length(sets) + 1}
+      copied_set = %{source_set | id: nil, block_id: nil, position: length(sets) + 1}
       updated_block = %{block | sets: sets ++ [copied_set]}
       updated_blocks = List.replace_at(blocks, block_index, updated_block)
       form_plan = %{state.form_plan | blocks: updated_blocks}
@@ -308,6 +362,78 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def copy_set(%State{} = state, _block_index, _set_index),
     do: {:error, :missing_form_plan, state}
+
+  defp copy_block_as_new(%Block{} = block, position) do
+    sets =
+      block.sets
+      |> Enum.sort_by(&(&1.position || 0))
+      |> Enum.with_index(1)
+      |> Enum.map(fn {set, set_position} ->
+        %{
+          set
+          | id: nil,
+            block_id: nil,
+            position: set_position,
+            inserted_at: nil,
+            updated_at: nil
+        }
+      end)
+
+    %{
+      block
+      | id: nil,
+        plan_id: nil,
+        position: position,
+        repeat_count: 1,
+        sets: sets,
+        inserted_at: nil,
+        updated_at: nil
+    }
+  end
+
+  defp schedule_copied_block(steps, copied_block_position) when is_list(steps) and steps != [] do
+    steps = Enum.sort_by(steps, &(&1.position || 0))
+
+    steps ++
+      [
+        %PlanStep{
+          position: length(steps) + 1,
+          kind: :block_run,
+          block_position: copied_block_position,
+          repeat_count: 1
+        }
+      ]
+  end
+
+  defp schedule_copied_block(steps, _copied_block_position), do: steps
+
+  defp solver_basic_params?(params) when is_map(params) do
+    Enum.any?(
+      ["target_duration_min", "burpee_count_target", "reps_per_set"],
+      &Map.has_key?(params, &1)
+    )
+  end
+
+  defp rename_form_plan(%WorkoutPlan{} = plan, name), do: %{plan | name: name}
+  defp rename_form_plan(plan, _name), do: plan
+
+  defp derived_or_empty(%WorkoutPlan{} = plan, input), do: derived(plan, input)
+  defp derived_or_empty(_plan, _input), do: %Derived{}
+
+  defp preserve_manual_plan?(%State{
+         manual_edit?: true,
+         locked_block_indexes: locked_indexes,
+         form_plan: %WorkoutPlan{blocks: blocks}
+       })
+       when is_list(blocks) do
+    MapSet.size(locked_indexes) == 0
+  end
+
+  defp preserve_manual_plan?(_state), do: false
+
+  defp merge_manual_plan(%WorkoutPlan{} = generated_plan, %WorkoutPlan{} = manual_plan) do
+    %{generated_plan | blocks: manual_plan.blocks, steps: manual_plan.steps}
+  end
 
   defp locked_blocks_by_index(%WorkoutPlan{blocks: blocks}, locked_indexes)
        when is_list(blocks) do
@@ -329,15 +455,49 @@ defmodule BurpeeTrainer.PlanEditor do
       |> Enum.with_index()
       |> Enum.map(fn {block, index} -> Map.get(locked_blocks, index, block) end)
 
-    %{plan | blocks: blocks}
+    steps = restore_locked_step_repeats(plan.steps, locked_blocks)
+
+    %{plan | blocks: blocks, steps: steps}
   end
 
   defp restore_locked_blocks(plan, _locked_blocks), do: plan
+
+  defp restore_locked_step_repeats(steps, locked_blocks) when is_list(steps) do
+    repeats_by_position =
+      locked_blocks
+      |> Map.values()
+      |> Map.new(fn block -> {block.position, block.repeat_count || 1} end)
+
+    Enum.map(steps, fn
+      %{kind: :block_run, block_position: position} = step ->
+        case Map.fetch(repeats_by_position, position) do
+          {:ok, repeat_count} -> %{step | repeat_count: repeat_count}
+          :error -> step
+        end
+
+      step ->
+        step
+    end)
+  end
+
+  defp restore_locked_step_repeats(steps, _locked_blocks), do: steps
 
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(%WorkoutPlan{} = plan) do
     Input.from_plan(plan)
   end
+
+  defp pace_bias_override(%Input{pace_bias: :balanced}), do: nil
+
+  defp pace_bias_override(%Input{pace_bias: :faster, burpee_type: burpee_type}) do
+    PacePolicy.for(burpee_type).preferred_fast_sec_per_rep
+  end
+
+  defp pace_bias_override(%Input{pace_bias: :slower, burpee_type: burpee_type}) do
+    PacePolicy.for(burpee_type).preferred_slow_sec_per_rep
+  end
+
+  defp pace_bias_override(_input), do: nil
 
   defp put_input(%State{} = state, input), do: %{state | input: input}
 

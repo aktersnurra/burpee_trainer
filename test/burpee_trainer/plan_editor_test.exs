@@ -20,6 +20,26 @@ defmodule BurpeeTrainer.PlanEditorTest do
     assert input.additional_rests == []
     assert input.sec_per_burpee_override == nil
     assert input.block_pattern == nil
+    assert input.manual_structure? == false
+    assert input.pace_bias == :balanced
+    assert input.load_shape == :even
+  end
+
+  test "default contract generation does not impose a hidden block pattern" do
+    {:ok, state} = PlanEditor.new(:level_1a, %{})
+    {:ok, state} = PlanEditor.regenerate(state)
+
+    total_reps =
+      state.form_plan.blocks
+      |> Enum.flat_map(fn block ->
+        repeat_count = block.repeat_count || 1
+
+        Enum.map(block.sets, fn set -> set.burpee_count * repeat_count end)
+      end)
+      |> Enum.sum()
+
+    assert state.form_plan.burpee_count_target == 100
+    assert total_reps == 100
   end
 
   describe "PlanEditor.Input boundary" do
@@ -30,6 +50,7 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert input.target_duration_min == 20
       assert input.burpee_count_target == 100
       assert input.pacing_style == :even
+      assert input.manual_structure? == false
     end
 
     test "apply_coach_params/2 accepts positive count and pace" do
@@ -66,6 +87,14 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert input.reps_per_set == 10
     end
 
+    test "change_basics/2 preserves the existing name for blank input" do
+      {:ok, input} =
+        Input.default()
+        |> Input.change_basics(%{"name" => "   "})
+
+      assert input.name == "New workout"
+    end
+
     test "change_basics/2 preserves existing numbers for invalid partial input" do
       {:ok, input} =
         Input.default()
@@ -88,6 +117,18 @@ defmodule BurpeeTrainer.PlanEditorTest do
         |> Input.change_block_pattern(%{"pattern" => %{"1" => "7", "0" => "5", "2" => "bad"}})
 
       assert input.block_pattern == [5, 7]
+      assert input.manual_structure? == true
+    end
+
+    test "change_block_pattern/2 ignores Phoenix unused nested input sentinels" do
+      {:ok, input} =
+        Input.default()
+        |> Input.change_block_pattern(%{
+          "pattern" => %{"_unused_0" => "", "0" => "4", "1" => "3"}
+        })
+
+      assert input.block_pattern == [4, 3]
+      assert input.manual_structure? == true
     end
 
     test "set_pace_override/2 stores positive numeric pace" do
@@ -216,6 +257,39 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert state.input.pacing_style == :unbroken
     end
 
+    test "pace bias maps to solver movement pace" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.set_pace_bias(state, "faster")
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      assert state.input.pace_bias == :faster
+      assert state.solver_solution.metadata.pace_bias == :faster
+      assert_in_delta state.solver_solution.sec_per_burpee, 4.8, 1.0e-6
+    end
+
+    test "pace bias clears manual pace override" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.set_pace_override(state, "12.5")
+
+      assert state.input.sec_per_burpee_override == 12.5
+
+      {:ok, state} = PlanEditor.set_pace_bias(state, "faster")
+
+      assert state.input.pace_bias == :faster
+      assert state.input.sec_per_burpee_override == nil
+    end
+
+    test "load shape is stored on solver metadata" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+
+      {:ok, state} = PlanEditor.set_load_shape(state, "front_loaded")
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      assert state.input.load_shape == :front_loaded
+      assert state.solver_solution.metadata.load_shape == :front_loaded
+    end
+
     test "pick_pacing rejects invalid style without changing state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
 
@@ -318,6 +392,62 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert state.derived.can_save? in [true, false]
     end
 
+    test "solver errors fail closed instead of keeping stale can-save state" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      assert state.derived.can_save?
+
+      state = %{
+        state
+        | input: %{state.input | additional_rests: [%{target_min: 10, rest_sec: 30}]}
+      }
+
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      assert state.solver_error =~ "Explicit rest cannot be placed"
+      refute state.derived.can_save?
+    end
+
+    test "change_basics name-only edit preserves existing workout structure" do
+      user = user_fixture()
+
+      plan =
+        plan_fixture(user, %{
+          "name" => "Custom plan",
+          "target_duration_min" => 20,
+          "burpee_count_target" => 10,
+          "pacing_style" => "even",
+          "blocks" => [
+            %{
+              "position" => 1,
+              "repeat_count" => 1,
+              "sets" => [
+                %{
+                  "position" => 1,
+                  "burpee_count" => 10,
+                  "sec_per_rep" => 7.5,
+                  "sec_per_burpee" => 7.5,
+                  "end_of_set_rest" => 45
+                }
+              ]
+            }
+          ]
+        })
+
+      {:ok, state} = PlanEditor.from_plan(plan, :level_1a)
+      {:ok, state} = PlanEditor.change_basics(state, %{"name" => "Renamed"})
+
+      [block] = state.form_plan.blocks
+      [set] = block.sets
+
+      assert state.input.name == "Renamed"
+      assert state.form_plan.name == "Renamed"
+      assert set.burpee_count == 10
+      assert set.sec_per_rep == 7.5
+      assert set.end_of_set_rest == 45
+    end
+
     test "change_basics updates input then regenerates" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
 
@@ -346,6 +476,73 @@ defmodule BurpeeTrainer.PlanEditorTest do
 
       assert MapSet.member?(state.locked_block_indexes, 0)
       assert state.manual_edit?
+    end
+
+    test "change_basics preserves locked block contents while regenerating" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      locked_block = state.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      edited_block = %{locked_block | sets: [%{hd(locked_block.sets) | burpee_count: 17}]}
+
+      state = %{
+        state
+        | form_plan: %{state.form_plan | blocks: [edited_block]},
+          locked_block_indexes: MapSet.new([0]),
+          manual_edit?: true
+      }
+
+      {:ok, changed} =
+        PlanEditor.change_basics(state, %{
+          "target_duration_min" => "25",
+          "burpee_count_target" => "120"
+        })
+
+      [first_block | _] = Enum.sort_by(changed.form_plan.blocks, & &1.position)
+
+      assert hd(first_block.sets).burpee_count == 17
+      assert MapSet.member?(changed.locked_block_indexes, 0)
+      assert changed.manual_edit?
+    end
+
+    test "change_basics preserves locked block repeat count in matching steps" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      [locked_block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
+      edited_block = %{locked_block | repeat_count: 7}
+
+      steps =
+        Enum.map(state.form_plan.steps || [], fn
+          %{kind: :block_run, block_position: position} = step
+          when position == locked_block.position ->
+            %{step | repeat_count: 7}
+
+          step ->
+            step
+        end)
+
+      state = %{
+        state
+        | form_plan: %{state.form_plan | blocks: [edited_block], steps: steps},
+          locked_block_indexes: MapSet.new([0]),
+          manual_edit?: true
+      }
+
+      {:ok, changed} =
+        PlanEditor.change_basics(state, %{
+          "target_duration_min" => "25",
+          "burpee_count_target" => "120"
+        })
+
+      [first_block | _] = Enum.sort_by(changed.form_plan.blocks, & &1.position)
+      [first_step | _] = Enum.sort_by(changed.form_plan.steps || [], & &1.position)
+
+      assert first_block.repeat_count == 7
+      assert first_step.repeat_count == 7
+
+      assert BurpeeTrainer.Planner.summary(changed.form_plan).burpee_count_total ==
+               hd(first_block.sets).burpee_count * 7
     end
 
     test "rebalance_unlocked_blocks/1 preserves locked block positions" do
@@ -380,15 +577,58 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert state.manual_edit? == true
     end
 
-    test "copy_block returns manual state with another block" do
+    test "copy_block clears copied ids and schedules the duplicate" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
       {:ok, state} = PlanEditor.regenerate(state)
+
+      form_plan =
+        state.form_plan
+        |> Map.update!(:blocks, fn blocks ->
+          blocks
+          |> Enum.with_index(1)
+          |> Enum.map(fn {block, id} ->
+            sets =
+              block.sets
+              |> Enum.with_index(1)
+              |> Enum.map(fn {set, set_id} -> %{set | id: set_id, block_id: id} end)
+
+            %{block | id: id, plan_id: 123, sets: sets}
+          end)
+        end)
+
+      state = %{state | form_plan: form_plan}
       block_count = length(state.form_plan.blocks)
+      step_count = length(state.form_plan.steps)
 
       {:ok, state} = PlanEditor.copy_block(state, "0")
 
       assert state.manual_edit? == true
       assert length(state.form_plan.blocks) == block_count + 1
+      assert length(state.form_plan.steps) == step_count + 1
+
+      copied_block = state.form_plan.blocks |> Enum.sort_by(& &1.position) |> List.last()
+      copied_step = state.form_plan.steps |> Enum.sort_by(& &1.position) |> List.last()
+
+      assert copied_block.id == nil
+      assert copied_block.plan_id == nil
+      assert Enum.all?(copied_block.sets, &is_nil(&1.id))
+      assert copied_step.kind == :block_run
+      assert copied_step.block_position == copied_block.position
+      assert copied_step.repeat_count == 1
+    end
+
+    test "change_basics preserves unscheduled manual edits such as duplicated blocks" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+      {:ok, state} = PlanEditor.copy_block(state, "0")
+      block_count = length(state.form_plan.blocks)
+      step_count = length(state.form_plan.steps)
+
+      {:ok, state} = PlanEditor.change_basics(state, %{"target_duration_min" => "25"})
+
+      assert length(state.form_plan.blocks) == block_count
+      assert length(state.form_plan.steps) == step_count
+      assert state.manual_edit?
     end
 
     test "copy_set returns manual state with another set" do

@@ -23,7 +23,7 @@ assert.deepEqual(result.commands, [{ type: "renderPrompt" }]);
 
 result = flowTransition(result.state, { type: "WARMUP_SKIP" });
 assert.equal(result.state.mode, "workout_ready_prompt");
-assert.deepEqual(result.commands, [{ type: "showWarmupDonePrompt" }]);
+assert.deepEqual(result.commands, [{ type: "showWorkoutReadyPrompt" }]);
 
 result = flowTransition(result.state, { type: "WORKOUT_READY" });
 assert.equal(result.state.mode, "workout_countdown");

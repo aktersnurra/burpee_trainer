@@ -298,6 +298,68 @@ defmodule BurpeeTrainer.WorkoutsTest do
   end
 
   describe "sessions" do
+    test "create_session_from_plan/3 derives planned fields from the plan" do
+      user = user_fixture()
+
+      plan =
+        plan_fixture(user, %{
+          "burpee_type" => "navy_seal",
+          "blocks" => [
+            %{
+              "position" => 1,
+              "repeat_count" => 1,
+              "sets" => [
+                %{
+                  "position" => 1,
+                  "burpee_count" => 4,
+                  "sec_per_rep" => 10.0,
+                  "sec_per_burpee" => 10.0,
+                  "end_of_set_rest" => 5
+                }
+              ]
+            }
+          ]
+        })
+
+      {:ok, session} =
+        Workouts.create_session_from_plan(user, plan, %{
+          "burpee_type" => "six_count",
+          "burpee_count_planned" => "999",
+          "duration_sec_planned" => "999",
+          "burpee_count_actual" => "4",
+          "duration_sec_actual" => "45"
+        })
+
+      assert session.burpee_type == :navy_seal
+      assert session.burpee_count_planned == 4
+      assert session.duration_sec_planned == 45
+    end
+
+    test "create_session_from_plan/3 rejects another user's plan" do
+      alice = user_fixture()
+      bob = user_fixture()
+      bob_plan = plan_fixture(bob)
+
+      assert {:error, :not_found} =
+               Workouts.create_session_from_plan(alice, bob_plan, %{
+                 "burpee_count_actual" => "30",
+                 "duration_sec_actual" => "90"
+               })
+    end
+
+    test "create_tracked_session_from_plan/3 rejects another user's plan" do
+      alice = user_fixture()
+      bob = user_fixture()
+      bob_plan = plan_fixture(bob)
+
+      assert {:error, :not_found} =
+               Workouts.create_tracked_session_from_plan(alice, bob_plan, %{
+                 "burpee_count_actual" => "3",
+                 "duration_sec_actual" => "15",
+                 "cadence_ms" => [5000, 10000, 15000]
+               })
+    end
+
     test "create_session_from_plan/3 persists planned + actual fields" do
       user = user_fixture()
       plan = plan_fixture(user)

@@ -145,6 +145,29 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "[data-home-weekly-split]")
   end
 
+  test "catch-up panel stays hidden before the weekend", %{conn: conn, user: user} do
+    previous_today = Application.get_env(:burpee_trainer, :today_override)
+    tuesday = Date.utc_today() |> Date.beginning_of_week(:monday) |> Date.add(1)
+    Application.put_env(:burpee_trainer, :today_override, tuesday)
+
+    on_exit(fn ->
+      if previous_today,
+        do: Application.put_env(:burpee_trainer, :today_override, previous_today),
+        else: Application.delete_env(:burpee_trainer, :today_override)
+    end)
+
+    free_form_session_fixture(user, %{
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 150,
+      "duration_sec_actual" => 1200
+    })
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    refute has_element?(view, "#home-catch-up-panel")
+    refute render(view) =~ "Finish the week"
+  end
+
   test "catch-up panel suggests goal-free sessions for logged types and creates plans", %{
     conn: conn,
     user: user

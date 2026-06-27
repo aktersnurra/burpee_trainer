@@ -18,6 +18,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   alias BurpeeTrainer.{Levels, Workouts}
   alias BurpeeTrainer.{PlanEditor, PlanPresentation, PlanSolver, PrescriptionGraph}
+  alias BurpeeTrainer.PlanEditor.Derived
   alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
@@ -36,6 +37,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
      |> assign(:expanded_blocks, MapSet.new())
      |> assign(:expanded_timeline_row, nil)
      |> assign(:open_block_menu, nil)
+     |> assign(:rest_prompt, nil)
      |> assign(:level, level)
      |> assign(:manual_edit, false)
      |> assign(:creator_phase, if(socket.assigns.live_action == :new, do: :intent, else: :editor))
@@ -128,21 +130,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp regenerate(socket) do
     {:ok, editor} = PlanEditor.regenerate(socket.assigns.editor)
 
-    socket = put_editor(socket, editor)
+    socket
+    |> put_editor(editor)
+    |> assign_form_from_editor()
+  end
 
-    if editor.solver_solution do
-      base = editor.plan || %WorkoutPlan{}
+  defp assign_form_from_editor(
+         %{assigns: %{editor: %{form_plan: %WorkoutPlan{} = form_plan}}} = socket
+       ) do
+    base = socket.assigns.editor.plan || %WorkoutPlan{}
+    changeset = change_form_plan(base, plan_to_attrs(form_plan))
 
-      changeset =
-        Workouts.change_plan(%{base | blocks: []}, plan_to_attrs(editor.solver_solution.plan))
+    assign(socket, :form, to_form(changeset))
+  end
 
-      assign(socket, :form, to_form(changeset))
-    else
-      existing_form =
-        socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+  defp assign_form_from_editor(socket) do
+    existing_form =
+      socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
 
-      assign(socket, :form, existing_form)
-    end
+    assign(socket, :form, existing_form)
   end
 
   attr(:plan, :any, default: nil)
@@ -284,14 +290,135 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp insert_rest_step(steps, edge_index, rest_sec) do
     sorted_steps = Enum.sort_by(steps || [], & &1.position)
-    insert_at = max(edge_index, 0)
-    {before_steps, after_steps} = Enum.split(sorted_steps, insert_at)
+    total_executions = block_execution_count(sorted_steps)
 
-    before_steps
-    |> Kernel.++([%BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}])
-    |> Kernel.++(after_steps)
-    |> merge_adjacent_rest_steps()
-    |> reposition_steps()
+    if edge_index <= 0 or edge_index >= total_executions do
+      reposition_steps(sorted_steps)
+    else
+      rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
+
+      sorted_steps
+      |> insert_rest_after_execution(edge_index, rest_step, [], 0)
+      |> merge_adjacent_rest_steps()
+      |> reposition_steps()
+    end
+  end
+
+  defp block_execution_count(steps) do
+    steps
+    |> Enum.filter(&match?(%{kind: :block_run}, &1))
+    |> Enum.reduce(0, fn step, total -> total + max(step.repeat_count || 1, 1) end)
+  end
+
+  defp insert_rest_after_execution([], _edge_index, _rest_step, acc, _executions_seen),
+    do: Enum.reverse(acc)
+
+  defp insert_rest_after_execution(
+         [%{kind: :block_run} = step | remaining],
+         edge_index,
+         rest_step,
+         acc,
+         executions_seen
+       ) do
+    repeat_count = max(step.repeat_count || 1, 1)
+    next_seen = executions_seen + repeat_count
+
+    cond do
+      edge_index > executions_seen and edge_index < next_seen ->
+        before_count = edge_index - executions_seen
+        after_count = repeat_count - before_count
+
+        split_steps = [
+          %{step | repeat_count: before_count},
+          rest_step,
+          %{step | id: nil, repeat_count: after_count}
+        ]
+
+        Enum.reverse(acc) ++ split_steps ++ remaining
+
+      edge_index == next_seen ->
+        Enum.reverse(acc) ++ [step, rest_step] ++ remaining
+
+      true ->
+        insert_rest_after_execution(remaining, edge_index, rest_step, [step | acc], next_seen)
+    end
+  end
+
+  defp insert_rest_after_execution(
+         [step | remaining],
+         edge_index,
+         rest_step,
+         acc,
+         executions_seen
+       ) do
+    insert_rest_after_execution(remaining, edge_index, rest_step, [step | acc], executions_seen)
+  end
+
+  defp recalibrate_plan_to_target(%WorkoutPlan{} = plan, target_sec)
+       when is_number(target_sec) and target_sec > 0 do
+    steps = ensure_block_run_steps(plan.steps, plan.blocks)
+    blocks_by_position = Map.new(plan.blocks || [], &{&1.position, &1})
+
+    explicit_rest_sec =
+      Enum.reduce(steps, 0, fn
+        %{kind: :rest, rest_sec: rest_sec}, total -> total + (rest_sec || 0)
+        _step, total -> total
+      end)
+
+    {total_reps, set_rest_sec} =
+      Enum.reduce(steps, {0, 0}, fn
+        %{kind: :block_run, block_position: block_position, repeat_count: repeat_count},
+        {reps_total, rest_total} ->
+          block = Map.get(blocks_by_position, block_position)
+          repeat_count = max(repeat_count || 1, 1)
+
+          {
+            reps_total + block_reps(block) * repeat_count,
+            rest_total + block_set_rest(block) * repeat_count
+          }
+
+        _step, acc ->
+          acc
+      end)
+
+    available_work_sec = target_sec - explicit_rest_sec - set_rest_sec
+
+    if total_reps > 0 and available_work_sec > 0 do
+      cadence = available_work_sec / total_reps
+      %{plan | blocks: recalibrate_blocks(plan.blocks, cadence)}
+    else
+      plan
+    end
+  end
+
+  defp recalibrate_plan_to_target(plan, _target_sec), do: plan
+
+  defp recalibrate_blocks(blocks, cadence) do
+    Enum.map(blocks || [], fn block ->
+      sets =
+        Enum.map(block.sets || [], fn set ->
+          sec_per_burpee =
+            if is_number(set.sec_per_burpee), do: min(set.sec_per_burpee, cadence), else: cadence
+
+          %{set | sec_per_rep: cadence, sec_per_burpee: sec_per_burpee}
+        end)
+
+      %{block | sets: sets}
+    end)
+  end
+
+  defp block_reps(nil), do: 0
+
+  defp block_reps(block) do
+    block.sets
+    |> Enum.reduce(0, fn set, total -> total + (set.burpee_count || 0) end)
+  end
+
+  defp block_set_rest(nil), do: 0
+
+  defp block_set_rest(block) do
+    block.sets
+    |> Enum.reduce(0, fn set, total -> total + (set.end_of_set_rest || 0) end)
   end
 
   defp place_rest_step_at_target_min(steps, blocks, target_min, rest_sec) do
@@ -487,6 +614,270 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> Enum.map(fn {step, position} -> %{step | position: position} end)
   end
 
+  defp update_block_from_sheet(blocks, block_index, block_params) do
+    blocks =
+      if is_map(Map.get(block_params, "sets")) do
+        update_block_sets(blocks, block_index, Map.get(block_params, "sets"))
+      else
+        set_params = %{
+          "burpee_count" => Map.get(block_params, "reps"),
+          "sec_per_rep" => Map.get(block_params, "sec_per_rep"),
+          "end_of_set_rest" => Map.get(block_params, "rest_sec")
+        }
+
+        update_timeline_block(blocks, block_index, set_params)
+      end
+
+    update_block_repeat_count(blocks, block_index, Map.get(block_params, "repeat_count"))
+  end
+
+  defp update_segment_from_sheet(%WorkoutPlan{} = form_plan, source_block_index, block_params) do
+    case parse_positive_integer(Map.get(block_params, "step_position")) do
+      {:ok, step_position} ->
+        steps = ensure_block_run_steps(form_plan.steps, form_plan.blocks)
+
+        {blocks, steps, block_index} =
+          detach_block_segment(form_plan.blocks, steps, source_block_index, step_position)
+
+        blocks = update_block_from_sheet(blocks, block_index, block_params)
+        updated_block = blocks |> Enum.sort_by(&(&1.position || 0)) |> Enum.at(block_index)
+
+        steps =
+          update_step_repeat_count(
+            steps,
+            updated_block && updated_block.position,
+            updated_block && updated_block.repeat_count,
+            step_position
+          )
+
+        %{form_plan | blocks: blocks, steps: steps}
+
+      :error ->
+        blocks = update_block_from_sheet(form_plan.blocks, source_block_index, block_params)
+        updated_block = blocks |> Enum.sort_by(&(&1.position || 0)) |> Enum.at(source_block_index)
+
+        steps =
+          update_step_repeat_count(
+            form_plan.steps,
+            updated_block && updated_block.position,
+            updated_block && updated_block.repeat_count
+          )
+
+        %{form_plan | blocks: blocks, steps: steps}
+    end
+  end
+
+  defp selected_source_block_index(%WorkoutPlan{} = form_plan, block_params, fallback_index) do
+    with {:ok, step_position} <- parse_positive_integer(Map.get(block_params, "step_position")),
+         %{kind: :block_run, block_position: block_position} <-
+           Enum.find(
+             form_plan.steps || [],
+             &(&1.position == step_position and &1.kind == :block_run)
+           ),
+         index when is_integer(index) <-
+           form_plan.blocks
+           |> Enum.sort_by(&(&1.position || 0))
+           |> Enum.find_index(&(&1.position == block_position)) do
+      index
+    else
+      _ -> fallback_index
+    end
+  end
+
+  defp detach_block_segment(blocks, steps, source_block_index, step_position) do
+    blocks = Enum.sort_by(blocks || [], &(&1.position || 0))
+    steps = Enum.sort_by(steps || [], &(&1.position || 0))
+    block = Enum.at(blocks, source_block_index)
+    target_step = Enum.find(steps, &(&1.position == step_position and &1.kind == :block_run))
+
+    if block && target_step && target_step.block_position == block.position &&
+         shared_block_run?(steps, block.position) do
+      cloned_position = next_block_position_from_blocks(blocks)
+      cloned_block = clone_block_for_segment(block, cloned_position, target_step.repeat_count)
+
+      steps =
+        Enum.map(steps, fn
+          %{kind: :block_run, position: ^step_position} = step ->
+            %{step | block_position: cloned_position}
+
+          step ->
+            step
+        end)
+
+      {blocks ++ [cloned_block], steps, length(blocks)}
+    else
+      {blocks, steps, source_block_index}
+    end
+  end
+
+  defp shared_block_run?(steps, block_position) do
+    steps
+    |> Enum.count(&(&1.kind == :block_run and &1.block_position == block_position))
+    |> Kernel.>(1)
+  end
+
+  defp next_block_position_from_blocks(blocks) when is_list(blocks) do
+    blocks
+    |> Enum.map(&(&1.position || 0))
+    |> Enum.max(fn -> 0 end)
+    |> Kernel.+(1)
+  end
+
+  defp clone_block_for_segment(block, position, repeat_count) do
+    sets =
+      block.sets
+      |> Enum.sort_by(&(&1.position || 0))
+      |> Enum.with_index(1)
+      |> Enum.map(fn {set, set_position} ->
+        %{
+          set
+          | id: nil,
+            block_id: nil,
+            position: set_position,
+            inserted_at: nil,
+            updated_at: nil
+        }
+      end)
+
+    %{
+      block
+      | id: nil,
+        plan_id: nil,
+        position: position,
+        repeat_count: repeat_count || block.repeat_count || 1,
+        sets: sets,
+        inserted_at: nil,
+        updated_at: nil
+    }
+  end
+
+  defp parse_positive_integer(value) do
+    case Integer.parse(to_string(value || "")) do
+      {parsed, ""} when parsed > 0 -> {:ok, parsed}
+      _ -> :error
+    end
+  end
+
+  defp update_step_repeat_count(steps, block_position, repeat_count, step_position)
+       when is_list(steps) and is_integer(block_position) and is_integer(repeat_count) and
+              is_integer(step_position) do
+    Enum.map(steps, fn
+      %{kind: :block_run, position: ^step_position, block_position: ^block_position} = step ->
+        %{step | repeat_count: repeat_count}
+
+      step ->
+        step
+    end)
+  end
+
+  defp update_step_repeat_count(steps, block_position, repeat_count)
+       when is_list(steps) and is_integer(block_position) and is_integer(repeat_count) do
+    Enum.map(steps, fn
+      %{kind: :block_run, block_position: ^block_position} = step ->
+        %{step | repeat_count: repeat_count}
+
+      step ->
+        step
+    end)
+  end
+
+  defp update_step_repeat_count(steps, _block_position, _repeat_count), do: steps
+
+  defp update_block_sets(blocks, block_index, sets_params) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Enum.map(fn {block, idx} ->
+      if idx == block_index do
+        sets =
+          block.sets
+          |> Enum.sort_by(& &1.position)
+          |> Enum.with_index()
+          |> Enum.map(fn {set, set_idx} ->
+            params = Map.get(sets_params, Integer.to_string(set_idx), %{})
+
+            %{
+              set
+              | position: set_idx + 1,
+                burpee_count:
+                  parse_positive_integer_or(Map.get(params, "burpee_count"), set.burpee_count),
+                sec_per_rep: parse_float_or(Map.get(params, "sec_per_rep"), set.sec_per_rep),
+                sec_per_burpee:
+                  parse_float_or(
+                    Map.get(params, "sec_per_burpee") || Map.get(params, "sec_per_rep"),
+                    set.sec_per_burpee
+                  ),
+                end_of_set_rest:
+                  parse_non_negative_integer_or(
+                    Map.get(params, "end_of_set_rest"),
+                    set.end_of_set_rest
+                  )
+            }
+          end)
+
+        %{block | sets: sets}
+      else
+        block
+      end
+    end)
+  end
+
+  defp update_block_repeat_count(blocks, block_index, repeat_count) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Enum.map(fn {block, idx} ->
+      if idx == block_index do
+        %{block | repeat_count: parse_positive_integer_or(repeat_count, block.repeat_count || 1)}
+      else
+        block
+      end
+    end)
+  end
+
+  defp update_timeline_block(blocks, block_index, set_params) do
+    blocks
+    |> Enum.sort_by(& &1.position)
+    |> Enum.with_index()
+    |> Enum.map(fn {block, idx} ->
+      if idx == block_index do
+        sets = Enum.sort_by(block.sets || [], & &1.position)
+
+        case List.first(sets) do
+          nil ->
+            block
+
+          first_set ->
+            set = %{
+              first_set
+              | position: 1,
+                burpee_count:
+                  parse_positive_integer_or(
+                    Map.get(set_params, "burpee_count"),
+                    Enum.reduce(sets, 0, &((&1.burpee_count || 0) + &2))
+                  ),
+                sec_per_rep:
+                  parse_float_or(Map.get(set_params, "sec_per_rep"), first_set.sec_per_rep),
+                sec_per_burpee:
+                  parse_float_or(
+                    Map.get(set_params, "sec_per_burpee") || Map.get(set_params, "sec_per_rep"),
+                    first_set.sec_per_burpee
+                  ),
+                end_of_set_rest:
+                  parse_non_negative_integer_or(
+                    Map.get(set_params, "end_of_set_rest"),
+                    List.last(sets).end_of_set_rest
+                  )
+            }
+
+            %{block | sets: [set]}
+        end
+      else
+        block
+      end
+    end)
+  end
+
   defp update_timeline_set(blocks, block_index, set_index, set_params) do
     blocks
     |> Enum.sort_by(& &1.position)
@@ -531,6 +922,52 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end)
   end
 
+  defp rest_placement_edges(steps) do
+    total_executions = block_execution_count(steps)
+
+    {edges, _seen} =
+      steps
+      |> Enum.sort_by(&(&1.position || 0))
+      |> Enum.reduce({[], 0}, fn
+        %{kind: :block_run} = step, {edges, seen} ->
+          repeat_count = max(step.repeat_count || 1, 1)
+
+          step_edges =
+            for offset <- 1..repeat_count,
+                edge_index = seen + offset,
+                edge_index < total_executions do
+              %{
+                edge_index: edge_index,
+                label: "After block #{edge_index} of #{total_executions}",
+                default?: edge_index == max(1, div(total_executions, 2))
+              }
+            end
+
+          {edges ++ step_edges, seen + repeat_count}
+
+        _step, acc ->
+          acc
+      end)
+
+    edges
+  end
+
+  defp ensure_block_run_steps(steps, _blocks) when is_list(steps) and steps != [], do: steps
+
+  defp ensure_block_run_steps(_steps, blocks) do
+    blocks
+    |> Enum.sort_by(&(&1.position || 0))
+    |> Enum.with_index(1)
+    |> Enum.map(fn {block, position} ->
+      %BurpeeTrainer.Workouts.PlanStep{
+        position: position,
+        kind: :block_run,
+        block_position: block.position || position,
+        repeat_count: block.repeat_count || 1
+      }
+    end)
+  end
+
   defp parse_positive_integer_or(value, fallback) do
     case Integer.parse(to_string(value || "")) do
       {parsed, ""} when parsed > 0 -> parsed
@@ -565,7 +1002,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {derived, form_plan} =
       try do
         form_plan = Ecto.Changeset.apply_changes(changeset)
-        {PlanEditor.derived(form_plan, socket.assigns.editor.input), form_plan}
+
+        if socket.assigns.solver_error do
+          {%Derived{}, form_plan}
+        else
+          {PlanEditor.derived(form_plan, socket.assigns.editor.input), form_plan}
+        end
       rescue
         e ->
           require Logger
@@ -633,6 +1075,81 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, assign(socket, :creator_difficulty, difficulty)}
   end
 
+  def handle_event("set_pace_bias", %{"bias" => bias}, socket) do
+    bias =
+      case to_string(bias) do
+        "1" -> "slower"
+        "2" -> "balanced"
+        "3" -> "faster"
+        other -> other
+      end
+
+    case PlanEditor.set_pace_bias(socket.assigns.editor, bias) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
+
+        {:noreply, socket}
+
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("set_load_shape", %{"shape" => shape}, socket) do
+    case PlanEditor.set_load_shape(socket.assigns.editor, shape) do
+      {:ok, editor} ->
+        socket =
+          socket
+          |> put_editor(editor)
+          |> regenerate()
+          |> assign_derived()
+
+        {:noreply, socket}
+
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("set_structure_mode", %{"mode" => "auto"}, socket) do
+    input = socket.assigns.editor.input
+
+    editor = %{
+      socket.assigns.editor
+      | input: %{input | block_pattern: nil, manual_structure?: false}
+    }
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("set_structure_mode", %{"mode" => "pattern"}, socket) do
+    input = socket.assigns.editor.input
+    pattern = default_pattern(input)
+
+    editor = %{
+      socket.assigns.editor
+      | input: %{input | block_pattern: pattern, manual_structure?: true}
+    }
+
+    socket =
+      socket
+      |> put_editor(editor)
+      |> regenerate()
+      |> assign_derived()
+
+    {:noreply, socket}
+  end
+
   def handle_event("generate_workout", _params, socket) do
     {:noreply, assign(socket, :creator_phase, :review)}
   end
@@ -643,8 +1160,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   def handle_event("select_block", %{"index" => index}, socket) do
     case PlanEditor.select_block(socket.assigns.editor, index) do
-      {:ok, editor} -> {:noreply, put_editor(socket, editor)}
-      {:error, _reason, _state} -> {:noreply, socket}
+      {:ok, editor} ->
+        editor = %{editor | open_block_menu: nil}
+        {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, nil)}
+
+      {:error, _reason, _state} ->
+        {:noreply, socket}
     end
   end
 
@@ -680,17 +1201,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     with {:ok, source_block_index} <-
            parse_non_negative_index(Map.get(block_params, "source_block_index")),
          true <- source_block_index < length(form_plan.blocks) do
-      set_params = %{
-        "burpee_count" => Map.get(block_params, "reps"),
-        "sec_per_rep" => Map.get(block_params, "sec_per_rep"),
-        "end_of_set_rest" => Map.get(block_params, "rest_sec")
-      }
-
-      blocks = update_timeline_set(form_plan.blocks, source_block_index, 0, set_params)
-      form_plan = %{form_plan | blocks: blocks}
+      form_plan = update_segment_from_sheet(form_plan, source_block_index, block_params)
       editor = %{socket.assigns.editor | form_plan: form_plan, manual_edit?: true}
+      lock_index = selected_source_block_index(form_plan, block_params, source_block_index)
 
-      case PlanEditor.lock_block(editor, Integer.to_string(source_block_index)) do
+      case PlanEditor.lock_block(editor, Integer.to_string(lock_index)) do
         {:ok, editor} -> validate_editor_form(socket, editor)
         {:error, _reason, _state} -> {:noreply, socket}
       end
@@ -710,7 +1225,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     socket =
       socket
       |> put_editor(editor)
-      |> regenerate()
+      |> assign_form_from_editor()
       |> assign_derived()
 
     {:noreply, socket}
@@ -763,7 +1278,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("add_pattern_set", _params, socket) do
     input = socket.assigns.editor.input
     pattern = default_pattern(input)
-    editor = %{socket.assigns.editor | input: %{input | block_pattern: pattern ++ [1]}}
+
+    editor = %{
+      socket.assigns.editor
+      | input: %{input | block_pattern: pattern ++ [1], manual_structure?: true}
+    }
 
     socket =
       socket
@@ -779,18 +1298,22 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     pattern = default_pattern(input)
 
     next_pattern =
-      if length(pattern) > 1 do
+      with {:ok, index} <- parse_non_negative_index(index),
+           true <- length(pattern) > 1 do
         pattern
-        |> List.delete_at(String.to_integer(index))
+        |> List.delete_at(index)
         |> case do
           [] -> [1]
           pattern -> pattern
         end
       else
-        pattern
+        _ -> pattern
       end
 
-    editor = %{socket.assigns.editor | input: %{input | block_pattern: next_pattern}}
+    editor = %{
+      socket.assigns.editor
+      | input: %{input | block_pattern: next_pattern, manual_structure?: true}
+    }
 
     socket =
       socket
@@ -801,13 +1324,44 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     {:noreply, socket}
   end
 
-  def handle_event("add_rest", _, socket) do
-    {:ok, editor} = PlanEditor.add_rest(socket.assigns.editor)
+  def handle_event("add_rest", _params, socket), do: open_rest_prompt(socket)
+
+  def handle_event("open_rest_prompt", _params, socket), do: open_rest_prompt(socket)
+
+  def handle_event("close_rest_prompt", _params, socket),
+    do: {:noreply, assign(socket, :rest_prompt, nil)}
+
+  def handle_event("insert_prompted_rest", %{"rest" => rest_params}, socket) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
+    edge_index = parse_non_negative_integer_or(Map.get(rest_params, "edge_index"), 1)
+
+    steps =
+      form_plan.steps
+      |> ensure_block_run_steps(form_plan.blocks)
+      |> insert_rest_step(edge_index, rest_sec)
+
+    form_plan =
+      form_plan
+      |> Map.put(:steps, steps)
+      |> recalibrate_plan_to_target(socket.assigns.editor.input.target_duration_min * 60)
+
+    editor = %{
+      socket.assigns.editor
+      | form_plan: form_plan,
+        manual_edit?: true,
+        open_block_menu: nil
+    }
+
+    attrs = form_plan |> plan_to_attrs() |> Map.put("steps", steps_to_attrs(steps))
+    base_plan = socket.assigns.plan || form_plan
+    changeset = change_form_plan(base_plan, attrs) |> Map.put(:action, :validate)
 
     socket =
       socket
       |> put_editor(editor)
-      |> regenerate()
+      |> assign(:form, to_form(changeset))
+      |> assign(:rest_prompt, nil)
       |> assign_derived()
 
     {:noreply, socket}
@@ -1000,6 +1554,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("copy_block", %{"index" => idx_str}, socket) do
     case PlanEditor.copy_block(socket.assigns.editor, idx_str) do
       {:ok, editor} ->
+        editor = %{editor | open_block_menu: nil}
         validate_editor_form(socket, editor)
 
       {:error, _reason, _state} ->
@@ -1140,6 +1695,33 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  defp open_rest_prompt(socket) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+    edges =
+      form_plan.steps
+      |> ensure_block_run_steps(form_plan.blocks)
+      |> rest_placement_edges()
+
+    default_edge =
+      edges
+      |> Enum.find(& &1.default?)
+      |> case do
+        %{edge_index: edge_index} ->
+          edge_index
+
+        _missing ->
+          edges
+          |> List.first()
+          |> case do
+            %{edge_index: edge_index} -> edge_index
+            _none -> nil
+          end
+      end
+
+    {:noreply, assign(socket, :rest_prompt, %{rest_sec: 30, edge_index: default_edge})}
+  end
+
   defp validate_editor_form(socket, editor) do
     params = %{
       "blocks" => blocks_to_attrs(editor.form_plan.blocks),
@@ -1256,6 +1838,35 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp format_sec(v), do: v
 
+  defp structure_pattern(%{block_pattern: pattern}) when is_list(pattern) and pattern != [],
+    do: pattern
+
+  defp structure_pattern(plan_input), do: default_pattern(plan_input)
+
+  defp structure_summary(%{manual_structure?: true, burpee_count_target: target} = plan_input) do
+    pattern = structure_pattern(plan_input)
+    reps_per_block = Enum.sum(pattern)
+
+    block_text =
+      cond do
+        reps_per_block <= 0 ->
+          "Choose a pattern"
+
+        rem(target, reps_per_block) == 0 ->
+          "#{div(target, reps_per_block)} #{plural(div(target, reps_per_block), "block")} for #{target} reps"
+
+        true ->
+          "#{div(target, reps_per_block)} full #{plural(div(target, reps_per_block), "block")} + #{rem(target, reps_per_block)} reps"
+      end
+
+    "#{reps_per_block} reps per block · #{block_text}"
+  end
+
+  defp structure_summary(_plan_input), do: "Planner chooses readable blocks."
+
+  defp plural(1, word), do: word
+  defp plural(_count, word), do: word <> "s"
+
   # ---------------------------------------------------------------------------
   # Render
   # ---------------------------------------------------------------------------
@@ -1277,6 +1888,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:creator_advanced?, :boolean, default: false)
   attr(:selected_block_index, :integer, default: nil)
   attr(:locked_block_indexes, :any, default: MapSet.new())
+  attr(:rest_prompt, :map, default: nil)
 
   defp plan_solution_card(assigns) do
     form_plan = Ecto.Changeset.apply_changes(assigns.form.source)
@@ -1287,6 +1899,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       |> Presentation.contract(assigns.derived)
       |> Map.merge(%{
         block_rows: block_rows,
+        structure_rows: Presentation.structure_rows(form_plan, block_rows),
         structure_map: Presentation.structure_map(block_rows),
         structure_groups: Presentation.structure_groups(block_rows)
       })
@@ -1327,6 +1940,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       )
       |> assign(:timeline_rows, timeline_rows)
       |> assign(:timeline_rest_edges, timeline_rest_edges)
+      |> assign(
+        :rest_placement_edges,
+        rest_placement_edges(ensure_block_run_steps(steps, form_plan.blocks))
+      )
 
     assigns = assign(assigns, :selected_timeline_row, selected_timeline_row(assigns))
 
@@ -1380,34 +1997,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     }
   end
 
-  defp plan_feedback(nil, solver_error, _derived, plan_input) when is_binary(solver_error) do
-    %{
-      title: "This cannot fit in #{Fmt.duration_sec(plan_input.target_duration_min * 60)}",
-      message: "The locked blocks and rests exceed the duration.",
-      actions: ["Show locked blocks", "Unlock all", "Allow longer workout", "Undo"]
-    }
-  end
-
-  defp plan_feedback(nil, nil, %{both_ok: false} = derived, plan_input) do
-    over_by = max(0, round(derived.duration_sec - plan_input.target_duration_min * 60))
-
-    message =
-      if over_by > 0 do
-        "You are #{Fmt.duration_sec(over_by)} over."
-      else
-        "Reps are #{derived.burpee_count}, target is #{plan_input.burpee_count_target}."
-      end
-
-    %{
-      title: "Workout no longer fits #{Fmt.duration_sec(plan_input.target_duration_min * 60)}",
-      message: message,
-      actions: [
-        "Rebalance unlocked blocks",
-        "Keep #{Fmt.duration_sec(round(derived.duration_sec))}",
-        "Undo change"
-      ]
-    }
-  end
+  defp plan_feedback(nil, solver_error, derived, plan_input),
+    do: Presentation.plan_feedback(solver_error, derived, plan_input)
 
   defp plan_feedback(_timeline_error, _solver_error, _derived, _plan_input), do: nil
 
@@ -1419,9 +2010,9 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     ~H"""
     <.qs_surface class="bg-[var(--session-surface)]/55 px-5 py-5">
       <div class="flex items-start justify-between gap-4">
-        <form phx-change="change_basics" class="min-w-0 flex-1 space-y-2">
+        <form id="workout-name-form" phx-change="change_basics" class="min-w-0 flex-1 space-y-2">
           <label class="text-sm font-medium text-[var(--session-muted)]">
-            Custom workout
+            {if @live_action == :new, do: "Workout name", else: "Custom workout"}
           </label>
           <input
             type="text"
@@ -1466,8 +2057,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         class={[
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :six_count,
-            do:
-              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
+            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
             else:
               "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
@@ -1483,8 +2073,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
         class={[
           "flex-1 py-3 text-sm font-medium tracking-wide transition",
           if(@plan_input.burpee_type == :navy_seal,
-            do:
-              "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
+            do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
             else:
               "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
           )
@@ -1497,48 +2086,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   attr(:plan_input, :map, required: true)
-  attr(:level, :atom, required: true)
-
-  defp plan_goal_controls(assigns) do
-    ~H"""
-    <form
-      id="plan-goal-controls"
-      phx-change="change_basics"
-      class="grid grid-cols-2 bg-[var(--session-surface)]/40"
-    >
-      <div class="border-r border-[var(--session-border)] p-5">
-        <p class="mb-3 text-xs font-medium text-[var(--session-muted)]">Duration</p>
-        <div class="flex items-baseline gap-1">
-          <input
-            type="number"
-            name="target_duration_min"
-            min="1"
-            max="120"
-            value={@plan_input.target_duration_min}
-            class="w-full bg-transparent text-5xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)] focus:outline-none"
-          />
-          <span class="text-sm text-[var(--session-muted)]">min</span>
-        </div>
-      </div>
-      <div class="p-5">
-        <p class="mb-3 text-xs font-medium text-[var(--session-muted)]">Goal</p>
-        <input
-          type="number"
-          name="burpee_count_target"
-          min="1"
-          value={@plan_input.burpee_count_target}
-          class="w-full bg-transparent text-5xl font-semibold leading-none tracking-[-0.05em] tabular-nums text-[var(--session-ink)] focus:outline-none"
-        />
-      </div>
-    </form>
-    """
-  end
-
-  attr(:plan_input, :map, required: true)
+  attr(:compact, :boolean, default: false)
 
   defp plan_pacing_controls(assigns) do
     ~H"""
-    <form phx-change="change_basics" class="bg-[var(--session-surface)]/40">
+    <form id="plan-pacing-controls" phx-change="change_basics" class="bg-[var(--session-surface)]/40">
       <div class="flex">
         <button
           type="button"
@@ -1547,8 +2099,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class={[
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :even,
-              do:
-                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
+              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
               else:
                 "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
@@ -1564,25 +2115,25 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           class={[
             "flex-1 py-3 text-sm font-medium tracking-wide transition",
             if(@plan_input.pacing_style == :unbroken,
-              do:
-                "bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)] ring-1 ring-inset ring-[var(--session-toggle-border)]",
+              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
               else:
                 "text-[var(--session-muted)] hover:bg-[var(--session-bg)] hover:text-[var(--session-ink)]"
             )
           ]}
         >
-          Unbroken
+          Unbroken sets
         </button>
       </div>
-      <%= if @plan_input.pacing_style == :unbroken do %>
+      <%= if @plan_input.pacing_style == :unbroken and not @compact do %>
         <div class="flex items-baseline justify-between border-t border-[var(--session-border)] px-6 py-5">
           <div class="space-y-1">
-            <p class="text-sm font-medium text-[var(--session-muted)]">Per set</p>
+            <p class="text-sm font-medium text-[var(--session-muted)]">Max per set</p>
             <div class="flex items-baseline gap-1.5">
               <input
                 type="number"
                 name="reps_per_set"
                 min="1"
+                max={@plan_input.burpee_count_target}
                 value={@plan_input.reps_per_set}
                 class="w-20 bg-transparent text-3xl font-bold leading-none tabular-nums text-[var(--session-ink)] focus:outline-none"
               />
@@ -1590,7 +2141,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
             </div>
           </div>
           <span class="text-sm tabular-nums text-[var(--session-muted)]">
-            → {@plan_input.burpee_count_target |> div(max(1, @plan_input.reps_per_set || 1))} sets
+            {@plan_input.reps_per_set || 1} reps max
             <%= if rem(@plan_input.burpee_count_target, max(1, @plan_input.reps_per_set || 1)) > 0 do %>
               <span class="text-[var(--session-muted)]">+ 1</span>
             <% end %>

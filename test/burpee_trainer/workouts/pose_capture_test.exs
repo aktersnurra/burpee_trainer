@@ -53,6 +53,43 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureTest do
       assert main_chunk.chunk_index == 1
     end
 
+    test "rejects chunks whose sample count does not match payload samples" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      {:ok, run} = Workouts.start_pose_capture_run(user, plan)
+
+      assert {:error, changeset} =
+               Workouts.append_pose_trace_chunk(user, run, %{
+                 "segment" => "main",
+                 "chunk_index" => 0,
+                 "started_at_ms" => 0,
+                 "ended_at_ms" => 3_000,
+                 "sample_count" => 2,
+                 "payload_json" => Jason.encode!(%{"samples" => [%{"tMs" => 0}]})
+               })
+
+      assert %{payload_json: ["sample count must match samples length"]} = errors_on(changeset)
+    end
+
+    test "rejects oversized pose chunk payloads" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      {:ok, run} = Workouts.start_pose_capture_run(user, plan)
+      large_payload = Jason.encode!(%{"samples" => [%{"blob" => String.duplicate("x", 300_000)}]})
+
+      assert {:error, changeset} =
+               Workouts.append_pose_trace_chunk(user, run, %{
+                 "segment" => "main",
+                 "chunk_index" => 0,
+                 "started_at_ms" => 0,
+                 "ended_at_ms" => 3_000,
+                 "sample_count" => 1,
+                 "payload_json" => large_payload
+               })
+
+      assert %{payload_json: ["is too large"]} = errors_on(changeset)
+    end
+
     test "rejects appending chunks to another user's run" do
       owner = user_fixture()
       intruder = user_fixture()

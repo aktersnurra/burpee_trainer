@@ -53,12 +53,18 @@ defmodule BurpeeTrainer.PlanSolver.RecoverySearch do
     auto_reset_total = Enum.reduce(placement.auto_resets, 0, &(&1.duration_sec + &2))
     explicit_total = Enum.reduce(placement.explicit_rests, 0, &(&1.duration_sec + &2))
     recovery_total = normal_gap_count * normal_sec + auto_reset_total + explicit_total
-    sec_per_rep = (input.target_duration_sec - recovery_total) / input.burpee_count_target
+
+    sec_per_rep =
+      input.sec_per_rep_override ||
+        (input.target_duration_sec - recovery_total) / input.burpee_count_target
+
+    duration_sec = recovery_total + sec_per_rep * input.burpee_count_target
 
     %{
       structure: structure,
       set_pattern: set_pattern,
       sec_per_rep: sec_per_rep,
+      duration_error_sec: abs(duration_sec - input.target_duration_sec),
       normal_recovery_sec: normal_sec,
       recoveries: recoveries(set_pattern, normal_sec, placement),
       placement: placement,
@@ -73,9 +79,10 @@ defmodule BurpeeTrainer.PlanSolver.RecoverySearch do
     }
   end
 
-  defp hard_feasible?(candidate, policy) do
+  defp hard_feasible?(%{duration_error_sec: duration_error_sec} = candidate, policy) do
     candidate.sec_per_rep >= policy.hard_fastest_sec_per_rep and
-      candidate.sec_per_rep <= policy.hard_slowest_sec_per_rep
+      candidate.sec_per_rep <= policy.hard_slowest_sec_per_rep and
+      duration_error_sec <= 1.0e-6
   end
 
   defp representative_pace(input, policy) do
@@ -105,23 +112,27 @@ defmodule BurpeeTrainer.PlanSolver.RecoverySearch do
     explicit_by_set = Enum.group_by(placement.explicit_rests, & &1.after_set)
 
     automatic =
-      for after_set <- 1..(length(set_pattern) - 1) do
-        case Map.get(reset_by_set, after_set) do
-          nil ->
-            %Recovery{
-              after_set: after_set,
-              total_sec: normal_sec,
-              kind: :normal,
-              source: :auto_normal
-            }
+      if length(set_pattern) <= 1 do
+        []
+      else
+        for after_set <- 1..(length(set_pattern) - 1) do
+          case Map.get(reset_by_set, after_set) do
+            nil ->
+              %Recovery{
+                after_set: after_set,
+                total_sec: normal_sec,
+                kind: :normal,
+                source: :auto_normal
+              }
 
-          reset ->
-            %Recovery{
-              after_set: after_set,
-              total_sec: reset.duration_sec,
-              kind: :reset,
-              source: {:auto_reset, reset.kind}
-            }
+            reset ->
+              %Recovery{
+                after_set: after_set,
+                total_sec: reset.duration_sec,
+                kind: :reset,
+                source: {:auto_reset, reset.kind}
+              }
+          end
         end
       end
 

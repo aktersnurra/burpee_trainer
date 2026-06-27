@@ -30,7 +30,7 @@ export function flowTransition(state, event) {
 					mode: "workout_ready_prompt",
 					activeSegment: null,
 				},
-				commands: [{ type: "showWarmupDonePrompt" }],
+				commands: [{ type: "showWorkoutReadyPrompt" }],
 			};
 
 		case "WARMUP_READY":

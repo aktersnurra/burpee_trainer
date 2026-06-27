@@ -87,6 +87,59 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Jason.decode!(chunk.payload_json)["samples"] == [%{"tMs" => 0}]
   end
 
+  test "tracked completion discard deletes uploaded pose data", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+
+    render_hook(view, "pose_capture_chunk", %{
+      "segment" => "main",
+      "chunk_index" => 0,
+      "started_at_ms" => 0,
+      "ended_at_ms" => 3_000,
+      "sample_count" => 1,
+      "payload" => %{"version" => 1, "samples" => [%{"tMs" => 0}]}
+    })
+
+    [run] = Repo.all(PoseCaptureRun)
+    assert Repo.preload(run, :pose_trace_chunks).pose_trace_chunks != []
+
+    render_hook(view, "session_complete", %{
+      "main" => %{"burpee_count_done" => 3, "duration_sec" => 15},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
+    })
+
+    view |> element("button[phx-click='discard']", "Discard") |> render_click()
+    assert_redirect(view, ~p"/workouts")
+
+    refute Repo.get(PoseCaptureRun, run.id)
+  end
+
+  test "tracked capture abort button deletes uploaded pose data", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+
+    render_hook(view, "pose_capture_chunk", %{
+      "segment" => "warmup",
+      "chunk_index" => 0,
+      "started_at_ms" => 0,
+      "ended_at_ms" => 3_000,
+      "sample_count" => 1,
+      "payload" => %{"version" => 1, "samples" => [%{"tMs" => 0}]}
+    })
+
+    [run] = Repo.all(PoseCaptureRun)
+    assert Repo.preload(run, :pose_trace_chunks).pose_trace_chunks != []
+
+    view |> element("#session-abort-btn") |> render_click()
+    assert_redirect(view, ~p"/workouts")
+
+    refute Repo.get(PoseCaptureRun, run.id)
+  end
+
   test "tracked capture abort event deletes uploaded pose data", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")

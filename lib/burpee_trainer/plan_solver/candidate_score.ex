@@ -9,9 +9,9 @@ defmodule BurpeeTrainer.PlanSolver.CandidateScore do
       pace_band_violation_ms(candidate.sec_per_rep, policy),
       candidate.explicit_rest_target_error_ms,
       candidate.reset_count_miss,
-      candidate.reset_window_error_ms,
       candidate.structure_shape_penalty,
       candidate.structure_complexity_penalty,
+      candidate.reset_window_error_ms,
       pace_midpoint_error_ms(candidate.sec_per_rep, policy),
       candidate.normal_recovery_preference_error,
       candidate.canonical_tiebreaker

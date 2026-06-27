@@ -160,6 +160,9 @@ const SessionHook = {
 			case "showWarmupDonePrompt":
 				this.showWarmupDonePrompt();
 				break;
+			case "showWorkoutReadyPrompt":
+				this.showWorkoutReadyPrompt();
+				break;
 			case "showCapturePrompt":
 				this.showCapturePrompt();
 				break;
@@ -262,7 +265,58 @@ const SessionHook = {
 		}
 	},
 
-	showWarmupPrompt() {},
+	showWarmupPrompt() {
+		this.renderer.resetReady();
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		this.rafId = null;
+		this.audio.stop();
+		this.startTime = null;
+		this.countdownCount = null;
+		this.countdownPaused = false;
+
+		const parent = this.el.querySelector("#session-runner-client") || this.el;
+		let overlay = this.el.querySelector("#start-overlay");
+
+		if (!overlay) {
+			overlay = document.createElement("div");
+			overlay.id = "start-overlay";
+		}
+
+		overlay.className =
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-[var(--session-bg)] p-6 text-center text-[var(--session-ink)]";
+		overlay.replaceChildren();
+
+		const title = document.createElement("span");
+		title.className =
+			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
+		title.textContent = "Warm up first?";
+
+		const description = document.createElement("p");
+		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
+		description.textContent =
+			"Start with a short warmup, or skip straight to the workout.";
+
+		const buttons = document.createElement("div");
+		buttons.className = "flex flex-wrap items-center justify-center gap-2";
+
+		const yes = document.createElement("button");
+		yes.type = "button";
+		yes.id = "warmup-yes-btn";
+		yes.className =
+			"rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 text-sm font-medium text-[var(--session-bg)] transition active:scale-[0.98] hover:opacity-90";
+		yes.textContent = "Warm up";
+
+		const skip = document.createElement("button");
+		skip.type = "button";
+		skip.id = "warmup-skip-btn";
+		skip.className =
+			"rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-6 py-4 text-sm font-medium text-[var(--session-muted)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]";
+		skip.textContent = "Skip warmup";
+
+		buttons.append(yes, skip);
+		overlay.append(title, description, buttons);
+		parent.appendChild(overlay);
+	},
 
 	showCapturePrompt() {
 		this.renderer.resetReady();
@@ -297,7 +351,7 @@ const SessionHook = {
 		yes.id = "capture-tracked-btn";
 		yes.className =
 			"min-w-32 rounded-xl border border-[var(--session-toggle-border)] bg-[var(--session-toggle-bg)] px-5 py-4 text-sm font-medium text-[var(--session-toggle-ink)] transition active:scale-[0.98] hover:opacity-90";
-		yes.textContent = "Use camera";
+		yes.textContent = "Track with camera";
 
 		const no = document.createElement("button");
 		no.type = "button";
@@ -354,6 +408,20 @@ const SessionHook = {
 	},
 
 	showWarmupDonePrompt() {
+		this.showWorkoutStartPrompt(
+			"Warmup complete",
+			"Take a breath. Start the workout when you're ready.",
+		);
+	},
+
+	showWorkoutReadyPrompt() {
+		this.showWorkoutStartPrompt(
+			"Ready when you are",
+			"Start the workout when you're ready.",
+		);
+	},
+
+	showWorkoutStartPrompt(titleText, descriptionText) {
 		this.renderer.resetReady();
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.rafId = null;
@@ -375,14 +443,14 @@ const SessionHook = {
 		overlay.replaceChildren();
 
 		const title = document.createElement("span");
+		title.id = "start-overlay-title";
 		title.className =
 			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
-		title.textContent = "Warmup complete";
+		title.textContent = titleText;
 
 		const description = document.createElement("p");
 		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
-		description.textContent =
-			"Take a breath. Start the workout when you're ready.";
+		description.textContent = descriptionText;
 
 		const button = document.createElement("button");
 		button.type = "button";
@@ -689,7 +757,11 @@ const SessionHook = {
 		if (!actions) return;
 
 		const isPaused = this.paused || this.countdownPaused;
-		const canFinishEarly = isPaused && this.activeSegment === "workout";
+		const canFinishEarly =
+			this.paused &&
+			!this.countdownPaused &&
+			this.activeSegment === "workout" &&
+			this.startTime !== null;
 		actions.style.opacity = isPaused ? "1" : "0";
 		actions.style.transform = isPaused ? "translateY(0)" : "";
 		actions.style.pointerEvents = isPaused ? "auto" : "none";
@@ -717,10 +789,15 @@ const SessionHook = {
 	},
 
 	onFinishEarly() {
-		if (this.activeSegment !== "workout") return;
+		if (
+			this.activeSegment !== "workout" ||
+			this.countdownCount !== null ||
+			this.startTime === null
+		)
+			return;
 		if (!confirm("End the session now and log what you've done so far?"))
 			return;
-		const elapsed = (performance.now() - this.startTime) / 1000;
+		const elapsed = this.segment?.clock?.elapsedSec ?? 0;
 		this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });
 	},
 

@@ -27,7 +27,10 @@ defmodule BurpeeTrainer.PlanEditor.Input do
           reps_per_set: pos_integer() | nil,
           additional_rests: [additional_rest()],
           sec_per_burpee_override: float() | nil,
-          block_pattern: [pos_integer()] | nil
+          block_pattern: [pos_integer()] | nil,
+          manual_structure?: boolean(),
+          pace_bias: :slower | :balanced | :faster,
+          load_shape: :even | :front_loaded | :back_loaded
         }
 
   @enforce_keys [
@@ -46,7 +49,10 @@ defmodule BurpeeTrainer.PlanEditor.Input do
     reps_per_set: nil,
     additional_rests: [],
     sec_per_burpee_override: nil,
-    block_pattern: nil
+    block_pattern: nil,
+    manual_structure?: false,
+    pace_bias: :balanced,
+    load_shape: :even
   ]
 
   @spec default() :: t()
@@ -60,7 +66,10 @@ defmodule BurpeeTrainer.PlanEditor.Input do
       reps_per_set: PlanSolver.default_reps_per_set(:six_count),
       additional_rests: [],
       sec_per_burpee_override: nil,
-      block_pattern: nil
+      block_pattern: nil,
+      manual_structure?: false,
+      pace_bias: :balanced,
+      load_shape: :even
     }
   end
 
@@ -82,7 +91,10 @@ defmodule BurpeeTrainer.PlanEditor.Input do
       reps_per_set: infer_reps_per_set(plan),
       additional_rests: decode_additional_rests(plan.additional_rests),
       sec_per_burpee_override: nil,
-      block_pattern: infer_block_pattern(plan)
+      block_pattern: infer_block_pattern(plan),
+      manual_structure?: false,
+      pace_bias: metadata_atom(plan.plan_solver_metadata, :pace_bias, :balanced),
+      load_shape: metadata_atom(plan.plan_solver_metadata, :load_shape, :even)
     }
   end
 
@@ -91,7 +103,7 @@ defmodule BurpeeTrainer.PlanEditor.Input do
     {:ok,
      %{
        input
-       | name: Map.get(params, "name", input.name),
+       | name: non_blank_name_or(Map.get(params, "name", input.name), input.name),
          target_duration_min:
            positive_integer_or(
              Map.get(params, "target_duration_min", ""),
@@ -112,11 +124,17 @@ defmodule BurpeeTrainer.PlanEditor.Input do
     pattern =
       params
       |> Map.get("pattern", %{})
-      |> Enum.sort_by(fn {idx, _value} -> String.to_integer(to_string(idx)) end)
+      |> Enum.flat_map(fn {idx, value} ->
+        case Integer.parse(to_string(idx)) do
+          {index, ""} -> [{index, value}]
+          _other -> []
+        end
+      end)
+      |> Enum.sort_by(fn {idx, _value} -> idx end)
       |> Enum.map(fn {_idx, value} -> parse_positive_integer(value) end)
       |> Enum.reject(&is_nil/1)
 
-    {:ok, %{input | block_pattern: pattern}}
+    {:ok, %{input | block_pattern: pattern, manual_structure?: pattern != []}}
   end
 
   @spec set_pace_override(t(), term()) :: {:ok, t()}
@@ -128,6 +146,30 @@ defmodule BurpeeTrainer.PlanEditor.Input do
       end
 
     {:ok, %{input | sec_per_burpee_override: override}}
+  end
+
+  @spec set_pace_bias(t(), term()) :: {:ok, t()}
+  def set_pace_bias(%__MODULE__{} = input, bias) do
+    bias =
+      case to_string(bias || "") do
+        "faster" -> :faster
+        "slower" -> :slower
+        _ -> :balanced
+      end
+
+    {:ok, %{input | pace_bias: bias, sec_per_burpee_override: nil}}
+  end
+
+  @spec set_load_shape(t(), term()) :: {:ok, t()}
+  def set_load_shape(%__MODULE__{} = input, shape) do
+    shape =
+      case to_string(shape || "") do
+        "front_loaded" -> :front_loaded
+        "back_loaded" -> :back_loaded
+        _ -> :even
+      end
+
+    {:ok, %{input | load_shape: shape}}
   end
 
   @spec parse_non_negative_index(term()) ::
@@ -160,6 +202,31 @@ defmodule BurpeeTrainer.PlanEditor.Input do
 
       {:ok, %{input | additional_rests: rests}}
     end
+  end
+
+  defp non_blank_name_or(value, fallback) do
+    case String.trim(to_string(value || "")) do
+      "" -> fallback
+      name -> name
+    end
+  end
+
+  defp metadata_atom(metadata, key, fallback) when is_map(metadata) do
+    value = Map.get(metadata, key) || Map.get(metadata, Atom.to_string(key))
+
+    cond do
+      value in [:slower, :balanced, :faster, :even, :front_loaded, :back_loaded] -> value
+      is_binary(value) -> safe_existing_atom(value, fallback)
+      true -> fallback
+    end
+  end
+
+  defp metadata_atom(_metadata, _key, fallback), do: fallback
+
+  defp safe_existing_atom(value, fallback) do
+    String.to_existing_atom(value)
+  rescue
+    ArgumentError -> fallback
   end
 
   defp decode_additional_rests(json) do

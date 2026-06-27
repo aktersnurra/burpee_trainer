@@ -68,7 +68,7 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       today = Date.utc_today()
 
       recent_plan = plan_fixture(user, %{"name" => "Recent Plan"})
-      old_plan = plan_fixture(user, %{"name" => "Old Plan"})
+      old_plan = plan_fixture(user, %{"name" => "Old Plan", "burpee_type" => "navy_seal"})
 
       recent =
         session_from_plan_fixture(user, recent_plan, %{

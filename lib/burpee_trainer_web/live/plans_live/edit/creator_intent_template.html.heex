@@ -1,14 +1,11 @@
 <section id="creator-intent-screen" class="space-y-5">
   <.qs_surface class="bg-[var(--session-surface)]/55 p-5">
     <div class="space-y-2">
-      <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+      <h1 class="text-3xl font-semibold tracking-[-0.055em] text-[var(--session-ink)]">
         Create workout
-      </p>
-      <h1 class="text-2xl font-semibold tracking-[-0.04em] text-[var(--session-ink)]">
-        What are we doing?
       </h1>
       <p class="text-sm leading-6 text-[var(--session-muted)]">
-        Set the training intent first. The generated workout stays editable after review.
+        Choose the target. Review the structure before starting.
       </p>
     </div>
   </.qs_surface>
@@ -16,136 +13,222 @@
   <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
     <div class="border-b border-[var(--session-border)] px-5 py-4">
       <p class="text-sm font-semibold text-[var(--session-ink)]">Burpee type</p>
-      <p class="mt-1 text-xs text-[var(--session-muted)]">Choose the movement pattern.</p>
+      <p class="mt-1 text-xs text-[var(--session-muted)]">Sets the safe rhythm range.</p>
     </div>
     <.plan_type_picker plan_input={@plan_input} />
   </.qs_surface>
 
-  <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
-    <form id="creator-duration-form" phx-change="change_basics" class="p-5">
-      <p class="text-sm font-semibold text-[var(--session-ink)]">Duration</p>
-      <div class="mt-3 grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          phx-click="change_basics"
-          phx-value-target_duration_min="20"
-          class="rounded-lg border border-[var(--session-border)] px-3 py-3 text-sm font-medium text-[var(--session-ink)] active:bg-[var(--session-track)]/70"
-        >
-          20 min
-        </button>
-        <button
-          type="button"
-          phx-click="change_basics"
-          phx-value-target_duration_min="30"
-          class="rounded-lg border border-[var(--session-border)] px-3 py-3 text-sm font-medium text-[var(--session-ink)] active:bg-[var(--session-track)]/70"
-        >
-          30 min
-        </button>
-        <label class="rounded-lg border border-[var(--session-border)] px-3 py-2 text-sm text-[var(--session-muted)]">
-          Custom
+  <.qs_surface class="bg-[var(--session-surface)]/50 p-5">
+    <form id="creator-contract-form" phx-change="change_basics" class="grid grid-cols-2 gap-4">
+      <p class="col-span-2 text-sm font-semibold text-[var(--session-ink)]">Target</p>
+      <label class="space-y-2">
+        <span class="text-xs font-medium text-[var(--session-muted)]">Minutes</span>
+        <div class="flex items-baseline rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-4 py-3">
           <input
             type="number"
             name="target_duration_min"
             min="1"
             max="120"
             value={@plan_input.target_duration_min}
-            class="mt-1 w-full bg-transparent text-sm tabular-nums text-[var(--session-ink)] focus:outline-none"
+            class="w-full bg-transparent text-3xl font-semibold tracking-[-0.045em] tabular-nums text-[var(--session-ink)] focus:outline-none"
           />
-        </label>
-      </div>
+          <span class="text-sm text-[var(--session-muted)]">min</span>
+        </div>
+      </label>
+
+      <label class="space-y-2">
+        <span class="text-xs font-medium text-[var(--session-muted)]">Reps</span>
+        <input
+          type="number"
+          name="burpee_count_target"
+          min="1"
+          value={@plan_input.burpee_count_target}
+          class="w-full rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-4 py-3 text-3xl font-semibold tracking-[-0.045em] tabular-nums text-[var(--session-ink)] focus:outline-none"
+        />
+      </label>
     </form>
   </.qs_surface>
 
+  <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
+    <div class="border-b border-[var(--session-border)] px-5 py-4">
+      <p class="text-sm font-semibold text-[var(--session-ink)]">Format</p>
+      <p class="mt-1 text-xs text-[var(--session-muted)]">
+        Choose even pacing or grouped sets.
+      </p>
+    </div>
+    <.plan_pacing_controls plan_input={@plan_input} />
+  </.qs_surface>
+
   <.qs_surface class="bg-[var(--session-surface)]/50 p-5">
-    <p class="text-sm font-semibold text-[var(--session-ink)]">Intent</p>
-    <div class="mt-3 grid grid-cols-2 gap-2">
-      <%= for {label, value} <- [{"Planned workout", "planned_session"}, {"Catch up", "catch_up"}, {"Easy technique", "easy_technique"}, {"Max reps", "max_reps"}] do %>
+    <div class="space-y-4">
+      <div>
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Structure</p>
+        <p class="mt-1 text-xs leading-5 text-[var(--session-muted)]">
+          Pick how the reps should be grouped. The planner still handles pace and recovery.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/35">
         <button
+          id="structure-auto-mode"
           type="button"
-          phx-click="pick_creator_intent"
-          phx-value-intent={value}
+          phx-click="set_structure_mode"
+          phx-value-mode="auto"
           class={[
-            "rounded-lg border px-3 py-3 text-left text-sm font-medium transition active:bg-[var(--session-track)]/70",
-            if(to_string(@creator_intent) == value,
-              do:
-                "border-[var(--session-toggle-border)] bg-[var(--session-toggle-bg)] text-[var(--session-toggle-ink)]",
-              else: "border-[var(--session-border)] text-[var(--session-ink)]"
+            "border-r border-[var(--session-border)] px-3 py-3 text-left text-sm font-medium transition active:bg-[var(--session-track)]/70",
+            if(@plan_input.manual_structure?,
+              do: "text-[var(--session-muted)]",
+              else: "bg-[var(--session-ink)] text-[var(--session-bg)]"
             )
           ]}
         >
-          {label}
+          <span class="block">Let planner choose</span>
+          <span class="mt-1 block text-xs font-normal opacity-70">Readable blocks</span>
         </button>
-      <% end %>
+        <button
+          id="structure-pattern-mode"
+          type="button"
+          phx-click="set_structure_mode"
+          phx-value-mode="pattern"
+          class={[
+            "px-3 py-3 text-left text-sm font-medium transition active:bg-[var(--session-track)]/70",
+            if(@plan_input.manual_structure?,
+              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              else: "text-[var(--session-muted)]"
+            )
+          ]}
+        >
+          <span class="block">Repeating pattern</span>
+          <span class="mt-1 block text-xs font-normal opacity-70">Preferred structure</span>
+        </button>
+      </div>
+
+      <form
+        :if={@plan_input.manual_structure?}
+        id="creator-structure-form"
+        phx-change="change_block_pattern"
+        class="space-y-3 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/35 p-4"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm font-semibold text-[var(--session-ink)]">Preferred structure</p>
+          <p class="text-right text-xs tabular-nums text-[var(--session-muted)]">
+            {structure_summary(@plan_input)}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <% pattern = structure_pattern(@plan_input) %>
+          <%= for {reps, idx} <- Enum.with_index(pattern) do %>
+            <div class="inline-flex items-center overflow-hidden rounded-lg border border-[var(--session-border)] bg-[var(--session-surface)]/70">
+              <input
+                type="number"
+                name={"pattern[#{idx}]"}
+                min="1"
+                value={reps}
+                class="w-20 border-0 bg-transparent px-3 py-2 text-center text-sm tabular-nums text-[var(--session-ink)] focus:outline-none"
+              />
+              <button
+                :if={length(pattern) > 1}
+                type="button"
+                phx-click="remove_pattern_set"
+                phx-value-index={idx}
+                data-remove-pattern-set
+                class="border-l border-[var(--session-border)] px-2 py-2 text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+                aria-label={"Remove set #{idx + 1}"}
+              >
+                <.icon name="hero-x-mark" class="size-3.5" />
+              </button>
+            </div>
+            <span
+              :if={idx < length(pattern) - 1}
+              class="text-sm text-[var(--session-muted)]"
+            >
+              +
+            </span>
+          <% end %>
+          <button
+            id="creator-add-pattern-set"
+            type="button"
+            phx-click="add_pattern_set"
+            class="rounded-lg border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+          >
+            + Set
+          </button>
+        </div>
+      </form>
     </div>
   </.qs_surface>
 
   <.qs_surface class="bg-[var(--session-surface)]/50 p-5">
-    <form id="creator-difficulty-form" phx-change="set_creator_difficulty" class="space-y-3">
-      <div class="flex items-center justify-between">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Difficulty</p>
-        <p class="text-sm tabular-nums text-[var(--session-muted)]">{@creator_difficulty} / 5</p>
-      </div>
-      <input
-        type="range"
-        name="difficulty"
-        min="1"
-        max="5"
-        value={@creator_difficulty}
-        class="w-full accent-[var(--session-ink)]"
-      />
-    </form>
-  </.qs_surface>
+    <div class="space-y-5">
+      <form id="pace-bias-form" class="space-y-3">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Feel</p>
+        <div class="grid grid-cols-3 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/35">
+          <%= for {label, bias} <- [{"Slower", :slower}, {"Balanced", :balanced}, {"Faster", :faster}] do %>
+            <button
+              type="button"
+              phx-click="set_pace_bias"
+              phx-value-bias={bias}
+              class={[
+                "border-r border-[var(--session-border)] px-3 py-3 text-center text-sm font-medium last:border-r-0 active:bg-[var(--session-track)]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--session-ink)]/20",
+                if(@plan_input.pace_bias == bias,
+                  do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+                  else: "text-[var(--session-muted)]"
+                )
+              ]}
+            >
+              {label}
+            </button>
+          <% end %>
+        </div>
+      </form>
 
-  <.qs_surface class="bg-[var(--session-surface)]/50 p-5">
-    <button
-      id="advanced-constraints-toggle"
-      type="button"
-      phx-click="toggle_advanced_constraints"
-      aria-controls="advanced-constraints-panel"
-      aria-expanded={to_string(@creator_advanced?)}
-      class="flex w-full items-center justify-between text-left text-sm font-medium text-[var(--session-ink)] active:text-[var(--session-muted)]"
-    >
-      <span>Advanced constraints</span>
-      <span class="text-[var(--session-muted)]">
-        {if @creator_advanced?, do: "Hide", else: "Show"}
-      </span>
-    </button>
-
-    <div
-      :if={@creator_advanced?}
-      id="advanced-constraints-panel"
-      class="mt-5 space-y-4 border-t border-[var(--session-border)] pt-5"
-    >
-      <div class="grid gap-2 text-xs text-[var(--session-muted)] sm:grid-cols-2">
-        <span class="rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-3 py-2">
-          Manual target reps
-        </span>
-        <span class="rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-3 py-2">
-          Unbroken cap
-        </span>
-        <span class="rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-3 py-2">
-          Minimum rest
-        </span>
-        <span class="rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-3 py-2">
-          Maximum pace
-        </span>
-        <span class="rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/45 px-3 py-2">
-          Solver strictness
-        </span>
+      <div class="space-y-3 border-t border-[var(--session-border)] pt-5">
+        <p class="text-sm font-semibold text-[var(--session-ink)]">Load</p>
+        <div class="grid grid-cols-3 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/35">
+          <%= for {label, shape, helper} <- [
+            {"Flat", :even, "Stable"},
+            {"Front-loaded", :front_loaded, "Work early"},
+            {"Back-loaded", :back_loaded, "Finish harder"}
+          ] do %>
+            <button
+              type="button"
+              phx-click="set_load_shape"
+              phx-value-shape={shape}
+              class={[
+                "min-w-0 border-r border-[var(--session-border)] px-2 py-3 text-center text-xs font-medium last:border-r-0 active:bg-[var(--session-track)]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--session-ink)]/20",
+                if(@plan_input.load_shape == shape,
+                  do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+                  else: "text-[var(--session-muted)]"
+                )
+              ]}
+            >
+              <span class="block truncate">{label}</span>
+              <span class="mt-1 block truncate text-[10px] font-normal opacity-70">{helper}</span>
+            </button>
+          <% end %>
+        </div>
       </div>
-      <.plan_goal_controls plan_input={@plan_input} level={@level} />
-      <.plan_pacing_controls plan_input={@plan_input} />
-      <p class="text-xs leading-5 text-[var(--session-muted)]">
-        Unbroken cap, minimum rest, maximum pace, and solver strictness use the current safe defaults in this pass.
-      </p>
     </div>
   </.qs_surface>
+
+  <div
+    :if={is_binary(@solver_error)}
+    id="creator-prescription-feedback"
+    class="rounded-2xl border border-[var(--session-error-border)] bg-[var(--session-error-bg)] px-4 py-3 text-sm text-[var(--session-error-ink)]"
+  >
+    <p class="font-semibold">
+      This cannot fit in {Fmt.duration_sec(@plan_input.target_duration_min * 60)}
+    </p>
+    <p class="mt-1 text-xs leading-5 opacity-80">
+      Adjust duration, total reps, style, or advanced rests before generating.
+    </p>
+  </div>
 
   <button
     id="generate-workout"
     type="button"
     phx-click="generate_workout"
-    disabled={not (@derived && @derived.both_ok)}
+    disabled={not (!!(@derived && @derived.both_ok))}
     class={[
       "w-full rounded-xl px-5 py-4 text-sm font-semibold transition active:translate-y-px",
       if(@derived && @derived.both_ok,

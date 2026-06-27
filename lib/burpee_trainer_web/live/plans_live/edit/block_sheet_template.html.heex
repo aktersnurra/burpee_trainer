@@ -1,6 +1,8 @@
 <% selected_block_row =
   if is_integer(@selected_block_index) do
-    Enum.at(@contract.block_rows, @selected_block_index)
+    Enum.find(@contract.structure_rows, fn row ->
+      row.kind == :block and row.index == @selected_block_index
+    end)
   end %>
 <div
   :if={is_map(selected_block_row)}
@@ -27,39 +29,63 @@
     </button>
   </div>
 
-  <form id="block-sheet-form" phx-change="change_block_sheet" class="mt-5 grid grid-cols-3 gap-3">
+  <form id="block-sheet-form" phx-change="change_block_sheet" class="mt-5 space-y-5">
     <input type="hidden" name="block[source_block_index]" value={row.source_block_index} />
-    <label class="space-y-2">
-      <span class="text-xs font-medium text-[var(--session-muted)]">Reps</span>
+    <input
+      :if={Map.get(row, :step_position)}
+      type="hidden"
+      name="block[step_position]"
+      value={Map.get(row, :step_position)}
+    />
+
+    <label class="block space-y-2">
+      <span class="text-xs font-medium text-[var(--session-muted)]">Repeat</span>
       <input
         type="number"
-        name="block[reps]"
-        value={row.reps}
+        name="block[repeat_count]"
+        value={row.repeat_count || 1}
         min="1"
         class="w-full rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-3 py-3 text-center text-sm tabular-nums text-[var(--session-ink)]"
       />
     </label>
-    <label class="space-y-2">
-      <span class="text-xs font-medium text-[var(--session-muted)]">Seconds per rep</span>
-      <input
-        type="number"
-        name="block[sec_per_rep]"
-        value={row.sec_per_rep}
-        min="0.1"
-        step="0.1"
-        class="w-full rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-3 py-3 text-center text-sm tabular-nums text-[var(--session-ink)]"
-      />
-    </label>
-    <label class="space-y-2">
-      <span class="text-xs font-medium text-[var(--session-muted)]">Rest after</span>
-      <input
-        type="number"
-        name="block[rest_sec]"
-        value={row.rest_sec}
-        min="0"
-        class="w-full rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-3 py-3 text-center text-sm tabular-nums text-[var(--session-ink)]"
-      />
-    </label>
+
+    <div class="space-y-3">
+      <div class="grid grid-cols-[3rem_1fr_1fr_1fr] gap-2 text-xs font-medium text-[var(--session-muted)]">
+        <span>Set</span>
+        <span>Reps</span>
+        <span>Rep interval</span>
+        <span>Rest after</span>
+      </div>
+      <div
+        :for={set <- row.sets}
+        data-block-sheet-set-row
+        class="grid grid-cols-[3rem_1fr_1fr_1fr] items-center gap-2"
+      >
+        <span class="text-sm tabular-nums text-[var(--session-muted)]">{set.index + 1}</span>
+        <input
+          type="number"
+          name={"block[sets][#{set.index}][burpee_count]"}
+          value={set.burpee_count}
+          min="1"
+          class="w-full rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+        />
+        <input
+          type="number"
+          name={"block[sets][#{set.index}][sec_per_rep]"}
+          value={format_sec(set.sec_per_rep)}
+          min="0.1"
+          step="0.1"
+          class="w-full rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+        />
+        <input
+          type="number"
+          name={"block[sets][#{set.index}][end_of_set_rest]"}
+          value={set.end_of_set_rest}
+          min="0"
+          class="w-full rounded-lg border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)]"
+        />
+      </div>
+    </div>
   </form>
 
   <div class="mt-5 flex flex-wrap items-center gap-2">
@@ -70,8 +96,11 @@
       phx-value-index={row.source_block_index}
       class="rounded-lg border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-ink)] active:bg-[var(--session-track)]/70"
     >
-      {if row.locked?, do: "Unlock block pattern", else: "Lock this block pattern"}
+      {if row.locked?, do: "Unlock block", else: "Lock this block"}
     </button>
+    <p :if={row.locked?} class="w-full text-xs text-[var(--session-muted)]">
+      Rebalance will not change this block.
+    </p>
     <button
       type="button"
       phx-click="copy_block"
@@ -79,15 +108,6 @@
       class="rounded-lg border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-muted)] active:bg-[var(--session-track)]/70"
     >
       Duplicate
-    </button>
-    <button
-      id="block-delete"
-      type="button"
-      disabled
-      aria-disabled="true"
-      class="cursor-not-allowed rounded-lg border border-[var(--session-error-border)] bg-[var(--session-error-bg)]/40 px-3 py-2 text-sm font-medium text-[var(--session-error-ink)]/60"
-    >
-      Delete block
     </button>
   </div>
 </div>

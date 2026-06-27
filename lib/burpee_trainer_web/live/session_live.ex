@@ -105,23 +105,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("pose_capture_abort", params, socket) do
-    %{current_user: user, pose_capture_run: run} = socket.assigns
     reason = Map.get(params, "reason") || "client_aborted"
-
-    if run do
-      case Workouts.abort_pose_capture_run(user, run, reason) do
-        :ok ->
-          {:noreply,
-           socket
-           |> assign(:pose_capture_run, nil)
-           |> assign(:capture_setup_state, :aborted)}
-
-        {:error, _reason} ->
-          {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
-    end
+    {:noreply, abort_active_pose_capture(socket, reason)}
   end
 
   def handle_event("track", %{"state" => "lost"}, socket) do
@@ -250,7 +235,28 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("discard", _, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/workouts")}
+    {:noreply,
+     socket
+     |> abort_active_pose_capture("user_discarded")
+     |> push_navigate(to: ~p"/workouts")}
+  end
+
+  defp abort_active_pose_capture(socket, reason) do
+    %{current_user: user, pose_capture_run: run} = socket.assigns
+
+    if run do
+      case Workouts.abort_pose_capture_run(user, run, reason) do
+        :ok ->
+          socket
+          |> assign(:pose_capture_run, nil)
+          |> assign(:capture_setup_state, :aborted)
+
+        {:error, _reason} ->
+          socket
+      end
+    else
+      socket
+    end
   end
 
   defp maybe_complete_pose_capture_run(socket, session) do
@@ -485,15 +491,17 @@ defmodule BurpeeTrainerWeb.SessionLive do
             class="mx-auto flex w-full max-w-[360px] items-center justify-center gap-1.5 rounded-2xl border border-[var(--session-border)] bg-[var(--session-surface)]/95 p-1.5 shadow-[0_18px_45px_rgba(32,32,29,0.10)] backdrop-blur-sm"
             aria-label="Paused session actions"
           >
-            <.link
+            <button
               id="session-abort-btn"
-              navigate={~p"/workouts"}
+              type="button"
+              phx-click="discard"
+              data-confirm="Abort this session without saving?"
               class="flex flex-1 items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-3 text-sm font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
               aria-label="Abort session without saving"
             >
               <.icon name="hero-x-mark" class="size-4" />
               <span>Abort</span>
-            </.link>
+            </button>
             <button
               id="finish-early-btn"
               type="button"

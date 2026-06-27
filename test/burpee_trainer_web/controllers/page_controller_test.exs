@@ -30,6 +30,16 @@ defmodule BurpeeTrainerWeb.PageControllerTest do
   test "GET / keeps coach output inside the primary recommendation and catch-up separate", %{
     conn: conn
   } do
+    previous_today = Application.get_env(:burpee_trainer, :today_override)
+    saturday = Date.utc_today() |> Date.beginning_of_week(:monday) |> Date.add(5)
+    Application.put_env(:burpee_trainer, :today_override, saturday)
+
+    on_exit(fn ->
+      if previous_today,
+        do: Application.put_env(:burpee_trainer, :today_override, previous_today),
+        else: Application.delete_env(:burpee_trainer, :today_override)
+    end)
+
     user = user_fixture(%{"username" => "home_order_user"})
     plan = plan_fixture(user, %{"name" => "Resume Plan"})
 

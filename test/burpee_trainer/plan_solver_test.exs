@@ -134,6 +134,39 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert_solution_matches_execution(inp, sol)
   end
 
+  test "unbroken legacy block pattern is adapted to exact preferred set pattern" do
+    inp =
+      input(%{
+        pacing_style: :unbroken,
+        reps_per_set: 8,
+        burpee_count_target: 120,
+        target_duration_min: 20,
+        level: :level_3,
+        block_pattern: [5]
+      })
+
+    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert sol.set_pattern == List.duplicate(5, 24)
+    assert sol.metadata.strategy == :manual_structure
+    assert_solution_matches_execution(inp, sol)
+  end
+
+  test "unbroken pace override pins movement pace exactly" do
+    inp =
+      input(%{
+        pacing_style: :unbroken,
+        reps_per_set: 5,
+        burpee_count_target: 20,
+        target_duration_sec: 145,
+        block_pattern: [5],
+        sec_per_burpee_override: 5.0
+      })
+
+    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert_in_delta sol.sec_per_burpee, 5.0, 1.0e-6
+    assert_solution_matches_execution(inp, sol)
+  end
+
   test "manual tapered structure is preserved exactly" do
     {:ok, block1} = BlockSpec.new(5, [8])
     {:ok, block2} = BlockSpec.new(5, [7])

@@ -205,7 +205,13 @@ defmodule BurpeeTrainerWeb.OverviewLive do
        when remaining_min <= 0,
        do: nil
 
-  defp build_auto_catch_up_plan(assigns) do
+  defp build_auto_catch_up_plan(%{today: today} = assigns) do
+    if WeeklyTrainingContract.catch_up_available?(today) do
+      build_available_catch_up_plan(assigns)
+    end
+  end
+
+  defp build_available_catch_up_plan(assigns) do
     eligible_types = eligible_catch_up_types(assigns.training_state)
     duration_min = max(round(assigns.weekly_status.remaining_min), 20)
 

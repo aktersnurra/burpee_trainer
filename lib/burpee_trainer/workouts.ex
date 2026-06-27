@@ -10,6 +10,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Goals
   alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Milestones
+  alias BurpeeTrainer.Planner
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
   alias BurpeeTrainer.Workouts.PaceConsistency
@@ -486,10 +487,13 @@ defmodule BurpeeTrainer.Workouts do
   days since last, time-of-day bucket) are computed before insert.
   """
   @spec create_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
-  def create_session_from_plan(%User{id: user_id}, %WorkoutPlan{id: plan_id} = plan, attrs) do
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def create_session_from_plan(%User{id: user_id}, %WorkoutPlan{user_id: user_id} = plan, attrs) do
+    plan = Repo.preload(plan, blocks: :sets, steps: [])
+    attrs = Map.merge(attrs, planned_session_attrs(plan))
+
     changeset =
-      %WorkoutSession{user_id: user_id, plan_id: plan_id}
+      %WorkoutSession{user_id: user_id, plan_id: plan.id}
       |> WorkoutSession.from_plan_changeset(attrs)
       |> Ecto.Changeset.change(capture_mode: :timed)
       |> with_derived_session_fields(user_id)
@@ -505,19 +509,23 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
+  def create_session_from_plan(%User{}, %WorkoutPlan{}, _attrs), do: {:error, :not_found}
+
   @spec create_tracked_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def create_tracked_session_from_plan(
         %User{id: user_id},
-        %WorkoutPlan{id: plan_id} = plan,
+        %WorkoutPlan{user_id: user_id} = plan,
         attrs
       ) do
+    plan = Repo.preload(plan, blocks: :sets, steps: [])
+    attrs = Map.merge(attrs, planned_session_attrs(plan))
     cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
     cadence_json = Jason.encode!(cadence)
     consistency = PaceConsistency.score(cadence)
 
     changeset =
-      %WorkoutSession{user_id: user_id, plan_id: plan_id}
+      %WorkoutSession{user_id: user_id, plan_id: plan.id}
       |> WorkoutSession.from_plan_changeset(attrs)
       |> validate_tracked_capture(cadence)
       |> Ecto.Changeset.change(
@@ -537,6 +545,18 @@ defmodule BurpeeTrainer.Workouts do
       error ->
         error
     end
+  end
+
+  def create_tracked_session_from_plan(%User{}, %WorkoutPlan{}, _attrs), do: {:error, :not_found}
+
+  defp planned_session_attrs(%WorkoutPlan{} = plan) do
+    summary = Planner.summary(plan)
+
+    %{
+      "burpee_type" => Atom.to_string(plan.burpee_type),
+      "burpee_count_planned" => summary.burpee_count_total,
+      "duration_sec_planned" => round(summary.duration_sec_total)
+    }
   end
 
   @doc """

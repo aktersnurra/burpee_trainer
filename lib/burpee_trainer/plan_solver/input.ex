@@ -27,7 +27,9 @@ defmodule BurpeeTrainer.PlanSolver.Input do
     reps_per_set: nil,
     additional_rests: [],
     sec_per_burpee_override: nil,
-    block_pattern: nil
+    block_pattern: nil,
+    pace_bias: :balanced,
+    load_shape: :even
   ]
 
   @type burpee_type :: :six_count | :navy_seal
@@ -58,7 +60,9 @@ defmodule BurpeeTrainer.PlanSolver.Input do
           reps_per_set: pos_integer | nil,
           additional_rests: [additional_rest],
           sec_per_burpee_override: float | nil,
-          block_pattern: [pos_integer] | nil
+          block_pattern: [pos_integer] | nil,
+          pace_bias: :slower | :balanced | :faster,
+          load_shape: :even | :front_loaded | :back_loaded
         }
 
   @spec normalize_and_validate(t()) :: {:ok, t()} | {:error, Infeasible.t()}
@@ -69,6 +73,7 @@ defmodule BurpeeTrainer.PlanSolver.Input do
       |> normalize_pace_override()
       |> normalize_explicit_rests()
       |> normalize_unbroken_max()
+      |> normalize_legacy_block_pattern()
 
     validate_canonical(input)
   end
@@ -129,6 +134,71 @@ defmodule BurpeeTrainer.PlanSolver.Input do
        do: %{input | max_unbroken_reps: reps}
 
   defp normalize_unbroken_max(input), do: input
+
+  defp normalize_legacy_block_pattern(
+         %__MODULE__{
+           pacing_style: :unbroken,
+           block_structure: nil,
+           block_pattern: pattern,
+           burpee_count_target: total_reps
+         } = input
+       )
+       when is_list(pattern) and pattern != [] do
+    set_pattern = expand_legacy_pattern(total_reps, pattern)
+
+    case block_specs_from_set_pattern(set_pattern) do
+      {:ok, blocks} -> %{input | block_structure: blocks}
+      {:error, _reason} -> input
+    end
+  end
+
+  defp normalize_legacy_block_pattern(input), do: input
+
+  defp expand_legacy_pattern(total_reps, pattern) do
+    {full_repeats, remainder_pattern} = split_pattern(total_reps, pattern)
+
+    pattern
+    |> List.duplicate(full_repeats)
+    |> List.flatten()
+    |> Kernel.++(remainder_pattern)
+  end
+
+  defp block_specs_from_set_pattern(set_pattern) do
+    set_pattern
+    |> Enum.chunk_every(2)
+    |> Enum.chunk_by(& &1)
+    |> Enum.reduce_while({:ok, []}, fn same_motif_chunks, {:ok, acc} ->
+      motif = hd(same_motif_chunks)
+
+      case BlockSpec.new(length(same_motif_chunks), motif) do
+        {:ok, block} -> {:cont, {:ok, acc ++ [block]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp split_pattern(total_reps, pattern) do
+    block_total = Enum.sum(pattern)
+    full_repeats = div(total_reps, block_total)
+    remainder = rem(total_reps, block_total)
+
+    remainder_pattern =
+      if remainder > 0 do
+        pattern
+        |> Enum.reduce_while({[], remainder}, fn reps, {acc, remaining} ->
+          cond do
+            remaining == 0 -> {:halt, {acc, 0}}
+            reps <= remaining -> {:cont, {acc ++ [reps], remaining - reps}}
+            true -> {:halt, {acc ++ [remaining], 0}}
+          end
+        end)
+        |> elem(0)
+      else
+        []
+      end
+
+    {full_repeats, remainder_pattern}
+  end
 
   defp validate_canonical(%__MODULE__{} = input) do
     cond do

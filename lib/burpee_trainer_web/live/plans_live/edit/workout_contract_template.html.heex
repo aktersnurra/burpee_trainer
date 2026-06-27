@@ -2,7 +2,7 @@
   <.qs_surface class="bg-[var(--session-surface)]/60 p-5">
     <div class="space-y-3">
       <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-        Generated workout
+        Review workout
       </p>
       <div class="space-y-1">
         <h1 class="text-3xl font-semibold tracking-[-0.055em] text-[var(--session-ink)]">
@@ -11,6 +11,9 @@
         <p class="text-base font-medium text-[var(--session-ink)]">{@contract.stats}</p>
         <p class="text-sm leading-6 text-[var(--session-muted)]">{@contract.structure}</p>
         <p class="text-sm leading-6 text-[var(--session-muted)]">{@contract.feel}</p>
+        <p class="text-sm leading-6 text-[var(--session-muted)]">
+          {@contract.pace_label} · {@contract.shape_label}
+        </p>
       </div>
 
       <div
@@ -56,7 +59,7 @@
       phx-click="edit_generated_workout"
       class="w-full rounded-xl border border-[var(--session-border)] px-5 py-4 text-sm font-semibold text-[var(--session-ink)] transition active:bg-[var(--session-track)]/70"
     >
-      Edit workout
+      Edit structure
     </button>
   </form>
 </section>

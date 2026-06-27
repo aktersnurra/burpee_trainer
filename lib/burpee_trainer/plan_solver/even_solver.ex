@@ -96,7 +96,9 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
       metadata: %{
         solver_version: 3,
         strategy: :even,
-        recommendation: "#{input.burpee_count_target} reps with even cadence",
+        recommendation: "#{input.burpee_count_target} reps with even pace",
+        pace_bias: input.pace_bias,
+        load_shape: input.load_shape,
         rest_suggestions: [],
         recovery_mode: :cadence,
         recovery_sec: 0.0,

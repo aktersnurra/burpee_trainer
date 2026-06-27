@@ -77,6 +77,8 @@ defmodule BurpeeTrainer.PlanSolver.UnbrokenSolver do
       },
       score_key: candidate.score_key,
       recommendation: "#{StructureSearch.encode(candidate.structure)} with auto recovery",
+      pace_bias: input.pace_bias,
+      load_shape: input.load_shape,
       rest_suggestions: [],
       recovery_mode: :auto,
       recovery_sec: candidate.normal_recovery_sec,

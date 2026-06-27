@@ -6,8 +6,9 @@
 >
   <div class="session-surface mx-auto max-w-2xl space-y-5 pb-24 text-[var(--session-ink)]">
     <.plan_editor_header plan_input={@plan_input} live_action={@live_action} plan={@plan} />
-
-    <.plan_metadata plan={@plan} />
+    <%= if @live_action == :edit do %>
+      <.plan_metadata plan={@plan} />
+    <% end %>
 
     <%= if @live_action == :new and @creator_phase == :intent do %>
       <.creator_intent_template
@@ -17,6 +18,7 @@
         creator_difficulty={@creator_difficulty}
         creator_advanced?={@creator_advanced?}
         derived={@derived}
+        solver_error={@solver_error}
       />
     <% else %>
       <.plan_solution_card
@@ -36,6 +38,7 @@
         creator_advanced?={@creator_advanced?}
         selected_block_index={@selected_block_index}
         locked_block_indexes={@locked_block_indexes}
+        rest_prompt={@rest_prompt}
         plan={@plan}
       />
     <% end %>
