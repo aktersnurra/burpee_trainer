@@ -1,0 +1,144 @@
+<section id="workout-editor-overview" class="space-y-5">
+  <.qs_surface class="bg-[var(--session-surface)]/60 p-5">
+    <div class="flex items-start justify-between gap-4">
+      <div class="min-w-0 space-y-1">
+        <p class="text-xs font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+          Edit workout
+        </p>
+        <h1 class="text-2xl font-semibold tracking-[-0.045em] text-[var(--session-ink)]">
+          {@contract.title}
+        </h1>
+        <p class="text-sm font-medium text-[var(--session-ink)]">{@contract.stats}</p>
+      </div>
+      <form id="editor-save-start-form" phx-submit="start_workout">
+        <input type="hidden" name="start_intent" value="workout" />
+        <button
+          id="editor-start-workout"
+          type="submit"
+          disabled={not @start_available?}
+          aria-disabled={to_string(not @start_available?)}
+          aria-describedby={if @plan_feedback, do: "plan-solver-impossible"}
+          class={[
+            "rounded-xl px-4 py-2.5 text-sm font-semibold transition active:translate-y-px",
+            if(@start_available?,
+              do: "bg-[var(--session-ink)] text-[var(--session-bg)]",
+              else:
+                "cursor-not-allowed border border-[var(--session-border)] bg-[var(--session-track)] text-[var(--session-muted)]"
+            )
+          ]}
+        >
+          Start
+        </button>
+      </form>
+    </div>
+
+    <.qs_surface
+      :if={@plan_feedback}
+      id="plan-solver-impossible"
+      class="mt-5 space-y-5 bg-[var(--session-bg)]/55 p-5"
+    >
+      <div class="flex items-start gap-3">
+        <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--session-error-border)] bg-[var(--session-error-bg)] text-[var(--session-error-ink)]">
+          <.icon name="hero-exclamation-triangle" class="size-4" />
+        </span>
+        <div class="min-w-0 space-y-1">
+          <p class="text-sm font-semibold text-[var(--session-error-ink)]">
+            {@plan_feedback.title}
+          </p>
+          <p class="text-sm leading-6 text-[var(--session-muted)]">
+            {@plan_feedback.message}
+          </p>
+        </div>
+      </div>
+      <div class="grid gap-2 sm:grid-cols-3">
+        <%= for action <- @plan_feedback.actions do %>
+          <button
+            :if={action == "Rebalance unlocked blocks"}
+            type="button"
+            phx-click="rebalance_unlocked_blocks"
+            class="rounded-lg border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] active:bg-[var(--session-track)]/70"
+          >
+            {action}
+          </button>
+          <button
+            :if={action != "Rebalance unlocked blocks"}
+            type="button"
+            disabled
+            aria-disabled="true"
+            title="Not available in this editor yet"
+            class="cursor-not-allowed rounded-lg border border-[var(--session-border)] bg-[var(--session-track)]/45 px-3 py-2 text-xs font-medium text-[var(--session-muted)]/70"
+          >
+            {action}
+          </button>
+        <% end %>
+      </div>
+    </.qs_surface>
+
+    <div
+      data-structure-map
+      class="mt-5 flex items-end gap-1.5"
+      aria-label="Workout structure preview"
+    >
+      <%= for mark <- @contract.structure_map do %>
+        <span
+          title={mark.label}
+          class="block w-2 rounded-full bg-[var(--session-ink)]"
+          style={"height: #{mark.height}px; opacity: #{mark.shade}; margin-right: #{mark.gap}px"}
+        />
+      <% end %>
+    </div>
+  </.qs_surface>
+
+  <.qs_surface class="bg-[var(--session-surface)]/50 p-5">
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-sm font-semibold text-[var(--session-ink)]">Structure</p>
+      <button
+        id="rebalance-unlocked-blocks"
+        type="button"
+        phx-click="rebalance_unlocked_blocks"
+        class="text-sm font-medium text-[var(--session-muted)] active:text-[var(--session-ink)]"
+      >
+        Rebalance unlocked blocks
+      </button>
+    </div>
+
+    <div class="mt-4 divide-y divide-[var(--session-border)]">
+      <button
+        :for={row <- @contract.block_rows}
+        type="button"
+        phx-click="select_block"
+        phx-value-index={row.index}
+        data-workout-block-row
+        class="w-full py-4 text-left transition active:bg-[var(--session-track)]/50"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm font-semibold text-[var(--session-ink)]">{row.title}</p>
+            <p class="text-sm text-[var(--session-ink)]">{row.headline}</p>
+            <p class="text-xs text-[var(--session-muted)]">{row.detail}</p>
+            <p :if={row.locked?} class="text-xs font-medium text-[var(--session-muted)]">
+              {row.lock_label}
+            </p>
+          </div>
+          <span class="text-lg leading-none text-[var(--session-muted)]">…</span>
+        </div>
+      </button>
+    </div>
+  </.qs_surface>
+
+  <.block_sheet_template
+    contract={@contract}
+    selected_block_index={@selected_block_index}
+  />
+
+  <button
+    id="advanced-constraints-toggle"
+    type="button"
+    phx-click="toggle_advanced_constraints"
+    aria-controls="advanced-constraints-panel"
+    aria-expanded={to_string(@creator_advanced?)}
+    class="w-full rounded-xl border border-[var(--session-border)] px-5 py-3 text-left text-sm font-medium text-[var(--session-ink)] active:bg-[var(--session-track)]/70"
+  >
+    Advanced constraints
+  </button>
+</section>

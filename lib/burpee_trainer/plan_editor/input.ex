@@ -52,7 +52,7 @@ defmodule BurpeeTrainer.PlanEditor.Input do
   @spec default() :: t()
   def default do
     %__MODULE__{
-      name: "New plan",
+      name: "New workout",
       burpee_type: :six_count,
       target_duration_min: 20,
       burpee_count_target: 100,

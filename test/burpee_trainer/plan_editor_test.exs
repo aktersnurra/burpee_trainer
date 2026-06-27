@@ -7,11 +7,11 @@ defmodule BurpeeTrainer.PlanEditorTest do
   alias BurpeeTrainer.PlanEditor.Input
   alias BurpeeTrainer.PlanSolver
 
-  test "default_input returns typed new-plan defaults" do
+  test "default_input returns typed new-workout defaults" do
     input = PlanEditor.default_input()
 
     assert %Input{} = input
-    assert input.name == "New plan"
+    assert input.name == "New workout"
     assert input.burpee_type == :six_count
     assert input.target_duration_min == 20
     assert input.burpee_count_target == 100
@@ -25,7 +25,7 @@ defmodule BurpeeTrainer.PlanEditorTest do
   describe "PlanEditor.Input boundary" do
     test "default/0 returns typed defaults" do
       assert %Input{} = input = Input.default()
-      assert input.name == "New plan"
+      assert input.name == "New workout"
       assert input.burpee_type == :six_count
       assert input.target_duration_min == 20
       assert input.burpee_count_target == 100
@@ -337,6 +337,40 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
+  describe "block locks" do
+    test "lock_block/2 marks a block index as locked" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      {:ok, state} = PlanEditor.lock_block(state, "0")
+
+      assert MapSet.member?(state.locked_block_indexes, 0)
+      assert state.manual_edit?
+    end
+
+    test "rebalance_unlocked_blocks/1 preserves locked block positions" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+
+      locked_block = state.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      edited_block = %{locked_block | sets: [%{hd(locked_block.sets) | burpee_count: 17}]}
+      form_plan = %{state.form_plan | blocks: [edited_block]}
+
+      state = %{
+        state
+        | form_plan: form_plan,
+          locked_block_indexes: MapSet.new([0]),
+          manual_edit?: true
+      }
+
+      {:ok, rebalanced} = PlanEditor.rebalance_unlocked_blocks(state)
+      [first_block | _] = Enum.sort_by(rebalanced.form_plan.blocks, & &1.position)
+
+      assert hd(first_block.sets).burpee_count == 17
+      assert MapSet.member?(rebalanced.locked_block_indexes, 0)
+    end
+  end
+
   describe "manual edit transitions" do
     test "enable_manual_edit marks state manual" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
@@ -378,7 +412,7 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert %PlanEditor.State{} = state
       assert state.plan == nil
       assert state.level == :level_1a
-      assert state.input.name == "New plan"
+      assert state.input.name == "New workout"
       assert state.input.burpee_type == :six_count
       assert state.manual_edit? == false
       assert state.expanded_blocks == MapSet.new()

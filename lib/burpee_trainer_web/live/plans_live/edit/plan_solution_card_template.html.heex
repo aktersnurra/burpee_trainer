@@ -1,301 +1,308 @@
-<.qs_surface class="bg-[var(--session-surface)]/60 p-5">
-  <div class="space-y-5">
-    <%= if @plan_feedback do %>
-      <.qs_surface
-        id="plan-solver-impossible"
-        class="space-y-5 bg-[var(--session-bg)]/55 p-5"
-      >
-        <div class="flex items-start gap-3">
-          <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--session-error-border)] bg-[var(--session-error-bg)] text-[var(--session-error-ink)]">
-            <.icon name="hero-exclamation-triangle" class="size-4" />
-          </span>
-          <div class="min-w-0 space-y-1">
-            <p class="text-sm font-semibold text-[var(--session-error-ink)]">
-              {@plan_feedback.title}
-            </p>
-            <p class="text-sm leading-6 text-[var(--session-muted)]">
-              {@plan_feedback.message}
-            </p>
-          </div>
-        </div>
-        <div class="grid gap-2 sm:grid-cols-3">
-          <.qs_property_tag :for={action <- @plan_feedback.actions} class="px-3 py-2 text-xs">
-            {action}
-          </.qs_property_tag>
-        </div>
-      </.qs_surface>
-    <% end %>
-    <form
-      id="block-pattern-editor"
-      phx-change="change_block_pattern"
-      class="mt-5 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-4 text-left"
-    >
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="text-sm font-medium text-[var(--session-muted)]">
-            Block pattern
-          </p>
-          <p class="mt-1 text-xs text-[var(--session-muted)]">
-            Solver computes repeats, pace, and rests from this grouping.
-          </p>
-        </div>
-        <p class="text-right text-xs tabular-nums text-[var(--session-muted)]">
-          {@pattern_summary}
-        </p>
-      </div>
-      <div class="mt-4 flex flex-wrap items-center gap-2">
-        <% pattern = default_pattern(@plan_input) %>
-        <%= for {reps, idx} <- Enum.with_index(pattern) do %>
-          <div class="inline-flex items-center overflow-hidden rounded-md border border-[var(--session-border)] bg-[var(--session-surface)]/60">
-            <input
-              type="number"
-              min="1"
-              name={"pattern[#{idx}]"}
-              value={reps}
-              class="w-16 border-0 bg-transparent px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)] focus:outline-none"
-            />
-            <button
-              :if={length(pattern) > 1}
-              type="button"
-              phx-click="remove_pattern_set"
-              phx-value-index={idx}
-              data-remove-pattern-set
-              class="border-l border-[var(--session-border)] px-2 py-2 text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
-              aria-label={"Remove set #{idx + 1}"}
-            >
-              <.icon name="hero-x-mark" class="size-3.5" />
-            </button>
-          </div>
-        <% end %>
-        <button
-          type="button"
-          phx-click="add_pattern_set"
-          class="border border-[var(--session-border)] px-3 py-2 text-xs text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-        >
-          + Set
-        </button>
-      </div>
-    </form>
-    <%= if @prescription_blocked? do %>
-      <div
-        id="plan-prescription-blocked"
-        class="rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-5 py-5 text-center"
-      >
-        <p class="text-sm font-semibold text-[var(--session-ink)]">
-          No runnable prescription yet
-        </p>
-        <p class="mt-2 text-sm leading-6 text-[var(--session-muted)]">
-          Adjust the target, block pattern, or rest placement before creating this session.
-        </p>
-      </div>
-    <% end %>
+<%= cond do %>
+  <% @creator_phase == :review -> %>
+    <.workout_contract_template contract={@contract} />
+  <% true -> %>
+    <.workout_editor_overview_template
+      contract={@contract}
+      plan={@plan}
+      creator_advanced?={@creator_advanced?}
+      plan_feedback={@plan_feedback}
+      start_available?={@start_available?}
+      selected_block_index={@selected_block_index}
+    />
+<% end %>
 
-    <%= if !@prescription_blocked? and @derived do %>
-      <div class="space-y-3">
-        <div class="relative space-y-6">
-          <div class="space-y-3">
-            <p class="text-center text-sm font-medium text-[var(--session-muted)]">
-              Prescription
+<div
+  :if={@creator_phase != :review and @creator_advanced?}
+  id="advanced-constraints-panel"
+  class="space-y-4"
+>
+  <.qs_surface class="bg-[var(--session-surface)]/50 p-5">
+    <p class="text-sm font-semibold text-[var(--session-ink)]">Advanced constraints</p>
+    <p class="mt-2 text-sm leading-6 text-[var(--session-muted)]">
+      Block pattern, rest placement, and pace overrides are available here. Solver/debug details remain hidden.
+    </p>
+  </.qs_surface>
+
+  <.qs_surface class="bg-[var(--session-surface)]/60 p-5">
+    <div class="space-y-5">
+      <form
+        id="block-pattern-editor"
+        phx-change="change_block_pattern"
+        class="mt-5 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-4 text-left"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-[var(--session-muted)]">
+              Block pattern
             </p>
-            <div class="grid grid-cols-3 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 text-center">
-              <div class="px-3 py-4">
-                <p class="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-                  Time
-                </p>
-                <p class={[
-                  "qs-tabular mt-1 text-2xl font-semibold leading-none tracking-[-0.045em] tabular-nums",
-                  if(@derived.both_ok,
-                    do: "text-[var(--session-ink)]",
-                    else: "text-[var(--session-error-ink)]"
-                  )
-                ]}>
-                  <%= if @derived.both_ok do %>
-                    {Fmt.duration_sec(round(@derived.duration_sec))}
-                  <% else %>
-                    —
-                  <% end %>
-                </p>
-              </div>
-              <div class="border-x border-[var(--session-border)] px-3 py-4">
-                <p class="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-                  Reps
-                </p>
-                <p class="qs-tabular mt-1 text-2xl font-semibold leading-none tracking-[-0.045em] tabular-nums text-[var(--session-ink)]">
-                  {@derived.burpee_count}
-                </p>
-              </div>
-              <div class="px-3 py-4">
-                <p class="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
-                  Pace
-                </p>
-                <p
-                  id="plan-prescription-pace"
-                  class="qs-tabular mt-1 text-2xl font-semibold leading-none tracking-[-0.045em] tabular-nums text-[var(--session-ink)]"
-                >
-                  <%= if pace = @plan_input.sec_per_burpee_override || (@solver_solution && @solver_solution.sec_per_burpee) || (@plan && @plan.sec_per_burpee) do %>
-                    {format_sec(pace)}s
-                  <% else %>
-                    —
-                  <% end %>
-                </p>
-              </div>
-            </div>
-            <form
-              id="plan-pace-form"
-              phx-change="set_pace_override"
-              class="grid grid-cols-[1fr_auto_auto] items-end gap-3 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 p-3 text-left"
-            >
-              <label class="space-y-1">
-                <span class="block text-xs font-semibold text-[var(--session-ink)]">
-                  <%= if @plan_input.sec_per_burpee_override do %>
-                    Manual pace
-                  <% else %>
-                    Auto pace
-                  <% end %>
-                </span>
-                <span class="block text-[11px] text-[var(--session-muted)]">
-                  Seconds per rep. Clear to return to auto.
-                </span>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  name="pace"
-                  value={
-                    format_sec(
-                      @plan_input.sec_per_burpee_override ||
-                        (@solver_solution && @solver_solution.sec_per_burpee) ||
-                        (@plan && @plan.sec_per_burpee)
-                    )
-                  }
-                  class="mt-2 w-full border border-[var(--session-border)] bg-[var(--session-surface)]/70 px-3 py-2 text-sm tabular-nums text-[var(--session-ink)]"
-                />
-              </label>
+            <p class="mt-1 text-xs text-[var(--session-muted)]">
+              Solver computes repeats, pace, and rests from this grouping.
+            </p>
+          </div>
+          <p class="text-right text-xs tabular-nums text-[var(--session-muted)]">
+            {@pattern_summary}
+          </p>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <% pattern = default_pattern(@plan_input) %>
+          <%= for {reps, idx} <- Enum.with_index(pattern) do %>
+            <div class="inline-flex items-center overflow-hidden rounded-md border border-[var(--session-border)] bg-[var(--session-surface)]/60">
+              <input
+                type="number"
+                min="1"
+                name={"pattern[#{idx}]"}
+                value={reps}
+                class="w-16 border-0 bg-transparent px-2 py-2 text-center text-sm tabular-nums text-[var(--session-ink)] focus:outline-none"
+              />
               <button
+                :if={length(pattern) > 1}
                 type="button"
-                phx-click="set_pace_override"
-                phx-value-pace=""
-                class="border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                phx-click="remove_pattern_set"
+                phx-value-index={idx}
+                data-remove-pattern-set
+                class="border-l border-[var(--session-border)] px-2 py-2 text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+                aria-label={"Remove set #{idx + 1}"}
               >
-                Auto
+                <.icon name="hero-x-mark" class="size-3.5" />
               </button>
-              <p class="pb-2 text-right text-xs text-[var(--session-muted)]">
-                <%= if @plan_input.sec_per_burpee_override do %>
-                  Override active
-                <% else %>
-                  Solver balanced
-                <% end %>
-              </p>
-            </form>
-            <div
-              :if={@solver_solution}
-              class="mt-5 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-4 text-left"
-            >
-              <p class="text-sm font-medium text-[var(--session-muted)]">
-                Recommended
-              </p>
-              <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
-                {@solver_solution.metadata.recommendation}
-              </p>
-              <p class="mt-1 text-xs text-[var(--session-muted)]">
-                Pace and recovery are auto-balanced for your level.
-              </p>
-
-              <div :if={@solver_solution.metadata.rest_suggestions != []} class="mt-4 space-y-2">
-                <%= for suggestion <- @solver_solution.metadata.rest_suggestions do %>
-                  <div class="flex items-center justify-between gap-3 rounded-lg border border-[var(--session-border)] bg-[var(--session-surface)]/60 p-3">
-                    <div>
-                      <p class="text-xs font-semibold text-[var(--session-ink)]">
-                        Optional reset
-                      </p>
-                      <p class="text-xs text-[var(--session-muted)]">
-                        {suggestion.rest_sec}s at {suggestion.target_min}:00 · {suggestion.effect}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      phx-click="accept_rest_suggestion"
-                      phx-value-target-min={suggestion.target_min}
-                      phx-value-rest-sec={suggestion.rest_sec}
-                      data-accept-rest-suggestion
-                      class="border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-                    >
-                      Add
-                    </button>
-                  </div>
-                <% end %>
-              </div>
             </div>
+          <% end %>
+          <button
+            type="button"
+            phx-click="add_pattern_set"
+            class="border border-[var(--session-border)] px-3 py-2 text-xs text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          >
+            + Set
+          </button>
+        </div>
+      </form>
 
-            <div id="workout-outline" class="mt-6 space-y-3 text-left">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <p class="text-sm font-semibold text-[var(--session-ink)]">Workout</p>
-                  <p class="text-xs text-[var(--session-muted)]">
-                    {@presentation_outline.summary}
+      <%= if @prescription_blocked? do %>
+        <div
+          id="plan-prescription-blocked"
+          class="rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-5 py-5 text-center"
+        >
+          <p class="text-sm font-semibold text-[var(--session-ink)]">
+            {if @plan_feedback, do: @plan_feedback.title, else: "Prescription unavailable"}
+          </p>
+          <p class="mt-2 text-sm leading-6 text-[var(--session-muted)]">
+            {if @plan_feedback,
+              do: @plan_feedback.message,
+              else:
+                "Adjust the target, block pattern, or rest placement before creating this workout."}
+          </p>
+        </div>
+      <% end %>
+
+      <%= if !@prescription_blocked? and @derived do %>
+        <div class="space-y-3">
+          <div class="relative space-y-6">
+            <div class="space-y-3">
+              <p class="text-center text-sm font-medium text-[var(--session-muted)]">
+                Prescription
+              </p>
+              <div class="grid grid-cols-3 overflow-hidden rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 text-center">
+                <div class="px-3 py-4">
+                  <p class="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                    Time
+                  </p>
+                  <p class={[
+                    "qs-tabular mt-1 text-2xl font-semibold leading-none tracking-[-0.045em] tabular-nums",
+                    if(@derived.both_ok,
+                      do: "text-[var(--session-ink)]",
+                      else: "text-[var(--session-error-ink)]"
+                    )
+                  ]}>
+                    <%= if @derived.both_ok do %>
+                      {Fmt.duration_sec(round(@derived.duration_sec))}
+                    <% else %>
+                      —
+                    <% end %>
                   </p>
                 </div>
-                <div class="rounded-full border border-[var(--session-border)] px-3 py-1 text-[11px] font-medium text-[var(--session-muted)]">
-                  Outline
+                <div class="border-x border-[var(--session-border)] px-3 py-4">
+                  <p class="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                    Reps
+                  </p>
+                  <p class="qs-tabular mt-1 text-2xl font-semibold leading-none tracking-[-0.045em] tabular-nums text-[var(--session-ink)]">
+                    {@derived.burpee_count}
+                  </p>
+                </div>
+                <div class="px-3 py-4">
+                  <p class="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--session-muted)]">
+                    Pace
+                  </p>
+                  <p
+                    id="plan-prescription-pace"
+                    class="qs-tabular mt-1 text-2xl font-semibold leading-none tracking-[-0.045em] tabular-nums text-[var(--session-ink)]"
+                  >
+                    <%= if pace = @plan_input.sec_per_burpee_override || (@solver_solution && @solver_solution.sec_per_burpee) || (@plan && @plan.sec_per_burpee) do %>
+                      {format_sec(pace)}s
+                    <% else %>
+                      —
+                    <% end %>
+                  </p>
+                </div>
+              </div>
+              <form
+                id="plan-pace-form"
+                phx-change="set_pace_override"
+                class="grid grid-cols-[1fr_auto_auto] items-end gap-3 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 p-3 text-left"
+              >
+                <label class="space-y-1">
+                  <span class="block text-xs font-semibold text-[var(--session-ink)]">
+                    <%= if @plan_input.sec_per_burpee_override do %>
+                      Manual pace
+                    <% else %>
+                      Auto pace
+                    <% end %>
+                  </span>
+                  <span class="block text-[11px] text-[var(--session-muted)]">
+                    Seconds per rep. Clear to return to auto.
+                  </span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    name="pace"
+                    value={
+                      format_sec(
+                        @plan_input.sec_per_burpee_override ||
+                          (@solver_solution && @solver_solution.sec_per_burpee) ||
+                          (@plan && @plan.sec_per_burpee)
+                      )
+                    }
+                    class="mt-2 w-full border border-[var(--session-border)] bg-[var(--session-surface)]/70 px-3 py-2 text-sm tabular-nums text-[var(--session-ink)]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  phx-click="set_pace_override"
+                  phx-value-pace=""
+                  class="border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                >
+                  Auto
+                </button>
+                <p class="pb-2 text-right text-xs text-[var(--session-muted)]">
+                  <%= if @plan_input.sec_per_burpee_override do %>
+                    Override active
+                  <% else %>
+                    Solver balanced
+                  <% end %>
+                </p>
+              </form>
+              <div
+                :if={@solver_solution}
+                class="mt-5 rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-4 text-left"
+              >
+                <p class="text-sm font-medium text-[var(--session-muted)]">
+                  Recommended
+                </p>
+                <p class="mt-2 text-sm font-semibold text-[var(--session-ink)]">
+                  {@solver_solution.metadata.recommendation}
+                </p>
+                <p class="mt-1 text-xs text-[var(--session-muted)]">
+                  Pace and recovery are auto-balanced for your level.
+                </p>
+
+                <div :if={@solver_solution.metadata.rest_suggestions != []} class="mt-4 space-y-2">
+                  <%= for suggestion <- @solver_solution.metadata.rest_suggestions do %>
+                    <div class="flex items-center justify-between gap-3 rounded-lg border border-[var(--session-border)] bg-[var(--session-surface)]/60 p-3">
+                      <div>
+                        <p class="text-xs font-semibold text-[var(--session-ink)]">
+                          Optional reset
+                        </p>
+                        <p class="text-xs text-[var(--session-muted)]">
+                          {suggestion.rest_sec}s at {suggestion.target_min}:00 · {suggestion.effect}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        phx-click="accept_rest_suggestion"
+                        phx-value-target-min={suggestion.target_min}
+                        phx-value-rest-sec={suggestion.rest_sec}
+                        data-accept-rest-suggestion
+                        class="border border-[var(--session-border)] px-3 py-2 text-xs font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  <% end %>
                 </div>
               </div>
 
-              <%= for block <- @presentation_outline.blocks do %>
-                <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-4">
-                  <div class="flex items-start justify-between gap-4">
-                    <div>
-                      <p class="text-sm font-semibold text-[var(--session-ink)]">
-                        ▾ {block.title}
-                      </p>
-                      <p class="mt-1 text-xs text-[var(--session-muted)]">
-                        {block.set_count} sets × {block.reps_per_set || "mixed"} reps · {outline_rhythm_label(
-                          block.pacing_style
-                        )} · {format_sec(block.sec_per_burpee)} s/rep · {block.default_recovery_label} normal
-                      </p>
-                    </div>
-                    <div class="text-right text-xs tabular-nums text-[var(--session-muted)]">
-                      <p>{Fmt.duration_sec(round(@derived.duration_sec))}</p>
-                      <p>{block.total_reps} reps</p>
-                    </div>
+              <div id="workout-outline" class="mt-6 space-y-3 text-left">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold text-[var(--session-ink)]">Workout</p>
+                    <p class="text-xs text-[var(--session-muted)]">
+                      {@presentation_outline.summary}
+                    </p>
                   </div>
-
-                  <div class="mt-4 divide-y divide-[var(--session-border)]/70">
-                    <%= for row <- block.rows do %>
-                      <div class="grid grid-cols-[1fr_auto] items-center gap-3 py-2 text-sm">
-                        <div>
-                          <p class="font-medium text-[var(--session-ink)]">
-                            {outline_range_label(row)}
-                          </p>
-                          <p class="text-xs text-[var(--session-muted)]">
-                            {outline_row_note(row, block)}
-                          </p>
-                        </div>
-                        <div class="text-right text-xs tabular-nums text-[var(--session-muted)]">
-                          {row.recovery_label}
-                        </div>
-                      </div>
-                    <% end %>
+                  <div class="rounded-full border border-[var(--session-border)] px-3 py-1 text-[11px] font-medium text-[var(--session-muted)]">
+                    Outline
                   </div>
                 </div>
-              <% end %>
+
+                <%= for block <- @presentation_outline.blocks do %>
+                  <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface-alt)]/70 p-4">
+                    <div class="flex items-start justify-between gap-4">
+                      <div>
+                        <p class="text-sm font-semibold text-[var(--session-ink)]">
+                          ▾ {block.title}
+                        </p>
+                        <p class="mt-1 text-xs text-[var(--session-muted)]">
+                          {block.set_count} sets × {block.reps_per_set || "mixed"} reps · {outline_rhythm_label(
+                            block.pacing_style
+                          )} · {format_sec(block.sec_per_burpee)} s/rep · {block.default_recovery_label} normal
+                        </p>
+                      </div>
+                      <div class="text-right text-xs tabular-nums text-[var(--session-muted)]">
+                        <p>{Fmt.duration_sec(round(@derived.duration_sec))}</p>
+                        <p>{block.total_reps} reps</p>
+                      </div>
+                    </div>
+
+                    <div class="mt-4 divide-y divide-[var(--session-border)]/70">
+                      <%= for row <- block.rows do %>
+                        <div class="grid grid-cols-[1fr_auto] items-center gap-3 py-2 text-sm">
+                          <div>
+                            <p class="font-medium text-[var(--session-ink)]">
+                              {outline_range_label(row)}
+                            </p>
+                            <p class="text-xs text-[var(--session-muted)]">
+                              {outline_row_note(row, block)}
+                            </p>
+                          </div>
+                          <div class="text-right text-xs tabular-nums text-[var(--session-muted)]">
+                            {row.recovery_label}
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    <% end %>
-  </div>
+      <% end %>
+    </div>
+  </.qs_surface>
+</div>
 
-  <.form
-    for={@form}
-    id="plan-form"
-    phx-change="validate"
-    phx-submit="save"
-    class="hidden"
-  >
-  </.form>
-</.qs_surface>
+<.form
+  :if={@creator_phase != :review}
+  for={@form}
+  id="plan-form"
+  phx-change="validate"
+  phx-submit="save"
+  class="hidden"
+>
+</.form>
 
-<div class="flex items-center justify-end gap-2 px-1">
+<div :if={@creator_phase != :review} class="flex items-center justify-end gap-2 px-1">
   <.link
     navigate={~p"/workouts"}
     class="rounded-md border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-4 py-2.5 text-sm font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
@@ -303,19 +310,20 @@
     Cancel
   </.link>
   <button
+    id="editor-save-session"
     type="submit"
     form="plan-form"
     disabled={not (@derived && @derived.both_ok)}
     class={[
-      "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition",
+      "inline-flex items-center justify-center gap-2 rounded-md border border-[var(--session-border)] px-4 py-2.5 text-sm font-medium transition",
       if(@derived && @derived.both_ok,
-        do: "bg-[var(--session-ink)] text-[var(--session-bg)] hover:opacity-90",
-        else:
-          "cursor-not-allowed border border-[var(--session-border)] bg-[var(--session-track)] text-[var(--session-muted)]"
+        do:
+          "bg-[var(--session-bg)]/55 text-[var(--session-ink)] hover:bg-[var(--session-track)]/70",
+        else: "cursor-not-allowed bg-[var(--session-track)] text-[var(--session-muted)]"
       )
     ]}
   >
-    {if @live_action == :new, do: "Create session", else: "Save session"}
+    {if @live_action == :new, do: "Create workout", else: "Save workout"}
     <%= if @derived && @derived.both_ok do %>
       <.icon name="hero-arrow-right" class="size-4" />
     <% end %>

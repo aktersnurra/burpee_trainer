@@ -201,6 +201,62 @@ defmodule BurpeeTrainer.PlanEditor do
   @spec enable_manual_edit(State.t()) :: {:ok, State.t()}
   def enable_manual_edit(%State{} = state), do: {:ok, %{state | manual_edit?: true}}
 
+  @spec select_block(State.t(), term()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
+  def select_block(%State{} = state, index) do
+    case Input.parse_non_negative_index(index) do
+      {:ok, index} -> {:ok, %{state | selected_block_index: index}}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  @spec close_block(State.t()) :: {:ok, State.t()}
+  def close_block(%State{} = state), do: {:ok, %{state | selected_block_index: nil}}
+
+  @spec lock_block(State.t(), term()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
+  def lock_block(%State{} = state, index) do
+    case Input.parse_non_negative_index(index) do
+      {:ok, index} ->
+        {:ok,
+         %{
+           state
+           | locked_block_indexes: MapSet.put(state.locked_block_indexes, index),
+             manual_edit?: true
+         }}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  @spec unlock_block(State.t(), term()) :: {:ok, State.t()} | {:error, Input.reason(), State.t()}
+  def unlock_block(%State{} = state, index) do
+    case Input.parse_non_negative_index(index) do
+      {:ok, index} ->
+        {:ok, %{state | locked_block_indexes: MapSet.delete(state.locked_block_indexes, index)}}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  @spec rebalance_unlocked_blocks(State.t()) :: {:ok, State.t()}
+  def rebalance_unlocked_blocks(%State{} = state) do
+    locked_blocks = locked_blocks_by_index(state.form_plan, state.locked_block_indexes)
+
+    {:ok, regenerated} = regenerate(state)
+
+    form_plan = restore_locked_blocks(regenerated.form_plan, locked_blocks)
+
+    {:ok,
+     %{
+       regenerated
+       | form_plan: form_plan,
+         locked_block_indexes: state.locked_block_indexes,
+         manual_edit?: true,
+         derived: derived(form_plan, state.input)
+     }}
+  end
+
   @spec copy_block(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def copy_block(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, index) do
     with {:ok, index} <- Input.parse_non_negative_index(index),
@@ -252,6 +308,31 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def copy_set(%State{} = state, _block_index, _set_index),
     do: {:error, :missing_form_plan, state}
+
+  defp locked_blocks_by_index(%WorkoutPlan{blocks: blocks}, locked_indexes)
+       when is_list(blocks) do
+    blocks
+    |> Enum.sort_by(&(&1.position || 0))
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {block, index}, acc ->
+      if MapSet.member?(locked_indexes, index), do: Map.put(acc, index, block), else: acc
+    end)
+  end
+
+  defp locked_blocks_by_index(_plan, _locked_indexes), do: %{}
+
+  defp restore_locked_blocks(%WorkoutPlan{blocks: blocks} = plan, locked_blocks)
+       when is_list(blocks) do
+    blocks =
+      blocks
+      |> Enum.sort_by(&(&1.position || 0))
+      |> Enum.with_index()
+      |> Enum.map(fn {block, index} -> Map.get(locked_blocks, index, block) end)
+
+    %{plan | blocks: blocks}
+  end
+
+  defp restore_locked_blocks(plan, _locked_blocks), do: plan
 
   @spec input_from_plan(WorkoutPlan.t()) :: input()
   def input_from_plan(%WorkoutPlan{} = plan) do

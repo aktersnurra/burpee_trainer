@@ -21,6 +21,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
   alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
   alias BurpeeTrainerWeb.Fmt
+  alias BurpeeTrainerWeb.PlansLive.Edit.Presentation
 
   embed_templates("edit/*")
 
@@ -37,6 +38,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
      |> assign(:open_block_menu, nil)
      |> assign(:level, level)
      |> assign(:manual_edit, false)
+     |> assign(:creator_phase, if(socket.assigns.live_action == :new, do: :intent, else: :editor))
+     |> assign(:creator_advanced?, false)
+     |> assign(:creator_intent, :planned_session)
+     |> assign(:creator_difficulty, 3)
      |> load_plan(params)
      |> build_form_from_plan()
      |> assign_derived()}
@@ -52,7 +57,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     socket
     |> put_editor(editor)
-    |> assign(:page_title, "Edit plan")
+    |> assign(:page_title, "Edit workout")
     |> assign(:solver_error, editor.solver_error)
     |> assign(:solver_solution, editor.solver_solution)
     |> assign(:manual_edit, editor.manual_edit?)
@@ -63,7 +68,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     socket
     |> put_editor(editor)
-    |> assign(:page_title, "New plan")
+    |> assign(:page_title, "New workout")
     |> assign(:solver_error, editor.solver_error)
     |> assign(:solver_solution, editor.solver_solution)
     |> assign(:manual_edit, editor.manual_edit?)
@@ -81,6 +86,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> assign(:manual_edit, editor.manual_edit?)
     |> assign(:expanded_blocks, editor.expanded_blocks)
     |> assign(:open_block_menu, editor.open_block_menu)
+    |> assign(:selected_block_index, editor.selected_block_index)
+    |> assign(:locked_block_indexes, editor.locked_block_indexes)
     |> assign(:derived, derived_assign(editor))
   end
 
@@ -179,7 +186,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp metadata_source_label("coach_target"), do: "Coach target"
   defp metadata_source_label("catch_up"), do: "Catch-up"
-  defp metadata_source_label(_source), do: "Generated plan"
+  defp metadata_source_label(_source), do: "Generated workout"
 
   defp metadata_kind_label(nil), do: "Generated"
   defp metadata_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
@@ -230,25 +237,29 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     Enum.sort_by(blocks, & &1.position)
     |> Enum.with_index()
     |> Map.new(fn {block, idx} ->
-      {to_string(idx),
-       %{
-         "position" => block.position,
-         "repeat_count" => block.repeat_count,
-         "sets" =>
-           block.sets
-           |> Enum.sort_by(& &1.position)
-           |> Enum.with_index()
-           |> Map.new(fn {set, si} ->
-             {to_string(si),
-              %{
-                "position" => set.position,
-                "burpee_count" => set.burpee_count,
-                "sec_per_rep" => set.sec_per_rep,
-                "sec_per_burpee" => set.sec_per_burpee,
-                "end_of_set_rest" => set.end_of_set_rest
-              }}
-           end)
-       }}
+      block_attrs = %{
+        "position" => block.position,
+        "repeat_count" => block.repeat_count,
+        "sets" =>
+          block.sets
+          |> Enum.sort_by(& &1.position)
+          |> Enum.with_index()
+          |> Map.new(fn {set, si} ->
+            set_attrs = %{
+              "position" => set.position,
+              "burpee_count" => set.burpee_count,
+              "sec_per_rep" => set.sec_per_rep,
+              "sec_per_burpee" => set.sec_per_burpee,
+              "end_of_set_rest" => set.end_of_set_rest
+            }
+
+            set_attrs = if set.id, do: Map.put(set_attrs, "id", set.id), else: set_attrs
+            {to_string(si), set_attrs}
+          end)
+      }
+
+      block_attrs = if block.id, do: Map.put(block_attrs, "id", block.id), else: block_attrs
+      {to_string(idx), block_attrs}
     end)
   end
 
@@ -497,6 +508,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
                     ),
                   sec_per_rep:
                     parse_float_or(Map.get(set_params, "sec_per_rep"), set.sec_per_rep),
+                  sec_per_burpee:
+                    parse_float_or(
+                      Map.get(set_params, "sec_per_burpee") || Map.get(set_params, "sec_per_rep"),
+                      set.sec_per_burpee
+                    ),
                   end_of_set_rest:
                     parse_non_negative_integer_or(
                       Map.get(set_params, "end_of_set_rest"),
@@ -526,6 +542,13 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     case Integer.parse(to_string(value || "")) do
       {parsed, ""} when parsed >= 0 -> parsed
       _ -> fallback
+    end
+  end
+
+  defp parse_non_negative_index(value) do
+    case Integer.parse(to_string(value || "")) do
+      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
+      _ -> :error
     end
   end
 
@@ -584,6 +607,103 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # ---------------------------------------------------------------------------
 
   @impl true
+  def handle_event("toggle_advanced_constraints", _params, socket) do
+    {:noreply, update(socket, :creator_advanced?, &(!&1))}
+  end
+
+  def handle_event("pick_creator_intent", %{"intent" => intent}, socket) do
+    intent =
+      case intent do
+        "catch_up" -> :catch_up
+        "easy_technique" -> :easy_technique
+        "max_reps" -> :max_reps
+        _ -> :planned_session
+      end
+
+    {:noreply, assign(socket, :creator_intent, intent)}
+  end
+
+  def handle_event("set_creator_difficulty", %{"difficulty" => difficulty}, socket) do
+    difficulty =
+      case Integer.parse(to_string(difficulty || "")) do
+        {value, ""} when value in 1..5 -> value
+        _ -> socket.assigns.creator_difficulty
+      end
+
+    {:noreply, assign(socket, :creator_difficulty, difficulty)}
+  end
+
+  def handle_event("generate_workout", _params, socket) do
+    {:noreply, assign(socket, :creator_phase, :review)}
+  end
+
+  def handle_event("edit_generated_workout", _params, socket) do
+    {:noreply, assign(socket, :creator_phase, :editor)}
+  end
+
+  def handle_event("select_block", %{"index" => index}, socket) do
+    case PlanEditor.select_block(socket.assigns.editor, index) do
+      {:ok, editor} -> {:noreply, put_editor(socket, editor)}
+      {:error, _reason, _state} -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_block_sheet", _params, socket) do
+    {:ok, editor} = PlanEditor.close_block(socket.assigns.editor)
+    {:noreply, put_editor(socket, editor)}
+  end
+
+  def handle_event("toggle_block_lock", %{"index" => index}, socket) do
+    case parse_non_negative_index(index) do
+      {:ok, source_block_index} ->
+        index = Integer.to_string(source_block_index)
+        locked? = MapSet.member?(socket.assigns.locked_block_indexes, source_block_index)
+
+        result =
+          if locked?,
+            do: PlanEditor.unlock_block(socket.assigns.editor, index),
+            else: PlanEditor.lock_block(socket.assigns.editor, index)
+
+        case result do
+          {:ok, editor} -> validate_editor_form(socket, editor)
+          {:error, _reason, _state} -> {:noreply, socket}
+        end
+
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("change_block_sheet", %{"block" => block_params}, socket) do
+    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+    with {:ok, source_block_index} <-
+           parse_non_negative_index(Map.get(block_params, "source_block_index")),
+         true <- source_block_index < length(form_plan.blocks) do
+      set_params = %{
+        "burpee_count" => Map.get(block_params, "reps"),
+        "sec_per_rep" => Map.get(block_params, "sec_per_rep"),
+        "end_of_set_rest" => Map.get(block_params, "rest_sec")
+      }
+
+      blocks = update_timeline_set(form_plan.blocks, source_block_index, 0, set_params)
+      form_plan = %{form_plan | blocks: blocks}
+      editor = %{socket.assigns.editor | form_plan: form_plan, manual_edit?: true}
+
+      case PlanEditor.lock_block(editor, Integer.to_string(source_block_index)) do
+        {:ok, editor} -> validate_editor_form(socket, editor)
+        {:error, _reason, _state} -> {:noreply, socket}
+      end
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("rebalance_unlocked_blocks", _params, socket) do
+    {:ok, editor} = PlanEditor.rebalance_unlocked_blocks(socket.assigns.editor)
+    validate_editor_form(socket, editor)
+  end
+
   def handle_event("change_basics", params, socket) do
     {:ok, editor} = PlanEditor.change_basics(socket.assigns.editor, params)
 
@@ -978,16 +1098,32 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  def handle_event("start_workout", params, socket) do
+    if feasible_prescription?(socket.assigns.derived) do
+      submitted_params = Map.get(params, "workout_plan", %{})
+      form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+
+      full_params =
+        form_plan
+        |> plan_to_attrs()
+        |> Map.merge(merge_basics(submitted_params, socket.assigns.editor.input))
+
+      start_plan(socket, socket.assigns.live_action, full_params)
+    else
+      {:noreply, assign(socket, :solver_error, "Fix workout before starting")}
+    end
+  end
+
   def handle_event("duplicate_plan", _, %{assigns: %{live_action: :edit, plan: plan}} = socket) do
     case Workouts.duplicate_plan(plan) do
       {:ok, copy} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Plan copied.")
+         |> put_flash(:info, "Workout copied.")
          |> push_navigate(to: ~p"/workouts/#{copy.id}/edit")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not copy plan.")}
+        {:noreply, put_flash(socket, :error, "Could not copy workout.")}
     end
   end
 
@@ -996,16 +1132,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       {:ok, _plan} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Plan deleted.")
+         |> put_flash(:info, "Workout deleted.")
          |> push_navigate(to: ~p"/workouts")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not delete plan.")}
+        {:noreply, put_flash(socket, :error, "Could not delete workout.")}
     end
   end
 
   defp validate_editor_form(socket, editor) do
-    params = %{"blocks" => blocks_to_attrs(editor.form_plan.blocks)}
+    params = %{
+      "blocks" => blocks_to_attrs(editor.form_plan.blocks),
+      "steps" => steps_to_attrs(editor.form_plan.steps)
+    }
+
     base_plan = editor.plan || %WorkoutPlan{}
 
     changeset =
@@ -1026,12 +1166,38 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp feasible_prescription?(%{both_ok: true}), do: true
   defp feasible_prescription?(_derived), do: false
 
+  defp start_plan(socket, :new, params) do
+    case Workouts.create_plan(socket.assigns.current_user, params) do
+      {:ok, plan} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Workout ready.")
+         |> push_navigate(to: ~p"/session/#{plan.id}")}
+
+      {:error, changeset} ->
+        {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+    end
+  end
+
+  defp start_plan(socket, :edit, params) do
+    case Workouts.update_plan(socket.assigns.plan, params) do
+      {:ok, plan} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Workout ready.")
+         |> push_navigate(to: ~p"/session/#{plan.id}")}
+
+      {:error, changeset} ->
+        {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+    end
+  end
+
   defp save_plan(socket, :new, params) do
     case Workouts.create_plan(socket.assigns.current_user, params) do
       {:ok, _plan} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Plan created.")
+         |> put_flash(:info, "Workout created.")
          |> push_navigate(to: ~p"/workouts")}
 
       {:error, changeset} ->
@@ -1047,7 +1213,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       {:ok, _plan} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Plan saved.")
+         |> put_flash(:info, "Workout saved.")
          |> push_navigate(to: ~p"/workouts")}
 
       {:error, changeset} ->
@@ -1107,9 +1273,24 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:solver_solution, :any, required: true)
   attr(:live_action, :atom, required: true)
   attr(:level, :atom, required: true)
+  attr(:creator_phase, :atom, default: :editor)
+  attr(:creator_advanced?, :boolean, default: false)
+  attr(:selected_block_index, :integer, default: nil)
+  attr(:locked_block_indexes, :any, default: MapSet.new())
 
   defp plan_solution_card(assigns) do
     form_plan = Ecto.Changeset.apply_changes(assigns.form.source)
+    block_rows = Presentation.block_rows(form_plan, assigns.locked_block_indexes)
+
+    contract =
+      form_plan
+      |> Presentation.contract(assigns.derived)
+      |> Map.merge(%{
+        block_rows: block_rows,
+        structure_map: Presentation.structure_map(block_rows),
+        structure_groups: Presentation.structure_groups(block_rows)
+      })
+
     steps = loaded_steps(form_plan.steps)
     block_time_ranges = block_time_ranges(form_plan.blocks, assigns.plan_input)
 
@@ -1126,17 +1307,20 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     assigns =
       assigns
+      |> assign(:contract, contract)
       |> assign(:block_time_ranges, block_time_ranges)
       |> assign(
         :plan_feedback,
         plan_feedback(
-          assigns.timeline_error || assigns.solver_error,
+          assigns.timeline_error,
+          assigns.solver_error,
           assigns.derived,
           assigns.plan_input
         )
       )
       |> assign(:presentation_outline, PlanPresentation.outline(form_plan))
       |> assign(:pattern_summary, pattern_summary(assigns.plan_input, assigns.derived))
+      |> assign(:start_available?, feasible_prescription?(assigns.derived))
       |> assign(
         :prescription_blocked?,
         prescription_blocked?(assigns.solver_error, assigns.derived)
@@ -1183,53 +1367,49 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp prescription_blocked?(_solver_error, _derived), do: false
 
-  defp plan_feedback(solver_error, _derived, _plan_input) when is_binary(solver_error),
-    do: feedback_from_message(solver_error)
+  defp plan_feedback(timeline_error, _solver_error, _derived, _plan_input)
+       when is_binary(timeline_error) do
+    %{
+      title: "Rest placement needs attention",
+      message: timeline_error,
+      actions: [
+        "Move the rest closer to a set boundary",
+        "Shorten the rest",
+        "Increase the duration"
+      ]
+    }
+  end
 
-  defp plan_feedback(nil, %{both_ok: false} = derived, plan_input) do
-    duration_message =
-      if derived.duration_ok do
-        nil
-      else
-        "Duration is #{Fmt.duration_sec(round(derived.duration_sec))}, target is #{plan_input.target_duration_min}m."
-      end
+  defp plan_feedback(nil, solver_error, _derived, plan_input) when is_binary(solver_error) do
+    %{
+      title: "This cannot fit in #{Fmt.duration_sec(plan_input.target_duration_min * 60)}",
+      message: "The locked blocks and rests exceed the duration.",
+      actions: ["Show locked blocks", "Unlock all", "Allow longer workout", "Undo"]
+    }
+  end
 
-    count_message =
-      if derived.count_ok do
-        nil
+  defp plan_feedback(nil, nil, %{both_ok: false} = derived, plan_input) do
+    over_by = max(0, round(derived.duration_sec - plan_input.target_duration_min * 60))
+
+    message =
+      if over_by > 0 do
+        "You are #{Fmt.duration_sec(over_by)} over."
       else
         "Reps are #{derived.burpee_count}, target is #{plan_input.burpee_count_target}."
       end
 
     %{
-      title: "Prescription does not match target",
-      message: [duration_message, count_message] |> Enum.reject(&is_nil/1) |> Enum.join(" "),
-      actions: ["Adjust the graph", "Regenerate from targets", "Relax duration or reps"]
+      title: "Workout no longer fits #{Fmt.duration_sec(plan_input.target_duration_min * 60)}",
+      message: message,
+      actions: [
+        "Rebalance unlocked blocks",
+        "Keep #{Fmt.duration_sec(round(derived.duration_sec))}",
+        "Undo change"
+      ]
     }
   end
 
-  defp plan_feedback(_solver_error, _derived, _plan_input), do: nil
-
-  defp feedback_from_message(message) do
-    actions =
-      cond do
-        String.contains?(message, "minimum pace") or String.contains?(message, "needs at least") or
-          String.contains?(message, "cannot fit") or
-          String.contains?(message, "hard pace bounds") or
-          String.contains?(message, "Work alone does not fit") or
-            String.contains?(message, "No human-shaped recovery allocation") ->
-          ["Increase the duration", "Reduce the rep target", "Choose an easier pace/level"]
-
-        String.contains?(message, "additional rests") or
-            String.contains?(message, "Cannot place rest") ->
-          ["Move the rest closer to a set boundary", "Shorten the rest", "Increase the duration"]
-
-        true ->
-          ["Relax one target", "Adjust duration, reps, pace, or rests"]
-      end
-
-    %{title: "No workable prescription", message: message, actions: actions}
-  end
+  defp plan_feedback(_timeline_error, _solver_error, _derived, _plan_input), do: nil
 
   attr(:plan_input, :map, required: true)
   attr(:live_action, :atom, required: true)
@@ -1241,7 +1421,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       <div class="flex items-start justify-between gap-4">
         <form phx-change="change_basics" class="min-w-0 flex-1 space-y-2">
           <label class="text-sm font-medium text-[var(--session-muted)]">
-            Custom session
+            Custom workout
           </label>
           <input
             type="text"
@@ -1293,7 +1473,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
           )
         ]}
       >
-        Six-Count
+        Six-count
       </button>
       <div class="w-px bg-[var(--session-border)]" />
       <button

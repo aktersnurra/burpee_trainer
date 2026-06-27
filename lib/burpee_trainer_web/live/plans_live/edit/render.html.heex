@@ -7,46 +7,37 @@
   <div class="session-surface mx-auto max-w-2xl space-y-5 pb-24 text-[var(--session-ink)]">
     <.plan_editor_header plan_input={@plan_input} live_action={@live_action} plan={@plan} />
 
-    <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
-      <div class="border-b border-[var(--session-border)] px-5 py-4">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Type</p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">Choose the movement pattern.</p>
-      </div>
-      <.plan_type_picker plan_input={@plan_input} />
-    </.qs_surface>
-
-    <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
-      <div class="border-b border-[var(--session-border)] px-5 py-4">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Target</p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">Set the time box and rep goal.</p>
-      </div>
-      <.plan_goal_controls plan_input={@plan_input} level={@level} />
-    </.qs_surface>
-
-    <.qs_surface class="overflow-hidden bg-[var(--session-surface)]/50">
-      <div class="border-b border-[var(--session-border)] px-5 py-4">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">Style</p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">Pick how the work should be split.</p>
-      </div>
-      <.plan_pacing_controls plan_input={@plan_input} />
-    </.qs_surface>
-
     <.plan_metadata plan={@plan} />
 
-    <.plan_solution_card
-      plan={@plan}
-      form={@form}
-      expanded_blocks={@expanded_blocks}
-      expanded_timeline_row={@expanded_timeline_row}
-      open_block_menu={@open_block_menu}
-      plan_input={@plan_input}
-      manual_edit={@manual_edit}
-      derived={@derived}
-      solver_error={@solver_error}
-      timeline_error={@timeline_error}
-      solver_solution={@solver_solution}
-      live_action={@live_action}
-      level={@level}
-    />
+    <%= if @live_action == :new and @creator_phase == :intent do %>
+      <.creator_intent_template
+        plan_input={@plan_input}
+        level={@level}
+        creator_intent={@creator_intent}
+        creator_difficulty={@creator_difficulty}
+        creator_advanced?={@creator_advanced?}
+        derived={@derived}
+      />
+    <% else %>
+      <.plan_solution_card
+        form={@form}
+        expanded_blocks={@expanded_blocks}
+        expanded_timeline_row={@expanded_timeline_row}
+        open_block_menu={@open_block_menu}
+        plan_input={@plan_input}
+        manual_edit={@manual_edit}
+        derived={@derived}
+        solver_error={@solver_error}
+        timeline_error={@timeline_error}
+        solver_solution={@solver_solution}
+        live_action={@live_action}
+        level={@level}
+        creator_phase={@creator_phase}
+        creator_advanced?={@creator_advanced?}
+        selected_block_index={@selected_block_index}
+        locked_block_indexes={@locked_block_indexes}
+        plan={@plan}
+      />
+    <% end %>
   </div>
 </Layouts.app>

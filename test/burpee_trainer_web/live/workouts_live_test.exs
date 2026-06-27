@@ -10,6 +10,57 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     {:ok, conn: conn, user: user}
   end
 
+  defp open_advanced_constraints(view) do
+    view |> element("#advanced-constraints-toggle") |> render_click()
+    view
+  end
+
+  defp classes_for(html, selector) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.to_tree(skip_whitespace_nodes: true)
+    |> Enum.map(fn {_, attrs, _children} ->
+      attrs |> Map.new() |> Map.get("class", "")
+    end)
+  end
+
+  defp texts_for(html, selector) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.to_tree(skip_whitespace_nodes: true)
+    |> Enum.map(&node_text/1)
+  end
+
+  defp feedback_buttons(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#plan-solver-impossible button")
+    |> LazyHTML.to_tree(skip_whitespace_nodes: true)
+    |> Enum.map(fn {_, attrs, children} ->
+      {Map.new(attrs), node_text(children)}
+    end)
+  end
+
+  defp enabled_unimplemented_feedback_actions(html) do
+    html
+    |> feedback_buttons()
+    |> Enum.reject(fn {_attrs, text} -> text =~ "Rebalance unlocked blocks" end)
+    |> Enum.reject(fn {attrs, _text} -> Map.has_key?(attrs, "disabled") end)
+    |> Enum.map(fn {_attrs, text} -> String.trim(text) end)
+  end
+
+  defp node_text(nodes) when is_list(nodes), do: Enum.map_join(nodes, " ", &node_text/1)
+  defp node_text({_tag, _attrs, children}), do: node_text(children)
+  defp node_text(text) when is_binary(text), do: text
+
+  defp generate_workout(view) do
+    view |> element("#generate-workout") |> render_click()
+    view |> element("#edit-workout") |> render_click()
+    open_advanced_constraints(view)
+  end
+
   describe "/workouts" do
     test "empty state renders when no plans or videos", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/workouts")
@@ -155,12 +206,84 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workout-play-plan-#{plan.id}[href='/session/#{plan.id}']")
     end
 
+    test "existing plan edit page opens directly to editor overview", %{conn: conn, user: user} do
+      plan = plan_fixture(user, %{"name" => "Readable Edit"})
+
+      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      assert has_element?(view, "#workout-editor-overview")
+      assert html =~ "Edit workout"
+      assert html =~ "Readable Edit"
+      assert html =~ "Custom workout"
+      assert html =~ "Save workout"
+      refute html =~ "Custom session"
+      refute html =~ "Save session"
+      assert has_element?(view, "[data-workout-block-row]")
+      refute html =~ "Prescription graph"
+    end
+
+    test "existing workout Start submits visible edits before session navigation", %{
+      conn: conn,
+      user: user
+    } do
+      plan =
+        plan_fixture(user, %{
+          "name" => "Start Saves Edits",
+          "target_duration_min" => 2,
+          "burpee_count_target" => 17,
+          "blocks" => [
+            %{
+              "position" => 1,
+              "repeat_count" => 1,
+              "sets" => [
+                %{
+                  "position" => 1,
+                  "burpee_count" => 10,
+                  "sec_per_rep" => 7.5,
+                  "sec_per_burpee" => 7.5,
+                  "end_of_set_rest" => 45
+                }
+              ]
+            }
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+
+      view |> element("[data-workout-block-row][phx-value-index='0']") |> render_click()
+
+      view
+      |> element("#block-sheet-form")
+      |> render_change(%{
+        "block" => %{
+          "source_block_index" => "0",
+          "reps" => "17",
+          "sec_per_rep" => "4.2",
+          "rest_sec" => "45"
+        }
+      })
+
+      assert has_element?(view, "#editor-save-start-form #editor-start-workout[type='submit']")
+      view |> form("#editor-save-start-form", %{}) |> render_submit()
+      assert_redirect(view, ~p"/session/#{plan.id}")
+
+      updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
+      [first_block | _] = Enum.sort_by(updated.blocks, & &1.position)
+      [first_set | _] = Enum.sort_by(first_block.sets, & &1.position)
+
+      assert first_set.burpee_count == 17
+      assert_in_delta first_set.sec_per_rep, 4.2, 0.01
+      assert first_set.end_of_set_rest == 45
+    end
+
     test "workout outline renders block summary without duplicated graph", %{
       conn: conn,
       user: user
     } do
       plan = plan_fixture(user, %{"name" => "Timeline Plan"})
-      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
+      html = render(view)
 
       assert has_element?(view, "#workout-outline")
       assert html =~ "Block 1"
@@ -173,6 +296,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "pace override is available without opening graph inspector", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Timeline Edit Plan"})
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
 
       assert has_element?(view, "#plan-pace-form input[name='pace']")
       refute has_element?(view, "#graph-inspector")
@@ -215,7 +339,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           ]
         })
 
-      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
+      html = render(view)
 
       assert has_element?(view, "#workout-outline")
       assert html =~ "Block 1"
@@ -241,7 +367,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
         })
 
-      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
+      html = render(view)
 
       assert html =~ "Block 1"
       assert has_element?(view, "#workout-outline")
@@ -279,7 +407,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           ]
         })
 
-      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
+      html = render(view)
 
       assert has_element?(view, "#workout-outline")
       assert html =~ "70 reps"
@@ -290,15 +420,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "generated unbroken outline renders executable steps", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "200"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "200"
+      })
 
-      view
-      |> element("button[phx-value-style='unbroken']")
-      |> render_click()
-
+      render_click(view, "pick_pacing", %{"style" => "unbroken"})
       render_change(view, "change_basics", %{"reps_per_set" => "5"})
+      generate_workout(view)
 
       html = render(view)
       assert has_element?(view, "#workout-outline")
@@ -310,15 +439,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "removed timeline does not offer invalid rest near finish", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "144"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "144"
+      })
 
-      view
-      |> element("button[phx-value-style='unbroken']")
-      |> render_click()
-
+      render_click(view, "pick_pacing", %{"style" => "unbroken"})
       render_change(view, "change_basics", %{"reps_per_set" => "8"})
+      generate_workout(view)
 
       refute has_element?(view, "[data-timeline-edge-action][phx-value-target-min='19']")
       refute has_element?(view, "#plan-prescription-timeline")
@@ -329,10 +457,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       view |> element("button[phx-value-type='navy_seal']") |> render_click()
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "70"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "70"
+      })
 
+      generate_workout(view)
       render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
 
       html = render(view)
@@ -346,6 +476,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
     test "block pattern set can be removed", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
       render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
       assert has_element?(view, "button[data-remove-pattern-set][phx-value-index='1']")
@@ -361,6 +492,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
     test "visible pace control exposes editable pace override", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
       render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
 
@@ -383,14 +515,17 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       view |> element("button[phx-value-type='navy_seal']") |> render_click()
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "70"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "70"
+      })
 
+      generate_workout(view)
       render_change(view, "change_block_pattern", %{"pattern" => %{"0" => "4", "1" => "3"}})
 
       view |> element("#plan-form") |> render_submit(%{"workout_plan" => %{}})
-      assert_redirect(view, ~p"/workouts")
+      flash = assert_redirect(view, ~p"/workouts")
+      assert flash["info"] == "Workout created."
 
       [plan | _] = BurpeeTrainer.Workouts.list_plans(user)
       plan = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
@@ -409,15 +544,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     } do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "144"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "144"
+      })
 
-      view
-      |> element("button[phx-value-style='unbroken']")
-      |> render_click()
-
+      render_click(view, "pick_pacing", %{"style" => "unbroken"})
       render_change(view, "change_basics", %{"reps_per_set" => "8"})
+      generate_workout(view)
 
       html = render(view)
       assert has_element?(view, "#workout-outline")
@@ -433,10 +567,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     test "new even plan explains cadence recommendation without reset suggestions", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "160"
+      })
 
+      generate_workout(view)
       html = render(view)
       assert html =~ "Recommended"
       assert html =~ "even cadence"
@@ -446,32 +582,16 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       refute has_element?(view, "#plan-prescription-timeline")
     end
 
-    test "even recommendation does not expose duplicate reset suggestions", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/workouts/new")
-
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "160"})
-
-      html = render(view)
-      assert has_element?(view, "#workout-outline")
-      refute has_element?(view, "button[data-accept-rest-suggestion]")
-      refute html =~ ~s(id="plan-prescription-timeline")
-    end
-
     test "outline replaces graph interactions for generated plans", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "144"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "144"
+      })
 
-      view
-      |> element("button[phx-value-style='unbroken']")
-      |> render_click()
-
+      render_click(view, "pick_pacing", %{"style" => "unbroken"})
+      generate_workout(view)
       render_change(view, "change_basics", %{"reps_per_set" => "8"})
 
       html = render(view)
@@ -486,7 +606,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
     test "existing grouped plan shows block pattern editor", %{conn: conn, user: user} do
       plan = plan_fixture(user, %{"name" => "Grouped Plan"})
-      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
+      html = render(view)
 
       assert has_element?(view, "#block-pattern-editor")
       assert html =~ "Block pattern"
@@ -546,6 +668,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
         })
 
       {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
 
       assert has_element?(view, "#plan-prescription-pace", "5.3s")
       refute has_element?(view, "#plan-prescription-pace", "—")
@@ -593,9 +716,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       view |> element("#plan-duplicate") |> render_click()
 
-      {path, _flash} = assert_redirect(view)
+      {path, flash} = assert_redirect(view)
       assert path =~ ~r"/workouts/\d+/edit"
       refute path == "/workouts/#{plan.id}/edit"
+      assert flash["info"] == "Workout copied."
     end
 
     test "deleting a plan from the edit page returns to workouts", %{conn: conn, user: user} do
@@ -604,7 +728,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       view |> element("#plan-delete") |> render_click()
 
-      assert_redirect(view, "/workouts")
+      flash = assert_redirect(view, "/workouts")
+      assert flash["info"] == "Workout deleted."
     end
 
     test "video card has no edit link", %{conn: conn} do
@@ -616,34 +741,254 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
   end
 
   describe "/workouts/new" do
-    test "renders the new plan editor surface", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/workouts/new")
+    test "new workout opens as an intent-first creator, not a solver panel", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/workouts/new")
 
-      assert html =~ "session-surface"
-      assert html =~ ~s(id="plan-form")
-      assert html =~ "Custom session"
-      assert html =~ "Type"
-      assert html =~ "Duration"
-      assert html =~ "Goal"
-      assert html =~ "Style"
-      assert html =~ "Prescription"
-      assert html =~ "Workout"
-      assert html =~ "Block pattern"
-      refute html =~ "Show structure"
-      assert html =~ ~s(id="workout-outline")
-      refute html =~ ~s(id="plan-prescription-timeline")
-      refute html =~ ~s(data-timeline-primary-graph)
-      refute html =~ ~s(data-timeline-edge-action)
-      refute html =~ ~s(data-timeline-block-node)
-      assert html =~ "Six-Count"
+      assert has_element?(view, "#creator-intent-screen")
+      assert html =~ "Create workout"
+      assert html =~ "What are we doing?"
+      assert html =~ "Six-count"
       assert html =~ "Navy SEAL"
-      assert html =~ "Create session"
-      refute html =~ ">Reps<"
+      assert html =~ "20 min"
+      assert html =~ "30 min"
+      assert html =~ "Planned workout"
+      assert html =~ "Catch up"
+      assert html =~ "Easy technique"
+      assert html =~ "Max reps"
+      assert html =~ "Difficulty"
+      assert html =~ "Generate workout"
+
+      refute html =~ "Block pattern"
+      refute html =~ "Prescription graph"
+      refute html =~ "Solver computes"
       refute html =~ ">Pace<"
+    end
+
+    test "generated review shows a readable workout contract before block data", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("#generate-workout") |> render_click()
+
+      html = render(view)
+      assert has_element?(view, "#workout-contract-review")
+      assert html =~ "20 min Six-count"
+      assert html =~ "reps ·"
+      assert html =~ "block"
+      assert html =~ "Expected feel:"
+      assert has_element?(view, "[data-structure-map]")
+      assert has_element?(view, "#start-workout")
+      assert has_element?(view, "#edit-workout")
+
+      refute html =~ "Block pattern"
+      refute html =~ "Prescription graph"
+      refute html =~ "Solver computes"
+    end
+
+    test "editor overview is readable block cards, not a field table", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("#generate-workout") |> render_click()
+      view |> element("#edit-workout") |> render_click()
+
+      html = render(view)
+      assert has_element?(view, "#workout-editor-overview")
+      assert html =~ "Edit workout"
+      assert html =~ "20 min Six-count"
+      assert html =~ "reps ·"
+      assert html =~ "block"
+      assert has_element?(view, "[data-structure-map]")
+      assert has_element?(view, "[data-workout-block-row]")
+      assert html =~ "Rep every"
+      assert html =~ "rest"
+      assert html =~ "Rebalance unlocked blocks"
+
+      refute html =~ "Prescription graph"
+      refute html =~ "Solver computes"
+      refute html =~ ">Pace<"
+    end
+
+    test "selecting a block opens a focused edit sheet and locking labels the row", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("#generate-workout") |> render_click()
+      view |> element("#edit-workout") |> render_click()
+      view |> element("[data-workout-block-row][phx-value-index='0']") |> render_click()
+
+      assert has_element?(view, "#block-edit-sheet")
+      html = render(view)
+      assert html =~ "Reps"
+      assert html =~ "Seconds per rep"
+      assert html =~ "Rest after"
+      assert html =~ "Lock this block pattern"
+      assert html =~ "Duplicate"
+      assert html =~ "Delete block"
+      assert has_element?(view, "#block-delete[disabled][aria-disabled='true']")
+
+      view
+      |> element("#block-sheet-form")
+      |> render_change(%{
+        "block" => %{
+          "source_block_index" => "0",
+          "reps" => "17",
+          "sec_per_rep" => "4.2",
+          "rest_sec" => "45"
+        }
+      })
+
+      html = render(view)
+      assert html =~ "Locked by you"
+      assert html =~ "17 reps"
+      assert html =~ "Rep every 4.2s"
+      assert html =~ "0:45 rest"
+    end
+
+    test "locking a repeated block row uses the source block index", %{conn: conn, user: user} do
+      plan =
+        plan_fixture(user, %{
+          "name" => "Repeated Row Lock",
+          "blocks" => [
+            %{
+              "position" => 1,
+              "repeat_count" => 3,
+              "sets" => [
+                %{
+                  "position" => 1,
+                  "burpee_count" => 10,
+                  "sec_per_rep" => 6.0,
+                  "sec_per_burpee" => 6.0,
+                  "end_of_set_rest" => 30
+                }
+              ]
+            }
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      view |> element("[data-workout-block-row][phx-value-index='1']") |> render_click()
+
+      assert has_element?(
+               view,
+               "#block-sheet-form input[name='block[source_block_index]'][value='0']"
+             )
+
+      view |> element("#block-lock-toggle") |> render_click()
+
+      view
+      |> element("#block-sheet-form")
+      |> render_change(%{
+        "block" => %{
+          "source_block_index" => "0",
+          "reps" => "19",
+          "sec_per_rep" => "4.4",
+          "rest_sec" => "50"
+        }
+      })
+
+      html = render(view)
+      [first_row_text] = texts_for(html, "[data-workout-block-row][phx-value-index='0']")
+
+      assert first_row_text =~ "Locked by you"
+      assert first_row_text =~ "19 reps"
+      assert length(Regex.scan(~r/Locked by you/, html)) > 1
+
+      view |> element("#rebalance-unlocked-blocks") |> render_click()
+
+      html = render(view)
+      [first_row_text] = texts_for(html, "[data-workout-block-row][phx-value-index='0']")
+
+      assert first_row_text =~ "Locked by you"
+      assert first_row_text =~ "19 reps"
+    end
+
+    test "editor overview keeps one primary CTA while save remains available", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("#generate-workout") |> render_click()
+      view |> element("#edit-workout") |> render_click()
+
+      html = render(view)
+
+      primary_actions =
+        html
+        |> classes_for("a, button")
+        |> Enum.count(fn classes ->
+          classes |> String.split() |> Enum.member?("bg-[var(--session-ink)]")
+        end)
+
+      assert primary_actions == 1
+      assert has_element?(view, "#editor-start-workout")
+      assert has_element?(view, "#editor-save-session[form='plan-form']")
+      assert html =~ "Create workout"
+      refute html =~ "Create session"
+
+      [save_classes] = classes_for(html, "#editor-save-session")
+      save_class_tokens = String.split(save_classes)
+      assert "border" in save_class_tokens
+      refute "bg-[var(--session-ink)]" in save_class_tokens
+    end
+
+    test "invalid editor overview shows feedback and disables Start before advanced is opened", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      view |> element("#generate-workout") |> render_click()
+      view |> element("#edit-workout") |> render_click()
+
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "1",
+        "burpee_count_target" => "200"
+      })
+
+      html = render(view)
+      assert has_element?(view, "#plan-solver-impossible")
+      assert html =~ "This cannot fit in 1:00"
+      assert html =~ "The locked blocks and rests exceed the duration."
+      assert html =~ "Show locked blocks"
+      assert html =~ "Unlock all"
+      assert html =~ "Allow longer workout"
+      assert html =~ "Undo"
+      assert enabled_unimplemented_feedback_actions(html) == []
+      refute html =~ "No runnable prescription yet"
+      refute html =~ "No workable prescription"
+      assert has_element?(view, "#editor-start-workout[disabled]")
+      refute html =~ ~s(id="advanced-constraints-panel")
+    end
+
+    test "advanced constraints are collapsed until requested", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/workouts/new")
+
+      assert has_element?(view, "#advanced-constraints-toggle")
+      refute html =~ ~s(id="advanced-constraints-panel")
+
+      view |> element("#advanced-constraints-toggle") |> render_click()
+
+      assert has_element?(view, "#advanced-constraints-panel")
+      html = render(view)
+      assert html =~ "Manual target reps"
+      assert html =~ "Unbroken cap"
+      assert html =~ "Minimum rest"
+      assert html =~ "Maximum pace"
+      assert html =~ "Solver strictness"
+    end
+
+    test "advanced constraints toggle exposes collapsed and expanded state", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+
+      assert has_element?(
+               view,
+               "#advanced-constraints-toggle[aria-controls='advanced-constraints-panel'][aria-expanded='false']"
+             )
+
+      view |> element("#advanced-constraints-toggle") |> render_click()
+
+      assert has_element?(view, "#advanced-constraints-toggle[aria-expanded='true']")
+      assert has_element?(view, "#advanced-constraints-panel")
     end
 
     test "invalid manual prescription shows actionable feedback", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
       view
       |> element("#plan-form")
@@ -656,9 +1001,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
               "sets" => %{
                 "0" => %{
                   "position" => "1",
-                  "burpee_count" => "1",
-                  "sec_per_rep" => "5.0",
-                  "sec_per_burpee" => "5.0",
+                  "burpee_count" => "200",
+                  "sec_per_rep" => "6.21",
+                  "sec_per_burpee" => "6.21",
                   "end_of_set_rest" => "0"
                 }
               }
@@ -669,46 +1014,58 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
-      assert html =~ "Prescription does not match target"
-      assert html =~ "Reps are 1"
+      assert html =~ "Workout no longer fits 20:00"
+      assert html =~ "You are 0:42 over."
+      assert html =~ "Rebalance unlocked blocks"
+      assert html =~ "Keep 20:42"
+      assert html =~ "Undo change"
+      assert enabled_unimplemented_feedback_actions(html) == []
       refute html =~ ">—<"
     end
 
     test "aggressive impossible prescription explains alternatives", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "20", "burpee_count_target" => "300"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "20",
+        "burpee_count_target" => "300"
+      })
 
-      view
-      |> element("button[phx-value-style='unbroken']")
-      |> render_click()
-
+      render_click(view, "pick_pacing", %{"style" => "unbroken"})
       render_change(view, "change_basics", %{"reps_per_set" => "8"})
 
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
-      assert html =~ "Reduce the rep target"
+      assert html =~ "This cannot fit in 20:00"
+      assert html =~ "The locked blocks and rests exceed the duration."
+      assert html =~ "Allow longer workout"
       refute html =~ "No runnable prescription yet"
-      assert html =~ "Workout"
+      refute html =~ "No workable prescription"
+      refute html =~ "Prescription graph"
       refute html =~ "Predicted finish"
     end
 
-    test "impossible prescription shows actionable feedback", %{conn: conn} do
+    test "impossible prescription uses product conflict copy and actions", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "1", "burpee_count_target" => "200"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "1",
+        "burpee_count_target" => "200"
+      })
 
       html = render(view)
       assert has_element?(view, "#plan-solver-impossible")
-      assert html =~ "No workable prescription"
-      assert html =~ "hard pace bounds"
-      assert html =~ "Increase the duration"
-      assert html =~ "Reduce the rep target"
-      assert html =~ "No runnable prescription yet"
+      assert html =~ "This cannot fit in 1:00"
+      assert html =~ "The locked blocks and rests exceed the duration."
+      assert html =~ "Show locked blocks"
+      assert html =~ "Unlock all"
+      assert html =~ "Allow longer workout"
+      assert html =~ "Undo"
+      assert enabled_unimplemented_feedback_actions(html) == []
+      refute html =~ "No runnable prescription yet"
+      refute html =~ "No workable prescription"
       refute html =~ "Recommended"
       refute html =~ "Prescription graph"
       refute html =~ "Predicted finish"
@@ -716,10 +1073,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
     test "impossible prescription cannot be saved", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
-      view
-      |> element("#plan-goal-controls")
-      |> render_change(%{"target_duration_min" => "1", "burpee_count_target" => "200"})
+      render_change(view, "change_basics", %{
+        "target_duration_min" => "1",
+        "burpee_count_target" => "200"
+      })
 
       assert has_element?(view, "button[form='plan-form'][disabled]")
 
@@ -728,13 +1087,16 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
         |> element("#plan-form")
         |> render_submit(%{"workout_plan" => %{}})
 
-      assert html =~ "Fix prescription before saving"
+      assert html =~ "This cannot fit in 1:00"
+      assert html =~ "The locked blocks and rests exceed the duration."
       assert has_element?(view, "#plan-form")
     end
 
-    test "new editor uses block pattern instead of show structure", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/workouts/new")
+    test "generated workout review uses block pattern instead of show structure", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
 
+      html = render(view)
       assert has_element?(view, "#block-pattern-editor")
       assert html =~ "Block pattern"
       refute html =~ "Show structure"
@@ -772,14 +1134,16 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
         })
 
-      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      open_advanced_constraints(view)
+      html = render(view)
 
       assert html =~ "Block pattern"
       assert has_element?(view, "#workout-outline")
       refute html =~ "Show structure"
     end
 
-    test "picking Navy SEAL keeps the editor rendered", %{conn: conn} do
+    test "picking Navy SEAL keeps creator usable before generated editor", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view
@@ -788,7 +1152,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       html = render(view)
       assert html =~ "Navy SEAL"
-      assert html =~ ~s(id="plan-form")
+      assert has_element?(view, "#creator-intent-screen")
+
+      generate_workout(view)
+      assert has_element?(view, "#plan-form")
     end
   end
 
