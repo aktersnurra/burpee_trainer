@@ -66,9 +66,17 @@ defmodule BurpeeTrainer.PlanSolver.StructureSearch do
     grammar = grammar_structures(input)
     fallback = [balanced_fallback(input)]
 
-    (uniform ++ grammar ++ fallback)
-    |> Enum.uniq_by(&encode/1)
-    |> Enum.filter(&valid_generated_structure?(&1, input))
+    candidates =
+      (uniform ++ grammar ++ fallback)
+      |> Enum.uniq_by(&encode/1)
+      |> Enum.filter(&valid_generated_structure?(&1, input))
+
+    readable_candidates = Enum.filter(candidates, &readable_generated_structure?(&1, input))
+
+    case readable_candidates do
+      [] -> candidates
+      readable -> readable
+    end
     |> Enum.sort_by(&structure_key/1)
   end
 
@@ -77,6 +85,13 @@ defmodule BurpeeTrainer.PlanSolver.StructureSearch do
 
     Enum.sum(set_pattern) == input.burpee_count_target and
       Enum.all?(set_pattern, &(&1 <= input.max_unbroken_reps))
+  end
+
+  defp readable_generated_structure?(structure, %Input{} = input) do
+    set_pattern = expand(structure)
+    floor = min_readable_set(input.max_unbroken_reps)
+
+    Enum.all?(set_pattern, &(&1 >= floor))
   end
 
   defp uniform_structures(target, max_unbroken_reps) do

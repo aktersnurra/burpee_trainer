@@ -4,6 +4,8 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
+  alias BurpeeTrainer.Workouts
+
   setup_all do
     previous_today = Application.get_env(:burpee_trainer, :today_override)
     saturday = Date.utc_today() |> Date.beginning_of_week(:monday) |> Date.add(5)
@@ -167,6 +169,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     {path, _flash} = assert_redirect(view)
     assert path =~ ~r"/workouts/\d+/edit"
+
+    [_, plan_id] = Regex.run(~r"/workouts/(\d+)/edit", path)
+    plan = Workouts.get_plan!(user, String.to_integer(plan_id))
+
+    assert metadata_value(plan.plan_solver_metadata, :solver_version) == 3
+    assert metadata_value(plan.plan_solver_metadata, :source) == "catch_up"
+    assert is_binary(metadata_value(plan.plan_solver_metadata, :structure_key))
   end
 
   test "catch-up panel balances eighty remaining minutes across two logged types", %{
@@ -309,5 +318,9 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#catch-up-six-count")
     refute has_element?(view, "[data-home-coach-suggestion]")
     refute has_element?(view, "[data-home-weekly-split]")
+  end
+
+  defp metadata_value(metadata, key) do
+    Map.get(metadata || %{}, key) || Map.get(metadata || %{}, Atom.to_string(key))
   end
 end

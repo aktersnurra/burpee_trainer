@@ -400,6 +400,8 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
              ]
 
       assert [%{kind: :block_run, repeat_count: 10}] = plan.steps
+      assert metadata_value(plan.plan_solver_metadata, :solver_version) == 3
+      assert metadata_value(plan.plan_solver_metadata, :structure_key) == "10x[4,3]"
     end
 
     test "new plan renders normalized workout outline instead of solver-fragment blocks", %{
@@ -788,5 +790,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ "Navy SEAL"
       assert html =~ ~s(id="plan-form")
     end
+  end
+
+  defp metadata_value(metadata, key) do
+    Map.get(metadata || %{}, key) || Map.get(metadata || %{}, Atom.to_string(key))
   end
 end

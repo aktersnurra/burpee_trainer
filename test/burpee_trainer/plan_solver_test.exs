@@ -63,6 +63,36 @@ defmodule BurpeeTrainer.PlanSolverTest do
     )
   end
 
+  test "even additional rest is included in canonical execution" do
+    inp =
+      input(%{
+        pacing_style: :even,
+        burpee_count_target: 10,
+        target_duration_min: 10,
+        block_pattern: [5],
+        additional_rests: [%{target_min: 5, rest_sec: 60}]
+      })
+
+    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert Enum.any?(sol.execution, &match?(%Execution.RestEvent{source: {:explicit, 5}}, &1))
+    assert Enum.any?(sol.plan.steps, &(&1.kind == :rest and &1.rest_sec == 60))
+    assert_solution_matches_execution(inp, sol)
+  end
+
+  test "even one-rep target with leftover additional rest is infeasible" do
+    assert {:error, [msg]} =
+             PlanSolver.solve(
+               input(%{
+                 pacing_style: :even,
+                 burpee_count_target: 1,
+                 target_duration_min: 1,
+                 additional_rests: [%{target_min: 1, rest_sec: 10}]
+               })
+             )
+
+    assert msg =~ "Explicit rest cannot be placed"
+  end
+
   test "even pace override pins movement pace while preserving total duration" do
     assert {:ok, sol} =
              PlanSolver.solve(

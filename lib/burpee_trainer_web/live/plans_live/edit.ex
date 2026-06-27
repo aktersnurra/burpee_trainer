@@ -202,6 +202,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
       "additional_rests" => plan.additional_rests,
+      "plan_solver_metadata" => plan.plan_solver_metadata,
       "blocks" => blocks_to_attrs(plan.blocks),
       "steps" => steps_to_attrs(plan.steps || [])
     }

@@ -132,7 +132,13 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, sol} = BurpeeTrainer.PlanSolver.solve(input)
 
-    assert [%{repeat_count: 10}] = sol.plan.steps
+    assert [first_run, rest_step, second_run] = sol.plan.steps
+    assert first_run.kind == :block_run
+    assert first_run.repeat_count == 6
+    assert rest_step.kind == :rest
+    assert rest_step.rest_sec == 20
+    assert second_run.kind == :block_run
+    assert second_run.repeat_count == 4
     assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 70
     assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 1200
     assert sol.metadata.strategy == :even

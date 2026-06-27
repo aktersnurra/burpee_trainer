@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.PlanSolver.EvenSolver do
   @moduledoc "Plan Solver v3 even pacing branch."
 
-  alias BurpeeTrainer.PlanSolver.{BlockSpec, Infeasible, PacePolicy, Prescription}
+  alias BurpeeTrainer.PlanSolver.{BlockSpec, Infeasible, PacePolicy, Prescription, Recovery}
 
   @spec solve(BurpeeTrainer.PlanSolver.Input.t(), PacePolicy.t()) ::
           {:ok, Prescription.t()} | {:error, Infeasible.t()}
@@ -40,7 +40,11 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
          suggestions: ["Adjust reps or duration"]
        }}
     else
-      {:ok, prescription(input, policy, sec_per_rep, nil)}
+      cadence_sec = input.target_duration_sec / input.burpee_count_target
+
+      with {:ok, recoveries} <- explicit_recoveries(input, cadence_sec) do
+        {:ok, prescription(input, policy, sec_per_rep, cadence_sec, recoveries)}
+      end
     end
   end
 
@@ -48,9 +52,7 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
     sec_per_rep = selected_movement_pace(input, policy, available_average)
     explicit_rest_total = Enum.reduce(input.explicit_rests || [], 0, &(&1.duration_sec + &2))
 
-    cadence_sec =
-      (input.target_duration_sec - explicit_rest_total - sec_per_rep) /
-        (input.burpee_count_target - 1)
+    cadence_sec = (input.target_duration_sec - explicit_rest_total) / input.burpee_count_target
 
     cond do
       cadence_sec < sec_per_rep ->
@@ -70,11 +72,13 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
          }}
 
       true ->
-        {:ok, prescription(input, policy, sec_per_rep, cadence_sec)}
+        with {:ok, recoveries} <- explicit_recoveries(input, cadence_sec) do
+          {:ok, prescription(input, policy, sec_per_rep, cadence_sec, recoveries)}
+        end
     end
   end
 
-  defp prescription(input, policy, sec_per_rep, cadence_sec) do
+  defp prescription(input, policy, sec_per_rep, cadence_sec, recoveries) do
     {blocks, set_pattern} = cadence_groups(input)
 
     %Prescription{
@@ -86,7 +90,7 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
       cadence_sec: cadence_sec,
       blocks: blocks,
       set_pattern: set_pattern,
-      recoveries: [],
+      recoveries: recoveries,
       execution: nil,
       score: {0, 0, 0, 0, 0, 0, 0, 0, "even"},
       metadata: %{
@@ -106,6 +110,66 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
         }
       }
     }
+  end
+
+  defp explicit_recoveries(%{explicit_rests: rests}, _cadence_sec) when rests in [nil, []],
+    do: {:ok, []}
+
+  defp explicit_recoveries(input, cadence_sec) do
+    {_blocks, set_pattern} = cadence_groups(input)
+    boundaries = even_boundaries(set_pattern, cadence_sec)
+
+    recoveries =
+      Enum.reduce_while(input.explicit_rests || [], [], fn rest, acc ->
+        case closest_boundary(boundaries, rest.target_elapsed_sec, rest.tolerance_sec) do
+          nil ->
+            {:halt,
+             {:error,
+              %Infeasible{
+                reason: :cannot_place_explicit_rest,
+                details: %{
+                  target_elapsed_sec: rest.target_elapsed_sec,
+                  duration_sec: rest.duration_sec
+                },
+                suggestions: [
+                  "Move the rest to an earlier set boundary",
+                  "Remove the explicit rest"
+                ]
+              }}}
+
+          boundary ->
+            recovery = %Recovery{
+              after_set: boundary.after_set,
+              total_sec: rest.duration_sec,
+              kind: :explicit,
+              source: {:explicit, round(rest.target_elapsed_sec / 60)}
+            }
+
+            {:cont, [recovery | acc]}
+        end
+      end)
+
+    case recoveries do
+      {:error, _error} = error -> error
+      recoveries -> {:ok, Enum.reverse(recoveries)}
+    end
+  end
+
+  defp even_boundaries(set_pattern, cadence_sec) do
+    set_pattern
+    |> Enum.drop(-1)
+    |> Enum.with_index(1)
+    |> Enum.map_reduce(0.0, fn {reps, after_set}, elapsed ->
+      elapsed = elapsed + reps * cadence_sec
+      {%{after_set: after_set, elapsed_sec: elapsed}, elapsed}
+    end)
+    |> elem(0)
+  end
+
+  defp closest_boundary(boundaries, target_elapsed_sec, tolerance_sec) do
+    boundaries
+    |> Enum.filter(&(abs(&1.elapsed_sec - target_elapsed_sec) <= tolerance_sec))
+    |> Enum.min_by(&abs(&1.elapsed_sec - target_elapsed_sec), fn -> nil end)
   end
 
   defp cadence_groups(%{block_pattern: pattern, burpee_count_target: total_reps})

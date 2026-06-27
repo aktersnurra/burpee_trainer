@@ -55,6 +55,48 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolverTest do
     assert Enum.all?(prescription.blocks, &(length(&1.motif) <= 2))
   end
 
+  test "even pacing places explicit rests on real cadence group boundaries" do
+    input = %Input{
+      burpee_type: :six_count,
+      target_duration_sec: 1_200,
+      burpee_count_target: 120,
+      pacing_style: :even,
+      block_pattern: [10],
+      explicit_rests: [
+        %BurpeeTrainer.PlanSolver.ExplicitRest{
+          target_elapsed_sec: 600,
+          duration_sec: 30,
+          tolerance_sec: 90
+        }
+      ]
+    }
+
+    assert {:ok, prescription} = EvenSolver.solve(input, PacePolicy.for(:six_count))
+    assert [%{kind: :explicit, total_sec: 30, after_set: after_set}] = prescription.recoveries
+    assert after_set > 0
+    assert after_set < length(prescription.set_pattern)
+    assert_in_delta prescription.cadence_sec * 120 + 30, 1_200, 1.0e-6
+  end
+
+  test "even pacing rejects explicit rest when no real boundary exists" do
+    input = %Input{
+      burpee_type: :six_count,
+      target_duration_sec: 1_200,
+      burpee_count_target: 1,
+      pacing_style: :even,
+      explicit_rests: [
+        %BurpeeTrainer.PlanSolver.ExplicitRest{
+          target_elapsed_sec: 60,
+          duration_sec: 10,
+          tolerance_sec: 60
+        }
+      ]
+    }
+
+    assert {:error, error} = EvenSolver.solve(input, PacePolicy.for(:six_count))
+    assert error.reason == :cannot_place_explicit_rest
+  end
+
   test "even pacing rejects impossible hard-fastest target" do
     input = %Input{
       burpee_type: :six_count,

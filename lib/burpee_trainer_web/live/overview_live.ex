@@ -312,7 +312,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
     metadata = %{
       "source" => "coach_target",
-      "solver_version" => "deterministic-v2",
       "suggestion_kind" => Atom.to_string(suggestion.kind),
       "risk" => Atom.to_string(suggestion.risk),
       "confidence" => suggestion.confidence,
@@ -339,7 +338,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     |> Enum.reduce_while({:ok, []}, fn {session, index}, {:ok, plans} ->
       metadata = %{
         "source" => "catch_up",
-        "solver_version" => "deterministic-v2",
         "suggestion_kind" => Atom.to_string(session.suggestion_kind),
         "weekly_split_effect" => Atom.to_string(catch_up_plan.weekly_split_effect),
         "total_duration_min" => catch_up_plan.total_duration_min,
@@ -373,14 +371,35 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   defp generated_plan_attrs(plan, opts) do
+    source_metadata = Keyword.fetch!(opts, :plan_solver_metadata)
+
     plan
     |> workout_plan_attrs()
     |> Map.merge(%{
       "coach_suggestion_kind" => Keyword.fetch!(opts, :coach_suggestion_kind),
       "coach_target_reps" => Keyword.fetch!(opts, :coach_target_reps),
-      "plan_solver_metadata" => Keyword.fetch!(opts, :plan_solver_metadata)
+      "plan_solver_metadata" => merged_plan_solver_metadata(plan, source_metadata)
     })
   end
+
+  defp merged_plan_solver_metadata(plan, source_metadata) do
+    plan.plan_solver_metadata
+    |> stringify_metadata()
+    |> Map.merge(stringify_metadata(source_metadata))
+  end
+
+  defp stringify_metadata(nil), do: %{}
+
+  defp stringify_metadata(metadata) when is_map(metadata) do
+    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
+  end
+
+  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
+
+  defp stringify_metadata_value(values) when is_list(values),
+    do: Enum.map(values, &stringify_metadata_value/1)
+
+  defp stringify_metadata_value(value), do: value
 
   defp workout_plan_attrs(plan) do
     %{

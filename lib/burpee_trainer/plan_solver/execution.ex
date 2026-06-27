@@ -84,7 +84,10 @@ defmodule BurpeeTrainer.PlanSolver.Execution do
         _other -> [prescription.burpee_count]
       end
 
-    cadence_sec = prescription.target_duration_sec / prescription.burpee_count
+    cadence_sec =
+      prescription.cadence_sec || prescription.target_duration_sec / prescription.burpee_count
+
+    recoveries_by_set = Enum.group_by(prescription.recoveries, & &1.after_set)
 
     {_elapsed, events} =
       set_pattern
@@ -102,7 +105,26 @@ defmodule BurpeeTrainer.PlanSolver.Execution do
           duration_sec: duration_sec
         }
 
-        {elapsed + duration_sec, [event | events]}
+        elapsed = elapsed + duration_sec
+        events = [event | events]
+
+        recoveries = Map.get(recoveries_by_set, set_index, [])
+
+        Enum.reduce(recoveries, {elapsed, events}, fn
+          %Recovery{total_sec: total_sec} = recovery, {elapsed, events} when total_sec > 0 ->
+            rest = %RestEvent{
+              kind: :rest,
+              index: length(events) + 1,
+              rest_sec: total_sec,
+              starts_at_sec: elapsed,
+              source: recovery.source
+            }
+
+            {elapsed + total_sec, [rest | events]}
+
+          _recovery, acc ->
+            acc
+        end)
       end)
 
     Enum.reverse(events)

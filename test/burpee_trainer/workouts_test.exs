@@ -244,6 +244,28 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert set.burpee_count == 5
     end
 
+    test "save_generated_plan/2 preserves v3 solver metadata" do
+      user = user_fixture()
+
+      assert {:ok, solution} =
+               BurpeeTrainer.PlanSolver.solve(%BurpeeTrainer.PlanSolver.Input{
+                 name: "Generated",
+                 burpee_type: :six_count,
+                 target_duration_min: 10,
+                 burpee_count_target: 60,
+                 pacing_style: :even,
+                 level: :level_1c
+               })
+
+      assert metadata_value(solution.plan.plan_solver_metadata, :solver_version) == 3
+
+      assert {:ok, saved} = Workouts.save_generated_plan(user, solution.plan)
+      saved = Workouts.get_plan!(user, saved.id)
+
+      assert metadata_value(saved.plan_solver_metadata, :solver_version) == 3
+      assert metadata_value(saved.plan_solver_metadata, :structure_key) == "1x[60]"
+    end
+
     test "duplicate_plan/1 creates an independent copy with suffixed name and metadata" do
       user = user_fixture()
 
@@ -763,5 +785,9 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert Workouts.last_run_plan(user) == nil
     end
+  end
+
+  defp metadata_value(metadata, key) do
+    Map.get(metadata || %{}, key) || Map.get(metadata || %{}, Atom.to_string(key))
   end
 end

@@ -29,6 +29,27 @@ defmodule BurpeeTrainer.PlanPresentationTest do
     assert List.last(block.rows).recovery_label == "No recovery"
   end
 
+  test "v3 metadata outline includes explicit rest steps" do
+    input = %PlanSolver.Input{
+      name: "Explicit rest",
+      burpee_type: :six_count,
+      target_duration_min: 10,
+      burpee_count_target: 10,
+      pacing_style: :even,
+      level: :level_1a,
+      block_pattern: [5],
+      additional_rests: [%{target_min: 5, rest_sec: 60}]
+    }
+
+    assert {:ok, solution} = PlanSolver.solve(input)
+    assert Enum.any?(solution.plan.steps, &(&1.kind == :rest and &1.rest_sec == 60))
+
+    outline = PlanPresentation.outline(solution.plan)
+    rows = outline.blocks |> hd() |> Map.fetch!(:rows)
+
+    assert Enum.any?(rows, &(&1.recovery_label == "60s recovery"))
+  end
+
   test "outline prefers persisted prescription blocks when available" do
     plan = %WorkoutPlan{
       name: "140",

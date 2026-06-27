@@ -27,6 +27,23 @@ defmodule BurpeeTrainer.PlanSolver.UnbrokenSolverTest do
     assert prescription.metadata.strategy in [:generated_grammar, :balanced_fallback]
   end
 
+  test "generated 120-rep case avoids tiny sets when balanced exact structure exists" do
+    input = %Input{
+      burpee_type: :six_count,
+      target_duration_sec: 1_200,
+      burpee_count_target: 120,
+      pacing_style: :unbroken,
+      max_unbroken_reps: 8,
+      explicit_rests: []
+    }
+
+    assert {:ok, prescription} = UnbrokenSolver.solve(input, PacePolicy.for(:six_count))
+
+    assert Enum.sum(prescription.set_pattern) == 120
+    assert Enum.max(prescription.set_pattern) <= 8
+    assert Enum.min(prescription.set_pattern) >= 5
+  end
+
   test "manual tapered 140-rep structure is preserved exactly" do
     {:ok, block1} = BlockSpec.new(5, [8])
     {:ok, block2} = BlockSpec.new(5, [7])

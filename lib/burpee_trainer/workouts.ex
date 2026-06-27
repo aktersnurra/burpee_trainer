@@ -594,12 +594,28 @@ defmodule BurpeeTrainer.Workouts do
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => plan.pacing_style,
       "additional_rests" => plan.additional_rests,
+      "coach_suggestion_kind" => plan.coach_suggestion_kind,
+      "coach_target_reps" => plan.coach_target_reps,
+      "plan_solver_metadata" => stringify_metadata(plan.plan_solver_metadata),
       "blocks" => save_generated_plan_blocks(plan.blocks),
       "steps" => save_generated_plan_steps(plan.steps)
     }
 
     create_plan(user, attrs)
   end
+
+  defp stringify_metadata(nil), do: nil
+
+  defp stringify_metadata(metadata) when is_map(metadata) do
+    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
+  end
+
+  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
+
+  defp stringify_metadata_value(values) when is_list(values),
+    do: Enum.map(values, &stringify_metadata_value/1)
+
+  defp stringify_metadata_value(value), do: value
 
   defp save_generated_plan_blocks(blocks) do
     for block <- Enum.sort_by(blocks, & &1.position) do

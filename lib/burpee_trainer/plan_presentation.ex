@@ -90,6 +90,8 @@ defmodule BurpeeTrainer.PlanPresentation do
         {metadata_value(reset, :after_set), metadata_value(reset, :duration_sec)}
       end)
 
+    explicit_rest_by_set = explicit_rest_by_set(plan)
+
     sec_per_rep = metadata_value(metadata, :sec_per_rep) || plan.sec_per_burpee || 0.0
     sec_per_burpee = plan.sec_per_burpee || sec_per_rep
 
@@ -106,12 +108,14 @@ defmodule BurpeeTrainer.PlanPresentation do
     set_pattern
     |> Enum.with_index(1)
     |> Enum.map(fn {reps, set_index} ->
-      recovery_sec =
+      base_recovery_sec =
         cond do
-          set_index == set_count -> 0
           Map.has_key?(reset_by_set, set_index) -> Map.fetch!(reset_by_set, set_index)
+          set_index == set_count -> 0
           true -> normal_recovery_sec
         end
+
+      recovery_sec = base_recovery_sec + Map.get(explicit_rest_by_set, set_index, 0)
 
       %{
         set_index: set_index,
@@ -121,6 +125,28 @@ defmodule BurpeeTrainer.PlanPresentation do
         recovery_sec: recovery_sec
       }
     end)
+  end
+
+  defp explicit_rest_by_set(%WorkoutPlan{} = plan) do
+    blocks_by_position = Map.new(plan.blocks || [], &{&1.position, &1})
+
+    plan
+    |> normalized_steps()
+    |> Enum.reduce({%{}, 0}, fn
+      %PlanStep{kind: :block_run} = step, {rests, next_index} ->
+        block = Map.fetch!(blocks_by_position, step.block_position)
+        repeat_count = step.repeat_count || block.repeat_count || 1
+        set_count = length(block.sets || []) * repeat_count
+        {rests, next_index + set_count}
+
+      %PlanStep{kind: :rest, rest_sec: rest_sec}, {rests, next_index}
+      when is_integer(rest_sec) and rest_sec > 0 and next_index > 0 ->
+        {Map.update(rests, next_index, rest_sec, &(&1 + rest_sec)), next_index}
+
+      _step, acc ->
+        acc
+    end)
+    |> elem(0)
   end
 
   defp structure_title(structure_key) when is_binary(structure_key) do
