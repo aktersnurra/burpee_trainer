@@ -735,6 +735,29 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
+  describe "inline set editing" do
+    defp reps(state, block_index) do
+      block = state.form_plan.blocks |> Enum.sort_by(& &1.position) |> Enum.at(block_index)
+      block.sets |> Enum.sort_by(& &1.position) |> Enum.map(& &1.burpee_count)
+    end
+
+    defp set_positions(state, block_index) do
+      block = state.form_plan.blocks |> Enum.sort_by(& &1.position) |> Enum.at(block_index)
+      block.sets |> Enum.map(& &1.position) |> Enum.sort()
+    end
+
+    test "add_set appends a set copying the last set's cadence" do
+      state = multi_block_state(1)
+      before = reps(state, 0)
+
+      {:ok, added} = PlanEditor.add_set(state, "0")
+
+      assert added.manual_edit? == true
+      assert length(reps(added, 0)) == length(before) + 1
+      assert set_positions(added, 0) == Enum.to_list(1..(length(before) + 1))
+    end
+  end
+
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})
