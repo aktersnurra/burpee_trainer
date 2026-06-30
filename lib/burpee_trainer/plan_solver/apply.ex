@@ -276,7 +276,11 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       blocks: blocks,
       steps: steps,
       plan_solver_metadata:
-        Map.merge(prescription.metadata, %{
+        prescription.metadata
+        # score_key is the solver's internal scoring tuple; it has no persisted
+        # reader and Ecto's :map dump cannot JSON-encode a tuple.
+        |> Map.delete(:score_key)
+        |> Map.merge(%{
           solver_version: 3,
           structure_key: StructureSearch.encode(prescription.blocks),
           sec_per_rep: prescription.sec_per_rep,

@@ -131,4 +131,27 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     assert BurpeeTrainer.Planner.summary(plan).burpee_count_total == 140
     assert abs(BurpeeTrainer.Planner.summary(plan).duration_sec_total - 1_200) <= 1
   end
+
+  test "persisted metadata is JSON-encodable (no tuples leak from solver scoring)" do
+    input = %Input{
+      name: "140",
+      burpee_type: :six_count,
+      target_duration_sec: 1_200,
+      target_duration_min: 20,
+      burpee_count_target: 140,
+      pacing_style: :unbroken,
+      max_unbroken_reps: 8,
+      explicit_rests: []
+    }
+
+    {:ok, prescription} = UnbrokenSolver.solve(input, PacePolicy.for(:six_count))
+    execution = Execution.build(prescription)
+
+    {:ok, plan} = Apply.from_execution(input, execution, prescription)
+
+    # Ecto dumps :map fields through the JSON encoder; a tuple (e.g. score_key)
+    # raises here exactly as it does on insert.
+    assert {:ok, _json} = Jason.encode(plan.plan_solver_metadata)
+    refute Map.has_key?(plan.plan_solver_metadata, :score_key)
+  end
 end
