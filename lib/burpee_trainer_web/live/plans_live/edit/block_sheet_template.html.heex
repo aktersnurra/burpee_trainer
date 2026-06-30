@@ -3,7 +3,10 @@
     Enum.find(@contract.structure_rows, fn row ->
       row.kind == :block and row.index == @selected_block_index
     end)
-  end %>
+  end
+
+can_delete_block? =
+  Enum.count(@contract.structure_rows, fn row -> row.kind == :block end) > 1 %>
 <div
   :if={is_map(selected_block_row)}
   id="block-edit-sheet"
@@ -108,6 +111,15 @@
       class="rounded-lg border border-[var(--session-border)] px-3 py-2 text-sm font-medium text-[var(--session-muted)] active:bg-[var(--session-track)]/70"
     >
       Duplicate
+    </button>
+    <button
+      :if={can_delete_block?}
+      type="button"
+      phx-click="delete_block"
+      phx-value-index={row.source_block_index}
+      class="rounded-lg border border-error/40 px-3 py-2 text-sm font-medium text-error/80 active:bg-[var(--session-track)]/70"
+    >
+      Remove
     </button>
   </div>
 </div>

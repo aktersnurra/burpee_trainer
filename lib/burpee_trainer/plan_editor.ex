@@ -337,6 +337,68 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def copy_block(%State{} = state, _index), do: {:error, :missing_form_plan, state}
 
+  @spec delete_block(State.t(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def delete_block(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, index) do
+    sorted = Enum.sort_by(blocks || [], & &1.position)
+
+    with {:ok, index} <- Input.parse_non_negative_index(index),
+         %Block{} = target <- Enum.at(sorted, index),
+         true <- length(sorted) > 1 do
+      remaining = List.delete_at(sorted, index) |> renumber_blocks()
+      steps = drop_block_run_step(state.form_plan.steps, target.position)
+      form_plan = %{state.form_plan | blocks: remaining, steps: steps}
+
+      {:ok,
+       %{
+         state
+         | form_plan: form_plan,
+           locked_block_indexes: shift_locked_indexes(state.locked_block_indexes, index),
+           manual_edit?: true,
+           derived: derived(form_plan, state.input)
+       }}
+    else
+      false -> {:error, :last_block, state}
+      nil -> {:error, {:missing_block, index}, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  def delete_block(%State{} = state, _index), do: {:error, :missing_form_plan, state}
+
+  defp renumber_blocks(blocks) do
+    blocks
+    |> Enum.with_index(1)
+    |> Enum.map(fn {block, position} -> %{block | position: position} end)
+  end
+
+  # Drops the block_run step for the deleted block, decrements block_position for
+  # steps referencing later blocks, and renumbers all step positions contiguously.
+  defp drop_block_run_step(steps, deleted_position) when is_list(steps) do
+    steps
+    |> Enum.sort_by(&(&1.position || 0))
+    |> Enum.reject(fn step ->
+      step.kind == :block_run and step.block_position == deleted_position
+    end)
+    |> Enum.map(fn step ->
+      if step.kind == :block_run and step.block_position > deleted_position do
+        %{step | block_position: step.block_position - 1}
+      else
+        step
+      end
+    end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {step, position} -> %{step | position: position} end)
+  end
+
+  defp drop_block_run_step(steps, _deleted_position), do: steps
+
+  defp shift_locked_indexes(locked, deleted_index) do
+    locked
+    |> Enum.reject(&(&1 == deleted_index))
+    |> Enum.map(fn i -> if i > deleted_index, do: i - 1, else: i end)
+    |> MapSet.new()
+  end
+
   @spec copy_set(State.t(), term(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def copy_set(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, block_index, set_index) do
     with {:ok, block_index} <- Input.parse_non_negative_index(block_index),

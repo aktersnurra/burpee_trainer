@@ -643,6 +643,98 @@ defmodule BurpeeTrainer.PlanEditorTest do
     end
   end
 
+  describe "delete_block" do
+    # Builds a manual state with at least one block; extra blocks are added with
+    # copy_block so deletes can be observed in the middle of the sequence.
+    defp multi_block_state(block_count) when block_count >= 1 do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      {:ok, state} = PlanEditor.regenerate(state)
+      state = single_block_state(state)
+
+      Enum.reduce(2..block_count//1, state, fn _i, acc ->
+        {:ok, acc} = PlanEditor.copy_block(acc, "0")
+        acc
+      end)
+    end
+
+    # Collapses a freshly generated plan down to one block + one block_run step
+    # so block/step counts are predictable as copies are added.
+    defp single_block_state(state) do
+      [block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
+      block = %{block | position: 1}
+
+      step = %BurpeeTrainer.Workouts.PlanStep{
+        position: 1,
+        kind: :block_run,
+        block_position: 1,
+        repeat_count: 1
+      }
+
+      %{state | form_plan: %{state.form_plan | blocks: [block], steps: [step]}}
+    end
+
+    defp block_positions(state),
+      do: state.form_plan.blocks |> Enum.map(& &1.position) |> Enum.sort()
+
+    defp step_positions(state),
+      do: state.form_plan.steps |> Enum.map(& &1.position) |> Enum.sort()
+
+    defp block_run_positions(state) do
+      state.form_plan.steps
+      |> Enum.filter(&(&1.kind == :block_run))
+      |> Enum.map(& &1.block_position)
+      |> Enum.sort()
+    end
+
+    test "deleting a middle block renumbers blocks and steps contiguously" do
+      state = multi_block_state(3)
+      assert block_positions(state) == [1, 2, 3]
+
+      {:ok, deleted} = PlanEditor.delete_block(state, "1")
+
+      assert deleted.manual_edit? == true
+      assert length(deleted.form_plan.blocks) == 2
+      assert block_positions(deleted) == [1, 2]
+      assert step_positions(deleted) == [1, 2]
+      # No block_run step may reference a missing block position.
+      assert block_run_positions(deleted) == [1, 2]
+    end
+
+    test "deleting the only remaining block is rejected" do
+      state = multi_block_state(1)
+      assert length(state.form_plan.blocks) == 1
+
+      assert {:error, :last_block, ^state} = PlanEditor.delete_block(state, "0")
+    end
+
+    test "locked block indexes shift to follow surviving blocks" do
+      state = multi_block_state(3)
+      # Lock the third block (index 2); deleting index 0 should leave it at 1.
+      state = %{state | locked_block_indexes: MapSet.new([2])}
+
+      {:ok, deleted} = PlanEditor.delete_block(state, "0")
+
+      assert MapSet.member?(deleted.locked_block_indexes, 1)
+      refute MapSet.member?(deleted.locked_block_indexes, 2)
+    end
+
+    test "locking the deleted block drops that lock" do
+      state = multi_block_state(3)
+      state = %{state | locked_block_indexes: MapSet.new([1])}
+
+      {:ok, deleted} = PlanEditor.delete_block(state, "1")
+
+      refute MapSet.member?(deleted.locked_block_indexes, 1)
+    end
+
+    test "missing form_plan returns an error tuple" do
+      {:ok, state} = PlanEditor.new(:level_1a, %{})
+      state = %{state | form_plan: nil}
+
+      assert {:error, :missing_form_plan, ^state} = PlanEditor.delete_block(state, "0")
+    end
+  end
+
   describe "state initialization" do
     test "new/2 builds default editor state" do
       {:ok, state} = PlanEditor.new(:level_1a, %{})

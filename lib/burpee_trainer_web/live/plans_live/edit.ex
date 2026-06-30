@@ -1934,6 +1934,17 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  def handle_event("delete_block", %{"index" => idx_str}, socket) do
+    case PlanEditor.delete_block(socket.assigns.editor, idx_str) do
+      {:ok, editor} ->
+        editor = %{editor | open_block_menu: nil, selected_block_index: nil}
+        validate_editor_form(socket, editor)
+
+      {:error, _reason, _state} ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("copy_set", %{"block_index" => bi_str, "set_index" => si_str}, socket) do
     case PlanEditor.copy_set(socket.assigns.editor, bi_str, si_str) do
       {:ok, editor} ->
