@@ -13,12 +13,18 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       |> form("#session-completion-form", workout_session: params)
       |> render_submit()
 
-    if has_element?(view, "#celebration-overlay") do
-      view
-      |> element("#celebration-overlay button", "Continue")
-      |> render_click()
-    else
-      result
+    case result do
+      {:error, {:live_redirect, _}} ->
+        result
+
+      _ ->
+        if has_element?(view, "#celebration-overlay") do
+          view
+          |> element("#celebration-overlay button", "Continue")
+          |> render_click()
+        else
+          result
+        end
     end
   end
 
@@ -62,6 +68,29 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert has_element?(view, "#camera-setup-panel[data-setup-state='ready']")
     assert render(view) =~ "Camera ready"
+  end
+
+  test "camera setup panel closes when tracked session starts", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+    assert has_element?(view, "#camera-setup-panel")
+
+    render_hook(view, "camera_setup_started", %{})
+
+    refute has_element?(view, "#camera-setup-panel")
+    assert has_element?(view, "#pose-tracker[phx-hook='PoseTracker']")
+  end
+
+  test "tracked rep events do not crash the session", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+    render_hook(view, "rep", %{"index" => 1, "t_ms" => 5_000})
+
+    assert has_element?(view, "#burpee-session")
   end
 
   test "tracked capture chunk event persists pose trace chunk", %{conn: conn, user: user} do
@@ -429,6 +458,31 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert main.duration_sec_actual == round(1.6 * 60)
     assert main.note_post == "brutal"
     assert main.plan_id == plan.id
+  end
+
+  test "save_session navigates away even when milestones are triggered", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "session_complete", %{
+      "main" => %{"burpee_count_done" => 30, "duration_sec" => 90},
+      "warmup" => %{"burpee_count_done" => 0, "duration_sec" => 0}
+    })
+
+    params = %{
+      "burpee_type" => "six_count",
+      "burpee_count_planned" => "30",
+      "duration_sec_planned" => "90",
+      "burpee_count_actual" => "30",
+      "duration_min" => "1.5"
+    }
+
+    {:error, {:live_redirect, %{to: "/stats"}}} =
+      view
+      |> form("#session-completion-form", workout_session: params)
+      |> render_submit()
+
+    assert length(Workouts.list_sessions(user)) == 1
   end
 
   test "save_session with warmup saves only the main workout session", %{conn: conn, user: user} do

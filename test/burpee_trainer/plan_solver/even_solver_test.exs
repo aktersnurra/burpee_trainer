@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.PlanSolver.EvenSolverTest do
   use ExUnit.Case, async: true
 
-  alias BurpeeTrainer.PlanSolver.{EvenSolver, Input, PacePolicy}
+  alias BurpeeTrainer.PlanSolver.{EvenSolver, Execution, Input, PacePolicy}
 
   test "even pacing uses one cadence stream and preserves style" do
     input = %Input{
@@ -55,27 +55,35 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolverTest do
     assert Enum.all?(prescription.blocks, &(length(&1.motif) <= 2))
   end
 
-  test "even pacing places explicit rests on real cadence group boundaries" do
+  test "even pacing funds explicit rests from work before the rest anchor" do
     input = %Input{
       burpee_type: :six_count,
       target_duration_sec: 1_200,
-      burpee_count_target: 120,
+      burpee_count_target: 100,
       pacing_style: :even,
       block_pattern: [10],
       explicit_rests: [
         %BurpeeTrainer.PlanSolver.ExplicitRest{
           target_elapsed_sec: 600,
-          duration_sec: 30,
+          duration_sec: 60,
           tolerance_sec: 90
         }
       ]
     }
 
     assert {:ok, prescription} = EvenSolver.solve(input, PacePolicy.for(:six_count))
-    assert [%{kind: :explicit, total_sec: 30, after_set: after_set}] = prescription.recoveries
-    assert after_set > 0
-    assert after_set < length(prescription.set_pattern)
-    assert_in_delta prescription.cadence_sec * 120 + 30, 1_200, 1.0e-6
+    assert [%{kind: :explicit, total_sec: 60, after_set: 5}] = prescription.recoveries
+    assert_in_delta prescription.cadence_sec, 12.0, 1.0e-6
+    assert Enum.take(prescription.set_cadences, 5) == List.duplicate(10.8, 5)
+    assert Enum.drop(prescription.set_cadences, 5) == List.duplicate(12.0, 5)
+
+    execution = Execution.build(prescription)
+    rest = Enum.find(execution, &match?(%Execution.RestEvent{}, &1))
+    assert_in_delta rest.starts_at_sec, 540.0, 1.0e-6
+
+    first_after_rest = Enum.find(execution, &match?(%Execution.SetEvent{index: 6}, &1))
+    assert_in_delta first_after_rest.starts_at_sec, 600.0, 1.0e-6
+    assert_in_delta Execution.duration_sec(execution), 1_200, 1.0e-6
   end
 
   test "even pacing rejects explicit rest when no real boundary exists" do

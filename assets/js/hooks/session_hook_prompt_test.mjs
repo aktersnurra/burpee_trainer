@@ -153,3 +153,21 @@ test("warmup prompt renders actionable warmup buttons after capture choice", () 
 	assert.equal(ctx.el.querySelector("#capture-tracked-btn"), null);
 	assert.equal(ctx.el.querySelector("#capture-timed-btn"), null);
 });
+
+test("starting tracked camera setup tells the server the setup card can close", () => {
+	const events = [];
+	const flowEvents = [];
+	const ctx = {
+		pushEvent(name, payload) {
+			events.push({ name, payload });
+		},
+		dispatchFlow(event) {
+			flowEvents.push(event);
+		},
+	};
+
+	SessionHook.onCameraSetupStart.call(ctx);
+
+	assert.deepEqual(events, [{ name: "camera_setup_started", payload: {} }]);
+	assert.deepEqual(flowEvents, [{ type: "CAMERA_SETUP_READY" }]);
+});

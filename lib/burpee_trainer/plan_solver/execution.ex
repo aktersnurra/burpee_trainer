@@ -87,19 +87,29 @@ defmodule BurpeeTrainer.PlanSolver.Execution do
     cadence_sec =
       prescription.cadence_sec || prescription.target_duration_sec / prescription.burpee_count
 
+    set_cadences =
+      case prescription.set_cadences do
+        cadences when is_list(cadences) and length(cadences) == length(set_pattern) ->
+          cadences
+
+        _other ->
+          List.duplicate(cadence_sec, length(set_pattern))
+      end
+
     recoveries_by_set = Enum.group_by(prescription.recoveries, & &1.after_set)
 
     {_elapsed, events} =
       set_pattern
+      |> Enum.zip(set_cadences)
       |> Enum.with_index(1)
-      |> Enum.reduce({0.0, []}, fn {reps, set_index}, {elapsed, events} ->
-        duration_sec = reps * cadence_sec
+      |> Enum.reduce({0.0, []}, fn {{reps, set_cadence_sec}, set_index}, {elapsed, events} ->
+        duration_sec = reps * set_cadence_sec
 
         event = %SetEvent{
           kind: :set,
           index: set_index,
           burpee_count: reps,
-          sec_per_rep: cadence_sec,
+          sec_per_rep: set_cadence_sec,
           sec_per_burpee: prescription.sec_per_rep,
           starts_at_sec: elapsed,
           duration_sec: duration_sec

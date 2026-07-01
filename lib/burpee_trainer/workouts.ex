@@ -490,7 +490,11 @@ defmodule BurpeeTrainer.Workouts do
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def create_session_from_plan(%User{id: user_id}, %WorkoutPlan{user_id: user_id} = plan, attrs) do
     plan = Repo.preload(plan, blocks: :sets, steps: [])
-    attrs = Map.merge(attrs, planned_session_attrs(plan))
+
+    attrs =
+      attrs
+      |> with_client_session_id()
+      |> Map.merge(planned_session_attrs(plan))
 
     changeset =
       %WorkoutSession{user_id: user_id, plan_id: plan.id}
@@ -499,13 +503,16 @@ defmodule BurpeeTrainer.Workouts do
       |> with_derived_session_fields(user_id)
       |> maybe_carry_style_name(plan)
 
-    case Repo.insert(changeset) do
-      {:ok, session} ->
+    case insert_idempotent_session(changeset, user_id) do
+      {:ok, session, :inserted} ->
         maybe_upsert_style_performance(session, user_id)
         {:ok, session}
 
-      error ->
-        error
+      {:ok, session, :existing} ->
+        {:ok, session}
+
+      {:error, changeset} ->
+        {:error, changeset}
     end
   end
 
@@ -519,7 +526,12 @@ defmodule BurpeeTrainer.Workouts do
         attrs
       ) do
     plan = Repo.preload(plan, blocks: :sets, steps: [])
-    attrs = Map.merge(attrs, planned_session_attrs(plan))
+
+    attrs =
+      attrs
+      |> with_client_session_id()
+      |> Map.merge(planned_session_attrs(plan))
+
     cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
     cadence_json = Jason.encode!(cadence)
     consistency = PaceConsistency.score(cadence)
@@ -537,13 +549,16 @@ defmodule BurpeeTrainer.Workouts do
       |> with_derived_session_fields(user_id)
       |> maybe_carry_style_name(plan)
 
-    case Repo.insert(changeset) do
-      {:ok, session} ->
+    case insert_idempotent_session(changeset, user_id) do
+      {:ok, session, :inserted} ->
         maybe_upsert_style_performance(session, user_id)
         {:ok, session}
 
-      error ->
-        error
+      {:ok, session, :existing} ->
+        {:ok, session}
+
+      {:error, changeset} ->
+        {:error, changeset}
     end
   end
 
@@ -559,6 +574,41 @@ defmodule BurpeeTrainer.Workouts do
     }
   end
 
+  defp with_client_session_id(attrs) do
+    case Map.get(attrs, "client_session_id") || Map.get(attrs, :client_session_id) do
+      value when is_binary(value) and value != "" -> attrs
+      _ -> Map.put(attrs, "client_session_id", Ecto.UUID.generate())
+    end
+  end
+
+  defp insert_idempotent_session(changeset, user_id) do
+    client_session_id = Ecto.Changeset.get_field(changeset, :client_session_id)
+
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      %WorkoutSession{} = session ->
+        {:ok, session, :existing}
+
+      nil ->
+        case Repo.insert(changeset) do
+          {:ok, session} ->
+            {:ok, session, :inserted}
+
+          {:error, changeset} ->
+            case get_session_by_client_session_id(user_id, client_session_id) do
+              %WorkoutSession{} = session -> {:ok, session, :existing}
+              nil -> {:error, changeset}
+            end
+        end
+    end
+  end
+
+  defp get_session_by_client_session_id(_user_id, nil), do: nil
+  defp get_session_by_client_session_id(_user_id, ""), do: nil
+
+  defp get_session_by_client_session_id(user_id, client_session_id) do
+    Repo.get_by(WorkoutSession, user_id: user_id, client_session_id: client_session_id)
+  end
+
   @doc """
   Create a free-form session (no plan reference). `user_id` is set
   programmatically. Same derived-field computation as plan sessions.
@@ -566,12 +616,55 @@ defmodule BurpeeTrainer.Workouts do
   @spec create_free_form_session(User.t(), map) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
   def create_free_form_session(%User{id: user_id}, attrs) do
-    %WorkoutSession{user_id: user_id}
-    |> WorkoutSession.free_form_changeset(attrs)
-    |> Ecto.Changeset.change(capture_mode: :logged)
-    |> with_derived_session_fields(user_id)
-    |> Repo.insert()
+    changeset =
+      %WorkoutSession{user_id: user_id}
+      |> WorkoutSession.free_form_changeset(with_client_session_id(attrs))
+      |> Ecto.Changeset.change(capture_mode: :logged)
+      |> with_derived_session_fields(user_id)
+
+    case insert_idempotent_session(changeset, user_id) do
+      {:ok, session, _status} -> {:ok, session}
+      {:error, changeset} -> {:error, changeset}
+    end
   end
+
+  @doc """
+  Delete a completed session for a user.
+
+  Linked tracked capture runs are deleted first so stored pose traces are not
+  left behind after removing an accidental saved session.
+  """
+  @spec delete_session(User.t(), integer() | WorkoutSession.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def delete_session(%User{id: user_id} = user, session_id) when is_integer(session_id) do
+    case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
+      nil -> {:error, :not_found}
+      session -> delete_session(user, session)
+    end
+  end
+
+  def delete_session(%User{id: user_id}, %WorkoutSession{user_id: user_id} = session) do
+    result =
+      Repo.transaction(fn ->
+        Repo.delete_all(
+          from(run in PoseCaptureRun,
+            where: run.user_id == ^user_id and run.workout_session_id == ^session.id
+          )
+        )
+
+        case Repo.delete(session) do
+          {:ok, deleted} -> deleted
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+
+    case result do
+      {:ok, deleted} -> {:ok, deleted}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def delete_session(%User{}, %WorkoutSession{}), do: {:error, :not_found}
 
   @doc """
   Blank changeset builders for forms.

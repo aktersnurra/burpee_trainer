@@ -147,6 +147,19 @@ defmodule BurpeeTrainerWeb.StatsLiveTest do
       refute render(view) =~ "Load more"
     end
 
+    test "recent sessions can be deleted", %{conn: conn, user: user} do
+      plan = plan_fixture(user)
+      session = session_from_plan_fixture(user, plan)
+
+      {:ok, view, _html} = live(conn, ~p"/stats")
+      assert has_element?(view, "#session-delete-#{session.id}")
+
+      view |> element("#session-delete-#{session.id}") |> render_click()
+
+      refute has_element?(view, "#session-delete-#{session.id}")
+      assert Workouts.list_sessions(user) == []
+    end
+
     test "uses session surface visual system without stats log action", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stats")
       html = render(view)

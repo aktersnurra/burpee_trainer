@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ROOT_DIR="$(unset CDPATH && cd -- "$(dirname -- "$0")/.." && pwd)"
 MEDIAPIPE_DIR="$ROOT_DIR/priv/static/models/mediapipe_pose"
 
 mkdir -p "$MEDIAPIPE_DIR"

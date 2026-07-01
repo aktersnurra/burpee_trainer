@@ -25,6 +25,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     field(:cadence_ms, :string)
     field(:target_pace_sec, :float)
     field(:pace_consistency, :float)
+    field(:client_session_id, :string)
 
     # Derived fields — computed by Workouts context at save time, never from user input.
     field(:style_name, :string)
@@ -64,7 +65,8 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
       :note_pre,
       :note_post,
       :mood,
-      :tags
+      :tags,
+      :client_session_id
     ])
     |> validate_session_core()
     |> validate_mood()
@@ -84,7 +86,8 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
       :note_post,
       :mood,
       :tags,
-      :inserted_at
+      :inserted_at,
+      :client_session_id
     ])
     |> validate_session_core()
     |> validate_mood()
@@ -95,6 +98,9 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     |> validate_required([:burpee_type, :burpee_count_actual, :duration_sec_actual])
     |> validate_number(:burpee_count_actual, greater_than_or_equal_to: 0)
     |> validate_number(:duration_sec_actual, greater_than_or_equal_to: 0)
+    |> unique_constraint(:client_session_id,
+      name: :workout_sessions_user_id_client_session_id_index
+    )
   end
 
   defp validate_mood(changeset) do

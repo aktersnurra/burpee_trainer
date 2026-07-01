@@ -11,76 +11,80 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
     available_average =
       (input.target_duration_sec - explicit_rest_total) / input.burpee_count_target
 
-    cond do
-      available_average < policy.hard_fastest_sec_per_rep ->
-        {:error,
-         %Infeasible{
-           reason: :no_pace_within_hard_bounds,
-           details: %{available_average: available_average},
-           suggestions: ["Reduce reps", "Increase duration", "Remove explicit rest"]
-         }}
-
-      input.burpee_count_target == 1 ->
-        one_rep_prescription(input, policy, available_average)
-
-      true ->
-        stream_prescription(input, policy, available_average)
-    end
-  end
-
-  defp one_rep_prescription(input, policy, available_average) do
-    sec_per_rep = selected_movement_pace(input, policy, available_average)
-
-    if sec_per_rep < policy.hard_fastest_sec_per_rep or
-         sec_per_rep > policy.hard_slowest_sec_per_rep do
+    if available_average < policy.hard_fastest_sec_per_rep do
       {:error,
        %Infeasible{
          reason: :no_pace_within_hard_bounds,
-         details: %{sec_per_rep: sec_per_rep},
-         suggestions: ["Adjust reps or duration"]
+         details: %{available_average: available_average},
+         suggestions: ["Reduce reps", "Increase duration", "Remove explicit rest"]
        }}
     else
-      cadence_sec = input.target_duration_sec / input.burpee_count_target
+      even_prescription(input, policy, available_average)
+    end
+  end
 
-      with {:ok, recoveries} <- explicit_recoveries(input, cadence_sec) do
-        {:ok, prescription(input, policy, sec_per_rep, cadence_sec, recoveries)}
+  defp even_prescription(input, policy, available_average) do
+    {blocks, set_pattern} = cadence_groups(input)
+    base_cadence_sec = input.target_duration_sec / input.burpee_count_target
+
+    with {:ok, recoveries} <- explicit_recoveries(input, base_cadence_sec),
+         {:ok, set_cadences} <-
+           funded_set_cadences(
+             set_pattern,
+             recoveries,
+             base_cadence_sec,
+             policy.hard_fastest_sec_per_rep,
+             input.target_duration_sec
+           ) do
+      fastest_set_cadence = Enum.min(set_cadences)
+
+      sec_per_rep =
+        selected_movement_pace(input, policy, min(available_average, fastest_set_cadence))
+
+      cond do
+        sec_per_rep < policy.hard_fastest_sec_per_rep or
+            sec_per_rep > policy.hard_slowest_sec_per_rep ->
+          {:error,
+           %Infeasible{
+             reason: :no_pace_within_hard_bounds,
+             details: %{sec_per_rep: sec_per_rep},
+             suggestions: ["Adjust reps or duration"]
+           }}
+
+        fastest_set_cadence < sec_per_rep ->
+          {:error,
+           %Infeasible{
+             reason: :no_pace_within_hard_bounds,
+             details: %{cadence_sec: fastest_set_cadence, sec_per_rep: sec_per_rep},
+             suggestions: ["Reduce rest", "Move rest later", "Increase duration"]
+           }}
+
+        true ->
+          {:ok,
+           prescription(
+             input,
+             policy,
+             sec_per_rep,
+             base_cadence_sec,
+             blocks,
+             set_pattern,
+             set_cadences,
+             recoveries
+           )}
       end
     end
   end
 
-  defp stream_prescription(input, policy, available_average) do
-    sec_per_rep = selected_movement_pace(input, policy, available_average)
-    explicit_rest_total = Enum.reduce(input.explicit_rests || [], 0, &(&1.duration_sec + &2))
-
-    cadence_sec = (input.target_duration_sec - explicit_rest_total) / input.burpee_count_target
-
-    cond do
-      cadence_sec < sec_per_rep ->
-        {:error,
-         %Infeasible{
-           reason: :no_pace_within_hard_bounds,
-           details: %{cadence_sec: cadence_sec, sec_per_rep: sec_per_rep},
-           suggestions: ["Reduce reps", "Increase duration"]
-         }}
-
-      sec_per_rep > policy.hard_slowest_sec_per_rep ->
-        {:error,
-         %Infeasible{
-           reason: :no_pace_within_hard_bounds,
-           details: %{sec_per_rep: sec_per_rep},
-           suggestions: ["Reduce duration or choose a faster target"]
-         }}
-
-      true ->
-        with {:ok, recoveries} <- explicit_recoveries(input, cadence_sec) do
-          {:ok, prescription(input, policy, sec_per_rep, cadence_sec, recoveries)}
-        end
-    end
-  end
-
-  defp prescription(input, policy, sec_per_rep, cadence_sec, recoveries) do
-    {blocks, set_pattern} = cadence_groups(input)
-
+  defp prescription(
+         input,
+         policy,
+         sec_per_rep,
+         cadence_sec,
+         blocks,
+         set_pattern,
+         set_cadences,
+         recoveries
+       ) do
     %Prescription{
       pacing_style: :even,
       burpee_type: input.burpee_type,
@@ -88,6 +92,7 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
       burpee_count: input.burpee_count_target,
       sec_per_rep: sec_per_rep,
       cadence_sec: cadence_sec,
+      set_cadences: set_cadences,
       blocks: blocks,
       set_pattern: set_pattern,
       recoveries: recoveries,
@@ -100,9 +105,11 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
         pace_bias: input.pace_bias,
         load_shape: input.load_shape,
         rest_suggestions: [],
-        recovery_mode: :cadence,
+        recovery_mode: if(recoveries == [], do: :cadence, else: :saved_up_rest),
         recovery_sec: 0.0,
         work_interval_sec: sec_per_rep,
+        base_cadence_sec: cadence_sec,
+        fastest_cadence_sec: Enum.min(set_cadences),
         pace_status: pace_status(sec_per_rep, policy),
         pace_policy: %{
           hard_fastest_sec_per_rep: policy.hard_fastest_sec_per_rep,
@@ -155,6 +162,115 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
       {:error, _error} = error -> error
       recoveries -> {:ok, Enum.reverse(recoveries)}
     end
+  end
+
+  defp funded_set_cadences(set_pattern, recoveries, base_cadence_sec, fastest_sec, target_sec) do
+    recoveries
+    |> Enum.sort_by(& &1.after_set)
+    |> Enum.reduce_while({[], 0.0, 0}, fn recovery, {cadences, elapsed, previous_set} ->
+      with {:ok, segment} <- set_segment(set_pattern, previous_set, recovery.after_set) do
+        segment_reps = Enum.sum(segment)
+        target_anchor_sec = reps_through_set(set_pattern, recovery.after_set) * base_cadence_sec
+        available_work_sec = target_anchor_sec - elapsed - recovery.total_sec
+        minimum_work_sec = segment_reps * fastest_sec
+
+        {segment_cadence, elapsed} =
+          if available_work_sec >= minimum_work_sec do
+            {available_work_sec / segment_reps, target_anchor_sec}
+          else
+            {fastest_sec, elapsed + minimum_work_sec + recovery.total_sec}
+          end
+
+        {:cont,
+         {cadences ++ List.duplicate(segment_cadence, length(segment)), elapsed,
+          recovery.after_set}}
+      else
+        {:error, reason} -> {:halt, {:error, cadence_error(reason)}}
+      end
+    end)
+    |> case do
+      {:error, _reason} = error ->
+        error
+
+      {cadences, elapsed, previous_set} ->
+        append_final_cadences(
+          set_pattern,
+          previous_set,
+          cadences,
+          elapsed,
+          base_cadence_sec,
+          fastest_sec,
+          target_sec
+        )
+    end
+  end
+
+  defp append_final_cadences(
+         set_pattern,
+         previous_set,
+         cadences,
+         elapsed,
+         base_cadence_sec,
+         fastest_sec,
+         target_sec
+       ) do
+    segment = Enum.drop(set_pattern, previous_set)
+    segment_reps = Enum.sum(segment)
+    available_work_sec = target_sec - elapsed
+    minimum_work_sec = segment_reps * fastest_sec
+
+    cond do
+      segment_reps == 0 and abs(available_work_sec) <= 1.0e-6 ->
+        {:ok, cadences}
+
+      segment_reps == 0 ->
+        {:error, cadence_error(:no_reps_after_rest)}
+
+      available_work_sec < minimum_work_sec ->
+        {:error, cadence_error(:cannot_fund_rest)}
+
+      true ->
+        cadence = available_work_sec / segment_reps
+
+        cadence =
+          if abs(cadence - base_cadence_sec) <= 1.0e-6 do
+            base_cadence_sec
+          else
+            cadence
+          end
+
+        {:ok, cadences ++ List.duplicate(cadence, length(segment))}
+    end
+  end
+
+  defp set_segment(_set_pattern, previous_set, after_set) when after_set <= previous_set,
+    do: {:error, :invalid_rest_order}
+
+  defp set_segment(set_pattern, _previous_set, after_set) when after_set > length(set_pattern),
+    do: {:error, :invalid_rest_boundary}
+
+  defp set_segment(set_pattern, previous_set, after_set) do
+    segment = set_pattern |> Enum.drop(previous_set) |> Enum.take(after_set - previous_set)
+
+    if segment == [] do
+      {:error, :empty_rest_segment}
+    else
+      {:ok, segment}
+    end
+  end
+
+  defp cadence_error(reason) do
+    %Infeasible{
+      reason: :no_pace_within_hard_bounds,
+      details: %{reason: reason},
+      suggestions: ["Reduce rest", "Move rest later", "Increase duration"]
+    }
+  end
+
+  defp reps_through_set(set_pattern, after_set) do
+    set_pattern
+    |> Enum.take(after_set)
+    |> Enum.sum()
   end
 
   defp even_boundaries(set_pattern, cadence_sec) do

@@ -1,8 +1,8 @@
 defmodule BurpeeTrainer.WorkoutsTest do
   use BurpeeTrainer.DataCase, async: false
 
-  alias BurpeeTrainer.Workouts
-  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Workouts.{PoseCaptureRun, WorkoutPlan, WorkoutSession}
 
   import BurpeeTrainer.Fixtures
 
@@ -375,6 +375,83 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert session.plan_id == plan.id
       assert session.burpee_count_actual == 28
       assert session.duration_sec_actual == 130
+      assert session.client_session_id
+    end
+
+    test "create_session_from_plan/3 is idempotent for the same client session id" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      client_session_id = Ecto.UUID.generate()
+
+      attrs = %{
+        "client_session_id" => client_session_id,
+        "burpee_count_actual" => 28,
+        "duration_sec_actual" => 130
+      }
+
+      assert {:ok, first} = Workouts.create_session_from_plan(user, plan, attrs)
+      assert {:ok, second} = Workouts.create_session_from_plan(user, plan, attrs)
+
+      assert first.id == second.id
+      assert first.client_session_id == client_session_id
+      assert length(Workouts.list_sessions(user)) == 1
+    end
+
+    test "create_tracked_session_from_plan/3 is idempotent for the same client session id" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      client_session_id = Ecto.UUID.generate()
+
+      attrs = %{
+        "client_session_id" => client_session_id,
+        "burpee_count_actual" => "3",
+        "duration_sec_actual" => "15",
+        "cadence_ms" => [5_000, 10_000, 15_000]
+      }
+
+      assert {:ok, first} = Workouts.create_tracked_session_from_plan(user, plan, attrs)
+      assert {:ok, second} = Workouts.create_tracked_session_from_plan(user, plan, attrs)
+
+      assert first.id == second.id
+      assert first.client_session_id == client_session_id
+      assert length(Workouts.list_sessions(user)) == 1
+    end
+
+    test "delete_session/2 removes only the user's session" do
+      alice = user_fixture()
+      bob = user_fixture()
+      alice_plan = plan_fixture(alice)
+      bob_plan = plan_fixture(bob)
+      alice_session = session_from_plan_fixture(alice, alice_plan)
+      bob_session = session_from_plan_fixture(bob, bob_plan)
+
+      assert {:error, :not_found} = Workouts.delete_session(alice, bob_session.id)
+      assert {:ok, deleted} = Workouts.delete_session(alice, alice_session.id)
+
+      assert deleted.id == alice_session.id
+      refute Repo.get(WorkoutSession, alice_session.id)
+      assert Repo.get(WorkoutSession, bob_session.id)
+    end
+
+    test "delete_session/2 removes linked tracked capture data" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      {:ok, session} =
+        Workouts.create_tracked_session_from_plan(user, plan, %{
+          "burpee_count_actual" => "1",
+          "duration_sec_actual" => "5",
+          "cadence_ms" => [5_000]
+        })
+
+      {:ok, run} = Workouts.start_pose_capture_run(user, plan)
+      {:ok, run} = Workouts.complete_pose_capture_run(user, run, session)
+
+      assert Repo.get(PoseCaptureRun, run.id)
+      assert {:ok, _deleted} = Workouts.delete_session(user, session.id)
+
+      refute Repo.get(WorkoutSession, session.id)
+      refute Repo.get(PoseCaptureRun, run.id)
     end
 
     test "create_free_form_session/2 leaves planned fields nil" do

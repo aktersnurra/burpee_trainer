@@ -37,6 +37,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:warmup_asked, false)
           |> assign(:completion_tags, [])
           |> assign(:completion_form, nil)
+          |> assign(:client_session_id, Ecto.UUID.generate())
           |> assign(:celebration, nil)
           |> assign(:capture_mode, :timed)
           |> assign(:capture_setup_state, :idle)
@@ -82,10 +83,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   def handle_event("tracker_ready", _, socket) do
+    setup_state = if socket.assigns.capture_setup_state == :started, do: :started, else: :ready
+
     {:noreply,
      socket
-     |> assign(:capture_setup_state, :ready)
+     |> assign(:capture_setup_state, setup_state)
      |> assign(:tracking_state, :ready)}
+  end
+
+  def handle_event("camera_setup_started", _, socket) do
+    {:noreply, assign(socket, :capture_setup_state, :started)}
   end
 
   def handle_event("pose_capture_chunk", params, socket) do
@@ -115,6 +122,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   def handle_event("track", %{"state" => "live"}, socket) do
     {:noreply, assign(socket, :tracking_state, :running)}
+  end
+
+  def handle_event("rep", _params, socket) do
+    {:noreply, socket}
   end
 
   def handle_event(
@@ -179,7 +190,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
     changeset =
       socket.assigns.plan
       |> blank_session()
-      |> WorkoutSession.from_plan_changeset(coerce_duration(params))
+      |> WorkoutSession.from_plan_changeset(
+        params
+        |> put_client_session_id(socket)
+        |> coerce_duration()
+      )
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, :completion_form, to_form(changeset))}
@@ -190,6 +205,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
     session_params =
       params
+      |> put_client_session_id(socket)
       |> coerce_duration()
       |> Map.put("mood", mood)
       |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
@@ -213,17 +229,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
     case create_session do
       {:ok, session} ->
         maybe_complete_pose_capture_run(socket, session)
+        _events = Workouts.session_milestones(user, session)
 
-        case Workouts.session_milestones(user, session) do
-          [] ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Session saved.")
-             |> push_navigate(to: ~p"/stats")}
-
-          events ->
-            {:noreply, assign(socket, :celebration, events)}
-        end
+        {:noreply,
+         socket
+         |> put_flash(:info, "Session saved.")
+         |> push_navigate(to: ~p"/stats")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :completion_form, to_form(changeset))}
@@ -433,6 +444,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
     end
   end
 
+  defp put_client_session_id(params, socket) do
+    case Map.get(params, "client_session_id") do
+      value when is_binary(value) and value != "" -> params
+      _ -> Map.put(params, "client_session_id", socket.assigns.client_session_id)
+    end
+  end
+
   defp parse_completion_payload(%{"main" => main}) when is_map(main) do
     with {:ok, main_result} <- parse_completion_result(main) do
       {:ok, %{main: main_result}}
@@ -463,7 +481,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
       "burpee_count_planned" => summary.burpee_count_total,
       "duration_sec_planned" => round(summary.duration_sec_total),
       "burpee_count_actual" => burpee_count_done,
-      "duration_sec_actual" => duration_sec_actual
+      "duration_sec_actual" => duration_sec_actual,
+      "client_session_id" => socket.assigns.client_session_id
     }
 
     plan
@@ -549,7 +568,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 phx-update="ignore"
                 data-target-pace-sec={@plan.sec_per_burpee}
               />
-              <.camera_setup_panel setup_state={@capture_setup_state} />
+              <.camera_setup_panel
+                :if={@capture_setup_state in [:arming, :ready]}
+                setup_state={@capture_setup_state}
+              />
             <% end %>
 
             <.session_runner
@@ -917,11 +939,17 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <.input field={@form[:burpee_type]} type="text" />
           <.input field={@form[:burpee_count_planned]} type="number" />
           <.input field={@form[:duration_sec_planned]} type="number" />
+          <input
+            type="hidden"
+            name={@form[:client_session_id].name}
+            value={@form[:client_session_id].value}
+          />
         </div>
 
         <%!-- Actions --%>
         <button
           type="submit"
+          phx-disable-with="Saving…"
           class="flex w-full items-center justify-center rounded-md border border-[var(--session-ink)] bg-[var(--session-ink)] py-3 text-sm font-semibold text-[var(--session-bg)] transition active:scale-[0.99] hover:opacity-90"
         >
           Save session

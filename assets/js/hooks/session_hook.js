@@ -489,6 +489,7 @@ const SessionHook = {
 	},
 
 	onCameraSetupStart() {
+		this.pushEvent("camera_setup_started", {});
 		this.dispatchFlow({ type: "CAMERA_SETUP_READY" });
 	},
 

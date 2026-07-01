@@ -104,6 +104,25 @@ defmodule BurpeeTrainerWeb.StatsLive do
      |> assign_period_sessions(socket.assigns.period_detailed_sessions, visible_count)}
   end
 
+  def handle_event("delete_session", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {session_id, ""} ->
+        case Workouts.delete_session(socket.assigns.current_user, session_id) do
+          {:ok, _session} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Session deleted.")
+             |> assign_stats(socket.assigns.period, socket.assigns.sessions_visible_count)}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Could not delete that session.")}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Could not delete that session.")}
+    end
+  end
+
   def handle_event("open_goal_modal", %{"type" => type_str}, socket) do
     user = socket.assigns.current_user
     burpee_type = String.to_existing_atom(type_str)
@@ -597,9 +616,22 @@ defmodule BurpeeTrainerWeb.StatsLive do
         </div>
       </div>
 
-      <span class="shrink-0 pt-0.5 text-right text-xs text-[var(--session-muted)]">
-        {@date_str}
-      </span>
+      <div class="relative z-10 flex flex-col items-end gap-1 pt-0.5 text-right">
+        <span class="shrink-0 text-xs text-[var(--session-muted)]">
+          {@date_str}
+        </span>
+        <button
+          id={"session-delete-#{@session.id}"}
+          type="button"
+          phx-click="delete_session"
+          phx-value-id={@session.id}
+          data-confirm="Delete this saved session?"
+          class="rounded-md px-1.5 py-1 text-[11px] font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
+          aria-label="Delete saved session"
+        >
+          Delete
+        </button>
+      </div>
     </div>
     """
   end
