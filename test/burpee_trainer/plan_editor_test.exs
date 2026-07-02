@@ -756,6 +756,30 @@ defmodule BurpeeTrainer.PlanEditorTest do
       assert length(reps(added, 0)) == length(before) + 1
       assert set_positions(added, 0) == Enum.to_list(1..(length(before) + 1))
     end
+
+    test "delete_set removes a set and renumbers positions" do
+      state = multi_block_state(1)
+      {:ok, state} = PlanEditor.add_set(state, "0")
+      {:ok, state} = PlanEditor.add_set(state, "0")
+      count = length(reps(state, 0))
+
+      {:ok, deleted} = PlanEditor.delete_set(state, "0", "1")
+
+      assert deleted.manual_edit? == true
+      assert length(reps(deleted, 0)) == count - 1
+      assert set_positions(deleted, 0) == Enum.to_list(1..(count - 1))
+    end
+
+    test "delete_set rejects removing the block's last set" do
+      state = multi_block_state(1)
+      # collapse block 0 to a single set
+      block = state.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      [one | _] = Enum.sort_by(block.sets, & &1.position)
+      block = %{block | sets: [%{one | position: 1}]}
+      state = %{state | form_plan: %{state.form_plan | blocks: [%{block | position: 1}]}}
+
+      assert {:error, :last_set, ^state} = PlanEditor.delete_set(state, "0", "0")
+    end
   end
 
   describe "state initialization" do

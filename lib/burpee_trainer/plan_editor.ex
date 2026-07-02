@@ -462,6 +462,41 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def add_set(%State{} = state, _block_index), do: {:error, :missing_form_plan, state}
 
+  @spec delete_set(State.t(), term(), term()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  def delete_set(%State{form_plan: %WorkoutPlan{blocks: blocks}} = state, block_index, set_index) do
+    with {:ok, block_index} <- Input.parse_non_negative_index(block_index),
+         {:ok, set_index} <- Input.parse_non_negative_index(set_index),
+         blocks <- Enum.sort_by(blocks || [], & &1.position),
+         %Block{} = block <- Enum.at(blocks, block_index),
+         sets <- Enum.sort_by(block.sets || [], & &1.position),
+         %Set{} <- Enum.at(sets, set_index),
+         true <- length(sets) > 1 do
+      remaining =
+        sets
+        |> List.delete_at(set_index)
+        |> Enum.with_index(1)
+        |> Enum.map(fn {set, position} -> %{set | position: position} end)
+
+      updated_block = %{block | sets: remaining}
+      form_plan = %{state.form_plan | blocks: List.replace_at(blocks, block_index, updated_block)}
+
+      {:ok,
+       %{
+         state
+         | form_plan: form_plan,
+           manual_edit?: true,
+           derived: derived(form_plan, state.input)
+       }}
+    else
+      false -> {:error, :last_set, state}
+      nil -> {:error, :missing_item, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  def delete_set(%State{} = state, _block_index, _set_index),
+    do: {:error, :missing_form_plan, state}
+
   defp copy_block_as_new(%Block{} = block, position) do
     sets =
       block.sets
