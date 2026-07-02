@@ -161,7 +161,7 @@ defmodule BurpeeTrainer.Fixtures do
     burpee_type = Map.get(attrs, "burpee_type", "six_count")
     pacing_style = Map.get(attrs, "pacing_style", "even")
     block_pattern = source_pattern(attrs, blocks, burpee_type, pacing_style)
-    target_reps = Map.get(attrs, "burpee_count_target") || Enum.sum(block_pattern) || 30
+    target_reps = Map.get(attrs, "burpee_count_target") || source_total_reps(blocks) || 30
 
     source = %{
       "burpee_type" => burpee_type,
@@ -200,16 +200,12 @@ defmodule BurpeeTrainer.Fixtures do
     blocks
     |> Enum.sort_by(&(Map.get(&1, "position") || 0))
     |> Enum.flat_map(fn block ->
-      motif =
-        block
-        |> Map.get("sets", [])
-        |> Enum.sort_by(&(Map.get(&1, "position") || 0))
-        |> Enum.map(&Map.get(&1, "burpee_count"))
-        |> Enum.reject(&is_nil/1)
-
-      List.duplicate(motif, max(Map.get(block, "repeat_count", 1), 1))
+      block
+      |> Map.get("sets", [])
+      |> Enum.sort_by(&(Map.get(&1, "position") || 0))
+      |> Enum.map(&Map.get(&1, "burpee_count"))
+      |> Enum.reject(&is_nil/1)
     end)
-    |> List.flatten()
     |> case do
       [] -> [10]
       pattern -> pattern
@@ -217,6 +213,26 @@ defmodule BurpeeTrainer.Fixtures do
   end
 
   defp source_block_pattern(_blocks), do: [10]
+
+  defp source_total_reps(blocks) when is_list(blocks) do
+    blocks
+    |> Enum.map(fn block ->
+      reps =
+        block
+        |> Map.get("sets", [])
+        |> Enum.map(&(Map.get(&1, "burpee_count") || 0))
+        |> Enum.sum()
+
+      reps * max(Map.get(block, "repeat_count", 1), 1)
+    end)
+    |> Enum.sum()
+    |> case do
+      0 -> nil
+      total -> total
+    end
+  end
+
+  defp source_total_reps(_blocks), do: nil
 
   defp maybe_put_unbroken_max(source, %{"pacing_style" => "unbroken"} = attrs, _block_pattern) do
     Map.put(

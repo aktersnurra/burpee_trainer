@@ -1,7 +1,8 @@
 defmodule BurpeeTrainerWeb.PlansLive.Edit.PresentationTest do
   use ExUnit.Case, async: true
 
-  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
   alias BurpeeTrainerWeb.PlansLive.Edit.Presentation
 
   defp set(position, reps, sec_per_rep, rest) do

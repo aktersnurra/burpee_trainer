@@ -2,7 +2,8 @@ defmodule BurpeeTrainer.PlannerTest do
   use ExUnit.Case, async: true
 
   alias BurpeeTrainer.Planner
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   defp build_set(position, burpee_count, sec_per_rep, end_of_set_rest) do
     %Set{

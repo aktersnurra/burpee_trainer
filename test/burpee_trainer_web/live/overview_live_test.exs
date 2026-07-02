@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.Workouts
+  alias BurpeeTrainer.{ExecutionPrograms, Workouts}
 
   setup_all do
     previous_today = Application.get_env(:burpee_trainer, :today_override)
@@ -196,9 +196,12 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     [_, plan_id] = Regex.run(~r"/workouts/(\d+)/edit", path)
     plan = Workouts.get_plan!(user, String.to_integer(plan_id))
 
-    assert metadata_value(plan.plan_solver_metadata, :solver_version) == 3
-    assert metadata_value(plan.plan_solver_metadata, :source) == "catch_up"
-    assert is_binary(metadata_value(plan.plan_solver_metadata, :structure_key))
+    assert plan.current_execution_program_id
+    assert plan.source_json["target_duration_sec"] == 3_600
+
+    program = ExecutionPrograms.get!(plan.current_execution_program_id)
+    assert program.solver_version == 4
+    assert program.target_duration_sec == 3_600
   end
 
   test "catch-up panel balances eighty remaining minutes across two logged types", %{
@@ -341,9 +344,5 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#catch-up-six-count")
     refute has_element?(view, "[data-home-coach-suggestion]")
     refute has_element?(view, "[data-home-weekly-split]")
-  end
-
-  defp metadata_value(metadata, key) do
-    Map.get(metadata || %{}, key) || Map.get(metadata || %{}, Atom.to_string(key))
   end
 end

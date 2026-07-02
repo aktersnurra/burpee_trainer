@@ -254,14 +254,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       view |> element("#plan-form") |> render_submit(%{"workout_plan" => %{}})
       assert_redirect(view, ~p"/workouts")
 
+      source_json = plan.source_json
+      execution_program_id = plan.current_execution_program_id
       updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
-      [block] = updated.blocks
-      [set] = block.sets
 
       assert updated.name == "Renamed Structure"
-      assert set.burpee_count == 10
-      assert_in_delta set.sec_per_rep, 7.5, 0.01
-      assert set.end_of_set_rest == 45
+      assert Map.drop(updated.source_json, ["pace_bias", "load_shape"]) == source_json
+      assert updated.source_json["pace_bias"] == "balanced"
+      assert updated.source_json["load_shape"] == "even"
+      assert updated.current_execution_program_id == execution_program_id
     end
 
     test "existing workout Start submits visible edits before session navigation", %{
@@ -273,6 +274,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           "name" => "Start Saves Edits",
           "target_duration_min" => 2,
           "burpee_count_target" => 17,
+          "block_pattern" => [17],
           "blocks" => [
             %{
               "position" => 1,
@@ -280,7 +282,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
               "sets" => [
                 %{
                   "position" => 1,
-                  "burpee_count" => 10,
+                  "burpee_count" => 17,
                   "sec_per_rep" => 7.5,
                   "sec_per_burpee" => 7.5,
                   "end_of_set_rest" => 45
@@ -557,7 +559,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(value="6.4")
     end
 
-    test "saves generated plan and reloads solver metadata", %{conn: conn, user: user} do
+    test "saves generated plan and reloads current execution program", %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view |> element("button[phx-value-type='navy_seal']") |> render_click()
@@ -582,8 +584,11 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert plan.source_json["target_duration_sec"] == 1_200
       assert plan.source_json["burpee_type"] == "navy_seal"
       assert plan.current_execution_program_id
-      assert metadata_value(plan.plan_solver_metadata, :solver_version) == 3
-      assert metadata_value(plan.plan_solver_metadata, :structure_key)
+
+      program = BurpeeTrainer.ExecutionPrograms.get!(plan.current_execution_program_id)
+      assert program.solver_version == 4
+      assert program.target_reps == 70
+      assert program.target_duration_sec == 1_200
     end
 
     test "new workout editor accepts submitted source JSON and compiles current program", %{
@@ -798,28 +803,22 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workout-outline")
     end
 
-    test "plan edit page shows generated plan metadata", %{conn: conn, user: user} do
+    test "plan edit page does not depend on removed legacy solver metadata", %{
+      conn: conn,
+      user: user
+    } do
       plan =
         plan_fixture(user, %{
           "name" => "Coach Six-count",
           "coach_suggestion_kind" => "recommended",
-          "coach_target_reps" => 150,
-          "plan_solver_metadata" => %{
-            "source" => "coach_target",
-            "risk" => "normal",
-            "rationale" => ["Your current estimate is 150 six-count burpees in 20 min."]
-          }
+          "coach_target_reps" => 150
         })
 
-      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      assert has_element?(view, "#plan-metadata")
-      html = render(view)
-      assert html =~ "Why this?"
-      assert html =~ "Coach target"
-      assert html =~ "Recommended · 150 reps"
-      assert html =~ "Risk: normal"
-      assert html =~ "Your current estimate is 150 six-count burpees in 20 min."
+      refute has_element?(view, "#plan-metadata")
+      assert html =~ "Coach Six-count"
+      assert has_element?(view, "#workout-editor-overview")
     end
 
     test "plan edit page exposes duplicate and delete actions", %{conn: conn, user: user} do
@@ -1676,23 +1675,20 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
       generate_workout(view)
 
+      view |> element("[data-workout-block-row][phx-value-index='0']") |> render_click()
+
       view
-      |> element("#plan-form")
+      |> element("#block-sheet-form")
       |> render_change(%{
-        "workout_plan" => %{
-          "blocks" => %{
+        "block" => %{
+          "source_block_index" => "0",
+          "repeat_count" => "1",
+          "sets" => %{
             "0" => %{
-              "position" => "1",
-              "repeat_count" => "1",
-              "sets" => %{
-                "0" => %{
-                  "position" => "1",
-                  "burpee_count" => "200",
-                  "sec_per_rep" => "6.21",
-                  "sec_per_burpee" => "6.21",
-                  "end_of_set_rest" => "0"
-                }
-              }
+              "burpee_count" => "200",
+              "sec_per_rep" => "6.21",
+              "sec_per_burpee" => "6.21",
+              "end_of_set_rest" => "0"
             }
           }
         }
@@ -1844,9 +1840,5 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       generate_workout(view)
       assert has_element?(view, "#plan-form")
     end
-  end
-
-  defp metadata_value(metadata, key) do
-    Map.get(metadata || %{}, key) || Map.get(metadata || %{}, Atom.to_string(key))
   end
 end

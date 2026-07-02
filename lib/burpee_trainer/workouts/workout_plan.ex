@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Workouts.{Block, ExecutionProgram, PlanStep}
+  alias BurpeeTrainer.Workouts.ExecutionProgram
 
   @burpee_types [:six_count, :navy_seal]
   @pacing_styles [:even, :unbroken]
@@ -17,28 +17,21 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     field(:burpee_count_target, :integer)
     field(:sec_per_burpee, :float)
     field(:pacing_style, Ecto.Enum, values: @pacing_styles)
-    field(:additional_rests, :string, default: "[]")
     field(:style_name, :string)
     field(:fatigue_factor, :float, default: 0.0)
     field(:coach_suggestion_kind, :string)
     field(:coach_target_reps, :integer)
-    field(:plan_solver_metadata, :map)
     field(:source_json, :map)
+
+    # Transient editor projections derived from source/programs. These are not
+    # persisted and must not be used as runtime execution truth.
+    field(:blocks, :any, virtual: true, default: [])
+    field(:steps, :any, virtual: true, default: [])
+    field(:additional_rests, :string, virtual: true, default: "[]")
+    field(:plan_solver_metadata, :map, virtual: true)
 
     belongs_to(:user, User)
     belongs_to(:current_execution_program, ExecutionProgram)
-
-    has_many(:blocks, Block,
-      foreign_key: :plan_id,
-      preload_order: [asc: :position],
-      on_replace: :delete
-    )
-
-    has_many(:steps, PlanStep,
-      foreign_key: :plan_id,
-      preload_order: [asc: :position],
-      on_replace: :delete
-    )
 
     timestamps(type: :utc_datetime)
   end
@@ -56,12 +49,10 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       :burpee_count_target,
       :sec_per_burpee,
       :pacing_style,
-      :additional_rests,
       :style_name,
       :fatigue_factor,
       :coach_suggestion_kind,
       :coach_target_reps,
-      :plan_solver_metadata,
       :source_json,
       :current_execution_program_id
     ])
@@ -73,16 +64,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     |> validate_number(:fatigue_factor,
       greater_than_or_equal_to: 0.0,
       less_than_or_equal_to: 1.0
-    )
-    |> cast_assoc(:blocks,
-      with: &Block.changeset/2,
-      sort_param: :blocks_sort,
-      drop_param: :blocks_drop
-    )
-    |> cast_assoc(:steps,
-      with: &PlanStep.changeset/2,
-      sort_param: :steps_sort,
-      drop_param: :steps_drop
     )
   end
 end

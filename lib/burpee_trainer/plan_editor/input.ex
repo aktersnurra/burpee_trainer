@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.PlanEditor.Input do
   """
 
   alias BurpeeTrainer.PlanSolver
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @type additional_rest :: PlanSolver.Input.additional_rest()
 

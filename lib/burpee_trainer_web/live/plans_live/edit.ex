@@ -21,7 +21,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   alias BurpeeTrainer.PlanCompiler.CompileError
   alias BurpeeTrainer.PlanEditor.Derived
   alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
   alias BurpeeTrainerWeb.Fmt
   alias BurpeeTrainerWeb.PlansLive.Edit.Presentation
 
@@ -147,8 +148,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp assign_form_from_editor(socket) do
-    existing_form =
-      socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+    existing_form = socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{}))
 
     assign(socket, :form, existing_form)
   end
@@ -198,13 +198,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp metadata_kind_label(nil), do: "Generated"
   defp metadata_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
-
-  defp change_form_plan(%WorkoutPlan{id: nil} = plan, attrs) do
-    plan
-    |> Map.put(:blocks, [])
-    |> Map.put(:steps, [])
-    |> Workouts.change_plan(attrs)
-  end
 
   defp change_form_plan(%WorkoutPlan{} = plan, attrs), do: Workouts.change_plan(plan, attrs)
 
@@ -396,10 +389,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     %{
       "style_name" => form_plan.style_name,
       "coach_suggestion_kind" => form_plan.coach_suggestion_kind,
-      "coach_target_reps" => form_plan.coach_target_reps,
-      "plan_solver_metadata" =>
-        form_plan.plan_solver_metadata ||
-          (editor.solver_solution && editor.solver_solution.metadata)
+      "coach_target_reps" => form_plan.coach_target_reps
     }
   end
 
@@ -412,7 +402,6 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       "burpee_count_target" => plan.burpee_count_target,
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
-      "plan_solver_metadata" => plan.plan_solver_metadata,
       "blocks" => blocks_to_attrs(plan.blocks),
       "steps" => steps_to_attrs(plan.steps || [])
     }
@@ -681,7 +670,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     if edge_index <= 0 or edge_index >= total_executions do
       reposition_steps(sorted_steps)
     else
-      rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
+      rest_step = %PlanStep{kind: :rest, rest_sec: rest_sec}
 
       sorted_steps
       |> insert_rest_after_execution(edge_index, rest_step, [], 0)
@@ -810,7 +799,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp place_rest_step_at_target_min(steps, blocks, target_min, rest_sec) do
     blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
     target_sec = target_min * 60.0
-    rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
+    rest_step = %PlanStep{kind: :rest, rest_sec: rest_sec}
 
     steps = steps |> Enum.sort_by(& &1.position) |> merge_adjacent_block_runs()
 
@@ -844,7 +833,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       end
 
     Enum.find(candidates, fn candidate ->
-      rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: candidate.rest_sec}
+      rest_step = %PlanStep{kind: :rest, rest_sec: candidate.rest_sec}
       blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
       sorted_steps = steps |> Enum.sort_by(& &1.position) |> merge_adjacent_block_runs()
 
@@ -1345,7 +1334,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> Enum.sort_by(&(&1.position || 0))
     |> Enum.with_index(1)
     |> Enum.map(fn {block, position} ->
-      %BurpeeTrainer.Workouts.PlanStep{
+      %PlanStep{
         position: position,
         kind: :block_run,
         block_position: block.position || position,
@@ -1383,22 +1372,18 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp assign_derived(socket) do
-    changeset = socket.assigns.form.source
+    form_plan = socket.assigns.editor.form_plan
 
-    {derived, form_plan} =
-      try do
-        form_plan = Ecto.Changeset.apply_changes(changeset)
+    derived =
+      cond do
+        socket.assigns.solver_error ->
+          %Derived{}
 
-        if socket.assigns.solver_error do
-          {%Derived{}, form_plan}
-        else
-          {PlanEditor.derived(form_plan, socket.assigns.editor.input), form_plan}
-        end
-      rescue
-        e ->
-          require Logger
-          Logger.warning("assign_derived failed: #{inspect(e)}")
-          {nil, socket.assigns.editor.form_plan}
+        match?(%WorkoutPlan{}, form_plan) ->
+          PlanEditor.derived(form_plan, socket.assigns.editor.input)
+
+        true ->
+          nil
       end
 
     editor = %{socket.assigns.editor | derived: derived, form_plan: form_plan}
@@ -1582,7 +1567,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("change_block_sheet", %{"block" => block_params}, socket) do
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    form_plan = socket.assigns.editor.form_plan
 
     with {:ok, source_block_index} <-
            parse_non_negative_index(Map.get(block_params, "source_block_index")),
@@ -1718,7 +1703,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     do: {:noreply, assign(socket, :rest_prompt, nil)}
 
   def handle_event("insert_prompted_rest", %{"rest" => rest_params}, socket) do
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    form_plan = socket.assigns.editor.form_plan
     rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
     edge_index = parse_non_negative_integer_or(Map.get(rest_params, "edge_index"), 1)
 
@@ -2078,7 +2063,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp open_rest_prompt(socket) do
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    form_plan = socket.assigns.editor.form_plan
 
     edges =
       form_plan.steps
@@ -2242,6 +2227,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # ---------------------------------------------------------------------------
 
   attr(:plan, :any, required: true)
+  attr(:editor, :any, required: true)
   attr(:form, :any, required: true)
   attr(:expanded_blocks, :any, required: true)
   attr(:expanded_timeline_row, :any, required: true)
@@ -2261,7 +2247,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:rest_prompt, :map, default: nil)
 
   defp plan_solution_card(assigns) do
-    form_plan = Ecto.Changeset.apply_changes(assigns.form.source)
+    form_plan = assigns.editor.form_plan || Ecto.Changeset.apply_changes(assigns.form.source)
     block_rows = Presentation.block_rows(form_plan, assigns.locked_block_indexes)
 
     contract =

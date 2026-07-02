@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Workouts do
   @moduledoc """
-  Context for workout plans (with blocks + sets) and workout sessions.
+  Context for workout source plans and workout sessions.
   All queries are scoped by `user_id`.
   """
 
@@ -16,9 +16,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Workouts.PaceConsistency
 
   alias BurpeeTrainer.Workouts.{
-    Block,
     ExecutionProgram,
-    PlanStep,
     PoseCaptureRun,
     PoseTraceChunk,
     StylePerformance,
@@ -36,30 +34,27 @@ defmodule BurpeeTrainer.Workouts do
   # ---------------------------------------------------------------------------
 
   @doc """
-  List all plans for a user, preloading blocks and sets so the timeline
-  can be computed without further queries.
+  List all source plans for a user.
   """
   @spec list_plans(User.t()) :: [WorkoutPlan.t()]
   def list_plans(%User{id: user_id}) do
     Repo.all(
       from(plan in WorkoutPlan,
         where: plan.user_id == ^user_id,
-        order_by: [desc: plan.updated_at],
-        preload: [blocks: :sets, steps: []]
+        order_by: [desc: plan.updated_at]
       )
     )
   end
 
   @doc """
-  Fetch a plan by id for a user, with blocks + sets preloaded.
+  Fetch a source plan by id for a user.
   Raises if the plan doesn't exist or belongs to a different user.
   """
   @spec get_plan!(User.t(), integer) :: WorkoutPlan.t()
   def get_plan!(%User{id: user_id}, id) do
     Repo.one!(
       from(plan in WorkoutPlan,
-        where: plan.id == ^id and plan.user_id == ^user_id,
-        preload: [blocks: :sets, steps: []]
+        where: plan.id == ^id and plan.user_id == ^user_id
       )
     )
   end
@@ -177,67 +172,23 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Delete a plan. Cascades to blocks and sets via FK. Sessions that
-  referenced the plan have their `plan_id` nilified.
+  Delete a plan. Sessions that referenced the plan have their `plan_id` nilified.
   """
   @spec delete_plan(WorkoutPlan.t()) :: {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
   def delete_plan(%WorkoutPlan{} = plan), do: Repo.delete(plan)
 
   @doc """
-  Duplicate a plan (new row, same content, suffixed name). Blocks and
-  sets are recreated with fresh ids.
+  Duplicate a source plan (new row, same source, suffixed name) and compile a fresh program.
   """
   @spec duplicate_plan(WorkoutPlan.t()) ::
           {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
-  def duplicate_plan(%WorkoutPlan{} = plan) do
-    source = Repo.preload(plan, blocks: :sets, steps: [])
-
+  def duplicate_plan(%WorkoutPlan{} = source) do
     attrs = %{
       "name" => source.name <> " (copy)",
-      "source_json" => plan_source_attrs(source),
-      "style_name" => source.style_name,
-      "coach_suggestion_kind" => source.coach_suggestion_kind,
-      "coach_target_reps" => source.coach_target_reps,
-      "plan_solver_metadata" => source.plan_solver_metadata,
-      "blocks" => duplicate_plan_blocks(source.blocks),
-      "steps" => duplicate_plan_steps(source.steps)
+      "source_json" => source.source_json
     }
 
     create_plan(%User{id: source.user_id}, attrs)
-  end
-
-  defp duplicate_plan_blocks(blocks) do
-    for block <- Enum.sort_by(blocks, & &1.position) do
-      %{
-        "position" => block.position,
-        "repeat_count" => block.repeat_count,
-        "sets" => duplicate_plan_sets(block.sets)
-      }
-    end
-  end
-
-  defp duplicate_plan_sets(sets) do
-    for set <- Enum.sort_by(sets, & &1.position) do
-      %{
-        "position" => set.position,
-        "burpee_count" => set.burpee_count,
-        "sec_per_rep" => set.sec_per_rep,
-        "sec_per_burpee" => set.sec_per_burpee,
-        "end_of_set_rest" => set.end_of_set_rest
-      }
-    end
-  end
-
-  defp duplicate_plan_steps(steps) do
-    for %PlanStep{} = step <- Enum.sort_by(steps || [], & &1.position) do
-      %{
-        "position" => step.position,
-        "kind" => Atom.to_string(step.kind),
-        "block_position" => step.block_position,
-        "repeat_count" => step.repeat_count,
-        "rest_sec" => step.rest_sec
-      }
-    end
   end
 
   # ---------------------------------------------------------------------------
@@ -422,8 +373,8 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Returns the `%WorkoutPlan{}` (blocks preloaded) from the most recent
-  non-warmup session that has a plan_id, or `nil` if none exists.
+  Returns the `%WorkoutPlan{}` from the most recent non-warmup session that has
+  a plan_id, or `nil` if none exists.
   """
   @spec last_run_plan(User.t()) :: WorkoutPlan.t() | nil
   def last_run_plan(%User{id: user_id}) do
@@ -442,10 +393,7 @@ defmodule BurpeeTrainer.Workouts do
         )
       )
 
-    case result do
-      nil -> nil
-      plan -> Repo.preload(plan, :blocks)
-    end
+    result
   end
 
   @doc """
@@ -565,8 +513,6 @@ defmodule BurpeeTrainer.Workouts do
   @spec create_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def create_session_from_plan(%User{id: user_id}, %WorkoutPlan{user_id: user_id} = plan, attrs) do
-    plan = Repo.preload(plan, blocks: :sets, steps: [])
-
     with {:ok, planned_attrs} <- planned_session_attrs(plan) do
       attrs =
         attrs
@@ -606,8 +552,6 @@ defmodule BurpeeTrainer.Workouts do
         %WorkoutPlan{user_id: user_id} = plan,
         attrs
       ) do
-    plan = Repo.preload(plan, blocks: :sets, steps: [])
-
     with {:ok, planned_attrs} <- planned_session_attrs(plan) do
       attrs =
         attrs
@@ -789,10 +733,7 @@ defmodule BurpeeTrainer.Workouts do
       "source_json" => plan_source_attrs(plan),
       "style_name" => plan.style_name,
       "coach_suggestion_kind" => plan.coach_suggestion_kind,
-      "coach_target_reps" => plan.coach_target_reps,
-      "plan_solver_metadata" => stringify_metadata(plan.plan_solver_metadata),
-      "blocks" => save_generated_plan_blocks(plan.blocks),
-      "steps" => save_generated_plan_steps(plan.steps)
+      "coach_target_reps" => plan.coach_target_reps
     }
 
     create_plan(user, attrs)
@@ -801,72 +742,8 @@ defmodule BurpeeTrainer.Workouts do
   defp plan_source_attrs(%WorkoutPlan{source_json: source}) when is_map(source), do: source
   defp plan_source_attrs(%WorkoutPlan{}), do: nil
 
-  defp stringify_metadata(nil), do: nil
-
-  defp stringify_metadata(metadata) when is_map(metadata) do
-    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
-  end
-
-  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
-
-  defp stringify_metadata_value(values) when is_list(values),
-    do: Enum.map(values, &stringify_metadata_value/1)
-
-  defp stringify_metadata_value(value), do: value
-
-  defp save_generated_plan_blocks(blocks) do
-    for block <- Enum.sort_by(blocks, & &1.position) do
-      %{
-        "position" => block.position,
-        "repeat_count" => block.repeat_count,
-        "sets" => save_generated_plan_sets(block.sets)
-      }
-    end
-  end
-
-  defp save_generated_plan_steps(steps) do
-    for step <- Enum.sort_by(steps || [], & &1.position) do
-      %{
-        "position" => step.position,
-        "kind" => Atom.to_string(step.kind),
-        "block_position" => step.block_position,
-        "repeat_count" => step.repeat_count,
-        "rest_sec" => step.rest_sec
-      }
-    end
-  end
-
-  defp save_generated_plan_sets(sets) do
-    for set <- Enum.sort_by(sets, & &1.position) do
-      %{
-        "position" => set.position,
-        "burpee_count" => set.burpee_count,
-        "sec_per_rep" => set.sec_per_rep,
-        "sec_per_burpee" => set.sec_per_burpee,
-        "end_of_set_rest" => set.end_of_set_rest
-      }
-    end
-  end
-
   @doc false
-  def preload_plan(%WorkoutPlan{} = plan), do: Repo.preload(plan, blocks: :sets, steps: [])
-
-  @doc """
-  Reorder blocks within a plan by supplying `[{block_id, position}, ...]`.
-  """
-  @spec reorder_blocks(WorkoutPlan.t(), [{integer, integer}]) :: :ok
-  def reorder_blocks(%WorkoutPlan{id: plan_id}, id_positions) when is_list(id_positions) do
-    Repo.transaction(fn ->
-      Enum.each(id_positions, fn {block_id, position} ->
-        Repo.update_all(
-          from(b in Block, where: b.id == ^block_id and b.plan_id == ^plan_id),
-          set: [position: position]
-        )
-      end)
-    end)
-
-    :ok
-  end
+  def preload_plan(%WorkoutPlan{} = plan), do: plan
 
   # ---------------------------------------------------------------------------
   # Gamification — push-up score, personal bests, milestone detection

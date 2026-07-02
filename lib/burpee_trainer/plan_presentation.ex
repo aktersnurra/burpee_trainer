@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.PlanPresentation do
   blocks and set ranges for display.
   """
 
-  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @type outline :: %{
           summary: String.t(),

@@ -316,20 +316,11 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       level: level
     }
 
-    metadata = %{
-      "source" => "coach_target",
-      "suggestion_kind" => Atom.to_string(suggestion.kind),
-      "risk" => Atom.to_string(suggestion.risk),
-      "confidence" => suggestion.confidence,
-      "rationale" => suggestion.rationale
-    }
-
     with {:ok, solution} <- PlanSolver.solve(plan_input),
          attrs =
            generated_plan_attrs(solution.plan,
              coach_suggestion_kind: Atom.to_string(suggestion.kind),
-             coach_target_reps: suggestion.burpee_count_target,
-             plan_solver_metadata: metadata
+             coach_target_reps: suggestion.burpee_count_target
            ),
          {:ok, plan} <- Workouts.create_plan(user, attrs) do
       {:ok, plan}
@@ -342,22 +333,11 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     catch_up_plan.selected_sessions
     |> Enum.with_index(1)
     |> Enum.reduce_while({:ok, []}, fn {session, index}, {:ok, plans} ->
-      metadata = %{
-        "source" => "catch_up",
-        "suggestion_kind" => Atom.to_string(session.suggestion_kind),
-        "weekly_split_effect" => Atom.to_string(catch_up_plan.weekly_split_effect),
-        "total_duration_min" => catch_up_plan.total_duration_min,
-        "fatigue_cost" => catch_up_plan.fatigue_cost,
-        "risk" => Atom.to_string(catch_up_plan.risk),
-        "rationale" => catch_up_plan.rationale
-      }
-
       with {:ok, solution} <- PlanSolver.solve(named_plan_input(session.plan_input, index)),
            attrs =
              generated_plan_attrs(solution.plan,
                coach_suggestion_kind: Atom.to_string(session.suggestion_kind),
-               coach_target_reps: session.target_reps,
-               plan_solver_metadata: metadata
+               coach_target_reps: session.target_reps
              ),
            {:ok, plan} <- Workouts.create_plan(user, attrs) do
         {:cont, {:ok, [plan | plans]}}
@@ -377,15 +357,12 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   defp generated_plan_attrs(plan, opts) do
-    source_metadata = Keyword.fetch!(opts, :plan_solver_metadata)
-
     plan
     |> workout_plan_attrs()
     |> Map.merge(%{
       "source_json" => generated_source_json(plan),
       "coach_suggestion_kind" => Keyword.fetch!(opts, :coach_suggestion_kind),
-      "coach_target_reps" => Keyword.fetch!(opts, :coach_target_reps),
-      "plan_solver_metadata" => merged_plan_solver_metadata(plan, source_metadata)
+      "coach_target_reps" => Keyword.fetch!(opts, :coach_target_reps)
     })
   end
 
@@ -450,25 +427,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     end
   end
 
-  defp merged_plan_solver_metadata(plan, source_metadata) do
-    plan.plan_solver_metadata
-    |> stringify_metadata()
-    |> Map.merge(stringify_metadata(source_metadata))
-  end
-
-  defp stringify_metadata(nil), do: %{}
-
-  defp stringify_metadata(metadata) when is_map(metadata) do
-    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
-  end
-
-  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
-
-  defp stringify_metadata_value(values) when is_list(values),
-    do: Enum.map(values, &stringify_metadata_value/1)
-
-  defp stringify_metadata_value(value), do: value
-
   defp workout_plan_attrs(plan) do
     %{
       "name" => plan.name,
@@ -477,38 +435,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       "burpee_count_target" => plan.burpee_count_target,
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
-      "additional_rests" => plan.additional_rests,
-      "fatigue_factor" => plan.fatigue_factor,
-      "blocks" => Enum.map(plan.blocks, &block_attrs/1),
-      "steps" => Enum.map(plan.steps || [], &step_attrs/1)
-    }
-  end
-
-  defp step_attrs(step) do
-    %{
-      "position" => step.position,
-      "kind" => Atom.to_string(step.kind),
-      "block_position" => step.block_position,
-      "repeat_count" => step.repeat_count,
-      "rest_sec" => step.rest_sec
-    }
-  end
-
-  defp block_attrs(block) do
-    %{
-      "position" => block.position,
-      "repeat_count" => block.repeat_count,
-      "sets" => Enum.map(block.sets, &set_attrs/1)
-    }
-  end
-
-  defp set_attrs(set) do
-    %{
-      "position" => set.position,
-      "burpee_count" => set.burpee_count,
-      "sec_per_rep" => set.sec_per_rep,
-      "sec_per_burpee" => set.sec_per_burpee,
-      "end_of_set_rest" => set.end_of_set_rest
+      "fatigue_factor" => plan.fatigue_factor
     }
   end
 

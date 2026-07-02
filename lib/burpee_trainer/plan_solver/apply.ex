@@ -9,7 +9,8 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   """
 
   alias BurpeeTrainer.PlanSolver.{Execution, Input, Prescription, StructureSearch}
-  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @spec from_execution(Input.t(), Execution.t(), Prescription.t() | float) ::
           {:ok, WorkoutPlan.t()}
