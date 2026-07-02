@@ -42,7 +42,7 @@ assert.deepEqual(currentFrame([work, rest], 2), {
 assert.equal(currentFrame([work], 10), null);
 
 let reps = {
-	currentEventKey: "0:work:Block 1",
+	currentEventKey: "0:work",
 	doneInEvent: 4,
 	burpeeCountDone: 4,
 	previousFrame: { event: work, index: 0 },
@@ -52,7 +52,7 @@ reps = accountReps(reps.previousFrame, { event: rest, index: 1 }, reps);
 assert.equal(reps.burpeeCountDone, 5);
 
 reps = {
-	currentEventKey: "0:work:Block 1",
+	currentEventKey: "0:work",
 	doneInEvent: 4,
 	burpeeCountDone: 4,
 	previousFrame: { event: work, index: 0 },
@@ -82,7 +82,7 @@ const resetResult = segmentTransition(
 			...initialSegmentState().reps,
 			burpeeCountDone: 7,
 			doneInEvent: 7,
-			currentEventKey: "0:work:Previous",
+			currentEventKey: "0:work",
 			previousFrame: { event: work, index: 0 },
 		},
 	},
@@ -280,7 +280,7 @@ assert.deepEqual(result.commands, [
 const repState = {
 	...initialSegmentState(),
 	reps: {
-		currentEventKey: "0:work:Block 1",
+		currentEventKey: "0:work",
 		doneInEvent: 4,
 		burpeeCountDone: 4,
 		previousFrame: { event: work, index: 0 },
@@ -330,7 +330,7 @@ result = segmentTransition(
 	{
 		...initialSegmentState(),
 		reps: {
-			currentEventKey: "0:work:Warmup",
+			currentEventKey: "0:work",
 			doneInEvent: 4,
 			burpeeCountDone: 4,
 			previousFrame: { event: warmupWork, index: 0 },
@@ -430,7 +430,7 @@ result = segmentTransition(
 		mode: "running",
 		clock: { ...initialSegmentState().clock, totalDurationSec: 15 },
 		reps: {
-			currentEventKey: "0:work:Block 1",
+			currentEventKey: "0:work",
 			doneInEvent: 5,
 			burpeeCountDone: 5,
 			previousFrame: { event: work, index: 0 },
@@ -450,7 +450,7 @@ result = segmentTransition(
 		mode: "running",
 		clock: { ...initialSegmentState().clock, totalDurationSec: 15 },
 		reps: {
-			currentEventKey: "0:work:Block 1",
+			currentEventKey: "0:work",
 			doneInEvent: 5,
 			burpeeCountDone: 5,
 			previousFrame: { event: work, index: 0 },

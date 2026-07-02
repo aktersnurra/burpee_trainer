@@ -31,10 +31,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
 
   defp canonical_event(%ProgramEvent.Work{} = event) do
     %{
-      id: event.id,
       kind: "work",
-      set_index: event.set_index,
-      block_index: event.block_index,
       reps: event.reps,
       sec_per_rep_us: sec_to_us(event.sec_per_rep)
     }
@@ -42,10 +39,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
 
   defp canonical_event(%ProgramEvent.Rest{} = event) do
     %{
-      id: event.id,
       kind: "rest",
-      duration_ms: sec_to_ms(event.duration_sec),
-      source: encode_source(event.source)
+      duration_ms: sec_to_ms(event.duration_sec)
     }
   end
 

@@ -12,23 +12,9 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                target_reps: 20,
                target_duration_sec: 300,
                events: [
-                 ProgramEvent.work!(%{
-                   id: "work-001",
-                   set_index: 1,
-                   block_index: 1,
-                   reps: 10,
-                   sec_per_rep: 12.0,
-                   label: "Set 1"
-                 }),
-                 ProgramEvent.rest!(%{id: "rest-001", duration_sec: 60, label: "Rest"}),
-                 ProgramEvent.work!(%{
-                   id: "work-002",
-                   set_index: 2,
-                   block_index: 1,
-                   reps: 10,
-                   sec_per_rep: 12.0,
-                   label: "Set 2"
-                 })
+                 ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0}),
+                 ProgramEvent.rest!(%{duration_sec: 60}),
+                 ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0})
                ],
                metadata: %{pacing_style: :even}
              })
@@ -39,20 +25,10 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
     assert :ok = ProgramValidator.validate(program)
 
     [first_work | _] = Program.events(program)
-    refute Map.has_key?(Map.from_struct(first_work), :duration_sec)
+    assert Map.from_struct(first_work) == %{kind: :work, reps: 10, sec_per_rep: 12.0}
   end
 
-  test "validator rejects duplicate event ids" do
-    event =
-      ProgramEvent.work!(%{
-        id: "work-001",
-        set_index: 1,
-        block_index: 1,
-        reps: 10,
-        sec_per_rep: 12.0,
-        label: "Set 1"
-      })
-
+  test "validator rejects invalid work instructions" do
     assert {:ok, program} =
              Program.new(%{
                schema_version: 1,
@@ -60,12 +36,11 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                burpee_type: :six_count,
                target_reps: 20,
                target_duration_sec: 240,
-               events: [event, %{event | set_index: 2}],
+               events: [ProgramEvent.work!(%{reps: 10, sec_per_rep: 0.0})],
                metadata: %{pacing_style: :even}
              })
 
-    assert {:error, %CompileError{code: :duplicate_event_id, context: %{id: "work-001"}}} =
-             ProgramValidator.validate(program)
+    assert {:error, %CompileError{code: :invalid_event}} = ProgramValidator.validate(program)
   end
 
   test "validator rejects target duration mismatch" do
@@ -76,16 +51,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                burpee_type: :six_count,
                target_reps: 10,
                target_duration_sec: 300,
-               events: [
-                 ProgramEvent.work!(%{
-                   id: "work-001",
-                   set_index: 1,
-                   block_index: 1,
-                   reps: 10,
-                   sec_per_rep: 12.0,
-                   label: "Set 1"
-                 })
-               ],
+               events: [ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0})],
                metadata: %{pacing_style: :even}
              })
 

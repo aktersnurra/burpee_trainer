@@ -298,6 +298,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert payload.program_hash
     assert [%{kind: "work", reps: 10, sec_per_rep: 12.0} = work] = payload.events
     refute Map.has_key?(work, :duration_sec)
+    refute Map.has_key?(work, :id)
+    refute Map.has_key?(work, :set_index)
+    refute Map.has_key?(work, :block_index)
+    refute Map.has_key?(work, :label)
     refute Map.has_key?(payload, :blocks)
     refute Map.has_key?(payload, :steps)
     refute Map.has_key?(payload, :additional_rests)
@@ -332,7 +336,11 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     rest_index = Enum.find_index(payload.events, &(&1.kind == "rest"))
     assert rest_index == 36
-    assert Enum.at(payload.events, rest_index).duration_sec == 10.0
+    rest = Enum.at(payload.events, rest_index)
+    assert rest.duration_sec == 10.0
+    refute Map.has_key?(rest, :id)
+    refute Map.has_key?(rest, :label)
+    refute Map.has_key?(rest, :source)
 
     {before_rest, [_rest | after_rest]} = Enum.split(payload.events, rest_index)
     assert Enum.sum(Enum.map(before_rest, &(&1.reps || 0))) == 180

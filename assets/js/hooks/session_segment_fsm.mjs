@@ -67,7 +67,7 @@ export function eventKey(frameOrEvent, fallbackIndex = 0) {
 	const index = Number.isInteger(frameOrEvent.index)
 		? frameOrEvent.index
 		: fallbackIndex;
-	return `${index}:${eventKind(event)}:${event.label || ""}`;
+	return `${index}:${eventKind(event)}`;
 }
 
 function eventKind(event) {

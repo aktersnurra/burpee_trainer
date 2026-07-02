@@ -14,26 +14,18 @@ const program = {
 	target_duration_sec: 132,
 	events: [
 		{
-			id: "work-001",
 			kind: "work",
-			set_index: 1,
 			reps: 10,
 			sec_per_rep: 6,
-			label: "Set 1",
 		},
 		{
-			id: "rest-001",
 			kind: "rest",
 			duration_sec: 30,
-			label: "Rest",
 		},
 		{
-			id: "work-002",
 			kind: "work",
-			set_index: 2,
 			reps: 7,
 			sec_per_rep: 6,
-			label: "Set 2",
 		},
 	],
 };
@@ -53,20 +45,18 @@ assert.equal(programBurpeeCount(workout), 17);
 assert.equal(workout[0].reps, 10);
 assert.equal(workout[2].reps, 7);
 assert.deepEqual(setBarsFromProgram(program), [
-	{ id: "work-001", index: 1, reps: 10, label: "Set 1" },
-	{ id: "work-002", index: 2, reps: 7, label: "Set 2" },
+	{ id: "work-1", index: 1, reps: 10, label: "Set 1" },
+	{ id: "work-2", index: 2, reps: 7, label: "Set 2" },
 ]);
 
 const pureKindProgram = {
 	events: [
 		{
-			id: "work-a",
 			kind: "work",
-			set_index: 1,
 			reps: 5,
 			sec_per_rep: 10,
 		},
-		{ id: "rest-a", kind: "rest", duration_sec: 10 },
+		{ kind: "rest", duration_sec: 10 },
 	],
 };
 

@@ -109,36 +109,21 @@ defmodule BurpeeTrainer.PlanCompiler do
       burpee_type: source.burpee_type,
       target_reps: source.target_reps,
       target_duration_sec: source.target_duration_sec,
-      events:
-        execution
-        |> Enum.with_index(1)
-        |> Enum.map(fn {event, index} -> program_event(event, index) end),
+      events: Enum.map(execution, &program_event/1),
       metadata: Map.merge(metadata || %{}, %{source: :plan_compiler})
     })
   end
 
-  defp program_event(%Execution.SetEvent{} = event, _index) do
+  defp program_event(%Execution.SetEvent{} = event) do
     ProgramEvent.work!(%{
-      id: "work-#{pad(event.index)}",
-      set_index: event.index,
-      block_index: nil,
-      display_group: nil,
       reps: event.burpee_count,
-      sec_per_rep: event.sec_per_rep,
-      label: "Set #{event.index}"
+      sec_per_rep: event.sec_per_rep
     })
   end
 
-  defp program_event(%Execution.RestEvent{} = event, index) do
-    ProgramEvent.rest!(%{
-      id: "rest-#{pad(index)}",
-      duration_sec: event.rest_sec,
-      label: "Rest",
-      source: event.source
-    })
+  defp program_event(%Execution.RestEvent{} = event) do
+    ProgramEvent.rest!(%{duration_sec: event.rest_sec})
   end
-
-  defp pad(index), do: index |> Integer.to_string() |> String.pad_leading(3, "0")
 
   defp get(attrs, key), do: Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
 

@@ -7,27 +7,35 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramEvent do
 
   @spec work!(map()) :: Work.t()
   def work!(attrs) when is_map(attrs) do
+    reject_unknown!(attrs, [:reps, :sec_per_rep], :work)
+
     %Work{
-      id: fetch!(attrs, :id),
       kind: :work,
-      set_index: fetch!(attrs, :set_index),
-      block_index: Map.get(attrs, :block_index),
-      display_group: Map.get(attrs, :display_group),
       reps: fetch!(attrs, :reps),
-      sec_per_rep: fetch!(attrs, :sec_per_rep) * 1.0,
-      label: fetch!(attrs, :label)
+      sec_per_rep: fetch!(attrs, :sec_per_rep) * 1.0
     }
   end
 
   @spec rest!(map()) :: Rest.t()
   def rest!(attrs) when is_map(attrs) do
+    reject_unknown!(attrs, [:duration_sec], :rest)
+
     %Rest{
-      id: fetch!(attrs, :id),
       kind: :rest,
-      duration_sec: fetch!(attrs, :duration_sec),
-      label: fetch!(attrs, :label),
-      source: Map.get(attrs, :source)
+      duration_sec: fetch!(attrs, :duration_sec)
     }
+  end
+
+  defp reject_unknown!(attrs, allowed_keys, event_kind) do
+    unknown_keys =
+      attrs
+      |> Map.keys()
+      |> Enum.reject(&(&1 in allowed_keys))
+      |> Enum.sort()
+
+    if unknown_keys != [] do
+      raise ArgumentError, "unknown #{event_kind} event fields: #{inspect(unknown_keys)}"
+    end
   end
 
   defp fetch!(attrs, key) do

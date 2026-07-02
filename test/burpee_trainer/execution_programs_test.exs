@@ -12,16 +12,7 @@ defmodule BurpeeTrainer.ExecutionProgramsTest do
         burpee_type: :six_count,
         target_reps: 10,
         target_duration_sec: 120,
-        events: [
-          ProgramEvent.work!(%{
-            id: "work-001",
-            set_index: 1,
-            block_index: 1,
-            reps: 10,
-            sec_per_rep: 12.0,
-            label: "Set 1"
-          })
-        ],
+        events: [ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0})],
         metadata: %{pacing_style: :even, recovery_model: :saved_up_rest}
       })
 

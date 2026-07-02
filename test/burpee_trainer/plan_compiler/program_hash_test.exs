@@ -14,14 +14,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
             target_reps: 10,
             target_duration_sec: 120,
             events: [
-              ProgramEvent.work!(%{
-                id: "work-001",
-                set_index: 1,
-                block_index: 1,
-                reps: 10,
-                sec_per_rep: 12.0,
-                label: "Set 1"
-              })
+              ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0}),
+              ProgramEvent.rest!(%{duration_sec: 0.0})
             ],
             metadata: %{pacing_style: :even, recovery_model: :saved_up_rest}
           },
@@ -36,22 +30,11 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
     assert ProgramHash.hash(program()) == ProgramHash.hash(program())
   end
 
-  test "hash ignores display label changes" do
-    changed_label =
-      program(%{
-        events: [
-          ProgramEvent.work!(%{
-            id: "work-001",
-            set_index: 1,
-            block_index: 1,
-            reps: 10,
-            sec_per_rep: 12.0,
-            label: "A prettier label"
-          })
-        ]
-      })
+  test "canonical map stores only executable event fields" do
+    [work, rest] = ProgramHash.canonical_map(program()).events
 
-    assert ProgramHash.hash(program()) == ProgramHash.hash(changed_label)
+    assert work == %{kind: "work", reps: 10, sec_per_rep_us: 12_000_000}
+    assert rest == %{kind: "rest", duration_ms: 0}
   end
 
   test "hash changes when executable cadence changes" do
@@ -59,14 +42,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
       program(%{
         target_duration_sec: 130,
         events: [
-          ProgramEvent.work!(%{
-            id: "work-001",
-            set_index: 1,
-            block_index: 1,
-            reps: 10,
-            sec_per_rep: 13.0,
-            label: "Set 1"
-          })
+          ProgramEvent.work!(%{reps: 10, sec_per_rep: 13.0}),
+          ProgramEvent.rest!(%{duration_sec: 0.0})
         ]
       })
 

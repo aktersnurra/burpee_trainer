@@ -8,7 +8,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
   @spec validate(Program.t()) :: :ok | {:error, CompileError.t()}
   def validate(%Program{} = program) do
     with :ok <- validate_events(program.events),
-         :ok <- validate_unique_ids(program.events),
          :ok <- validate_reps(program),
          :ok <- validate_duration(program) do
       :ok
@@ -20,12 +19,12 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
 
   defp validate_events(events) do
     Enum.reduce_while(events, :ok, fn
-      %ProgramEvent.Work{reps: reps, sec_per_rep: pace, id: id}, :ok
-      when is_binary(id) and reps > 0 and pace > 0 ->
+      %ProgramEvent.Work{reps: reps, sec_per_rep: pace}, :ok
+      when reps > 0 and pace > 0 ->
         {:cont, :ok}
 
-      %ProgramEvent.Rest{duration_sec: duration, id: id}, :ok
-      when is_binary(id) and duration > 0 ->
+      %ProgramEvent.Rest{duration_sec: duration}, :ok
+      when duration > 0 ->
         {:cont, :ok}
 
       event, :ok ->
@@ -33,21 +32,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
          {:error,
           CompileError.new(:invalid_event, "Program contains an invalid event", %{event: event})}}
     end)
-  end
-
-  defp validate_unique_ids(events) do
-    ids = Enum.map(events, & &1.id)
-
-    case ids -- Enum.uniq(ids) do
-      [duplicate | _] ->
-        {:error,
-         CompileError.new(:duplicate_event_id, "Program event ids must be unique", %{
-           id: duplicate
-         })}
-
-      [] ->
-        :ok
-    end
   end
 
   defp validate_reps(%Program{} = program) do
