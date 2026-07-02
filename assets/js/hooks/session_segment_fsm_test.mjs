@@ -7,30 +7,30 @@ import {
 } from "./session_segment_fsm.mjs";
 
 const work = {
-	phase: "work",
+	kind: "work",
 	duration_sec: 10,
-	burpee_count: 5,
+	reps: 5,
 	label: "Block 1",
 };
 
 const rest = {
-	phase: "rest",
+	kind: "rest",
 	duration_sec: 5,
-	burpee_count: 0,
+	reps: 0,
 	label: "Rest",
 };
 
 const warmupWork = {
-	phase: "work",
+	kind: "work",
 	duration_sec: 10,
-	burpee_count: 5,
+	reps: 5,
 	label: "Warmup",
 };
 
 const warmupRest = {
-	phase: "rest",
+	kind: "rest",
 	duration_sec: 5,
-	burpee_count: 0,
+	reps: 0,
 	label: "Warmup rest",
 };
 

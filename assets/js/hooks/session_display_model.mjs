@@ -47,8 +47,8 @@ export function runningDisplayModel({
 			: isRest
 				? formatTime(frame?.phase_remaining ?? timeLeftSec)
 				: isWork
-					? Math.max((event?.reps || event?.burpee_count || 0) - doneInEvent, 0)
-					: (event?.reps ?? event?.burpee_count ?? totalTarget ?? "—"),
+					? Math.max((event?.reps || 0) - doneInEvent, 0)
+					: (event?.reps ?? totalTarget ?? "—"),
 		countdownDots: isRestCountdown
 			? {
 					count: 3,
@@ -94,11 +94,8 @@ function ringProgressForFrame(frame) {
 	if (!event?.duration_sec) return 0;
 
 	if (eventKind(event) === "work") {
-		const burpeeCount = event.reps || event.burpee_count || 1;
-		const secondsPerRep =
-			event.sec_per_rep ||
-			event.sec_per_burpee ||
-			event.duration_sec / burpeeCount;
+		const burpeeCount = event.reps || 1;
+		const secondsPerRep = event.sec_per_rep || event.duration_sec / burpeeCount;
 		if (!secondsPerRep || secondsPerRep <= 0) return 0;
 		return clamp(((frame.phase_elapsed || 0) % secondsPerRep) / secondsPerRep);
 	}
@@ -107,7 +104,7 @@ function ringProgressForFrame(frame) {
 }
 
 function eventKind(event) {
-	return event?.kind || event?.phase;
+	return event?.kind;
 }
 
 function clamp(value) {

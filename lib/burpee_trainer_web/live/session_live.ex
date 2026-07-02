@@ -334,14 +334,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
         %{
           id: map_get(event, :id),
           kind: "work",
-          phase: "work",
           set_index: set_index,
           block_index: map_get(event, :block_index),
           reps: map_get(event, :reps),
-          burpee_count: map_get(event, :reps),
           duration_sec: map_get(event, :duration_ms) / 1000,
           sec_per_rep: sec_per_rep,
-          sec_per_burpee: sec_per_rep,
           label: "Set #{set_index}"
         }
 
@@ -349,12 +346,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         %{
           id: map_get(event, :id),
           kind: "rest",
-          phase: "rest",
           duration_sec: map_get(event, :duration_ms) / 1000,
-          burpee_count: nil,
-          reps: nil,
-          sec_per_rep: nil,
-          sec_per_burpee: nil,
           label: "Rest"
         }
     end

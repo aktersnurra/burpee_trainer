@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
 
 const workoutTimeline = [
-	{ phase: "work", duration_sec: 10, burpee_count: 5, label: "Block 1" },
+	{ kind: "work", duration_sec: 10, reps: 5, label: "Block 1" },
 ];
 const warmupTimeline = [
-	{ phase: "work", duration_sec: 6, burpee_count: 3, label: "Warmup" },
+	{ kind: "work", duration_sec: 6, reps: 3, label: "Warmup" },
 ];
 
 let result = flowTransition(initialFlowState(), {

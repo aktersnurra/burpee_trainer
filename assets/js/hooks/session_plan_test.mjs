@@ -15,34 +15,34 @@ const program = {
 		{
 			id: "work-001",
 			kind: "work",
-			phase: "work",
+			kind: "work",
 			set_index: 1,
 			reps: 10,
-			burpee_count: 10,
+			reps: 10,
 			duration_sec: 60,
 			sec_per_rep: 6,
-			sec_per_burpee: 6,
+			sec_per_rep: 6,
 			label: "Set 1",
 		},
 		{
 			id: "rest-001",
 			kind: "rest",
-			phase: "rest",
+			kind: "rest",
 			duration_sec: 30,
-			burpee_count: null,
-			sec_per_burpee: null,
+			reps: null,
+			sec_per_rep: null,
 			label: "Rest",
 		},
 		{
 			id: "work-002",
 			kind: "work",
-			phase: "work",
+			kind: "work",
 			set_index: 2,
 			reps: 7,
-			burpee_count: 7,
+			reps: 7,
 			duration_sec: 42,
 			sec_per_rep: 6,
-			sec_per_burpee: 6,
+			sec_per_rep: 6,
 			label: "Set 2",
 		},
 	],
@@ -82,7 +82,7 @@ const pureKindProgram = {
 };
 
 assert.equal(programBurpeeCount(pureKindProgram), 5);
-assert.equal(warmupTimelineFromProgram(pureKindProgram)[0].burpee_count, 5);
+assert.equal(warmupTimelineFromProgram(pureKindProgram)[0].reps, 5);
 assert.deepEqual(workoutTimelineFromProgram({ blocks: [{ sets: [] }] }), []);
 
 console.log("session_plan tests passed");

@@ -64,7 +64,7 @@ export function eventKey(frameOrEvent, fallbackIndex = 0) {
 }
 
 function eventKind(event) {
-	return event?.kind || event?.phase;
+	return event?.kind;
 }
 
 function isBurpeeEvent(event) {
@@ -75,11 +75,8 @@ function completedRepsInFrame(frame) {
 	if (!frame || !frame.event || !isBurpeeEvent(frame.event)) return 0;
 
 	const event = frame.event;
-	const target = event.reps || event.burpee_count || 0;
-	const secondsPerRep =
-		event.sec_per_rep ||
-		event.sec_per_burpee ||
-		event.duration_sec / (target || 1);
+	const target = event.reps || 0;
+	const secondsPerRep = event.sec_per_rep || event.duration_sec / (target || 1);
 
 	return Math.min(
 		Math.floor((frame.phase_elapsed || 0) / secondsPerRep),
@@ -120,7 +117,7 @@ export function accountReps(previousFrame, nextFrame, reps) {
 
 	if (!isBurpee) return { ...reps, currentEventKey: nextKey, doneInEvent: 0 };
 
-	const target = previousEvent.reps || previousEvent.burpee_count || 0;
+	const target = previousEvent.reps || 0;
 	const doneInEvent =
 		reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
 	const missing = Math.max(target - doneInEvent, 0);
@@ -140,7 +137,7 @@ function totalDurationSec(timeline) {
 function totalBurpeeCount(timeline) {
 	return timeline.reduce((sum, item) => {
 		if (!isBurpeeEvent(item)) return sum;
-		return sum + (item.reps || item.burpee_count || 0);
+		return sum + (item.reps || 0);
 	}, 0);
 }
 
@@ -151,10 +148,7 @@ function beepCommandsForFrame(beeps, frame) {
 
 	if (eventKind(timelineEvent) === "work") {
 		const secondsPerRep =
-			timelineEvent.sec_per_rep ||
-			timelineEvent.sec_per_burpee ||
-			timelineEvent.duration_sec /
-				(timelineEvent.reps || timelineEvent.burpee_count || 1);
+			timelineEvent.sec_per_rep || timelineEvent.duration_sec / (timelineEvent.reps || 1);
 		const repIndex = Math.floor(phase_elapsed / secondsPerRep);
 
 		if (repIndex !== beeps.lastRepIndex) {
@@ -209,7 +203,7 @@ function displayCommandsForFrame(display, event) {
 	let nextDisplay = display;
 
 	if (isWork) {
-		const burpeeCount = timelineEvent.reps || timelineEvent.burpee_count || 0;
+		const burpeeCount = timelineEvent.reps || 0;
 		const remainingReps = Math.max(burpeeCount - (event.doneInEvent || 0), 0);
 		const enteringWork =
 			frameEventKey !== display.lastEventKey ||
@@ -236,9 +230,7 @@ function displayCommandsForFrame(display, event) {
 		}
 
 		const secondsPerRep =
-			timelineEvent.sec_per_rep ||
-			timelineEvent.sec_per_burpee ||
-			timelineEvent.duration_sec / (burpeeCount || 1);
+			timelineEvent.sec_per_rep || timelineEvent.duration_sec / (burpeeCount || 1);
 		const repIndex = Math.floor(frame.phase_elapsed / secondsPerRep);
 		const repElapsed = frame.phase_elapsed - repIndex * secondsPerRep;
 		commands.push({

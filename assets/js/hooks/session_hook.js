@@ -658,15 +658,12 @@ const SessionHook = {
 
 	triggerDownCueForFrame(frame, remainingReps) {
 		const event = frame?.event;
-		if ((event?.kind || event?.phase) !== "work") {
+		if (event?.kind !== "work") {
 			this.lastDownCueKey = null;
 			return;
 		}
 
-		const secondsPerRep =
-			event.sec_per_rep ||
-			event.sec_per_burpee ||
-			event.duration_sec / (event.reps || event.burpee_count || 1);
+		const secondsPerRep = event.sec_per_rep || event.duration_sec / (event.reps || 1);
 		if (!secondsPerRep || secondsPerRep <= 0) return;
 
 		const repIndex = Math.floor((frame.phase_elapsed || 0) / secondsPerRep);
