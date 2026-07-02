@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Workouts.{Block, PlanStep}
+  alias BurpeeTrainer.Workouts.{Block, ExecutionProgram, PlanStep}
 
   @burpee_types [:six_count, :navy_seal]
   @pacing_styles [:even, :unbroken]
@@ -23,8 +23,10 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     field(:coach_suggestion_kind, :string)
     field(:coach_target_reps, :integer)
     field(:plan_solver_metadata, :map)
+    field(:source_json, :map)
 
     belongs_to(:user, User)
+    belongs_to(:current_execution_program, ExecutionProgram)
 
     has_many(:blocks, Block,
       foreign_key: :plan_id,
@@ -59,7 +61,9 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       :fatigue_factor,
       :coach_suggestion_kind,
       :coach_target_reps,
-      :plan_solver_metadata
+      :plan_solver_metadata,
+      :source_json,
+      :current_execution_program_id
     ])
     |> validate_required([:name, :burpee_type])
     |> validate_length(:name, min: 1, max: 80)
