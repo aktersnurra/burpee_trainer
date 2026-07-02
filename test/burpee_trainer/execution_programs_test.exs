@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.ExecutionProgramsTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase, async: false
 
   alias BurpeeTrainer.ExecutionPrograms
   alias BurpeeTrainer.PlanCompiler.{Program, ProgramEvent}

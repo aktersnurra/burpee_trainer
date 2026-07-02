@@ -468,8 +468,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert main.note_post == "brutal"
     assert main.plan_id == plan.id
     assert main.execution_program_id == plan.current_execution_program_id
-    assert main.burpee_count_planned == 30
-    assert main.duration_sec_planned == 180
+
+    program = BurpeeTrainer.ExecutionPrograms.get!(plan.current_execution_program_id)
+    assert main.burpee_count_planned == program.target_reps
+    assert main.duration_sec_planned == program.target_duration_sec
   end
 
   test "save_session navigates away even when milestones are triggered", %{conn: conn, user: user} do

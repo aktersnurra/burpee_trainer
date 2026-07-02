@@ -382,10 +382,72 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     plan
     |> workout_plan_attrs()
     |> Map.merge(%{
+      "source_json" => generated_source_json(plan),
       "coach_suggestion_kind" => Keyword.fetch!(opts, :coach_suggestion_kind),
       "coach_target_reps" => Keyword.fetch!(opts, :coach_target_reps),
       "plan_solver_metadata" => merged_plan_solver_metadata(plan, source_metadata)
     })
+  end
+
+  defp generated_source_json(plan) do
+    pattern = generated_block_pattern(plan.blocks)
+
+    source = %{
+      "burpee_type" => Atom.to_string(plan.burpee_type),
+      "target_reps" => plan.burpee_count_target,
+      "target_duration_sec" => plan.target_duration_min * 60,
+      "pacing_style" => Atom.to_string(plan.pacing_style),
+      "block_pattern" => pattern,
+      "explicit_rests" => generated_explicit_rests(plan.additional_rests)
+    }
+
+    if plan.pacing_style == :unbroken do
+      Map.put(source, "max_unbroken_reps", Enum.max(pattern, fn -> 1 end))
+    else
+      source
+    end
+  end
+
+  defp generated_block_pattern(blocks) when is_list(blocks) do
+    blocks
+    |> Enum.sort_by(&(&1.position || 0))
+    |> Enum.flat_map(fn block ->
+      motif =
+        block.sets
+        |> Enum.sort_by(&(&1.position || 0))
+        |> Enum.map(& &1.burpee_count)
+
+      List.duplicate(motif, max(block.repeat_count || 1, 1))
+    end)
+    |> List.flatten()
+    |> case do
+      [] -> [1]
+      pattern -> pattern
+    end
+  end
+
+  defp generated_block_pattern(_blocks), do: [1]
+
+  defp generated_explicit_rests(rests_json) do
+    case Jason.decode(rests_json || "[]") do
+      {:ok, rests} when is_list(rests) ->
+        Enum.flat_map(rests, fn
+          %{"rest_sec" => rest_sec, "target_min" => target_min} ->
+            [
+              %{
+                "target_elapsed_sec" => round(target_min * 60),
+                "duration_sec" => round(rest_sec),
+                "tolerance_sec" => 60
+              }
+            ]
+
+          _rest ->
+            []
+        end)
+
+      _other ->
+        []
+    end
   end
 
   defp merged_plan_solver_metadata(plan, source_metadata) do

@@ -311,12 +311,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert_redirect(view, ~p"/session/#{plan.id}")
 
       updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
-      [first_block | _] = Enum.sort_by(updated.blocks, & &1.position)
-      [first_set | _] = Enum.sort_by(first_block.sets, & &1.position)
-
-      assert first_set.burpee_count == 17
-      assert_in_delta first_set.sec_per_rep, 4.2, 0.01
-      assert first_set.end_of_set_rest == 45
+      assert updated.source_json["block_pattern"] == [17]
+      assert updated.source_json["target_reps"] == 17
+      assert updated.source_json["sec_per_rep_override"] == 4.2
+      assert updated.current_execution_program_id
     end
 
     test "workout outline renders block summary without duplicated graph", %{
@@ -580,8 +578,86 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert plan.burpee_count_target == 70
       assert plan.burpee_type == :navy_seal
+      assert plan.source_json["target_reps"] == 70
+      assert plan.source_json["target_duration_sec"] == 1_200
+      assert plan.source_json["burpee_type"] == "navy_seal"
+      assert plan.current_execution_program_id
       assert metadata_value(plan.plan_solver_metadata, :solver_version) == 3
       assert metadata_value(plan.plan_solver_metadata, :structure_key)
+    end
+
+    test "new workout editor accepts submitted source JSON and compiles current program", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
+
+      view
+      |> element("#plan-form")
+      |> render_submit(%{
+        "workout_plan" => %{
+          "name" => "Posted source",
+          "source_json" => %{
+            "burpee_type" => "six_count",
+            "target_reps" => 100,
+            "target_duration_sec" => 1_200,
+            "pacing_style" => "even",
+            "block_pattern" => [10],
+            "explicit_rests" => [],
+            "pace_bias" => "slower",
+            "load_shape" => "front_loaded",
+            "sec_per_rep_override" => 6.0
+          }
+        }
+      })
+
+      assert_redirect(view, ~p"/workouts")
+
+      [plan | _] = BurpeeTrainer.Workouts.list_plans(user)
+      assert plan.name == "Posted source"
+      assert plan.source_json["target_reps"] == 100
+      assert plan.source_json["target_duration_sec"] == 1_200
+      assert plan.source_json["block_pattern"] == [10]
+      assert plan.source_json["pace_bias"] == "slower"
+      assert plan.source_json["load_shape"] == "front_loaded"
+      assert plan.source_json["sec_per_rep_override"] == 6.0
+      assert plan.current_execution_program_id
+    end
+
+    test "submitted source JSON preserves all compiler fields", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
+
+      view
+      |> element("#plan-form")
+      |> render_submit(%{
+        "workout_plan" => %{
+          "name" => "Posted unbroken source",
+          "source_json" => %{
+            "burpee_type" => "six_count",
+            "target_reps" => 100,
+            "target_duration_sec" => 900,
+            "pacing_style" => "unbroken",
+            "max_unbroken_reps" => 5,
+            "block_pattern" => [5],
+            "explicit_rests" => [],
+            "pace_bias" => "slower",
+            "load_shape" => "front_loaded"
+          }
+        }
+      })
+
+      assert_redirect(view, ~p"/workouts")
+
+      [plan | _] = BurpeeTrainer.Workouts.list_plans(user)
+      assert plan.name == "Posted unbroken source"
+      assert plan.pacing_style == :unbroken
+      assert plan.source_json["pacing_style"] == "unbroken"
+      assert plan.source_json["max_unbroken_reps"] == 5
+      assert plan.source_json["pace_bias"] == "slower"
+      assert plan.source_json["load_shape"] == "front_loaded"
+      assert plan.current_execution_program_id
     end
 
     test "new plan renders readable editor rows instead of solver-fragment blocks", %{
@@ -1293,6 +1369,22 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert Enum.at(rows, 2) =~ "Blocks 3–5"
       assert html =~ "20:00"
       refute html =~ "Workout no longer fits"
+
+      view |> element("#plan-form") |> render_submit(%{"workout_plan" => %{}})
+      assert_redirect(view, ~p"/workouts")
+
+      updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
+      rest = Enum.find(updated.source_json["explicit_rests"], &(&1["duration_sec"] == 45))
+      assert rest
+      assert rest["target_elapsed_sec"] > 0
+      assert rest["tolerance_sec"] == 60
+
+      program = BurpeeTrainer.ExecutionPrograms.get!(updated.current_execution_program_id)
+
+      assert Enum.any?(program.program_json["events"], fn
+               %{"kind" => "rest", "duration_ms" => 45_000} -> true
+               _event -> false
+             end)
     end
 
     test "block sheet edits only the selected segment after a repeated block is split", %{
