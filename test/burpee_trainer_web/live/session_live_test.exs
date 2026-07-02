@@ -264,60 +264,67 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert html =~ "Skip"
   end
 
-  test "mount pushes session_ready with serialized plan", %{conn: conn, user: user} do
-    plan = plan_fixture(user)
-    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    assert_push_event(view, "session_ready", %{plan: plan_payload})
-    assert is_list(plan_payload.blocks)
-    assert length(plan_payload.blocks) > 0
-
-    first_block = hd(plan_payload.blocks)
-    first_set = hd(first_block.sets)
-    assert Map.has_key?(first_block, :repeat_count)
-    assert Map.has_key?(first_set, :burpee_count)
-    assert Map.has_key?(first_set, :sec_per_rep)
-    assert Map.has_key?(first_set, :end_of_set_rest)
-    assert is_list(plan_payload.timeline)
-  end
-
-  test "session_ready timeline includes additional rests as first-class events", %{
+  test "session ready payload contains canonical program events and no derived plan timeline", %{
     conn: conn,
     user: user
   } do
-    sets =
-      for position <- 1..40 do
-        %{
-          "position" => position,
-          "burpee_count" => 5,
-          "sec_per_rep" => 6.0,
-          "sec_per_burpee" => 3.0,
-          "end_of_set_rest" => 0
+    {:ok, plan} =
+      Workouts.create_plan(user, %{
+        "name" => "10 in 2",
+        "source_json" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 10,
+          "target_duration_sec" => 120,
+          "pacing_style" => "even",
+          "block_pattern" => [10],
+          "explicit_rests" => []
         }
-      end
+      })
 
-    plan =
-      plan_fixture(user, %{
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    assert_push_event(view, "session_ready", payload)
+    assert payload.program_id == plan.current_execution_program_id
+    assert payload.program_hash
+    assert [%{kind: "work", reps: 10, duration_sec: 120.0}] = payload.events
+    refute Map.has_key?(payload, :blocks)
+    refute Map.has_key?(payload, :timeline)
+  end
+
+  test "session_ready program events include explicit rests as first-class events", %{
+    conn: conn,
+    user: user
+  } do
+    {:ok, plan} =
+      Workouts.create_plan(user, %{
         "name" => "Session Rest Plan",
-        "additional_rests" => Jason.encode!([%{"target_min" => 18, "rest_sec" => 10}]),
-        "blocks" => [%{"position" => 1, "repeat_count" => 1, "sets" => sets}]
+        "source_json" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 200,
+          "target_duration_sec" => 1210,
+          "pacing_style" => "even",
+          "block_pattern" => [5],
+          "explicit_rests" => [
+            %{"target_elapsed_sec" => 1080, "duration_sec" => 10, "tolerance_sec" => 90}
+          ]
+        }
       })
 
     {:ok, view, html} = live(conn, ~p"/session/#{plan.id}")
 
     assert html =~ "20:10"
-    assert_push_event(view, "session_ready", %{plan: plan_payload})
+    assert_push_event(view, "session_ready", payload)
 
-    assert Enum.count(plan_payload.timeline, &(&1.phase == "rest")) == 1
+    assert Enum.count(payload.events, &(&1.kind == "rest")) == 1
 
-    rest_index = Enum.find_index(plan_payload.timeline, &(&1.phase == "rest"))
+    rest_index = Enum.find_index(payload.events, &(&1.kind == "rest"))
     assert rest_index == 36
-    assert Enum.at(plan_payload.timeline, rest_index).duration_sec == 10
+    assert Enum.at(payload.events, rest_index).duration_sec == 10.0
 
-    {before_rest, [_rest | after_rest]} = Enum.split(plan_payload.timeline, rest_index)
-    assert Enum.sum(Enum.map(before_rest, &(&1.burpee_count || 0))) == 180
-    assert Enum.sum(Enum.map(after_rest, &(&1.burpee_count || 0))) == 20
-    assert Enum.sum(Enum.map(plan_payload.timeline, & &1.duration_sec)) == 1210
+    {before_rest, [_rest | after_rest]} = Enum.split(payload.events, rest_index)
+    assert Enum.sum(Enum.map(before_rest, &(&1.reps || 0))) == 180
+    assert Enum.sum(Enum.map(after_rest, &(&1.reps || 0))) == 20
+    assert_in_delta Enum.sum(Enum.map(payload.events, & &1.duration_sec)), 1210.0, 0.01
   end
 
   test "session_started transitions phase to running", %{conn: conn, user: user} do
@@ -458,6 +465,9 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert main.duration_sec_actual == round(1.6 * 60)
     assert main.note_post == "brutal"
     assert main.plan_id == plan.id
+    assert main.execution_program_id == plan.current_execution_program_id
+    assert main.burpee_count_planned == 30
+    assert main.duration_sec_planned == 180
   end
 
   test "save_session navigates away even when milestones are triggered", %{conn: conn, user: user} do
