@@ -40,18 +40,25 @@ export function currentFrame(timeline, elapsedSec) {
 
 	for (let index = 0; index < timeline.length; index++) {
 		const event = timeline[index];
-		if (elapsedSec < cursor + event.duration_sec) {
+		const durationSec = eventDurationSec(event);
+		if (elapsedSec < cursor + durationSec) {
 			return {
 				event,
 				index,
 				phase_elapsed: elapsedSec - cursor,
-				phase_remaining: event.duration_sec - (elapsedSec - cursor),
+				phase_remaining: durationSec - (elapsedSec - cursor),
 			};
 		}
-		cursor += event.duration_sec;
+		cursor += durationSec;
 	}
 
 	return null;
+}
+
+export function eventDurationSec(event) {
+	if (event?.kind === "work") return (event.reps || 0) * (event.sec_per_rep || 0);
+	if (event?.kind === "rest") return event.duration_sec || 0;
+	return 0;
 }
 
 export function eventKey(frameOrEvent, fallbackIndex = 0) {
@@ -76,7 +83,7 @@ function completedRepsInFrame(frame) {
 
 	const event = frame.event;
 	const target = event.reps || 0;
-	const secondsPerRep = event.sec_per_rep || event.duration_sec / (target || 1);
+	const secondsPerRep = event.sec_per_rep;
 
 	return Math.min(
 		Math.floor((frame.phase_elapsed || 0) / secondsPerRep),
@@ -131,7 +138,7 @@ export function accountReps(previousFrame, nextFrame, reps) {
 }
 
 function totalDurationSec(timeline) {
-	return timeline.reduce((sum, item) => sum + item.duration_sec, 0);
+	return timeline.reduce((sum, item) => sum + eventDurationSec(item), 0);
 }
 
 function totalBurpeeCount(timeline) {
@@ -147,8 +154,7 @@ function beepCommandsForFrame(beeps, frame) {
 	const { event: timelineEvent, phase_elapsed, phase_remaining } = frame;
 
 	if (eventKind(timelineEvent) === "work") {
-		const secondsPerRep =
-			timelineEvent.sec_per_rep || timelineEvent.duration_sec / (timelineEvent.reps || 1);
+		const secondsPerRep = timelineEvent.sec_per_rep;
 		const repIndex = Math.floor(phase_elapsed / secondsPerRep);
 
 		if (repIndex !== beeps.lastRepIndex) {
@@ -229,8 +235,7 @@ function displayCommandsForFrame(display, event) {
 			nextDisplay = { ...display, lastRemainingReps: remainingReps };
 		}
 
-		const secondsPerRep =
-			timelineEvent.sec_per_rep || timelineEvent.duration_sec / (burpeeCount || 1);
+		const secondsPerRep = timelineEvent.sec_per_rep;
 		const repIndex = Math.floor(frame.phase_elapsed / secondsPerRep);
 		const repElapsed = frame.phase_elapsed - repIndex * secondsPerRep;
 		commands.push({

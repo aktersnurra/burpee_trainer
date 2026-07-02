@@ -6,15 +6,15 @@ import {
 } from "./session_display_model.mjs";
 
 const workoutTimeline = [
-	{ kind: "work", duration_sec: 10, reps: 5, label: "Block 1" },
+	{ kind: "work", reps: 5, sec_per_rep: 2, label: "Block 1" },
 	{ kind: "rest", duration_sec: 5, label: "Rest" },
-	{ kind: "work", duration_sec: 10, reps: 5, label: "Block 1" },
+	{ kind: "work", reps: 5, sec_per_rep: 2, label: "Block 1" },
 ];
 
 const warmupFrame = {
 	index: 0,
 	phase_elapsed: 2,
-	event: { kind: "work", duration_sec: 6, reps: 3 },
+	event: { kind: "work", reps: 3, sec_per_rep: 2 },
 };
 
 const workoutFrame = {
@@ -31,9 +31,9 @@ const restFrame = {
 
 test("runner display uses generic work/rest phases", () => {
 	const warmupTimeline = [
-		{ kind: "work", duration_sec: 6, reps: 3 },
+		{ kind: "work", reps: 3, sec_per_rep: 2 },
 		{ kind: "rest", duration_sec: 5 },
-		{ kind: "work", duration_sec: 6, reps: 3 },
+		{ kind: "work", reps: 3, sec_per_rep: 2 },
 	];
 	const model = runningDisplayModel({
 		timeline: warmupTimeline,
@@ -57,12 +57,7 @@ test("work ring cycles once per rep, not once per set", () => {
 		frame: {
 			index: 0,
 			phase_elapsed: 3,
-			event: {
-				...workoutTimeline[0],
-				duration_sec: 10,
-				reps: 5,
-				sec_per_rep: 2,
-			},
+			event: workoutTimeline[0],
 		},
 		timeLeftSec: 17,
 		totalDone: 0,

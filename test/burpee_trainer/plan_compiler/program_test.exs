@@ -17,7 +17,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                    set_index: 1,
                    block_index: 1,
                    reps: 10,
-                   duration_sec: 120.0,
                    sec_per_rep: 12.0,
                    label: "Set 1"
                  }),
@@ -27,7 +26,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                    set_index: 2,
                    block_index: 1,
                    reps: 10,
-                   duration_sec: 120.0,
                    sec_per_rep: 12.0,
                    label: "Set 2"
                  })
@@ -39,6 +37,9 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
     assert Program.total_reps(program) == 20
     assert_in_delta Program.duration_sec(program), 300.0, 1.0e-6
     assert :ok = ProgramValidator.validate(program)
+
+    [first_work | _] = Program.events(program)
+    refute Map.has_key?(Map.from_struct(first_work), :duration_sec)
   end
 
   test "validator rejects duplicate event ids" do
@@ -48,7 +49,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
         set_index: 1,
         block_index: 1,
         reps: 10,
-        duration_sec: 120.0,
         sec_per_rep: 12.0,
         label: "Set 1"
       })
@@ -82,7 +82,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                    set_index: 1,
                    block_index: 1,
                    reps: 10,
-                   duration_sec: 120.0,
                    sec_per_rep: 12.0,
                    label: "Set 1"
                  })

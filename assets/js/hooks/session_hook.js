@@ -1,6 +1,7 @@
 import { SessionAudio } from "./session_audio.mjs";
 import {
 	currentFrame,
+	eventDurationSec,
 	initialSegmentState,
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
@@ -510,7 +511,7 @@ const SessionHook = {
 					? {
 							index: 0,
 							phase_elapsed: 0,
-							phase_remaining: this.timeline[0].duration_sec || 0,
+							phase_remaining: eventDurationSec(this.timeline[0]),
 							event: this.timeline[0],
 						}
 					: null,
@@ -663,7 +664,7 @@ const SessionHook = {
 			return;
 		}
 
-		const secondsPerRep = event.sec_per_rep || event.duration_sec / (event.reps || 1);
+		const secondsPerRep = event.sec_per_rep;
 		if (!secondsPerRep || secondsPerRep <= 0) return;
 
 		const repIndex = Math.floor((frame.phase_elapsed || 0) / secondsPerRep);

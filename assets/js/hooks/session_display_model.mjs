@@ -75,9 +75,10 @@ function activeSegmentGlyphs({ timeline, frame }) {
 	const completedSets = (timeline || [])
 		.slice(0, frame?.index ?? timeline.length)
 		.filter((event) => eventKind(event) === "work").length;
+	const currentSetDurationSec = eventDurationSec(frame?.event);
 	const currentSetProgress =
-		eventKind(frame?.event) === "work" && frame.event.duration_sec > 0
-			? clamp((frame.phase_elapsed || 0) / frame.event.duration_sec)
+		eventKind(frame?.event) === "work" && currentSetDurationSec > 0
+			? clamp((frame.phase_elapsed || 0) / currentSetDurationSec)
 			: null;
 
 	return [
@@ -91,16 +92,22 @@ function activeSegmentGlyphs({ timeline, frame }) {
 
 function ringProgressForFrame(frame) {
 	const event = frame?.event;
-	if (!event?.duration_sec) return 0;
+	const durationSec = eventDurationSec(event);
+	if (durationSec <= 0) return 0;
 
 	if (eventKind(event) === "work") {
-		const burpeeCount = event.reps || 1;
-		const secondsPerRep = event.sec_per_rep || event.duration_sec / burpeeCount;
+		const secondsPerRep = event.sec_per_rep;
 		if (!secondsPerRep || secondsPerRep <= 0) return 0;
 		return clamp(((frame.phase_elapsed || 0) % secondsPerRep) / secondsPerRep);
 	}
 
-	return clamp((frame?.phase_elapsed || 0) / event.duration_sec);
+	return clamp((frame?.phase_elapsed || 0) / durationSec);
+}
+
+function eventDurationSec(event) {
+	if (event?.kind === "work") return (event.reps || 0) * (event.sec_per_rep || 0);
+	if (event?.kind === "rest") return event.duration_sec || 0;
+	return 0;
 }
 
 function eventKind(event) {

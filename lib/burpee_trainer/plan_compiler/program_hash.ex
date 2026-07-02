@@ -36,8 +36,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
       set_index: event.set_index,
       block_index: event.block_index,
       reps: event.reps,
-      duration_ms: sec_to_ms(event.duration_sec),
-      sec_per_rep_ms: sec_to_ms(event.sec_per_rep)
+      sec_per_rep_us: sec_to_us(event.sec_per_rep)
     }
   end
 
@@ -59,6 +58,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
   end
 
   defp sec_to_ms(value), do: round(value * 1000)
+  defp sec_to_us(value), do: round(value * 1_000_000)
 
   defp encode_source(value) when is_atom(value), do: Atom.to_string(value)
   defp encode_source({left, right}), do: [encode_source(left), encode_source(right)]

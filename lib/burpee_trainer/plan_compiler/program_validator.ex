@@ -20,8 +20,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
 
   defp validate_events(events) do
     Enum.reduce_while(events, :ok, fn
-      %ProgramEvent.Work{reps: reps, duration_sec: duration, sec_per_rep: pace, id: id}, :ok
-      when is_binary(id) and reps > 0 and duration > 0 and pace > 0 ->
+      %ProgramEvent.Work{reps: reps, sec_per_rep: pace, id: id}, :ok
+      when is_binary(id) and reps > 0 and pace > 0 ->
         {:cont, :ok}
 
       %ProgramEvent.Rest{duration_sec: duration, id: id}, :ok

@@ -34,19 +34,16 @@ export function warmupTimelineFromProgram(program) {
 
 	if (!firstWork) return [];
 
-	const secPerRep = firstWork.sec_per_rep || firstWork.duration_sec / (firstWork.reps || 1);
+	const secPerRep = firstWork.sec_per_rep;
 	if (!secPerRep || secPerRep <= 0) return [];
 
 	const warmupReps = Math.min(firstWork.reps || 0, Math.trunc(60 / secPerRep));
 	if (warmupReps <= 0) return [];
 
-	const durationSec = warmupReps * secPerRep;
-
 	return [
 		{
 			id: "warmup-work-001",
 			kind: "work",
-			duration_sec: durationSec,
 			reps: warmupReps,
 			sec_per_rep: secPerRep,
 			label: "Warmup Round 1",
@@ -60,7 +57,6 @@ export function warmupTimelineFromProgram(program) {
 		{
 			id: "warmup-work-002",
 			kind: "work",
-			duration_sec: durationSec,
 			reps: warmupReps,
 			sec_per_rep: secPerRep,
 			label: "Warmup Round 2",

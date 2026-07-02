@@ -18,7 +18,6 @@ defmodule BurpeeTrainer.ExecutionProgramsTest do
             set_index: 1,
             block_index: 1,
             reps: 10,
-            duration_sec: 120.0,
             sec_per_rep: 12.0,
             label: "Set 1"
           })

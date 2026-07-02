@@ -124,7 +124,6 @@ defmodule BurpeeTrainer.PlanCompiler do
       block_index: nil,
       display_group: nil,
       reps: event.burpee_count,
-      duration_sec: event.duration_sec,
       sec_per_rep: event.sec_per_rep,
       label: "Set #{event.index}"
     })

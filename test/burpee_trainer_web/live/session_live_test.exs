@@ -28,6 +28,16 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     end
   end
 
+  defp program_payload_duration_sec(events) do
+    Enum.reduce(events, 0.0, fn
+      %{kind: "work", reps: reps, sec_per_rep: sec_per_rep}, total ->
+        total + reps * sec_per_rep
+
+      %{kind: "rest", duration_sec: duration_sec}, total ->
+        total + duration_sec
+    end)
+  end
+
   setup %{conn: conn} do
     user = user_fixture()
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
@@ -286,7 +296,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert_push_event(view, "session_ready", payload)
     assert payload.program_id == plan.current_execution_program_id
     assert payload.program_hash
-    assert [%{kind: "work", reps: 10, duration_sec: 120.0}] = payload.events
+    assert [%{kind: "work", reps: 10, sec_per_rep: 12.0} = work] = payload.events
+    refute Map.has_key?(work, :duration_sec)
     refute Map.has_key?(payload, :blocks)
     refute Map.has_key?(payload, :steps)
     refute Map.has_key?(payload, :additional_rests)
@@ -326,7 +337,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {before_rest, [_rest | after_rest]} = Enum.split(payload.events, rest_index)
     assert Enum.sum(Enum.map(before_rest, &(&1.reps || 0))) == 180
     assert Enum.sum(Enum.map(after_rest, &(&1.reps || 0))) == 20
-    assert_in_delta Enum.sum(Enum.map(payload.events, & &1.duration_sec)), 1210.0, 0.01
+    assert_in_delta program_payload_duration_sec(payload.events), 1210.0, 0.01
   end
 
   test "session_started transitions phase to running", %{conn: conn, user: user} do

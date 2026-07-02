@@ -14,7 +14,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramEvent do
       block_index: Map.get(attrs, :block_index),
       display_group: Map.get(attrs, :display_group),
       reps: fetch!(attrs, :reps),
-      duration_sec: fetch!(attrs, :duration_sec) * 1.0,
       sec_per_rep: fetch!(attrs, :sec_per_rep) * 1.0,
       label: fetch!(attrs, :label)
     }

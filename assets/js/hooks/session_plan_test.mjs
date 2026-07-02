@@ -5,6 +5,7 @@ import {
 	warmupTimelineFromProgram,
 	workoutTimelineFromProgram,
 } from "./session_plan.mjs";
+import { eventDurationSec } from "./session_segment_fsm.mjs";
 
 const program = {
 	program_id: 7,
@@ -15,33 +16,22 @@ const program = {
 		{
 			id: "work-001",
 			kind: "work",
-			kind: "work",
 			set_index: 1,
 			reps: 10,
-			reps: 10,
-			duration_sec: 60,
-			sec_per_rep: 6,
 			sec_per_rep: 6,
 			label: "Set 1",
 		},
 		{
 			id: "rest-001",
 			kind: "rest",
-			kind: "rest",
 			duration_sec: 30,
-			reps: null,
-			sec_per_rep: null,
 			label: "Rest",
 		},
 		{
 			id: "work-002",
 			kind: "work",
-			kind: "work",
 			set_index: 2,
 			reps: 7,
-			reps: 7,
-			duration_sec: 42,
-			sec_per_rep: 6,
 			sec_per_rep: 6,
 			label: "Set 2",
 		},
@@ -54,8 +44,8 @@ assert.deepEqual(
 	["work", "rest", "work", "rest"],
 );
 assert.equal(programBurpeeCount(warmup), 20);
-assert.equal(warmup[0].duration_sec, 60);
-assert.equal(warmup[2].duration_sec, 60);
+assert.equal(eventDurationSec(warmup[0]), 60);
+assert.equal(eventDurationSec(warmup[2]), 60);
 
 const workout = workoutTimelineFromProgram(program);
 assert.deepEqual(workout, program.events);
@@ -74,7 +64,6 @@ const pureKindProgram = {
 			kind: "work",
 			set_index: 1,
 			reps: 5,
-			duration_sec: 50,
 			sec_per_rep: 10,
 		},
 		{ id: "rest-a", kind: "rest", duration_sec: 10 },

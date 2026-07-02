@@ -166,7 +166,7 @@ defmodule BurpeeTrainer.Workouts do
       Enum.filter(program.events, &match?(%BurpeeTrainer.PlanCompiler.ProgramEvent.Work{}, &1))
 
     total_reps = Enum.reduce(work_events, 0, &(&1.reps + &2))
-    total_work = Enum.reduce(work_events, 0.0, &(&1.duration_sec + &2))
+    total_work = Enum.reduce(work_events, 0.0, &(&1.reps * &1.sec_per_rep + &2))
 
     if total_reps > 0, do: Float.round(total_work / total_reps, 1), else: 0.0
   end

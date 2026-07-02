@@ -19,7 +19,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
                 set_index: 1,
                 block_index: 1,
                 reps: 10,
-                duration_sec: 120.0,
                 sec_per_rep: 12.0,
                 label: "Set 1"
               })
@@ -46,7 +45,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
             set_index: 1,
             block_index: 1,
             reps: 10,
-            duration_sec: 120.0,
             sec_per_rep: 12.0,
             label: "A prettier label"
           })
@@ -66,7 +64,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
             set_index: 1,
             block_index: 1,
             reps: 10,
-            duration_sec: 130.0,
             sec_per_rep: 13.0,
             label: "Set 1"
           })

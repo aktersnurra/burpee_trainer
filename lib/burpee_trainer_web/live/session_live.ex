@@ -328,16 +328,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp program_event_for_runner(event) do
     case map_get(event, :kind) do
       "work" ->
-        sec_per_rep = map_get(event, :sec_per_rep_ms) / 1000
+        sec_per_rep = map_get(event, :sec_per_rep_us) / 1_000_000
         set_index = map_get(event, :set_index)
+        reps = map_get(event, :reps)
 
         %{
           id: map_get(event, :id),
           kind: "work",
           set_index: set_index,
           block_index: map_get(event, :block_index),
-          reps: map_get(event, :reps),
-          duration_sec: map_get(event, :duration_ms) / 1000,
+          reps: reps,
           sec_per_rep: sec_per_rep,
           label: "Set #{set_index}"
         }

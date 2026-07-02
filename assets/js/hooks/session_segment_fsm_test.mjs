@@ -8,29 +8,27 @@ import {
 
 const work = {
 	kind: "work",
-	duration_sec: 10,
 	reps: 5,
+	sec_per_rep: 2,
 	label: "Block 1",
 };
 
 const rest = {
 	kind: "rest",
 	duration_sec: 5,
-	reps: 0,
 	label: "Rest",
 };
 
 const warmupWork = {
 	kind: "work",
-	duration_sec: 10,
 	reps: 5,
+	sec_per_rep: 2,
 	label: "Warmup",
 };
 
 const warmupRest = {
 	kind: "rest",
 	duration_sec: 5,
-	reps: 0,
 	label: "Warmup rest",
 };
 
@@ -379,14 +377,13 @@ assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
 
 const programWork = {
 	kind: "work",
-	duration_sec: 10,
 	reps: 5,
+	sec_per_rep: 2,
 	label: "Set 1",
 };
 const programRest = {
 	kind: "rest",
 	duration_sec: 5,
-	reps: null,
 	label: "Rest",
 };
 
