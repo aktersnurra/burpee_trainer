@@ -65,7 +65,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
       :source_json,
       :current_execution_program_id
     ])
-    |> validate_required([:name, :burpee_type])
+    |> validate_required([:name, :source_json])
     |> validate_length(:name, min: 1, max: 80)
     |> validate_number(:target_duration_min, greater_than: 0)
     |> validate_number(:burpee_count_target, greater_than: 0)
@@ -77,8 +77,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     |> cast_assoc(:blocks,
       with: &Block.changeset/2,
       sort_param: :blocks_sort,
-      drop_param: :blocks_drop,
-      required: true
+      drop_param: :blocks_drop
     )
     |> cast_assoc(:steps,
       with: &PlanStep.changeset/2,
