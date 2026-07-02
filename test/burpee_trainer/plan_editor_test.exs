@@ -780,6 +780,28 @@ defmodule BurpeeTrainer.PlanEditorTest do
 
       assert {:error, :last_set, ^state} = PlanEditor.delete_set(state, "0", "0")
     end
+
+    test "update_set changes only the targeted field" do
+      state = multi_block_state(1)
+      {:ok, state} = PlanEditor.add_set(state, "0")
+
+      {:ok, updated} = PlanEditor.update_set(state, "0", "1", %{"reps" => "12"})
+
+      block = updated.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      target = block.sets |> Enum.sort_by(& &1.position) |> Enum.at(1)
+      assert target.burpee_count == 12
+      assert updated.manual_edit? == true
+    end
+
+    test "update_set sets rest via the rest key" do
+      state = multi_block_state(1)
+
+      {:ok, updated} = PlanEditor.update_set(state, "0", "0", %{"rest" => "60"})
+
+      block = updated.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      target = block.sets |> Enum.sort_by(& &1.position) |> hd()
+      assert target.end_of_set_rest == 60
+    end
   end
 
   describe "state initialization" do

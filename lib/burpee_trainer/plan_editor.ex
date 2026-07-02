@@ -497,6 +497,63 @@ defmodule BurpeeTrainer.PlanEditor do
   def delete_set(%State{} = state, _block_index, _set_index),
     do: {:error, :missing_form_plan, state}
 
+  @spec update_set(State.t(), term(), term(), map()) ::
+          {:ok, State.t()} | {:error, term(), State.t()}
+  def update_set(
+        %State{form_plan: %WorkoutPlan{blocks: blocks}} = state,
+        block_index,
+        set_index,
+        params
+      )
+      when is_map(params) do
+    with {:ok, block_index} <- Input.parse_non_negative_index(block_index),
+         {:ok, set_index} <- Input.parse_non_negative_index(set_index),
+         blocks <- Enum.sort_by(blocks || [], & &1.position),
+         %Block{} = block <- Enum.at(blocks, block_index),
+         sets <- Enum.sort_by(block.sets || [], & &1.position),
+         %Set{} = set <- Enum.at(sets, set_index) do
+      set = apply_set_field(set, params)
+      updated_block = %{block | sets: List.replace_at(sets, set_index, set)}
+      form_plan = %{state.form_plan | blocks: List.replace_at(blocks, block_index, updated_block)}
+
+      {:ok,
+       %{
+         state
+         | form_plan: form_plan,
+           manual_edit?: true,
+           derived: derived(form_plan, state.input)
+       }}
+    else
+      nil -> {:error, :missing_item, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  def update_set(%State{} = state, _b, _s, _params), do: {:error, :missing_form_plan, state}
+
+  defp apply_set_field(%Set{} = set, %{"reps" => value}) do
+    case Integer.parse(to_string(value)) do
+      {n, ""} when n > 0 -> %{set | burpee_count: n}
+      _ -> set
+    end
+  end
+
+  defp apply_set_field(%Set{} = set, %{"rest" => value}) do
+    case Integer.parse(to_string(value)) do
+      {n, ""} when n >= 0 -> %{set | end_of_set_rest: n}
+      _ -> set
+    end
+  end
+
+  defp apply_set_field(%Set{} = set, %{"rep_interval" => value}) do
+    case Float.parse(to_string(value)) do
+      {f, ""} when f > 0 -> %{set | sec_per_rep: f}
+      _ -> set
+    end
+  end
+
+  defp apply_set_field(%Set{} = set, _params), do: set
+
   defp copy_block_as_new(%Block{} = block, position) do
     sets =
       block.sets
