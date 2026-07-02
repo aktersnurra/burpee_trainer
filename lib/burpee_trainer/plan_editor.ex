@@ -531,6 +531,42 @@ defmodule BurpeeTrainer.PlanEditor do
 
   def update_set(%State{} = state, _b, _s, _params), do: {:error, :missing_form_plan, state}
 
+  @spec set_block_repeat(State.t(), term(), term()) ::
+          {:ok, State.t()} | {:error, term(), State.t()}
+  def set_block_repeat(
+        %State{form_plan: %WorkoutPlan{blocks: blocks}} = state,
+        block_index,
+        value
+      ) do
+    with {:ok, block_index} <- Input.parse_non_negative_index(block_index),
+         blocks <- Enum.sort_by(blocks || [], & &1.position),
+         %Block{} = block <- Enum.at(blocks, block_index) do
+      repeat = max(parse_int_or(value, block.repeat_count || 1), 1)
+      updated_block = %{block | repeat_count: repeat}
+      form_plan = %{state.form_plan | blocks: List.replace_at(blocks, block_index, updated_block)}
+
+      {:ok,
+       %{
+         state
+         | form_plan: form_plan,
+           manual_edit?: true,
+           derived: derived(form_plan, state.input)
+       }}
+    else
+      nil -> {:error, {:missing_block, block_index}, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  def set_block_repeat(%State{} = state, _b, _v), do: {:error, :missing_form_plan, state}
+
+  defp parse_int_or(value, fallback) do
+    case Integer.parse(to_string(value || "")) do
+      {n, ""} -> n
+      _ -> fallback
+    end
+  end
+
   defp apply_set_field(%Set{} = set, %{"reps" => value}) do
     case Integer.parse(to_string(value)) do
       {n, ""} when n > 0 -> %{set | burpee_count: n}

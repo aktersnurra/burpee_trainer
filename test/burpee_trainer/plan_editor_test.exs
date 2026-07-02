@@ -802,6 +802,18 @@ defmodule BurpeeTrainer.PlanEditorTest do
       target = block.sets |> Enum.sort_by(& &1.position) |> hd()
       assert target.end_of_set_rest == 60
     end
+
+    test "set_block_repeat clamps to at least 1" do
+      state = multi_block_state(1)
+
+      {:ok, updated} = PlanEditor.set_block_repeat(state, "0", "3")
+      block = updated.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      assert block.repeat_count == 3
+
+      {:ok, clamped} = PlanEditor.set_block_repeat(state, "0", "0")
+      block = clamped.form_plan.blocks |> Enum.sort_by(& &1.position) |> hd()
+      assert block.repeat_count == 1
+    end
   end
 
   describe "state initialization" do
