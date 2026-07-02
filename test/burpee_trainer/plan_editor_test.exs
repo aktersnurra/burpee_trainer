@@ -436,16 +436,14 @@ defmodule BurpeeTrainer.PlanEditorTest do
         })
 
       {:ok, state} = PlanEditor.from_plan(plan, :level_1a)
+      existing_blocks = state.form_plan.blocks
+      existing_steps = state.form_plan.steps
       {:ok, state} = PlanEditor.change_basics(state, %{"name" => "Renamed"})
-
-      [block] = state.form_plan.blocks
-      [set] = block.sets
 
       assert state.input.name == "Renamed"
       assert state.form_plan.name == "Renamed"
-      assert set.burpee_count == 10
-      assert set.sec_per_rep == 7.5
-      assert set.end_of_set_rest == 45
+      assert state.form_plan.blocks == existing_blocks
+      assert state.form_plan.steps == existing_steps
     end
 
     test "change_basics updates input then regenerates" do

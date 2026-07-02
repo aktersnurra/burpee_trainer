@@ -8,7 +8,8 @@ defmodule BurpeeTrainer.PlanEditor do
   alias BurpeeTrainer.{Planner, PlanSolver}
   alias BurpeeTrainer.PlanSolver.Input, as: SolverInput
   alias BurpeeTrainer.PlanSolver.PacePolicy
-  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @type input :: Input.t()
 
@@ -33,10 +34,12 @@ defmodule BurpeeTrainer.PlanEditor do
       input: input,
       level: level,
       solver_solution: nil,
-      derived: derived(plan, input)
+      derived: %Derived{}
     }
 
-    {:ok, state}
+    with {:ok, state} <- regenerate(state) do
+      {:ok, %{state | plan: plan}}
+    end
   end
 
   @spec default_input() :: input()

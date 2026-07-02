@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.PrescriptionGraph do
   order: block runs, inserted rests, and finish.
   """
 
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   defmodule Graph do
     @enforce_keys [:nodes]

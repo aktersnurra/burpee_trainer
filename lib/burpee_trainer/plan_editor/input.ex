@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.PlanEditor.Input do
   """
 
   alias BurpeeTrainer.PlanSolver
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @type additional_rest :: PlanSolver.Input.additional_rest()
 
@@ -81,6 +82,35 @@ defmodule BurpeeTrainer.PlanEditor.Input do
   end
 
   @spec from_plan(WorkoutPlan.t()) :: t()
+  def from_plan(%WorkoutPlan{source_json: source} = plan) when is_map(source) do
+    block_pattern = source_block_pattern(source) || infer_block_pattern(plan)
+
+    %__MODULE__{
+      name: plan.name,
+      burpee_type: source_burpee_type(source, plan.burpee_type || :six_count),
+      target_duration_min: source_target_duration_min(source, plan.target_duration_min || 20),
+      burpee_count_target: source_target_reps(source, plan.burpee_count_target || 100),
+      pacing_style: source_pacing_style(source, plan.pacing_style || :even),
+      reps_per_set: source_max_unbroken_reps(source) || infer_reps_per_set(plan),
+      additional_rests: source_additional_rests(source),
+      sec_per_burpee_override: source_sec_per_rep_override(source),
+      block_pattern: block_pattern,
+      manual_structure?: not is_nil(block_pattern),
+      pace_bias:
+        source_metadata_atom(
+          source,
+          :pace_bias,
+          metadata_atom(plan.plan_solver_metadata, :pace_bias, :balanced)
+        ),
+      load_shape:
+        source_metadata_atom(
+          source,
+          :load_shape,
+          metadata_atom(plan.plan_solver_metadata, :load_shape, :even)
+        )
+    }
+  end
+
   def from_plan(%WorkoutPlan{} = plan) do
     %__MODULE__{
       name: plan.name,
@@ -232,19 +262,126 @@ defmodule BurpeeTrainer.PlanEditor.Input do
   defp decode_additional_rests(json) do
     case Jason.decode(json || "[]") do
       {:ok, list} when is_list(list) ->
-        Enum.flat_map(list, fn
-          %{"rest_sec" => rest_sec, "target_min" => target_min}
-          when is_number(rest_sec) and is_number(target_min) ->
-            [%{rest_sec: rest_sec, target_min: target_min}]
-
-          _other ->
-            []
-        end)
+        Enum.flat_map(list, &editor_rest_from_map/1)
 
       _ ->
         []
     end
   end
+
+  defp source_burpee_type(source, fallback) do
+    case source_value(source, :burpee_type) do
+      "six_count" -> :six_count
+      "navy_seal" -> :navy_seal
+      value when value in [:six_count, :navy_seal] -> value
+      _ -> fallback
+    end
+  end
+
+  defp source_pacing_style(source, fallback) do
+    case source_value(source, :pacing_style) do
+      "even" -> :even
+      "unbroken" -> :unbroken
+      value when value in [:even, :unbroken] -> value
+      _ -> fallback
+    end
+  end
+
+  defp source_target_reps(source, fallback),
+    do: positive_integer_or(source_value(source, :target_reps), fallback)
+
+  defp source_target_duration_min(source, fallback) do
+    source
+    |> source_value(:target_duration_sec)
+    |> positive_integer_or(fallback * 60)
+    |> div(60)
+    |> max(1)
+  end
+
+  defp source_max_unbroken_reps(source),
+    do: positive_integer_or(source_value(source, :max_unbroken_reps), nil)
+
+  defp source_sec_per_rep_override(source) do
+    case parse_positive_float(source_value(source, :sec_per_rep_override)) do
+      {:ok, value} -> value
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp source_block_pattern(source) do
+    case source_value(source, :block_pattern) do
+      pattern when is_list(pattern) ->
+        pattern
+        |> Enum.map(&positive_integer_or(&1, nil))
+        |> Enum.reject(&is_nil/1)
+        |> case do
+          [] -> nil
+          pattern -> pattern
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp source_additional_rests(source) do
+    source
+    |> source_value(:explicit_rests)
+    |> case do
+      rests when is_list(rests) -> Enum.flat_map(rests, &editor_rest_from_map/1)
+      _ -> []
+    end
+  end
+
+  defp editor_rest_from_map(%{"rest_sec" => rest_sec, "target_min" => target_min}) do
+    rest_sec = positive_integer_or(rest_sec, nil)
+    target_min = positive_integer_or(target_min, nil)
+    if rest_sec && target_min, do: [%{rest_sec: rest_sec, target_min: target_min}], else: []
+  end
+
+  defp editor_rest_from_map(%{
+         "duration_sec" => duration_sec,
+         "target_elapsed_sec" => target_elapsed_sec
+       }) do
+    duration_sec = positive_integer_or(duration_sec, nil)
+    target_elapsed_sec = positive_integer_or(target_elapsed_sec, nil)
+
+    if duration_sec && target_elapsed_sec do
+      [%{rest_sec: duration_sec, target_min: max(1, round(target_elapsed_sec / 60))}]
+    else
+      []
+    end
+  end
+
+  defp editor_rest_from_map(%{rest_sec: rest_sec, target_min: target_min}),
+    do: editor_rest_from_map(%{"rest_sec" => rest_sec, "target_min" => target_min})
+
+  defp editor_rest_from_map(%{
+         duration_sec: duration_sec,
+         target_elapsed_sec: target_elapsed_sec
+       }),
+       do:
+         editor_rest_from_map(%{
+           "duration_sec" => duration_sec,
+           "target_elapsed_sec" => target_elapsed_sec
+         })
+
+  defp editor_rest_from_map(_rest), do: []
+
+  defp source_metadata_atom(source, key, fallback) do
+    case source_value(source, key) do
+      value when value in [:slower, :balanced, :faster, :even, :front_loaded, :back_loaded] ->
+        value
+
+      value when is_binary(value) ->
+        safe_existing_atom(value, fallback)
+
+      _ ->
+        fallback
+    end
+  end
+
+  defp source_value(source, key), do: Map.get(source, key) || Map.get(source, Atom.to_string(key))
 
   defp infer_block_pattern(%WorkoutPlan{} = plan) do
     plan.blocks

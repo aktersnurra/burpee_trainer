@@ -1,23 +1,22 @@
 defmodule BurpeeTrainer.Workouts do
   @moduledoc """
-  Context for workout plans (with blocks + sets) and workout sessions.
+  Context for workout source plans and workout sessions.
   All queries are scoped by `user_id`.
   """
 
   import Ecto.Query
 
   alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.{ExecutionPrograms, PlanCompiler}
   alias BurpeeTrainer.Goals
   alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Milestones
-  alias BurpeeTrainer.Planner
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
   alias BurpeeTrainer.Workouts.PaceConsistency
 
   alias BurpeeTrainer.Workouts.{
-    Block,
-    PlanStep,
+    ExecutionProgram,
     PoseCaptureRun,
     PoseTraceChunk,
     StylePerformance,
@@ -35,30 +34,27 @@ defmodule BurpeeTrainer.Workouts do
   # ---------------------------------------------------------------------------
 
   @doc """
-  List all plans for a user, preloading blocks and sets so the timeline
-  can be computed without further queries.
+  List all source plans for a user.
   """
   @spec list_plans(User.t()) :: [WorkoutPlan.t()]
   def list_plans(%User{id: user_id}) do
     Repo.all(
       from(plan in WorkoutPlan,
         where: plan.user_id == ^user_id,
-        order_by: [desc: plan.updated_at],
-        preload: [blocks: :sets, steps: []]
+        order_by: [desc: plan.updated_at]
       )
     )
   end
 
   @doc """
-  Fetch a plan by id for a user, with blocks + sets preloaded.
+  Fetch a source plan by id for a user.
   Raises if the plan doesn't exist or belongs to a different user.
   """
   @spec get_plan!(User.t(), integer) :: WorkoutPlan.t()
   def get_plan!(%User{id: user_id}, id) do
     Repo.one!(
       from(plan in WorkoutPlan,
-        where: plan.id == ^id and plan.user_id == ^user_id,
-        preload: [blocks: :sets, steps: []]
+        where: plan.id == ^id and plan.user_id == ^user_id
       )
     )
   end
@@ -76,11 +72,25 @@ defmodule BurpeeTrainer.Workouts do
   Create a plan for a user. `user_id` is set programmatically — never
   trust it from form attrs.
   """
-  @spec create_plan(User.t(), map) :: {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
+  @spec create_plan(User.t(), map) ::
+          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t() | term()}
   def create_plan(%User{id: user_id}, attrs) do
-    %WorkoutPlan{user_id: user_id}
-    |> WorkoutPlan.changeset(attrs)
-    |> Repo.insert()
+    with source when is_map(source) <- source_json_from_attrs(attrs),
+         {:ok, program} <- PlanCompiler.compile(source),
+         {:ok, persisted_program} <- ExecutionPrograms.get_or_insert(program) do
+      attrs =
+        attrs
+        |> Map.put("current_execution_program_id", persisted_program.id)
+        |> Map.put("source_json", source)
+        |> put_source_summary(program, source)
+
+      %WorkoutPlan{user_id: user_id}
+      |> WorkoutPlan.changeset(attrs)
+      |> Repo.insert()
+    else
+      {:error, _reason} = error -> error
+      _missing_or_invalid_source -> PlanCompiler.compile(%{})
+    end
   end
 
   @doc """
@@ -88,80 +98,97 @@ defmodule BurpeeTrainer.Workouts do
   so ownership is already enforced.
   """
   @spec update_plan(WorkoutPlan.t(), map) ::
-          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t() | term()}
   def update_plan(%WorkoutPlan{} = plan, attrs) do
-    plan
-    |> WorkoutPlan.changeset(attrs)
-    |> Repo.update()
+    attrs =
+      if source_json_from_attrs(attrs) do
+        attrs
+      else
+        Map.put(attrs, "source_json", plan.source_json)
+      end
+
+    with source when is_map(source) <- source_json_from_attrs(attrs),
+         {:ok, program} <- PlanCompiler.compile(source),
+         {:ok, persisted_program} <- ExecutionPrograms.get_or_insert(program) do
+      attrs =
+        attrs
+        |> Map.put("current_execution_program_id", persisted_program.id)
+        |> Map.put("source_json", source)
+        |> put_source_summary(program, source)
+
+      plan
+      |> WorkoutPlan.changeset(attrs)
+      |> Repo.update()
+    else
+      {:error, _reason} = error -> error
+      _missing_or_invalid_source -> PlanCompiler.compile(%{})
+    end
+  end
+
+  @spec compile_plan(WorkoutPlan.t()) :: {:ok, ExecutionProgram.t()} | {:error, term()}
+  def compile_plan(%WorkoutPlan{current_execution_program_id: id}) when is_integer(id) do
+    {:ok, ExecutionPrograms.get!(id)}
+  end
+
+  def compile_plan(%WorkoutPlan{source_json: source}) when is_map(source) do
+    with {:ok, program} <- PlanCompiler.compile(source) do
+      ExecutionPrograms.get_or_insert(program)
+    end
+  end
+
+  def compile_plan(%WorkoutPlan{}), do: {:error, :missing_source_json}
+
+  defp source_json_from_attrs(attrs) do
+    Map.get(attrs, "source_json") || Map.get(attrs, :source_json)
+  end
+
+  defp put_source_summary(attrs, %BurpeeTrainer.PlanCompiler.Program{} = program, source) do
+    attrs
+    |> Map.put("burpee_type", Atom.to_string(program.burpee_type))
+    |> Map.put("target_duration_min", round(program.target_duration_sec / 60))
+    |> Map.put("burpee_count_target", program.target_reps)
+    |> Map.put("sec_per_burpee", average_work_pace(program))
+    |> Map.put("pacing_style", source_pacing_style(source))
+  end
+
+  defp source_pacing_style(%{"pacing_style" => style}) when is_atom(style),
+    do: Atom.to_string(style)
+
+  defp source_pacing_style(%{"pacing_style" => style}) when is_binary(style), do: style
+  defp source_pacing_style(%{pacing_style: style}) when is_atom(style), do: Atom.to_string(style)
+  defp source_pacing_style(%{pacing_style: style}) when is_binary(style), do: style
+
+  defp average_work_pace(%{metadata: %{work_interval_sec: pace}}) when is_number(pace),
+    do: Float.round(pace, 1)
+
+  defp average_work_pace(program) do
+    work_events =
+      Enum.filter(program.events, &match?(%BurpeeTrainer.PlanCompiler.ProgramEvent.Work{}, &1))
+
+    total_reps = Enum.reduce(work_events, 0, &(&1.reps + &2))
+    total_work = Enum.reduce(work_events, 0.0, &(&1.reps * &1.sec_per_rep + &2))
+
+    if total_reps > 0, do: Float.round(total_work / total_reps, 1), else: 0.0
   end
 
   @doc """
-  Delete a plan. Cascades to blocks and sets via FK. Sessions that
-  referenced the plan have their `plan_id` nilified.
+  Delete a plan. Sessions that referenced the plan have their `plan_id` nilified.
   """
   @spec delete_plan(WorkoutPlan.t()) :: {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
   def delete_plan(%WorkoutPlan{} = plan), do: Repo.delete(plan)
 
   @doc """
-  Duplicate a plan (new row, same content, suffixed name). Blocks and
-  sets are recreated with fresh ids.
+  Duplicate a source plan (new row, same source, suffixed name) and compile a fresh program.
   """
   @spec duplicate_plan(WorkoutPlan.t()) ::
           {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
-  def duplicate_plan(%WorkoutPlan{} = plan) do
-    source = Repo.preload(plan, blocks: :sets, steps: [])
-
+  def duplicate_plan(%WorkoutPlan{} = source) do
     attrs = %{
       "name" => source.name <> " (copy)",
-      "burpee_type" => source.burpee_type,
-      "target_duration_min" => source.target_duration_min,
-      "burpee_count_target" => source.burpee_count_target,
-      "sec_per_burpee" => source.sec_per_burpee,
-      "pacing_style" => source.pacing_style,
-      "additional_rests" => source.additional_rests,
-      "style_name" => source.style_name,
-      "coach_suggestion_kind" => source.coach_suggestion_kind,
-      "coach_target_reps" => source.coach_target_reps,
-      "plan_solver_metadata" => source.plan_solver_metadata,
-      "blocks" => duplicate_plan_blocks(source.blocks),
-      "steps" => duplicate_plan_steps(source.steps)
+      "source_json" => source.source_json
     }
 
     create_plan(%User{id: source.user_id}, attrs)
-  end
-
-  defp duplicate_plan_blocks(blocks) do
-    for block <- Enum.sort_by(blocks, & &1.position) do
-      %{
-        "position" => block.position,
-        "repeat_count" => block.repeat_count,
-        "sets" => duplicate_plan_sets(block.sets)
-      }
-    end
-  end
-
-  defp duplicate_plan_sets(sets) do
-    for set <- Enum.sort_by(sets, & &1.position) do
-      %{
-        "position" => set.position,
-        "burpee_count" => set.burpee_count,
-        "sec_per_rep" => set.sec_per_rep,
-        "sec_per_burpee" => set.sec_per_burpee,
-        "end_of_set_rest" => set.end_of_set_rest
-      }
-    end
-  end
-
-  defp duplicate_plan_steps(steps) do
-    for %PlanStep{} = step <- Enum.sort_by(steps || [], & &1.position) do
-      %{
-        "position" => step.position,
-        "kind" => Atom.to_string(step.kind),
-        "block_position" => step.block_position,
-        "repeat_count" => step.repeat_count,
-        "rest_sec" => step.rest_sec
-      }
-    end
   end
 
   # ---------------------------------------------------------------------------
@@ -346,8 +373,8 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Returns the `%WorkoutPlan{}` (blocks preloaded) from the most recent
-  non-warmup session that has a plan_id, or `nil` if none exists.
+  Returns the `%WorkoutPlan{}` from the most recent non-warmup session that has
+  a plan_id, or `nil` if none exists.
   """
   @spec last_run_plan(User.t()) :: WorkoutPlan.t() | nil
   def last_run_plan(%User{id: user_id}) do
@@ -366,10 +393,7 @@ defmodule BurpeeTrainer.Workouts do
         )
       )
 
-    case result do
-      nil -> nil
-      plan -> Repo.preload(plan, :blocks)
-    end
+    result
   end
 
   @doc """
@@ -489,30 +513,33 @@ defmodule BurpeeTrainer.Workouts do
   @spec create_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def create_session_from_plan(%User{id: user_id}, %WorkoutPlan{user_id: user_id} = plan, attrs) do
-    plan = Repo.preload(plan, blocks: :sets, steps: [])
+    with {:ok, planned_attrs} <- planned_session_attrs(plan) do
+      attrs =
+        attrs
+        |> with_client_session_id()
+        |> Map.merge(planned_attrs)
 
-    attrs =
-      attrs
-      |> with_client_session_id()
-      |> Map.merge(planned_session_attrs(plan))
+      changeset =
+        %WorkoutSession{user_id: user_id, plan_id: plan.id}
+        |> WorkoutSession.from_plan_changeset(attrs)
+        |> Ecto.Changeset.change(
+          capture_mode: :timed,
+          execution_program_id: Map.fetch!(planned_attrs, "execution_program_id")
+        )
+        |> with_derived_session_fields(user_id)
+        |> maybe_carry_style_name(plan)
 
-    changeset =
-      %WorkoutSession{user_id: user_id, plan_id: plan.id}
-      |> WorkoutSession.from_plan_changeset(attrs)
-      |> Ecto.Changeset.change(capture_mode: :timed)
-      |> with_derived_session_fields(user_id)
-      |> maybe_carry_style_name(plan)
+      case insert_idempotent_session(changeset, user_id) do
+        {:ok, session, :inserted} ->
+          maybe_upsert_style_performance(session, user_id)
+          {:ok, session}
 
-    case insert_idempotent_session(changeset, user_id) do
-      {:ok, session, :inserted} ->
-        maybe_upsert_style_performance(session, user_id)
-        {:ok, session}
+        {:ok, session, :existing} ->
+          {:ok, session}
 
-      {:ok, session, :existing} ->
-        {:ok, session}
-
-      {:error, changeset} ->
-        {:error, changeset}
+        {:error, changeset} ->
+          {:error, changeset}
+      end
     end
   end
 
@@ -525,53 +552,56 @@ defmodule BurpeeTrainer.Workouts do
         %WorkoutPlan{user_id: user_id} = plan,
         attrs
       ) do
-    plan = Repo.preload(plan, blocks: :sets, steps: [])
+    with {:ok, planned_attrs} <- planned_session_attrs(plan) do
+      attrs =
+        attrs
+        |> with_client_session_id()
+        |> Map.merge(planned_attrs)
 
-    attrs =
-      attrs
-      |> with_client_session_id()
-      |> Map.merge(planned_session_attrs(plan))
+      cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
+      cadence_json = Jason.encode!(cadence)
+      consistency = PaceConsistency.score(cadence)
 
-    cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
-    cadence_json = Jason.encode!(cadence)
-    consistency = PaceConsistency.score(cadence)
+      changeset =
+        %WorkoutSession{user_id: user_id, plan_id: plan.id}
+        |> WorkoutSession.from_plan_changeset(attrs)
+        |> validate_tracked_capture(cadence)
+        |> Ecto.Changeset.change(
+          capture_mode: :tracked,
+          cadence_ms: cadence_json,
+          target_pace_sec: parse_optional_float(Map.get(attrs, "target_pace_sec")),
+          pace_consistency: consistency,
+          execution_program_id: Map.fetch!(planned_attrs, "execution_program_id")
+        )
+        |> with_derived_session_fields(user_id)
+        |> maybe_carry_style_name(plan)
 
-    changeset =
-      %WorkoutSession{user_id: user_id, plan_id: plan.id}
-      |> WorkoutSession.from_plan_changeset(attrs)
-      |> validate_tracked_capture(cadence)
-      |> Ecto.Changeset.change(
-        capture_mode: :tracked,
-        cadence_ms: cadence_json,
-        target_pace_sec: parse_optional_float(Map.get(attrs, "target_pace_sec")),
-        pace_consistency: consistency
-      )
-      |> with_derived_session_fields(user_id)
-      |> maybe_carry_style_name(plan)
+      case insert_idempotent_session(changeset, user_id) do
+        {:ok, session, :inserted} ->
+          maybe_upsert_style_performance(session, user_id)
+          {:ok, session}
 
-    case insert_idempotent_session(changeset, user_id) do
-      {:ok, session, :inserted} ->
-        maybe_upsert_style_performance(session, user_id)
-        {:ok, session}
+        {:ok, session, :existing} ->
+          {:ok, session}
 
-      {:ok, session, :existing} ->
-        {:ok, session}
-
-      {:error, changeset} ->
-        {:error, changeset}
+        {:error, changeset} ->
+          {:error, changeset}
+      end
     end
   end
 
   def create_tracked_session_from_plan(%User{}, %WorkoutPlan{}, _attrs), do: {:error, :not_found}
 
   defp planned_session_attrs(%WorkoutPlan{} = plan) do
-    summary = Planner.summary(plan)
-
-    %{
-      "burpee_type" => Atom.to_string(plan.burpee_type),
-      "burpee_count_planned" => summary.burpee_count_total,
-      "duration_sec_planned" => round(summary.duration_sec_total)
-    }
+    with {:ok, program} <- compile_plan(plan) do
+      {:ok,
+       %{
+         "burpee_type" => Atom.to_string(program.burpee_type),
+         "burpee_count_planned" => program.target_reps,
+         "duration_sec_planned" => program.target_duration_sec,
+         "execution_program_id" => program.id
+       }}
+    end
   end
 
   defp with_client_session_id(attrs) do
@@ -700,89 +730,20 @@ defmodule BurpeeTrainer.Workouts do
   def save_generated_plan(%User{} = user, %WorkoutPlan{} = plan) do
     attrs = %{
       "name" => plan.name,
-      "burpee_type" => Atom.to_string(plan.burpee_type),
+      "source_json" => plan_source_attrs(plan),
       "style_name" => plan.style_name,
-      "target_duration_min" => plan.target_duration_min,
-      "burpee_count_target" => plan.burpee_count_target,
-      "sec_per_burpee" => plan.sec_per_burpee,
-      "pacing_style" => plan.pacing_style,
-      "additional_rests" => plan.additional_rests,
       "coach_suggestion_kind" => plan.coach_suggestion_kind,
-      "coach_target_reps" => plan.coach_target_reps,
-      "plan_solver_metadata" => stringify_metadata(plan.plan_solver_metadata),
-      "blocks" => save_generated_plan_blocks(plan.blocks),
-      "steps" => save_generated_plan_steps(plan.steps)
+      "coach_target_reps" => plan.coach_target_reps
     }
 
     create_plan(user, attrs)
   end
 
-  defp stringify_metadata(nil), do: nil
-
-  defp stringify_metadata(metadata) when is_map(metadata) do
-    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
-  end
-
-  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
-
-  defp stringify_metadata_value(values) when is_list(values),
-    do: Enum.map(values, &stringify_metadata_value/1)
-
-  defp stringify_metadata_value(value), do: value
-
-  defp save_generated_plan_blocks(blocks) do
-    for block <- Enum.sort_by(blocks, & &1.position) do
-      %{
-        "position" => block.position,
-        "repeat_count" => block.repeat_count,
-        "sets" => save_generated_plan_sets(block.sets)
-      }
-    end
-  end
-
-  defp save_generated_plan_steps(steps) do
-    for step <- Enum.sort_by(steps || [], & &1.position) do
-      %{
-        "position" => step.position,
-        "kind" => Atom.to_string(step.kind),
-        "block_position" => step.block_position,
-        "repeat_count" => step.repeat_count,
-        "rest_sec" => step.rest_sec
-      }
-    end
-  end
-
-  defp save_generated_plan_sets(sets) do
-    for set <- Enum.sort_by(sets, & &1.position) do
-      %{
-        "position" => set.position,
-        "burpee_count" => set.burpee_count,
-        "sec_per_rep" => set.sec_per_rep,
-        "sec_per_burpee" => set.sec_per_burpee,
-        "end_of_set_rest" => set.end_of_set_rest
-      }
-    end
-  end
+  defp plan_source_attrs(%WorkoutPlan{source_json: source}) when is_map(source), do: source
+  defp plan_source_attrs(%WorkoutPlan{}), do: nil
 
   @doc false
-  def preload_plan(%WorkoutPlan{} = plan), do: Repo.preload(plan, blocks: :sets, steps: [])
-
-  @doc """
-  Reorder blocks within a plan by supplying `[{block_id, position}, ...]`.
-  """
-  @spec reorder_blocks(WorkoutPlan.t(), [{integer, integer}]) :: :ok
-  def reorder_blocks(%WorkoutPlan{id: plan_id}, id_positions) when is_list(id_positions) do
-    Repo.transaction(fn ->
-      Enum.each(id_positions, fn {block_id, position} ->
-        Repo.update_all(
-          from(b in Block, where: b.id == ^block_id and b.plan_id == ^plan_id),
-          set: [position: position]
-        )
-      end)
-    end)
-
-    :ok
-  end
+  def preload_plan(%WorkoutPlan{} = plan), do: plan
 
   # ---------------------------------------------------------------------------
   # Gamification — push-up score, personal bests, milestone detection

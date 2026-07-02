@@ -18,9 +18,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   alias BurpeeTrainer.{Levels, Workouts}
   alias BurpeeTrainer.{PlanEditor, PlanPresentation, PlanSolver, PrescriptionGraph}
+  alias BurpeeTrainer.PlanCompiler.CompileError
   alias BurpeeTrainer.PlanEditor.Derived
   alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
   alias BurpeeTrainerWeb.Fmt
   alias BurpeeTrainerWeb.PlansLive.Edit.Presentation
 
@@ -138,15 +140,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp assign_form_from_editor(
          %{assigns: %{editor: %{form_plan: %WorkoutPlan{} = form_plan}}} = socket
        ) do
-    base = socket.assigns.editor.plan || %WorkoutPlan{}
-    changeset = change_form_plan(base, plan_to_attrs(form_plan))
+    editor = socket.assigns.editor
+    base = editor.plan || %WorkoutPlan{}
+    changeset = change_form_plan(base, editor_form_attrs(%{editor | form_plan: form_plan}))
 
     assign(socket, :form, to_form(changeset))
   end
 
   defp assign_form_from_editor(socket) do
-    existing_form =
-      socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{blocks: []}))
+    existing_form = socket.assigns[:form] || to_form(Workouts.change_plan(%WorkoutPlan{}))
 
     assign(socket, :form, existing_form)
   end
@@ -197,28 +199,401 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp metadata_kind_label(nil), do: "Generated"
   defp metadata_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
 
-  defp change_form_plan(%WorkoutPlan{id: nil} = plan, attrs) do
-    plan
-    |> Map.put(:blocks, [])
-    |> Map.put(:steps, [])
-    |> Workouts.change_plan(attrs)
+  defp change_form_plan(%WorkoutPlan{} = plan, attrs), do: Workouts.change_plan(plan, attrs)
+
+  defp editor_form_attrs(editor, params \\ %{}) do
+    editor.form_plan
+    |> plan_to_attrs()
+    |> Map.merge(params)
+    |> Map.merge(editor_source_attrs(editor, params))
   end
 
-  defp change_form_plan(%WorkoutPlan{} = plan, attrs), do: Workouts.change_plan(plan, attrs)
+  defp editor_save_attrs(editor, params) do
+    editor_source_attrs(editor, params)
+    |> Map.merge(editor_metadata_attrs(editor))
+  end
+
+  defp editor_source_attrs(editor, params) do
+    %{
+      "name" => Map.get(params, "name") || editor.input.name,
+      "source_json" => source_json_from_editor_or_params(editor, params)
+    }
+  end
+
+  defp source_json_from_editor_or_params(editor, params) do
+    case submitted_source_json(params) do
+      nil -> source_from_editor(editor)
+      source -> normalize_submitted_source(source)
+    end
+  end
+
+  defp normalize_submitted_source(source) when is_map(source) do
+    source
+    |> stringify_source_keys()
+    |> normalize_submitted_integer("target_reps")
+    |> normalize_submitted_integer("target_duration_sec")
+    |> normalize_submitted_integer("max_unbroken_reps")
+    |> normalize_submitted_float("sec_per_rep_override")
+    |> normalize_submitted_block_pattern()
+    |> normalize_submitted_explicit_rests()
+  end
+
+  defp stringify_source_keys(source) do
+    Map.new(source, fn
+      {key, value} when is_atom(key) -> {Atom.to_string(key), stringify_source_value(value)}
+      {key, value} -> {to_string(key), stringify_source_value(value)}
+    end)
+  end
+
+  defp stringify_source_value(value) when is_map(value), do: stringify_source_keys(value)
+
+  defp stringify_source_value(value) when is_list(value),
+    do: Enum.map(value, &stringify_source_value/1)
+
+  defp stringify_source_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp stringify_source_value(value), do: value
+
+  defp normalize_submitted_integer(source, key) do
+    case Map.fetch(source, key) do
+      {:ok, value} -> Map.put(source, key, parse_int(value))
+      :error -> source
+    end
+  end
+
+  defp normalize_submitted_float(source, key) do
+    case Map.fetch(source, key) do
+      {:ok, value} -> Map.put(source, key, parse_float(value))
+      :error -> source
+    end
+  end
+
+  defp normalize_submitted_block_pattern(source) do
+    case Map.fetch(source, "block_pattern") do
+      {:ok, value} -> Map.put(source, "block_pattern", parse_block_pattern(value))
+      :error -> source
+    end
+  end
+
+  defp normalize_submitted_explicit_rests(source) do
+    case Map.fetch(source, "explicit_rests") do
+      {:ok, value} -> Map.put(source, "explicit_rests", parse_explicit_rests(value))
+      :error -> source
+    end
+  end
+
+  defp submitted_source_json(params) do
+    case Map.get(params, "source_json") || Map.get(params, :source_json) do
+      source when is_map(source) ->
+        source
+
+      source when is_binary(source) ->
+        case Jason.decode(source) do
+          {:ok, decoded} when is_map(decoded) -> decoded
+          _other -> nil
+        end
+
+      _other ->
+        nil
+    end
+  end
+
+  defp source_from_editor(editor) do
+    source =
+      editor.input
+      |> source_from_input()
+      |> put_form_plan_explicit_rests(editor.form_plan)
+
+    if editor.manual_edit? do
+      source
+      |> maybe_put_manual_block_pattern(editor.form_plan)
+      |> maybe_put_manual_pace(editor.form_plan)
+    else
+      source
+    end
+  end
+
+  defp maybe_put_manual_block_pattern(source, form_plan) do
+    case block_pattern_from_form_plan(form_plan) do
+      pattern when is_list(pattern) and pattern != [] -> Map.put(source, "block_pattern", pattern)
+      _other -> source
+    end
+  end
+
+  defp maybe_put_manual_pace(source, form_plan) do
+    case pace_override_from_form_plan(form_plan) do
+      pace when is_number(pace) ->
+        if valid_manual_pace_override?(source, pace) do
+          Map.put(source, "sec_per_rep_override", pace)
+        else
+          source
+        end
+
+      nil ->
+        source
+    end
+  end
+
+  defp valid_manual_pace_override?(source, pace) do
+    policy = source |> source_burpee_type_for_policy() |> PlanSolver.PacePolicy.for()
+
+    pace >= policy.hard_fastest_sec_per_rep and pace <= policy.hard_slowest_sec_per_rep
+  end
+
+  defp source_burpee_type_for_policy(source) do
+    case Map.get(source, "burpee_type") || Map.get(source, :burpee_type) do
+      :navy_seal -> :navy_seal
+      "navy_seal" -> :navy_seal
+      _other -> :six_count
+    end
+  end
+
+  defp block_pattern_from_form_plan(%WorkoutPlan{blocks: blocks}) when is_list(blocks) do
+    pattern =
+      blocks
+      |> Enum.sort_by(&(&1.position || 0))
+      |> Enum.flat_map(fn block ->
+        motif =
+          block.sets
+          |> Enum.sort_by(&(&1.position || 0))
+          |> Enum.map(& &1.burpee_count)
+          |> Enum.reject(&is_nil/1)
+
+        List.duplicate(motif, max(block.repeat_count || 1, 1))
+      end)
+      |> List.flatten()
+
+    if pattern == [], do: nil, else: pattern
+  end
+
+  defp block_pattern_from_form_plan(_form_plan), do: nil
+
+  defp pace_override_from_form_plan(%WorkoutPlan{blocks: blocks}) when is_list(blocks) do
+    paces =
+      blocks
+      |> Enum.flat_map(fn block -> block.sets || [] end)
+      |> Enum.map(& &1.sec_per_rep)
+      |> Enum.filter(&is_number/1)
+      |> Enum.uniq_by(&Float.round(&1 * 1.0, 3))
+
+    case paces do
+      [pace] -> pace
+      _other -> nil
+    end
+  end
+
+  defp pace_override_from_form_plan(_form_plan), do: nil
+
+  defp editor_metadata_attrs(editor) do
+    form_plan = editor.form_plan || %WorkoutPlan{}
+
+    %{
+      "style_name" => form_plan.style_name,
+      "coach_suggestion_kind" => form_plan.coach_suggestion_kind,
+      "coach_target_reps" => form_plan.coach_target_reps
+    }
+  end
 
   defp plan_to_attrs(%WorkoutPlan{} = plan) do
     %{
       "name" => plan.name,
+      "source_json" => plan.source_json,
       "burpee_type" => Atom.to_string(plan.burpee_type),
       "target_duration_min" => plan.target_duration_min,
       "burpee_count_target" => plan.burpee_count_target,
       "sec_per_burpee" => plan.sec_per_burpee,
       "pacing_style" => Atom.to_string(plan.pacing_style),
-      "additional_rests" => plan.additional_rests,
-      "plan_solver_metadata" => plan.plan_solver_metadata,
       "blocks" => blocks_to_attrs(plan.blocks),
       "steps" => steps_to_attrs(plan.steps || [])
     }
+  end
+
+  defp source_from_input(plan_input) do
+    source =
+      source_from_form(%{
+        "burpee_type" => Atom.to_string(plan_input.burpee_type),
+        "target_reps" => plan_input.burpee_count_target,
+        "target_duration_sec" => plan_input.target_duration_min * 60,
+        "pacing_style" => Atom.to_string(plan_input.pacing_style),
+        "block_pattern" =>
+          if(plan_input.manual_structure?, do: plan_input.block_pattern, else: nil),
+        "explicit_rests" => plan_input.additional_rests || []
+      })
+      |> Map.put("pace_bias", Atom.to_string(plan_input.pace_bias || :balanced))
+      |> Map.put("load_shape", Atom.to_string(plan_input.load_shape || :even))
+
+    source =
+      if plan_input.pacing_style == :unbroken do
+        Map.put(source, "max_unbroken_reps", plan_input.reps_per_set)
+      else
+        source
+      end
+
+    if plan_input.sec_per_burpee_override do
+      Map.put(source, "sec_per_rep_override", plan_input.sec_per_burpee_override)
+    else
+      source
+    end
+  end
+
+  defp source_from_form(params) do
+    %{
+      "burpee_type" => params["burpee_type"],
+      "target_reps" => parse_int(params["target_reps"]),
+      "target_duration_sec" => parse_int(params["target_duration_sec"]),
+      "pacing_style" => params["pacing_style"],
+      "block_pattern" => parse_block_pattern(params["block_pattern"]),
+      "explicit_rests" => parse_explicit_rests(params["explicit_rests"] || [])
+    }
+  end
+
+  defp put_form_plan_explicit_rests(source, %WorkoutPlan{} = form_plan) do
+    source_rests = parse_explicit_rests(Map.get(source, "explicit_rests") || [])
+    form_rests = explicit_rests_from_form_plan(form_plan)
+
+    rests =
+      (source_rests ++ form_rests)
+      |> Enum.uniq_by(&{&1["target_elapsed_sec"], &1["duration_sec"]})
+
+    Map.put(source, "explicit_rests", rests)
+  end
+
+  defp put_form_plan_explicit_rests(source, _form_plan), do: source
+
+  defp explicit_rests_from_form_plan(%WorkoutPlan{steps: steps, blocks: blocks})
+       when is_list(steps) do
+    blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
+
+    steps
+    |> Enum.sort_by(&(&1.position || 0))
+    |> Enum.reduce({[], 0.0}, fn
+      %{kind: :block_run, block_position: block_position, repeat_count: repeat_count},
+      {rests, elapsed} ->
+        block = Map.get(blocks_by_position, block_position)
+        elapsed = elapsed + block_duration(block) * max(repeat_count || 1, 1)
+        {rests, elapsed}
+
+      %{kind: :rest, rest_sec: rest_sec}, {rests, elapsed} ->
+        rest = explicit_rest_from_elapsed(elapsed, rest_sec, 60)
+        {rests ++ rest, elapsed + (parse_int(rest_sec) || 0)}
+
+      _step, acc ->
+        acc
+    end)
+    |> elem(0)
+  end
+
+  defp explicit_rests_from_form_plan(_form_plan), do: []
+
+  defp parse_int(value) when is_integer(value), do: value
+  defp parse_int(value) when is_float(value), do: round(value)
+
+  defp parse_int(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {integer, ""} -> integer
+      _other -> nil
+    end
+  end
+
+  defp parse_int(_value), do: nil
+
+  defp parse_float(value) when is_integer(value), do: value * 1.0
+  defp parse_float(value) when is_float(value), do: value
+
+  defp parse_float(value) when is_binary(value) do
+    case Float.parse(value) do
+      {number, ""} -> number
+      _other -> nil
+    end
+  end
+
+  defp parse_float(_value), do: nil
+
+  defp parse_block_pattern(nil), do: nil
+  defp parse_block_pattern([]), do: nil
+
+  defp parse_block_pattern(values) when is_list(values) do
+    values
+    |> Enum.map(&parse_int/1)
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      pattern -> pattern
+    end
+  end
+
+  defp parse_block_pattern(values) when is_map(values) do
+    values
+    |> Enum.sort_by(fn {index, _value} -> parse_int(index) || 0 end)
+    |> Enum.map(fn {_index, value} -> parse_int(value) end)
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      pattern -> pattern
+    end
+  end
+
+  defp parse_block_pattern(value) when is_binary(value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.map(&parse_int/1)
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      pattern -> pattern
+    end
+  end
+
+  defp parse_block_pattern(_value), do: nil
+
+  defp parse_explicit_rests(rests) when is_list(rests) do
+    Enum.flat_map(rests, fn
+      %{rest_sec: rest_sec, target_min: target_min} ->
+        explicit_rest_from_target_min(target_min, rest_sec, 60)
+
+      %{"rest_sec" => rest_sec, "target_min" => target_min} ->
+        explicit_rest_from_target_min(target_min, rest_sec, 60)
+
+      %{"target_elapsed_sec" => target, "duration_sec" => duration} = rest ->
+        explicit_rest_from_elapsed(target, duration, Map.get(rest, "tolerance_sec") || 60)
+
+      %{target_elapsed_sec: target, duration_sec: duration} = rest ->
+        explicit_rest_from_elapsed(target, duration, Map.get(rest, :tolerance_sec) || 60)
+
+      _rest ->
+        []
+    end)
+  end
+
+  defp parse_explicit_rests(_rests), do: []
+
+  defp explicit_rest_from_target_min(target_min, duration_sec, tolerance_sec) do
+    case parse_int(target_min) do
+      target_min when is_integer(target_min) ->
+        explicit_rest_from_elapsed(target_min * 60, duration_sec, tolerance_sec)
+
+      _other ->
+        []
+    end
+  end
+
+  defp explicit_rest_from_elapsed(target_elapsed_sec, duration_sec, tolerance_sec) do
+    target_elapsed_sec = parse_int(target_elapsed_sec)
+    duration_sec = parse_int(duration_sec)
+    tolerance_sec = parse_int(tolerance_sec) || 60
+
+    if is_integer(target_elapsed_sec) and target_elapsed_sec >= 0 and is_integer(duration_sec) and
+         duration_sec > 0 do
+      [
+        %{
+          "target_elapsed_sec" => target_elapsed_sec,
+          "duration_sec" => duration_sec,
+          "tolerance_sec" => tolerance_sec
+        }
+      ]
+    else
+      []
+    end
   end
 
   defp steps_to_attrs(steps) do
@@ -295,7 +670,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     if edge_index <= 0 or edge_index >= total_executions do
       reposition_steps(sorted_steps)
     else
-      rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
+      rest_step = %PlanStep{kind: :rest, rest_sec: rest_sec}
 
       sorted_steps
       |> insert_rest_after_execution(edge_index, rest_step, [], 0)
@@ -424,7 +799,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   defp place_rest_step_at_target_min(steps, blocks, target_min, rest_sec) do
     blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
     target_sec = target_min * 60.0
-    rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: rest_sec}
+    rest_step = %PlanStep{kind: :rest, rest_sec: rest_sec}
 
     steps = steps |> Enum.sort_by(& &1.position) |> merge_adjacent_block_runs()
 
@@ -458,7 +833,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       end
 
     Enum.find(candidates, fn candidate ->
-      rest_step = %BurpeeTrainer.Workouts.PlanStep{kind: :rest, rest_sec: candidate.rest_sec}
+      rest_step = %PlanStep{kind: :rest, rest_sec: candidate.rest_sec}
       blocks_by_position = Map.new(blocks || [], &{&1.position, &1})
       sorted_steps = steps |> Enum.sort_by(& &1.position) |> merge_adjacent_block_runs()
 
@@ -959,7 +1334,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     |> Enum.sort_by(&(&1.position || 0))
     |> Enum.with_index(1)
     |> Enum.map(fn {block, position} ->
-      %BurpeeTrainer.Workouts.PlanStep{
+      %PlanStep{
         position: position,
         kind: :block_run,
         block_position: block.position || position,
@@ -997,22 +1372,18 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp assign_derived(socket) do
-    changeset = socket.assigns.form.source
+    form_plan = socket.assigns.editor.form_plan
 
-    {derived, form_plan} =
-      try do
-        form_plan = Ecto.Changeset.apply_changes(changeset)
+    derived =
+      cond do
+        socket.assigns.solver_error ->
+          %Derived{}
 
-        if socket.assigns.solver_error do
-          {%Derived{}, form_plan}
-        else
-          {PlanEditor.derived(form_plan, socket.assigns.editor.input), form_plan}
-        end
-      rescue
-        e ->
-          require Logger
-          Logger.warning("assign_derived failed: #{inspect(e)}")
-          {nil, socket.assigns.editor.form_plan}
+        match?(%WorkoutPlan{}, form_plan) ->
+          PlanEditor.derived(form_plan, socket.assigns.editor.input)
+
+        true ->
+          nil
       end
 
     editor = %{socket.assigns.editor | derived: derived, form_plan: form_plan}
@@ -1196,7 +1567,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("change_block_sheet", %{"block" => block_params}, socket) do
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    form_plan = socket.assigns.editor.form_plan
 
     with {:ok, source_block_index} <-
            parse_non_negative_index(Map.get(block_params, "source_block_index")),
@@ -1332,7 +1703,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     do: {:noreply, assign(socket, :rest_prompt, nil)}
 
   def handle_event("insert_prompted_rest", %{"rest" => rest_params}, socket) do
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    form_plan = socket.assigns.editor.form_plan
     rest_sec = parse_positive_integer_or(Map.get(rest_params, "rest_sec"), 30)
     edge_index = parse_non_negative_integer_or(Map.get(rest_params, "edge_index"), 1)
 
@@ -1625,7 +1996,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
     changeset =
       base_plan
-      |> Workouts.change_plan(merge_basics(params, socket.assigns.editor.input))
+      |> Workouts.change_plan(editor_form_attrs(socket.assigns.editor, params))
       |> Map.put(:action, :validate)
 
     socket =
@@ -1640,14 +2011,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("save", params, socket) do
     if feasible_prescription?(socket.assigns.derived) do
       submitted_params = Map.get(params, "workout_plan", %{})
-      form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
-      full_params =
-        form_plan
-        |> plan_to_attrs()
-        |> Map.merge(merge_basics(submitted_params, socket.assigns.editor.input))
-
-      save_plan(socket, socket.assigns.live_action, full_params)
+      save_plan(
+        socket,
+        socket.assigns.live_action,
+        editor_save_attrs(socket.assigns.editor, submitted_params)
+      )
     else
       {:noreply, assign(socket, :solver_error, "Fix prescription before saving")}
     end
@@ -1656,14 +2025,12 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   def handle_event("start_workout", params, socket) do
     if feasible_prescription?(socket.assigns.derived) do
       submitted_params = Map.get(params, "workout_plan", %{})
-      form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
 
-      full_params =
-        form_plan
-        |> plan_to_attrs()
-        |> Map.merge(merge_basics(submitted_params, socket.assigns.editor.input))
-
-      start_plan(socket, socket.assigns.live_action, full_params)
+      start_plan(
+        socket,
+        socket.assigns.live_action,
+        editor_save_attrs(socket.assigns.editor, submitted_params)
+      )
     else
       {:noreply, assign(socket, :solver_error, "Fix workout before starting")}
     end
@@ -1696,7 +2063,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp open_rest_prompt(socket) do
-    form_plan = Ecto.Changeset.apply_changes(socket.assigns.form.source)
+    form_plan = socket.assigns.editor.form_plan
 
     edges =
       form_plan.steps
@@ -1723,16 +2090,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   defp validate_editor_form(socket, editor) do
-    params = %{
-      "blocks" => blocks_to_attrs(editor.form_plan.blocks),
-      "steps" => steps_to_attrs(editor.form_plan.steps)
-    }
-
     base_plan = editor.plan || %WorkoutPlan{}
 
     changeset =
       base_plan
-      |> Workouts.change_plan(merge_basics(params, editor.input))
+      |> Workouts.change_plan(editor_form_attrs(editor))
       |> Map.put(:action, :validate)
 
     socket =
@@ -1756,8 +2118,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
          |> put_flash(:info, "Workout ready.")
          |> push_navigate(to: ~p"/session/#{plan.id}")}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+
+      {:error, %CompileError{} = error} ->
+        {:noreply, assign(socket, :solver_error, error.message)}
     end
   end
 
@@ -1769,8 +2134,11 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
          |> put_flash(:info, "Workout ready.")
          |> push_navigate(to: ~p"/session/#{plan.id}")}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, socket |> assign(:form, to_form(changeset)) |> assign_derived()}
+
+      {:error, %CompileError{} = error} ->
+        {:noreply, assign(socket, :solver_error, error.message)}
     end
   end
 
@@ -1782,11 +2150,14 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
          |> put_flash(:info, "Workout created.")
          |> push_navigate(to: ~p"/workouts")}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply,
          socket
          |> assign(:form, to_form(changeset))
          |> assign_derived()}
+
+      {:error, %CompileError{} = error} ->
+        {:noreply, assign(socket, :solver_error, error.message)}
     end
   end
 
@@ -1798,31 +2169,15 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
          |> put_flash(:info, "Workout saved.")
          |> push_navigate(to: ~p"/workouts")}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply,
          socket
          |> assign(:form, to_form(changeset))
          |> assign_derived()}
-    end
-  end
 
-  defp merge_basics(params, plan_input) do
-    Map.merge(
-      %{
-        "name" => plan_input.name,
-        "burpee_type" => Atom.to_string(plan_input.burpee_type),
-        "target_duration_min" => plan_input.target_duration_min,
-        "burpee_count_target" => plan_input.burpee_count_target,
-        "pacing_style" => Atom.to_string(plan_input.pacing_style),
-        "additional_rests" =>
-          Jason.encode!(
-            Enum.map(plan_input.additional_rests, fn %{rest_sec: r, target_min: t} ->
-              %{"rest_sec" => r, "target_min" => t}
-            end)
-          )
-      },
-      params
-    )
+      {:error, %CompileError{} = error} ->
+        {:noreply, assign(socket, :solver_error, error.message)}
+    end
   end
 
   defp format_sec(nil), do: nil
@@ -1872,6 +2227,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   # ---------------------------------------------------------------------------
 
   attr(:plan, :any, required: true)
+  attr(:editor, :any, required: true)
   attr(:form, :any, required: true)
   attr(:expanded_blocks, :any, required: true)
   attr(:expanded_timeline_row, :any, required: true)
@@ -1891,7 +2247,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   attr(:rest_prompt, :map, default: nil)
 
   defp plan_solution_card(assigns) do
-    form_plan = Ecto.Changeset.apply_changes(assigns.form.source)
+    form_plan = assigns.editor.form_plan || Ecto.Changeset.apply_changes(assigns.form.source)
     block_rows = Presentation.block_rows(form_plan, assigns.locked_block_indexes)
 
     contract =
@@ -2315,6 +2671,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
       set_text
     end
   end
+
+  defp block_duration(nil), do: 0.0
 
   defp block_duration(block) do
     Enum.reduce(block.sets || [], 0.0, fn set, total ->

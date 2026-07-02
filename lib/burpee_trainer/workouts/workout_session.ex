@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
 
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Goals.Goal
-  alias BurpeeTrainer.Workouts.WorkoutPlan
+  alias BurpeeTrainer.Workouts.{ExecutionProgram, WorkoutPlan}
 
   @burpee_types [:six_count, :navy_seal]
   @valid_moods [-1, 0, 1]
@@ -37,6 +37,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
 
     belongs_to(:user, User)
     belongs_to(:plan, WorkoutPlan)
+    belongs_to(:execution_program, ExecutionProgram)
     belongs_to(:goal, Goal)
 
     timestamps(type: :utc_datetime)

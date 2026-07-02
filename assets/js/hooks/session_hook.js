@@ -1,14 +1,16 @@
 import { SessionAudio } from "./session_audio.mjs";
 import {
 	currentFrame,
+	eventDurationSec,
 	initialSegmentState,
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
 import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
 import {
-	timelineBurpeeCount,
-	warmupTimelineFromPlan,
-	workoutTimelineFromPlan,
+	programBurpeeCount,
+	setBarsFromProgram,
+	warmupTimelineFromProgram,
+	workoutTimelineFromProgram,
 } from "./session_plan.mjs";
 import { SessionRenderer } from "./session_renderer.mjs";
 import { isPauseToggleKey } from "./session_input.mjs";
@@ -27,6 +29,7 @@ const SessionHook = {
 		this.flow = initialFlowState();
 		this.segment = initialSegmentState();
 		this.activeSegment = null;
+		this.program = null;
 		this.timeline = [];
 		this.startTime = null;
 		this.paused = false;
@@ -84,13 +87,13 @@ const SessionHook = {
 			passive: true,
 		});
 
-		this.handleEvent("session_ready", ({ plan }) => {
-			this.plan = plan;
+		this.handleEvent("session_ready", (payload) => {
+			this.program = payload;
 			this.renderer.resetReady();
 			this.dispatchFlow({
 				type: "SESSION_READY",
-				workoutTimeline: workoutTimelineFromPlan(plan),
-				blockCount: (plan.blocks || []).length,
+				workoutTimeline: workoutTimelineFromProgram(payload),
+				blockCount: setBarsFromProgram(payload).length,
 			});
 		});
 
@@ -464,11 +467,11 @@ const SessionHook = {
 	},
 
 	onWarmupYes() {
-		const warmupTimeline = warmupTimelineFromPlan(this.plan);
+		const warmupTimeline = warmupTimelineFromProgram(this.program);
 		this.dispatchFlow({
 			type: "WARMUP_READY",
 			warmupTimeline,
-			burpeeCountTarget: timelineBurpeeCount(warmupTimeline),
+			burpeeCountTarget: programBurpeeCount(warmupTimeline),
 		});
 	},
 
@@ -503,13 +506,12 @@ const SessionHook = {
 		const renderCountdown = (value, progress, pop) => {
 			const segmentPreview = runningDisplayModel({
 				segment: this.activeSegment,
-				plan: this.plan,
 				timeline: this.timeline,
 				frame: this.timeline[0]
 					? {
 							index: 0,
 							phase_elapsed: 0,
-							phase_remaining: this.timeline[0].duration_sec || 0,
+							phase_remaining: eventDurationSec(this.timeline[0]),
 							event: this.timeline[0],
 						}
 					: null,
@@ -642,7 +644,6 @@ const SessionHook = {
 		const totalDurationSec = this.segment.clock.totalDurationSec;
 		const model = runningDisplayModel({
 			segment: this.activeSegment,
-			plan: this.plan,
 			timeline: this.timeline,
 			frame,
 			timeLeftSec: Math.max(totalDurationSec - elapsed, 0),
@@ -658,15 +659,12 @@ const SessionHook = {
 
 	triggerDownCueForFrame(frame, remainingReps) {
 		const event = frame?.event;
-		if (event?.phase !== "work") {
+		if (event?.kind !== "work") {
 			this.lastDownCueKey = null;
 			return;
 		}
 
-		const secondsPerRep =
-			event.sec_per_rep ||
-			event.sec_per_burpee ||
-			event.duration_sec / (event.burpee_count || 1);
+		const secondsPerRep = event.sec_per_rep;
 		if (!secondsPerRep || secondsPerRep <= 0) return;
 
 		const repIndex = Math.floor((frame.phase_elapsed || 0) / secondsPerRep);

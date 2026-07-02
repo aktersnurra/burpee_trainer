@@ -254,14 +254,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       view |> element("#plan-form") |> render_submit(%{"workout_plan" => %{}})
       assert_redirect(view, ~p"/workouts")
 
+      source_json = plan.source_json
+      execution_program_id = plan.current_execution_program_id
       updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
-      [block] = updated.blocks
-      [set] = block.sets
 
       assert updated.name == "Renamed Structure"
-      assert set.burpee_count == 10
-      assert_in_delta set.sec_per_rep, 7.5, 0.01
-      assert set.end_of_set_rest == 45
+      assert Map.drop(updated.source_json, ["pace_bias", "load_shape"]) == source_json
+      assert updated.source_json["pace_bias"] == "balanced"
+      assert updated.source_json["load_shape"] == "even"
+      assert updated.current_execution_program_id == execution_program_id
     end
 
     test "existing workout Start submits visible edits before session navigation", %{
@@ -273,6 +274,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
           "name" => "Start Saves Edits",
           "target_duration_min" => 2,
           "burpee_count_target" => 17,
+          "block_pattern" => [17],
           "blocks" => [
             %{
               "position" => 1,
@@ -280,7 +282,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
               "sets" => [
                 %{
                   "position" => 1,
-                  "burpee_count" => 10,
+                  "burpee_count" => 17,
                   "sec_per_rep" => 7.5,
                   "sec_per_burpee" => 7.5,
                   "end_of_set_rest" => 45
@@ -311,12 +313,10 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert_redirect(view, ~p"/session/#{plan.id}")
 
       updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
-      [first_block | _] = Enum.sort_by(updated.blocks, & &1.position)
-      [first_set | _] = Enum.sort_by(first_block.sets, & &1.position)
-
-      assert first_set.burpee_count == 17
-      assert_in_delta first_set.sec_per_rep, 4.2, 0.01
-      assert first_set.end_of_set_rest == 45
+      assert updated.source_json["block_pattern"] == [17]
+      assert updated.source_json["target_reps"] == 17
+      assert updated.source_json["sec_per_rep_override"] == 4.2
+      assert updated.current_execution_program_id
     end
 
     test "workout outline renders block summary without duplicated graph", %{
@@ -559,7 +559,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert html =~ ~s(value="6.4")
     end
 
-    test "saves generated plan and reloads solver metadata", %{conn: conn, user: user} do
+    test "saves generated plan and reloads current execution program", %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
 
       view |> element("button[phx-value-type='navy_seal']") |> render_click()
@@ -580,8 +580,89 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
 
       assert plan.burpee_count_target == 70
       assert plan.burpee_type == :navy_seal
-      assert metadata_value(plan.plan_solver_metadata, :solver_version) == 3
-      assert metadata_value(plan.plan_solver_metadata, :structure_key)
+      assert plan.source_json["target_reps"] == 70
+      assert plan.source_json["target_duration_sec"] == 1_200
+      assert plan.source_json["burpee_type"] == "navy_seal"
+      assert plan.current_execution_program_id
+
+      program = BurpeeTrainer.ExecutionPrograms.get!(plan.current_execution_program_id)
+      assert program.solver_version == 4
+      assert program.target_reps == 70
+      assert program.target_duration_sec == 1_200
+    end
+
+    test "new workout editor accepts submitted source JSON and compiles current program", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
+
+      view
+      |> element("#plan-form")
+      |> render_submit(%{
+        "workout_plan" => %{
+          "name" => "Posted source",
+          "source_json" => %{
+            "burpee_type" => "six_count",
+            "target_reps" => 100,
+            "target_duration_sec" => 1_200,
+            "pacing_style" => "even",
+            "block_pattern" => [10],
+            "explicit_rests" => [],
+            "pace_bias" => "slower",
+            "load_shape" => "front_loaded",
+            "sec_per_rep_override" => 6.0
+          }
+        }
+      })
+
+      assert_redirect(view, ~p"/workouts")
+
+      [plan | _] = BurpeeTrainer.Workouts.list_plans(user)
+      assert plan.name == "Posted source"
+      assert plan.source_json["target_reps"] == 100
+      assert plan.source_json["target_duration_sec"] == 1_200
+      assert plan.source_json["block_pattern"] == [10]
+      assert plan.source_json["pace_bias"] == "slower"
+      assert plan.source_json["load_shape"] == "front_loaded"
+      assert plan.source_json["sec_per_rep_override"] == 6.0
+      assert plan.current_execution_program_id
+    end
+
+    test "submitted source JSON preserves all compiler fields", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/workouts/new")
+      generate_workout(view)
+
+      view
+      |> element("#plan-form")
+      |> render_submit(%{
+        "workout_plan" => %{
+          "name" => "Posted unbroken source",
+          "source_json" => %{
+            "burpee_type" => "six_count",
+            "target_reps" => 100,
+            "target_duration_sec" => 900,
+            "pacing_style" => "unbroken",
+            "max_unbroken_reps" => 5,
+            "block_pattern" => [5],
+            "explicit_rests" => [],
+            "pace_bias" => "slower",
+            "load_shape" => "front_loaded"
+          }
+        }
+      })
+
+      assert_redirect(view, ~p"/workouts")
+
+      [plan | _] = BurpeeTrainer.Workouts.list_plans(user)
+      assert plan.name == "Posted unbroken source"
+      assert plan.pacing_style == :unbroken
+      assert plan.source_json["pacing_style"] == "unbroken"
+      assert plan.source_json["max_unbroken_reps"] == 5
+      assert plan.source_json["pace_bias"] == "slower"
+      assert plan.source_json["load_shape"] == "front_loaded"
+      assert plan.current_execution_program_id
     end
 
     test "new plan renders readable editor rows instead of solver-fragment blocks", %{
@@ -722,28 +803,22 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert has_element?(view, "#workout-outline")
     end
 
-    test "plan edit page shows generated plan metadata", %{conn: conn, user: user} do
+    test "plan edit page does not depend on removed legacy solver metadata", %{
+      conn: conn,
+      user: user
+    } do
       plan =
         plan_fixture(user, %{
           "name" => "Coach Six-count",
           "coach_suggestion_kind" => "recommended",
-          "coach_target_reps" => 150,
-          "plan_solver_metadata" => %{
-            "source" => "coach_target",
-            "risk" => "normal",
-            "rationale" => ["Your current estimate is 150 six-count burpees in 20 min."]
-          }
+          "coach_target_reps" => 150
         })
 
-      {:ok, view, _html} = live(conn, ~p"/workouts/#{plan.id}/edit")
+      {:ok, view, html} = live(conn, ~p"/workouts/#{plan.id}/edit")
 
-      assert has_element?(view, "#plan-metadata")
-      html = render(view)
-      assert html =~ "Why this?"
-      assert html =~ "Coach target"
-      assert html =~ "Recommended · 150 reps"
-      assert html =~ "Risk: normal"
-      assert html =~ "Your current estimate is 150 six-count burpees in 20 min."
+      refute has_element?(view, "#plan-metadata")
+      assert html =~ "Coach Six-count"
+      assert has_element?(view, "#workout-editor-overview")
     end
 
     test "plan edit page exposes duplicate and delete actions", %{conn: conn, user: user} do
@@ -1293,6 +1368,22 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       assert Enum.at(rows, 2) =~ "Blocks 3–5"
       assert html =~ "20:00"
       refute html =~ "Workout no longer fits"
+
+      view |> element("#plan-form") |> render_submit(%{"workout_plan" => %{}})
+      assert_redirect(view, ~p"/workouts")
+
+      updated = BurpeeTrainer.Workouts.get_plan!(user, plan.id)
+      rest = Enum.find(updated.source_json["explicit_rests"], &(&1["duration_sec"] == 45))
+      assert rest
+      assert rest["target_elapsed_sec"] > 0
+      assert rest["tolerance_sec"] == 60
+
+      program = BurpeeTrainer.ExecutionPrograms.get!(updated.current_execution_program_id)
+
+      assert Enum.any?(program.program_json["events"], fn
+               %{"kind" => "rest", "duration_ms" => 45_000} -> true
+               _event -> false
+             end)
     end
 
     test "block sheet edits only the selected segment after a repeated block is split", %{
@@ -1584,23 +1675,20 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/workouts/new")
       generate_workout(view)
 
+      view |> element("[data-workout-block-row][phx-value-index='0']") |> render_click()
+
       view
-      |> element("#plan-form")
+      |> element("#block-sheet-form")
       |> render_change(%{
-        "workout_plan" => %{
-          "blocks" => %{
+        "block" => %{
+          "source_block_index" => "0",
+          "repeat_count" => "1",
+          "sets" => %{
             "0" => %{
-              "position" => "1",
-              "repeat_count" => "1",
-              "sets" => %{
-                "0" => %{
-                  "position" => "1",
-                  "burpee_count" => "200",
-                  "sec_per_rep" => "6.21",
-                  "sec_per_burpee" => "6.21",
-                  "end_of_set_rest" => "0"
-                }
-              }
+              "burpee_count" => "200",
+              "sec_per_rep" => "6.21",
+              "sec_per_burpee" => "6.21",
+              "end_of_set_rest" => "0"
             }
           }
         }
@@ -1752,9 +1840,5 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       generate_workout(view)
       assert has_element?(view, "#plan-form")
     end
-  end
-
-  defp metadata_value(metadata, key) do
-    Map.get(metadata || %{}, key) || Map.get(metadata || %{}, Atom.to_string(key))
   end
 end

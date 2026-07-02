@@ -10,7 +10,8 @@ defmodule BurpeeTrainer.Planner do
   field — this is by design.
   """
 
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   defmodule Event do
     @moduledoc """

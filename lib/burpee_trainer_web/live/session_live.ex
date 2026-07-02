@@ -2,10 +2,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
   @moduledoc """
   Session runner — client-driven execution model.
 
-  On mount the server loads the persisted workout plan and pushes serialized
-  plan data via `session_ready`. The client derives warmup/workout timelines,
-  owns the clock, state machine, beeps, and high-frequency DOM updates. The
-  server stays idle during the workout and only validates/saves completion.
+  On mount the server loads the editable workout plan, compiles/loads its
+  immutable execution program, and pushes canonical program events via
+  `session_ready`. The client owns the clock, state machine, beeps, and
+  high-frequency DOM updates. The server stays idle during the workout and only
+  validates/saves completion.
 
   State machine (server-side phase):
       :idle → :running → :done
@@ -15,8 +16,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
   """
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Duration, Mood, Planner, PrescriptionGraph, Workouts}
-  alias BurpeeTrainer.Workouts.WorkoutSession
+  alias BurpeeTrainer.{Duration, Mood, Workouts}
+  alias BurpeeTrainer.Workouts.{ExecutionProgram, WorkoutSession}
   alias BurpeeTrainerWeb.Fmt
 
   @impl true
@@ -26,13 +27,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
     case Integer.parse(plan_id) do
       {id, ""} ->
         plan = Workouts.get_plan!(user, id)
-        summary = session_summary(plan)
+        {:ok, execution_program} = Workouts.compile_plan(plan)
+        summary = program_summary(execution_program)
 
         socket =
           socket
           |> assign(:plan, plan)
+          |> assign(:execution_program, execution_program)
           |> assign(:summary, summary)
-          |> assign(:phase, if(plan.blocks == [], do: :not_runnable, else: :idle))
+          |> assign(:phase, :idle)
           |> assign(:mood, nil)
           |> assign(:warmup_asked, false)
           |> assign(:completion_tags, [])
@@ -46,7 +49,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:tracked_finish, nil)
           |> assign(:tracking_error, nil)
 
-        {:ok, push_event(socket, "session_ready", %{plan: serialize_plan(plan)})}
+        {:ok, push_event(socket, "session_ready", serialize_program(execution_program))}
 
       _ ->
         {:ok,
@@ -194,6 +197,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         params
         |> put_client_session_id(socket)
         |> coerce_duration()
+        |> put_program_session_attrs(socket)
       )
       |> Map.put(:action, :validate)
 
@@ -207,6 +211,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       params
       |> put_client_session_id(socket)
       |> coerce_duration()
+      |> put_program_session_attrs(socket)
       |> Map.put("mood", mood)
       |> Map.put("tags", tags |> Enum.sort() |> Enum.join(","))
 
@@ -295,144 +300,50 @@ defmodule BurpeeTrainerWeb.SessionLive do
     |> Map.put("payload_json", payload_json)
   end
 
-  defp session_summary(plan) do
-    summary = Planner.summary(plan)
-    timeline = serialize_execution_timeline(plan)
-
-    case Enum.sum(Enum.map(timeline, &(&1.duration_sec || 0))) do
-      0 -> summary
-      duration_sec_total -> %{summary | duration_sec_total: duration_sec_total}
-    end
-  end
-
-  defp serialize_plan(plan) do
+  defp program_summary(%ExecutionProgram{} = program) do
     %{
-      sec_per_burpee: plan.sec_per_burpee,
-      timeline: serialize_execution_timeline(plan),
-      blocks:
-        Enum.map(plan.blocks, fn block ->
-          %{
-            position: block.position,
-            repeat_count: block.repeat_count,
-            sets:
-              Enum.map(block.sets, fn set ->
-                %{
-                  position: set.position,
-                  burpee_count: set.burpee_count,
-                  sec_per_rep: set.sec_per_rep,
-                  sec_per_burpee: set.sec_per_burpee,
-                  end_of_set_rest: set.end_of_set_rest
-                }
-              end)
-          }
-        end)
+      burpee_count_total: program.target_reps,
+      duration_sec_total: program.target_duration_sec,
+      blocks: []
     }
   end
 
-  defp serialize_execution_timeline(%{steps: steps} = plan) when is_list(steps) and steps != [] do
-    blocks_by_position = Map.new(plan.blocks || [], &{&1.position, &1})
-
-    steps
-    |> Enum.sort_by(& &1.position)
-    |> Enum.flat_map(&serialize_plan_step(&1, blocks_by_position))
+  defp serialize_program(%ExecutionProgram{} = program) do
+    %{
+      program_id: program.id,
+      program_hash: program.content_hash,
+      target_reps: program.target_reps,
+      target_duration_sec: program.target_duration_sec,
+      events: program_events_for_runner(program.program_json),
+      display: Map.get(program.summary_json || %{}, "display", %{})
+    }
   end
 
-  defp serialize_execution_timeline(plan) do
-    rests = decode_additional_rests(plan.additional_rests)
-    finish_sec = Planner.summary(plan).duration_sec_total
-
-    plan
-    |> PrescriptionGraph.build(rests, finish_sec)
-    |> Map.fetch!(:nodes)
-    |> Enum.flat_map(&serialize_execution_node/1)
+  defp program_events_for_runner(program_json) do
+    program_json
+    |> map_get(:events, [])
+    |> Enum.map(&program_event_for_runner/1)
   end
 
-  defp serialize_plan_step(
-         %{kind: :block_run, block_position: block_position, repeat_count: repeat_count},
-         blocks_by_position
-       ) do
-    case Map.fetch(blocks_by_position, block_position) do
-      {:ok, block} -> block |> Map.put(:repeat_count, repeat_count) |> block_events()
-      :error -> []
-    end
-  end
-
-  defp serialize_plan_step(%{kind: :rest, rest_sec: rest_sec}, _blocks_by_position) do
-    [
-      %{
-        phase: "rest",
-        duration_sec: rest_sec,
-        burpee_count: nil,
-        sec_per_burpee: nil,
-        label: "Rest"
-      }
-    ]
-  end
-
-  defp serialize_plan_step(_step, _blocks_by_position), do: []
-
-  defp serialize_execution_node(%PrescriptionGraph.BlockRunNode{} = node) do
-    node.block
-    |> Map.put(:repeat_count, node.repeat_count)
-    |> block_events()
-  end
-
-  defp serialize_execution_node(%PrescriptionGraph.RestNode{} = node) do
-    [
-      %{
-        phase: "rest",
-        duration_sec: node.duration_sec,
-        burpee_count: nil,
-        sec_per_burpee: nil,
-        label: "Rest"
-      }
-    ]
-  end
-
-  defp serialize_execution_node(_node), do: []
-
-  defp block_events(block) do
-    sets = Enum.sort_by(block.sets || [], & &1.position)
-
-    for _round <- 1..(block.repeat_count || 1), set <- sets, reduce: [] do
-      events ->
-        work = %{
-          phase: "work",
-          duration_sec: set.burpee_count * set.sec_per_rep,
-          burpee_count: set.burpee_count,
-          sec_per_burpee: set.sec_per_rep,
-          label: "Block #{block.position}"
+  defp program_event_for_runner(event) do
+    case map_get(event, :kind) do
+      "work" ->
+        %{
+          kind: "work",
+          reps: map_get(event, :reps),
+          sec_per_rep: map_get(event, :sec_per_rep_us) / 1_000_000
         }
 
-        rest =
-          if (set.end_of_set_rest || 0) > 0 do
-            [
-              %{
-                phase: "rest",
-                duration_sec: set.end_of_set_rest,
-                burpee_count: nil,
-                sec_per_burpee: nil,
-                label: "Rest"
-              }
-            ]
-          else
-            []
-          end
-
-        events ++ [work | rest]
+      "rest" ->
+        %{
+          kind: "rest",
+          duration_sec: map_get(event, :duration_ms) / 1000
+        }
     end
   end
 
-  defp decode_additional_rests(rests_json) do
-    case Jason.decode(rests_json || "[]") do
-      {:ok, rests} when is_list(rests) ->
-        Enum.map(rests, fn %{"rest_sec" => rest_sec, "target_min" => target_min} ->
-          %{rest_sec: rest_sec, target_min: target_min}
-        end)
-
-      _ ->
-        []
-    end
+  defp map_get(map, key, default \\ nil) when is_map(map) do
+    Map.get(map, key, Map.get(map, Atom.to_string(key), default))
   end
 
   defp blank_session(plan), do: %WorkoutSession{user_id: plan.user_id, plan_id: plan.id}
@@ -449,6 +360,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
       value when is_binary(value) and value != "" -> params
       _ -> Map.put(params, "client_session_id", socket.assigns.client_session_id)
     end
+  end
+
+  defp put_program_session_attrs(params, socket) do
+    program = socket.assigns.execution_program
+
+    params
+    |> Map.put("burpee_type", Atom.to_string(program.burpee_type))
+    |> Map.put("burpee_count_planned", program.target_reps)
+    |> Map.put("duration_sec_planned", program.target_duration_sec)
+    |> Map.put("execution_program_id", program.id)
   end
 
   defp parse_completion_payload(%{"main" => main}) when is_map(main) do
@@ -474,16 +395,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   defp build_completion_form(socket, burpee_count_done, duration_sec_actual) do
-    %{plan: plan, summary: summary} = socket.assigns
+    %{plan: plan} = socket.assigns
 
-    attrs = %{
-      "burpee_type" => Atom.to_string(plan.burpee_type),
-      "burpee_count_planned" => summary.burpee_count_total,
-      "duration_sec_planned" => round(summary.duration_sec_total),
-      "burpee_count_actual" => burpee_count_done,
-      "duration_sec_actual" => duration_sec_actual,
-      "client_session_id" => socket.assigns.client_session_id
-    }
+    attrs =
+      %{
+        "burpee_count_actual" => burpee_count_done,
+        "duration_sec_actual" => duration_sec_actual,
+        "client_session_id" => socket.assigns.client_session_id
+      }
+      |> put_program_session_attrs(socket)
 
     plan
     |> blank_session()
