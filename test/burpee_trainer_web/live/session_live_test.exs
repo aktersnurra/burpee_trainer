@@ -288,6 +288,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert payload.program_hash
     assert [%{kind: "work", reps: 10, duration_sec: 120.0}] = payload.events
     refute Map.has_key?(payload, :blocks)
+    refute Map.has_key?(payload, :steps)
+    refute Map.has_key?(payload, :additional_rests)
     refute Map.has_key?(payload, :timeline)
   end
 
