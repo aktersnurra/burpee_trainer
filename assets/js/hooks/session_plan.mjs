@@ -1,26 +1,47 @@
-// Client-owned runner plan projection.
-// Phoenix sends persisted plan data; this module derives the runnable warmup
-// and workout segments used by the browser FSM.
-export function workoutTimelineFromPlan(plan) {
-	if (Array.isArray(plan?.timeline) && plan.timeline.length > 0) {
-		return plan.timeline;
-	}
-
-	return sortedBlocks(plan).flatMap((block) => blockTimeline(block));
+// Client-owned runner program projection.
+// Phoenix sends immutable execution program data; this module exposes the
+// runnable warmup/workout segments used by the browser FSM.
+export function workoutTimelineFromProgram(program) {
+	return Array.isArray(program?.events) ? program.events : [];
 }
 
-export function warmupTimelineFromPlan(plan) {
-	const firstBlock = sortedBlocks(plan)[0];
-	const firstSet = firstBlock ? sortedSets(firstBlock)[0] : null;
+export function programBurpeeCount(programOrEvents) {
+	const events = Array.isArray(programOrEvents)
+		? programOrEvents
+		: workoutTimelineFromProgram(programOrEvents);
 
-	if (!firstSet) return [];
+	return events.reduce((total, event) => {
+		if (eventKind(event) !== "work") return total;
+		return total + (event.reps || event.burpee_count || 0);
+	}, 0);
+}
+
+export function setBarsFromProgram(program) {
+	return workoutTimelineFromProgram(program)
+		.filter((event) => eventKind(event) === "work")
+		.map((event, index) => ({
+			id: event.id || `work-${index + 1}`,
+			index: event.set_index || index + 1,
+			reps: event.reps || event.burpee_count || 0,
+			label: event.label || `Set ${index + 1}`,
+		}));
+}
+
+export function warmupTimelineFromProgram(program) {
+	const firstWork = workoutTimelineFromProgram(program).find(
+		(event) => eventKind(event) === "work",
+	);
+
+	if (!firstWork) return [];
 
 	const secPerBurpee =
-		plan.sec_per_burpee || firstSet.sec_per_burpee || firstSet.sec_per_rep;
+		firstWork.sec_per_rep ||
+		firstWork.sec_per_burpee ||
+		firstWork.duration_sec / (firstWork.reps || firstWork.burpee_count || 1);
 	if (!secPerBurpee || secPerBurpee <= 0) return [];
 
 	const warmupReps = Math.min(
-		firstSet.burpee_count || 0,
+		firstWork.reps || firstWork.burpee_count || 0,
 		Math.trunc(60 / secPerBurpee),
 	);
 	if (warmupReps <= 0) return [];
@@ -29,13 +50,19 @@ export function warmupTimelineFromPlan(plan) {
 
 	return [
 		{
+			id: "warmup-work-001",
+			kind: "work",
 			phase: "work",
 			duration_sec: durationSec,
+			reps: warmupReps,
 			burpee_count: warmupReps,
+			sec_per_rep: secPerBurpee,
 			sec_per_burpee: secPerBurpee,
 			label: "Warmup Round 1",
 		},
 		{
+			id: "warmup-rest-001",
+			kind: "rest",
 			phase: "rest",
 			duration_sec: 120,
 			burpee_count: null,
@@ -43,13 +70,19 @@ export function warmupTimelineFromPlan(plan) {
 			label: "Warmup Rest",
 		},
 		{
+			id: "warmup-work-002",
+			kind: "work",
 			phase: "work",
 			duration_sec: durationSec,
+			reps: warmupReps,
 			burpee_count: warmupReps,
+			sec_per_rep: secPerBurpee,
 			sec_per_burpee: secPerBurpee,
 			label: "Warmup Round 2",
 		},
 		{
+			id: "warmup-rest-002",
+			kind: "rest",
 			phase: "rest",
 			duration_sec: 180,
 			burpee_count: null,
@@ -59,52 +92,6 @@ export function warmupTimelineFromPlan(plan) {
 	];
 }
 
-export function timelineBurpeeCount(timeline) {
-	return timeline.reduce((total, event) => {
-		if (event.phase !== "work") return total;
-		return total + (event.burpee_count || 0);
-	}, 0);
-}
-
-function blockTimeline(block) {
-	if ((block.repeat_count || 0) <= 0) return [];
-
-	const sets = sortedSets(block);
-	const events = [];
-
-	for (let round = 1; round <= block.repeat_count; round++) {
-		sets.forEach((set, index) => {
-			events.push({
-				phase: "work",
-				duration_sec: set.burpee_count * set.sec_per_rep,
-				burpee_count: set.burpee_count,
-				sec_per_burpee: set.sec_per_rep,
-				label: `Block ${block.position}`,
-			});
-
-			if ((set.end_of_set_rest || 0) > 0 && index + 1 <= sets.length) {
-				events.push({
-					phase: "rest",
-					duration_sec: set.end_of_set_rest,
-					burpee_count: null,
-					sec_per_burpee: null,
-					label: "Rest",
-				});
-			}
-		});
-	}
-
-	return events;
-}
-
-function sortedBlocks(plan) {
-	return [...(plan?.blocks || [])].sort(
-		(a, b) => (a.position || 0) - (b.position || 0),
-	);
-}
-
-function sortedSets(block) {
-	return [...(block?.sets || [])].sort(
-		(a, b) => (a.position || 0) - (b.position || 0),
-	);
+function eventKind(event) {
+	return event?.kind || event?.phase;
 }

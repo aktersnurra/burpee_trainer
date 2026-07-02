@@ -377,6 +377,44 @@ result = segmentTransition(initialSegmentState(), {
 });
 assert.deepEqual(result.commands, [{ type: "playLeadBeep" }]);
 
+const programWork = {
+	kind: "work",
+	duration_sec: 10,
+	reps: 5,
+	label: "Set 1",
+};
+const programRest = {
+	kind: "rest",
+	duration_sec: 5,
+	reps: null,
+	label: "Rest",
+};
+
+result = segmentTransition(initialSegmentState(), {
+	type: "SEGMENT_READY",
+	timeline: [programWork, programRest],
+	blockCount: 1,
+});
+assert.deepEqual(result.commands, [
+	{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },
+	{ type: "updateVisibleRepGoal", burpeeCountTarget: 5 },
+	{ type: "renderTimer", timeLeftSec: 15 },
+]);
+
+result = segmentTransition(initialSegmentState(), {
+	type: "DISPLAY_FRAME",
+	frame: { event: programWork, index: 0, phase_elapsed: 2, phase_remaining: 8 },
+	elapsedSec: 2,
+	totalDurationSec: 15,
+	doneInEvent: 1,
+});
+assert.deepEqual(result.commands, [
+	{ type: "renderTimer", timeLeftSec: 13 },
+	{ type: "enterWorkPhase", eventType: "work", burpeeCount: 5 },
+	{ type: "triggerDown", remainingReps: 4 },
+	{ type: "renderWorkRepProgress", progress: 0 },
+]);
+
 result = segmentTransition(result.state, {
 	type: "BEEP_FRAME",
 	frame: { event: rest, phase_elapsed: 4.1, phase_remaining: 0.9 },

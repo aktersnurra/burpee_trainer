@@ -28,8 +28,9 @@ export function runningDisplayModel({
 	doneInEvent = 0,
 }) {
 	const event = frame?.event;
-	const isRest = event?.phase === "rest";
-	const isWork = event?.phase === "work";
+	const kind = eventKind(event);
+	const isRest = kind === "rest";
+	const isWork = kind === "work";
 	const progress = ringProgressForFrame(frame);
 
 	const isRestCountdown =
@@ -46,8 +47,8 @@ export function runningDisplayModel({
 			: isRest
 				? formatTime(frame?.phase_remaining ?? timeLeftSec)
 				: isWork
-					? Math.max((event?.burpee_count || 0) - doneInEvent, 0)
-					: (event?.burpee_count ?? totalTarget ?? "—"),
+					? Math.max((event?.reps || event?.burpee_count || 0) - doneInEvent, 0)
+					: (event?.reps ?? event?.burpee_count ?? totalTarget ?? "—"),
 		countdownDots: isRestCountdown
 			? {
 					count: 3,
@@ -66,14 +67,16 @@ export function runningDisplayModel({
 }
 
 function activeSegmentGlyphs({ timeline, frame }) {
-	const workEvents = (timeline || []).filter((event) => event.phase === "work");
+	const workEvents = (timeline || []).filter(
+		(event) => eventKind(event) === "work",
+	);
 	if (workEvents.length === 0) return [];
 
 	const completedSets = (timeline || [])
 		.slice(0, frame?.index ?? timeline.length)
-		.filter((event) => event.phase === "work").length;
+		.filter((event) => eventKind(event) === "work").length;
 	const currentSetProgress =
-		frame?.event?.phase === "work" && frame.event.duration_sec > 0
+		eventKind(frame?.event) === "work" && frame.event.duration_sec > 0
 			? clamp((frame.phase_elapsed || 0) / frame.event.duration_sec)
 			: null;
 
@@ -90,8 +93,8 @@ function ringProgressForFrame(frame) {
 	const event = frame?.event;
 	if (!event?.duration_sec) return 0;
 
-	if (event.phase === "work") {
-		const burpeeCount = event.burpee_count || 1;
+	if (eventKind(event) === "work") {
+		const burpeeCount = event.reps || event.burpee_count || 1;
 		const secondsPerRep =
 			event.sec_per_rep ||
 			event.sec_per_burpee ||
@@ -101,6 +104,10 @@ function ringProgressForFrame(frame) {
 	}
 
 	return clamp((frame?.phase_elapsed || 0) / event.duration_sec);
+}
+
+function eventKind(event) {
+	return event?.kind || event?.phase;
 }
 
 function clamp(value) {
