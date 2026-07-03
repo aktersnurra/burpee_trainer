@@ -292,7 +292,7 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
 
   defp cadence_groups(%{block_pattern: pattern, burpee_count_target: total_reps})
        when is_list(pattern) and pattern != [] do
-    set_pattern = expand_legacy_pattern(total_reps, pattern)
+    set_pattern = expand_block_pattern(total_reps, pattern)
     {block_specs_from_set_pattern(set_pattern), set_pattern}
   end
 
@@ -301,7 +301,7 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolver do
     {[block], [total_reps]}
   end
 
-  defp expand_legacy_pattern(total_reps, pattern) do
+  defp expand_block_pattern(total_reps, pattern) do
     {full_repeats, remainder_pattern} = split_pattern(total_reps, pattern)
 
     pattern

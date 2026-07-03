@@ -8,8 +8,8 @@ defmodule BurpeeTrainer.WorkoutFeed do
   import Ecto.Query
 
   alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.ExecutionPrograms
   alias BurpeeTrainer.Levels
-  alias BurpeeTrainer.Planner
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Videos
   alias BurpeeTrainer.Workouts
@@ -61,7 +61,12 @@ defmodule BurpeeTrainer.WorkoutFeed do
   # ---------------------------------------------------------------------------
 
   defp plan_to_item(plan, last_used) do
-    %{burpee_count_total: count, duration_sec_total: duration} = Planner.summary(plan)
+    program = current_program(plan)
+    count = if program, do: program.target_reps, else: plan.burpee_count_target || 0
+
+    duration =
+      if program, do: program.target_duration_sec, else: (plan.target_duration_min || 0) * 60
+
     level = Levels.level_for_count(plan.burpee_type, count)
 
     %WorkoutItem{
@@ -78,6 +83,9 @@ defmodule BurpeeTrainer.WorkoutFeed do
       inserted_at: plan.inserted_at
     }
   end
+
+  defp current_program(%{current_execution_program_id: nil}), do: nil
+  defp current_program(%{current_execution_program_id: id}), do: ExecutionPrograms.get!(id)
 
   defp video_to_item(video) do
     level =

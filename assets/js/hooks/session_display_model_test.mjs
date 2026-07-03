@@ -6,15 +6,15 @@ import {
 } from "./session_display_model.mjs";
 
 const workoutTimeline = [
-	{ phase: "work", duration_sec: 10, burpee_count: 5, label: "Block 1" },
-	{ phase: "rest", duration_sec: 5, label: "Rest" },
-	{ phase: "work", duration_sec: 10, burpee_count: 5, label: "Block 1" },
+	{ kind: "work", reps: 5, sec_per_rep: 2 },
+	{ kind: "rest", duration_sec: 5 },
+	{ kind: "work", reps: 5, sec_per_rep: 2 },
 ];
 
 const warmupFrame = {
 	index: 0,
 	phase_elapsed: 2,
-	event: { phase: "work", duration_sec: 6, burpee_count: 3 },
+	event: { kind: "work", reps: 3, sec_per_rep: 2 },
 };
 
 const workoutFrame = {
@@ -31,9 +31,9 @@ const restFrame = {
 
 test("runner display uses generic work/rest phases", () => {
 	const warmupTimeline = [
-		{ phase: "work", duration_sec: 6, burpee_count: 3 },
-		{ phase: "rest", duration_sec: 5 },
-		{ phase: "work", duration_sec: 6, burpee_count: 3 },
+		{ kind: "work", reps: 3, sec_per_rep: 2 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 3, sec_per_rep: 2 },
 	];
 	const model = runningDisplayModel({
 		timeline: warmupTimeline,
@@ -57,12 +57,7 @@ test("work ring cycles once per rep, not once per set", () => {
 		frame: {
 			index: 0,
 			phase_elapsed: 3,
-			event: {
-				...workoutTimeline[0],
-				duration_sec: 10,
-				burpee_count: 5,
-				sec_per_burpee: 2,
-			},
+			event: workoutTimeline[0],
 		},
 		timeLeftSec: 17,
 		totalDone: 0,

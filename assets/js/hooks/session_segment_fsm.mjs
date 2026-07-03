@@ -40,18 +40,25 @@ export function currentFrame(timeline, elapsedSec) {
 
 	for (let index = 0; index < timeline.length; index++) {
 		const event = timeline[index];
-		if (elapsedSec < cursor + event.duration_sec) {
+		const durationSec = eventDurationSec(event);
+		if (elapsedSec < cursor + durationSec) {
 			return {
 				event,
 				index,
 				phase_elapsed: elapsedSec - cursor,
-				phase_remaining: event.duration_sec - (elapsedSec - cursor),
+				phase_remaining: durationSec - (elapsedSec - cursor),
 			};
 		}
-		cursor += event.duration_sec;
+		cursor += durationSec;
 	}
 
 	return null;
+}
+
+export function eventDurationSec(event) {
+	if (event?.kind === "work") return (event.reps || 0) * (event.sec_per_rep || 0);
+	if (event?.kind === "rest") return event.duration_sec || 0;
+	return 0;
 }
 
 export function eventKey(frameOrEvent, fallbackIndex = 0) {
@@ -60,22 +67,23 @@ export function eventKey(frameOrEvent, fallbackIndex = 0) {
 	const index = Number.isInteger(frameOrEvent.index)
 		? frameOrEvent.index
 		: fallbackIndex;
-	return `${index}:${event.phase}:${event.label || ""}`;
+	return `${index}:${eventKind(event)}`;
+}
+
+function eventKind(event) {
+	return event?.kind;
 }
 
 function isBurpeeEvent(event) {
-	return event.phase === "work";
+	return eventKind(event) === "work";
 }
 
 function completedRepsInFrame(frame) {
 	if (!frame || !frame.event || !isBurpeeEvent(frame.event)) return 0;
 
 	const event = frame.event;
-	const target = event.burpee_count || 0;
-	const secondsPerRep =
-		event.sec_per_rep ||
-		event.sec_per_burpee ||
-		event.duration_sec / (target || 1);
+	const target = event.reps || 0;
+	const secondsPerRep = event.sec_per_rep;
 
 	return Math.min(
 		Math.floor((frame.phase_elapsed || 0) / secondsPerRep),
@@ -116,7 +124,7 @@ export function accountReps(previousFrame, nextFrame, reps) {
 
 	if (!isBurpee) return { ...reps, currentEventKey: nextKey, doneInEvent: 0 };
 
-	const target = previousEvent.burpee_count || 0;
+	const target = previousEvent.reps || 0;
 	const doneInEvent =
 		reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
 	const missing = Math.max(target - doneInEvent, 0);
@@ -130,13 +138,13 @@ export function accountReps(previousFrame, nextFrame, reps) {
 }
 
 function totalDurationSec(timeline) {
-	return timeline.reduce((sum, item) => sum + item.duration_sec, 0);
+	return timeline.reduce((sum, item) => sum + eventDurationSec(item), 0);
 }
 
 function totalBurpeeCount(timeline) {
 	return timeline.reduce((sum, item) => {
 		if (!isBurpeeEvent(item)) return sum;
-		return sum + (item.burpee_count || 0);
+		return sum + (item.reps || 0);
 	}, 0);
 }
 
@@ -145,11 +153,8 @@ function beepCommandsForFrame(beeps, frame) {
 
 	const { event: timelineEvent, phase_elapsed, phase_remaining } = frame;
 
-	if (timelineEvent.phase === "work") {
-		const secondsPerRep =
-			timelineEvent.sec_per_rep ||
-			timelineEvent.sec_per_burpee ||
-			timelineEvent.duration_sec / (timelineEvent.burpee_count || 1);
+	if (eventKind(timelineEvent) === "work") {
+		const secondsPerRep = timelineEvent.sec_per_rep;
 		const repIndex = Math.floor(phase_elapsed / secondsPerRep);
 
 		if (repIndex !== beeps.lastRepIndex) {
@@ -162,7 +167,7 @@ function beepCommandsForFrame(beeps, frame) {
 		return { beeps: { ...beeps, lastRestCount: null }, commands: [] };
 	}
 
-	if (timelineEvent.phase !== "rest") {
+	if (eventKind(timelineEvent) !== "rest") {
 		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
 	}
 
@@ -196,14 +201,15 @@ function displayCommandsForFrame(display, event) {
 
 	const timelineEvent = frame.event;
 	const frameEventKey = eventKey(frame);
-	const isWork = timelineEvent.phase === "work";
-	const isRest = timelineEvent.phase === "rest";
+	const kind = eventKind(timelineEvent);
+	const isWork = kind === "work";
+	const isRest = kind === "rest";
 	const commands = [{ type: "renderTimer", timeLeftSec }];
 
 	let nextDisplay = display;
 
 	if (isWork) {
-		const burpeeCount = timelineEvent.burpee_count || 0;
+		const burpeeCount = timelineEvent.reps || 0;
 		const remainingReps = Math.max(burpeeCount - (event.doneInEvent || 0), 0);
 		const enteringWork =
 			frameEventKey !== display.lastEventKey ||
@@ -211,7 +217,7 @@ function displayCommandsForFrame(display, event) {
 		if (enteringWork) {
 			commands.push({
 				type: "enterWorkPhase",
-				eventType: timelineEvent.phase,
+				eventType: kind,
 				burpeeCount,
 			});
 			commands.push({
@@ -220,7 +226,7 @@ function displayCommandsForFrame(display, event) {
 			});
 			nextDisplay = {
 				lastEventKey: frameEventKey,
-				lastEventType: timelineEvent.phase,
+				lastEventType: kind,
 				lastBurpeeCount: burpeeCount,
 				lastRemainingReps: remainingReps,
 			};
@@ -229,10 +235,7 @@ function displayCommandsForFrame(display, event) {
 			nextDisplay = { ...display, lastRemainingReps: remainingReps };
 		}
 
-		const secondsPerRep =
-			timelineEvent.sec_per_rep ||
-			timelineEvent.sec_per_burpee ||
-			timelineEvent.duration_sec / (burpeeCount || 1);
+		const secondsPerRep = timelineEvent.sec_per_rep;
 		const repIndex = Math.floor(frame.phase_elapsed / secondsPerRep);
 		const repElapsed = frame.phase_elapsed - repIndex * secondsPerRep;
 		commands.push({
@@ -241,10 +244,10 @@ function displayCommandsForFrame(display, event) {
 		});
 	} else if (isRest) {
 		if (frameEventKey !== display.lastEventKey) {
-			commands.push({ type: "enterRestPhase", eventType: timelineEvent.phase });
+			commands.push({ type: "enterRestPhase", eventType: kind });
 			nextDisplay = {
 				lastEventKey: frameEventKey,
-				lastEventType: timelineEvent.phase,
+				lastEventType: kind,
 				lastBurpeeCount: 0,
 				lastRemainingReps: null,
 			};

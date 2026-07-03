@@ -8,14 +8,14 @@ defmodule BurpeeTrainer.PlanPresentationTest do
     input = %PlanSolver.Input{
       name: "144 in 20",
       burpee_type: :six_count,
-      target_duration_min: 20,
+      target_duration_sec: 1_200,
       burpee_count_target: 144,
       pacing_style: :unbroken,
       level: :level_1a,
-      reps_per_set: 8
+      max_unbroken_reps: 8
     }
 
-    assert {:ok, solution} = PlanSolver.solve(input)
+    assert {:ok, solution} = PlanSolver.generate_plan(input)
 
     outline = PlanPresentation.outline(solution.plan)
 
@@ -33,15 +33,17 @@ defmodule BurpeeTrainer.PlanPresentationTest do
     input = %PlanSolver.Input{
       name: "Explicit rest",
       burpee_type: :six_count,
-      target_duration_min: 10,
+      target_duration_sec: 600,
       burpee_count_target: 10,
       pacing_style: :even,
       level: :level_1a,
       block_pattern: [5],
-      additional_rests: [%{target_min: 5, rest_sec: 60}]
+      explicit_rests: [
+        %PlanSolver.ExplicitRest{target_elapsed_sec: 300, duration_sec: 60, tolerance_sec: 60}
+      ]
     }
 
-    assert {:ok, solution} = PlanSolver.solve(input)
+    assert {:ok, solution} = PlanSolver.generate_plan(input)
     assert Enum.any?(solution.plan.steps, &(&1.kind == :rest and &1.rest_sec == 60))
 
     outline = PlanPresentation.outline(solution.plan)

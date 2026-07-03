@@ -2,7 +2,8 @@ defmodule BurpeeTrainer.PrescriptionGraphTest do
   use ExUnit.Case, async: true
 
   alias BurpeeTrainer.PrescriptionGraph
-  alias BurpeeTrainer.Workouts.{Block, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   describe "build/3" do
     test "splits repeated block runs around additional rests" do

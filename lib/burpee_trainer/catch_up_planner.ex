@@ -110,10 +110,10 @@ defmodule BurpeeTrainer.CatchUpPlanner do
       plan_input: %PlanInput{
         name: "Catch-up #{slot_index}",
         burpee_type: input.selected_burpee_type,
-        target_duration_min: duration_min,
+        target_duration_sec: duration_min * 60,
         burpee_count_target: target_reps,
         pacing_style: :even,
-        additional_rests: [],
+        explicit_rests: [],
         level: level
       }
     }

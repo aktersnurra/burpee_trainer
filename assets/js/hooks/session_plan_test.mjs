@@ -1,88 +1,69 @@
 import assert from "node:assert/strict";
 import {
-	timelineBurpeeCount,
-	warmupTimelineFromPlan,
-	workoutTimelineFromPlan,
+	programBurpeeCount,
+	setBarsFromProgram,
+	warmupTimelineFromProgram,
+	workoutTimelineFromProgram,
 } from "./session_plan.mjs";
+import { eventDurationSec } from "./session_segment_fsm.mjs";
 
-const plan = {
-	sec_per_burpee: 5.5,
-	blocks: [
+const program = {
+	program_id: 7,
+	program_hash: "abc",
+	target_reps: 17,
+	target_duration_sec: 132,
+	events: [
 		{
-			position: 1,
-			repeat_count: 1,
-			sets: [
-				{
-					position: 2,
-					burpee_count: 7,
-					sec_per_rep: 6,
-					sec_per_burpee: 6,
-					end_of_set_rest: 0,
-				},
-				{
-					position: 1,
-					burpee_count: 10,
-					sec_per_rep: 6,
-					sec_per_burpee: 6,
-					end_of_set_rest: 30,
-				},
-			],
+			kind: "work",
+			reps: 10,
+			sec_per_rep: 6,
+		},
+		{
+			kind: "rest",
+			duration_sec: 30,
+		},
+		{
+			kind: "work",
+			reps: 7,
+			sec_per_rep: 6,
 		},
 	],
 };
 
-const warmup = warmupTimelineFromPlan(plan);
-assert.deepEqual(
-	warmup.map((event) => event.phase),
-	["work", "rest", "work", "rest"],
-);
-assert.equal(timelineBurpeeCount(warmup), 20);
-assert.equal(warmup[0].duration_sec, 55);
-assert.equal(warmup[2].duration_sec, 55);
+const warmup = warmupTimelineFromProgram(program);
+assert.deepEqual(warmup, [
+	{ kind: "work", reps: 10, sec_per_rep: 6 },
+	{ kind: "rest", duration_sec: 120 },
+	{ kind: "work", reps: 10, sec_per_rep: 6 },
+	{ kind: "rest", duration_sec: 180 },
+]);
+assert.equal(programBurpeeCount(warmup), 20);
+assert.equal(eventDurationSec(warmup[0]), 60);
+assert.equal(eventDurationSec(warmup[2]), 60);
 
-const workout = workoutTimelineFromPlan(plan);
-assert.deepEqual(
-	workout.map((event) => event.phase),
-	["work", "rest", "work"],
-);
-assert.equal(timelineBurpeeCount(workout), 17);
-assert.equal(workout[0].burpee_count, 10);
-assert.equal(workout[2].burpee_count, 7);
+const workout = workoutTimelineFromProgram(program);
+assert.deepEqual(workout, program.events);
+assert.equal(programBurpeeCount(workout), 17);
+assert.equal(workout[0].reps, 10);
+assert.equal(workout[2].reps, 7);
+assert.deepEqual(setBarsFromProgram(program), [
+	{ index: 1, reps: 10 },
+	{ index: 2, reps: 7 },
+]);
 
-const executionPlan = {
-	...plan,
-	timeline: [
+const pureKindProgram = {
+	events: [
 		{
-			phase: "work",
-			duration_sec: 1080,
-			burpee_count: 180,
-			sec_per_burpee: 6,
-			label: "Block 1",
+			kind: "work",
+			reps: 5,
+			sec_per_rep: 10,
 		},
-		{
-			phase: "rest",
-			duration_sec: 10,
-			burpee_count: null,
-			sec_per_burpee: null,
-			label: "Rest",
-		},
-		{
-			phase: "work",
-			duration_sec: 120,
-			burpee_count: 20,
-			sec_per_burpee: 6,
-			label: "Block 1 continued",
-		},
+		{ kind: "rest", duration_sec: 10 },
 	],
 };
 
-const executionWorkout = workoutTimelineFromPlan(executionPlan);
-assert.deepEqual(
-	executionWorkout.map((event) => event.phase),
-	["work", "rest", "work"],
-);
-assert.equal(timelineBurpeeCount(executionWorkout), 200);
-assert.equal(executionWorkout[1].duration_sec, 10);
-assert.equal(executionWorkout[2].label, "Block 1 continued");
+assert.equal(programBurpeeCount(pureKindProgram), 5);
+assert.equal(warmupTimelineFromProgram(pureKindProgram)[0].reps, 5);
+assert.deepEqual(workoutTimelineFromProgram({ blocks: [{ sets: [] }] }), []);
 
 console.log("session_plan tests passed");

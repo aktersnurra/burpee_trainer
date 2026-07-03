@@ -6,7 +6,8 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit.Presentation do
   of the LiveView process. It does not change solver behavior or persistence.
   """
 
-  alias BurpeeTrainer.Workouts.{Block, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.Block
+  alias BurpeeTrainer.Workouts.WorkoutPlan
   alias BurpeeTrainerWeb.Fmt
 
   @type block_row :: %{

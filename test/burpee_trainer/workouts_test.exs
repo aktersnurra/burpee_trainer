@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.WorkoutsTest do
   use BurpeeTrainer.DataCase, async: false
 
-  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.{ExecutionPrograms, Repo, Workouts}
   alias BurpeeTrainer.Workouts.{PoseCaptureRun, WorkoutPlan, WorkoutSession}
 
   import BurpeeTrainer.Fixtures
@@ -97,90 +97,197 @@ defmodule BurpeeTrainer.WorkoutsTest do
   end
 
   describe "plans" do
-    test "create_plan/2 persists plan with blocks and sets" do
+    test "creating a plan stores source_json and current execution program" do
+      user = user_fixture()
+
+      attrs = %{
+        "name" => "100 in 20",
+        "source_json" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 100,
+          "target_duration_sec" => 1_200,
+          "pacing_style" => "even",
+          "block_pattern" => [10],
+          "explicit_rests" => [
+            %{"target_elapsed_sec" => 600, "duration_sec" => 60, "tolerance_sec" => 90}
+          ]
+        }
+      }
+
+      assert {:ok, plan} = Workouts.create_plan(user, attrs)
+      assert %WorkoutPlan{} = plan
+      assert plan.user_id == user.id
+      assert plan.source_json["target_reps"] == 100
+      assert plan.current_execution_program_id
+    end
+
+    test "create_plan/2 requires explicit source_json instead of legacy execution fields" do
+      user = user_fixture()
+
+      assert {:error, %BurpeeTrainer.PlanCompiler.CompileError{code: :invalid_source}} =
+               Workouts.create_plan(user, %{
+                 "name" => "Legacy-only plan",
+                 "burpee_type" => "six_count",
+                 "burpee_count_target" => 10,
+                 "target_duration_min" => 2,
+                 "pacing_style" => "even"
+               })
+    end
+
+    test "creating an unbroken source-backed plan preserves source pacing style" do
+      user = user_fixture()
+
+      assert {:ok, plan} =
+               Workouts.create_plan(user, %{
+                 "name" => "Unbroken source",
+                 "source_json" => %{
+                   "burpee_type" => "six_count",
+                   "target_reps" => 20,
+                   "target_duration_sec" => 300,
+                   "pacing_style" => "unbroken",
+                   "max_unbroken_reps" => 5,
+                   "explicit_rests" => []
+                 }
+               })
+
+      assert plan.pacing_style == :unbroken
+      assert plan.source_json["pacing_style"] == "unbroken"
+      assert plan.current_execution_program_id
+    end
+
+    test "deleting a plan preserves performed session facts" do
+      user = user_fixture()
+
+      assert {:ok, plan} =
+               Workouts.create_plan(user, %{
+                 "name" => "10 in 2",
+                 "source_json" => %{
+                   "burpee_type" => "six_count",
+                   "target_reps" => 10,
+                   "target_duration_sec" => 120,
+                   "pacing_style" => "even",
+                   "block_pattern" => [10],
+                   "explicit_rests" => []
+                 }
+               })
+
+      program = BurpeeTrainer.ExecutionPrograms.get!(plan.current_execution_program_id)
+
+      assert {:ok, session} =
+               Workouts.create_session_from_plan(user, plan, %{
+                 "burpee_count_actual" => 10,
+                 "duration_sec_actual" => 118,
+                 "client_session_id" => Ecto.UUID.generate(),
+                 "execution_program_id" => program.id
+               })
+
+      assert {:ok, _plan} = Workouts.delete_plan(plan)
+      session = Workouts.get_session!(user, session.id)
+
+      assert session.plan_id == nil
+      assert session.execution_program_id == program.id
+      assert session.burpee_count_actual == 10
+    end
+
+    test "source-backed plan sessions link the compiled program when current id is missing" do
+      user = user_fixture()
+
+      assert {:ok, plan} =
+               Workouts.create_plan(user, %{
+                 "name" => "Source without current program",
+                 "source_json" => %{
+                   "burpee_type" => "six_count",
+                   "target_reps" => 12,
+                   "target_duration_sec" => 144,
+                   "pacing_style" => "even",
+                   "block_pattern" => [6],
+                   "explicit_rests" => []
+                 }
+               })
+
+      original_program_id = plan.current_execution_program_id
+      plan = Repo.update!(Ecto.Changeset.change(plan, current_execution_program_id: nil))
+      assert plan.current_execution_program_id == nil
+
+      assert {:ok, session} =
+               Workouts.create_session_from_plan(user, plan, %{
+                 "burpee_count_actual" => 12,
+                 "duration_sec_actual" => 140,
+                 "client_session_id" => Ecto.UUID.generate()
+               })
+
+      assert session.execution_program_id == original_program_id
+      assert session.burpee_count_planned == 12
+      assert session.duration_sec_planned == 144
+    end
+
+    test "create_plan/2 persists source and current execution program" do
       user = user_fixture()
       plan = plan_fixture(user)
 
       assert %WorkoutPlan{} = plan
       assert plan.user_id == user.id
-      assert [block] = plan.blocks
-      assert length(block.sets) == 3
+      assert plan.source_json["target_reps"] > 0
+      assert plan.current_execution_program_id
+
+      program = ExecutionPrograms.get!(plan.current_execution_program_id)
+      assert program.target_reps == plan.source_json["target_reps"]
     end
 
-    test "create_plan/2 preserves the last set's end_of_set_rest (it is part of the set's duration)" do
+    test "create_plan/2 keeps explicit rests in source and compiled program" do
       user = user_fixture()
 
       plan =
         plan_fixture(user, %{
-          "blocks" => [
-            %{
-              "position" => 1,
-              "repeat_count" => 1,
-              "sets" => [
-                %{
-                  "position" => 1,
-                  "burpee_count" => 10,
-                  "sec_per_rep" => 6.0,
-                  "sec_per_burpee" => 3.0,
-                  "end_of_set_rest" => 30
-                },
-                %{
-                  "position" => 2,
-                  "burpee_count" => 10,
-                  "sec_per_rep" => 6.0,
-                  "sec_per_burpee" => 3.0,
-                  "end_of_set_rest" => 99
-                }
-              ]
-            }
-          ]
+          "source_json" => %{
+            "burpee_type" => "six_count",
+            "target_reps" => 20,
+            "target_duration_sec" => 240,
+            "pacing_style" => "even",
+            "block_pattern" => [10],
+            "explicit_rests" => [
+              %{"target_elapsed_sec" => 120, "duration_sec" => 30, "tolerance_sec" => 60}
+            ]
+          }
         })
 
-      [last_set | _] = Enum.sort_by(hd(plan.blocks).sets, & &1.position, :desc)
-      assert last_set.end_of_set_rest == 99
+      assert [%{"duration_sec" => 30}] = plan.source_json["explicit_rests"]
+
+      program = ExecutionPrograms.get!(plan.current_execution_program_id)
+
+      assert Enum.any?(program.program_json["events"], fn event ->
+               event["kind"] == "rest" and event["duration_ms"] == 30_000
+             end)
     end
 
-    test "create_plan/2 persists generated plan metadata" do
+    test "create_plan/2 persists coach attribution without solver metadata column" do
       user = user_fixture()
 
       plan =
         plan_fixture(user, %{
           "coach_suggestion_kind" => "recommended",
-          "coach_target_reps" => 150,
-          "plan_solver_metadata" => %{
-            "solver_version" => "intelligence-v2",
-            "explanation" => ["Generated from coach target."]
-          }
+          "coach_target_reps" => 150
         })
 
       assert plan.coach_suggestion_kind == "recommended"
       assert plan.coach_target_reps == 150
-      assert plan.plan_solver_metadata["solver_version"] == "intelligence-v2"
-      assert plan.plan_solver_metadata["explanation"] == ["Generated from coach target."]
+      assert plan.plan_solver_metadata == nil
     end
 
-    test "create_plan/2 rejects a plan without a name" do
+    test "create_plan/2 rejects a source-backed plan without a name" do
       user = user_fixture()
 
       assert {:error, changeset} =
                Workouts.create_plan(user, %{
                  "name" => "",
-                 "burpee_type" => "six_count",
-                 "blocks" => [
-                   %{
-                     "position" => 1,
-                     "repeat_count" => 1,
-                     "sets" => [
-                       %{
-                         "position" => 1,
-                         "burpee_count" => 5,
-                         "sec_per_rep" => 6.0,
-                         "sec_per_burpee" => 3.0,
-                         "end_of_set_rest" => 0
-                       }
-                     ]
-                   }
-                 ]
+                 "source_json" => %{
+                   "burpee_type" => "six_count",
+                   "target_reps" => 5,
+                   "target_duration_sec" => 60,
+                   "pacing_style" => "even",
+                   "block_pattern" => [5],
+                   "explicit_rests" => []
+                 }
                })
 
       assert %{name: [_ | _]} = errors_on(changeset)
@@ -212,17 +319,26 @@ defmodule BurpeeTrainer.WorkoutsTest do
       refute Enum.any?(Workouts.list_plans(alice), &(&1.user_id == bob.id))
     end
 
-    test "update_plan/2 replaces blocks (on_replace: :delete)" do
+    test "update_plan/2 recompiles source and stores the new current program" do
       user = user_fixture()
       plan = plan_fixture(user)
+      original_program_id = plan.current_execution_program_id
 
       {:ok, updated} =
         Workouts.update_plan(plan, %{
           "name" => "Renamed",
+          "source_json" => %{
+            "burpee_type" => "six_count",
+            "target_reps" => 5,
+            "target_duration_sec" => 60,
+            "pacing_style" => "even",
+            "block_pattern" => [5],
+            "explicit_rests" => []
+          },
           "blocks" => [
             %{
               "position" => 1,
-              "repeat_count" => 2,
+              "repeat_count" => 1,
               "sets" => [
                 %{
                   "position" => 1,
@@ -238,20 +354,19 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       updated = Workouts.get_plan!(user, updated.id)
       assert updated.name == "Renamed"
-      assert [block] = updated.blocks
-      assert block.repeat_count == 2
-      assert [set] = block.sets
-      assert set.burpee_count == 5
+      assert updated.source_json["target_reps"] == 5
+      assert updated.current_execution_program_id
+      refute updated.current_execution_program_id == original_program_id
     end
 
-    test "save_generated_plan/2 preserves v3 solver metadata" do
+    test "save_generated_plan/2 persists generated source and current program" do
       user = user_fixture()
 
       assert {:ok, solution} =
-               BurpeeTrainer.PlanSolver.solve(%BurpeeTrainer.PlanSolver.Input{
+               BurpeeTrainer.PlanSolver.generate_plan(%BurpeeTrainer.PlanSolver.Input{
                  name: "Generated",
                  burpee_type: :six_count,
-                 target_duration_min: 10,
+                 target_duration_sec: 600,
                  burpee_count_target: 60,
                  pacing_style: :even,
                  level: :level_1c
@@ -259,22 +374,33 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert metadata_value(solution.plan.plan_solver_metadata, :solver_version) == 3
 
-      assert {:ok, saved} = Workouts.save_generated_plan(user, solution.plan)
+      source_json = %{
+        "burpee_type" => "six_count",
+        "target_reps" => 60,
+        "target_duration_sec" => 600,
+        "pacing_style" => "even",
+        "block_pattern" => [60],
+        "explicit_rests" => []
+      }
+
+      assert {:ok, saved} =
+               Workouts.save_generated_plan(user, %{solution.plan | source_json: source_json})
+
       saved = Workouts.get_plan!(user, saved.id)
 
-      assert metadata_value(saved.plan_solver_metadata, :solver_version) == 3
-      assert metadata_value(saved.plan_solver_metadata, :structure_key) == "1x[60]"
+      assert saved.source_json == source_json
+      assert saved.current_execution_program_id
+      assert ExecutionPrograms.get!(saved.current_execution_program_id).target_reps == 60
     end
 
-    test "duplicate_plan/1 creates an independent copy with suffixed name and metadata" do
+    test "duplicate_plan/1 creates an independent copy with suffixed name and source" do
       user = user_fixture()
 
       plan =
         plan_fixture(user, %{
           "name" => "Original",
           "coach_suggestion_kind" => "recommended",
-          "coach_target_reps" => 100,
-          "plan_solver_metadata" => %{"source" => "coach_target"}
+          "coach_target_reps" => 100
         })
 
       {:ok, copy} = Workouts.duplicate_plan(plan)
@@ -282,13 +408,13 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert copy.id != plan.id
       assert copy.name == "Original (copy)"
       assert copy.user_id == user.id
-      assert copy.coach_suggestion_kind == "recommended"
-      assert copy.coach_target_reps == 100
-      assert copy.plan_solver_metadata == %{"source" => "coach_target"}
-      assert length(copy.blocks) == length(plan.blocks)
+      assert copy.source_json == plan.source_json
+      assert copy.current_execution_program_id
+      assert copy.coach_suggestion_kind == nil
+      assert copy.coach_target_reps == nil
     end
 
-    test "delete_plan/1 cascades blocks and sets" do
+    test "delete_plan/1 deletes the source plan" do
       user = user_fixture()
       plan = plan_fixture(user)
 
@@ -304,6 +430,14 @@ defmodule BurpeeTrainer.WorkoutsTest do
       plan =
         plan_fixture(user, %{
           "burpee_type" => "navy_seal",
+          "source_json" => %{
+            "burpee_type" => "navy_seal",
+            "target_reps" => 4,
+            "target_duration_sec" => 45,
+            "pacing_style" => "even",
+            "block_pattern" => [4],
+            "explicit_rests" => []
+          },
           "blocks" => [
             %{
               "position" => 1,

@@ -6,9 +6,10 @@ defmodule BurpeeTrainer.PlanEditor do
   alias BurpeeTrainer.BurpeeType
   alias BurpeeTrainer.PlanEditor.{Derived, Input, State}
   alias BurpeeTrainer.{Planner, PlanSolver}
+  alias BurpeeTrainer.PlanSolver.{ExplicitRest, PacePolicy}
   alias BurpeeTrainer.PlanSolver.Input, as: SolverInput
-  alias BurpeeTrainer.PlanSolver.PacePolicy
-  alias BurpeeTrainer.Workouts.{Block, PlanStep, Set, WorkoutPlan}
+  alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @type input :: Input.t()
 
@@ -33,10 +34,12 @@ defmodule BurpeeTrainer.PlanEditor do
       input: input,
       level: level,
       solver_solution: nil,
-      derived: derived(plan, input)
+      derived: %Derived{}
     }
 
-    {:ok, state}
+    with {:ok, state} <- regenerate(state) do
+      {:ok, %{state | plan: plan}}
+    end
   end
 
   @spec default_input() :: input()
@@ -150,13 +153,13 @@ defmodule BurpeeTrainer.PlanEditor do
     solver_input = %SolverInput{
       name: state.input.name,
       burpee_type: state.input.burpee_type,
-      target_duration_min: state.input.target_duration_min,
+      target_duration_sec: state.input.target_duration_min * 60,
       burpee_count_target: state.input.burpee_count_target,
       pacing_style: state.input.pacing_style,
       level: state.level,
-      reps_per_set: state.input.reps_per_set,
-      additional_rests: state.input.additional_rests,
-      sec_per_burpee_override:
+      max_unbroken_reps: if(state.input.pacing_style == :unbroken, do: state.input.reps_per_set),
+      explicit_rests: explicit_rests_from_editor(state.input.additional_rests),
+      sec_per_rep_override:
         state.input.sec_per_burpee_override || pace_bias_override(state.input),
       block_pattern: if(state.input.manual_structure?, do: state.input.block_pattern, else: nil),
       pace_bias: state.input.pace_bias,
@@ -166,7 +169,7 @@ defmodule BurpeeTrainer.PlanEditor do
     locked_blocks = locked_blocks_by_index(state.form_plan, state.locked_block_indexes)
     preserve_manual_plan? = preserve_manual_plan?(state)
 
-    case PlanSolver.solve(solver_input) do
+    case PlanSolver.generate_plan(solver_input) do
       {:ok, solution} ->
         form_plan =
           if preserve_manual_plan? do
@@ -486,6 +489,18 @@ defmodule BurpeeTrainer.PlanEditor do
   def input_from_plan(%WorkoutPlan{} = plan) do
     Input.from_plan(plan)
   end
+
+  defp explicit_rests_from_editor(rests) when is_list(rests) do
+    Enum.map(rests, fn rest ->
+      %ExplicitRest{
+        target_elapsed_sec: round(rest.target_min * 60),
+        duration_sec: round(rest.rest_sec),
+        tolerance_sec: 60
+      }
+    end)
+  end
+
+  defp explicit_rests_from_editor(_rests), do: []
 
   defp pace_bias_override(%Input{pace_bias: :balanced}), do: nil
 

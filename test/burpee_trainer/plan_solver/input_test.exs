@@ -3,17 +3,19 @@ defmodule BurpeeTrainer.PlanSolver.InputTest do
 
   alias BurpeeTrainer.PlanSolver.{ExplicitRest, Infeasible, Input}
 
-  test "normalizes existing editor fields into v3 canonical fields" do
+  test "accepts canonical fields without legacy normalization" do
     raw = %Input{
       name: "140 six-count",
       burpee_type: :six_count,
-      target_duration_min: 20,
+      target_duration_sec: 1_200,
       burpee_count_target: 140,
       pacing_style: :unbroken,
       level: :level_3,
-      reps_per_set: 8,
-      additional_rests: [%{target_min: 12, rest_sec: 60}],
-      sec_per_burpee_override: 5.5
+      max_unbroken_reps: 8,
+      explicit_rests: [
+        %ExplicitRest{target_elapsed_sec: 720, duration_sec: 60, tolerance_sec: 60}
+      ],
+      sec_per_rep_override: 5.5
     }
 
     assert {:ok, input} = Input.normalize_and_validate(raw)
