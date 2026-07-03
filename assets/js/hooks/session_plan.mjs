@@ -19,16 +19,10 @@ export function programBurpeeCount(programOrEvents) {
 export function setBarsFromProgram(program) {
 	return workoutTimelineFromProgram(program)
 		.filter((event) => eventKind(event) === "work")
-		.map((event, index) => {
-			const setIndex = index + 1;
-
-			return {
-				id: `work-${setIndex}`,
-				index: setIndex,
-				reps: event.reps || 0,
-				label: `Set ${setIndex}`,
-			};
-		});
+		.map((event, index) => ({
+			index: index + 1,
+			reps: event.reps || 0,
+		}));
 }
 
 export function warmupTimelineFromProgram(program) {
@@ -46,30 +40,22 @@ export function warmupTimelineFromProgram(program) {
 
 	return [
 		{
-			id: "warmup-work-001",
 			kind: "work",
 			reps: warmupReps,
 			sec_per_rep: secPerRep,
-			label: "Warmup Round 1",
 		},
 		{
-			id: "warmup-rest-001",
 			kind: "rest",
 			duration_sec: 120,
-			label: "Warmup Rest",
 		},
 		{
-			id: "warmup-work-002",
 			kind: "work",
 			reps: warmupReps,
 			sec_per_rep: secPerRep,
-			label: "Warmup Round 2",
 		},
 		{
-			id: "warmup-rest-002",
 			kind: "rest",
 			duration_sec: 180,
-			label: "Warmup Rest",
 		},
 	];
 }

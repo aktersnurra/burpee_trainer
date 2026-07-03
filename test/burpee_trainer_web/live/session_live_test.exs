@@ -265,6 +265,50 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert run.workout_session_id == session.id
   end
 
+  test "tracked target pace comes from execution program, not stale plan pace", %{
+    conn: conn,
+    user: user
+  } do
+    {:ok, plan} =
+      Workouts.create_plan(user, %{
+        "name" => "Pace Source",
+        "source_json" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 10,
+          "target_duration_sec" => 120,
+          "pacing_style" => "even",
+          "block_pattern" => [10],
+          "explicit_rests" => []
+        }
+      })
+
+    plan = Repo.update!(Ecto.Changeset.change(plan, sec_per_burpee: 99.0))
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(view, "choose_tracked", %{})
+
+    assert has_element?(view, "#pose-tracker[data-target-pace-sec='12.0']")
+
+    render_hook(view, "finish", %{
+      "reps" => 3,
+      "duration_ms" => 15_000,
+      "cadence_ms" => [5_000, 10_000, 15_000]
+    })
+
+    params = %{
+      "burpee_type" => "six_count",
+      "burpee_count_planned" => "10",
+      "duration_sec_planned" => "120",
+      "burpee_count_actual" => "3",
+      "duration_min" => "0.25"
+    }
+
+    {:error, {:live_redirect, %{to: "/stats"}}} = submit_completion(view, params)
+
+    [session] = Workouts.list_sessions(user)
+    assert session.target_pace_sec == 12.0
+  end
+
   test "idle state shows warmup prompt", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Grinder"})
     {:ok, _view, html} = live(conn, ~p"/session/#{plan.id}")

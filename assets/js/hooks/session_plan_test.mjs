@@ -31,10 +31,12 @@ const program = {
 };
 
 const warmup = warmupTimelineFromProgram(program);
-assert.deepEqual(
-	warmup.map((event) => event.kind),
-	["work", "rest", "work", "rest"],
-);
+assert.deepEqual(warmup, [
+	{ kind: "work", reps: 10, sec_per_rep: 6 },
+	{ kind: "rest", duration_sec: 120 },
+	{ kind: "work", reps: 10, sec_per_rep: 6 },
+	{ kind: "rest", duration_sec: 180 },
+]);
 assert.equal(programBurpeeCount(warmup), 20);
 assert.equal(eventDurationSec(warmup[0]), 60);
 assert.equal(eventDurationSec(warmup[2]), 60);
@@ -45,8 +47,8 @@ assert.equal(programBurpeeCount(workout), 17);
 assert.equal(workout[0].reps, 10);
 assert.equal(workout[2].reps, 7);
 assert.deepEqual(setBarsFromProgram(program), [
-	{ id: "work-1", index: 1, reps: 10, label: "Set 1" },
-	{ id: "work-2", index: 2, reps: 7, label: "Set 2" },
+	{ index: 1, reps: 10 },
+	{ index: 2, reps: 7 },
 ]);
 
 const pureKindProgram = {

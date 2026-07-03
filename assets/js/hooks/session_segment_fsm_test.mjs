@@ -10,26 +10,22 @@ const work = {
 	kind: "work",
 	reps: 5,
 	sec_per_rep: 2,
-	label: "Block 1",
 };
 
 const rest = {
 	kind: "rest",
 	duration_sec: 5,
-	label: "Rest",
 };
 
 const warmupWork = {
 	kind: "work",
 	reps: 5,
 	sec_per_rep: 2,
-	label: "Warmup",
 };
 
 const warmupRest = {
 	kind: "rest",
 	duration_sec: 5,
-	label: "Warmup rest",
 };
 
 assert.deepEqual(currentFrame([work, rest], 2), {
@@ -379,12 +375,10 @@ const programWork = {
 	kind: "work",
 	reps: 5,
 	sec_per_rep: 2,
-	label: "Set 1",
 };
 const programRest = {
 	kind: "rest",
 	duration_sec: 5,
-	label: "Rest",
 };
 
 result = segmentTransition(initialSegmentState(), {

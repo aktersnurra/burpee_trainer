@@ -28,8 +28,8 @@ const program = {
 assert.deepEqual(workoutTimelineFromProgram(program), program.events);
 assert.equal(programBurpeeCount(program), 20);
 assert.deepEqual(setBarsFromProgram(program), [
-	{ id: "work-1", index: 1, reps: 10, label: "Set 1" },
-	{ id: "work-2", index: 2, reps: 10, label: "Set 2" },
+	{ index: 1, reps: 10 },
+	{ index: 2, reps: 10 },
 ]);
 
 console.log("session_program tests passed");

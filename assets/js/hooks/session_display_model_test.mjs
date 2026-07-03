@@ -6,9 +6,9 @@ import {
 } from "./session_display_model.mjs";
 
 const workoutTimeline = [
-	{ kind: "work", reps: 5, sec_per_rep: 2, label: "Block 1" },
-	{ kind: "rest", duration_sec: 5, label: "Rest" },
-	{ kind: "work", reps: 5, sec_per_rep: 2, label: "Block 1" },
+	{ kind: "work", reps: 5, sec_per_rep: 2 },
+	{ kind: "rest", duration_sec: 5 },
+	{ kind: "work", reps: 5, sec_per_rep: 2 },
 ];
 
 const warmupFrame = {

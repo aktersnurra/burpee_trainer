@@ -34,6 +34,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           socket
           |> assign(:plan, plan)
           |> assign(:execution_program, execution_program)
+          |> assign(:target_pace_sec, program_target_pace_sec(execution_program))
           |> assign(:summary, summary)
           |> assign(:phase, :idle)
           |> assign(:mood, nil)
@@ -224,7 +225,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           plan,
           Map.merge(session_params, %{
             "cadence_ms" => tracked.cadence_ms,
-            "target_pace_sec" => plan.sec_per_burpee
+            "target_pace_sec" => socket.assigns.target_pace_sec
           })
         )
       else
@@ -323,6 +324,28 @@ defmodule BurpeeTrainerWeb.SessionLive do
     program_json
     |> map_get(:events, [])
     |> Enum.map(&program_event_for_runner/1)
+  end
+
+  defp program_target_pace_sec(%ExecutionProgram{} = program) do
+    work_totals =
+      program.program_json
+      |> map_get(:events, [])
+      |> Enum.reduce({0, 0.0}, fn event, {reps_total, sec_total} ->
+        case map_get(event, :kind) do
+          "work" ->
+            reps = map_get(event, :reps)
+            sec_per_rep = map_get(event, :sec_per_rep_us) / 1_000_000
+            {reps_total + reps, sec_total + reps * sec_per_rep}
+
+          _other ->
+            {reps_total, sec_total}
+        end
+      end)
+
+    case work_totals do
+      {0, _sec_total} -> nil
+      {reps_total, sec_total} -> Float.round(sec_total / reps_total, 3)
+    end
   end
 
   defp program_event_for_runner(event) do
@@ -486,7 +509,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 id="pose-tracker"
                 phx-hook="PoseTracker"
                 phx-update="ignore"
-                data-target-pace-sec={@plan.sec_per_burpee}
+                data-target-pace-sec={@target_pace_sec}
               />
               <.camera_setup_panel
                 :if={@capture_setup_state in [:arming, :ready]}
