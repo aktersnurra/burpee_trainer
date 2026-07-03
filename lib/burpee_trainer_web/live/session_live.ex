@@ -16,6 +16,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
   """
   use BurpeeTrainerWeb, :live_view
 
+  require Logger
+
   alias BurpeeTrainer.{Duration, Mood, Workouts}
   alias BurpeeTrainer.Workouts.{ExecutionProgram, WorkoutSession}
   alias BurpeeTrainerWeb.Fmt
@@ -93,6 +95,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
      socket
      |> assign(:capture_setup_state, setup_state)
      |> assign(:tracking_state, :ready)}
+  end
+
+  def handle_event("camera_preview_diagnostics", params, socket) do
+    Logger.info(
+      "Camera preview diagnostics user_id=#{socket.assigns.current_user.id} #{inspect(params)}"
+    )
+
+    {:noreply, socket}
   end
 
   def handle_event("camera_setup_started", _, socket) do
@@ -510,7 +520,30 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 phx-hook="PoseTracker"
                 phx-update="ignore"
                 data-target-pace-sec={@target_pace_sec}
-              />
+                class={[
+                  "pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--session-bg)] p-6 transition-opacity duration-200",
+                  @capture_setup_state in [:arming, :ready] && "z-10 opacity-100",
+                  @capture_setup_state == :started && "invisible -z-10 opacity-0"
+                ]}
+              >
+                <div
+                  id="pose-tracker-preview-frame"
+                  class="relative aspect-[3/4] w-full max-w-[430px] overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
+                >
+                  <video
+                    id="pose-tracker-preview"
+                    class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
+                    muted
+                    playsinline
+                  >
+                  </video>
+                  <canvas
+                    id="pose-tracker-canvas"
+                    class="absolute inset-0 h-full w-full"
+                  >
+                  </canvas>
+                </div>
+              </div>
               <.camera_setup_panel
                 :if={@capture_setup_state in [:arming, :ready]}
                 setup_state={@capture_setup_state}
@@ -535,9 +568,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
     <div
       id="camera-setup-panel"
       data-setup-state={@setup_state}
-      class="pointer-events-none absolute inset-x-0 top-8 z-20 mx-auto w-full max-w-[430px] px-5 text-[var(--session-ink)]"
+      class="pointer-events-auto absolute inset-0 z-20 flex flex-col items-center justify-between px-5 py-8 text-[var(--session-ink)]"
     >
-      <.qs_surface class="bg-[var(--session-surface)]/80 px-5 py-4 shadow-[0_18px_45px_rgba(32,32,29,0.12)] backdrop-blur-sm">
+      <.qs_surface class="w-full max-w-[430px] bg-[var(--session-surface)]/80 px-5 py-4 shadow-[0_18px_45px_rgba(32,32,29,0.12)] backdrop-blur-sm">
         <p class="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
           Camera setup
         </p>
@@ -552,6 +585,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
           Make sure your full body is visible. We’ll save pose traces for warmup and main workout.
         </p>
       </.qs_surface>
+
+      <button
+        id="camera-setup-start-btn"
+        type="button"
+        class="pointer-events-auto rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-sm font-semibold text-[var(--session-bg)] shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition active:scale-[0.98]"
+      >
+        Start tracked session
+      </button>
     </div>
     """
   end

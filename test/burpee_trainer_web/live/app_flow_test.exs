@@ -117,6 +117,22 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
 
     render_hook(session, "choose_tracked", %{})
+
+    assert has_element?(
+             session,
+             "#pose-tracker[phx-hook='PoseTracker'][phx-update='ignore'] #pose-tracker-preview[muted][playsinline]"
+           )
+
+    assert has_element?(
+             session,
+             "#pose-tracker-preview-frame #pose-tracker-canvas"
+           )
+
+    assert has_element?(
+             session,
+             "#camera-setup-panel.pointer-events-auto #camera-setup-start-btn"
+           )
+
     render_hook(session, "tracker_ready", %{})
 
     render_hook(session, "pose_capture_chunk", %{
