@@ -137,7 +137,6 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
       name: "140",
       burpee_type: :six_count,
       target_duration_sec: 1_200,
-      target_duration_min: 20,
       burpee_count_target: 140,
       pacing_style: :unbroken,
       max_unbroken_reps: 8,

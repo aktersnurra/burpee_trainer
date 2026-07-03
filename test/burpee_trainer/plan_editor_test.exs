@@ -663,7 +663,7 @@ defmodule BurpeeTrainer.PlanEditorTest do
       [block | _] = Enum.sort_by(state.form_plan.blocks, & &1.position)
       block = %{block | position: 1}
 
-      step = %BurpeeTrainer.Workouts.PlanStep{
+      step = %BurpeeTrainer.PlanEditor.PlanStep{
         position: 1,
         kind: :block_run,
         block_position: 1,
