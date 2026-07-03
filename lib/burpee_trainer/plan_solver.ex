@@ -2,9 +2,10 @@ defmodule BurpeeTrainer.PlanSolver do
   @moduledoc """
   Public entry point for session plan generation.
 
-  Plan Solver v3 normalizes editor input, solves the selected pacing style, then
-  validates canonical execution and persisted plan totals before returning a
-  `%PlanSolver.Solution{}`.
+  Plan Solver v3 normalizes input, solves the selected pacing style, then
+  validates canonical execution before returning a clean `%PlanSolver.Solution{}`.
+  Call `generate_plan/1` when a caller needs the derived `%WorkoutPlan{}`
+  projection for editor/storage compatibility.
   """
 
   alias BurpeeTrainer.{Levels, PaceModel}
@@ -13,6 +14,7 @@ defmodule BurpeeTrainer.PlanSolver do
     Apply,
     EvenSolver,
     Execution,
+    GeneratedPlan,
     Infeasible,
     Input,
     PacePolicy,
@@ -32,9 +34,9 @@ defmodule BurpeeTrainer.PlanSolver do
   @spec default_reps_per_set(atom) :: pos_integer
   def default_reps_per_set(type), do: Map.get(@default_reps_per_set, type, 10)
 
-  @doc "Compatibility lower bound for legacy callers."
+  @doc "Fastest effective pace for an input after user override and level bounds."
   @spec effective_ceiling(Input.t()) :: float
-  def effective_ceiling(%Input{sec_per_burpee_override: override}) when is_float(override),
+  def effective_ceiling(%Input{sec_per_rep_override: override}) when is_float(override),
     do: override
 
   def effective_ceiling(%Input{} = input) do
@@ -44,20 +46,34 @@ defmodule BurpeeTrainer.PlanSolver do
     min(user_ceiling, workout_ceiling)
   end
 
-  @doc "Generate a `%Solution{}` from a `%PlanSolver.Input{}`."
+  @doc "Solve a `%PlanSolver.Input{}` into canonical prescription and execution."
   @spec solve(Input.t()) :: {:ok, Solution.t()} | {:error, [String.t()]}
   def solve(%Input{} = raw_input) do
-    with :ok <- validate_legacy_block_pattern(raw_input),
+    with {:ok, {_input, solution}} <- solve_core(raw_input) do
+      {:ok, solution}
+    end
+  end
+
+  @doc "Generate the derived `%WorkoutPlan{}` projection from a solved input."
+  @spec generate_plan(Input.t()) :: {:ok, GeneratedPlan.t()} | {:error, [String.t()]}
+  def generate_plan(%Input{} = raw_input) do
+    with {:ok, {input, solution}} <- solve_core(raw_input),
+         {:ok, plan} <- Apply.from_execution(input, solution.execution, solution.prescription),
+         :ok <- Validator.validate_persisted_plan(input, solution.execution, plan) do
+      {:ok, GeneratedPlan.from(solution, plan)}
+    end
+  end
+
+  defp solve_core(%Input{} = raw_input) do
+    with :ok <- validate_block_pattern(raw_input),
          {:ok, input} <- Input.normalize_and_validate(raw_input),
          policy = PacePolicy.for(input.burpee_type),
          :ok <- validate_pace_override(input, policy),
          {:ok, prescription} <- solve_style(input, policy),
          execution = Execution.build(prescription),
          prescription = %{prescription | execution: execution},
-         :ok <- Validator.validate_execution(input, prescription, execution),
-         {:ok, plan} <- Apply.from_execution(input, execution, prescription),
-         :ok <- Validator.validate_persisted_plan(input, execution, plan) do
-      {:ok, Solution.from(prescription, execution, plan)}
+         :ok <- Validator.validate_execution(input, prescription, execution) do
+      {:ok, {input, Solution.from(prescription, execution)}}
     else
       {:error, %Infeasible{} = error} -> {:error, infeasible_messages(error)}
       {:error, messages} when is_list(messages) -> {:error, messages}
@@ -70,9 +86,9 @@ defmodule BurpeeTrainer.PlanSolver do
   defp solve_style(%Input{pacing_style: :unbroken} = input, policy),
     do: UnbrokenSolver.solve(input, policy)
 
-  defp validate_legacy_block_pattern(%Input{block_pattern: nil}), do: :ok
+  defp validate_block_pattern(%Input{block_pattern: nil}), do: :ok
 
-  defp validate_legacy_block_pattern(%Input{block_pattern: pattern})
+  defp validate_block_pattern(%Input{block_pattern: pattern})
        when is_list(pattern) and pattern != [] do
     if Enum.all?(pattern, &(is_integer(&1) and &1 > 0)) do
       :ok
@@ -81,7 +97,7 @@ defmodule BurpeeTrainer.PlanSolver do
     end
   end
 
-  defp validate_legacy_block_pattern(%Input{block_pattern: _pattern}),
+  defp validate_block_pattern(%Input{block_pattern: _pattern}),
     do: {:error, ["block pattern must contain 1 to 12 positive rep counts"]}
 
   defp validate_pace_override(%Input{sec_per_rep_override: override}, _policy)

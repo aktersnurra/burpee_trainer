@@ -4,7 +4,6 @@ defmodule BurpeeTrainer.PlanEditor.State do
   """
 
   alias BurpeeTrainer.PlanEditor.{Derived, Input}
-  alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
   defstruct [
@@ -28,7 +27,7 @@ defmodule BurpeeTrainer.PlanEditor.State do
           input: Input.t() | nil,
           level: atom() | nil,
           solver_error: String.t() | nil,
-          solver_solution: PlanSolver.Solution.t() | nil,
+          solver_solution: BurpeeTrainer.PlanSolver.GeneratedPlan.t() | nil,
           derived: Derived.t() | nil,
           form_plan: WorkoutPlan.t() | nil,
           manual_edit?: boolean(),

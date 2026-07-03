@@ -746,14 +746,14 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
       input = %BurpeeTrainer.PlanSolver.Input{
         name: "Catch-up Six-count 1",
         burpee_type: :six_count,
-        target_duration_min: 20,
+        target_duration_sec: 1_200,
         burpee_count_target: 120,
         pacing_style: :even,
         level: :level_1c,
         block_pattern: [12]
       }
 
-      {:ok, solution} = BurpeeTrainer.PlanSolver.solve(input)
+      {:ok, solution} = BurpeeTrainer.PlanSolver.generate_plan(input)
 
       plan =
         plan_fixture(user, %{

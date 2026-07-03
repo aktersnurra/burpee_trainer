@@ -20,6 +20,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   alias BurpeeTrainer.{PlanEditor, PlanPresentation, PlanSolver, PrescriptionGraph}
   alias BurpeeTrainer.PlanCompiler.CompileError
   alias BurpeeTrainer.PlanEditor.Derived
+  alias BurpeeTrainer.PlanSolver.ExplicitRest
   alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
   alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
   alias BurpeeTrainer.Workouts.WorkoutPlan
@@ -2748,23 +2749,40 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
 
   defp timeline_rest_edge_available?(plan_input, level, row, next_row) do
     target_min = timeline_edge_target_min(row, next_row)
-    rest = %{target_min: target_min, rest_sec: 30}
+
+    explicit_rest = %ExplicitRest{
+      target_elapsed_sec: round(target_min * 60),
+      duration_sec: 30,
+      tolerance_sec: 60
+    }
 
     solver_input = %PlanSolverInput{
       name: plan_input.name,
       burpee_type: plan_input.burpee_type,
-      target_duration_min: plan_input.target_duration_min,
+      target_duration_sec: plan_input.target_duration_min * 60,
       burpee_count_target: plan_input.burpee_count_target,
       pacing_style: plan_input.pacing_style,
       level: level,
-      reps_per_set: plan_input.reps_per_set,
-      additional_rests: plan_input.additional_rests ++ [rest],
-      sec_per_burpee_override: plan_input.sec_per_burpee_override,
+      max_unbroken_reps: if(plan_input.pacing_style == :unbroken, do: plan_input.reps_per_set),
+      explicit_rests: explicit_rests_from_editor(plan_input.additional_rests) ++ [explicit_rest],
+      sec_per_rep_override: plan_input.sec_per_burpee_override,
       block_pattern: plan_input.block_pattern
     }
 
-    match?({:ok, _solution}, PlanSolver.solve(solver_input))
+    match?({:ok, _solution}, PlanSolver.generate_plan(solver_input))
   end
+
+  defp explicit_rests_from_editor(rests) when is_list(rests) do
+    Enum.map(rests, fn rest ->
+      %ExplicitRest{
+        target_elapsed_sec: round(rest.target_min * 60),
+        duration_sec: round(rest.rest_sec),
+        tolerance_sec: 60
+      }
+    end)
+  end
+
+  defp explicit_rests_from_editor(_rests), do: []
 
   defp timeline_edge_target_min(row, next_row) do
     next_sec = if next_row, do: next_row.time_sec, else: row.time_sec + 60

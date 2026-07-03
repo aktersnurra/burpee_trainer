@@ -2,22 +2,68 @@ defmodule BurpeeTrainer.PlanSolverTest do
   use ExUnit.Case, async: false
 
   alias BurpeeTrainer.PlanSolver
-  alias BurpeeTrainer.PlanSolver.{BlockSpec, Execution, Input, Solution, StructureSearch}
+
+  alias BurpeeTrainer.PlanSolver.{
+    BlockSpec,
+    Execution,
+    ExplicitRest,
+    GeneratedPlan,
+    Input,
+    StructureSearch
+  }
 
   defp input(overrides) do
-    Map.merge(
-      %{
-        name: "t",
-        burpee_type: :six_count,
-        target_duration_min: 10,
-        burpee_count_target: 20,
-        pacing_style: :even,
-        level: :level_1c,
-        additional_rests: []
-      },
-      overrides
+    attrs =
+      Map.merge(
+        %{
+          name: "t",
+          burpee_type: :six_count,
+          target_duration_min: 10,
+          burpee_count_target: 20,
+          pacing_style: :even,
+          level: :level_1c,
+          additional_rests: []
+        },
+        overrides
+      )
+
+    struct!(Input, canonical_attrs(attrs))
+  end
+
+  defp canonical_attrs(attrs) do
+    target_duration_sec =
+      Map.get(attrs, :target_duration_sec) || round(Map.fetch!(attrs, :target_duration_min) * 60)
+
+    attrs
+    |> Map.drop([
+      :target_duration_min,
+      :reps_per_set,
+      :additional_rests,
+      :sec_per_burpee_override
+    ])
+    |> Map.put(:target_duration_sec, target_duration_sec)
+    |> Map.put(:explicit_rests, explicit_rests(Map.get(attrs, :additional_rests, [])))
+    |> maybe_put(
+      :max_unbroken_reps,
+      Map.get(attrs, :max_unbroken_reps) || Map.get(attrs, :reps_per_set)
     )
-    |> then(fn attrs -> struct!(Input, attrs) end)
+    |> maybe_put(
+      :sec_per_rep_override,
+      Map.get(attrs, :sec_per_rep_override) || Map.get(attrs, :sec_per_burpee_override)
+    )
+  end
+
+  defp maybe_put(attrs, _key, nil), do: attrs
+  defp maybe_put(attrs, key, value), do: Map.put(attrs, key, value)
+
+  defp explicit_rests(rests) when is_list(rests) do
+    Enum.map(rests, fn rest ->
+      %ExplicitRest{
+        target_elapsed_sec: round(rest.target_min * 60),
+        duration_sec: round(rest.rest_sec),
+        tolerance_sec: 60
+      }
+    end)
   end
 
   test "sustainable_ceiling/2 delegates to PaceModel" do
@@ -34,7 +80,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
   test "rejects non-positive preferred block pattern entries at compatibility boundary" do
     assert {:error, [msg]} =
-             PlanSolver.solve(
+             PlanSolver.generate_plan(
                input(%{pacing_style: :even, burpee_count_target: 70, block_pattern: [4, 0]})
              )
 
@@ -42,8 +88,8 @@ defmodule BurpeeTrainer.PlanSolverTest do
   end
 
   test "even solve preserves even style and exact persisted totals" do
-    assert {:ok, %Solution{} = sol} =
-             PlanSolver.solve(
+    assert {:ok, %GeneratedPlan{} = sol} =
+             PlanSolver.generate_plan(
                input(%{
                  pacing_style: :even,
                  burpee_count_target: 140,
@@ -73,7 +119,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         additional_rests: [%{target_min: 5, rest_sec: 60}]
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
     assert Enum.any?(sol.execution, &match?(%Execution.RestEvent{source: {:explicit, 5}}, &1))
     assert Enum.any?(sol.plan.steps, &(&1.kind == :rest and &1.rest_sec == 60))
     assert_solution_matches_execution(inp, sol)
@@ -89,7 +135,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         additional_rests: [%{target_min: 10, rest_sec: 60}]
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
 
     set_events = Enum.filter(sol.execution, &match?(%Execution.SetEvent{}, &1))
     assert Enum.map(set_events, & &1.burpee_count) == List.duplicate(10, 10)
@@ -108,7 +154,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
   test "even one-rep target with leftover additional rest is infeasible" do
     assert {:error, [msg]} =
-             PlanSolver.solve(
+             PlanSolver.generate_plan(
                input(%{
                  pacing_style: :even,
                  burpee_count_target: 1,
@@ -122,7 +168,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
   test "even pace override pins movement pace while preserving total duration" do
     assert {:ok, sol} =
-             PlanSolver.solve(
+             PlanSolver.generate_plan(
                input(%{
                  pacing_style: :even,
                  burpee_count_target: 60,
@@ -149,7 +195,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         level: :level_3
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
 
     assert sol.metadata.solver_version == 3
     assert sol.metadata.strategy in [:generated_grammar, :balanced_fallback]
@@ -172,7 +218,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         block_pattern: [5]
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
     assert sol.set_pattern == List.duplicate(5, 24)
     assert sol.metadata.strategy == :manual_structure
     assert_solution_matches_execution(inp, sol)
@@ -189,7 +235,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         sec_per_burpee_override: 5.0
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
     assert_in_delta sol.sec_per_burpee, 5.0, 1.0e-6
     assert_solution_matches_execution(inp, sol)
   end
@@ -211,7 +257,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
       explicit_rests: []
     }
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
     assert StructureSearch.encode(sol.prescription.blocks) == "5x[8]|5x[7]|5x[7,6]"
     assert sol.metadata.strategy == :manual_structure
     assert_solution_matches_execution(inp, sol)
@@ -219,7 +265,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
   test "hard pace bounds are not silently relaxed" do
     assert {:error, [msg]} =
-             PlanSolver.solve(
+             PlanSolver.generate_plan(
                input(%{
                  pacing_style: :unbroken,
                  reps_per_set: 8,
@@ -242,8 +288,8 @@ defmodule BurpeeTrainer.PlanSolverTest do
         target_duration_min: 10
       })
 
-    assert {:ok, first} = PlanSolver.solve(inp)
-    assert {:ok, second} = PlanSolver.solve(inp)
+    assert {:ok, first} = PlanSolver.generate_plan(inp)
+    assert {:ok, second} = PlanSolver.generate_plan(inp)
 
     assert first.sec_per_burpee == second.sec_per_burpee
     assert first.set_pattern == second.set_pattern
@@ -262,7 +308,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         level: :level_3
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
     assert match?(%Execution.SetEvent{}, List.last(sol.execution))
   end
 
@@ -275,7 +321,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         target_duration_min: 10
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
 
     refute Enum.any?(sol.execution, fn
              %Execution.RestEvent{source: {:auto_reset, _kind}} -> true
@@ -294,7 +340,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
         target_duration_min: 20
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
     assert match?(%Execution.SetEvent{}, List.last(sol.execution))
     assert length(sol.rest_pattern_sec) == max(length(sol.set_pattern) - 1, 0)
   end
@@ -317,7 +363,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
           reps_per_set: unquote(max_set)
         })
 
-      assert {:ok, sol} = PlanSolver.solve(inp)
+      assert {:ok, sol} = PlanSolver.generate_plan(inp)
       assert Enum.sum(sol.set_pattern) == unquote(reps)
       assert Enum.all?(sol.set_pattern, &(&1 <= unquote(max_set)))
       assert Execution.burpee_count(sol.execution) == unquote(reps)
@@ -337,14 +383,14 @@ defmodule BurpeeTrainer.PlanSolverTest do
         additional_rests: [%{target_min: 10, rest_sec: 45}]
       })
 
-    assert {:ok, sol} = PlanSolver.solve(inp)
+    assert {:ok, sol} = PlanSolver.generate_plan(inp)
 
     assert Enum.any?(sol.plan.steps, &(&1.kind == :rest and &1.rest_sec == 45))
     assert_solution_matches_execution(inp, sol)
   end
 
-  defp assert_solution_matches_execution(%Input{} = input, %Solution{} = sol) do
-    expected_sec = input.target_duration_sec || input.target_duration_min * 60
+  defp assert_solution_matches_execution(%Input{} = input, %GeneratedPlan{} = sol) do
+    expected_sec = input.target_duration_sec
     summary = BurpeeTrainer.Planner.summary(sol.plan)
 
     assert Execution.burpee_count(sol.execution) == input.burpee_count_target

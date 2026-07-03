@@ -14,7 +14,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     %Input{
       name: "t",
       burpee_type: :six_count,
-      target_duration_min: dur_min,
+      target_duration_sec: dur_min * 60,
       burpee_count_target: n,
       pacing_style: :even,
       level: :level_1c
@@ -25,11 +25,11 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
     %Input{
       name: "t",
       burpee_type: :six_count,
-      target_duration_min: dur_min,
+      target_duration_sec: dur_min * 60,
       burpee_count_target: n,
       pacing_style: :unbroken,
       level: :level_1c,
-      reps_per_set: rps
+      max_unbroken_reps: rps
     }
   end
 
@@ -41,7 +41,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
   test ":even solved six-count catch-up persists exact v3 totals" do
     input = %{even_input(120, 20) | block_pattern: [12]}
 
-    {:ok, solution} = BurpeeTrainer.PlanSolver.solve(input)
+    {:ok, solution} = BurpeeTrainer.PlanSolver.generate_plan(input)
 
     [block] = solution.plan.blocks
     assert block.repeat_count == 10
@@ -59,16 +59,20 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
       name: "Pattern rest",
       burpee_type: :navy_seal,
       level: :level_1a,
-      target_duration_min: 20,
+      target_duration_sec: 1_200,
       burpee_count_target: 70,
       pacing_style: :even,
-      reps_per_set: nil,
       block_pattern: [4, 3],
-      additional_rests: [%{target_min: 12, rest_sec: 20}],
-      sec_per_burpee_override: nil
+      explicit_rests: [
+        %BurpeeTrainer.PlanSolver.ExplicitRest{
+          target_elapsed_sec: 12 * 60,
+          duration_sec: 20,
+          tolerance_sec: 60
+        }
+      ]
     }
 
-    {:ok, sol} = BurpeeTrainer.PlanSolver.solve(input)
+    {:ok, sol} = BurpeeTrainer.PlanSolver.generate_plan(input)
 
     assert [first_run, rest_step, second_run] = sol.plan.steps
     assert first_run.kind == :block_run
@@ -85,7 +89,7 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
   test ":unbroken does not count recovery after the final repeated set" do
     input = unbroken_input(144, 20, 8)
 
-    {:ok, solution} = BurpeeTrainer.PlanSolver.solve(input)
+    {:ok, solution} = BurpeeTrainer.PlanSolver.generate_plan(input)
 
     assert solution.set_pattern == List.duplicate(8, 18)
     assert round(BurpeeTrainer.Planner.summary(solution.plan).duration_sec_total) == 1200
@@ -112,7 +116,6 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
       name: "140",
       burpee_type: :six_count,
       target_duration_sec: 1_200,
-      target_duration_min: 20,
       burpee_count_target: 140,
       pacing_style: :unbroken,
       max_unbroken_reps: 8,

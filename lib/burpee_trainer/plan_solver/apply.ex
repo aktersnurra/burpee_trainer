@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.PlanSolver.Apply do
   @moduledoc """
-  Derives the legacy `%WorkoutPlan{}` projection from canonical solver execution.
+  Derives the editor/storage `%WorkoutPlan{}` projection from canonical solver execution.
 
   The public entrypoint is intentionally limited to canonical execution events.
   Older direct builders from set/rest patterns were removed so runtime callers
@@ -79,9 +79,6 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
 
   defp target_duration_sec(%Input{target_duration_sec: seconds}) when is_integer(seconds),
     do: seconds
-
-  defp target_duration_sec(%Input{target_duration_min: minutes}) when is_number(minutes),
-    do: minutes * 60.0
 
   defp integer_rest_pattern_with_total([], _target_total), do: []
 
@@ -259,7 +256,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       burpee_count_target: input.burpee_count_target,
       sec_per_burpee: round_pace(p),
       pacing_style: input.pacing_style,
-      additional_rests: encode_rests(input.additional_rests || []),
+      additional_rests: encode_explicit_rests(input.explicit_rests || []),
       fatigue_factor: 0.0,
       blocks: blocks,
       steps: steps
@@ -274,7 +271,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       burpee_count_target: input.burpee_count_target,
       sec_per_burpee: round_pace(p),
       pacing_style: input.pacing_style,
-      additional_rests: encode_rests(input.additional_rests || []),
+      additional_rests: encode_explicit_rests(input.explicit_rests || []),
       fatigue_factor: 0.0,
       blocks: blocks,
       steps: steps,
@@ -290,13 +287,8 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     }
   end
 
-  defp duration_min(%Input{target_duration_min: minutes}) when is_integer(minutes), do: minutes
-
   defp duration_min(%Input{target_duration_sec: seconds}) when is_integer(seconds),
     do: round(seconds / 60)
-
-  defp duration_min(%Input{target_duration_min: minutes}) when is_number(minutes),
-    do: round(minutes)
 
   defp round_pace(value) when is_float(value), do: Float.round(value, 1)
   defp round_pace(value), do: value
@@ -310,12 +302,13 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
     }
   end
 
-  defp encode_rests([]), do: "[]"
+  defp encode_explicit_rests([]), do: "[]"
 
-  defp encode_rests(rests) do
+  defp encode_explicit_rests(rests) do
     items =
-      Enum.map(rests, fn %{rest_sec: r, target_min: t} ->
-        "{\"rest_sec\":#{r},\"target_min\":#{t}}"
+      Enum.map(rests, fn rest ->
+        target_min = rest.target_elapsed_sec / 60
+        "{\"rest_sec\":#{rest.duration_sec},\"target_min\":#{target_min}}"
       end)
 
     "[" <> Enum.join(items, ",") <> "]"

@@ -18,6 +18,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   alias BurpeeTrainer.CatchUpPlanner.{Plan, SelectedSession}
   alias BurpeeTrainer.CatchUpPlanner.Input, as: CatchUpInput
   alias BurpeeTrainer.CoachTargetPlanner.Input, as: CoachTargetInput
+  alias BurpeeTrainer.PlanSolver.ExplicitRest
   alias BurpeeTrainerWeb.{Layouts, LogFormComponent}
 
   @goal_min 80.0
@@ -309,14 +310,14 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     plan_input = %PlanSolver.Input{
       name: "Coach #{catch_up_type_label(suggestion.burpee_type)}",
       burpee_type: suggestion.burpee_type,
-      target_duration_min: suggestion.target_duration_min,
+      target_duration_sec: suggestion.target_duration_min * 60,
       burpee_count_target: suggestion.burpee_count_target,
       pacing_style: suggestion.plan_input_defaults.pacing_style,
-      additional_rests: suggestion.plan_input_defaults.additional_rests,
+      explicit_rests: explicit_rests_from_plan_defaults(suggestion.plan_input_defaults),
       level: level
     }
 
-    with {:ok, solution} <- PlanSolver.solve(plan_input),
+    with {:ok, solution} <- PlanSolver.generate_plan(plan_input),
          attrs =
            generated_plan_attrs(solution.plan,
              coach_suggestion_kind: Atom.to_string(suggestion.kind),
@@ -333,7 +334,8 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     catch_up_plan.selected_sessions
     |> Enum.with_index(1)
     |> Enum.reduce_while({:ok, []}, fn {session, index}, {:ok, plans} ->
-      with {:ok, solution} <- PlanSolver.solve(named_plan_input(session.plan_input, index)),
+      with {:ok, solution} <-
+             PlanSolver.generate_plan(named_plan_input(session.plan_input, index)),
            attrs =
              generated_plan_attrs(solution.plan,
                coach_suggestion_kind: Atom.to_string(session.suggestion_kind),
@@ -355,6 +357,18 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     type_label = catch_up_type_label(plan_input.burpee_type)
     %{plan_input | name: "Catch-up #{type_label} #{index}"}
   end
+
+  defp explicit_rests_from_plan_defaults(%{additional_rests: rests}) when is_list(rests) do
+    Enum.map(rests, fn rest ->
+      %ExplicitRest{
+        target_elapsed_sec: round(rest.target_min * 60),
+        duration_sec: round(rest.rest_sec),
+        tolerance_sec: 60
+      }
+    end)
+  end
+
+  defp explicit_rests_from_plan_defaults(_defaults), do: []
 
   defp generated_plan_attrs(plan, opts) do
     plan

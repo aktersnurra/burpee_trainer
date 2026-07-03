@@ -363,10 +363,10 @@ defmodule BurpeeTrainer.WorkoutsTest do
       user = user_fixture()
 
       assert {:ok, solution} =
-               BurpeeTrainer.PlanSolver.solve(%BurpeeTrainer.PlanSolver.Input{
+               BurpeeTrainer.PlanSolver.generate_plan(%BurpeeTrainer.PlanSolver.Input{
                  name: "Generated",
                  burpee_type: :six_count,
-                 target_duration_min: 10,
+                 target_duration_sec: 600,
                  burpee_count_target: 60,
                  pacing_style: :even,
                  level: :level_1c
