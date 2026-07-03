@@ -7,6 +7,7 @@ import {
 	requestPreferredCameraStream,
 	resolvePreviewVideo,
 } from "./pose_tracker_impl.mjs";
+import * as PoseTrackerDiagnostics from "./pose_tracker_impl.mjs";
 
 class FakeElement {
 	constructor(tagName = "div") {
@@ -193,7 +194,7 @@ function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 }
 
-test("tracked camera setup renders a visible mobile preview video", () => {
+test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 
 	ctx.dispatchFlow({
@@ -203,25 +204,24 @@ test("tracked camera setup renders a visible mobile preview video", () => {
 	});
 	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
 
-	const preview = ctx.el.querySelector("#pose-tracker-preview");
-	assert.ok(preview);
-	assert.equal(preview.tagName, "video");
-	assert.equal(preview.muted, true);
-	assert.equal(preview.playsInline, true);
-	assert.equal(preview.autoplay, true);
+	assert.equal(ctx.el.querySelector("#pose-tracker-preview"), null);
+	assert.match(ctx.el.querySelector("#start-overlay").className, /\bhidden\b/);
 });
 
-test("pose tracker binds camera stream to the visible setup preview", () => {
+test("pose tracker binds only to the preview rendered inside its hook", () => {
 	const root = new FakeElement("div");
 	root.id = "burpee-session";
 	globalThis.document.root = root;
 
-	const preview = new FakeElement("video");
-	preview.id = "pose-tracker-preview";
-	root.append(preview);
+	const stalePreview = new FakeElement("video");
+	stalePreview.id = "pose-tracker-preview";
+	root.append(stalePreview);
 
 	const tracker = new FakeElement("div");
 	tracker.id = "pose-tracker";
+	const preview = new FakeElement("video");
+	preview.id = "pose-tracker-preview";
+	tracker.append(preview);
 	root.append(tracker);
 
 	assert.equal(resolvePreviewVideo({ el: tracker }), preview);
@@ -230,87 +230,128 @@ test("pose tracker binds camera stream to the visible setup preview", () => {
 	assert.equal(preview.autoplay, true);
 });
 
-test("camera selection prefers exposed ultra-wide device", async () => {
-	const stopped = [];
+test("tracked pose overlay resizes and draws visible keypoints", () => {
+	assert.equal(typeof PoseTrackerDiagnostics.resizePoseCanvas, "function");
+	assert.equal(typeof PoseTrackerDiagnostics.drawPoseOverlay, "function");
+
 	const calls = [];
+	const context = {
+		setTransform(...args) {
+			calls.push(["setTransform", ...args]);
+		},
+		clearRect(...args) {
+			calls.push(["clearRect", ...args]);
+		},
+		save() {
+			calls.push(["save"]);
+		},
+		scale(...args) {
+			calls.push(["scale", ...args]);
+		},
+		translate(...args) {
+			calls.push(["translate", ...args]);
+		},
+		beginPath() {},
+		moveTo(...args) {
+			calls.push(["moveTo", ...args]);
+		},
+		lineTo(...args) {
+			calls.push(["lineTo", ...args]);
+		},
+		stroke() {
+			calls.push(["stroke"]);
+		},
+		arc(...args) {
+			calls.push(["arc", ...args]);
+		},
+		fill() {
+			calls.push(["fill"]);
+		},
+		restore() {
+			calls.push(["restore"]);
+		},
+	};
+	const canvas = {
+		width: 0,
+		height: 0,
+		getBoundingClientRect() {
+			return { width: 200, height: 300 };
+		},
+		getContext() {
+			return context;
+		},
+	};
+	const video = { videoWidth: 400, videoHeight: 600 };
+	const pose = {
+		keypoints: [
+			{ name: "left_shoulder", x: 100, y: 150, score: 0.9 },
+			{ name: "right_shoulder", x: 300, y: 150, score: 0.9 },
+			{ name: "nose", x: 200, y: 50, score: 0.1 },
+		],
+	};
+
+	PoseTrackerDiagnostics.resizePoseCanvas(canvas, 2);
+	PoseTrackerDiagnostics.drawPoseOverlay(canvas, pose, video, "#fff");
+
+	assert.equal(canvas.width, 400);
+	assert.equal(canvas.height, 600);
+	assert.deepEqual(
+		calls.find(([name]) => name === "setTransform"),
+		["setTransform", 2, 0, 0, 2, 0, 0],
+	);
+	assert.deepEqual(
+		calls.find(([name]) => name === "moveTo"),
+		["moveTo", 50, 75],
+	);
+	assert.deepEqual(
+		calls.find(([name]) => name === "lineTo"),
+		["lineTo", 150, 75],
+	);
+	assert.equal(calls.filter(([name]) => name === "arc").length, 2);
+});
+
+test("camera preview diagnostics report the rendered video boundary", () => {
+	assert.equal(typeof PoseTrackerDiagnostics.previewDiagnostics, "function");
+
+	const video = {
+		isConnected: true,
+		videoWidth: 1920,
+		videoHeight: 1080,
+		readyState: 4,
+		paused: false,
+		parentElement: { id: "pose-tracker-preview-frame" },
+		getBoundingClientRect() {
+			return { width: 0, height: 0 };
+		},
+	};
+
+	assert.deepEqual(PoseTrackerDiagnostics.previewDiagnostics(video), {
+		connected: true,
+		rendered_width: 0,
+		rendered_height: 0,
+		video_width: 1920,
+		video_height: 1080,
+		ready_state: 4,
+		paused: false,
+		parent_id: "pose-tracker-preview-frame",
+	});
+});
+
+test("camera selection matches the working debug page", async () => {
+	const calls = [];
+	const stream = { id: "front-camera" };
 	const mediaDevices = {
 		async getUserMedia(constraints) {
 			calls.push(constraints);
-			const id = `stream-${calls.length}`;
-			return {
-				id,
-				getTracks() {
-					return [
-						{
-							stop() {
-								stopped.push(id);
-							},
-						},
-					];
-				},
-				getVideoTracks() {
-					return [];
-				},
-			};
+			return stream;
 		},
 		async enumerateDevices() {
-			return [
-				{ kind: "videoinput", deviceId: "front", label: "Front Camera" },
-				{
-					kind: "videoinput",
-					deviceId: "ultra-wide",
-					label: "Back Ultra Wide Camera",
-				},
-			];
+			throw new Error("the debug camera path does not enumerate devices");
 		},
 	};
 
-	const stream = await requestPreferredCameraStream(mediaDevices);
-
-	assert.equal(stream.id, "stream-2");
-	assert.deepEqual(stopped, ["stream-1"]);
-	assert.deepEqual(calls, [
-		{ video: { facingMode: { ideal: "environment" } }, audio: false },
-		{
-			video: {
-				deviceId: { exact: "ultra-wide" },
-				facingMode: { ideal: "environment" },
-			},
-			audio: false,
-		},
-	]);
-});
-
-test("camera selection applies minimum zoom when supported", async () => {
-	let appliedConstraints = null;
-	const mediaDevices = {
-		async getUserMedia() {
-			return {
-				getTracks() {
-					return [];
-				},
-				getVideoTracks() {
-					return [
-						{
-							getCapabilities() {
-								return { zoom: { min: 0.5, max: 3 } };
-							},
-							async applyConstraints(constraints) {
-								appliedConstraints = constraints;
-							},
-						},
-					];
-				},
-			};
-		},
-		async enumerateDevices() {
-			return [];
-		},
-	};
-
-	await requestPreferredCameraStream(mediaDevices);
-
-	assert.deepEqual(appliedConstraints, { advanced: [{ zoom: 0.5 }] });
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.deepEqual(calls, [{ video: { facingMode: "user" }, audio: false }]);
 });
 
 test("timed workout completion pushes log payload with completed reps", () => {

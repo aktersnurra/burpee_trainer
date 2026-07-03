@@ -7,6 +7,7 @@ import { decodeBurpeePhases } from "./pose_phase_decoder.mjs";
 import { extractBurpeeCandidates } from "./pose_candidate_extractor.mjs";
 import { formatDecoderDiagnostics } from "./pose_decoder_diagnostics.mjs";
 import { matchTemplateWindow } from "./pose_template_matcher.mjs";
+import { drawPoseOverlay, resizePoseCanvas } from "./pose_overlay.mjs";
 import {
 	initialTemplateCalibration,
 	startTemplateCalibration,
@@ -22,26 +23,10 @@ const SAMPLE_WINDOW_MS = 6000;
 const FEATURE_WINDOW_MS = 20000;
 const DTW_REFRACTORY_MS = 1200;
 
-const EDGES = [
-	["left_shoulder", "right_shoulder"],
-	["left_shoulder", "left_elbow"],
-	["left_elbow", "left_wrist"],
-	["right_shoulder", "right_elbow"],
-	["right_elbow", "right_wrist"],
-	["left_shoulder", "left_hip"],
-	["right_shoulder", "right_hip"],
-	["left_hip", "right_hip"],
-	["left_hip", "left_knee"],
-	["left_knee", "left_ankle"],
-	["right_hip", "right_knee"],
-	["right_knee", "right_ankle"],
-];
-
 const PoseDebug = {
 	async mounted() {
 		this.video = this.el.querySelector("#pose-debug-video");
 		this.canvas = this.el.querySelector("#pose-debug-canvas");
-		this.ctx = this.canvas.getContext("2d");
 		this.state = initialCounterState();
 		this.calibration = initialTemplateCalibration();
 		this.traceRecorder = initialTraceRecorder();
@@ -65,7 +50,9 @@ const PoseDebug = {
 
 		try {
 			if (!webglAvailable()) {
-				throw new Error("WebGL is unavailable; BlazePose cannot start in this browser/context");
+				throw new Error(
+					"WebGL is unavailable; BlazePose cannot start in this browser/context",
+				);
 			}
 
 			this.stream = await navigator.mediaDevices.getUserMedia({
@@ -135,61 +122,11 @@ const PoseDebug = {
 	},
 
 	resizeCanvas() {
-		const rect = this.canvas.getBoundingClientRect();
-		const scale = window.devicePixelRatio || 1;
-		this.canvas.width = Math.round(rect.width * scale);
-		this.canvas.height = Math.round(rect.height * scale);
-		this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+		resizePoseCanvas(this.canvas);
 	},
 
 	draw(pose) {
-		const rect = this.canvas.getBoundingClientRect();
-		this.ctx.clearRect(0, 0, rect.width, rect.height);
-		if (!pose?.keypoints) return;
-
-		const points = new Map(
-			pose.keypoints.map((point) => [point.name || point.part, point]),
-		);
-
-		this.ctx.save();
-		this.ctx.scale(-1, 1);
-		this.ctx.translate(-rect.width, 0);
-
-		const ink = getComputedStyle(document.documentElement).getPropertyValue("--color-base-content").trim() || "#20201D";
-
-		this.ctx.lineWidth = 3;
-		this.ctx.strokeStyle = ink;
-		for (const [aName, bName] of EDGES) {
-			const a = points.get(aName);
-			const b = points.get(bName);
-			if (!visible(a) || !visible(b)) continue;
-			this.ctx.beginPath();
-			this.ctx.moveTo(
-				scaleX(a.x, this.video, rect),
-				scaleY(a.y, this.video, rect),
-			);
-			this.ctx.lineTo(
-				scaleX(b.x, this.video, rect),
-				scaleY(b.y, this.video, rect),
-			);
-			this.ctx.stroke();
-		}
-
-		for (const point of pose.keypoints) {
-			if (!visible(point)) continue;
-			this.ctx.fillStyle = ink;
-			this.ctx.beginPath();
-			this.ctx.arc(
-				scaleX(point.x, this.video, rect),
-				scaleY(point.y, this.video, rect),
-				5,
-				0,
-				Math.PI * 2,
-			);
-			this.ctx.fill();
-		}
-
-		this.ctx.restore();
+		drawPoseOverlay(this.canvas, pose, this.video);
 	},
 
 	bindTemplateControls() {
@@ -426,18 +363,6 @@ const PoseDebug = {
 		setText(this.el, "#pose-debug-status", value);
 	},
 };
-
-function visible(point) {
-	return point && (point.score == null || point.score >= 0.25);
-}
-
-function scaleX(x, video, rect) {
-	return (x / (video.videoWidth || 1)) * rect.width;
-}
-
-function scaleY(y, video, rect) {
-	return (y / (video.videoHeight || 1)) * rect.height;
-}
 
 function setText(root, selector, value) {
 	const el = root.querySelector(selector);

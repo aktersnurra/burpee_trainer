@@ -2,6 +2,7 @@ import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
+import { drawPoseOverlay, resizePoseCanvas } from "./pose_overlay.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
 import { waitForVideoFrame, webglAvailable } from "./pose_video.mjs";
 import {
@@ -9,6 +10,8 @@ import {
 	initialPoseCaptureRecorder,
 	recordPoseSample,
 } from "./pose_capture_recorder.mjs";
+
+export { drawPoseOverlay, resizePoseCanvas };
 
 function configurePreviewVideo(video) {
 	video.muted = true;
@@ -19,10 +22,24 @@ function configurePreviewVideo(video) {
 	return video;
 }
 
+export function previewDiagnostics(video) {
+	const rect = video.getBoundingClientRect?.() || {};
+	const dimension = (value) => (Number.isFinite(value) ? Math.round(value) : 0);
+
+	return {
+		connected: Boolean(video.isConnected),
+		rendered_width: dimension(rect.width),
+		rendered_height: dimension(rect.height),
+		video_width: dimension(video.videoWidth),
+		video_height: dimension(video.videoHeight),
+		ready_state: Number.isInteger(video.readyState) ? video.readyState : 0,
+		paused: Boolean(video.paused),
+		parent_id: video.parentElement?.id || null,
+	};
+}
+
 export function resolvePreviewVideo(hook) {
-	const existing =
-		globalThis.document?.getElementById?.("pose-tracker-preview") ||
-		hook.el.querySelector?.("#pose-tracker-preview");
+	const existing = hook.el.querySelector?.("#pose-tracker-preview");
 
 	if (existing) return configurePreviewVideo(existing);
 
@@ -33,72 +50,18 @@ export function resolvePreviewVideo(hook) {
 	return video;
 }
 
-function stopStream(stream) {
-	stream?.getTracks?.().forEach((track) => track.stop?.());
-}
-
-function ultraWideDevice(devices) {
-	return (devices || []).find(
-		(device) =>
-			device.kind === "videoinput" &&
-			/(ultra\s*wide|ultrawide|0\.5)/i.test(device.label || ""),
-	);
-}
-
-async function applyMinimumZoom(stream) {
-	const [track] = stream?.getVideoTracks?.() || [];
-	const zoom = track?.getCapabilities?.().zoom;
-
-	if (!zoom || !Number.isFinite(zoom.min) || !track.applyConstraints) return;
-
-	try {
-		await track.applyConstraints({ advanced: [{ zoom: zoom.min }] });
-	} catch (_error) {
-		// Some mobile browsers expose zoom capabilities but reject applying them.
-	}
-}
-
-export async function requestPreferredCameraStream(mediaDevices) {
-	let stream;
-
-	try {
-		stream = await mediaDevices.getUserMedia({
-			video: { facingMode: { ideal: "environment" } },
-			audio: false,
-		});
-	} catch (_error) {
-		stream = await mediaDevices.getUserMedia({
-			video: { facingMode: "user" },
-			audio: false,
-		});
-	}
-
-	try {
-		const device = ultraWideDevice(await mediaDevices.enumerateDevices?.());
-
-		if (device?.deviceId) {
-			const wideStream = await mediaDevices.getUserMedia({
-				video: {
-					deviceId: { exact: device.deviceId },
-					facingMode: { ideal: "environment" },
-				},
-				audio: false,
-			});
-			stopStream(stream);
-			stream = wideStream;
-		}
-	} catch (_error) {
-		// Device labels and lens selection are best-effort; keep the initial stream.
-	}
-
-	await applyMinimumZoom(stream);
-	return stream;
+export function requestPreferredCameraStream(mediaDevices) {
+	return mediaDevices.getUserMedia({
+		video: { facingMode: "user" },
+		audio: false,
+	});
 }
 
 export function createPoseTracker(hook) {
 	let stream = null;
 	let detector = null;
 	let video = null;
+	let canvas = null;
 	let raf = null;
 	let state = initialCounterState();
 	let startedAt = null;
@@ -129,6 +92,11 @@ export function createPoseTracker(hook) {
 			video.srcObject = stream;
 			await video.play();
 			await waitForVideoFrame(video);
+
+			canvas = hook.el.querySelector("#pose-tracker-canvas");
+			if (!canvas) throw new Error("Pose tracker canvas is unavailable");
+			resizePoseCanvas(canvas);
+			hook.pushEvent("camera_preview_diagnostics", previewDiagnostics(video));
 
 			detector = await createBlazePoseDetector();
 
@@ -168,6 +136,8 @@ export function createPoseTracker(hook) {
 			});
 			return;
 		}
+		drawPoseOverlay(canvas, poses[0], video);
+
 		const sample = sampleFromPose(
 			poses[0],
 			now - startedAt,
