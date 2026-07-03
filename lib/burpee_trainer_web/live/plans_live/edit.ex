@@ -1955,6 +1955,36 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
     end
   end
 
+  def handle_event("add_set", %{"block_index" => bi}, socket) do
+    case PlanEditor.add_set(socket.assigns.editor, bi) do
+      {:ok, editor} -> validate_editor_form(socket, editor)
+      {:error, _reason, _state} -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("delete_set", %{"block_index" => bi, "set_index" => si}, socket) do
+    case PlanEditor.delete_set(socket.assigns.editor, bi, si) do
+      {:ok, editor} -> validate_editor_form(socket, editor)
+      {:error, _reason, _state} -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("update_set", %{"block_index" => bi, "set_index" => si} = params, socket) do
+    fields = Map.take(params, ["reps", "rest", "rep_interval"])
+
+    case PlanEditor.update_set(socket.assigns.editor, bi, si, fields) do
+      {:ok, editor} -> validate_editor_form(socket, editor)
+      {:error, _reason, _state} -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("set_block_repeat", %{"block_index" => bi, "value" => value}, socket) do
+    case PlanEditor.set_block_repeat(socket.assigns.editor, bi, value) do
+      {:ok, editor} -> validate_editor_form(socket, editor)
+      {:error, _reason, _state} -> {:noreply, socket}
+    end
+  end
+
   def handle_event("toggle_block_menu", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
     open = if socket.assigns.editor.open_block_menu == idx, do: nil, else: idx
