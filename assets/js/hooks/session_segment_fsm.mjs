@@ -282,6 +282,69 @@ function finalizeSegment(state, elapsedSec) {
 	};
 }
 
+function completeTimelineReps(state, reps) {
+	return {
+		...reps,
+		burpeeCountDone: Math.max(
+			reps.burpeeCountDone,
+			totalBurpeeCount(state.timeline),
+		),
+		previousFrame: null,
+	};
+}
+
+function tickSegment(state, event) {
+	const frame = currentFrame(state.timeline, event.elapsedSec);
+
+	if (event.elapsedSec < state.clock.totalDurationSec) {
+		const nextReps = frame
+			? {
+					...accountReps(state.reps.previousFrame, frame, state.reps),
+					previousFrame: frame,
+				}
+			: state.reps;
+
+		return {
+			state: {
+				...state,
+				clock: { ...state.clock, elapsedSec: event.elapsedSec },
+				reps: nextReps,
+			},
+			commands: [
+				{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
+				{ type: "scheduleAnimationFrame" },
+			],
+		};
+	}
+
+	const repsAfterFrame = frame
+		? accountReps(state.reps.previousFrame, frame, state.reps)
+		: accountReps(state.reps.previousFrame, null, state.reps);
+	const nextReps = completeTimelineReps(
+		state,
+		frame ? accountReps(frame, null, repsAfterFrame) : repsAfterFrame,
+	);
+
+	return {
+		state: {
+			...state,
+			mode: "done",
+			clock: { ...state.clock, elapsedSec: event.elapsedSec },
+			reps: nextReps,
+		},
+		commands: [
+			{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
+			{
+				type: "segmentDone",
+				result: {
+					burpeeCountDone: nextReps.burpeeCountDone,
+					durationSec: Math.round(event.elapsedSec),
+				},
+			},
+		],
+	};
+}
+
 export function segmentTransition(state, event) {
 	switch (event.type) {
 		case "SEGMENT_READY": {
@@ -406,56 +469,8 @@ export function segmentTransition(state, event) {
 				commands: [{ type: "startAnimationFrame" }],
 			};
 
-		case "TICK": {
-			const frame = currentFrame(state.timeline, event.elapsedSec);
-
-			if (event.elapsedSec < state.clock.totalDurationSec) {
-				const nextReps = frame
-					? {
-							...accountReps(state.reps.previousFrame, frame, state.reps),
-							previousFrame: frame,
-						}
-					: state.reps;
-
-				return {
-					state: {
-						...state,
-						clock: { ...state.clock, elapsedSec: event.elapsedSec },
-						reps: nextReps,
-					},
-					commands: [
-						{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
-						{ type: "scheduleAnimationFrame" },
-					],
-				};
-			}
-
-			const repsAfterFrame = frame
-				? accountReps(state.reps.previousFrame, frame, state.reps)
-				: accountReps(state.reps.previousFrame, null, state.reps);
-			const nextReps = frame
-				? accountReps(frame, null, repsAfterFrame)
-				: repsAfterFrame;
-
-			return {
-				state: {
-					...state,
-					mode: "done",
-					clock: { ...state.clock, elapsedSec: event.elapsedSec },
-					reps: { ...nextReps, previousFrame: null },
-				},
-				commands: [
-					{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
-					{
-						type: "segmentDone",
-						result: {
-							burpeeCountDone: nextReps.burpeeCountDone,
-							durationSec: Math.round(event.elapsedSec),
-						},
-					},
-				],
-			};
-		}
+		case "TICK":
+			return tickSegment(state, event);
 
 		case "DISPLAY_FRAME": {
 			const result = displayCommandsForFrame(state.display, {

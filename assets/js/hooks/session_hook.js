@@ -394,6 +394,22 @@ const SessionHook = {
 			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
 		title.textContent = "Adjust camera";
 
+		const previewFrame = document.createElement("div");
+		previewFrame.id = "pose-tracker-preview-frame";
+		previewFrame.className =
+			"relative aspect-[3/4] w-full max-w-[280px] overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black shadow-[0_18px_45px_rgba(0,0,0,0.22)]";
+
+		const preview = document.createElement("video");
+		preview.id = "pose-tracker-preview";
+		preview.muted = true;
+		preview.playsInline = true;
+		preview.autoplay = true;
+		preview.setAttribute("playsinline", "");
+		preview.setAttribute("autoplay", "");
+		preview.className =
+			"absolute inset-0 h-full w-full object-cover scale-x-[-1]";
+		previewFrame.append(preview);
+
 		const description = document.createElement("p");
 		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
 		description.textContent =
@@ -406,7 +422,7 @@ const SessionHook = {
 			"border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.98]";
 		button.textContent = "Start tracked session";
 
-		overlay.append(title, description, button);
+		overlay.append(title, previewFrame, description, button);
 		parent.appendChild(overlay);
 	},
 
@@ -777,7 +793,12 @@ const SessionHook = {
 
 	pushTrackedFinish(payload) {
 		const tracker = this.el.querySelector("#pose-tracker");
-		if (!tracker || !payload?.main) return false;
+		if (
+			!tracker ||
+			tracker.dataset?.poseTrackerReady !== "true" ||
+			!payload?.main
+		)
+			return false;
 
 		tracker.dispatchEvent(
 			new CustomEvent("pose-tracker:finish", {

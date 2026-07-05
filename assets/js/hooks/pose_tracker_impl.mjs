@@ -10,6 +10,91 @@ import {
 	recordPoseSample,
 } from "./pose_capture_recorder.mjs";
 
+function configurePreviewVideo(video) {
+	video.muted = true;
+	video.playsInline = true;
+	video.autoplay = true;
+	video.setAttribute?.("playsinline", "");
+	video.setAttribute?.("autoplay", "");
+	return video;
+}
+
+export function resolvePreviewVideo(hook) {
+	const existing =
+		globalThis.document?.getElementById?.("pose-tracker-preview") ||
+		hook.el.querySelector?.("#pose-tracker-preview");
+
+	if (existing) return configurePreviewVideo(existing);
+
+	const video = configurePreviewVideo(document.createElement("video"));
+	video.id = "pose-tracker-preview";
+	video.className = "absolute inset-0 h-full w-full object-cover scale-x-[-1]";
+	hook.el.append?.(video);
+	return video;
+}
+
+function stopStream(stream) {
+	stream?.getTracks?.().forEach((track) => track.stop?.());
+}
+
+function ultraWideDevice(devices) {
+	return (devices || []).find(
+		(device) =>
+			device.kind === "videoinput" &&
+			/(ultra\s*wide|ultrawide|0\.5)/i.test(device.label || ""),
+	);
+}
+
+async function applyMinimumZoom(stream) {
+	const [track] = stream?.getVideoTracks?.() || [];
+	const zoom = track?.getCapabilities?.().zoom;
+
+	if (!zoom || !Number.isFinite(zoom.min) || !track.applyConstraints) return;
+
+	try {
+		await track.applyConstraints({ advanced: [{ zoom: zoom.min }] });
+	} catch (_error) {
+		// Some mobile browsers expose zoom capabilities but reject applying them.
+	}
+}
+
+export async function requestPreferredCameraStream(mediaDevices) {
+	let stream;
+
+	try {
+		stream = await mediaDevices.getUserMedia({
+			video: { facingMode: { ideal: "environment" } },
+			audio: false,
+		});
+	} catch (_error) {
+		stream = await mediaDevices.getUserMedia({
+			video: { facingMode: "user" },
+			audio: false,
+		});
+	}
+
+	try {
+		const device = ultraWideDevice(await mediaDevices.enumerateDevices?.());
+
+		if (device?.deviceId) {
+			const wideStream = await mediaDevices.getUserMedia({
+				video: {
+					deviceId: { exact: device.deviceId },
+					facingMode: { ideal: "environment" },
+				},
+				audio: false,
+			});
+			stopStream(stream);
+			stream = wideStream;
+		}
+	} catch (_error) {
+		// Device labels and lens selection are best-effort; keep the initial stream.
+	}
+
+	await applyMinimumZoom(stream);
+	return stream;
+}
+
 export function createPoseTracker(hook) {
 	let stream = null;
 	let detector = null;
@@ -33,17 +118,14 @@ export function createPoseTracker(hook) {
 
 		try {
 			if (!webglAvailable()) {
-				throw new Error("WebGL is unavailable; BlazePose cannot start in this browser/context");
+				throw new Error(
+					"WebGL is unavailable; BlazePose cannot start in this browser/context",
+				);
 			}
 
-			stream = await navigator.mediaDevices.getUserMedia({
-				video: { facingMode: "user" },
-				audio: false,
-			});
+			stream = await requestPreferredCameraStream(navigator.mediaDevices);
 
-			video = document.createElement("video");
-			video.muted = true;
-			video.playsInline = true;
+			video = resolvePreviewVideo(hook);
 			video.srcObject = stream;
 			await video.play();
 			await waitForVideoFrame(video);
@@ -52,9 +134,11 @@ export function createPoseTracker(hook) {
 
 			if (!mounted) return;
 			startedAt = performance.now();
+			hook.el.dataset.poseTrackerReady = "true";
 			hook.pushEvent("tracker_ready", {});
 			loop();
 		} catch (error) {
+			delete hook.el.dataset.poseTrackerReady;
 			console.error("PoseTracker failed", error);
 			hook.pushEvent("track", {
 				state: "lost",
@@ -64,7 +148,7 @@ export function createPoseTracker(hook) {
 	}
 
 	async function loop() {
-		if (!mounted || !detector || !video || startedAt == null) return;
+		if (!mounted || !detector || !video || startedAt === null) return;
 
 		const now = performance.now();
 		if (!shouldSamplePose(now, lastPoseMs)) {
@@ -149,6 +233,7 @@ export function createPoseTracker(hook) {
 
 	function destroyed() {
 		mounted = false;
+		delete hook.el.dataset.poseTrackerReady;
 		hook.el.removeEventListener("pose-tracker:finish", finish);
 		document.removeEventListener("pose-capture:segment", onCaptureSegment);
 		if (raf) cancelAnimationFrame(raf);

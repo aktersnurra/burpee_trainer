@@ -65,7 +65,7 @@ defmodule BurpeeTrainer.Workouts do
   """
   @spec change_plan(WorkoutPlan.t(), map) :: Ecto.Changeset.t()
   def change_plan(%WorkoutPlan{} = plan, attrs \\ %{}) do
-    WorkoutPlan.changeset(plan, attrs)
+    WorkoutPlan.changeset(plan, normalize_plan_attrs(attrs))
   end
 
   @doc """
@@ -85,7 +85,7 @@ defmodule BurpeeTrainer.Workouts do
         |> put_source_summary(program, source)
 
       %WorkoutPlan{user_id: user_id}
-      |> WorkoutPlan.changeset(attrs)
+      |> WorkoutPlan.changeset(normalize_plan_attrs(attrs))
       |> Repo.insert()
     else
       {:error, _reason} = error -> error
@@ -117,7 +117,7 @@ defmodule BurpeeTrainer.Workouts do
         |> put_source_summary(program, source)
 
       plan
-      |> WorkoutPlan.changeset(attrs)
+      |> WorkoutPlan.changeset(normalize_plan_attrs(attrs))
       |> Repo.update()
     else
       {:error, _reason} = error -> error
@@ -741,6 +741,39 @@ defmodule BurpeeTrainer.Workouts do
 
   defp plan_source_attrs(%WorkoutPlan{source_json: source}) when is_map(source), do: source
   defp plan_source_attrs(%WorkoutPlan{}), do: nil
+
+  defp normalize_plan_attrs(attrs) when is_map(attrs) do
+    attrs
+    |> normalize_metadata_key("plan_solver_metadata")
+    |> normalize_metadata_key(:plan_solver_metadata)
+  end
+
+  defp normalize_metadata_key(attrs, key) do
+    case Map.fetch(attrs, key) do
+      {:ok, metadata} -> Map.put(attrs, key, stringify_metadata(metadata))
+      :error -> attrs
+    end
+  end
+
+  defp stringify_metadata(nil), do: nil
+
+  defp stringify_metadata(metadata) when is_map(metadata) do
+    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
+  end
+
+  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
+
+  defp stringify_metadata_value(values) when is_list(values),
+    do: Enum.map(values, &stringify_metadata_value/1)
+
+  defp stringify_metadata_value(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> stringify_metadata_value()
+
+  defp stringify_metadata_value(value) when value in [nil, true, false], do: value
+
+  defp stringify_metadata_value(value) when is_atom(value), do: Atom.to_string(value)
+
+  defp stringify_metadata_value(value), do: value
 
   @doc false
   def preload_plan(%WorkoutPlan{} = plan), do: plan
