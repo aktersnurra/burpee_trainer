@@ -13,6 +13,7 @@ export class SessionRenderer {
 		this.downTimeout = null;
 		this.downCueActive = false;
 		this.paused = false;
+		this.lastPulseValue = null;
 	}
 
 	clearTimers() {
@@ -86,6 +87,7 @@ export class SessionRenderer {
 		this.clearTimers();
 		this.setVisualState(null);
 		this.updateWorkFill(0);
+		this.lastPulseValue = null;
 		const countEl = this.root.querySelector("#count");
 		if (countEl) {
 			countEl.classList.remove(
@@ -93,6 +95,7 @@ export class SessionRenderer {
 				"is-rest-time-long",
 				"is-count-long",
 				"is-countdown-dots",
+				"is-between-set-pulse",
 				"countdown-pop",
 			);
 			countEl.textContent = "—";
@@ -115,12 +118,17 @@ export class SessionRenderer {
 		this.setVisualState(visual.state);
 
 		if (visual.state === "initial-countdown") {
+			this.lastPulseValue = null;
 			this.renderCountdownDots(model.countdownDots || { count: 5, faded: 0 });
 		} else if (visual.state === "work") {
+			this.lastPulseValue = null;
 			this.updateWorkFill(visual.progress);
 			this.updateCurrentSetRepCount(model.primaryCount);
-		} else {
-			this.renderRestProgress(model.restTimeLeftSec ?? 0);
+		} else if (
+			["rest-breathe", "rest-settle", "rest-countdown"].includes(visual.state)
+		) {
+			this.updateWorkFill(0);
+			this.renderRestState(model);
 		}
 
 		if (model.timeLeftSec !== undefined) this.renderTimer(model.timeLeftSec);
@@ -132,14 +140,21 @@ export class SessionRenderer {
 	enterWorkPhase() {
 		this.setVisualState("work");
 		this.updateWorkFill(0);
+		this.lastPulseValue = null;
 	}
 
 	enterCountInPhase() {
 		this.setVisualState("initial-countdown");
 		this.updateWorkFill(0);
+		this.lastPulseValue = null;
 		const countEl = this.root.querySelector("#count");
 		if (countEl) {
-			countEl.classList.remove("is-down-cue", "is-count-long", "countdown-pop");
+			countEl.classList.remove(
+				"is-down-cue",
+				"is-count-long",
+				"is-between-set-pulse",
+				"countdown-pop",
+			);
 			countEl.style.color = "";
 			countEl.style.visibility = "";
 		}
@@ -148,6 +163,26 @@ export class SessionRenderer {
 	enterRestPhase() {
 		this.setVisualState("rest-breathe");
 		this.updateWorkFill(0);
+	}
+
+	renderRestState(model) {
+		const count = this.root.querySelector("#count");
+		if (!count) return;
+
+		count.classList.remove("is-between-set-pulse", "countdown-pop");
+		count.textContent = String(model.primaryCount ?? "");
+		count.style.visibility = this.paused ? "hidden" : "";
+
+		const pulse = model.visual?.pulse;
+		if (
+			model.visual?.state === "rest-countdown" &&
+			pulse !== this.lastPulseValue
+		) {
+			count.classList.add("is-between-set-pulse");
+			void count.offsetWidth;
+			count.classList.add("countdown-pop");
+		}
+		this.lastPulseValue = pulse;
 	}
 
 	renderRestProgress(timeLeftSec) {
@@ -207,6 +242,8 @@ export class SessionRenderer {
 			"is-down-cue",
 			"is-rest-time-long",
 			"is-countdown-dots",
+			"is-between-set-pulse",
+			"countdown-pop",
 		);
 		this.setCountLengthClass(countEl, String(repsLeft));
 		countEl.textContent = repsLeft;

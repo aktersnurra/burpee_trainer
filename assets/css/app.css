@@ -244,6 +244,52 @@ body {
   visibility: visible;
 }
 
+#session-rest-shape {
+  bottom: -8dvh;
+  height: min(54dvh, 34rem);
+  background: var(--session-rest);
+  border-radius: 50% 50% 0 0 / 14% 14% 0 0;
+  opacity: 0;
+  transform: scaleY(0.82);
+  transform-origin: bottom;
+  will-change: transform, border-radius, background-color;
+}
+
+@keyframes session-breathe {
+  0%, 100% { transform: scaleY(0.82); }
+  50% { transform: scaleY(1.04); }
+}
+
+#session-runner-client.is-rest-breathe #session-rest-shape {
+  opacity: 1;
+  animation: session-breathe 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite;
+}
+
+#session-runner-client.is-rest-settle #session-rest-shape,
+#session-runner-client.is-rest-countdown #session-rest-shape {
+  opacity: 1;
+  animation: none;
+  background: var(--session-work);
+  border-radius: 0;
+  transform: scaleY(0.5);
+  transition:
+    background-color 500ms ease,
+    border-radius 700ms ease,
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#count.is-between-set-pulse {
+  color: var(--session-work);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #session-rest-shape,
+  #count {
+    animation: none !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 #session-status-line #total-done,
 #session-status-line #time-left {
   font-size: clamp(3.5rem, 16vw, 5.5rem);

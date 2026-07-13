@@ -26,6 +26,7 @@ function element() {
 function harness() {
 	const elements = {
 		"#session-work-fill": element(),
+		"#session-rest-shape": element(),
 		"#session-runner-client": element(),
 		"#count": element(),
 		"#time-left": element(),
@@ -65,6 +66,51 @@ test("initial countdown still renders dots", () => {
 		elements["#session-runner-client"].classList.contains(
 			"is-initial-countdown",
 		),
+		true,
+	);
+});
+
+test("rest switches from breathing to settle to numeric countdown", () => {
+	const { renderer, elements } = harness();
+
+	renderer.renderDisplayModel({
+		visual: { state: "rest-breathe", progress: 0, pulse: null },
+		primaryCount: "12",
+		countdownDots: null,
+		totalDone: 8,
+		totalTarget: 20,
+		timeLeftSec: 40,
+	});
+	assert.equal(
+		elements["#session-runner-client"].classList.contains("is-rest-breathe"),
+		true,
+	);
+	assert.equal(elements["#count"].textContent, "12");
+
+	renderer.renderDisplayModel({
+		visual: { state: "rest-settle", progress: 0, pulse: null },
+		primaryCount: "5",
+		countdownDots: null,
+		totalDone: 8,
+		totalTarget: 20,
+		timeLeftSec: 33,
+	});
+	assert.equal(
+		elements["#session-runner-client"].classList.contains("is-rest-settle"),
+		true,
+	);
+
+	renderer.renderDisplayModel({
+		visual: { state: "rest-countdown", progress: 0, pulse: 3 },
+		primaryCount: 3,
+		countdownDots: null,
+		totalDone: 8,
+		totalTarget: 20,
+		timeLeftSec: 31,
+	});
+	assert.equal(elements["#count"].textContent, "3");
+	assert.equal(
+		elements["#count"].classList.contains("is-between-set-pulse"),
 		true,
 	);
 });
