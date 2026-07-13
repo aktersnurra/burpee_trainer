@@ -242,7 +242,7 @@ const SessionHook = {
 				this.renderer.updateCurrentSetRepCount(command.remainingReps);
 				break;
 			case "renderWorkRepProgress":
-				this.renderer.updateWorkRing(command.progress, command.color);
+				this.renderer.updateWorkFill(command.progress);
 				break;
 			case "enterRestPhase":
 				this.renderer.enterRestPhase();

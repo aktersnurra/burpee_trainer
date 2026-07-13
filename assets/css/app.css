@@ -149,7 +149,8 @@ body {
   --session-soft-muted: #9A9489;
   --session-border: #DAD6CE;
   --session-track: #DAD6CE;
-  --session-ring-track: #DAD6CE;
+  --session-work: #FD7236;
+  --session-rest: #749CCE;
   --session-accent: #A77B5D;
   --session-accent-strong: #8F5F46;
   --session-toggle-bg: #F1F8FF;
@@ -181,7 +182,6 @@ body {
   --session-soft-muted: #7E8794;
   --session-border: #343A45;
   --session-track: #2A303A;
-  --session-ring-track: #343A45;
   --session-accent: #E06A5F;
   --session-accent-strong: #FF8A7D;
   --session-toggle-bg: #112A42;
@@ -221,13 +221,6 @@ body {
 }
 
 
-/* Subtle pulse for the clock ring when 5s remain in a rest. */
-@keyframes burpee-ring-pulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.015); }
-}
-.burpee-ring-pulse { animation: burpee-ring-pulse 1s ease-in-out infinite; }
-
 /* Initial countdown number — punchy scale pop on each tick. */
 @keyframes countdown-pop {
   0%   { transform: scale(1.35); opacity: 0.6; }
@@ -236,113 +229,40 @@ body {
 }
 .countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-#burpee-session.is-counting-in,
-#burpee-session.is-counting-in #session-runner-client,
-#session-runner-client.is-counting-in {
+#session-work-fill {
+  background: var(--session-work);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  will-change: transform;
+}
+
+#session-runner-client:not(.is-working) #session-work-fill {
+  visibility: hidden;
+}
+
+#session-runner-client.is-working #session-work-fill {
+  visibility: visible;
+}
+
+#session-status-line #total-done,
+#session-status-line #time-left {
+  font-size: clamp(3.5rem, 16vw, 5.5rem);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+}
+
+#burpee-session.is-initial-countdown,
+#burpee-session.is-initial-countdown #session-runner-client,
+#session-runner-client.is-initial-countdown {
   background: var(--session-countin-bg) !important;
   color: var(--session-countin-ink) !important;
 }
 
-#session-runner-client.is-counting-in #total-done,
-#session-runner-client.is-counting-in #total-plan,
-#session-runner-client.is-counting-in #time-left {
+#session-runner-client.is-initial-countdown #total-done,
+#session-runner-client.is-initial-countdown #total-plan,
+#session-runner-client.is-initial-countdown #time-left {
   color: var(--session-countin-ink) !important;
-}
-
-#phase-label.is-counting-in {
-  display: block !important;
-  border: 0;
-  color: var(--session-countin-ink);
-  padding: 0;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 1.62px;
-  line-height: 12.6px;
-  text-transform: uppercase;
-}
-
-#ring-container.is-counting-in {
-  border: 0;
-  border-radius: 0;
-  color: var(--session-countin-ink);
-}
-
-#ring-container #ring-svg,
-#ring-container #flash-circle {
-  display: none;
-}
-
-#ring-container.is-working #ring-svg {
-  display: block;
-}
-
-#ring-container.is-counting-in #pause-icon {
-  color: var(--session-countin-ink);
-}
-
-#ring-container.is-resting #ring-svg,
-#ring-container.is-resting #flash-circle {
-  display: none;
-}
-
-#ring-container.is-resting #instrument-face {
-  background: transparent;
-}
-
-#ring-container.is-resting #rest-ripples {
-  display: block;
-}
-
-@keyframes rest-breathe-ripple {
-  0% {
-    opacity: calc(var(--rest-ripple-alpha) * 0.34);
-    transform: translate(-50%, -50%) scale(0.74);
-  }
-  42% {
-    opacity: var(--rest-ripple-alpha);
-    transform: translate(-50%, -50%) scale(1.16);
-  }
-  56% {
-    opacity: calc(var(--rest-ripple-alpha) * 0.78);
-    transform: translate(-50%, -50%) scale(1.16);
-  }
-  100% {
-    opacity: calc(var(--rest-ripple-alpha) * 0.22);
-    transform: translate(-50%, -50%) scale(0.78);
-  }
-}
-
-.rest-ripple {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  display: block;
-  border: 1px solid var(--session-ink);
-  border-radius: 9999px;
-  transform: translate(-50%, -50%);
-  transform-origin: center;
-  will-change: opacity, transform;
-}
-
-.rest-ripple-outer {
-  --rest-ripple-alpha: 0.22;
-  width: 250px;
-  height: 250px;
-  animation: rest-breathe-ripple 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite;
-}
-
-.rest-ripple-middle {
-  --rest-ripple-alpha: 0.28;
-  width: 200px;
-  height: 200px;
-  animation: rest-breathe-ripple 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite 260ms;
-}
-
-.rest-ripple-inner {
-  --rest-ripple-alpha: 0.34;
-  width: 150px;
-  height: 150px;
-  animation: rest-breathe-ripple 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite 520ms;
 }
 
 #count {
@@ -362,34 +282,12 @@ body {
   }
 }
 
-#ring-container #ring-svg {
-  opacity: 1;
-  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-#ring-container.is-down-cue-active #ring-svg {
-  opacity: 0;
-}
-
 #count.is-count-long {
   font-size: clamp(5rem, 24vw, 6.5rem);
   letter-spacing: -0.075em;
 }
 
-#ring-container.is-resting #count {
-  color: var(--session-ink);
-  font-size: 64px;
-  font-weight: 500;
-  letter-spacing: -3.2px;
-  line-height: 57.6px;
-  mix-blend-mode: normal;
-}
-
-#ring-container.is-counting-in #instrument-face {
-  background: transparent;
-}
-
-#ring-container.is-counting-in #count.is-countdown-dots {
+#session-runner-client.is-initial-countdown #count.is-countdown-dots {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -398,7 +296,7 @@ body {
   line-height: 1;
 }
 
-#ring-container.is-counting-in #count .countdown-dot {
+#session-runner-client.is-initial-countdown #count .countdown-dot {
   display: block;
   width: 24px;
   height: 24px;
@@ -408,13 +306,9 @@ body {
   transition: opacity 220ms ease, transform 220ms ease;
 }
 
-#ring-container.is-counting-in #count .countdown-dot.is-faded {
+#session-runner-client.is-initial-countdown #count .countdown-dot.is-faded {
   opacity: 0.22;
   transform: scale(0.86);
-}
-
-#ring-container.is-paused #instrument-face {
-  background: transparent;
 }
 
 /* iPhone notch / home-bar safe area for the bottom tab bar */

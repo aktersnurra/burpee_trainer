@@ -620,115 +620,62 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <div
       id="session-runner-client"
-      class="relative flex min-h-dvh w-full overflow-hidden bg-[var(--session-bg)] px-5 py-8 text-[var(--session-ink)]"
+      class="relative min-h-dvh w-full overflow-hidden bg-[var(--session-bg)] text-[var(--session-ink)]"
       phx-update="ignore"
     >
-      <div class="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col items-center justify-start pt-[10vh] sm:pt-[9vh]">
+      <div
+        id="session-visual-layers"
+        class="pointer-events-none absolute inset-0 overflow-hidden"
+        aria-hidden="true"
+      >
         <div
-          id="phase-label"
-          class="mx-auto mb-6 hidden w-fit font-mono uppercase leading-none text-[var(--session-ink)]"
+          id="session-work-fill"
+          class="absolute inset-0 origin-bottom scale-y-0 bg-[var(--session-work)]"
         >
         </div>
+        <div id="session-rest-shape" class="absolute inset-x-0 bottom-0"></div>
+      </div>
 
+      <div class="relative z-10 mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col px-5 py-8">
         <div
           id="ring-container"
-          class="group relative mx-auto h-[320px] w-[320px] cursor-pointer select-none touch-manipulation sm:h-[340px] sm:w-[340px]"
-          style="flex: 0 0 320px;"
+          class="relative flex min-h-0 flex-1 cursor-pointer select-none touch-manipulation items-center justify-center"
           role="button"
           tabindex="0"
           aria-label="Pause or resume session"
         >
+          <span
+            id="count"
+            class="qs-tabular text-[clamp(7rem,34vw,13rem)] font-semibold leading-none tracking-[-0.085em]"
+          >
+            —
+          </span>
           <svg
-            id="ring-svg"
-            viewBox="0 0 280 280"
-            class="absolute inset-0 z-10 size-full"
+            id="pause-icon"
+            viewBox="0 0 48 48"
+            fill="currentColor"
+            class="absolute size-24"
+            style="display: none;"
             aria-hidden="true"
           >
+            <rect x="10" y="8" width="10" height="32" rx="2" />
+            <rect x="28" y="8" width="10" height="32" rx="2" />
           </svg>
-
-          <svg
-            viewBox="0 0 280 280"
-            class="pointer-events-none absolute inset-0 z-20 size-full"
-            aria-hidden="true"
-          >
-            <circle
-              id="flash-circle"
-              cx="140"
-              cy="140"
-              r="107"
-              fill="none"
-              stroke="var(--session-ink)"
-              stroke-width="10"
-              opacity="0"
-              transform="rotate(-90 140 140)"
-            />
-          </svg>
-
-          <div
-            id="instrument-face"
-            class="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center rounded-full transition-colors duration-200"
-          >
-            <div id="rest-ripples" class="absolute inset-0 hidden" aria-hidden="true">
-              <span class="rest-ripple rest-ripple-outer"></span>
-              <span class="rest-ripple rest-ripple-middle"></span>
-              <span class="rest-ripple rest-ripple-inner"></span>
-            </div>
-            <span
-              id="count"
-              class="text-[132px] leading-none tracking-[-0.085em] tabular-nums text-[var(--session-ink)] sm:text-[144px]"
-            >
-              —
-            </span>
-            <span
-              id="down-word"
-              class="absolute mt-28 text-xs font-medium text-[var(--session-muted)]"
-              style="display: none;"
-            >
-              Down
-            </span>
-
-            <svg
-              id="pause-icon"
-              viewBox="0 0 48 48"
-              fill="currentColor"
-              class="absolute h-16 w-16 text-[var(--session-ink)]"
-              style="display: none; opacity: 0.8;"
-              aria-hidden="true"
-            >
-              <rect x="10" y="8" width="10" height="32" rx="2" />
-              <rect x="28" y="8" width="10" height="32" rx="2" />
-            </svg>
-          </div>
         </div>
 
         <div
-          id="set-glyphs"
-          class="mt-8 flex min-h-7 w-full items-end justify-center gap-5"
-          aria-label="Workout sets"
+          id="session-status-line"
+          class="relative z-10 flex items-end justify-between pb-[max(1rem,env(safe-area-inset-bottom))] tabular-nums"
         >
-        </div>
-
-        <div id="session-status-line" class="mt-12 w-full max-w-[340px] px-2">
-          <div class="flex items-baseline justify-between gap-10 tabular-nums text-[var(--session-ink)]">
-            <div class="flex items-baseline gap-1.5">
-              <span
-                id="total-done"
-                data-total-plan={@summary.burpee_count_total}
-                class="qs-tabular text-[28px] font-semibold leading-none tracking-[-0.045em]"
-              >
-                0
-              </span>
-              <span class="text-sm font-medium text-[var(--session-muted)]">
-                / <span id="total-plan" class="qs-tabular">{@summary.burpee_count_total}</span> reps
-              </span>
-            </div>
-            <div
-              id="time-left"
-              class="qs-tabular text-[28px] font-semibold leading-none tracking-[-0.045em] tabular-nums text-[var(--session-ink)]"
-            >
-              {Fmt.duration_sec(round(@summary.duration_sec_total))}
-            </div>
+          <div>
+            <span id="total-done" data-total-plan={@summary.burpee_count_total}>0</span>
+            <span class="block text-sm text-[var(--session-muted)]">done</span>
           </div>
+          <div class="text-right">
+            <span id="time-left">{Fmt.duration_sec(round(@summary.duration_sec_total))}</span>
+            <span class="block text-sm text-[var(--session-muted)]">left</span>
+          </div>
+          <span id="total-plan" class="sr-only">{@summary.burpee_count_total}</span>
         </div>
       </div>
 

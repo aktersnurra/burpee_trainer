@@ -134,7 +134,7 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		enterWorkPhase() {},
 		triggerDown() {},
 		updateCurrentSetRepCount() {},
-		updateWorkRing() {},
+		updateWorkFill() {},
 		enterRestPhase() {},
 		renderRestProgress() {},
 		renderDisplayModel() {},
