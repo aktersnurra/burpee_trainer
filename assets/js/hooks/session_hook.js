@@ -286,34 +286,35 @@ const SessionHook = {
 		}
 
 		overlay.className =
-			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-[var(--session-bg)] p-6 text-center text-[var(--session-ink)]";
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] p-5 text-center text-[var(--session-ink)] sm:p-8";
 		overlay.replaceChildren();
 
-		const title = document.createElement("span");
+		const title = document.createElement("h1");
 		title.className =
-			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
+			"qs-heading-tight text-[clamp(2.75rem,10vw,4.75rem)] font-medium leading-[0.98]";
 		title.textContent = "Warm up first?";
 
 		const description = document.createElement("p");
-		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
+		description.className =
+			"max-w-lg text-lg leading-relaxed text-[var(--session-muted)]";
 		description.textContent =
 			"Start with a short warmup, or skip straight to the workout.";
 
 		const buttons = document.createElement("div");
-		buttons.className = "flex flex-wrap items-center justify-center gap-2";
+		buttons.className = "grid w-full max-w-lg grid-cols-1 gap-3 sm:grid-cols-2";
 
 		const yes = document.createElement("button");
 		yes.type = "button";
 		yes.id = "warmup-yes-btn";
 		yes.className =
-			"rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 text-sm font-medium text-[var(--session-bg)] transition active:scale-[0.98] hover:opacity-90";
+			"min-h-14 w-full rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]";
 		yes.textContent = "Warm up";
 
 		const skip = document.createElement("button");
 		skip.type = "button";
 		skip.id = "warmup-skip-btn";
 		skip.className =
-			"rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-6 py-4 text-sm font-medium text-[var(--session-muted)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]";
+			"min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-6 py-4 text-base font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-[0.98]";
 		skip.textContent = "Skip warmup";
 
 		buttons.append(yes, skip);
@@ -339,32 +340,39 @@ const SessionHook = {
 		}
 
 		overlay.className =
-			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] text-center text-[var(--session-ink)]";
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] p-5 text-center text-[var(--session-ink)] sm:p-8";
 		overlay.replaceChildren();
 
-		const title = document.createElement("span");
-		title.className = "text-sm font-medium text-[var(--session-muted)]";
-		title.textContent = "Track with camera?";
+		const title = document.createElement("h1");
+		title.className =
+			"qs-heading-tight text-[clamp(2.75rem,10vw,4.75rem)] font-medium leading-[0.98]";
+		title.textContent = "Track your workout?";
+
+		const description = document.createElement("p");
+		description.className =
+			"max-w-lg text-lg leading-relaxed text-[var(--session-muted)]";
+		description.textContent =
+			"Use camera tracking for pace and rep detection, or run the session with the timer only.";
 
 		const buttons = document.createElement("div");
-		buttons.className = "flex gap-2";
+		buttons.className = "grid w-full max-w-lg grid-cols-1 gap-3 sm:grid-cols-2";
 
 		const yes = document.createElement("button");
 		yes.type = "button";
 		yes.id = "capture-tracked-btn";
 		yes.className =
-			"min-w-32 rounded-xl border border-[var(--session-toggle-border)] bg-[var(--session-toggle-bg)] px-5 py-4 text-sm font-medium text-[var(--session-toggle-ink)] transition active:scale-[0.98] hover:opacity-90";
-		yes.textContent = "Track with camera";
+			"min-h-14 w-full rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]";
+		yes.textContent = "Use camera";
 
 		const no = document.createElement("button");
 		no.type = "button";
 		no.id = "capture-timed-btn";
 		no.className =
-			"min-w-32 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-5 py-4 text-sm font-medium text-[var(--session-muted)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]";
+			"min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-6 py-4 text-base font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-[0.98]";
 		no.textContent = "Timer only";
 
 		buttons.append(yes, no);
-		overlay.append(title, buttons);
+		overlay.append(title, description, buttons);
 		parent.appendChild(overlay);
 	},
 
@@ -398,7 +406,7 @@ const SessionHook = {
 		);
 	},
 
-	showWorkoutStartPrompt(titleText, descriptionText) {
+	showWorkoutStartPrompt(_titleText, _descriptionText) {
 		this.renderer.resetReady();
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.rafId = null;
@@ -416,27 +424,28 @@ const SessionHook = {
 		}
 
 		overlay.className =
-			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-[var(--session-bg)] p-6 text-center text-[var(--session-ink)]";
+			"absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] p-5 text-center text-[var(--session-ink)] sm:p-8";
 		overlay.replaceChildren();
 
-		const title = document.createElement("span");
+		const meta = document.createElement("p");
+		meta.className =
+			"text-xs font-semibold uppercase tracking-[0.2em] text-[var(--session-muted)]";
+		meta.textContent = "Ready when you are";
+
+		const title = document.createElement("h1");
 		title.id = "start-overlay-title";
 		title.className =
-			"font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--session-soft-muted)]";
-		title.textContent = titleText;
-
-		const description = document.createElement("p");
-		description.className = "max-w-xs text-sm text-[var(--session-soft-muted)]";
-		description.textContent = descriptionText;
+			"qs-heading-tight max-w-xl text-[clamp(2.75rem,10vw,4.75rem)] font-medium leading-[0.98]";
+		title.textContent = "Start when you’re ready.";
 
 		const button = document.createElement("button");
 		button.type = "button";
 		button.id = "workout-ready-btn";
 		button.className =
-			"border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--session-bg)] transition active:scale-[0.98]";
+			"mt-2 min-h-14 w-full max-w-lg rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]";
 		button.textContent = "Start workout";
 
-		overlay.append(title, description, button);
+		overlay.append(meta, title, button);
 		parent.appendChild(overlay);
 	},
 

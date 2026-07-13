@@ -133,6 +133,10 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
              "#camera-setup-panel.pointer-events-auto #camera-setup-start-btn"
            )
 
+    assert has_element?(session, "#camera-setup-panel #camera-setup-start-btn")
+    assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-preview")
+    assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-canvas")
+
     render_hook(session, "tracker_ready", %{})
 
     render_hook(session, "pose_capture_chunk", %{

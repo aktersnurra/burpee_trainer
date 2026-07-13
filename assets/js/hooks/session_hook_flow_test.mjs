@@ -194,6 +194,40 @@ function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 }
 
+test("capture prompt uses the mock hierarchy and stable actions", () => {
+	const ctx = buildHarness();
+	ctx.dispatchFlow({
+		type: "SESSION_READY",
+		workoutTimeline: [],
+		blockCount: 1,
+	});
+
+	const overlay = ctx.el.querySelector("#start-overlay");
+	assert.equal(overlay.children[0].textContent, "Track your workout?");
+	assert.ok(ctx.el.querySelector("#capture-tracked-btn"));
+	assert.ok(ctx.el.querySelector("#capture-timed-btn"));
+});
+
+test("warmup and ready prompts retain their stable action ids", () => {
+	const ctx = buildHarness();
+	ctx.dispatchFlow({
+		type: "SESSION_READY",
+		workoutTimeline: [],
+		blockCount: 1,
+	});
+	ctx.dispatchFlow({ type: "CAPTURE_TIMED" });
+
+	assert.equal(
+		ctx.el.querySelector("#start-overlay").children[0].textContent,
+		"Warm up first?",
+	);
+	assert.ok(ctx.el.querySelector("#warmup-yes-btn"));
+	assert.ok(ctx.el.querySelector("#warmup-skip-btn"));
+
+	ctx.dispatchFlow({ type: "WARMUP_SKIP" });
+	assert.ok(ctx.el.querySelector("#workout-ready-btn"));
+});
+
 test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 

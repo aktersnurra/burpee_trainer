@@ -220,6 +220,12 @@ body {
   text-transform: uppercase;
 }
 
+.session-camera-layout {
+  box-sizing: border-box;
+  grid-template-rows: 7.75rem minmax(0, 1fr) 3.5rem;
+  gap: 1.25rem;
+  padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+}
 
 /* Initial countdown number — punchy scale pop on each tick. */
 @keyframes countdown-pop {

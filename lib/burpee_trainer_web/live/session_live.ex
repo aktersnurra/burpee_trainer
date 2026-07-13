@@ -521,14 +521,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 phx-update="ignore"
                 data-target-pace-sec={@target_pace_sec}
                 class={[
-                  "pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--session-bg)] p-6 transition-opacity duration-200",
+                  "session-camera-layout pointer-events-none absolute inset-0 grid bg-[var(--session-bg)] transition-opacity duration-200",
                   @capture_setup_state in [:arming, :ready] && "z-10 opacity-100",
                   @capture_setup_state == :started && "invisible -z-10 opacity-0"
                 ]}
               >
                 <div
                   id="pose-tracker-preview-frame"
-                  class="relative aspect-[3/4] w-full max-w-[430px] overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
+                  class="relative row-start-2 aspect-[3/4] h-full max-h-[36rem] w-auto max-w-full place-self-center overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black"
                 >
                   <video
                     id="pose-tracker-preview"
@@ -568,28 +568,25 @@ defmodule BurpeeTrainerWeb.SessionLive do
     <div
       id="camera-setup-panel"
       data-setup-state={@setup_state}
-      class="pointer-events-auto absolute inset-0 z-20 flex flex-col items-center justify-between px-5 py-8 text-[var(--session-ink)]"
+      class="session-camera-layout pointer-events-auto absolute inset-0 z-20 grid text-center text-[var(--session-ink)]"
     >
-      <.qs_surface class="w-full max-w-[430px] bg-[var(--session-surface)]/80 px-5 py-4 shadow-[0_18px_45px_rgba(32,32,29,0.12)] backdrop-blur-sm">
-        <p class="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--session-soft-muted)]">
-          Camera setup
-        </p>
-        <p class="mt-2 text-sm font-medium text-[var(--session-ink)]">
+      <div class="row-start-1 w-full max-w-[430px] place-self-center self-center">
+        <h1 class="qs-heading-tight text-3xl font-medium leading-tight">
           <%= if @setup_state == :ready do %>
             Camera ready
           <% else %>
             Adjust your camera
           <% end %>
-        </p>
-        <p class="mt-1 text-xs leading-relaxed text-[var(--session-muted)]">
+        </h1>
+        <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
           Make sure your full body is visible. We’ll save pose traces for warmup and main workout.
         </p>
-      </.qs_surface>
+      </div>
 
       <button
         id="camera-setup-start-btn"
         type="button"
-        class="pointer-events-auto rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-sm font-semibold text-[var(--session-bg)] shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition active:scale-[0.98]"
+        class="pointer-events-auto row-start-3 min-h-14 w-full max-w-[430px] place-self-center rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]"
       >
         Start tracked session
       </button>
@@ -599,15 +596,18 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp not_runnable_panel(assigns) do
     ~H"""
-    <div class="flex min-h-dvh items-center justify-center bg-[var(--session-bg)] px-8 text-center text-[var(--session-ink)]">
-      <.qs_surface class="max-w-xs bg-[var(--session-surface)]/45 px-6 py-8">
-        <p class="text-sm font-semibold text-[var(--session-ink)]">
+    <div
+      id="session-not-runnable"
+      class="flex min-h-dvh items-center justify-center bg-[var(--session-bg)] px-8 text-center"
+    >
+      <div class="max-w-sm">
+        <h1 class="qs-heading-tight text-4xl font-medium text-[var(--session-ink)]">
           No timed events
-        </p>
-        <p class="mt-3 text-sm leading-relaxed text-[var(--session-muted)]">
+        </h1>
+        <p class="mt-4 text-base leading-relaxed text-[var(--session-muted)]">
           Add at least one block with one set before running.
         </p>
-      </.qs_surface>
+      </div>
     </div>
     """
   end
