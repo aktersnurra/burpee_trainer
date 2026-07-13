@@ -10,6 +10,7 @@ export function countdownDisplayModel({
 		mode: "countdown",
 		phaseLabel: "starting in",
 		ring: { kind: "session", progress: 1 - value / total },
+		visual: { state: "initial-countdown", progress: 0, pulse: null },
 		primaryCount: value,
 		countdownDots: { count: total, faded: Math.max(total - value, 0) },
 		setGlyphs,
@@ -32,38 +33,56 @@ export function runningDisplayModel({
 	const isRest = kind === "rest";
 	const isWork = kind === "work";
 	const progress = ringProgressForFrame(frame);
-
-	const isRestCountdown =
-		isRest &&
-		(frame?.phase_remaining ?? timeLeftSec ?? Infinity) <= 3 &&
-		(frame?.phase_remaining ?? timeLeftSec ?? 0) > 0;
+	const remainingSec = frame?.phase_remaining ?? timeLeftSec ?? 0;
+	const visual = visualStateForFrame({
+		isRest,
+		isWork,
+		remainingSec,
+		progress,
+	});
+	const isRestCountdown = isRest && remainingSec <= 3 && remainingSec > 0;
 
 	return {
 		mode: isRestCountdown ? "countdown" : isRest ? "rest" : "work",
 		phaseLabel: isRestCountdown ? "starting in" : "",
 		ring: { kind: "session", progress },
-		primaryCount: isRestCountdown
-			? Math.ceil(frame?.phase_remaining ?? timeLeftSec ?? 0)
-			: isRest
-				? formatTime(frame?.phase_remaining ?? timeLeftSec)
-				: isWork
-					? Math.max((event?.reps || 0) - doneInEvent, 0)
-					: (event?.reps ?? totalTarget ?? "—"),
-		countdownDots: isRestCountdown
-			? {
-					count: 3,
-					faded: Math.max(
-						3 - Math.ceil(frame?.phase_remaining ?? timeLeftSec ?? 0),
-						0,
-					),
-				}
-			: null,
-		restTimeLeftSec: isRest ? (frame?.phase_remaining ?? timeLeftSec) : null,
+		visual,
+		primaryCount:
+			visual.state === "rest-countdown"
+				? visual.pulse
+				: isRest
+					? formatTime(remainingSec)
+					: isWork
+						? Math.max((event?.reps || 0) - doneInEvent, 0)
+						: (event?.reps ?? totalTarget ?? "—"),
+		countdownDots: null,
+		restTimeLeftSec: isRest ? remainingSec : null,
 		totalDone,
 		totalTarget,
 		timeLeftSec,
 		setGlyphs: activeSegmentGlyphs({ timeline, frame }),
 	};
+}
+
+function visualStateForFrame({ isRest, isWork, remainingSec, progress }) {
+	if (isWork) {
+		return { state: "work", progress, pulse: null };
+	}
+
+	if (!isRest) {
+		return { state: "work", progress: 0, pulse: null };
+	}
+
+	if (remainingSec > 5) {
+		return { state: "rest-breathe", progress: 0, pulse: null };
+	}
+
+	if (remainingSec > 3) {
+		return { state: "rest-settle", progress: 0, pulse: null };
+	}
+
+	const pulse = remainingSec > 0 ? Math.ceil(remainingSec) : null;
+	return { state: "rest-countdown", progress: 0, pulse };
 }
 
 function activeSegmentGlyphs({ timeline, frame }) {
@@ -105,7 +124,8 @@ function ringProgressForFrame(frame) {
 }
 
 function eventDurationSec(event) {
-	if (event?.kind === "work") return (event.reps || 0) * (event.sec_per_rep || 0);
+	if (event?.kind === "work")
+		return (event.reps || 0) * (event.sec_per_rep || 0);
 	if (event?.kind === "rest") return event.duration_sec || 0;
 	return 0;
 }
