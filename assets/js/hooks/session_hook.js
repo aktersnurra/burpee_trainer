@@ -466,6 +466,12 @@ const SessionHook = {
 	},
 
 	onCameraSetupStart() {
+		const tracker = this.el.querySelector("#pose-tracker");
+		if (tracker) {
+			tracker.classList.remove("z-10", "opacity-100");
+			tracker.classList.add("invisible", "-z-10", "opacity-0");
+		}
+
 		this.pushEvent("camera_setup_started", {});
 		this.dispatchFlow({ type: "CAMERA_SETUP_READY" });
 	},

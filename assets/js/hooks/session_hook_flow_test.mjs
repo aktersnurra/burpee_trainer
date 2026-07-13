@@ -36,6 +36,23 @@ class FakeElement {
 		return this.attributes.has(name);
 	}
 
+	get classList() {
+		const element = this;
+		const tokens = () => element.className.split(/\s+/).filter(Boolean);
+
+		return {
+			add(...names) {
+				element.className = [...new Set([...tokens(), ...names])].join(" ");
+			},
+			remove(...names) {
+				const removed = new Set(names);
+				element.className = tokens()
+					.filter((name) => !removed.has(name))
+					.join(" ");
+			},
+		};
+	}
+
 	append(...children) {
 		this.children.push(...children);
 	}
@@ -207,6 +224,36 @@ test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 
 	assert.equal(ctx.el.querySelector("#pose-tracker-preview"), null);
 	assert.match(ctx.el.querySelector("#start-overlay").className, /\bhidden\b/);
+});
+
+test("starting a tracked session hides the preview without removing the tracker", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	tracker.className = "pointer-events-none z-10 opacity-100";
+
+	ctx.onCameraSetupStart();
+
+	assert.equal(ctx.el.querySelector("#pose-tracker"), tracker);
+	assert.equal(tracker.removed, undefined);
+	assert.doesNotMatch(tracker.className, /(?:^|\s)z-10(?:\s|$)/);
+	assert.doesNotMatch(tracker.className, /(?:^|\s)opacity-100(?:\s|$)/);
+	assert.match(tracker.className, /(?:^|\s)invisible(?:\s|$)/);
+	assert.match(tracker.className, /(?:^|\s)-z-10(?:\s|$)/);
+	assert.match(tracker.className, /(?:^|\s)opacity-0(?:\s|$)/);
+	assert.deepEqual(ctx.events, [
+		{ name: "camera_setup_started", payload: {} },
+	]);
+	assert.equal(ctx.flow.mode, "warmup_prompt");
+});
+
+test("camera setup continues when the tracker DOM is absent", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+
+	assert.doesNotThrow(() => ctx.onCameraSetupStart());
+	assert.deepEqual(ctx.events, [
+		{ name: "camera_setup_started", payload: {} },
+	]);
+	assert.equal(ctx.flow.mode, "warmup_prompt");
 });
 
 test("pose tracker binds only to the preview rendered inside its hook", () => {
