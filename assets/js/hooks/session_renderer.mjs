@@ -169,18 +169,19 @@ export class SessionRenderer {
 		const count = this.root.querySelector("#count");
 		if (!count) return;
 
-		count.classList.remove("is-between-set-pulse", "countdown-pop");
 		count.textContent = String(model.primaryCount ?? "");
 		count.style.visibility = this.paused ? "hidden" : "";
 
 		const pulse = model.visual?.pulse;
-		if (
-			model.visual?.state === "rest-countdown" &&
-			pulse !== this.lastPulseValue
-		) {
-			count.classList.add("is-between-set-pulse");
-			void count.offsetWidth;
-			count.classList.add("countdown-pop");
+		if (model.visual?.state === "rest-countdown") {
+			if (pulse !== this.lastPulseValue) {
+				count.classList.remove("is-between-set-pulse", "countdown-pop");
+				count.classList.add("is-between-set-pulse");
+				void count.offsetWidth;
+				count.classList.add("countdown-pop");
+			}
+		} else {
+			count.classList.remove("is-between-set-pulse", "countdown-pop");
 		}
 		this.lastPulseValue = pulse;
 	}

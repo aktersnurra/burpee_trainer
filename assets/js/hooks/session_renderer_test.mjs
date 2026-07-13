@@ -4,10 +4,15 @@ import { SessionRenderer } from "./session_renderer.mjs";
 
 function classList() {
 	const values = new Set();
+	const additions = [];
 	return {
-		add: (...names) => names.forEach((name) => values.add(name)),
+		add: (...names) => {
+			names.forEach((name) => values.add(name));
+			additions.push(...names);
+		},
 		remove: (...names) => names.forEach((name) => values.delete(name)),
 		contains: (name) => values.has(name),
+		addCount: (name) => additions.filter((added) => added === name).length,
 	};
 }
 
@@ -113,4 +118,26 @@ test("rest switches from breathing to settle to numeric countdown", () => {
 		elements["#count"].classList.contains("is-between-set-pulse"),
 		true,
 	);
+});
+
+test("between-set pulse survives duplicate frames and retriggers once per number", () => {
+	const { renderer, elements } = harness();
+	const count = elements["#count"];
+
+	for (const [index, pulse] of [3, 2, 1].entries()) {
+		const model = {
+			visual: { state: "rest-countdown", progress: 0, pulse },
+			primaryCount: pulse,
+		};
+
+		renderer.renderDisplayModel(model);
+		assert.equal(count.classList.contains("is-between-set-pulse"), true);
+		assert.equal(count.classList.contains("countdown-pop"), true);
+		assert.equal(count.classList.addCount("countdown-pop"), index + 1);
+
+		renderer.renderDisplayModel(model);
+		assert.equal(count.classList.contains("is-between-set-pulse"), true);
+		assert.equal(count.classList.contains("countdown-pop"), true);
+		assert.equal(count.classList.addCount("countdown-pop"), index + 1);
+	}
 });
