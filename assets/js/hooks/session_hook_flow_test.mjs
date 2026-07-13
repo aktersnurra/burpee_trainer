@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import SessionHook from "./session_hook.js";
 import { initialFlowState } from "./session_flow_fsm.mjs";
 import { initialSegmentState } from "./session_segment_fsm.mjs";
+import { POSE_FPS } from "./pose_sampler.mjs";
 import {
 	requestPreferredCameraStream,
 	resolvePreviewVideo,
@@ -352,6 +353,203 @@ test("camera selection matches the working debug page", async () => {
 
 	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
 	assert.deepEqual(calls, [{ video: { facingMode: "user" }, audio: false }]);
+});
+
+test("front camera applies its minimum supported zoom", async () => {
+	let appliedConstraints = null;
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						return { zoom: { min: 0.5, max: 2 } };
+					},
+					async applyConstraints(constraints) {
+						appliedConstraints = constraints;
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.deepEqual(appliedConstraints, { advanced: [{ zoom: 0.5 }] });
+});
+
+test("front camera continues when capabilities inspection throws", async () => {
+	let applyCalls = 0;
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						throw new Error("capabilities unavailable");
+					},
+					async applyConstraints() {
+						applyCalls += 1;
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.equal(applyCalls, 0);
+});
+
+test("front camera keeps a finite zoom minimum without applyConstraints", async () => {
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						return { zoom: { min: 0.75, max: 2 } };
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+});
+
+
+test("front camera continues when capabilities are undefined", async () => {
+	let applyCalls = 0;
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						return undefined;
+					},
+					async applyConstraints() {
+						applyCalls += 1;
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.equal(applyCalls, 0);
+});
+
+test("front camera continues when stream has no video tracks", async () => {
+	let applyCalls = 0;
+	const stream = {
+		getVideoTracks() {
+			return [];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.equal(applyCalls, 0);
+});
+
+test("front camera continues when minimum zoom is non-finite", async () => {
+	let applyCalls = 0;
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						return { zoom: { min: Number.NaN, max: 2 } };
+					},
+					async applyConstraints() {
+						applyCalls += 1;
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.equal(applyCalls, 0);
+});
+
+test("front camera continues when zoom is unsupported", async () => {
+	let applyCalls = 0;
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						return {};
+					},
+					async applyConstraints() {
+						applyCalls += 1;
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+	assert.equal(applyCalls, 0);
+});
+
+test("front camera continues when minimum zoom is rejected", async () => {
+	const stream = {
+		getVideoTracks() {
+			return [
+				{
+					getCapabilities() {
+						return { zoom: { min: 0.5, max: 2 } };
+					},
+					async applyConstraints() {
+						throw new Error("zoom rejected");
+					},
+				},
+			];
+		},
+	};
+	const mediaDevices = {
+		async getUserMedia() {
+			return stream;
+		},
+	};
+
+	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
+});
+
+test("pose estimation remains at 15 FPS", () => {
+	assert.equal(POSE_FPS, 15);
 });
 
 test("timed workout completion pushes log payload with completed reps", () => {

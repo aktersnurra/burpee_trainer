@@ -50,11 +50,31 @@ export function resolvePreviewVideo(hook) {
 	return video;
 }
 
-export function requestPreferredCameraStream(mediaDevices) {
-	return mediaDevices.getUserMedia({
+async function applyMinimumSupportedZoom(stream) {
+	const [track] = stream?.getVideoTracks?.() || [];
+
+	if (!track?.applyConstraints) return;
+
+	try {
+		const capabilities = track.getCapabilities?.();
+		const minimumZoom = capabilities?.zoom?.min;
+
+		if (!Number.isFinite(minimumZoom)) return;
+
+		await track.applyConstraints({ advanced: [{ zoom: minimumZoom }] });
+	} catch (_error) {
+		// Zoom is optional; preserve the working front-camera stream.
+	}
+}
+
+export async function requestPreferredCameraStream(mediaDevices) {
+	const stream = await mediaDevices.getUserMedia({
 		video: { facingMode: "user" },
 		audio: false,
 	});
+
+	await applyMinimumSupportedZoom(stream);
+	return stream;
 }
 
 export function createPoseTracker(hook) {
