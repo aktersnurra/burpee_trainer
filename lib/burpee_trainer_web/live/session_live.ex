@@ -601,7 +601,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       >
         <div
           id="session-work-fill"
-          class="absolute inset-0 origin-bottom scale-y-0 bg-[var(--session-work)]"
+          class="absolute inset-0 origin-bottom bg-[var(--session-work)]"
         >
         </div>
         <div id="session-rest-shape" class="absolute inset-x-0 bottom-0"></div>

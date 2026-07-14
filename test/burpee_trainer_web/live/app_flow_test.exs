@@ -54,6 +54,9 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     refute has_element?(session, "#count[aria-label]")
     refute has_element?(session, "#ring-container #session-accessible-status")
 
+    assert has_element?(session, "#session-work-fill")
+    refute has_element?(session, "#session-work-fill[class*='scale-y-']")
+
     assert has_element?(
              session,
              "#session-pause-actions[inert][aria-hidden='true'].pointer-events-none"
