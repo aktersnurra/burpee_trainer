@@ -55,8 +55,8 @@ export class SessionRenderer {
 
 	updateAccessibleState({ state, primaryCount }) {
 		const target = this.root.querySelector("#ring-container");
-		const count = this.root.querySelector("#count");
-		const primaryLabel =
+		const status = this.root.querySelector("#session-accessible-status");
+		const statusText =
 			state === "work"
 				? `${primaryCount} reps remaining`
 				: state?.startsWith("rest-")
@@ -69,7 +69,9 @@ export class SessionRenderer {
 				this.paused ? "Resume session" : "Pause session",
 			);
 		}
-		if (count) count.setAttribute("aria-label", primaryLabel);
+		if (status && status.textContent !== statusText) {
+			status.textContent = statusText;
+		}
 	}
 
 	updatePauseButton(paused) {

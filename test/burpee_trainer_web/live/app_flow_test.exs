@@ -43,7 +43,16 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
 
     assert has_element?(session, "#ring-container[aria-label='Pause session']")
-    assert has_element?(session, "#count[aria-label='Workout starting']")
+
+    assert has_element?(
+             session,
+             "#session-accessible-status[role='status'][aria-live='polite'][aria-atomic='true']",
+             "Workout starting"
+           )
+
+    assert has_element?(session, "#count[aria-hidden='true']")
+    refute has_element?(session, "#count[aria-label]")
+    refute has_element?(session, "#ring-container #session-accessible-status")
   end
 
   test "planned workout can be started, completed, saved, and reviewed in stats", %{

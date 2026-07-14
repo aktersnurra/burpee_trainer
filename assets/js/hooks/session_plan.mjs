@@ -16,15 +16,6 @@ export function programBurpeeCount(programOrEvents) {
 	}, 0);
 }
 
-export function setBarsFromProgram(program) {
-	return workoutTimelineFromProgram(program)
-		.filter((event) => eventKind(event) === "work")
-		.map((event, index) => ({
-			index: index + 1,
-			reps: event.reps || 0,
-		}));
-}
-
 export function warmupTimelineFromProgram(program) {
 	const firstWork = workoutTimelineFromProgram(program).find(
 		(event) => eventKind(event) === "work",

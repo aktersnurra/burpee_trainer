@@ -632,6 +632,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
       </div>
 
       <div class="relative z-10 mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col px-5 py-8">
+        <span
+          id="session-accessible-status"
+          class="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          Workout starting
+        </span>
         <div
           id="ring-container"
           class="relative flex min-h-0 flex-1 cursor-pointer select-none touch-manipulation items-center justify-center"
@@ -642,7 +651,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <span
             id="count"
             class="qs-tabular text-[clamp(7rem,34vw,13rem)] font-semibold leading-none tracking-[-0.085em]"
-            aria-label="Workout starting"
+            aria-hidden="true"
           >
             —
           </span>

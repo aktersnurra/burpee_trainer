@@ -2,7 +2,6 @@ export function initialSegmentState() {
 	return {
 		mode: "idle",
 		timeline: [],
-		blockCount: 0,
 		clock: {
 			startTime: null,
 			pauseTime: null,
@@ -56,7 +55,8 @@ export function currentFrame(timeline, elapsedSec) {
 }
 
 export function eventDurationSec(event) {
-	if (event?.kind === "work") return (event.reps || 0) * (event.sec_per_rep || 0);
+	if (event?.kind === "work")
+		return (event.reps || 0) * (event.sec_per_rep || 0);
 	if (event?.kind === "rest") return event.duration_sec || 0;
 	return 0;
 }
@@ -355,7 +355,6 @@ export function segmentTransition(state, event) {
 				state: {
 					...initialSegmentState(),
 					timeline,
-					blockCount: event.blockCount || 0,
 				},
 				commands: [
 					{ type: "updateVisibleRepTotal", burpeeCountDone: 0 },

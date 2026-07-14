@@ -1,14 +1,12 @@
 import { SessionAudio } from "./session_audio.mjs";
 import {
 	currentFrame,
-	eventDurationSec,
 	initialSegmentState,
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
 import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
 import {
 	programBurpeeCount,
-	setBarsFromProgram,
 	warmupTimelineFromProgram,
 	workoutTimelineFromProgram,
 } from "./session_plan.mjs";
@@ -48,8 +46,6 @@ const SessionHook = {
 		this.lastDownCueKey = null;
 		this.countdownRingEl = null;
 		this.hiddenAt = null;
-		this.blockCount = 0;
-		this.setGlyphBlocks = [];
 
 		this.onVisibility = () => {
 			if (document.visibilityState === "hidden") {
@@ -93,7 +89,6 @@ const SessionHook = {
 			this.dispatchFlow({
 				type: "SESSION_READY",
 				workoutTimeline: workoutTimelineFromProgram(payload),
-				blockCount: setBarsFromProgram(payload).length,
 			});
 		});
 
@@ -188,7 +183,6 @@ const SessionHook = {
 		const result = segmentTransition(this.segment, event);
 		this.segment = result.state;
 		this.timeline = this.segment.timeline;
-		this.blockCount = this.segment.blockCount;
 		result.commands.forEach((command) => this.runSegmentCommand(command));
 	},
 
@@ -487,28 +481,12 @@ const SessionHook = {
 		if (overlay) overlay.remove();
 
 		const renderCountdown = (value, progress, pop) => {
-			const segmentPreview = runningDisplayModel({
-				segment: this.activeSegment,
-				timeline: this.timeline,
-				frame: this.timeline[0]
-					? {
-							index: 0,
-							phase_elapsed: 0,
-							phase_remaining: eventDurationSec(this.timeline[0]),
-							event: this.timeline[0],
-						}
-					: null,
-				timeLeftSec: this.segment.clock.totalDurationSec,
-				totalDone: this.segment.reps.burpeeCountDone,
-				totalTarget: this.segment.reps.burpeeCountTarget,
-			});
 			const model = countdownDisplayModel({
 				value,
 				total: 5,
-				setGlyphs: segmentPreview.setGlyphs,
-				totalDone: segmentPreview.totalDone,
-				totalTarget: segmentPreview.totalTarget,
-				timeLeftSec: segmentPreview.timeLeftSec,
+				totalDone: this.segment.reps.burpeeCountDone,
+				totalTarget: this.segment.reps.burpeeCountTarget,
+				timeLeftSec: this.segment.clock.totalDurationSec,
 			});
 			model.ring.progress = progress;
 			this.renderer.renderDisplayModel(model);
@@ -592,7 +570,7 @@ const SessionHook = {
 		this.startTime = this.segment.clock.startTime;
 	},
 
-	startSegment({ segment, timeline, blockCount, burpeeCountTarget }) {
+	startSegment({ segment, timeline, burpeeCountTarget }) {
 		this.activeSegment = segment;
 		document.dispatchEvent(
 			new CustomEvent("pose-capture:segment", {
@@ -604,7 +582,6 @@ const SessionHook = {
 		this.dispatchSegment({
 			type: "SEGMENT_READY",
 			timeline,
-			blockCount,
 			burpeeCountTarget,
 		});
 		this.dispatchSegment({ type: "COUNTDOWN_START", now: performance.now() });
@@ -626,8 +603,6 @@ const SessionHook = {
 
 		const totalDurationSec = this.segment.clock.totalDurationSec;
 		const model = runningDisplayModel({
-			segment: this.activeSegment,
-			timeline: this.timeline,
 			frame,
 			timeLeftSec: Math.max(totalDurationSec - elapsed, 0),
 			totalDone: this.segment.reps.burpeeCountDone,

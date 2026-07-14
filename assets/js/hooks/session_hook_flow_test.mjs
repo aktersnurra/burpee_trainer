@@ -179,7 +179,6 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		countdownPaused: false,
 		countdownCount: null,
 		countdownTimeoutId: null,
-		setGlyphBlocks: [],
 		lastDownCueKey: null,
 		pushEvent(name, payload) {
 			events.push({ name, payload });
@@ -192,7 +191,6 @@ function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
 	ctx.dispatchFlow({
 		type: "SESSION_READY",
 		workoutTimeline,
-		blockCount: 1,
 	});
 	ctx.dispatchFlow({ type: "CAPTURE_TIMED" });
 	ctx.dispatchFlow({ type: "WARMUP_SKIP" });
@@ -207,7 +205,6 @@ test("capture prompt uses the mock hierarchy and stable actions", () => {
 	ctx.dispatchFlow({
 		type: "SESSION_READY",
 		workoutTimeline: [],
-		blockCount: 1,
 	});
 
 	const overlay = ctx.el.querySelector("#start-overlay");
@@ -221,7 +218,6 @@ test("warmup and ready prompts retain their stable action ids", () => {
 	ctx.dispatchFlow({
 		type: "SESSION_READY",
 		workoutTimeline: [],
-		blockCount: 1,
 	});
 	ctx.dispatchFlow({ type: "CAPTURE_TIMED" });
 
@@ -242,7 +238,6 @@ test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 	ctx.dispatchFlow({
 		type: "SESSION_READY",
 		workoutTimeline: [],
-		blockCount: 1,
 	});
 	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
 
@@ -448,7 +443,6 @@ test("tracked workout completion sends finish to ready pose tracker", () => {
 	ctx.dispatchFlow({
 		type: "SESSION_READY",
 		workoutTimeline,
-		blockCount: 1,
 	});
 	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
 	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });

@@ -18,14 +18,43 @@ function classList() {
 
 function element() {
 	const attributes = new Map();
-	return {
+	const children = [];
+	let textContent = "";
+	let textContentAssignments = 0;
+	const node = {
 		attributes,
+		children,
 		classList: classList(),
+		className: "",
 		style: {},
-		textContent: "",
-		firstChild: null,
-		appendChild() {},
-		removeChild() {},
+		ownerDocument: {
+			createElement() {
+				return element();
+			},
+		},
+		get textContent() {
+			return textContent;
+		},
+		set textContent(value) {
+			textContent = String(value);
+			textContentAssignments += 1;
+			children.splice(0);
+		},
+		get textContentAssignments() {
+			return textContentAssignments;
+		},
+		get firstChild() {
+			return children[0] || null;
+		},
+		appendChild(child) {
+			children.push(child);
+			return child;
+		},
+		removeChild(child) {
+			const index = children.indexOf(child);
+			if (index >= 0) children.splice(index, 1);
+			return child;
+		},
 		setAttribute(name, value) {
 			attributes.set(name, String(value));
 		},
@@ -33,6 +62,7 @@ function element() {
 			return attributes.get(name) || null;
 		},
 	};
+	return node;
 }
 
 function harness() {
@@ -41,6 +71,7 @@ function harness() {
 		"#session-rest-shape": element(),
 		"#session-runner-client": element(),
 		"#ring-container": element(),
+		"#session-accessible-status": element(),
 		"#count": element(),
 		"#time-left": element(),
 		"#total-done": element(),
@@ -80,6 +111,17 @@ test("initial countdown still renders dots", () => {
 			"is-initial-countdown",
 		),
 		true,
+	);
+	assert.equal(elements["#count"].children.length, 5);
+	assert.deepEqual(
+		elements["#count"].children.map((dot) => dot.className),
+		[
+			"countdown-dot is-faded",
+			"countdown-dot is-faded",
+			"countdown-dot",
+			"countdown-dot",
+			"countdown-dot",
+		],
 	);
 });
 
@@ -170,27 +212,41 @@ test("pause hides the active number and shows the pause glyph", () => {
 	);
 });
 
-test("renderer exposes meaningful count and pause labels", () => {
+test("renderer exposes count state through a separate status without repeat announcements", () => {
 	const { renderer, elements } = harness();
-	renderer.renderDisplayModel({
+	const status = elements["#session-accessible-status"];
+	const workModel = {
 		visual: { state: "work", progress: 0.5, pulse: null },
 		primaryCount: 5,
 		countdownDots: null,
 		totalDone: 4,
 		totalTarget: 20,
 		timeLeftSec: 60,
-	});
+	};
 
-	assert.equal(
-		elements["#count"].getAttribute("aria-label"),
-		"5 reps remaining",
-	);
+	renderer.renderDisplayModel(workModel);
+	assert.equal(status.textContent, "5 reps remaining");
+	assert.equal(status.textContentAssignments, 1);
+	assert.equal(elements["#count"].getAttribute("aria-label"), null);
+
+	renderer.renderDisplayModel(workModel);
+	assert.equal(status.textContentAssignments, 1);
+
+	renderer.renderDisplayModel({
+		...workModel,
+		visual: { state: "rest-breathe", progress: 0, pulse: null },
+		primaryCount: "12",
+	});
+	assert.equal(status.textContent, "Rest time remaining 12");
+	assert.equal(status.textContentAssignments, 2);
+
 	assert.equal(
 		elements["#ring-container"].getAttribute("aria-label"),
 		"Pause session",
 	);
 
 	renderer.updatePauseButton(true);
+	assert.equal(status.textContentAssignments, 2);
 	assert.equal(
 		elements["#ring-container"].getAttribute("aria-label"),
 		"Resume session",

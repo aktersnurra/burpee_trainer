@@ -1,7 +1,6 @@
 export function countdownDisplayModel({
 	value,
 	total = 5,
-	setGlyphs = [],
 	totalDone,
 	totalTarget,
 	timeLeftSec,
@@ -13,7 +12,6 @@ export function countdownDisplayModel({
 		visual: { state: "initial-countdown", progress: 0, pulse: null },
 		primaryCount: value,
 		countdownDots: { count: total, faded: Math.max(total - value, 0) },
-		setGlyphs,
 		totalDone,
 		totalTarget,
 		timeLeftSec,
@@ -21,7 +19,6 @@ export function countdownDisplayModel({
 }
 
 export function runningDisplayModel({
-	timeline,
 	frame,
 	timeLeftSec,
 	totalDone,
@@ -60,7 +57,6 @@ export function runningDisplayModel({
 		totalDone,
 		totalTarget,
 		timeLeftSec,
-		setGlyphs: activeSegmentGlyphs({ timeline, frame }),
 	};
 }
 
@@ -83,30 +79,6 @@ function visualStateForFrame({ isRest, isWork, remainingSec, progress }) {
 
 	const pulse = remainingSec > 0 ? Math.ceil(remainingSec) : null;
 	return { state: "rest-countdown", progress: 0, pulse };
-}
-
-function activeSegmentGlyphs({ timeline, frame }) {
-	const workEvents = (timeline || []).filter(
-		(event) => eventKind(event) === "work",
-	);
-	if (workEvents.length === 0) return [];
-
-	const completedSets = (timeline || [])
-		.slice(0, frame?.index ?? timeline.length)
-		.filter((event) => eventKind(event) === "work").length;
-	const currentSetDurationSec = eventDurationSec(frame?.event);
-	const currentSetProgress =
-		eventKind(frame?.event) === "work" && currentSetDurationSec > 0
-			? clamp((frame.phase_elapsed || 0) / currentSetDurationSec)
-			: null;
-
-	return [
-		{
-			setCount: workEvents.length,
-			completedSets,
-			currentSetProgress,
-		},
-	];
 }
 
 function ringProgressForFrame(frame) {

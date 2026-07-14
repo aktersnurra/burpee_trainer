@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import {
 	programBurpeeCount,
-	setBarsFromProgram,
 	workoutTimelineFromProgram,
 } from "./session_plan.mjs";
 
@@ -27,9 +26,5 @@ const program = {
 
 assert.deepEqual(workoutTimelineFromProgram(program), program.events);
 assert.equal(programBurpeeCount(program), 20);
-assert.deepEqual(setBarsFromProgram(program), [
-	{ index: 1, reps: 10 },
-	{ index: 2, reps: 10 },
-]);
 
 console.log("session_program tests passed");

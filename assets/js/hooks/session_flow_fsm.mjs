@@ -2,7 +2,6 @@ export function initialFlowState() {
 	return {
 		mode: "idle",
 		workoutTimeline: [],
-		blockCount: 0,
 		activeSegment: null,
 		warmupResult: { burpeeCountDone: 0, durationSec: 0 },
 		workoutResult: null,
@@ -18,7 +17,6 @@ export function flowTransition(state, event) {
 					...state,
 					mode: "capture_prompt",
 					workoutTimeline: event.workoutTimeline || [],
-					blockCount: event.blockCount || 0,
 				},
 				commands: [{ type: "showCapturePrompt" }],
 			};
@@ -45,7 +43,6 @@ export function flowTransition(state, event) {
 						type: "startSegment",
 						segment: "warmup",
 						timeline: event.warmupTimeline || [],
-						blockCount: state.blockCount,
 						burpeeCountTarget: event.burpeeCountTarget,
 					},
 				],
@@ -124,7 +121,6 @@ export function flowTransition(state, event) {
 						type: "startSegment",
 						segment: "workout",
 						timeline: state.workoutTimeline,
-						blockCount: state.blockCount,
 					},
 				],
 			};
