@@ -467,38 +467,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
         phx-hook="SessionHook"
         class="session-surface fixed inset-0 z-[60] flex min-h-dvh flex-col bg-[var(--session-bg)] text-[var(--session-ink)]"
       >
-        <div
-          id="session-pause-actions"
-          class="pointer-events-none absolute inset-x-0 bottom-7 z-20 translate-y-2 px-5 opacity-0 transition duration-150"
-          aria-hidden="true"
-          inert="inert"
-        >
-          <div
-            class="mx-auto flex w-full max-w-[360px] flex-col items-center gap-1.5"
-            aria-label="Paused session actions"
-          >
-            <button
-              id="finish-early-btn"
-              type="button"
-              disabled
-              class="w-full rounded-[1.75rem] border border-[var(--session-border)] bg-[var(--session-bg)] px-6 py-5 text-lg font-medium transition active:scale-[0.99] disabled:hidden"
-            >
-              Finish early
-            </button>
-            <button
-              id="session-abort-btn"
-              type="button"
-              phx-click="discard"
-              disabled
-              data-confirm="Abort this session without saving?"
-              class="px-6 py-3 text-base text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-              aria-label="Abort session without saving"
-            >
-              Abort
-            </button>
-          </div>
-        </div>
-
         <%= case @phase do %>
           <% :not_runnable -> %>
             <.not_runnable_panel />
@@ -639,7 +607,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
         <div id="session-rest-shape" class="absolute inset-x-0 bottom-0"></div>
       </div>
 
-      <div class="relative z-10 mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col px-5 py-8">
+      <div
+        id="session-runner-layout"
+        class="relative z-10 mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-[430px] px-5 py-8"
+      >
         <span
           id="session-accessible-status"
           class="sr-only"
@@ -674,6 +645,38 @@ defmodule BurpeeTrainerWeb.SessionLive do
             <rect x="10" y="8" width="10" height="32" rx="2" />
             <rect x="28" y="8" width="10" height="32" rx="2" />
           </svg>
+        </div>
+
+        <div
+          id="session-pause-actions"
+          class="pointer-events-none relative z-20 opacity-0 transition-opacity duration-150"
+          aria-hidden="true"
+          inert="inert"
+        >
+          <div
+            class="mx-auto flex w-full max-w-[360px] flex-col items-center gap-1.5"
+            aria-label="Paused session actions"
+          >
+            <button
+              id="finish-early-btn"
+              type="button"
+              disabled
+              class="w-full rounded-[1.75rem] border border-[var(--session-border)] bg-[var(--session-bg)] px-6 py-5 text-lg font-medium transition active:scale-[0.99] disabled:invisible"
+            >
+              Finish early
+            </button>
+            <button
+              id="session-abort-btn"
+              type="button"
+              phx-click="discard"
+              disabled
+              data-confirm="Abort this session without saving?"
+              class="px-6 py-3 text-base text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+              aria-label="Abort session without saving"
+            >
+              Abort
+            </button>
+          </div>
         </div>
 
         <div

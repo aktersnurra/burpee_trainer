@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const css = readFileSync(new URL("../../css/app.css", import.meta.url), "utf8");
+const sessionLive = readFileSync(
+	new URL(
+		"../../../lib/burpee_trainer_web/live/session_live.ex",
+		import.meta.url,
+	),
+	"utf8",
+);
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
 	([, selectors, declarations]) => ({
 		selectors: selectors.split(",").map((selector) => selector.trim()),
@@ -77,7 +84,7 @@ test("active runner uses fixed contrast-safe paper and ink in both themes", () =
 	}
 });
 
-test("active numerals, values, labels, and pause glyph use active surface ink", () => {
+test("active numerals, values, labels, pause glyph, and countdown dots use active surface ink", () => {
 	for (const state of activeStates) {
 		for (const target of [
 			"#count",
@@ -92,6 +99,83 @@ test("active numerals, values, labels, and pause glyph use active surface ink", 
 			);
 		}
 	}
+
+	const dot = ruleFor(
+		"#session-runner-client.is-initial-countdown #count .countdown-dot",
+	)?.declarations;
+	assert.match(
+		dot || "",
+		/background:\s*var\(--session-active-ink\)\s*!important;/,
+	);
+
+	for (const [theme, foreground, background] of [
+		["light", "#20201D", "#F4F2EE"],
+		["dark", "#20201D", "#F4F2EE"],
+	]) {
+		assert.ok(
+			contrastRatio(foreground, background) >= 4.5,
+			`${theme} countdown dots must contrast with their active background`,
+		);
+	}
+});
+
+test("between-set numerals retain dark ink while a work-orange halo pulses", () => {
+	const count = ruleFor("#count.is-between-set-pulse")?.declarations || "";
+	assert.match(count, /color:\s*var\(--session-active-ink\);/);
+	assert.match(count, /position:\s*relative;/);
+
+	const halo =
+		ruleFor("#count.is-between-set-pulse.countdown-pop::after")?.declarations ||
+		"";
+	assert.match(halo, /content:\s*"";/);
+	assert.match(halo, /border:[^;]*solid var\(--session-work\);/);
+	assert.match(halo, /animation:\s*session-countdown-halo\s+0\.35s[^;]*;/);
+
+	const frames = keyframesFor("session-countdown-halo");
+	assert.match(frames, /0%[\s\S]*opacity:\s*0;/);
+	assert.match(frames, /40%[\s\S]*opacity:\s*1;/);
+	assert.match(frames, /100%[\s\S]*opacity:\s*0;/);
+});
+
+test("pause actions reserve a separate normal-flow row above stable stats", () => {
+	const layout = ruleFor("#session-runner-layout")?.declarations || "";
+	assert.match(layout, /display:\s*grid;/);
+	assert.match(
+		layout,
+		/grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto\s+auto;/,
+	);
+
+	const actions = ruleFor("#session-pause-actions")?.declarations || "";
+	assert.match(actions, /position:\s*relative;/);
+	assert.match(actions, /grid-row:\s*2;/);
+	assert.match(actions, /margin-bottom:\s*1rem;/);
+	assert.doesNotMatch(actions, /position:\s*absolute;/);
+
+	const status = ruleFor("#session-status-line")?.declarations || "";
+	assert.match(status, /grid-row:\s*3;/);
+});
+
+test("muted supporting text meets normal-text contrast in both themes", () => {
+	const lightTheme = ruleFor(".session-surface")?.declarations || "";
+	const darkTheme =
+		ruleFor('[data-theme="dark"] .session-surface')?.declarations || "";
+	assert.match(lightTheme, /--session-muted:\s*#706C64;/);
+	assert.match(darkTheme, /--session-muted:\s*#AAB2BE;/);
+
+	for (const [theme, foreground, background] of [
+		["light", "#706C64", "#F4F2EE"],
+		["dark", "#AAB2BE", "#111318"],
+	]) {
+		assert.ok(
+			contrastRatio(foreground, background) >= 4.5,
+			`${theme} muted text must pass normal-text contrast`,
+		);
+	}
+
+	assert.match(
+		sessionLive,
+		/for="completion-note-input"[\s\S]*?class="[^"]*text-sm[^"]*text-\[var\(--session-muted\)\]"/,
+	);
 });
 
 test("rest settle is a finite pausable animation with a static countdown endpoint", () => {

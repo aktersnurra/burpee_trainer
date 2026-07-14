@@ -61,6 +61,16 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     assert has_element?(session, "#finish-early-btn[disabled]")
     assert has_element?(session, "#session-abort-btn[disabled]")
+
+    assert has_element?(
+             session,
+             "#session-runner-layout.grid > #session-pause-actions.relative + #session-status-line"
+           )
+
+    assert has_element?(
+             session,
+             "#session-pause-actions:not(.absolute) #finish-early-btn[class*='disabled:invisible']"
+           )
   end
 
   test "planned workout can be started, completed, saved, and reviewed in stats", %{

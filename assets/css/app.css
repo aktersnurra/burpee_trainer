@@ -147,7 +147,7 @@ body {
   --session-ink: #20201D;
   --session-active-bg: #F4F2EE;
   --session-active-ink: #20201D;
-  --session-muted: #74716A;
+  --session-muted: #706C64;
   --session-soft-muted: #9A9489;
   --session-border: #DAD6CE;
   --session-track: #DAD6CE;
@@ -332,7 +332,59 @@ body {
 }
 
 #count.is-between-set-pulse {
+  position: relative;
+  isolation: isolate;
   color: var(--session-active-ink);
+}
+
+@keyframes session-countdown-halo {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.16);
+  }
+}
+
+#count.is-between-set-pulse.countdown-pop::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: 1em;
+  height: 1em;
+  border: clamp(0.35rem, 2vw, 0.65rem) solid var(--session-work);
+  border-radius: 9999px;
+  pointer-events: none;
+  animation: session-countdown-halo 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+#session-runner-layout {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+
+#ring-container {
+  grid-row: 1;
+}
+
+#session-pause-actions {
+  position: relative;
+  grid-row: 2;
+  margin-bottom: 1rem;
+}
+
+#session-status-line {
+  grid-row: 3;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -342,6 +394,12 @@ body {
   #session-pause-actions {
     animation: none !important;
     transition-duration: 1ms !important;
+  }
+
+  #count.is-between-set-pulse.countdown-pop::after {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    animation: none !important;
   }
 }
 
@@ -421,7 +479,7 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 9999px;
-  background: var(--session-countin-ink) !important;
+  background: var(--session-active-ink) !important;
   opacity: 1;
   transition: opacity 220ms ease, transform 220ms ease;
 }
