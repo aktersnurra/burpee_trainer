@@ -126,6 +126,14 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		root.append(tracker);
 	}
 
+	const pauseActions = new FakeElement("div");
+	pauseActions.id = "session-pause-actions";
+	const finishEarly = new FakeElement("button");
+	finishEarly.id = "finish-early-btn";
+	finishEarly.setAttribute("disabled", "disabled");
+	pauseActions.append(finishEarly);
+	root.append(pauseActions);
+
 	const renderer = {
 		resetReady() {},
 		updateTotalCounter() {},
@@ -386,6 +394,28 @@ test("camera selection matches the working debug page", async () => {
 
 	assert.equal(await requestPreferredCameraStream(mediaDevices), stream);
 	assert.deepEqual(calls, [{ video: { facingMode: "user" }, audio: false }]);
+});
+
+test("paused workout reveals finish early and hides it again on resume", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const actions = ctx.el.querySelector("#session-pause-actions");
+	const finishEarly = ctx.el.querySelector("#finish-early-btn");
+	ctx.activeSegment = "workout";
+	ctx.startTime = 0;
+	ctx.paused = true;
+
+	ctx.updatePauseActionsVisibility();
+	assert.equal(actions.style.opacity, "1");
+	assert.equal(actions.style.pointerEvents, "auto");
+	assert.equal(actions.attributes.get("aria-hidden"), "false");
+	assert.equal(finishEarly.hasAttribute("disabled"), false);
+
+	ctx.paused = false;
+	ctx.updatePauseActionsVisibility();
+	assert.equal(actions.style.opacity, "0");
+	assert.equal(actions.style.pointerEvents, "none");
+	assert.equal(actions.attributes.get("aria-hidden"), "true");
+	assert.equal(finishEarly.hasAttribute("disabled"), true);
 });
 
 test("timed workout completion pushes log payload with completed reps", () => {

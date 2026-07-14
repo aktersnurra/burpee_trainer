@@ -53,7 +53,14 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
       "warmup" => %{"burpee_count_done" => 5, "duration_sec" => 60}
     })
 
+    assert has_element?(session, "#session-completion-summary")
     assert has_element?(session, "#session-completion-form")
+    assert has_element?(session, "#session-save-btn")
+
+    assert has_element?(
+             session,
+             "#session-discard-btn[data-confirm='Discard this session?']"
+           )
 
     session
     |> form("#session-completion-form",
@@ -157,7 +164,15 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
       "cadence_ms" => [5_000, 10_000, 15_000]
     })
 
+    assert has_element?(session, "#tracked-review")
+    assert has_element?(session, "#session-completion-summary")
     assert has_element?(session, "#session-completion-form")
+    assert has_element?(session, "#session-save-btn")
+
+    assert has_element?(
+             session,
+             "#session-discard-btn[data-confirm='Discard this session?']"
+           )
 
     session
     |> form("#session-completion-form",

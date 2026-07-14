@@ -141,3 +141,23 @@ test("between-set pulse survives duplicate frames and retriggers once per number
 		assert.equal(count.classList.addCount("countdown-pop"), index + 1);
 	}
 });
+
+test("pause hides the active number and shows the pause glyph", () => {
+	const { renderer, elements } = harness();
+	renderer.updatePauseButton(true);
+
+	assert.equal(elements["#count"].style.visibility, "hidden");
+	assert.equal(elements["#pause-icon"].style.display, "");
+	assert.equal(
+		elements["#session-runner-client"].classList.contains("is-paused"),
+		true,
+	);
+
+	renderer.updatePauseButton(false);
+	assert.equal(elements["#count"].style.visibility, "");
+	assert.equal(elements["#pause-icon"].style.display, "none");
+	assert.equal(
+		elements["#session-runner-client"].classList.contains("is-paused"),
+		false,
+	);
+});

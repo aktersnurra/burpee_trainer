@@ -271,6 +271,10 @@ body {
   animation: session-breathe 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite;
 }
 
+#session-runner-client.is-paused #session-rest-shape {
+  animation-play-state: paused;
+}
+
 #session-runner-client.is-rest-settle #session-rest-shape,
 #session-runner-client.is-rest-countdown #session-rest-shape {
   opacity: 1;

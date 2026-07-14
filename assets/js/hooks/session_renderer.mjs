@@ -59,6 +59,7 @@ export class SessionRenderer {
 		const countEl = this.root.querySelector("#count");
 		const downEl = this.root.querySelector("#down-word");
 		const ringContainer = this.root.querySelector("#ring-container");
+		const surface = this.root.querySelector("#session-runner-client");
 
 		if (paused) {
 			this.clearTimers();
@@ -68,17 +69,11 @@ export class SessionRenderer {
 			}
 			if (downEl) downEl.style.display = "none";
 			if (pauseIcon) pauseIcon.style.display = "";
-			if (ringContainer) {
-				ringContainer.style.opacity = "0.6";
-				ringContainer.classList.remove("is-down-cue-active");
-				ringContainer.classList.add("is-paused");
-			}
+			ringContainer?.classList.remove("is-down-cue-active");
+			surface?.classList.add("is-paused");
 		} else {
 			if (pauseIcon) pauseIcon.style.display = "none";
-			if (ringContainer) {
-				ringContainer.style.opacity = "";
-				ringContainer.classList.remove("is-paused");
-			}
+			surface?.classList.remove("is-paused");
 			if (countEl) countEl.style.visibility = "";
 		}
 	}
