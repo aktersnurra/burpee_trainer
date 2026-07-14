@@ -637,11 +637,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
           class="relative flex min-h-0 flex-1 cursor-pointer select-none touch-manipulation items-center justify-center"
           role="button"
           tabindex="0"
-          aria-label="Pause or resume session"
+          aria-label="Pause session"
         >
           <span
             id="count"
             class="qs-tabular text-[clamp(7rem,34vw,13rem)] font-semibold leading-none tracking-[-0.085em]"
+            aria-label="Workout starting"
           >
             —
           </span>

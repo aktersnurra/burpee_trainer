@@ -17,14 +17,21 @@ function classList() {
 }
 
 function element() {
+	const attributes = new Map();
 	return {
+		attributes,
 		classList: classList(),
 		style: {},
 		textContent: "",
 		firstChild: null,
 		appendChild() {},
 		removeChild() {},
-		setAttribute() {},
+		setAttribute(name, value) {
+			attributes.set(name, String(value));
+		},
+		getAttribute(name) {
+			return attributes.get(name) || null;
+		},
 	};
 }
 
@@ -33,6 +40,7 @@ function harness() {
 		"#session-work-fill": element(),
 		"#session-rest-shape": element(),
 		"#session-runner-client": element(),
+		"#ring-container": element(),
 		"#count": element(),
 		"#time-left": element(),
 		"#total-done": element(),
@@ -159,5 +167,32 @@ test("pause hides the active number and shows the pause glyph", () => {
 	assert.equal(
 		elements["#session-runner-client"].classList.contains("is-paused"),
 		false,
+	);
+});
+
+test("renderer exposes meaningful count and pause labels", () => {
+	const { renderer, elements } = harness();
+	renderer.renderDisplayModel({
+		visual: { state: "work", progress: 0.5, pulse: null },
+		primaryCount: 5,
+		countdownDots: null,
+		totalDone: 4,
+		totalTarget: 20,
+		timeLeftSec: 60,
+	});
+
+	assert.equal(
+		elements["#count"].getAttribute("aria-label"),
+		"5 reps remaining",
+	);
+	assert.equal(
+		elements["#ring-container"].getAttribute("aria-label"),
+		"Pause session",
+	);
+
+	renderer.updatePauseButton(true);
+	assert.equal(
+		elements["#ring-container"].getAttribute("aria-label"),
+		"Resume session",
 	);
 });

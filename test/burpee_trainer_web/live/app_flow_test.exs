@@ -37,6 +37,15 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(home, "#home-start-workout[href='/session/#{created.id}']")
   end
 
+  test "session runner exposes accessible starting state labels", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Accessible Flow"})
+
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    assert has_element?(session, "#ring-container[aria-label='Pause session']")
+    assert has_element?(session, "#count[aria-label='Workout starting']")
+  end
+
   test "planned workout can be started, completed, saved, and reviewed in stats", %{
     conn: conn,
     user: user

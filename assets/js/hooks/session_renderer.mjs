@@ -53,6 +53,25 @@ export class SessionRenderer {
 		fill.style.transform = `scaleY(${clamped})`;
 	}
 
+	updateAccessibleState({ state, primaryCount }) {
+		const target = this.root.querySelector("#ring-container");
+		const count = this.root.querySelector("#count");
+		const primaryLabel =
+			state === "work"
+				? `${primaryCount} reps remaining`
+				: state?.startsWith("rest-")
+					? `Rest time remaining ${primaryCount}`
+					: "Workout starting";
+
+		if (target) {
+			target.setAttribute(
+				"aria-label",
+				this.paused ? "Resume session" : "Pause session",
+			);
+		}
+		if (count) count.setAttribute("aria-label", primaryLabel);
+	}
+
 	updatePauseButton(paused) {
 		this.paused = paused;
 		const pauseIcon = this.root.querySelector("#pause-icon");
@@ -76,6 +95,11 @@ export class SessionRenderer {
 			surface?.classList.remove("is-paused");
 			if (countEl) countEl.style.visibility = "";
 		}
+
+		this.updateAccessibleState({
+			state: this.currentVisualState,
+			primaryCount: this.currentPrimaryCount,
+		});
 	}
 
 	resetReady() {
@@ -110,6 +134,12 @@ export class SessionRenderer {
 			progress: 0,
 			pulse: null,
 		};
+		this.currentVisualState = visual.state;
+		this.currentPrimaryCount = model.primaryCount;
+		this.updateAccessibleState({
+			state: visual.state,
+			primaryCount: model.primaryCount,
+		});
 		this.setVisualState(visual.state);
 
 		if (visual.state === "initial-countdown") {

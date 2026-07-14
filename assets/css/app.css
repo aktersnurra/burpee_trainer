@@ -293,8 +293,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  #session-work-fill,
   #session-rest-shape,
-  #count {
+  #count,
+  #session-pause-actions {
     animation: none !important;
     transition-duration: 1ms !important;
   }
@@ -306,6 +308,24 @@ body {
   font-weight: 600;
   line-height: 0.9;
   letter-spacing: -0.07em;
+}
+
+#session-runner-client.is-working #session-status-line > div > span,
+#session-runner-client.is-rest-breathe #session-status-line > div > span,
+#session-runner-client.is-rest-settle #session-status-line > div > span,
+#session-runner-client.is-rest-countdown #session-status-line > div > span {
+  color: var(--session-ink);
+}
+
+@media (max-width: 360px) {
+  #count {
+    font-size: clamp(6rem, 31vw, 8rem);
+  }
+
+  #session-status-line #total-done,
+  #session-status-line #time-left {
+    font-size: clamp(3rem, 15vw, 4rem);
+  }
 }
 
 #burpee-session.is-initial-countdown,
