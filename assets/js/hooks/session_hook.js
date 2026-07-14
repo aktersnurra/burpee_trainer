@@ -469,6 +469,14 @@ const SessionHook = {
 	},
 
 	onCameraSetupStart() {
+		const cameraVisibility = this.el.querySelector("#pose-tracker-visibility");
+		if (cameraVisibility) {
+			cameraVisibility.style.visibility = "hidden";
+			cameraVisibility.style.opacity = "0";
+			cameraVisibility.style.pointerEvents = "none";
+			cameraVisibility.setAttribute("aria-hidden", "true");
+		}
+
 		this.pushEvent("camera_setup_started", {});
 		this.dispatchFlow({ type: "CAMERA_SETUP_READY" });
 	},
@@ -711,6 +719,7 @@ const SessionHook = {
 	updatePauseActionsVisibility() {
 		const actions = this.el.querySelector("#session-pause-actions");
 		const finishEarlyBtn = this.el.querySelector("#finish-early-btn");
+		const abortBtn = this.el.querySelector("#session-abort-btn");
 		if (!actions) return;
 
 		const isPaused = this.paused || this.countdownPaused;
@@ -723,6 +732,14 @@ const SessionHook = {
 		actions.style.transform = isPaused ? "translateY(0)" : "";
 		actions.style.pointerEvents = isPaused ? "auto" : "none";
 		actions.setAttribute("aria-hidden", isPaused ? "false" : "true");
+
+		if (isPaused) {
+			actions.removeAttribute("inert");
+			abortBtn?.removeAttribute("disabled");
+		} else {
+			actions.setAttribute("inert", "");
+			abortBtn?.setAttribute("disabled", "disabled");
+		}
 
 		if (finishEarlyBtn) {
 			if (canFinishEarly) {

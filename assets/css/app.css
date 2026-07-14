@@ -145,6 +145,7 @@ body {
   --session-surface: #FAF8F3;
   --session-surface-alt: #EFECE4;
   --session-ink: #20201D;
+  --session-active-ink: #20201D;
   --session-muted: #74716A;
   --session-soft-muted: #9A9489;
   --session-border: #DAD6CE;
@@ -178,6 +179,7 @@ body {
   --session-surface: #171A21;
   --session-surface-alt: #20242C;
   --session-ink: #ECEFF3;
+  --session-active-ink: #20201D;
   --session-muted: #AAB2BE;
   --session-soft-muted: #7E8794;
   --session-border: #343A45;
@@ -288,8 +290,19 @@ body {
     transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+#session-runner-client.is-working #count,
+#session-runner-client.is-rest-breathe #count,
+#session-runner-client.is-rest-settle #count,
+#session-runner-client.is-rest-countdown #count,
+#session-runner-client.is-working #pause-icon,
+#session-runner-client.is-rest-breathe #pause-icon,
+#session-runner-client.is-rest-settle #pause-icon,
+#session-runner-client.is-rest-countdown #pause-icon {
+  color: var(--session-active-ink);
+}
+
 #count.is-between-set-pulse {
-  color: var(--session-work);
+  color: var(--session-active-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -314,7 +327,7 @@ body {
 #session-runner-client.is-rest-breathe #session-status-line > div > span,
 #session-runner-client.is-rest-settle #session-status-line > div > span,
 #session-runner-client.is-rest-countdown #session-status-line > div > span {
-  color: var(--session-ink);
+  color: var(--session-active-ink);
 }
 
 @media (max-width: 360px) {

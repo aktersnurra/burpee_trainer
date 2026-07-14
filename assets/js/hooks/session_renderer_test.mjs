@@ -5,14 +5,20 @@ import { SessionRenderer } from "./session_renderer.mjs";
 function classList() {
 	const values = new Set();
 	const additions = [];
+	let mutations = 0;
 	return {
 		add: (...names) => {
 			names.forEach((name) => values.add(name));
 			additions.push(...names);
+			mutations += 1;
 		},
-		remove: (...names) => names.forEach((name) => values.delete(name)),
+		remove: (...names) => {
+			names.forEach((name) => values.delete(name));
+			mutations += 1;
+		},
 		contains: (name) => values.has(name),
 		addCount: (name) => additions.filter((added) => added === name).length,
+		mutationCount: () => mutations,
 	};
 }
 
@@ -93,6 +99,36 @@ test("work fill uses the existing zero-to-one progress", () => {
 
 	renderer.updateWorkFill(0);
 	assert.equal(elements["#session-work-fill"].style.transform, "scaleY(0)");
+});
+
+test("duplicate visual states skip class mutations while live values still update", () => {
+	const { renderer, elements } = harness();
+	const surfaceClasses = elements["#session-runner-client"].classList;
+	const workModel = {
+		visual: { state: "work", progress: 0.25, pulse: null },
+		primaryCount: 5,
+	};
+
+	renderer.renderDisplayModel(workModel);
+	const workMutations = surfaceClasses.mutationCount();
+
+	renderer.renderDisplayModel({
+		...workModel,
+		visual: { ...workModel.visual, progress: 0.75 },
+		primaryCount: 4,
+	});
+	assert.equal(surfaceClasses.mutationCount(), workMutations);
+	assert.equal(elements["#session-work-fill"].style.transform, "scaleY(0.75)");
+	assert.equal(elements["#count"].textContent, "4");
+
+	renderer.renderDisplayModel({
+		visual: { state: "rest-breathe", progress: 0, pulse: null },
+		primaryCount: "12",
+	});
+	assert.ok(surfaceClasses.mutationCount() > workMutations);
+	assert.equal(surfaceClasses.contains("is-working"), false);
+	assert.equal(surfaceClasses.contains("is-rest-breathe"), true);
+	assert.equal(elements["#count"].textContent, "12");
 });
 
 test("initial countdown still renders dots", () => {

@@ -471,6 +471,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           id="session-pause-actions"
           class="pointer-events-none absolute inset-x-0 bottom-7 z-20 translate-y-2 px-5 opacity-0 transition duration-150"
           aria-hidden="true"
+          inert="inert"
         >
           <div
             class="mx-auto flex w-full max-w-[360px] flex-col items-center gap-1.5"
@@ -488,6 +489,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               id="session-abort-btn"
               type="button"
               phx-click="discard"
+              disabled
               data-confirm="Abort this session without saving?"
               class="px-6 py-3 text-base text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
               aria-label="Abort session without saving"
@@ -511,10 +513,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <% phase when phase in [:idle, :running] -> %>
             <%= if @capture_mode == :tracked do %>
               <div
-                id="pose-tracker"
-                phx-hook="PoseTracker"
-                phx-update="ignore"
-                data-target-pace-sec={@target_pace_sec}
+                id="pose-tracker-visibility"
+                aria-hidden={if(@capture_setup_state == :started, do: "true", else: "false")}
                 class={[
                   "session-camera-layout pointer-events-none absolute inset-0 grid bg-[var(--session-bg)] transition-opacity duration-200",
                   @capture_setup_state in [:arming, :ready] && "z-10 opacity-100",
@@ -522,21 +522,29 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 ]}
               >
                 <div
-                  id="pose-tracker-preview-frame"
-                  class="relative row-start-2 aspect-[3/4] h-full max-h-[36rem] w-auto max-w-full place-self-center overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black"
+                  id="pose-tracker"
+                  phx-hook="PoseTracker"
+                  phx-update="ignore"
+                  data-target-pace-sec={@target_pace_sec}
+                  class="contents"
                 >
-                  <video
-                    id="pose-tracker-preview"
-                    class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
-                    muted
-                    playsinline
+                  <div
+                    id="pose-tracker-preview-frame"
+                    class="relative row-start-2 aspect-[3/4] h-full max-h-[36rem] w-auto max-w-full place-self-center overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black"
                   >
-                  </video>
-                  <canvas
-                    id="pose-tracker-canvas"
-                    class="absolute inset-0 h-full w-full"
-                  >
-                  </canvas>
+                    <video
+                      id="pose-tracker-preview"
+                      class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
+                      muted
+                      playsinline
+                    >
+                    </video>
+                    <canvas
+                      id="pose-tracker-canvas"
+                      class="absolute inset-0 h-full w-full"
+                    >
+                    </canvas>
+                  </div>
                 </div>
               </div>
               <.camera_setup_panel
@@ -818,20 +826,32 @@ defmodule BurpeeTrainerWeb.SessionLive do
         class="mt-10"
       >
         <div class="border-t border-[var(--session-border)] py-6">
-          <p class="text-sm font-medium text-[var(--session-muted)]">Reps</p>
+          <label
+            for="completion-reps-input"
+            class="text-sm font-medium text-[var(--session-muted)]"
+          >
+            Reps
+          </label>
           <input
+            id="completion-reps-input"
             type="number"
             name={@form[:burpee_count_actual].name}
             value={@form[:burpee_count_actual].value}
             min="0"
             inputmode="numeric"
-            class="qs-tabular mt-2 w-full bg-transparent text-4xl font-semibold leading-none tracking-[-0.04em] text-[var(--session-ink)] focus:outline-none"
+            class="qs-tabular mt-2 min-h-11 w-full bg-transparent text-4xl font-semibold leading-none tracking-[-0.04em] text-[var(--session-ink)] focus:outline-none"
           />
         </div>
 
         <div class="border-t border-[var(--session-border)] py-6">
-          <p class="text-sm font-medium text-[var(--session-muted)]">Minutes</p>
+          <label
+            for="completion-duration-min-input"
+            class="text-sm font-medium text-[var(--session-muted)]"
+          >
+            Minutes
+          </label>
           <input
+            id="completion-duration-min-input"
             type="number"
             name="workout_session[duration_min]"
             value={
@@ -842,7 +862,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
             min="0"
             step="0.1"
             inputmode="decimal"
-            class="qs-tabular mt-2 w-full bg-transparent text-4xl font-semibold leading-none tracking-[-0.04em] text-[var(--session-ink)] focus:outline-none"
+            class="qs-tabular mt-2 min-h-11 w-full bg-transparent text-4xl font-semibold leading-none tracking-[-0.04em] text-[var(--session-ink)] focus:outline-none"
           />
         </div>
 
@@ -855,7 +875,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 phx-click="toggle_tag"
                 phx-value-tag={tag}
                 class={[
-                  "rounded-full border px-4 py-2 text-xs transition",
+                  "min-h-11 rounded-full border px-4 py-2 text-xs transition",
                   tag in @completion_tags &&
                     "border-[var(--session-tag-border)] bg-[var(--session-tag-bg)] font-medium text-[var(--session-tag-ink)]",
                   tag not in @completion_tags &&
@@ -893,7 +913,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           id="session-save-btn"
           type="submit"
           phx-disable-with="Saving…"
-          class="mt-8 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-5 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
+          class="mt-8 min-h-11 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-5 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
         >
           Save session
         </button>
@@ -902,7 +922,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           type="button"
           phx-click="discard"
           data-confirm="Discard this session?"
-          class="mx-auto mt-2 block px-6 py-3 text-sm text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+          class="mx-auto mt-2 block min-h-11 px-6 py-3 text-sm text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
         >
           Discard
         </button>

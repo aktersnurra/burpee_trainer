@@ -53,6 +53,14 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(session, "#count[aria-hidden='true']")
     refute has_element?(session, "#count[aria-label]")
     refute has_element?(session, "#ring-container #session-accessible-status")
+
+    assert has_element?(
+             session,
+             "#session-pause-actions[inert][aria-hidden='true'].pointer-events-none"
+           )
+
+    assert has_element?(session, "#finish-early-btn[disabled]")
+    assert has_element?(session, "#session-abort-btn[disabled]")
   end
 
   test "planned workout can be started, completed, saved, and reviewed in stats", %{
@@ -73,11 +81,36 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     assert has_element?(session, "#session-completion-summary")
     assert has_element?(session, "#session-completion-form")
-    assert has_element?(session, "#session-save-btn")
+    assert has_element?(session, "#session-save-btn.min-h-11")
 
     assert has_element?(
              session,
-             "#session-discard-btn[data-confirm='Discard this session?']"
+             "label[for='completion-reps-input']",
+             "Reps"
+           )
+
+    assert has_element?(
+             session,
+             "#completion-reps-input.min-h-11[name='workout_session[burpee_count_actual]']"
+           )
+
+    assert has_element?(
+             session,
+             "label[for='completion-duration-min-input']",
+             "Minutes"
+           )
+
+    assert has_element?(
+             session,
+             "#completion-duration-min-input.min-h-11[name='workout_session[duration_min]']"
+           )
+
+    assert has_element?(session, "button[phx-click='set_mood'].min-h-14")
+    assert has_element?(session, "button[phx-click='toggle_tag'].min-h-11")
+
+    assert has_element?(
+             session,
+             "#session-discard-btn.min-h-11[data-confirm='Discard this session?']"
            )
 
     session
@@ -145,7 +178,7 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     assert has_element?(
              session,
-             "#pose-tracker[phx-hook='PoseTracker'][phx-update='ignore'] #pose-tracker-preview[muted][playsinline]"
+             "#pose-tracker-visibility #pose-tracker[phx-hook='PoseTracker'][phx-update='ignore'] #pose-tracker-preview[muted][playsinline]"
            )
 
     assert has_element?(
@@ -161,6 +194,19 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(session, "#camera-setup-panel #camera-setup-start-btn")
     assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-preview")
     assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-canvas")
+
+    render_hook(session, "camera_setup_started", %{})
+
+    refute has_element?(session, "#camera-setup-panel")
+
+    assert has_element?(session, "#pose-tracker-visibility.invisible[aria-hidden='true']")
+
+    assert has_element?(
+             session,
+             "#pose-tracker-visibility #pose-tracker[phx-hook='PoseTracker'][phx-update='ignore']"
+           )
+
+    assert has_element?(session, "#pose-tracker #pose-tracker-preview-frame")
 
     render_hook(session, "tracker_ready", %{})
 

@@ -120,18 +120,25 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 	globalThis.document.root = root;
 
 	if (poseTrackerReady !== null) {
+		const trackerVisibility = new FakeElement("div");
+		trackerVisibility.id = "pose-tracker-visibility";
 		const tracker = new FakeElement("div");
 		tracker.id = "pose-tracker";
 		if (poseTrackerReady) tracker.dataset.poseTrackerReady = "true";
-		root.append(tracker);
+		trackerVisibility.append(tracker);
+		root.append(trackerVisibility);
 	}
 
 	const pauseActions = new FakeElement("div");
 	pauseActions.id = "session-pause-actions";
+	pauseActions.setAttribute("inert", "");
 	const finishEarly = new FakeElement("button");
 	finishEarly.id = "finish-early-btn";
 	finishEarly.setAttribute("disabled", "disabled");
-	pauseActions.append(finishEarly);
+	const abort = new FakeElement("button");
+	abort.id = "session-abort-btn";
+	abort.setAttribute("disabled", "disabled");
+	pauseActions.append(finishEarly, abort);
 	root.append(pauseActions);
 
 	const renderer = {
@@ -243,6 +250,20 @@ test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 
 	assert.equal(ctx.el.querySelector("#pose-tracker-preview"), null);
 	assert.match(ctx.el.querySelector("#start-overlay").className, /\bhidden\b/);
+});
+
+test("camera confirmation hides the patchable wrapper without unmounting PoseTracker", () => {
+	const ctx = buildHarness();
+	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
+	const tracker = ctx.el.querySelector("#pose-tracker");
+
+	ctx.onCameraSetupStart();
+
+	assert.equal(wrapper.style.visibility, "hidden");
+	assert.equal(wrapper.attributes.get("aria-hidden"), "true");
+	assert.equal(ctx.el.querySelector("#pose-tracker"), tracker);
+	assert.equal(tracker.removed, undefined);
+	assert.deepEqual(ctx.events, [{ name: "camera_setup_started", payload: {} }]);
 });
 
 test("pose tracker binds only to the preview rendered inside its hook", () => {
@@ -391,10 +412,11 @@ test("camera selection matches the working debug page", async () => {
 	assert.deepEqual(calls, [{ video: { facingMode: "user" }, audio: false }]);
 });
 
-test("paused workout reveals finish early and hides it again on resume", () => {
+test("pause actions are inert and disabled whenever hidden", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 	const actions = ctx.el.querySelector("#session-pause-actions");
 	const finishEarly = ctx.el.querySelector("#finish-early-btn");
+	const abort = ctx.el.querySelector("#session-abort-btn");
 	ctx.activeSegment = "workout";
 	ctx.startTime = 0;
 	ctx.paused = true;
@@ -403,14 +425,36 @@ test("paused workout reveals finish early and hides it again on resume", () => {
 	assert.equal(actions.style.opacity, "1");
 	assert.equal(actions.style.pointerEvents, "auto");
 	assert.equal(actions.attributes.get("aria-hidden"), "false");
+	assert.equal(actions.hasAttribute("inert"), false);
 	assert.equal(finishEarly.hasAttribute("disabled"), false);
+	assert.equal(abort.hasAttribute("disabled"), false);
 
 	ctx.paused = false;
 	ctx.updatePauseActionsVisibility();
 	assert.equal(actions.style.opacity, "0");
 	assert.equal(actions.style.pointerEvents, "none");
 	assert.equal(actions.attributes.get("aria-hidden"), "true");
+	assert.equal(actions.hasAttribute("inert"), true);
 	assert.equal(finishEarly.hasAttribute("disabled"), true);
+	assert.equal(abort.hasAttribute("disabled"), true);
+});
+
+test("countdown pause enables Abort but keeps Finish early disabled", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const actions = ctx.el.querySelector("#session-pause-actions");
+	const finishEarly = ctx.el.querySelector("#finish-early-btn");
+	const abort = ctx.el.querySelector("#session-abort-btn");
+	ctx.activeSegment = "workout";
+	ctx.startTime = null;
+	ctx.countdownPaused = true;
+
+	ctx.updatePauseActionsVisibility();
+
+	assert.equal(actions.hasAttribute("inert"), false);
+	assert.equal(actions.attributes.get("aria-hidden"), "false");
+	assert.equal(actions.style.pointerEvents, "auto");
+	assert.equal(finishEarly.hasAttribute("disabled"), true);
+	assert.equal(abort.hasAttribute("disabled"), false);
 });
 
 test("timed workout completion pushes log payload with completed reps", () => {

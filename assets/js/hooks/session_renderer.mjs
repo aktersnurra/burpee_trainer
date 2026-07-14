@@ -14,6 +14,7 @@ export class SessionRenderer {
 		this.downCueActive = false;
 		this.paused = false;
 		this.lastPulseValue = null;
+		this.appliedVisualState = undefined;
 	}
 
 	clearTimers() {
@@ -28,6 +29,8 @@ export class SessionRenderer {
 	}
 
 	setVisualState(state) {
+		if (this.appliedVisualState === state) return;
+
 		const surface = this.root.querySelector("#session-runner-client");
 		this.root.classList?.remove?.(...VISUAL_STATE_CLASSES);
 		surface?.classList?.remove?.(...VISUAL_STATE_CLASSES);
@@ -44,6 +47,8 @@ export class SessionRenderer {
 			this.root.classList?.add?.(className);
 			surface?.classList?.add?.(className);
 		}
+
+		this.appliedVisualState = state;
 	}
 
 	updateWorkFill(progress) {
