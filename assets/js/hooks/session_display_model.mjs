@@ -6,9 +6,6 @@ export function countdownDisplayModel({
 	timeLeftSec,
 }) {
 	return {
-		mode: "countdown",
-		phaseLabel: "starting in",
-		ring: { kind: "session", progress: 1 - value / total },
 		visual: { state: "initial-countdown", progress: 0, pulse: null },
 		primaryCount: value,
 		countdownDots: { count: total, faded: Math.max(total - value, 0) },
@@ -37,12 +34,7 @@ export function runningDisplayModel({
 		remainingSec,
 		progress,
 	});
-	const isRestCountdown = isRest && remainingSec <= 3 && remainingSec > 0;
-
 	return {
-		mode: isRestCountdown ? "countdown" : isRest ? "rest" : "work",
-		phaseLabel: isRestCountdown ? "starting in" : "",
-		ring: { kind: "session", progress },
 		visual,
 		primaryCount:
 			visual.state === "rest-countdown"

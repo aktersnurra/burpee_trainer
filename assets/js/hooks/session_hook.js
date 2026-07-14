@@ -44,7 +44,6 @@ const SessionHook = {
 
 		this.doneReps = 0;
 		this.lastDownCueKey = null;
-		this.countdownRingEl = null;
 		this.hiddenAt = null;
 
 		this.onVisibility = () => {
@@ -488,7 +487,7 @@ const SessionHook = {
 		const overlay = this.el.querySelector("#start-overlay");
 		if (overlay) overlay.remove();
 
-		const renderCountdown = (value, progress, pop) => {
+		const renderCountdown = (value, _progress, pop) => {
 			const model = countdownDisplayModel({
 				value,
 				total: 5,
@@ -496,7 +495,6 @@ const SessionHook = {
 				totalTarget: this.segment.reps.burpeeCountTarget,
 				timeLeftSec: this.segment.clock.totalDurationSec,
 			});
-			model.ring.progress = progress;
 			this.renderer.renderDisplayModel(model);
 
 			const countEl = this.el.querySelector("#count");
@@ -574,7 +572,6 @@ const SessionHook = {
 
 		this.updatePauseActionsVisibility();
 
-		this.countdownRingEl = null;
 		this.startTime = this.segment.clock.startTime;
 	},
 

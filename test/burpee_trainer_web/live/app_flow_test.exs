@@ -105,6 +105,17 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
              "#completion-duration-min-input.min-h-11[name='workout_session[duration_min]']"
            )
 
+    assert has_element?(
+             session,
+             "label[for='completion-note-input']",
+             "Note"
+           )
+
+    assert has_element?(
+             session,
+             "#completion-note-input[name='workout_session[note_post]']"
+           )
+
     assert has_element?(session, "button[phx-click='set_mood'].min-h-14")
     assert has_element?(session, "button[phx-click='toggle_tag'].min-h-11")
 

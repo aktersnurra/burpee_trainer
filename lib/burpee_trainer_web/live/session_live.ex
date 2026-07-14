@@ -889,8 +889,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
         </div>
 
         <div class="border-y border-[var(--session-border)] py-6">
-          <p class="mb-2 text-sm font-medium text-[var(--session-muted)]">Note</p>
+          <label
+            for="completion-note-input"
+            class="mb-2 block text-sm font-medium text-[var(--session-muted)]"
+          >
+            Note
+          </label>
           <textarea
+            id="completion-note-input"
             name={@form[:note_post].name}
             rows="3"
             placeholder="How did it go?"
