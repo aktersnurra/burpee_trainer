@@ -33,7 +33,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
     %{
       kind: "work",
       reps: event.reps,
-      sec_per_rep_us: sec_to_us(event.sec_per_rep)
+      sec_per_rep_us: sec_to_us(event.sec_per_rep),
+      sec_per_burpee_us: sec_to_us(event.sec_per_burpee)
     }
   end
 

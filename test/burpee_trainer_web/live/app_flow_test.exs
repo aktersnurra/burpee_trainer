@@ -37,11 +37,38 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(home, "#home-start-workout[href='/session/#{created.id}']")
   end
 
-  test "session runner exposes accessible starting state labels", %{conn: conn, user: user} do
+  test "session runner exposes the distance-safe stable runner contract", %{
+    conn: conn,
+    user: user
+  } do
     plan = plan_fixture(user, %{"name" => "Accessible Flow"})
 
-    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    document =
+      conn
+      |> get(~p"/session/#{plan.id}")
+      |> html_response(200)
+      |> LazyHTML.from_document()
 
+    [{"meta", viewport_attributes, []}] =
+      document
+      |> LazyHTML.query("meta[name='viewport']")
+      |> LazyHTML.to_tree()
+
+    viewport_content = Map.new(viewport_attributes)["content"]
+    assert viewport_content =~ "viewport-fit=cover"
+    assert viewport_content =~ "maximum-scale=1"
+    assert viewport_content =~ "user-scalable=no"
+
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    assert_push_event(session, "session_ready", payload)
+
+    work_event = Enum.find(payload.events, &(&1.kind == "work"))
+
+    assert %{sec_per_rep: cadence, sec_per_burpee: active_duration} = work_event
+    assert active_duration > 0
+    assert active_duration <= cadence
+
+    assert has_element?(session, "main[class*='safe-area-inset-top']")
     assert has_element?(session, "#ring-container[aria-label='Pause session']")
 
     assert has_element?(
@@ -50,11 +77,25 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
              "Workout starting"
            )
 
-    assert has_element?(session, "#count[aria-hidden='true']")
+    assert has_element?(session, "#ring-container #count[aria-hidden='true']")
+
+    assert has_element?(
+             session,
+             "#ring-container > #set-progress[hidden][aria-hidden='true']"
+           )
+
+    refute has_element?(session, "#session-top-readout #set-progress")
     refute has_element?(session, "#count[aria-label]")
     refute has_element?(session, "#ring-container #session-accessible-status")
 
+    for center_id <- ["ring-container", "count"],
+        decoration_class <- ["border", "ring", "shadow", "outline"] do
+      refute has_element?(session, "##{center_id}[class*='#{decoration_class}']")
+    end
+
+    assert has_element?(session, "#session-work-track")
     assert has_element?(session, "#session-work-fill")
+    assert has_element?(session, "#session-rest-shape")
     refute has_element?(session, "#session-work-fill[class*='scale-y-']")
 
     assert has_element?(
@@ -62,18 +103,58 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
              "#session-pause-actions[inert][aria-hidden='true'].pointer-events-none"
            )
 
-    assert has_element?(session, "#finish-early-btn[disabled]")
-    assert has_element?(session, "#session-abort-btn[disabled]")
-
     assert has_element?(
              session,
-             "#session-runner-layout.grid > #session-pause-actions.relative + #session-status-line"
+             "#finish-early-btn[disabled].session-finish-early-action"
            )
 
     assert has_element?(
              session,
-             "#session-pause-actions:not(.absolute) #finish-early-btn[class*='disabled:invisible']"
+             "#session-abort-btn[disabled][class*='text-[var(--session-active-ink)]']"
            )
+
+    refute has_element?(
+             session,
+             "#session-abort-btn[class*='text-[var(--session-active-muted)]']"
+           )
+
+    for prominent_class <- ["w-full", "border", "bg-", "rounded", "shadow", "ring"] do
+      refute has_element?(session, "#session-abort-btn[class*='#{prominent_class}']")
+    end
+
+    for anchor_id <- ["session-top-readout", "ring-container", "session-pause-actions"] do
+      assert has_element?(session, "#session-runner-layout > ##{anchor_id}")
+    end
+
+    assert has_element?(session, "#session-top-readout > #session-status-line")
+    assert has_element?(session, "#session-status-line #total-reps[hidden]")
+
+    assert has_element?(
+             session,
+             "#total-reps #total-reps-accessible.sr-only",
+             "0 of #{plan.burpee_count_target} total reps"
+           )
+
+    assert has_element?(session, "#total-reps #total-done[aria-hidden='true']:not(.sr-only)", "0")
+
+    assert has_element?(
+             session,
+             "#total-reps #total-plan[aria-hidden='true']:not(.sr-only)",
+             Integer.to_string(plan.burpee_count_target)
+           )
+
+    assert has_element?(session, "#total-reps > span[aria-hidden='true']", "/")
+    assert has_element?(session, "#session-status-line #time-left[aria-hidden='true']")
+
+    assert has_element?(
+             session,
+             "#session-status-line #session-time-accessible.sr-only",
+             "Session time remaining"
+           )
+
+    for forbidden_label <- ["done", "left", "reps left", "sets", "phase"] do
+      refute has_element?(session, "#session-status-line", forbidden_label)
+    end
   end
 
   test "planned workout can be started, completed, saved, and reviewed in stats", %{

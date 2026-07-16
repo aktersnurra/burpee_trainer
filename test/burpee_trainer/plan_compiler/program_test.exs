@@ -6,15 +6,23 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
   test "valid program computes reps and duration from ordered events" do
     assert {:ok, program} =
              Program.new(%{
-               schema_version: 1,
+               schema_version: 2,
                solver_version: 4,
                burpee_type: :six_count,
                target_reps: 20,
                target_duration_sec: 300,
                events: [
-                 ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0}),
+                 ProgramEvent.work!(%{
+                   reps: 10,
+                   sec_per_rep: 12.0,
+                   sec_per_burpee: 5.0
+                 }),
                  ProgramEvent.rest!(%{duration_sec: 60}),
-                 ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0})
+                 ProgramEvent.work!(%{
+                   reps: 10,
+                   sec_per_rep: 12.0,
+                   sec_per_burpee: 5.0
+                 })
                ],
                metadata: %{pacing_style: :even}
              })
@@ -25,18 +33,26 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
     assert :ok = ProgramValidator.validate(program)
 
     [first_work | _] = Program.events(program)
-    assert Map.from_struct(first_work) == %{kind: :work, reps: 10, sec_per_rep: 12.0}
+
+    assert Map.from_struct(first_work) == %{
+             kind: :work,
+             reps: 10,
+             sec_per_rep: 12.0,
+             sec_per_burpee: 5.0
+           }
   end
 
-  test "validator rejects invalid work instructions" do
+  test "validator rejects active duration longer than cadence" do
     assert {:ok, program} =
              Program.new(%{
-               schema_version: 1,
+               schema_version: 2,
                solver_version: 4,
                burpee_type: :six_count,
-               target_reps: 20,
-               target_duration_sec: 240,
-               events: [ProgramEvent.work!(%{reps: 10, sec_per_rep: 0.0})],
+               target_reps: 10,
+               target_duration_sec: 40,
+               events: [
+                 ProgramEvent.work!(%{reps: 10, sec_per_rep: 4.0, sec_per_burpee: 5.0})
+               ],
                metadata: %{pacing_style: :even}
              })
 
@@ -46,12 +62,18 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
   test "validator rejects target duration mismatch" do
     assert {:ok, program} =
              Program.new(%{
-               schema_version: 1,
+               schema_version: 2,
                solver_version: 4,
                burpee_type: :six_count,
                target_reps: 10,
                target_duration_sec: 300,
-               events: [ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0})],
+               events: [
+                 ProgramEvent.work!(%{
+                   reps: 10,
+                   sec_per_rep: 12.0,
+                   sec_per_burpee: 5.0
+                 })
+               ],
                metadata: %{pacing_style: :even}
              })
 

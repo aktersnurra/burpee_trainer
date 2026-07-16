@@ -13,7 +13,10 @@ defmodule BurpeeTrainer.PlanCompiler do
   alias BurpeeTrainer.PlanSolver.{Execution, ExplicitRest, Input}
 
   @solver_version 4
-  @schema_version 1
+  @schema_version 2
+
+  @spec schema_version() :: pos_integer()
+  def schema_version, do: @schema_version
 
   @spec compile(PlanSource.t() | map()) :: {:ok, Program.t()} | {:error, CompileError.t()}
   def compile(%PlanSource{} = source), do: compile_source(source)
@@ -117,7 +120,8 @@ defmodule BurpeeTrainer.PlanCompiler do
   defp program_event(%Execution.SetEvent{} = event) do
     ProgramEvent.work!(%{
       reps: event.burpee_count,
-      sec_per_rep: event.sec_per_rep
+      sec_per_rep: event.sec_per_rep,
+      sec_per_burpee: event.sec_per_burpee
     })
   end
 

@@ -16,6 +16,7 @@ defmodule BurpeeTrainer.PlanCompilerTest do
     }
 
     assert {:ok, %Program{} = program} = PlanCompiler.compile(source)
+    assert program.schema_version == 2
     assert Program.total_reps(program) == 100
     assert_in_delta Program.duration_sec(program), 1_200.0, 1.0e-6
 
@@ -27,6 +28,9 @@ defmodule BurpeeTrainer.PlanCompilerTest do
     assert Enum.map(work_events, & &1.reps) == List.duplicate(10, 10)
     assert Enum.map(Enum.take(work_events, 5), & &1.sec_per_rep) == List.duplicate(10.8, 5)
     assert Enum.map(Enum.drop(work_events, 5), & &1.sec_per_rep) == List.duplicate(12.0, 5)
+    assert Enum.all?(work_events, &(&1.sec_per_burpee > 0))
+    assert Enum.all?(work_events, &(&1.sec_per_burpee <= &1.sec_per_rep))
+    assert Enum.any?(work_events, &(&1.sec_per_burpee < &1.sec_per_rep))
   end
 
   test "compile errors are structured" do

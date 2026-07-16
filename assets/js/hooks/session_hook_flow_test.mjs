@@ -115,6 +115,7 @@ globalThis.clearTimeout = () => {};
 
 function buildHarness({ poseTrackerReady = false } = {}) {
 	const events = [];
+	const renderedModels = [];
 	const root = new FakeElement("div");
 	root.id = "burpee-session";
 	globalThis.document.root = root;
@@ -152,7 +153,9 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		updateWorkFill() {},
 		enterRestPhase() {},
 		renderRestProgress() {},
-		renderDisplayModel() {},
+		renderDisplayModel(model) {
+			renderedModels.push(model);
+		},
 		updatePauseButton() {},
 		clearTimers() {},
 	};
@@ -191,6 +194,7 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 			events.push({ name, payload });
 		},
 		events,
+		renderedModels,
 	};
 }
 
@@ -437,6 +441,28 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	assert.equal(actions.hasAttribute("inert"), true);
 	assert.equal(finishEarly.hasAttribute("disabled"), true);
 	assert.equal(abort.hasAttribute("disabled"), true);
+});
+
+test("running frames derive rest set progress from the hook timeline", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const timeline = Object.freeze([
+		Object.freeze({ kind: "work", reps: 6, sec_per_rep: 4 }),
+		Object.freeze({ kind: "rest", duration_sec: 30 }),
+		Object.freeze({ kind: "work", reps: 6, sec_per_rep: 4 }),
+		Object.freeze({ kind: "rest", duration_sec: 30 }),
+		Object.freeze({ kind: "work", reps: 8, sec_per_rep: 4 }),
+	]);
+
+	ctx.dispatchSegment({
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 20,
+	});
+	ctx.activeSegment = "workout";
+	ctx.renderRunningFrame(30);
+
+	assert.equal(ctx.renderedModels.length, 1);
+	assert.equal(ctx.renderedModels[0].setProgress, "1/3");
 });
 
 test("countdown pause enables Abort but keeps Finish early disabled", () => {

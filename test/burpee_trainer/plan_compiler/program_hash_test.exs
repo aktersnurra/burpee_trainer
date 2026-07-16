@@ -8,13 +8,17 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
       Program.new(
         Map.merge(
           %{
-            schema_version: 1,
+            schema_version: 2,
             solver_version: 4,
             burpee_type: :six_count,
             target_reps: 10,
             target_duration_sec: 120,
             events: [
-              ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0}),
+              ProgramEvent.work!(%{
+                reps: 10,
+                sec_per_rep: 12.0,
+                sec_per_burpee: 5.0
+              }),
               ProgramEvent.rest!(%{duration_sec: 0.0})
             ],
             metadata: %{pacing_style: :even, recovery_model: :saved_up_rest}
@@ -33,7 +37,13 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
   test "canonical map stores only executable event fields" do
     [work, rest] = ProgramHash.canonical_map(program()).events
 
-    assert work == %{kind: "work", reps: 10, sec_per_rep_us: 12_000_000}
+    assert work == %{
+             kind: "work",
+             reps: 10,
+             sec_per_rep_us: 12_000_000,
+             sec_per_burpee_us: 5_000_000
+           }
+
     assert rest == %{kind: "rest", duration_ms: 0}
   end
 
@@ -42,7 +52,11 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
       program(%{
         target_duration_sec: 130,
         events: [
-          ProgramEvent.work!(%{reps: 10, sec_per_rep: 13.0}),
+          ProgramEvent.work!(%{
+            reps: 10,
+            sec_per_rep: 13.0,
+            sec_per_burpee: 5.0
+          }),
           ProgramEvent.rest!(%{duration_sec: 0.0})
         ]
       })

@@ -7,12 +7,14 @@ defmodule BurpeeTrainer.ExecutionProgramsTest do
   defp program do
     {:ok, program} =
       Program.new(%{
-        schema_version: 1,
+        schema_version: 2,
         solver_version: 4,
         burpee_type: :six_count,
         target_reps: 10,
         target_duration_sec: 120,
-        events: [ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0})],
+        events: [
+          ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0, sec_per_burpee: 5.0})
+        ],
         metadata: %{pacing_style: :even, recovery_model: :saved_up_rest}
       })
 

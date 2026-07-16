@@ -6,9 +6,10 @@ export function countdownDisplayModel({
 	timeLeftSec,
 }) {
 	return {
-		visual: { state: "initial-countdown", progress: 0, pulse: null },
+		visual: { state: "count_in", progress: 0, pulse: null },
 		primaryCount: value,
 		countdownDots: { count: total, faded: Math.max(total - value, 0) },
+		setProgress: null,
 		totalDone,
 		totalTarget,
 		timeLeftSec,
@@ -16,6 +17,7 @@ export function countdownDisplayModel({
 }
 
 export function runningDisplayModel({
+	timeline = [],
 	frame,
 	timeLeftSec,
 	totalDone,
@@ -26,72 +28,75 @@ export function runningDisplayModel({
 	const kind = eventKind(event);
 	const isRest = kind === "rest";
 	const isWork = kind === "work";
-	const progress = ringProgressForFrame(frame);
 	const remainingSec = frame?.phase_remaining ?? timeLeftSec ?? 0;
-	const visual = visualStateForFrame({
-		isRest,
-		isWork,
-		remainingSec,
-		progress,
-	});
+	const visual = visualStateForFrame({ isRest, isWork, remainingSec, frame });
+
 	return {
 		visual,
 		primaryCount:
-			visual.state === "rest-countdown"
-				? visual.pulse
+			visual.state === "rest_count_in"
+				? Math.max(Math.ceil(remainingSec), 1)
 				: isRest
-					? formatTime(remainingSec)
+					? formatClock(remainingSec)
 					: isWork
 						? Math.max((event?.reps || 0) - doneInEvent, 0)
 						: (event?.reps ?? totalTarget ?? "—"),
 		countdownDots: null,
 		restTimeLeftSec: isRest ? remainingSec : null,
+		setProgress:
+			visual.state === "rest" ? setProgressForFrame(timeline, frame) : null,
 		totalDone,
 		totalTarget,
 		timeLeftSec,
 	};
 }
 
-function visualStateForFrame({ isRest, isWork, remainingSec, progress }) {
-	if (isWork) {
-		return { state: "work", progress, pulse: null };
-	}
+function visualStateForFrame({ isRest, isWork, remainingSec, frame }) {
+	if (isWork) return workVisualState(frame);
 
 	if (!isRest) {
-		return { state: "work", progress: 0, pulse: null };
-	}
-
-	if (remainingSec > 5) {
-		return { state: "rest-breathe", progress: 0, pulse: null };
+		return { state: "work_active", progress: 0, activeRatio: 1, pulse: null };
 	}
 
 	if (remainingSec > 3) {
-		return { state: "rest-settle", progress: 0, pulse: null };
+		return { state: "rest", progress: 0, pulse: null };
 	}
 
-	const pulse = remainingSec > 0 ? Math.ceil(remainingSec) : null;
-	return { state: "rest-countdown", progress: 0, pulse };
+	return { state: "rest_count_in", progress: 0, pulse: null };
 }
 
-function ringProgressForFrame(frame) {
-	const event = frame?.event;
-	const durationSec = eventDurationSec(event);
-	if (durationSec <= 0) return 0;
-
-	if (eventKind(event) === "work") {
-		const secondsPerRep = event.sec_per_rep;
-		if (!secondsPerRep || secondsPerRep <= 0) return 0;
-		return clamp(((frame.phase_elapsed || 0) % secondsPerRep) / secondsPerRep);
+function workVisualState(frame) {
+	const cadenceSec = Number(frame?.event?.sec_per_rep) || 0;
+	if (cadenceSec <= 0) {
+		return { state: "work_active", progress: 0, activeRatio: 1, pulse: null };
 	}
 
-	return clamp((frame?.phase_elapsed || 0) / durationSec);
+	const configuredActiveSec = Number(frame?.event?.sec_per_burpee);
+	const activeSec =
+		configuredActiveSec > 0
+			? Math.min(configuredActiveSec, cadenceSec)
+			: cadenceSec;
+	const repElapsedSec = (frame?.phase_elapsed || 0) % cadenceSec;
+	const recoverySec = cadenceSec - activeSec;
+
+	return {
+		state:
+			recoverySec <= 0 || repElapsedSec < activeSec
+				? "work_active"
+				: "work_recovery",
+		progress: clamp(repElapsedSec / cadenceSec),
+		activeRatio: clamp(activeSec / cadenceSec),
+		pulse: null,
+	};
 }
 
-function eventDurationSec(event) {
-	if (event?.kind === "work")
-		return (event.reps || 0) * (event.sec_per_rep || 0);
-	if (event?.kind === "rest") return event.duration_sec || 0;
-	return 0;
+function setProgressForFrame(timeline, frame) {
+	const total = timeline.filter((event) => eventKind(event) === "work").length;
+	const completed = timeline
+		.slice(0, frame?.index ?? 0)
+		.filter((event) => eventKind(event) === "work").length;
+
+	return total > 0 ? `${completed}/${total}` : null;
 }
 
 function eventKind(event) {
@@ -102,9 +107,9 @@ function clamp(value) {
 	return Math.min(Math.max(value, 0), 1);
 }
 
-function formatTime(sec) {
-	const s = Math.max(Math.ceil(sec || 0), 0);
-	const m = Math.floor(s / 60);
-	const r = s % 60;
-	return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${r}`;
+function formatClock(sec) {
+	const seconds = Math.max(Math.ceil(sec || 0), 0);
+	const minutes = Math.floor(seconds / 60);
+	const remainder = seconds % 60;
+	return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }

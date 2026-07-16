@@ -608,6 +608,7 @@ const SessionHook = {
 
 		const totalDurationSec = this.segment.clock.totalDurationSec;
 		const model = runningDisplayModel({
+			timeline: this.timeline,
 			frame,
 			timeLeftSec: Math.max(totalDurationSec - elapsed, 0),
 			totalDone: this.segment.reps.burpeeCountDone,

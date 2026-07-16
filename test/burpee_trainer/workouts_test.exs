@@ -1,8 +1,8 @@
 defmodule BurpeeTrainer.WorkoutsTest do
   use BurpeeTrainer.DataCase, async: false
 
-  alias BurpeeTrainer.{ExecutionPrograms, Repo, Workouts}
-  alias BurpeeTrainer.Workouts.{PoseCaptureRun, WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.{ExecutionPrograms, PlanCompiler, Repo, Workouts}
+  alias BurpeeTrainer.Workouts.{ExecutionProgram, PoseCaptureRun, WorkoutPlan, WorkoutSession}
 
   import BurpeeTrainer.Fixtures
 
@@ -119,6 +119,57 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert plan.user_id == user.id
       assert plan.source_json["target_reps"] == 100
       assert plan.current_execution_program_id
+    end
+
+    test "compile_plan lazily upgrades a legacy execution program" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      current_program = ExecutionPrograms.get!(plan.current_execution_program_id)
+
+      legacy_program_json =
+        Map.update!(current_program.program_json, "events", fn events ->
+          Enum.map(events, &Map.drop(&1, ["sec_per_burpee_us"]))
+        end)
+
+      legacy_program =
+        %ExecutionProgram{}
+        |> ExecutionProgram.changeset(%{
+          content_hash: "legacy-#{System.unique_integer([:positive])}",
+          schema_version: 1,
+          solver_version: current_program.solver_version,
+          burpee_type: current_program.burpee_type,
+          target_reps: current_program.target_reps,
+          target_duration_sec: current_program.target_duration_sec,
+          event_count: current_program.event_count,
+          program_json: legacy_program_json,
+          summary_json: current_program.summary_json
+        })
+        |> Repo.insert!()
+
+      plan =
+        plan
+        |> Ecto.Changeset.change(current_execution_program_id: legacy_program.id)
+        |> Repo.update!()
+
+      assert {:ok, upgraded_program} = Workouts.compile_plan(plan)
+      assert upgraded_program.schema_version == PlanCompiler.schema_version()
+      assert upgraded_program.id != legacy_program.id
+      assert Repo.reload(plan).current_execution_program_id == upgraded_program.id
+
+      assert Enum.all?(upgraded_program.program_json["events"], fn
+               %{"kind" => "work"} = event -> Map.has_key?(event, "sec_per_burpee_us")
+               _event -> true
+             end)
+
+      legacy_only_plan = %{
+        plan
+        | id: nil,
+          source_json: nil,
+          current_execution_program_id: legacy_program.id
+      }
+
+      assert {:ok, fallback_program} = Workouts.compile_plan(legacy_only_plan)
+      assert fallback_program.id == legacy_program.id
     end
 
     test "create_plan/2 requires explicit source_json instead of legacy execution fields" do

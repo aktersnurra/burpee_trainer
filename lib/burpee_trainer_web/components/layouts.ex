@@ -119,7 +119,7 @@ defmodule BurpeeTrainerWeb.Layouts do
     <% end %>
 
     <main class={[
-      "px-4 py-8 sm:px-6",
+      "px-4 pb-8 pt-[max(2rem,env(safe-area-inset-top))] sm:px-6",
       @session_surface_page? &&
         "session-surface min-h-dvh bg-[var(--session-bg)] text-[var(--session-ink)]",
       !@session_surface_page? && "mx-auto max-w-2xl"

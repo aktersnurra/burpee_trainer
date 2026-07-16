@@ -3,9 +3,26 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramEventTest do
 
   alias BurpeeTrainer.PlanCompiler.ProgramEvent
 
+  test "work events preserve distinct active duration and cadence" do
+    event = ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0, sec_per_burpee: 5.0})
+
+    assert Map.from_struct(event) == %{
+             kind: :work,
+             reps: 10,
+             sec_per_rep: 12.0,
+             sec_per_burpee: 5.0
+           }
+  end
+
   test "work events reject legacy and presentation fields" do
     assert_raise ArgumentError, ~r/unknown work event fields: \[:label, :set_index\]/, fn ->
-      ProgramEvent.work!(%{reps: 10, sec_per_rep: 12.0, set_index: 1, label: "Set 1"})
+      ProgramEvent.work!(%{
+        reps: 10,
+        sec_per_rep: 12.0,
+        sec_per_burpee: 5.0,
+        set_index: 1,
+        label: "Set 1"
+      })
     end
   end
 

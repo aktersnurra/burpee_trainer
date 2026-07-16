@@ -1,93 +1,161 @@
 # BurpeeTrainer
 
-A personal burpee training app with structured workout plans, live session tracking, and progression analytics. Built with Phoenix LiveView + SQLite, deployed at [burpee.gustafrydholm.xyz](https://burpee.gustafrydholm.xyz).
+A personal burpee training application for designing structured workouts, running timer- or camera-tracked sessions, and reviewing progression over time.
+
+Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks. The deployed application is available at [burpee.gustafrydholm.xyz](https://burpee.gustafrydholm.xyz).
 
 ## Features
 
-- **Workout plans** — three-layer editor with a solver that distributes reps, pacing, and rest periods automatically
-- **Live session runner** — client-driven timer (no server ticks), Web Audio API beeps, no-screen-sleep
-- **Two burpee styles** — 6-count and Navy Seal, each with their own archetypes and pace floors
-- **Style recommender** — Bayesian scoring across nine workout archetypes, adjusted for mood and time of day
-- **Progression tracking** — periodized 3-build/1-deload cycles, trend analysis, level landmarks
-- **History & goals** — Chart.js performance charts, PR stats, level unlock badges
-- **Video training** — Busy Dad Training videos served via nginx X-Accel-Redirect, log after watching
+- **Workout planning** — generate and edit prescriptions with explicit work, pace, and recovery structure.
+- **Compiled execution programs** — editable plans compile into immutable programs so completed sessions retain the exact workout that was run.
+- **Live session runner** — client-owned timing, audio cues, screen wake lock, pause/resume, rest breathing, count-in, and per-rep work pacing.
+- **Optional camera tracking** — BlazePose-based pose capture and rep tracking with timer-mode fallback.
+- **Progress and history** — completed sessions, goals, trends, milestones, and workout statistics.
+- **Single-user authentication** — bcrypt password hashing with all application data scoped to the user.
 
 ## Stack
 
-- **Elixir / Phoenix 1.8** with LiveView
-- **SQLite** via `ecto_sqlite3` — raw SQL throughout, no Ecto schemas
-- **Tailwind CSS** — Quiet stone light theme by default, with an optional warm charcoal dark mode and muted clay accent
-- **Vanilla JS hooks** — `SessionHook` (state machine + `requestAnimationFrame` clock), `ChartHook`, `VideoHook`
-- **bcrypt** session auth, single-user
+- Elixir `~> 1.20` and Phoenix 1.8 with LiveView
+- Ecto with SQLite via `ecto_sqlite3`
+- Tailwind CSS v4
+- Vanilla JavaScript modules and LiveView hooks
+- Chart.js for charts
+- bcrypt for password hashing
 
-## Development
+## Local development
+
+### Initial setup
+
+From the repository root:
 
 ```bash
-mix setup          # install deps, create and migrate DB, build assets
-mix phx.server     # start at localhost:4000
-iex -S mix phx.server  # with interactive shell
+mix setup
 ```
 
-Create the initial user:
+`mix setup` installs Elixir and asset dependencies, creates and migrates the development database, prepares browser assets, and builds the application assets.
+
+Start Phoenix at [http://localhost:4000](http://localhost:4000):
+
+```bash
+mix phx.server
+```
+
+For an interactive Elixir shell:
+
+```bash
+iex -S mix phx.server
+```
+
+### Database migrations
+
+Apply migrations after pulling changes that add or modify database tables:
+
+```bash
+mix ecto.migrate
+```
+
+If Phoenix reports pending migrations, stop the server, run the command above, and restart it.
+
+### Create the user
+
+BurpeeTrainer currently uses a single-user setup. Create the initial account with:
 
 ```bash
 mix burpee_trainer.create_user
 ```
 
-Run tests and pre-commit checks:
+The task prompts for a username and password, hashes the password through the normal Accounts boundary, and refuses to create a second user when one already exists.
+
+Create the user before attempting to log in to a fresh database.
+
+### Assets
+
+Install or refresh frontend dependencies and generated pose assets:
+
+```bash
+mix assets.setup
+```
+
+Build development assets:
+
+```bash
+mix assets.build
+```
+
+Run the JavaScript tests:
+
+```bash
+cd assets
+npm test
+```
+
+### Tests and project checks
+
+Run the Elixir test suite:
 
 ```bash
 mix test
-mix precommit      # compile --warnings-as-errors, unused deps, format, test
 ```
+
+Run the full project gate before finishing a change:
+
+```bash
+mix precommit
+```
+
+`mix precommit` compiles with warnings treated as errors, checks for unused dependencies, checks formatting, and runs the Elixir tests.
+
+## Production configuration
+
+Production releases read their runtime configuration from environment variables.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_PATH` | Yes | Persistent SQLite database path outside the replaceable release directory. |
+| `SECRET_KEY_BASE` | Yes | Cookie and application secret. Generate with `mix phx.gen.secret`. |
+| `PHX_HOST` | Yes in practice | Public hostname used in generated URLs. |
+| `PHX_SERVER` | Yes for a release | Set to `true` so the Phoenix endpoint starts. |
+| `PORT` | No | HTTP port; defaults to `4000`. |
+| `POOL_SIZE` | No | SQLite connection pool size; defaults to `5`. |
+| `DNS_CLUSTER_QUERY` | No | Optional DNS-based cluster discovery query. |
+
+The SQLite database and uploaded/runtime data must live in persistent paths managed by the target machine, not under the release directory that deployment replaces.
 
 ## Deployment
 
-Deployed as a `mix release` behind nginx with TLS (certbot), managed by systemd.
+Deployment is intentionally owned by a separate private infrastructure repository. On the deployment machine, `./deploy` in this repository is a local symlink to that infra repository’s deploy command; the script itself is not tracked here.
+
+Deploy to the NUC from the BurpeeTrainer repository root:
 
 ```bash
-HOST=burpee.gustafrydholm.xyz
-MIX_ENV=prod mix deps.get --only prod
-MIX_ENV=prod mix assets.deploy
-MIX_ENV=prod mix release --overwrite
-rsync -avz --delete _build/prod/rel/burpee_trainer/ $HOST:/opt/burpee_trainer/
-ssh $HOST "systemctl restart burpee_trainer"
+./deploy nuc
 ```
 
-See `deploy/README.md` for first-deploy server setup (systemd service, nginx config, env file).
+Deploy to another configured VPS/host by passing its infra target name:
+
+```bash
+./deploy <target>
+```
+
+If `./deploy` is missing on a deployment machine, restore the symlink using that machine’s private infra checkout rather than adding a deployment script to this repository:
+
+```bash
+ln -s /path/to/private-infra/deploy ./deploy
+```
+
+Target definitions, provisioning, release transfer/build details, migrations, service management, TLS, logs, and rollback procedures belong to the private infra repository. Treat that repository as the authoritative deployment documentation.
 
 ## Project layout
 
+```text
+lib/burpee_trainer/             Domain contexts, planning, compilation, persistence
+lib/burpee_trainer_web/         Phoenix endpoint, controllers, components, and LiveViews
+assets/css/                     Tailwind entry point and application styles
+assets/js/                      LiveView client and browser hooks
+priv/repo/migrations/           Ecto migrations
+config/                         Compile-time and runtime environment configuration
+scripts/                        Repository-owned asset and development helpers
+test/                           ExUnit, LiveView, and domain tests
 ```
-lib/
-  burpee_trainer/
-    levels.ex           # pure: level derivation from session history
-    plan_wizard.ex      # pure: PlanInput -> WorkoutPlan solver
-    planner.ex          # pure: plan -> flat event timeline + warmup
-    progression.ex      # pure: goal + sessions -> periodized recommendation
-    style_recommender.ex
-    style_generator.ex
-    workouts.ex         # plans, sessions, style_performances context
-    accounts.ex         # auth context
-    goals.ex
-    videos.ex
-  burpee_trainer_web/
-    live/
-      overview_live.ex  # / — action-first Home
-      session_live.ex   # /session/:plan_id
-      history_live.ex   # /history
-      goals_live.ex     # /goals
-      log_live.ex       # /log
-      plans_live/
-    controllers/
-      video_controller.ex  # X-Accel-Redirect auth for video files
-assets/
-  js/hooks/
-    session_hook.js     # client-owned clock, state machine, beeps
-    chart_hook.js
-    video_hook.js
-deploy/
-  burpee_trainer.service
-  nginx.conf
-  deploy.sh
-```
+
+Deployment infrastructure is deliberately not part of this tree; the deployment machine supplies it through the private infra symlink described above.

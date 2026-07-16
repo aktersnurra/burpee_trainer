@@ -25,6 +25,7 @@ export function warmupTimelineFromProgram(program) {
 
 	const secPerRep = firstWork.sec_per_rep;
 	if (!secPerRep || secPerRep <= 0) return [];
+	const secPerBurpee = firstWork.sec_per_burpee || secPerRep;
 
 	const warmupReps = Math.min(firstWork.reps || 0, Math.trunc(60 / secPerRep));
 	if (warmupReps <= 0) return [];
@@ -34,6 +35,7 @@ export function warmupTimelineFromProgram(program) {
 			kind: "work",
 			reps: warmupReps,
 			sec_per_rep: secPerRep,
+			sec_per_burpee: secPerBurpee,
 		},
 		{
 			kind: "rest",
@@ -43,6 +45,7 @@ export function warmupTimelineFromProgram(program) {
 			kind: "work",
 			reps: warmupReps,
 			sec_per_rep: secPerRep,
+			sec_per_burpee: secPerBurpee,
 		},
 		{
 			kind: "rest",

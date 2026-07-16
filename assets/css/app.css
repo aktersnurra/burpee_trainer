@@ -147,6 +147,7 @@ body {
   --session-ink: #20201D;
   --session-active-bg: #F4F2EE;
   --session-active-ink: #20201D;
+  --session-active-muted: #706C64;
   --session-muted: #706C64;
   --session-soft-muted: #9A9489;
   --session-border: #DAD6CE;
@@ -182,6 +183,7 @@ body {
   --session-ink: #ECEFF3;
   --session-active-bg: #F4F2EE;
   --session-active-ink: #20201D;
+  --session-active-muted: #706C64;
   --session-muted: #AAB2BE;
   --session-soft-muted: #7E8794;
   --session-border: #343A45;
@@ -239,70 +241,73 @@ body {
 }
 .countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-#session-work-fill {
-  background: var(--session-work);
-  transform: scaleY(0);
-  transform-origin: bottom;
-  will-change: transform;
+#session-runner-client {
+  --session-active-ratio: 100%;
 }
 
+#session-work-track,
+#session-work-fill {
+  background: linear-gradient(
+    to top,
+    var(--session-work) 0,
+    var(--session-work) var(--session-active-ratio),
+    var(--session-rest) var(--session-active-ratio),
+    var(--session-rest) 100%
+  );
+}
+
+#session-work-track {
+  opacity: 0.16;
+}
+
+#session-work-fill {
+  -webkit-clip-path: inset(100% 0 0 0);
+  clip-path: inset(100% 0 0 0);
+  will-change: clip-path;
+}
+
+#session-runner-client:not(.is-working) #session-work-track,
 #session-runner-client:not(.is-working) #session-work-fill {
   visibility: hidden;
 }
 
+#session-runner-client.is-working #session-work-track,
 #session-runner-client.is-working #session-work-fill {
   visibility: visible;
 }
 
 #session-rest-shape {
-  bottom: -8dvh;
-  height: min(54dvh, 34rem);
+  inset-inline-start: -15%;
+  bottom: 0;
+  width: 130%;
+  height: 70dvh;
   background: var(--session-rest);
-  border-radius: 50% 50% 0 0 / 14% 14% 0 0;
+  border-radius: 50% 50% 0 0 / 12dvh 12dvh 0 0;
   opacity: 0;
-  transform: scaleY(0.82);
-  transform-origin: bottom;
-  will-change: transform, border-radius, background-color;
+  transform: translateY(45dvh);
+  will-change: transform;
+}
+
+#session-runner-client:not(.is-rest) #session-rest-shape {
+  visibility: hidden;
 }
 
 @keyframes session-breathe {
-  0%, 100% { transform: scaleY(0.82); }
-  50% { transform: scaleY(1.04); }
-}
-
-#session-runner-client.is-rest-breathe #session-rest-shape {
-  opacity: 1;
-  animation: session-breathe 8.4s cubic-bezier(0.42, 0, 0.16, 1) infinite;
-}
-
-@keyframes session-rest-settle {
-  from {
-    background: var(--session-rest);
-    border-radius: 50% 50% 0 0 / 14% 14% 0 0;
-    transform: scaleY(1.04);
+  0% {
+    transform: translateY(45dvh);
+    animation-timing-function: cubic-bezier(0.42, 0, 0.18, 1);
   }
-
-  to {
-    background: var(--session-work);
-    border-radius: 0;
-    transform: scaleY(0.5);
+  45% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.22, 1);
   }
+  100% { transform: translateY(45dvh); }
 }
 
-#session-runner-client.is-rest-settle #session-rest-shape {
+#session-runner-client.is-rest #session-rest-shape {
   opacity: 1;
-  background: var(--session-work);
-  border-radius: 0;
-  transform: scaleY(0.5);
-  animation: session-rest-settle 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-#session-runner-client.is-rest-countdown #session-rest-shape {
-  opacity: 1;
-  animation: none;
-  background: var(--session-work);
-  border-radius: 0;
-  transform: scaleY(0.5);
+  background: var(--session-rest);
+  animation: session-breathe 5s infinite;
 }
 
 #session-runner-client.is-paused #session-rest-shape {
@@ -310,67 +315,35 @@ body {
 }
 
 #session-runner-client.is-working,
-#session-runner-client.is-rest-breathe,
-#session-runner-client.is-rest-settle,
-#session-runner-client.is-rest-countdown,
-#session-runner-client.is-initial-countdown {
+#session-runner-client.is-rest,
+#session-runner-client.is-rest-count-in,
+#session-runner-client.is-count-in {
   background: var(--session-active-bg);
   color: var(--session-active-ink);
 }
 
 #session-runner-client.is-working #count,
-#session-runner-client.is-rest-breathe #count,
-#session-runner-client.is-rest-settle #count,
-#session-runner-client.is-rest-countdown #count,
-#session-runner-client.is-initial-countdown #count,
+#session-runner-client.is-rest #count,
+#session-runner-client.is-rest-count-in #count,
+#session-runner-client.is-count-in #count,
 #session-runner-client.is-working #pause-icon,
-#session-runner-client.is-rest-breathe #pause-icon,
-#session-runner-client.is-rest-settle #pause-icon,
-#session-runner-client.is-rest-countdown #pause-icon,
-#session-runner-client.is-initial-countdown #pause-icon {
+#session-runner-client.is-rest #pause-icon,
+#session-runner-client.is-rest-count-in #pause-icon,
+#session-runner-client.is-count-in #pause-icon {
   color: var(--session-active-ink);
-}
-
-#count.is-between-set-pulse {
-  position: relative;
-  isolation: isolate;
-  color: var(--session-active-ink);
-}
-
-@keyframes session-countdown-halo {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.72);
-  }
-
-  40% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.16);
-  }
-}
-
-#count.is-between-set-pulse.countdown-pop::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: -1;
-  width: 1em;
-  height: 1em;
-  border: clamp(0.35rem, 2vw, 0.65rem) solid var(--session-work);
-  border-radius: 9999px;
-  pointer-events: none;
-  animation: session-countdown-halo 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 #session-runner-layout {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+#session-top-readout {
+  position: absolute;
+  top: max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem));
+  inset-inline: 0;
+  z-index: 10;
+  padding-inline: max(1.25rem, env(safe-area-inset-left)) max(1.25rem, env(safe-area-inset-right));
 }
 
 #ring-container {
@@ -380,11 +353,39 @@ body {
 #session-pause-actions {
   position: relative;
   grid-row: 2;
-  margin-bottom: 1rem;
+  margin-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
 #session-status-line {
-  grid-row: 3;
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  gap: clamp(1rem, 5vw, 2rem);
+}
+
+#session-runner-client.is-paused #session-status-line {
+  justify-content: space-between;
+}
+
+#set-progress {
+  position: absolute;
+  inset-block-start: calc(50% + clamp(5rem, 20vw, 7.5rem));
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: clamp(1.5rem, 7vw, 2.25rem);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+}
+
+.session-finish-early-action {
+  width: 100%;
+  min-height: 3.75rem;
+  border: 0;
+  border-radius: 1.25rem;
+  background: var(--session-active-ink);
+  color: var(--session-active-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -396,50 +397,99 @@ body {
     transition-duration: 1ms !important;
   }
 
-  #count.is-between-set-pulse.countdown-pop::after {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-    animation: none !important;
+  #session-rest-shape {
+    transform: translateY(22.5dvh);
   }
 }
 
-#session-status-line #total-done,
-#session-status-line #time-left {
-  font-size: clamp(3.5rem, 16vw, 5.5rem);
+#session-status-line #total-reps {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: clamp(2.5rem, 11vw, 4rem);
   font-weight: 600;
   line-height: 0.9;
   letter-spacing: -0.07em;
 }
 
-#session-runner-client.is-working #session-status-line > div > span,
-#session-runner-client.is-rest-breathe #session-status-line > div > span,
-#session-runner-client.is-rest-settle #session-status-line > div > span,
-#session-runner-client.is-rest-countdown #session-status-line > div > span,
-#session-runner-client.is-initial-countdown #session-status-line > div > span {
+#session-status-line #time-left {
+  display: inline-block;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: clamp(2.5rem, 11vw, 4rem);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+}
+
+#session-runner-client.is-working #session-status-line span,
+#session-runner-client.is-rest #session-status-line span,
+#session-runner-client.is-rest-count-in #session-status-line span,
+#session-runner-client.is-count-in #session-status-line span {
   color: var(--session-active-ink);
 }
 
 @media (max-width: 360px) {
+  #session-status-line #total-reps {
+    font-size: clamp(2.25rem, 11vw, 2.75rem);
+  }
+
+  #session-status-line #time-left {
+    font-size: clamp(2.5rem, 12vw, 3rem);
+  }
+
+  #set-progress {
+    font-size: clamp(1.75rem, 9vw, 2.25rem);
+  }
+
   #count {
     font-size: clamp(6rem, 31vw, 8rem);
   }
+}
 
-  #session-status-line #total-done,
+@media (orientation: landscape) and (max-height: 500px) {
+  #session-runner-layout {
+    padding-block: clamp(0.75rem, 4dvh, 1.25rem);
+  }
+
+  #session-top-readout {
+    top: max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem));
+  }
+
+  #session-status-line #total-reps {
+    font-size: clamp(1.75rem, 12dvh, 2.75rem);
+  }
+
   #session-status-line #time-left {
-    font-size: clamp(3rem, 15vw, 4rem);
+    font-size: clamp(2rem, 13dvh, 3rem);
+  }
+
+  #set-progress {
+    inset-block-start: calc(50% + 3.75rem);
+    font-size: clamp(1.25rem, 8dvh, 1.75rem);
+  }
+
+  #session-pause-actions {
+    position: absolute;
+    inset: 50% 1.25rem auto;
+    margin-bottom: 0;
+    transform: translateY(-50%);
+  }
+
+  #count {
+    font-size: clamp(5rem, 28dvh, 8rem);
   }
 }
 
-#burpee-session.is-initial-countdown,
-#burpee-session.is-initial-countdown #session-runner-client,
-#session-runner-client.is-initial-countdown {
+#burpee-session.is-count-in,
+#burpee-session.is-count-in #session-runner-client,
+#session-runner-client.is-count-in {
   background: var(--session-active-bg) !important;
   color: var(--session-active-ink) !important;
 }
 
-#session-runner-client.is-initial-countdown #total-done,
-#session-runner-client.is-initial-countdown #total-plan,
-#session-runner-client.is-initial-countdown #time-left {
+#session-runner-client.is-count-in #total-done,
+#session-runner-client.is-count-in #total-plan,
+#session-runner-client.is-count-in #time-left {
   color: var(--session-active-ink) !important;
 }
 
@@ -465,7 +515,7 @@ body {
   letter-spacing: -0.075em;
 }
 
-#session-runner-client.is-initial-countdown #count.is-countdown-dots {
+#session-runner-client.is-count-in #count.is-countdown-dots {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -474,7 +524,7 @@ body {
   line-height: 1;
 }
 
-#session-runner-client.is-initial-countdown #count .countdown-dot {
+#session-runner-client.is-count-in #count .countdown-dot {
   display: block;
   width: 24px;
   height: 24px;
@@ -484,7 +534,7 @@ body {
   transition: opacity 220ms ease, transform 220ms ease;
 }
 
-#session-runner-client.is-initial-countdown #count .countdown-dot.is-faded {
+#session-runner-client.is-count-in #count .countdown-dot.is-faded {
   opacity: 0.22;
   transform: scale(0.86);
 }
@@ -494,14 +544,13 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Hide scrollbar on mobile while keeping scroll functionality */
-@media (max-width: 768px) {
-  * {
-    scrollbar-width: none;
-  }
-  *::-webkit-scrollbar {
-    display: none;
-  }
+/* Hide scrollbars while keeping scroll functionality. */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
 }
 
 /* Hide number input spinners everywhere */

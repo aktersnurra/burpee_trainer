@@ -126,17 +126,47 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @spec compile_plan(WorkoutPlan.t()) :: {:ok, ExecutionProgram.t()} | {:error, term()}
-  def compile_plan(%WorkoutPlan{current_execution_program_id: id}) when is_integer(id) do
-    {:ok, ExecutionPrograms.get!(id)}
-  end
+  def compile_plan(%WorkoutPlan{current_execution_program_id: id} = plan)
+      when is_integer(id) do
+    current_program = ExecutionPrograms.get!(id)
 
-  def compile_plan(%WorkoutPlan{source_json: source}) when is_map(source) do
-    with {:ok, program} <- PlanCompiler.compile(source) do
-      ExecutionPrograms.get_or_insert(program)
+    if current_program.schema_version == PlanCompiler.schema_version() do
+      {:ok, current_program}
+    else
+      case compile_current_program(plan) do
+        {:ok, upgraded_program} -> {:ok, upgraded_program}
+        {:error, _reason} -> {:ok, current_program}
+      end
     end
   end
 
+  def compile_plan(%WorkoutPlan{source_json: source} = plan) when is_map(source) do
+    compile_current_program(plan)
+  end
+
   def compile_plan(%WorkoutPlan{}), do: {:error, :missing_source_json}
+
+  defp compile_current_program(%WorkoutPlan{source_json: source} = plan) when is_map(source) do
+    with {:ok, program} <- PlanCompiler.compile(source),
+         {:ok, persisted_program} <- ExecutionPrograms.get_or_insert(program),
+         :ok <- put_current_execution_program(plan, persisted_program) do
+      {:ok, persisted_program}
+    end
+  end
+
+  defp compile_current_program(%WorkoutPlan{}), do: {:error, :missing_source_json}
+
+  defp put_current_execution_program(%WorkoutPlan{id: nil}, _program), do: :ok
+
+  defp put_current_execution_program(%WorkoutPlan{} = plan, %ExecutionProgram{} = program) do
+    plan
+    |> Ecto.Changeset.change(current_execution_program_id: program.id)
+    |> Repo.update()
+    |> case do
+      {:ok, _plan} -> :ok
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
 
   defp source_json_from_attrs(attrs) do
     Map.get(attrs, "source_json") || Map.get(attrs, :source_json)
@@ -166,7 +196,7 @@ defmodule BurpeeTrainer.Workouts do
       Enum.filter(program.events, &match?(%BurpeeTrainer.PlanCompiler.ProgramEvent.Work{}, &1))
 
     total_reps = Enum.reduce(work_events, 0, &(&1.reps + &2))
-    total_work = Enum.reduce(work_events, 0.0, &(&1.reps * &1.sec_per_rep + &2))
+    total_work = Enum.reduce(work_events, 0.0, &(&1.reps * &1.sec_per_burpee + &2))
 
     if total_reps > 0, do: Float.round(total_work / total_reps, 1), else: 0.0
   end

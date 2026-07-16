@@ -361,10 +361,14 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp program_event_for_runner(event) do
     case map_get(event, :kind) do
       "work" ->
+        sec_per_rep_us = map_get(event, :sec_per_rep_us)
+        sec_per_burpee_us = map_get(event, :sec_per_burpee_us, sec_per_rep_us)
+
         %{
           kind: "work",
           reps: map_get(event, :reps),
-          sec_per_rep: map_get(event, :sec_per_rep_us) / 1_000_000
+          sec_per_rep: sec_per_rep_us / 1_000_000,
+          sec_per_burpee: sec_per_burpee_us / 1_000_000
         }
 
       "rest" ->
@@ -599,11 +603,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
         class="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden="true"
       >
-        <div
-          id="session-work-fill"
-          class="absolute inset-0 origin-bottom bg-[var(--session-work)]"
-        >
-        </div>
+        <div id="session-work-track" class="absolute inset-0"></div>
+        <div id="session-work-fill" class="absolute inset-0 origin-bottom"></div>
         <div id="session-rest-shape" class="absolute inset-x-0 bottom-0"></div>
       </div>
 
@@ -620,6 +621,37 @@ defmodule BurpeeTrainerWeb.SessionLive do
         >
           Workout starting
         </span>
+
+        <div id="session-top-readout" class="pointer-events-none">
+          <div id="session-status-line" class="qs-tabular flex items-start justify-between">
+            <div id="total-reps" class="flex items-baseline" hidden>
+              <span id="total-reps-accessible" class="sr-only">
+                0 of {@summary.burpee_count_total} total reps
+              </span>
+              <span
+                id="total-done"
+                data-total-plan={@summary.burpee_count_total}
+                aria-hidden="true"
+              >
+                0
+              </span>
+              <span id="total-separator" aria-hidden="true" hidden>/</span><span
+                id="total-plan"
+                aria-hidden="true"
+                hidden
+              >{@summary.burpee_count_total}</span>
+            </div>
+            <div class="text-right">
+              <span id="session-time-accessible" class="sr-only">
+                Session time remaining {Fmt.duration_sec(round(@summary.duration_sec_total))}
+              </span>
+              <span id="time-left" aria-hidden="true">
+                {Fmt.duration_sec(round(@summary.duration_sec_total))}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div
           id="ring-container"
           class="relative flex min-h-0 flex-1 cursor-pointer select-none touch-manipulation items-center justify-center"
@@ -633,6 +665,13 @@ defmodule BurpeeTrainerWeb.SessionLive do
             aria-hidden="true"
           >
             —
+          </span>
+          <span
+            id="set-progress"
+            class="qs-tabular pointer-events-none text-[var(--session-active-ink)]"
+            hidden
+            aria-hidden="true"
+          >
           </span>
           <svg
             id="pause-icon"
@@ -661,7 +700,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               id="finish-early-btn"
               type="button"
               disabled
-              class="w-full rounded-[1.75rem] border border-[var(--session-border)] bg-[var(--session-bg)] px-6 py-5 text-lg font-medium transition active:scale-[0.99] disabled:invisible"
+              class="session-finish-early-action px-6 py-4 text-lg font-medium transition enabled:hover:opacity-90 active:scale-[0.99] disabled:invisible"
             >
               Finish early
             </button>
@@ -671,27 +710,12 @@ defmodule BurpeeTrainerWeb.SessionLive do
               phx-click="discard"
               disabled
               data-confirm="Abort this session without saving?"
-              class="px-6 py-3 text-base text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
+              class="px-6 py-3 text-base text-[var(--session-active-ink)] transition hover:text-[var(--session-active-ink)]"
               aria-label="Abort session without saving"
             >
               Abort
             </button>
           </div>
-        </div>
-
-        <div
-          id="session-status-line"
-          class="relative z-10 flex items-end justify-between pb-[max(1rem,env(safe-area-inset-bottom))] tabular-nums"
-        >
-          <div>
-            <span id="total-done" data-total-plan={@summary.burpee_count_total}>0</span>
-            <span class="block text-sm text-[var(--session-muted)]">done</span>
-          </div>
-          <div class="text-right">
-            <span id="time-left">{Fmt.duration_sec(round(@summary.duration_sec_total))}</span>
-            <span class="block text-sm text-[var(--session-muted)]">left</span>
-          </div>
-          <span id="total-plan" class="sr-only">{@summary.burpee_count_total}</span>
         </div>
       </div>
 

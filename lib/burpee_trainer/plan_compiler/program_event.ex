@@ -7,12 +7,13 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramEvent do
 
   @spec work!(map()) :: Work.t()
   def work!(attrs) when is_map(attrs) do
-    reject_unknown!(attrs, [:reps, :sec_per_rep], :work)
+    reject_unknown!(attrs, [:reps, :sec_per_rep, :sec_per_burpee], :work)
 
     %Work{
       kind: :work,
       reps: fetch!(attrs, :reps),
-      sec_per_rep: fetch!(attrs, :sec_per_rep) * 1.0
+      sec_per_rep: fetch!(attrs, :sec_per_rep) * 1.0,
+      sec_per_burpee: fetch!(attrs, :sec_per_burpee) * 1.0
     }
   end
 
