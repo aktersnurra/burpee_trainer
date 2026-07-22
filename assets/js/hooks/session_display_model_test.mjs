@@ -159,6 +159,20 @@ test("active fill completes before full-screen recovery shows exact remaining ti
 	assertLeanContract(recoveryMidpoint, runningKeys);
 });
 
+test("single-set recovery hides redundant 1/1 position", () => {
+	const timeline = [
+		{ kind: "work", reps: 6, sec_per_rep: 4, sec_per_burpee: 3 },
+	];
+	const recovery = runningModel(timeline, 0, {
+		phase_elapsed: 3.5,
+		phase_remaining: 20.5,
+	});
+
+	assert.equal(recovery.visual.state, "work_recovery");
+	assert.equal(recovery.primaryCount, "1");
+	assert.equal(recovery.setProgress, null);
+});
+
 test("unbroken work fills across each cadence interval instead of staying solid", () => {
 	const timeline = [
 		{ kind: "work", reps: 6, sec_per_rep: 4, sec_per_burpee: 4 },

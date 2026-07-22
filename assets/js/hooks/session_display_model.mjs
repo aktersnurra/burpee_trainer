@@ -121,7 +121,7 @@ function setProgressForFrame(timeline, frame) {
 	const position =
 		eventKind(frame?.event) === "work" ? completed + 1 : completed;
 
-	return total > 0 ? `${position}/${total}` : null;
+	return total > 1 ? `${position}/${total}` : null;
 }
 
 function eventKind(event) {
