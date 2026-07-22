@@ -435,8 +435,19 @@ test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 	assert.match(ctx.el.querySelector("#start-overlay").className, /\bhidden\b/);
 });
 
-test("camera confirmation hides the patchable wrapper without unmounting PoseTracker", () => {
+test("camera confirmation is ignored until stable pose readiness", () => {
 	const ctx = buildHarness();
+	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
+
+	ctx.onCameraSetupStart();
+
+	assert.equal(wrapper.style.visibility, undefined);
+	assert.equal(wrapper.attributes.get("aria-hidden"), undefined);
+	assert.deepEqual(ctx.events, []);
+});
+
+test("camera confirmation hides the patchable wrapper without unmounting PoseTracker", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
 	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
 	const tracker = ctx.el.querySelector("#pose-tracker");
 
@@ -447,6 +458,23 @@ test("camera confirmation hides the patchable wrapper without unmounting PoseTra
 	assert.equal(ctx.el.querySelector("#pose-tracker"), tracker);
 	assert.equal(tracker.removed, undefined);
 	assert.deepEqual(ctx.events, [{ name: "camera_setup_started", payload: {} }]);
+});
+
+test("camera setup timer fallback returns to the ordinary timed warmup flow", () => {
+	const ctx = buildHarness();
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+
+	ctx.onCameraSetupTimed();
+
+	assert.deepEqual(ctx.events.at(-1), {
+		name: "fallback_to_timed",
+		payload: {},
+	});
+	assert.equal(ctx.flow.captureMode, "timed");
+	assert.equal(ctx.flow.mode, "warmup_prompt");
+	assert.ok(ctx.el.querySelector("#warmup-yes-btn"));
+	assert.ok(ctx.el.querySelector("#warmup-skip-btn"));
 });
 
 test("pose tracker binds only to the preview rendered inside its hook", () => {

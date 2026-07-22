@@ -88,14 +88,35 @@ defmodule BurpeeTrainerWeb.SessionLive do
     end
   end
 
-  def handle_event("tracker_ready", _, socket) do
-    setup_state = if socket.assigns.capture_setup_state == :started, do: :started, else: :ready
+  def handle_event("tracker_initialized", _, socket) do
+    {:noreply, assign(socket, :tracking_state, :initializing)}
+  end
 
+  def handle_event(
+        "tracker_readiness",
+        %{"state" => state},
+        %{assigns: %{capture_setup_state: setup_state}} = socket
+      )
+      when state in ["ready", "optimal"] and setup_state in [:arming, :ready] do
     {:noreply,
      socket
-     |> assign(:capture_setup_state, setup_state)
+     |> assign(:capture_setup_state, :ready)
      |> assign(:tracking_state, :ready)}
   end
+
+  def handle_event(
+        "tracker_readiness",
+        %{"state" => "not_ready"},
+        %{assigns: %{capture_setup_state: setup_state}} = socket
+      )
+      when setup_state in [:arming, :ready] do
+    {:noreply,
+     socket
+     |> assign(:capture_setup_state, :arming)
+     |> assign(:tracking_state, :arming)}
+  end
+
+  def handle_event("tracker_readiness", _params, socket), do: {:noreply, socket}
 
   def handle_event("camera_preview_diagnostics", params, socket) do
     Logger.info(
@@ -105,8 +126,23 @@ defmodule BurpeeTrainerWeb.SessionLive do
     {:noreply, socket}
   end
 
-  def handle_event("camera_setup_started", _, socket) do
+  def handle_event(
+        "camera_setup_started",
+        _,
+        %{assigns: %{capture_setup_state: :ready}} = socket
+      ) do
     {:noreply, assign(socket, :capture_setup_state, :started)}
+  end
+
+  def handle_event("camera_setup_started", _, socket), do: {:noreply, socket}
+
+  def handle_event("fallback_to_timed", _, socket) do
+    {:noreply,
+     socket
+     |> abort_active_pose_capture("camera_setup_fallback")
+     |> assign(:capture_mode, :timed)
+     |> assign(:capture_setup_state, :idle)
+     |> assign(:tracking_state, :disabled)}
   end
 
   def handle_event("pose_capture_chunk", params, socket) do
@@ -554,16 +590,28 @@ defmodule BurpeeTrainerWeb.SessionLive do
           <% end %>
         </h1>
         <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
-          Make sure your full body is visible. We’ll save pose traces for warmup and main workout.
+          <%= if @setup_state == :ready do %>
+            Shoulders and hips are visible. A wider frame can improve tracking accuracy.
+          <% else %>
+            Keep your shoulders and hips visible while tracking gets ready.
+          <% end %>
         </p>
       </div>
 
       <button
         id="camera-setup-start-btn"
         type="button"
-        class="pointer-events-auto row-start-3 min-h-14 w-full max-w-[430px] place-self-center rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]"
+        disabled={@setup_state != :ready}
+        class="pointer-events-auto row-start-3 min-h-14 w-full max-w-[430px] place-self-center rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition enabled:hover:opacity-90 enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
       >
         Start tracked session
+      </button>
+      <button
+        id="camera-setup-timed-btn"
+        type="button"
+        class="pointer-events-auto row-start-3 mt-20 place-self-center px-5 py-3 text-sm text-[var(--session-muted)] underline decoration-[var(--session-track)] underline-offset-4"
+      >
+        Use timer instead
       </button>
     </div>
     """

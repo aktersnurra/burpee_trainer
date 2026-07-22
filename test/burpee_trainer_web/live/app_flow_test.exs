@@ -303,12 +303,22 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
              "#camera-setup-panel.pointer-events-auto #camera-setup-start-btn"
            )
 
-    assert has_element?(session, "#camera-setup-panel #camera-setup-start-btn")
+    assert has_element?(session, "#camera-setup-panel #camera-setup-start-btn[disabled]")
     assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-preview")
     assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-canvas")
 
+    render_hook(session, "tracker_initialized", %{})
+    assert has_element?(session, "#camera-setup-start-btn[disabled]")
+
+    render_hook(session, "tracker_readiness", %{"state" => "ready"})
+    refute has_element?(session, "#camera-setup-start-btn[disabled]")
+    assert has_element?(session, "#camera-setup-timed-btn")
+
     render_hook(session, "camera_setup_started", %{})
 
+    refute has_element?(session, "#camera-setup-panel")
+
+    render_hook(session, "tracker_readiness", %{"state" => "not_ready"})
     refute has_element?(session, "#camera-setup-panel")
 
     assert has_element?(session, "#pose-tracker-visibility.invisible[aria-hidden='true']")
@@ -319,8 +329,6 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
            )
 
     assert has_element?(session, "#pose-tracker #pose-tracker-preview-frame")
-
-    render_hook(session, "tracker_ready", %{})
 
     render_hook(session, "pose_capture_chunk", %{
       "segment" => "main",
@@ -379,6 +387,39 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     {:ok, _analysis, analysis_html} = live(conn, ~p"/stats/sessions/#{saved.id}")
     assert analysis_html =~ "Session analysis"
     assert analysis_html =~ "Pace by rep"
+  end
+
+  test "tracked camera setup rejects start while arming", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Readiness Gate"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(session, "choose_tracked", %{})
+    render_hook(session, "camera_setup_started", %{})
+
+    assert has_element?(session, "#camera-setup-panel")
+    assert has_element?(session, "#camera-setup-start-btn[disabled]")
+
+    render_hook(session, "tracker_readiness", %{"state" => "optimal"})
+    refute has_element?(session, "#camera-setup-start-btn[disabled]")
+
+    render_hook(session, "camera_setup_started", %{})
+    refute has_element?(session, "#camera-setup-panel")
+  end
+
+  test "tracked camera setup can fall back to the timed warmup flow", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Timer Fallback"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(session, "choose_tracked", %{})
+    assert [_run] = Repo.all(PoseCaptureRun)
+
+    render_hook(session, "fallback_to_timed", %{})
+
+    assert Repo.all(PoseCaptureRun) == []
+    refute has_element?(session, "#camera-setup-panel")
+    refute has_element?(session, "#pose-tracker")
+    assert has_element?(session, "#start-overlay #warmup-yes-btn")
+    assert has_element?(session, "#start-overlay #warmup-skip-btn")
   end
 
   test "stats deletion removes a saved session from history and home totals", %{

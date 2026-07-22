@@ -99,6 +99,7 @@ const SessionHook = {
 			const captureTracked = e.target.closest("#capture-tracked-btn");
 			const captureTimed = e.target.closest("#capture-timed-btn");
 			const cameraSetupStart = e.target.closest("#camera-setup-start-btn");
+			const cameraSetupTimed = e.target.closest("#camera-setup-timed-btn");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
 
@@ -108,6 +109,7 @@ const SessionHook = {
 			if (captureTracked) this.onCaptureTracked();
 			if (captureTimed) this.onCaptureTimed();
 			if (cameraSetupStart) this.onCameraSetupStart();
+			if (cameraSetupTimed) this.onCameraSetupTimed();
 			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
 		});
@@ -469,6 +471,9 @@ const SessionHook = {
 	},
 
 	onCameraSetupStart() {
+		const tracker = this.el.querySelector("#pose-tracker");
+		if (tracker?.dataset?.poseTrackerReady !== "true") return;
+
 		const cameraVisibility = this.el.querySelector("#pose-tracker-visibility");
 		if (cameraVisibility) {
 			cameraVisibility.style.visibility = "hidden";
@@ -479,6 +484,11 @@ const SessionHook = {
 
 		this.pushEvent("camera_setup_started", {});
 		this.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+	},
+
+	onCameraSetupTimed() {
+		this.pushEvent("fallback_to_timed", {});
+		this.dispatchFlow({ type: "CAPTURE_TIMED" });
 	},
 
 	startCountdown() {
