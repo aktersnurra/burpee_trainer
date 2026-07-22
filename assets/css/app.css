@@ -369,6 +369,11 @@ body {
   padding-inline: max(1.5rem, env(safe-area-inset-left)) max(1.5rem, env(safe-area-inset-right));
 }
 
+#session-runner-client.is-count-in #session-top-readout,
+#session-runner-client.is-rest-count-in #session-top-readout {
+  visibility: hidden;
+}
+
 #session-progress {
   width: 100%;
   height: 4px;
@@ -545,30 +550,6 @@ body {
 #count.is-count-long {
   font-size: clamp(5rem, 24vw, 6.5rem);
   letter-spacing: -0.075em;
-}
-
-#session-runner-client.is-count-in #count.is-countdown-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  min-height: 148px;
-  line-height: 1;
-}
-
-#session-runner-client.is-count-in #count .countdown-dot {
-  display: block;
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  background: var(--session-active-ink) !important;
-  opacity: 1;
-  transition: opacity 220ms ease, transform 220ms ease;
-}
-
-#session-runner-client.is-count-in #count .countdown-dot.is-faded {
-  opacity: 0.22;
-  transform: scale(0.86);
 }
 
 /* iPhone notch / home-bar safe area for the bottom tab bar */

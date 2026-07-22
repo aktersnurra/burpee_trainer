@@ -68,10 +68,9 @@ const runningKeys = [
 	"timeLeftSec",
 ];
 
-test("initial count-in keeps dots and uses the count_in state", () => {
+test("initial count-in uses the same centered numeral treatment as rest count-in", () => {
 	const model = countdownDisplayModel({
 		value: 3,
-		total: 5,
 		totalDone: 0,
 		totalTarget: 20,
 		timeLeftSec: 60,
@@ -83,7 +82,8 @@ test("initial count-in keeps dots and uses the count_in state", () => {
 		progress: 0,
 		pulse: null,
 	});
-	assert.deepEqual(model.countdownDots, { count: 5, faded: 2 });
+	assert.equal(model.primaryCount, 3);
+	assert.equal(model.countdownDots, null);
 	assert.equal(model.setProgress, null);
 	assertLeanContract(model, [
 		"visual",

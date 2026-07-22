@@ -488,32 +488,19 @@ const SessionHook = {
 		const overlay = this.el.querySelector("#start-overlay");
 		if (overlay) overlay.remove();
 
-		const renderCountdown = (value, _progress, pop) => {
+		const renderCountdown = (value) => {
 			const model = countdownDisplayModel({
 				value,
-				total: 5,
 				totalDone: this.segment.reps.burpeeCountDone,
 				totalTarget: this.segment.reps.burpeeCountTarget,
 				timeLeftSec: this.segment.clock.totalDurationSec,
 				sessionProgress: this.activeSegment === "workout" ? 0 : null,
 			});
 			this.renderer.renderDisplayModel(model);
-
-			const countEl = this.el.querySelector("#count");
-			if (pop && countEl) {
-				countEl.classList.remove("countdown-pop");
-				void countEl.offsetWidth;
-				countEl.classList.add("countdown-pop");
-			}
 		};
 
 		this.renderCountdownFrame = renderCountdown;
-		this.countdownShowCount = (value, _animate) => {
-			const elapsedMs = this.countdownStartedAt
-				? performance.now() - this.countdownStartedAt
-				: 0;
-			renderCountdown(value, Math.min(Math.max(elapsedMs / 5000, 0), 1), true);
-		};
+		this.countdownShowCount = (value, _animate) => renderCountdown(value);
 		this.countdownCount = 5;
 		this.countdownStartedAt = performance.now();
 		this.renderCountdownContinuously(renderCountdown);

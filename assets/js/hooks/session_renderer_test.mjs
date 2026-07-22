@@ -235,29 +235,21 @@ test("work count distinguishes single, double, and triple digit values", () => {
 	assert.equal(count.classList.contains("is-count-long"), false);
 });
 
-test("initial count-in still renders dots", () => {
+test("initial count-in renders the same centered numeral as rest count-in", () => {
 	const { renderer, elements } = harness();
 	renderer.renderDisplayModel({
 		...model("count_in"),
 		primaryCount: 3,
-		countdownDots: { count: 5, faded: 2 },
+		countdownDots: null,
 	});
 
 	assert.equal(
 		elements["#session-runner-client"].classList.contains("is-count-in"),
 		true,
 	);
-	assert.equal(elements["#count"].children.length, 5);
-	assert.deepEqual(
-		elements["#count"].children.map((dot) => dot.className),
-		[
-			"countdown-dot is-faded",
-			"countdown-dot is-faded",
-			"countdown-dot",
-			"countdown-dot",
-			"countdown-dot",
-		],
-	);
+	assert.equal(elements["#count"].textContent, "3");
+	assert.equal(elements["#count"].children.length, 0);
+	assert.equal(elements["#count"].classList.contains("is-countdown-dots"), false);
 	assert.equal(elements["#set-progress"].hidden, true);
 });
 

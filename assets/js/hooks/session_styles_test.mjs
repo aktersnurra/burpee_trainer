@@ -264,6 +264,15 @@ test("rest_count_in is paper-only with undecorated center content", () => {
 	);
 });
 
+test("count-in states hide progress and completed reps", () => {
+	for (const state of ["is-count-in", "is-rest-count-in"]) {
+		const topReadout =
+			ruleFor(`#session-runner-client.${state} #session-top-readout`)
+				?.declarations || "";
+		assert.match(topReadout, /visibility:\s*hidden;/);
+	}
+});
+
 test("state-specific CSS preserves the center and bottom anchor positions", () => {
 	const stateClass =
 		/\.(?:is-working|is-rest|is-rest-count-in|is-count-in|is-paused)\b/;
@@ -422,7 +431,7 @@ test("reduced motion stops continuous breathing without suppressing discrete fil
 	);
 });
 
-test("count-in dots and active values retain approved ink", () => {
+test("numeric count-in and active values retain approved ink", () => {
 	for (const state of activeStates) {
 		for (const target of [
 			"#count",
@@ -438,8 +447,6 @@ test("count-in dots and active values retain approved ink", () => {
 		}
 	}
 
-	const dot =
-		ruleFor("#session-runner-client.is-count-in #count .countdown-dot")
-			?.declarations || "";
-	assert.match(dot, /background:\s*var\(--session-active-ink\)\s*!important;/);
+	assert.doesNotMatch(css, /\.countdown-dot/);
+	assert.doesNotMatch(renderer, /renderCountdownDots/);
 });

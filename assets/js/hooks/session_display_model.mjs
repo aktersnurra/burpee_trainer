@@ -9,7 +9,6 @@ export function sessionProgressForElapsed(elapsedSec, totalDurationSec) {
 
 export function countdownDisplayModel({
 	value,
-	total = 5,
 	totalDone,
 	totalTarget,
 	timeLeftSec,
@@ -18,7 +17,7 @@ export function countdownDisplayModel({
 	return {
 		visual: { state: "count_in", progress: 0, pulse: null },
 		primaryCount: value,
-		countdownDots: { count: total, faded: Math.max(total - value, 0) },
+		countdownDots: null,
 		setProgress: null,
 		sessionProgress,
 		totalDone,

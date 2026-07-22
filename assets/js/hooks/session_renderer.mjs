@@ -213,7 +213,7 @@ export class SessionRenderer {
 
 		if (visual.state === "count_in") {
 			this.lastPulseValue = null;
-			this.renderCountdownDots(model.countdownDots || { count: 5, faded: 0 });
+			this.renderRestState(model);
 		} else if (["work", "work_active", "work_recovery"].includes(visual.state)) {
 			this.lastPulseValue = null;
 			this.updateWorkFill(visual.progress, visual.activeRatio);
@@ -394,25 +394,6 @@ export class SessionRenderer {
 		const accessibleTotal = this.root.querySelector("#total-reps-accessible");
 		if (accessibleTotal && done !== "" && target !== "") {
 			accessibleTotal.textContent = `${done} of ${target} total reps`;
-		}
-	}
-
-	renderCountdownDots({ count, faded }) {
-		const countEl = this.root.querySelector("#count");
-		if (!countEl) return;
-
-		while (countEl.firstChild) countEl.removeChild(countEl.firstChild);
-		countEl.textContent = "";
-		countEl.classList.add("is-countdown-dots");
-
-		const documentRef = countEl.ownerDocument || globalThis.document;
-		if (!documentRef) return;
-
-		for (let index = 0; index < count; index += 1) {
-			const dot = documentRef.createElement("span");
-			dot.className = "countdown-dot";
-			if (index < faded) dot.className += " is-faded";
-			countEl.appendChild(dot);
 		}
 	}
 
