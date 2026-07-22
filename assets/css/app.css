@@ -111,11 +111,11 @@
 /* Keep the document chrome/background aligned with the selected app theme. */
 :root {
   color-scheme: light;
-  background: #F4F2EE;
+  background: #F3EEE8;
 }
 
 body {
-  background: #F4F2EE;
+  background: #F3EEE8;
 }
 
 [data-theme="dark"] {
@@ -130,31 +130,31 @@ body {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: light;
-    background: #F4F2EE;
+    background: #F3EEE8;
   }
 
   html:not([data-theme]) body {
-    background: #F4F2EE;
+    background: #F3EEE8;
   }
 }
 
 #burpee-session,
 .session-surface {
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --session-bg: #F4F2EE;
+  --session-bg: #F3EEE8;
   --session-surface: #FAF8F3;
   --session-surface-alt: #EFECE4;
   --session-ink: #20201D;
-  --session-active-bg: #F4F2EE;
+  --session-active-bg: #F3EEE8;
   --session-active-ink: #20201D;
   --session-active-muted: #706C64;
   --session-muted: #706C64;
   --session-soft-muted: #9A9489;
   --session-border: #DAD6CE;
-  --session-track: #DAD6CE;
-  --session-work: #FD7236;
-  --session-rest-light: #AFC8E8;
-  --session-rest: #749CCE;
+  --session-track: #DDD6CF;
+  --session-work: #E86F47;
+  --session-rest-light: color-mix(in srgb, var(--session-rest) 58%, var(--session-active-bg));
+  --session-rest: #7F95B5;
   --session-accent: #A77B5D;
   --session-accent-strong: #8F5F46;
   --session-toggle-bg: #F1F8FF;
@@ -182,13 +182,13 @@ body {
   --session-surface: #171A21;
   --session-surface-alt: #20242C;
   --session-ink: #ECEFF3;
-  --session-active-bg: #F4F2EE;
+  --session-active-bg: #F3EEE8;
   --session-active-ink: #20201D;
   --session-active-muted: #706C64;
   --session-muted: #AAB2BE;
   --session-soft-muted: #7E8794;
   --session-border: #343A45;
-  --session-track: #2A303A;
+  --session-track: #DDD6CF;
   --session-accent: #E06A5F;
   --session-accent-strong: #FF8A7D;
   --session-toggle-bg: #112A42;
@@ -243,7 +243,7 @@ body {
 .countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 #session-runner-client {
-  --session-progress-track: rgba(32, 32, 29, 0.09);
+  --session-progress-track: var(--session-track);
 }
 
 #session-work-fill {

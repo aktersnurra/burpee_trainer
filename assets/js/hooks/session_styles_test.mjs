@@ -82,14 +82,24 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 	const darkTheme = ruleFor('[data-theme="dark"] .session-surface');
 
 	for (const theme of [lightTheme, darkTheme]) {
-		assert.match(theme.declarations, /--session-active-bg:\s*#F4F2EE;/);
+		assert.match(theme.declarations, /--session-active-bg:\s*#F3EEE8;/);
 		assert.match(theme.declarations, /--session-active-ink:\s*#20201D;/);
 		assert.match(theme.declarations, /--session-active-muted:\s*#706C64;/);
+		assert.match(theme.declarations, /--session-track:\s*#DDD6CF;/);
 	}
 
-	assert.match(lightTheme.declarations, /--session-work:\s*#FD7236;/);
-	assert.match(lightTheme.declarations, /--session-rest-light:\s*#AFC8E8;/);
-	assert.match(lightTheme.declarations, /--session-rest:\s*#749CCE;/);
+	assert.match(lightTheme.declarations, /--session-work:\s*#E86F47;/);
+	assert.match(
+		lightTheme.declarations,
+		/--session-rest-light:\s*color-mix\(in srgb, var\(--session-rest\) 58%, var\(--session-active-bg\)\);/,
+	);
+	assert.match(lightTheme.declarations, /--session-rest:\s*#7F95B5;/);
+
+	const runner = ruleFor("#session-runner-client")?.declarations || "";
+	assert.match(
+		runner,
+		/--session-progress-track:\s*var\(--session-track\);/,
+	);
 
 	const workFill = ruleFor("#session-work-fill")?.declarations || "";
 	assert.match(workFill, /background:\s*var\(--session-work\);/);
@@ -130,7 +140,7 @@ test("Abort uses the actual fixed active ink with normal-text contrast on every 
 	assert.match(abortClass, /text-\[var\(--session-active-ink\)\]/);
 	assert.doesNotMatch(abortClass, /text-\[var\(--session-active-muted\)\]/);
 
-	for (const background of ["#F4F2EE", "#FD7236", "#749CCE"]) {
+	for (const background of ["#F3EEE8", "#E86F47", "#7F95B5"]) {
 		assert.ok(
 			contrastRatio("#20201D", background) >= 4.5,
 			`Abort foreground must pass normal-text contrast on ${background}`,
