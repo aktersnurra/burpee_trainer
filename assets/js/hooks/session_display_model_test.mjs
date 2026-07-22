@@ -114,7 +114,7 @@ test("overall session progress is clamped and monotonic across event boundaries"
 	);
 });
 
-test("work exposes one cadence progress with an active/recovery split", () => {
+test("active fill completes before full-screen recovery shows exact remaining time", () => {
 	const activeStart = runningModel(threeSetTimeline, 0, {
 		phase_elapsed: 0,
 		phase_remaining: 24,
@@ -135,30 +135,27 @@ test("work exposes one cadence progress with an active/recovery split", () => {
 	assert.deepEqual(activeStart.visual, {
 		state: "work_active",
 		progress: 0,
-		activeRatio: 0.75,
 		pulse: null,
 	});
 	assert.deepEqual(activeMidpoint.visual, {
 		state: "work_active",
-		progress: 0.375,
-		activeRatio: 0.75,
+		progress: 0.5,
 		pulse: null,
 	});
 	assert.deepEqual(recoveryStart.visual, {
 		state: "work_recovery",
-		progress: 0.75,
-		activeRatio: 0.75,
+		progress: 0,
 		pulse: null,
 	});
 	assert.deepEqual(recoveryMidpoint.visual, {
 		state: "work_recovery",
-		progress: 0.875,
-		activeRatio: 0.75,
+		progress: 0,
 		pulse: null,
 	});
-	assert.equal(recoveryMidpoint.primaryCount, 5);
+	assert.equal(recoveryMidpoint.primaryCount, "1");
+	assert.equal(recoveryMidpoint.restTimeLeftSec, 0.5);
 	assert.equal(recoveryMidpoint.sessionProgress, 0.25);
-	assert.equal(recoveryMidpoint.setProgress, null);
+	assert.equal(recoveryMidpoint.setProgress, "1/3");
 	assertLeanContract(recoveryMidpoint, runningKeys);
 });
 
@@ -173,17 +170,14 @@ test("unbroken work fills across each cadence interval instead of staying solid"
 	assert.deepEqual(start.visual, {
 		state: "work_active",
 		progress: 0,
-		activeRatio: 1,
 		pulse: null,
 	});
 	assert.deepEqual(midpoint.visual, {
 		state: "work_active",
 		progress: 0.5,
-		activeRatio: 1,
 		pulse: null,
 	});
 	assert.equal(end.visual.state, "work_active");
-	assert.equal(end.visual.activeRatio, 1);
 	assert.ok(end.visual.progress > 0.999);
 });
 
@@ -207,7 +201,7 @@ test("normal rest uses bare seconds and derives set progress from immutable work
 	assertLeanContract(firstRest, runningKeys);
 });
 
-test("rest switches to minute clock formatting at sixty seconds", () => {
+test("rest always uses bare total seconds", () => {
 	const timeline = [
 		{ kind: "work", reps: 1, sec_per_rep: 4, sec_per_burpee: 3 },
 		{ kind: "rest", duration_sec: 90 },
@@ -215,8 +209,8 @@ test("rest switches to minute clock formatting at sixty seconds", () => {
 	];
 
 	for (const [remaining, expected] of [
-		[65, "1:05"],
-		[60, "1:00"],
+		[65, "65"],
+		[60, "60"],
 		[59, "59"],
 	]) {
 		const model = runningModel(timeline, 1, {
@@ -294,7 +288,6 @@ test("the exact rest boundary enters work at zero per-rep progress", () => {
 	assert.deepEqual(boundaryModel.visual, {
 		state: "work_active",
 		progress: 0,
-		activeRatio: 0.75,
 		pulse: null,
 	});
 	assert.equal(boundaryModel.primaryCount, 6);

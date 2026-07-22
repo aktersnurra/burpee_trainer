@@ -55,7 +55,7 @@ export class SessionRenderer {
 		const classNames = {
 			work: ["is-working", "is-work-active"],
 			work_active: ["is-working", "is-work-active"],
-			work_recovery: ["is-working", "is-work-recovery"],
+			work_recovery: ["is-rest", "is-work-recovery"],
 			rest: ["is-rest"],
 			rest_count_in: ["is-rest-count-in"],
 			count_in: ["is-count-in"],
@@ -69,23 +69,14 @@ export class SessionRenderer {
 		this.appliedVisualState = state;
 	}
 
-	updateWorkFill(progress, activeRatio = 1) {
+	updateWorkFill(progress) {
 		const fill = this.root.querySelector("#session-work-fill");
-		const surface = this.root.querySelector("#session-runner-client");
 		if (!fill) return;
 
 		const clampedProgress = Math.min(Math.max(Number(progress) || 0, 0), 1);
-		const clampedActiveRatio = Math.min(
-			Math.max(Number(activeRatio) || 0, 0),
-			1,
-		);
 		const clip = `inset(${(1 - clampedProgress) * 100}% 0 0 0)`;
 		fill.style.clipPath = clip;
 		fill.style.webkitClipPath = clip;
-		surface?.style?.setProperty(
-			"--session-active-ratio",
-			`${clampedActiveRatio * 100}%`,
-		);
 	}
 
 	updateAccessibleState({ state, primaryCount, setProgress }) {
@@ -93,17 +84,23 @@ export class SessionRenderer {
 		const status = this.root.querySelector("#session-accessible-status");
 		const accessibleSetProgress = this.formatSetProgress(setProgress);
 		const statusText =
-			["work", "work_active", "work_recovery"].includes(state)
+			["work", "work_active"].includes(state)
 				? `${primaryCount} reps remaining`
-			: state === "rest"
-				? `Rest${
-						accessibleSetProgress
-							? `, set progress ${accessibleSetProgress}`
-							: ""
-					}`
-				: state === "rest_count_in"
-					? `Rest time remaining ${primaryCount}`
-					: "Workout starting";
+				: state === "work_recovery"
+					? `Recovery time remaining ${primaryCount}${
+							accessibleSetProgress
+								? `, set progress ${accessibleSetProgress}`
+								: ""
+						}`
+					: state === "rest"
+						? `Rest${
+								accessibleSetProgress
+									? `, set progress ${accessibleSetProgress}`
+									: ""
+							}`
+						: state === "rest_count_in"
+							? `Rest time remaining ${primaryCount}`
+							: "Workout starting";
 
 		if (target) {
 			target.setAttribute(
@@ -214,11 +211,13 @@ export class SessionRenderer {
 		if (visual.state === "count_in") {
 			this.lastPulseValue = null;
 			this.renderRestState(model);
-		} else if (["work", "work_active", "work_recovery"].includes(visual.state)) {
+		} else if (["work", "work_active"].includes(visual.state)) {
 			this.lastPulseValue = null;
-			this.updateWorkFill(visual.progress, visual.activeRatio);
+			this.updateWorkFill(visual.progress);
 			this.updateCurrentSetRepCount(model.primaryCount);
-		} else if (["rest", "rest_count_in"].includes(visual.state)) {
+		} else if (
+			["work_recovery", "rest", "rest_count_in"].includes(visual.state)
+		) {
 			this.updateWorkFill(0);
 			this.renderRestState(model);
 		}
@@ -405,11 +404,7 @@ export class SessionRenderer {
 	}
 
 	formatClock(sec) {
-		const s = Math.max(Math.ceil(sec), 0);
-		if (s < 60) return String(s);
-		const m = Math.floor(s / 60);
-		const r = s % 60;
-		return `${m}:${String(r).padStart(2, "0")}`;
+		return String(Math.max(Math.ceil(sec), 0));
 	}
 
 	formatSetProgress(value) {

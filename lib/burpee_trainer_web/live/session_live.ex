@@ -603,9 +603,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         class="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden="true"
       >
-        <div id="session-work-track" class="absolute inset-0"></div>
         <div id="session-work-fill" class="absolute inset-0 origin-bottom"></div>
-        <div id="session-rest-shape" class="absolute inset-x-0 bottom-0"></div>
       </div>
 
       <div

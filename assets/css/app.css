@@ -153,6 +153,7 @@ body {
   --session-border: #DAD6CE;
   --session-track: #DAD6CE;
   --session-work: #FD7236;
+  --session-rest-light: #AFC8E8;
   --session-rest: #749CCE;
   --session-accent: #A77B5D;
   --session-accent-strong: #8F5F46;
@@ -242,80 +243,44 @@ body {
 .countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 #session-runner-client {
-  --session-active-ratio: 100%;
   --session-progress-track: rgba(32, 32, 29, 0.09);
 }
 
-#session-work-track,
 #session-work-fill {
-  background: linear-gradient(
-    to top,
-    var(--session-work) 0,
-    var(--session-work) var(--session-active-ratio),
-    var(--session-rest) var(--session-active-ratio),
-    var(--session-rest) 100%
-  );
-}
-
-#session-work-track {
-  opacity: 0.16;
-}
-
-#session-work-fill {
+  background: var(--session-work);
   -webkit-clip-path: inset(100% 0 0 0);
   clip-path: inset(100% 0 0 0);
   will-change: clip-path;
 }
 
-#session-runner-client:not(.is-working) #session-work-track,
 #session-runner-client:not(.is-working) #session-work-fill {
   visibility: hidden;
 }
 
-#session-runner-client.is-working #session-work-track,
 #session-runner-client.is-working #session-work-fill {
   visibility: visible;
 }
 
-#session-rest-shape {
-  inset-inline-start: -15%;
-  bottom: 0;
-  width: 130%;
-  height: 70dvh;
-  background: var(--session-rest);
-  border-radius: 50% 50% 0 0 / 12dvh 12dvh 0 0;
-  opacity: 0;
-  transform: translateY(21dvh);
-  will-change: transform;
-}
-
-#session-runner-client:not(.is-rest) #session-rest-shape {
-  visibility: hidden;
-}
-
-@keyframes session-breathe {
+@keyframes session-blue-breathe {
   0%, 100% {
-    transform: translateY(26dvh);
-    animation-timing-function: ease-in-out;
+    background-color: var(--session-rest-light);
   }
   50% {
-    transform: translateY(16dvh);
-    animation-timing-function: ease-in-out;
+    background-color: var(--session-rest);
   }
 }
 
-#session-runner-client.is-rest #session-rest-shape {
-  opacity: 1;
-  background: var(--session-rest);
-  animation: session-breathe 5s infinite;
+#session-runner-client.is-rest {
+  background: var(--session-rest-light);
+  color: var(--session-active-ink);
+  animation: session-blue-breathe 5s ease-in-out infinite;
 }
 
-#session-runner-client.is-paused #session-rest-shape {
+#session-runner-client.is-rest.is-paused {
   animation-play-state: paused;
 }
 
 #session-runner-client.is-working,
-#session-runner-client.is-rest,
 #session-runner-client.is-rest-count-in,
 #session-runner-client.is-count-in {
   background: var(--session-active-bg);
@@ -442,15 +407,15 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #session-work-fill,
-  #session-rest-shape,
+  #session-runner-client.is-rest,
   #count,
   #session-pause-actions {
     animation: none !important;
     transition-duration: 1ms !important;
   }
 
-  #session-rest-shape {
-    transform: translateY(21dvh);
+  #session-runner-client.is-rest {
+    background: var(--session-rest-light);
   }
 }
 

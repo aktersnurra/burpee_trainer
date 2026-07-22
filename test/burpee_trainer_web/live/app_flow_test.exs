@@ -93,9 +93,10 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
       refute has_element?(session, "##{center_id}[class*='#{decoration_class}']")
     end
 
-    assert has_element?(session, "#session-work-track")
+    refute has_element?(session, "#session-work-track")
     assert has_element?(session, "#session-work-fill")
-    assert has_element?(session, "#session-rest-shape")
+    refute has_element?(session, "#session-work-threshold")
+    refute has_element?(session, "#session-rest-shape")
     refute has_element?(session, "#session-work-fill[class*='scale-y-']")
 
     assert has_element?(

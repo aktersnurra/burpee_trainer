@@ -41,21 +41,27 @@ export function runningDisplayModel({
 	const isWork = kind === "work";
 	const remainingSec = frame?.phase_remaining ?? timeLeftSec ?? 0;
 	const visual = visualStateForFrame({ isRest, isWork, remainingSec, frame });
+	const recoveryRemainingSec =
+		visual.state === "work_recovery" ? recoveryRemainingForFrame(frame) : null;
 
 	return {
 		visual,
 		primaryCount:
-			visual.state === "rest_count_in"
-				? Math.max(Math.ceil(remainingSec), 1)
-				: isRest
-					? formatClock(remainingSec)
-					: isWork
-						? Math.max((event?.reps || 0) - doneInEvent, 0)
-						: (event?.reps ?? totalTarget ?? "—"),
+			visual.state === "work_recovery"
+				? formatClock(recoveryRemainingSec)
+				: visual.state === "rest_count_in"
+					? Math.max(Math.ceil(remainingSec), 1)
+					: isRest
+						? formatClock(remainingSec)
+						: isWork
+							? Math.max((event?.reps || 0) - doneInEvent, 0)
+							: (event?.reps ?? totalTarget ?? "—"),
 		countdownDots: null,
-		restTimeLeftSec: isRest ? remainingSec : null,
+		restTimeLeftSec: isRest ? remainingSec : recoveryRemainingSec,
 		setProgress:
-			visual.state === "rest" ? setProgressForFrame(timeline, frame) : null,
+			["rest", "work_recovery"].includes(visual.state)
+				? setProgressForFrame(timeline, frame)
+				: null,
 		sessionProgress,
 		totalDone,
 		totalTarget,
@@ -91,15 +97,20 @@ function workVisualState(frame) {
 	const repElapsedSec = (frame?.phase_elapsed || 0) % cadenceSec;
 	const recoverySec = cadenceSec - activeSec;
 
+	const recovery = recoverySec > 0 && repElapsedSec >= activeSec;
+
 	return {
-		state:
-			recoverySec <= 0 || repElapsedSec < activeSec
-				? "work_active"
-				: "work_recovery",
-		progress: clamp(repElapsedSec / cadenceSec),
-		activeRatio: clamp(activeSec / cadenceSec),
+		state: recovery ? "work_recovery" : "work_active",
+		progress: recovery ? 0 : clamp(repElapsedSec / activeSec),
 		pulse: null,
 	};
+}
+
+function recoveryRemainingForFrame(frame) {
+	const cadenceSec = Number(frame?.event?.sec_per_rep) || 0;
+	if (cadenceSec <= 0) return 0;
+	const repElapsedSec = (frame?.phase_elapsed || 0) % cadenceSec;
+	return Math.max(cadenceSec - repElapsedSec, 0);
 }
 
 function setProgressForFrame(timeline, frame) {
@@ -107,8 +118,10 @@ function setProgressForFrame(timeline, frame) {
 	const completed = timeline
 		.slice(0, frame?.index ?? 0)
 		.filter((event) => eventKind(event) === "work").length;
+	const position =
+		eventKind(frame?.event) === "work" ? completed + 1 : completed;
 
-	return total > 0 ? `${completed}/${total}` : null;
+	return total > 0 ? `${position}/${total}` : null;
 }
 
 function eventKind(event) {
@@ -120,9 +133,5 @@ function clamp(value) {
 }
 
 function formatClock(sec) {
-	const seconds = Math.max(Math.ceil(sec || 0), 0);
-	if (seconds < 60) return String(seconds);
-	const minutes = Math.floor(seconds / 60);
-	const remainder = seconds % 60;
-	return `${minutes}:${String(remainder).padStart(2, "0")}`;
+	return String(Math.max(Math.ceil(sec || 0), 0));
 }

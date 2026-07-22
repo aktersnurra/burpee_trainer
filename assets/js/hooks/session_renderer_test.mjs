@@ -79,9 +79,7 @@ function element() {
 
 function harness() {
 	const elements = {
-		"#session-work-track": element(),
 		"#session-work-fill": element(),
-		"#session-rest-shape": element(),
 		"#session-runner-client": element(),
 		"#session-runner-layout": element(),
 		"#ring-container": element(),
@@ -114,9 +112,9 @@ function harness() {
 function model(state, overrides = {}) {
 	return {
 		visual: { state, progress: 0, pulse: null },
-		primaryCount: state === "rest" ? "18" : 5,
+		primaryCount: state === "rest" ? "18" : state === "work_recovery" ? "1" : 5,
 		countdownDots: null,
-		setProgress: state === "rest" ? "1/3" : null,
+		setProgress: ["rest", "work_recovery"].includes(state) ? "1/3" : null,
 		totalDone: 8,
 		totalTarget: 20,
 		timeLeftSec: 40,
@@ -125,28 +123,20 @@ function model(state, overrides = {}) {
 	};
 }
 
-test("work fill reveals fixed cadence colors without scaling the gradient", () => {
+test("active fill rises from neutral to full orange without scaling", () => {
 	const { renderer, elements } = harness();
 
-	renderer.updateWorkFill(0.5, 0.6);
+	renderer.updateWorkFill(0.5);
 	assert.equal(
 		elements["#session-work-fill"].style.clipPath,
 		"inset(50% 0 0 0)",
 	);
 	assert.equal(elements["#session-work-fill"].style.transform, undefined);
-	assert.equal(
-		elements["#session-runner-client"].style["--session-active-ratio"],
-		"60%",
-	);
 
-	renderer.updateWorkFill(0, 1);
+	renderer.updateWorkFill(0);
 	assert.equal(
 		elements["#session-work-fill"].style.clipPath,
 		"inset(100% 0 0 0)",
-	);
-	assert.equal(
-		elements["#session-runner-client"].style["--session-active-ratio"],
-		"100%",
 	);
 });
 
@@ -176,11 +166,10 @@ test("overall progress uses a clamped horizontal transform and freezes on pause"
 test("duplicate visual states skip class mutations while live values still update", () => {
 	const { renderer, elements } = harness();
 	const surfaceClasses = elements["#session-runner-client"].classList;
-	const workModel = model("work_recovery", {
+	const workModel = model("work_active", {
 		visual: {
-			state: "work_recovery",
+			state: "work_active",
 			progress: 0.25,
-			activeRatio: 0.6,
 			pulse: null,
 		},
 		primaryCount: 5,
@@ -199,13 +188,9 @@ test("duplicate visual states skip class mutations while live values still updat
 		elements["#session-work-fill"].style.clipPath,
 		"inset(25% 0 0 0)",
 	);
-	assert.equal(
-		elements["#session-runner-client"].style["--session-active-ratio"],
-		"60%",
-	);
 	assert.equal(elements["#count"].textContent, "4");
 	assert.equal(surfaceClasses.contains("is-working"), true);
-	assert.equal(surfaceClasses.contains("is-work-recovery"), true);
+	assert.equal(surfaceClasses.contains("is-work-active"), true);
 
 	renderer.renderDisplayModel(model("rest"));
 	assert.ok(surfaceClasses.mutationCount() > workMutations);
@@ -253,7 +238,7 @@ test("initial count-in renders the same centered numeral as rest count-in", () =
 	assert.equal(elements["#set-progress"].hidden, true);
 });
 
-test("normal rest shows set progress but rest_count_in removes supporting visuals", () => {
+test("intra-rep recovery uses the full rest screen and exact seconds", () => {
 	const { renderer, elements } = harness();
 
 	renderer.renderDisplayModel(model("rest"));
@@ -265,15 +250,18 @@ test("normal rest shows set progress but rest_count_in removes supporting visual
 	assert.equal(elements["#set-progress"].textContent, "1/3");
 	assert.equal(elements["#set-progress"].hidden, false);
 
-	renderer.renderDisplayModel(
-		model("work_recovery", {
-			visual: { state: "work_recovery", progress: 0.5, pulse: null },
-		}),
+	renderer.renderDisplayModel(model("work_recovery"));
+	assert.equal(
+		elements["#session-runner-client"].classList.contains("is-rest"),
+		true,
 	);
 	assert.equal(
 		elements["#session-runner-client"].classList.contains("is-working"),
-		true,
+		false,
 	);
+	assert.equal(elements["#count"].textContent, "1");
+	assert.equal(elements["#set-progress"].textContent, "1/3");
+	assert.equal(elements["#set-progress"].hidden, false);
 
 	renderer.renderDisplayModel(
 		model("rest_count_in", {
@@ -302,14 +290,14 @@ test("normal rest shows set progress but rest_count_in removes supporting visual
 	);
 });
 
-test("legacy rest rendering uses bare seconds below one minute", () => {
+test("legacy rest rendering always uses bare total seconds", () => {
 	const { renderer, elements } = harness();
 
 	renderer.renderRestProgress(16);
 	assert.equal(elements["#count"].textContent, "16");
 
 	renderer.renderRestProgress(65);
-	assert.equal(elements["#count"].textContent, "1:05");
+	assert.equal(elements["#count"].textContent, "65");
 });
 
 test("zero transitions to work and resets the active fill", () => {
@@ -323,7 +311,6 @@ test("zero transitions to work and resets the active fill", () => {
 			visual: {
 				state: "work_active",
 				progress: 0,
-				activeRatio: 0.75,
 				pulse: null,
 			},
 			primaryCount: 6,

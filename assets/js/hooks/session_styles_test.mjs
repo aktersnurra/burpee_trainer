@@ -88,28 +88,28 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 	}
 
 	assert.match(lightTheme.declarations, /--session-work:\s*#FD7236;/);
+	assert.match(lightTheme.declarations, /--session-rest-light:\s*#AFC8E8;/);
 	assert.match(lightTheme.declarations, /--session-rest:\s*#749CCE;/);
 
-	const workFieldRules = rules
-		.filter((rule) =>
-			rule.selectors.some((selector) =>
-				["#session-work-track", "#session-work-fill"].includes(selector),
-			),
-		)
-		.map((rule) => rule.declarations)
-		.join("\n");
-	assert.match(
-		workFieldRules,
-		/linear-gradient\([^;]*var\(--session-work\)[^;]*var\(--session-active-ratio\)[^;]*var\(--session-rest\)/,
-	);
-	assert.match(workFieldRules, /opacity:\s*0\.16;/);
-	assert.match(workFieldRules, /clip-path:\s*inset\(100% 0 0 0\);/);
-	assert.doesNotMatch(workFieldRules, /transform:\s*scaleY/);
+	const workFill = ruleFor("#session-work-fill")?.declarations || "";
+	assert.match(workFill, /background:\s*var\(--session-work\);/);
+	assert.match(workFill, /clip-path:\s*inset\(100% 0 0 0\);/);
+	assert.doesNotMatch(workFill, /linear-gradient|var\(--session-rest\)|opacity:/);
+	assert.doesNotMatch(workFill, /transform:\s*scaleY/);
+	assert.doesNotMatch(css, /#session-work-(?:track|threshold)/);
+	assert.doesNotMatch(css, /#session-rest-shape/);
+	assert.doesNotMatch(sessionLive, /session-work-(?:track|threshold)/);
+	assert.doesNotMatch(sessionLive, /session-rest-shape/);
+
+	for (const state of ["is-working", "is-rest-count-in", "is-count-in"]) {
+		const declarations =
+			ruleFor(`#session-runner-client.${state}`)?.declarations || "";
+		assert.match(declarations, /background:\s*var\(--session-active-bg\)/);
+	}
 
 	for (const state of activeStates) {
 		const declarations =
 			ruleFor(`#session-runner-client.${state}`)?.declarations || "";
-		assert.match(declarations, /background:\s*var\(--session-active-bg\)/);
 		assert.match(declarations, /color:\s*var\(--session-active-ink\)/);
 	}
 
@@ -138,73 +138,37 @@ test("Abort uses the actual fixed active ink with normal-text contrast on every 
 	}
 });
 
-test("pause preserves the underlying active field", () => {
+test("pause freezes the underlying full-screen rest breath", () => {
 	const pausedRest =
-		ruleFor("#session-runner-client.is-paused #session-rest-shape")
-			?.declarations || "";
+		ruleFor("#session-runner-client.is-rest.is-paused")?.declarations || "";
 	assert.match(pausedRest, /animation-play-state:\s*paused;/);
 	assert.doesNotMatch(
 		pausedRest,
-		/(?:display:\s*none|visibility:\s*hidden|opacity\s*:|background\s*:)/,
-	);
-
-	const pausedFieldRules = rules
-		.filter((rule) =>
-			rule.selectors.some(
-				(selector) =>
-					selector.includes(".is-paused") &&
-					/(?:#session-work-fill|#session-rest-shape)/.test(selector),
-			),
-		)
-		.map((rule) => rule.declarations)
-		.join("\n");
-	assert.doesNotMatch(
-		pausedFieldRules,
 		/(?:display:\s*none|visibility:\s*hidden|opacity\s*:\s*0)/,
 	);
 });
 
-test("normal rest is a centered soft-dome breathing field", () => {
-	const shape = ruleFor("#session-rest-shape")?.declarations || "";
-	assert.match(shape, /inset-inline-start:\s*-15%;/);
-	assert.match(shape, /width:\s*130%;/);
-	assert.match(shape, /height:\s*70dvh;/);
+test("normal and intra-rep rest breathe across the full blue screen", () => {
+	const breathing = blockFor("@keyframes session-blue-breathe");
 	assert.match(
-		shape,
-		/border-radius:\s*50% 50% 0 0 \/ 12dvh 12dvh 0 0;/,
+		breathing,
+		/0%,\s*100%[^}]*background-color:\s*var\(--session-rest-light\);/,
 	);
-	assert.match(shape, /transform:\s*translateY\(21dvh\);/);
-	assert.match(shape, /background:\s*var\(--session-rest\);/);
+	assert.match(
+		breathing,
+		/50%[^}]*background-color:\s*var\(--session-rest\);/,
+	);
 
-	const breathing = blockFor("@keyframes session-breathe");
-	const outerPosition = Number(
-		breathing.match(/0%,\s*100%[^}]*translateY\(([\d.]+)dvh\)/)?.[1],
+	const rest = ruleFor("#session-runner-client.is-rest")?.declarations || "";
+	assert.match(rest, /background:\s*var\(--session-rest-light\);/);
+	assert.match(
+		rest,
+		/animation:\s*session-blue-breathe\s+5s\s+ease-in-out\s+infinite;/,
 	);
-	const innerPosition = Number(
-		breathing.match(/50%[^}]*translateY\(([\d.]+)dvh\)/)?.[1],
-	);
-	assert.equal(outerPosition, 26);
-	assert.equal(innerPosition, 16);
-	assert.equal(outerPosition - innerPosition, 10);
-
-	const rest =
-		ruleFor("#session-runner-client.is-rest #session-rest-shape")
-			?.declarations || "";
-	assert.match(rest, /opacity:\s*1;/);
-	assert.match(rest, /background:\s*var\(--session-rest\);/);
-	assert.doesNotMatch(rest, /border-radius:/);
-	assert.match(rest, /animation:\s*session-breathe\s+5s\s+infinite;/);
+	assert.doesNotMatch(rest, /border-radius:|transform:|opacity:/);
 });
 
 test("rest_count_in is paper-only with undecorated center content", () => {
-	assert.equal(
-		hiddenByRule([
-			"#session-runner-client.is-rest-count-in #session-rest-shape",
-			"#session-runner-client:not(.is-rest) #session-rest-shape",
-		]),
-		true,
-		"the blue rest shape must be absent or hidden",
-	);
 	assert.equal(
 		hiddenByRule([
 			"#session-runner-client.is-rest-count-in #session-work-fill",
@@ -411,23 +375,19 @@ test("deprecated rest aliases are absent from model, renderer, and styles", () =
 	assert.doesNotMatch(runnerSources, /rest-(?:breathe|settle|countdown)/);
 });
 
-test("reduced motion stops continuous breathing without suppressing discrete fills", () => {
+test("reduced motion stops full-screen breathing without suppressing fills", () => {
 	const reducedMotion = blockFor("@media (prefers-reduced-motion: reduce)");
 	assert.match(
 		reducedMotion,
-		/#session-rest-shape[\s\S]*animation:\s*none\s*!important;/,
+		/#session-runner-client\.is-rest[\s\S]*animation:\s*none\s*!important;/,
 	);
 	assert.match(
 		reducedMotion,
-		/#session-rest-shape\s*\{[^}]*transform:\s*translateY\(21dvh\);/,
+		/#session-runner-client\.is-rest\s*\{[^}]*background:\s*var\(--session-rest-light\);/,
 	);
 	assert.doesNotMatch(
 		reducedMotion,
 		/#session-work-fill[^{]*\{[^}]*(?:display:\s*none|visibility:\s*hidden|opacity:\s*0)/,
-	);
-	assert.doesNotMatch(
-		reducedMotion,
-		/#session-rest-shape[^{]*\{[^}]*(?:display:\s*none|visibility:\s*hidden|opacity:\s*0)/,
 	);
 });
 
