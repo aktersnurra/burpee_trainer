@@ -114,7 +114,7 @@ function harness() {
 function model(state, overrides = {}) {
 	return {
 		visual: { state, progress: 0, pulse: null },
-		primaryCount: state === "rest" ? "0:18" : 5,
+		primaryCount: state === "rest" ? "18" : 5,
 		countdownDots: null,
 		setProgress: state === "rest" ? "1/3" : null,
 		totalDone: 8,
@@ -211,7 +211,7 @@ test("duplicate visual states skip class mutations while live values still updat
 	assert.ok(surfaceClasses.mutationCount() > workMutations);
 	assert.equal(surfaceClasses.contains("is-working"), false);
 	assert.equal(surfaceClasses.contains("is-rest"), true);
-	assert.equal(elements["#count"].textContent, "0:18");
+	assert.equal(elements["#count"].textContent, "18");
 });
 
 test("work count distinguishes single, double, and triple digit values", () => {
@@ -230,7 +230,7 @@ test("work count distinguishes single, double, and triple digit values", () => {
 	assert.equal(count.classList.contains("is-count-double"), false);
 	assert.equal(count.classList.contains("is-count-long"), true);
 
-	renderer.renderDisplayModel(model("rest", { primaryCount: "0:18" }));
+	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
 	assert.equal(count.classList.contains("is-count-double"), false);
 	assert.equal(count.classList.contains("is-count-long"), false);
 });
@@ -269,7 +269,7 @@ test("normal rest shows set progress but rest_count_in removes supporting visual
 		elements["#session-runner-client"].classList.contains("is-rest"),
 		true,
 	);
-	assert.equal(elements["#count"].textContent, "0:18");
+	assert.equal(elements["#count"].textContent, "18");
 	assert.equal(elements["#set-progress"].textContent, "1/3");
 	assert.equal(elements["#set-progress"].hidden, false);
 
@@ -308,6 +308,16 @@ test("normal rest shows set progress but rest_count_in removes supporting visual
 		elements["#count"].classList.contains("is-between-set-pulse"),
 		false,
 	);
+});
+
+test("legacy rest rendering uses bare seconds below one minute", () => {
+	const { renderer, elements } = harness();
+
+	renderer.renderRestProgress(16);
+	assert.equal(elements["#count"].textContent, "16");
+
+	renderer.renderRestProgress(65);
+	assert.equal(elements["#count"].textContent, "1:05");
 });
 
 test("zero transitions to work and resets the active fill", () => {
@@ -458,7 +468,7 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 	renderer.renderDisplayModel(model("rest"));
 	assert.equal(status.textContent, "Rest, set progress 1 of 3");
 	assert.equal(status.textContentAssignments, 2);
-	assert.equal(elements["#count"].textContent, "0:18");
+	assert.equal(elements["#count"].textContent, "18");
 	assert.equal(
 		elements["#total-reps-accessible"].textContent,
 		"8 of 20 total reps",
@@ -470,13 +480,13 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 
 	renderer.renderDisplayModel(
 		model("rest", {
-			primaryCount: "0:17",
+			primaryCount: "17",
 			totalDone: 9,
 			totalTarget: 21,
 			timeLeftSec: 39,
 		}),
 	);
-	assert.equal(elements["#count"].textContent, "0:17");
+	assert.equal(elements["#count"].textContent, "17");
 	assert.equal(status.textContent, "Rest, set progress 1 of 3");
 	assert.equal(
 		status.textContentAssignments,

@@ -289,10 +289,12 @@ test("shared progress and contextual metrics preserve the premium hierarchy", ()
 	const progress = ruleFor("#session-progress")?.declarations || "";
 	const progressFill = ruleFor("#session-progress-fill")?.declarations || "";
 	const runnerLayout = ruleFor("#session-runner-layout")?.declarations || "";
+	const setProgress = ruleFor("#set-progress")?.declarations || "";
 	const status = ruleFor("#session-status-line")?.declarations || "";
 	const total = ruleFor("#session-status-line #total-reps")?.declarations || "";
 
 	assert.match(runnerLayout, /max-width:\s*none;/);
+	assert.match(runnerLayout, /min-height:\s*100dvh;/);
 	assert.match(progress, /height:\s*4px;/);
 	assert.match(progress, /border-radius:\s*9999px;/);
 	assert.match(progress, /background:\s*var\(--session-progress-track\);/);
@@ -303,6 +305,10 @@ test("shared progress and contextual metrics preserve the premium hierarchy", ()
 	assert.match(status, /margin-top:\s*clamp\(1\.75rem,[^;]*2\.5rem\);/);
 	assert.match(status, /justify-content:\s*flex-start;/);
 	assert.match(total, /font-size:\s*clamp\(3\.25rem,[^;]*4\.5rem\);/);
+	assert.match(
+		setProgress,
+		/inset-block-start:\s*calc\(50% \+ clamp\(6\.875rem, 20vw, 8\.75rem\)\);/,
+	);
 	assert.doesNotMatch(css, /#session-status-line #time-left/);
 
 	for (const state of ["is-working", "is-count-in"]) {

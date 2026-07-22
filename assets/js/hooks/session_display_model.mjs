@@ -122,6 +122,7 @@ function clamp(value) {
 
 function formatClock(sec) {
 	const seconds = Math.max(Math.ceil(sec || 0), 0);
+	if (seconds < 60) return String(seconds);
 	const minutes = Math.floor(seconds / 60);
 	const remainder = seconds % 60;
 	return `${minutes}:${String(remainder).padStart(2, "0")}`;

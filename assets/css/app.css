@@ -356,7 +356,9 @@ body {
 #session-runner-layout {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
+  width: 100%;
   max-width: none;
+  min-height: 100dvh;
 }
 
 #session-top-readout {
@@ -414,7 +416,7 @@ body {
 
 #set-progress {
   position: absolute;
-  inset-block-start: calc(50% + clamp(6.5rem, 18dvh, 8.5rem));
+  inset-block-start: calc(50% + clamp(6.875rem, 20vw, 8.75rem));
   inset-inline-start: 50%;
   transform: translateX(-50%);
   white-space: nowrap;

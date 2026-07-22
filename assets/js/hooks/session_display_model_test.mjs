@@ -187,7 +187,7 @@ test("unbroken work fills across each cadence interval instead of staying solid"
 	assert.ok(end.visual.progress > 0.999);
 });
 
-test("normal rest uses clock text and derives set progress from immutable work events", () => {
+test("normal rest uses bare seconds and derives set progress from immutable work events", () => {
 	const firstRest = runningModel(threeSetTimeline, 1, {
 		phase_elapsed: 12,
 		phase_remaining: 18,
@@ -198,13 +198,33 @@ test("normal rest uses clock text and derives set progress from immutable work e
 	});
 
 	assert.equal(firstRest.visual.state, "rest");
-	assert.equal(firstRest.primaryCount, "0:18");
+	assert.equal(firstRest.primaryCount, "18");
 	assert.equal(firstRest.setProgress, "1/3");
 	assert.equal(secondRest.visual.state, "rest");
-	assert.equal(secondRest.primaryCount, "0:04");
+	assert.equal(secondRest.primaryCount, "4");
 	assert.equal(secondRest.setProgress, "2/3");
 	assert.equal(Object.hasOwn(threeSetTimeline[1], "setProgress"), false);
 	assertLeanContract(firstRest, runningKeys);
+});
+
+test("rest switches to minute clock formatting at sixty seconds", () => {
+	const timeline = [
+		{ kind: "work", reps: 1, sec_per_rep: 4, sec_per_burpee: 3 },
+		{ kind: "rest", duration_sec: 90 },
+		{ kind: "work", reps: 1, sec_per_rep: 4, sec_per_burpee: 3 },
+	];
+
+	for (const [remaining, expected] of [
+		[65, "1:05"],
+		[60, "1:00"],
+		[59, "59"],
+	]) {
+		const model = runningModel(timeline, 1, {
+			phase_elapsed: 90 - remaining,
+			phase_remaining: remaining,
+		});
+		assert.equal(model.primaryCount, expected);
+	}
 });
 
 test("just above three seconds remains normal rest", () => {
@@ -214,7 +234,7 @@ test("just above three seconds remains normal rest", () => {
 	});
 
 	assert.equal(model.visual.state, "rest");
-	assert.equal(model.primaryCount, "0:04");
+	assert.equal(model.primaryCount, "4");
 	assert.equal(model.setProgress, "1/3");
 });
 

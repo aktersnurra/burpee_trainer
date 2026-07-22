@@ -425,6 +425,7 @@ export class SessionRenderer {
 
 	formatClock(sec) {
 		const s = Math.max(Math.ceil(sec), 0);
+		if (s < 60) return String(s);
 		const m = Math.floor(s / 60);
 		const r = s % 60;
 		return `${m}:${String(r).padStart(2, "0")}`;
