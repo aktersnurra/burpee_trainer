@@ -95,15 +95,15 @@ export class SessionRenderer {
 		const statusText =
 			["work", "work_active", "work_recovery"].includes(state)
 				? `${primaryCount} reps remaining`
-				: state === "rest"
-					? `Rest${
-							accessibleSetProgress
-								? `, set progress ${accessibleSetProgress}`
-								: ""
-						}`
-					: state === "rest_count_in"
-						? `Rest time remaining ${primaryCount}`
-						: "Workout starting";
+			: state === "rest"
+				? `Rest${
+						accessibleSetProgress
+							? `, set progress ${accessibleSetProgress}`
+							: ""
+					}`
+				: state === "rest_count_in"
+					? `Rest time remaining ${primaryCount}`
+					: "Workout starting";
 
 		if (target) {
 			target.setAttribute(
@@ -172,6 +172,7 @@ export class SessionRenderer {
 			countEl.classList.remove(
 				"is-down-cue",
 				"is-rest-time-long",
+				"is-count-double",
 				"is-count-long",
 				"is-countdown-dots",
 				"countdown-pop",
@@ -247,7 +248,12 @@ export class SessionRenderer {
 		this.lastPulseValue = null;
 		const countEl = this.root.querySelector("#count");
 		if (countEl) {
-			countEl.classList.remove("is-down-cue", "is-count-long", "countdown-pop");
+			countEl.classList.remove(
+				"is-down-cue",
+				"is-count-double",
+				"is-count-long",
+				"countdown-pop",
+			);
 			countEl.style.color = "";
 			countEl.style.visibility = "";
 		}
@@ -264,6 +270,7 @@ export class SessionRenderer {
 
 		count.classList.remove(
 			"is-down-cue",
+			"is-count-double",
 			"is-count-long",
 			"is-countdown-dots",
 			"countdown-pop",
@@ -288,6 +295,7 @@ export class SessionRenderer {
 			countEl.classList.remove(
 				"is-down-cue",
 				"is-rest-time-long",
+				"is-count-double",
 				"is-count-long",
 				"is-countdown-dots",
 			);
@@ -311,6 +319,7 @@ export class SessionRenderer {
 		if (ringContainer) ringContainer.classList.add("is-down-cue-active");
 		countEl.classList.remove(
 			"is-rest-time-long",
+			"is-count-double",
 			"is-count-long",
 			"is-countdown-dots",
 		);
@@ -348,7 +357,13 @@ export class SessionRenderer {
 	}
 
 	setCountLengthClass(countEl, text) {
-		if (String(text).length >= 3) {
+		const length = String(text).length;
+		if (length === 2) {
+			countEl.classList.add("is-count-double");
+		} else {
+			countEl.classList.remove("is-count-double");
+		}
+		if (length >= 3) {
 			countEl.classList.add("is-count-long");
 		} else {
 			countEl.classList.remove("is-count-long");

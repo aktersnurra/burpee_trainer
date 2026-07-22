@@ -214,6 +214,27 @@ test("duplicate visual states skip class mutations while live values still updat
 	assert.equal(elements["#count"].textContent, "0:18");
 });
 
+test("work count distinguishes single, double, and triple digit values", () => {
+	const { renderer, elements } = harness();
+	const count = elements["#count"];
+
+	renderer.updateCurrentSetRepCount(9);
+	assert.equal(count.classList.contains("is-count-double"), false);
+	assert.equal(count.classList.contains("is-count-long"), false);
+
+	renderer.updateCurrentSetRepCount(10);
+	assert.equal(count.classList.contains("is-count-double"), true);
+	assert.equal(count.classList.contains("is-count-long"), false);
+
+	renderer.updateCurrentSetRepCount(100);
+	assert.equal(count.classList.contains("is-count-double"), false);
+	assert.equal(count.classList.contains("is-count-long"), true);
+
+	renderer.renderDisplayModel(model("rest", { primaryCount: "0:18" }));
+	assert.equal(count.classList.contains("is-count-double"), false);
+	assert.equal(count.classList.contains("is-count-long"), false);
+});
+
 test("initial count-in still renders dots", () => {
 	const { renderer, elements } = harness();
 	renderer.renderDisplayModel({

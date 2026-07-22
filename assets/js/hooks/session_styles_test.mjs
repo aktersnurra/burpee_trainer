@@ -173,13 +173,19 @@ test("normal rest is a centered soft-dome breathing field", () => {
 		shape,
 		/border-radius:\s*50% 50% 0 0 \/ 12dvh 12dvh 0 0;/,
 	);
-	assert.match(shape, /transform:\s*translateY\(45dvh\);/);
+	assert.match(shape, /transform:\s*translateY\(21dvh\);/);
 	assert.match(shape, /background:\s*var\(--session-rest\);/);
 
 	const breathing = blockFor("@keyframes session-breathe");
-	assert.match(breathing, /0%[^}]*translateY\(45dvh\)/);
-	assert.match(breathing, /45%[^}]*translateY\(0\)/);
-	assert.match(breathing, /100%[^}]*translateY\(45dvh\)/);
+	const outerPosition = Number(
+		breathing.match(/0%,\s*100%[^}]*translateY\(([\d.]+)dvh\)/)?.[1],
+	);
+	const innerPosition = Number(
+		breathing.match(/50%[^}]*translateY\(([\d.]+)dvh\)/)?.[1],
+	);
+	assert.equal(outerPosition, 26);
+	assert.equal(innerPosition, 16);
+	assert.equal(outerPosition - innerPosition, 10);
 
 	const rest =
 		ruleFor("#session-runner-client.is-rest #session-rest-shape")
@@ -279,25 +285,61 @@ test("state-specific CSS preserves the center and bottom anchor positions", () =
 	}
 });
 
-test("contextual metrics keep exact time above the phase-specific center", () => {
-	const readout = ruleFor("#session-top-readout")?.declarations || "";
+test("shared progress and contextual metrics preserve the premium hierarchy", () => {
+	const progress = ruleFor("#session-progress")?.declarations || "";
+	const progressFill = ruleFor("#session-progress-fill")?.declarations || "";
+	const runnerLayout = ruleFor("#session-runner-layout")?.declarations || "";
 	const status = ruleFor("#session-status-line")?.declarations || "";
-	const pausedStatus =
-		ruleFor("#session-runner-client.is-paused #session-status-line")
-			?.declarations || "";
-	const setProgress = ruleFor("#set-progress")?.declarations || "";
-	const time = ruleFor("#session-status-line #time-left")?.declarations || "";
+	const total = ruleFor("#session-status-line #total-reps")?.declarations || "";
 
-	assert.match(readout, /position:\s*absolute;/);
-	assert.match(readout, /top:\s*max\([^;]*safe-area-inset-top[^;]*\);/);
-	assert.match(status, /width:\s*100%;/);
-	assert.match(status, /justify-content:\s*space-between;/);
-	assert.match(pausedStatus, /justify-content:\s*space-between;/);
-	assert.match(time, /white-space:\s*nowrap;/);
-	assert.match(time, /font-size:\s*clamp\(2\.5rem,[^;]*vw[^;]*\);/);
-	assert.match(setProgress, /position:\s*absolute;/);
-	assert.match(setProgress, /inset-inline-start:\s*50%;/);
-	assert.match(setProgress, /transform:\s*translateX\(-50%\);/);
+	assert.match(runnerLayout, /max-width:\s*none;/);
+	assert.match(progress, /height:\s*4px;/);
+	assert.match(progress, /border-radius:\s*9999px;/);
+	assert.match(progress, /background:\s*var\(--session-progress-track\);/);
+	assert.match(progress, /overflow:\s*hidden;/);
+	assert.match(progressFill, /transform:\s*scaleX\(0\);/);
+	assert.match(progressFill, /transform-origin:\s*left center;/);
+	assert.match(progressFill, /will-change:\s*transform;/);
+	assert.match(status, /margin-top:\s*clamp\(1\.75rem,[^;]*2\.5rem\);/);
+	assert.match(status, /justify-content:\s*flex-start;/);
+	assert.match(total, /font-size:\s*clamp\(3\.25rem,[^;]*4\.5rem\);/);
+	assert.doesNotMatch(css, /#session-status-line #time-left/);
+
+	for (const state of ["is-working", "is-count-in"]) {
+		assert.match(
+			ruleFor(`#session-runner-client.${state} #session-progress-fill`)
+				?.declarations || "",
+			/background:\s*var\(--session-work\);/,
+		);
+	}
+	for (const state of ["is-rest", "is-rest-count-in"]) {
+		assert.match(
+			ruleFor(`#session-runner-client.${state} #session-progress-fill`)
+				?.declarations || "",
+			/background:\s*var\(--session-rest\);/,
+		);
+	}
+
+	assert.match(
+		ruleFor("#session-runner-client.is-working #count")?.declarations || "",
+		/font-size:\s*clamp\(15rem,[^;]*55vw[^;]*45dvh[^;]*22\.5rem\);/,
+	);
+	assert.match(
+		ruleFor("#session-runner-client.is-rest #count")?.declarations || "",
+		/font-size:\s*clamp\(9\.375rem,[^;]*37vw[^;]*31dvh[^;]*14\.375rem\);/,
+	);
+
+	const compactPortrait = blockFor("@media (max-width: 360px)");
+	assert.doesNotMatch(
+		compactPortrait,
+		/#session-status-line #total-reps\s*\{/,
+		"compact portrait must retain the 52px completed-rep floor",
+	);
+	assert.doesNotMatch(
+		compactPortrait,
+		/#set-progress\s*\{/,
+		"compact portrait must retain the 38px set-progress floor",
+	);
 });
 
 test("short landscape keeps the center and top readout visible", () => {
@@ -311,17 +353,29 @@ test("short landscape keeps the center and top readout visible", () => {
 	);
 	assert.match(
 		landscape,
-		/#count\s*\{[^}]*font-size:\s*clamp\(5rem,[^}]*dvh[^}]*\);/,
+		/#session-runner-client\.is-working #count\s*\{[^}]*font-size:\s*clamp\(7rem,\s*42dvh,\s*10rem\);/,
+	);
+	assert.match(
+		landscape,
+		/#session-runner-client\.is-working #count\.is-count-double\s*\{[^}]*font-size:\s*clamp\(6rem,\s*36dvh,\s*8\.5rem\);/,
+	);
+	assert.match(
+		landscape,
+		/#session-runner-client\.is-working #count\.is-count-long\s*\{[^}]*font-size:\s*clamp\(5rem,\s*30dvh,\s*7rem\);/,
+	);
+	assert.match(
+		landscape,
+		/#session-runner-client\.is-rest #count\s*\{[^}]*font-size:\s*clamp\(6rem,\s*34dvh,\s*8rem\);/,
 	);
 	assert.doesNotMatch(
 		landscape,
-		/#(?:count|session-top-readout|session-status-line|set-progress|total-reps|time-left)[^{]*\{[^}]*(?:display:\s*none|visibility:\s*hidden|opacity:\s*0|overflow:\s*hidden|text-overflow\s*:)/,
+		/#(?:count|session-top-readout|session-status-line|set-progress|total-reps)[^{]*\{[^}]*(?:display:\s*none|visibility:\s*hidden|opacity:\s*0|overflow:\s*hidden|text-overflow\s*:)/,
 	);
 });
 
 test("scrollbars are hidden globally without clipping page overflow", () => {
 	const scrollbarRules = css.match(
-		/\*\s*\{\s*scrollbar-width:\s*none;\s*\}[\s\S]*?\*::\-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/,
+		/\*\s*\{\s*scrollbar-width:\s*none;\s*\}[\s\S]*?\*::-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/,
 	)?.[0];
 
 	assert.ok(scrollbarRules, "global Firefox and WebKit scrollbar rules must exist");
@@ -342,7 +396,7 @@ test("reduced motion stops continuous breathing without suppressing discrete fil
 	);
 	assert.match(
 		reducedMotion,
-		/#session-rest-shape\s*\{[^}]*transform:\s*translateY\(22\.5dvh\);/,
+		/#session-rest-shape\s*\{[^}]*transform:\s*translateY\(21dvh\);/,
 	);
 	assert.doesNotMatch(
 		reducedMotion,

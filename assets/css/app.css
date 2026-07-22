@@ -243,6 +243,7 @@ body {
 
 #session-runner-client {
   --session-active-ratio: 100%;
+  --session-progress-track: rgba(32, 32, 29, 0.09);
 }
 
 #session-work-track,
@@ -284,7 +285,7 @@ body {
   background: var(--session-rest);
   border-radius: 50% 50% 0 0 / 12dvh 12dvh 0 0;
   opacity: 0;
-  transform: translateY(45dvh);
+  transform: translateY(21dvh);
   will-change: transform;
 }
 
@@ -293,15 +294,14 @@ body {
 }
 
 @keyframes session-breathe {
-  0% {
-    transform: translateY(45dvh);
-    animation-timing-function: cubic-bezier(0.42, 0, 0.18, 1);
+  0%, 100% {
+    transform: translateY(26dvh);
+    animation-timing-function: ease-in-out;
   }
-  45% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.3, 0, 0.22, 1);
+  50% {
+    transform: translateY(16dvh);
+    animation-timing-function: ease-in-out;
   }
-  100% { transform: translateY(45dvh); }
 }
 
 #session-runner-client.is-rest #session-rest-shape {
@@ -322,8 +322,6 @@ body {
   color: var(--session-active-ink);
 }
 
-#session-runner-client.is-working #count,
-#session-runner-client.is-rest #count,
 #session-runner-client.is-rest-count-in #count,
 #session-runner-client.is-count-in #count,
 #session-runner-client.is-working #pause-icon,
@@ -333,9 +331,32 @@ body {
   color: var(--session-active-ink);
 }
 
+#session-runner-client.is-working #count {
+  color: var(--session-active-ink);
+  font-size: clamp(15rem, min(55vw, 45dvh), 22.5rem);
+  font-weight: 750;
+  line-height: 0.84;
+}
+
+#session-runner-client.is-working #count.is-count-double {
+  font-size: clamp(12rem, min(44vw, 40dvh), 18rem);
+}
+
+#session-runner-client.is-working #count.is-count-long {
+  font-size: clamp(9rem, min(34vw, 34dvh), 14rem);
+}
+
+#session-runner-client.is-rest #count {
+  color: var(--session-active-ink);
+  font-size: clamp(9.375rem, min(37vw, 31dvh), 14.375rem);
+  font-weight: 750;
+  line-height: 0.88;
+}
+
 #session-runner-layout {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  max-width: none;
 }
 
 #session-top-readout {
@@ -343,7 +364,34 @@ body {
   top: max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem));
   inset-inline: 0;
   z-index: 10;
-  padding-inline: max(1.25rem, env(safe-area-inset-left)) max(1.25rem, env(safe-area-inset-right));
+  padding-inline: max(1.5rem, env(safe-area-inset-left)) max(1.5rem, env(safe-area-inset-right));
+}
+
+#session-progress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--session-progress-track);
+}
+
+#session-progress-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+#session-runner-client.is-working #session-progress-fill,
+#session-runner-client.is-count-in #session-progress-fill {
+  background: var(--session-work);
+}
+
+#session-runner-client.is-rest #session-progress-fill,
+#session-runner-client.is-rest-count-in #session-progress-fill {
+  background: var(--session-rest);
 }
 
 #ring-container {
@@ -351,29 +399,26 @@ body {
 }
 
 #session-pause-actions {
-  position: relative;
-  grid-row: 2;
-  margin-bottom: max(1rem, env(safe-area-inset-bottom));
+  position: absolute;
+  inset-inline: 1.25rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  margin-bottom: 0;
 }
 
 #session-status-line {
   width: 100%;
   min-width: 0;
-  justify-content: space-between;
-  gap: clamp(1rem, 5vw, 2rem);
-}
-
-#session-runner-client.is-paused #session-status-line {
-  justify-content: space-between;
+  margin-top: clamp(1.75rem, 4dvh, 2.5rem);
+  justify-content: flex-start;
 }
 
 #set-progress {
   position: absolute;
-  inset-block-start: calc(50% + clamp(5rem, 20vw, 7.5rem));
+  inset-block-start: calc(50% + clamp(6.5rem, 18dvh, 8.5rem));
   inset-inline-start: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
-  font-size: clamp(1.5rem, 7vw, 2.25rem);
+  font-size: clamp(2.375rem, 7vw, 3.25rem);
   font-weight: 600;
   line-height: 0.9;
   letter-spacing: -0.06em;
@@ -398,25 +443,15 @@ body {
   }
 
   #session-rest-shape {
-    transform: translateY(22.5dvh);
+    transform: translateY(21dvh);
   }
 }
 
 #session-status-line #total-reps {
   min-width: 0;
   white-space: nowrap;
-  font-size: clamp(2.5rem, 11vw, 4rem);
-  font-weight: 600;
-  line-height: 0.9;
-  letter-spacing: -0.07em;
-}
-
-#session-status-line #time-left {
-  display: inline-block;
-  min-width: 0;
-  white-space: nowrap;
-  font-size: clamp(2.5rem, 11vw, 4rem);
-  font-weight: 600;
+  font-size: clamp(3.25rem, 11vw, 4.5rem);
+  font-weight: 650;
   line-height: 0.9;
   letter-spacing: -0.07em;
 }
@@ -429,18 +464,6 @@ body {
 }
 
 @media (max-width: 360px) {
-  #session-status-line #total-reps {
-    font-size: clamp(2.25rem, 11vw, 2.75rem);
-  }
-
-  #session-status-line #time-left {
-    font-size: clamp(2.5rem, 12vw, 3rem);
-  }
-
-  #set-progress {
-    font-size: clamp(1.75rem, 9vw, 2.25rem);
-  }
-
   #count {
     font-size: clamp(6rem, 31vw, 8rem);
   }
@@ -459,10 +482,6 @@ body {
     font-size: clamp(1.75rem, 12dvh, 2.75rem);
   }
 
-  #session-status-line #time-left {
-    font-size: clamp(2rem, 13dvh, 3rem);
-  }
-
   #set-progress {
     inset-block-start: calc(50% + 3.75rem);
     font-size: clamp(1.25rem, 8dvh, 1.75rem);
@@ -475,8 +494,20 @@ body {
     transform: translateY(-50%);
   }
 
-  #count {
-    font-size: clamp(5rem, 28dvh, 8rem);
+  #session-runner-client.is-working #count {
+    font-size: clamp(7rem, 42dvh, 10rem);
+  }
+
+  #session-runner-client.is-working #count.is-count-double {
+    font-size: clamp(6rem, 36dvh, 8.5rem);
+  }
+
+  #session-runner-client.is-working #count.is-count-long {
+    font-size: clamp(5rem, 30dvh, 7rem);
+  }
+
+  #session-runner-client.is-rest #count {
+    font-size: clamp(6rem, 34dvh, 8rem);
   }
 }
 
@@ -488,8 +519,7 @@ body {
 }
 
 #session-runner-client.is-count-in #total-done,
-#session-runner-client.is-count-in #total-plan,
-#session-runner-client.is-count-in #time-left {
+#session-runner-client.is-count-in #total-plan {
   color: var(--session-active-ink) !important;
 }
 
