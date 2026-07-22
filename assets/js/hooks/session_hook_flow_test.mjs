@@ -459,10 +459,23 @@ test("running frames derive rest set progress from the hook timeline", () => {
 		burpeeCountTarget: 20,
 	});
 	ctx.activeSegment = "workout";
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
 	ctx.renderRunningFrame(30);
 
 	assert.equal(ctx.renderedModels.length, 1);
 	assert.equal(ctx.renderedModels[0].setProgress, "1/3");
+	assert.equal(ctx.renderedModels[0].sessionProgress, 30 / 140);
+
+	const warmupCtx = buildHarness({ poseTrackerReady: null });
+	warmupCtx.dispatchSegment({
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 20,
+	});
+	warmupCtx.activeSegment = "warmup";
+	warmupCtx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
+	warmupCtx.renderRunningFrame(30);
+	assert.equal(warmupCtx.renderedModels[0].sessionProgress, null);
 });
 
 test("countdown pause enables Abort but keeps Finish early disabled", () => {

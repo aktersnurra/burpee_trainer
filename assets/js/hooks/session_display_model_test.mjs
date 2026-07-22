@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
 	countdownDisplayModel,
 	runningDisplayModel,
+	sessionProgressForElapsed,
 } from "./session_display_model.mjs";
 import { currentFrame } from "./session_segment_fsm.mjs";
 
@@ -18,6 +19,7 @@ function runningModel(timeline, index, frameOverrides = {}) {
 			...frameOverrides,
 		},
 		timeLeftSec: 60,
+		sessionProgress: 0.25,
 		totalDone: 4,
 		totalTarget: 20,
 		doneInEvent: 1,
@@ -59,6 +61,7 @@ const runningKeys = [
 	"primaryCount",
 	"countdownDots",
 	"restTimeLeftSec",
+	"sessionProgress",
 	"setProgress",
 	"totalDone",
 	"totalTarget",
@@ -72,6 +75,7 @@ test("initial count-in keeps dots and uses the count_in state", () => {
 		totalDone: 0,
 		totalTarget: 20,
 		timeLeftSec: 60,
+		sessionProgress: 0,
 	});
 
 	assert.deepEqual(model.visual, {
@@ -85,11 +89,29 @@ test("initial count-in keeps dots and uses the count_in state", () => {
 		"visual",
 		"primaryCount",
 		"countdownDots",
+		"sessionProgress",
 		"setProgress",
 		"totalDone",
 		"totalTarget",
 		"timeLeftSec",
 	]);
+});
+
+test("overall session progress is clamped and monotonic across event boundaries", () => {
+	assert.equal(sessionProgressForElapsed(-1, 84), 0);
+	assert.equal(sessionProgressForElapsed(0, 84), 0);
+	assert.equal(sessionProgressForElapsed(21, 84), 0.25);
+	assert.equal(sessionProgressForElapsed(42, 84), 0.5);
+	assert.equal(sessionProgressForElapsed(84, 84), 1);
+	assert.equal(sessionProgressForElapsed(100, 84), 1);
+	assert.equal(sessionProgressForElapsed(10, 0), 0);
+
+	const samples = [23.999, 24, 53.999, 54].map((elapsed) =>
+		sessionProgressForElapsed(elapsed, 84),
+	);
+	assert.ok(
+		samples.every((value, index) => index === 0 || value >= samples[index - 1]),
+	);
 });
 
 test("work exposes one cadence progress with an active/recovery split", () => {
@@ -135,6 +157,7 @@ test("work exposes one cadence progress with an active/recovery split", () => {
 		pulse: null,
 	});
 	assert.equal(recoveryMidpoint.primaryCount, 5);
+	assert.equal(recoveryMidpoint.sessionProgress, 0.25);
 	assert.equal(recoveryMidpoint.setProgress, null);
 	assertLeanContract(recoveryMidpoint, runningKeys);
 });

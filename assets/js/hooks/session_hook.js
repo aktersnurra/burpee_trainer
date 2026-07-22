@@ -15,6 +15,7 @@ import { isPauseToggleKey } from "./session_input.mjs";
 import {
 	countdownDisplayModel,
 	runningDisplayModel,
+	sessionProgressForElapsed,
 } from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 
@@ -494,6 +495,7 @@ const SessionHook = {
 				totalDone: this.segment.reps.burpeeCountDone,
 				totalTarget: this.segment.reps.burpeeCountTarget,
 				timeLeftSec: this.segment.clock.totalDurationSec,
+				sessionProgress: this.activeSegment === "workout" ? 0 : null,
 			});
 			this.renderer.renderDisplayModel(model);
 
@@ -607,10 +609,15 @@ const SessionHook = {
 		this.syncRepStateFromSegment();
 
 		const totalDurationSec = this.segment.clock.totalDurationSec;
+		const sessionProgress =
+			this.activeSegment === "workout"
+				? sessionProgressForElapsed(elapsed, totalDurationSec)
+				: null;
 		const model = runningDisplayModel({
 			timeline: this.timeline,
 			frame,
 			timeLeftSec: Math.max(totalDurationSec - elapsed, 0),
+			sessionProgress,
 			totalDone: this.segment.reps.burpeeCountDone,
 			totalTarget: this.segment.reps.burpeeCountTarget,
 			doneInEvent: this.doneReps,

@@ -1,15 +1,26 @@
+export function sessionProgressForElapsed(elapsedSec, totalDurationSec) {
+	const elapsed = Number(elapsedSec);
+	const total = Number(totalDurationSec);
+	if (!Number.isFinite(elapsed) || !Number.isFinite(total) || total <= 0) {
+		return 0;
+	}
+	return clamp(elapsed / total);
+}
+
 export function countdownDisplayModel({
 	value,
 	total = 5,
 	totalDone,
 	totalTarget,
 	timeLeftSec,
+	sessionProgress = null,
 }) {
 	return {
 		visual: { state: "count_in", progress: 0, pulse: null },
 		primaryCount: value,
 		countdownDots: { count: total, faded: Math.max(total - value, 0) },
 		setProgress: null,
+		sessionProgress,
 		totalDone,
 		totalTarget,
 		timeLeftSec,
@@ -20,6 +31,7 @@ export function runningDisplayModel({
 	timeline = [],
 	frame,
 	timeLeftSec,
+	sessionProgress = null,
 	totalDone,
 	totalTarget,
 	doneInEvent = 0,
@@ -45,6 +57,7 @@ export function runningDisplayModel({
 		restTimeLeftSec: isRest ? remainingSec : null,
 		setProgress:
 			visual.state === "rest" ? setProgressForFrame(timeline, frame) : null,
+		sessionProgress,
 		totalDone,
 		totalTarget,
 		timeLeftSec,
