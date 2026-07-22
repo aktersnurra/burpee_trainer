@@ -623,7 +623,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
         </span>
 
         <div id="session-top-readout" class="pointer-events-none">
-          <div id="session-status-line" class="qs-tabular flex items-start justify-between">
+          <div id="session-progress" hidden aria-hidden="true">
+            <div id="session-progress-fill"></div>
+          </div>
+
+          <div id="session-status-line" class="qs-tabular flex items-start">
             <div id="total-reps" class="flex items-baseline" hidden>
               <span id="total-reps-accessible" class="sr-only">
                 0 of {@summary.burpee_count_total} total reps
@@ -641,14 +645,10 @@ defmodule BurpeeTrainerWeb.SessionLive do
                 hidden
               >{@summary.burpee_count_total}</span>
             </div>
-            <div class="text-right">
-              <span id="session-time-accessible" class="sr-only">
-                Session time remaining {Fmt.duration_sec(round(@summary.duration_sec_total))}
-              </span>
-              <span id="time-left" aria-hidden="true">
-                {Fmt.duration_sec(round(@summary.duration_sec_total))}
-              </span>
-            </div>
+
+            <span id="session-time-accessible" class="sr-only">
+              Session time remaining {Fmt.duration_sec(round(@summary.duration_sec_total))}
+            </span>
           </div>
         </div>
 

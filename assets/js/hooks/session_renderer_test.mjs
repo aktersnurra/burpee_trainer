@@ -87,10 +87,11 @@ function harness() {
 		"#ring-container": element(),
 		"#session-pause-actions": element(),
 		"#session-status-line": element(),
+		"#session-progress": element(),
+		"#session-progress-fill": element(),
 		"#session-accessible-status": element(),
 		"#count": element(),
 		"#set-progress": element(),
-		"#time-left": element(),
 		"#session-time-accessible": element(),
 		"#total-reps": element(),
 		"#total-reps-accessible": element(),
@@ -99,6 +100,7 @@ function harness() {
 		"#total-plan": element(),
 		"#pause-icon": element(),
 	};
+	elements["#session-progress"].hidden = true;
 	elements["#total-reps"].hidden = true;
 	elements["#total-separator"].hidden = true;
 	elements["#total-plan"].hidden = true;
@@ -118,6 +120,7 @@ function model(state, overrides = {}) {
 		totalDone: 8,
 		totalTarget: 20,
 		timeLeftSec: 40,
+		sessionProgress: 0.25,
 		...overrides,
 	};
 }
@@ -145,6 +148,29 @@ test("work fill reveals fixed cadence colors without scaling the gradient", () =
 		elements["#session-runner-client"].style["--session-active-ratio"],
 		"100%",
 	);
+});
+
+test("overall progress uses a clamped horizontal transform and freezes on pause", () => {
+	const { renderer, elements } = harness();
+	const track = elements["#session-progress"];
+	const fill = elements["#session-progress-fill"];
+
+	renderer.renderDisplayModel(model("work_active", { sessionProgress: 0.25 }));
+	assert.equal(track.hidden, false);
+	assert.equal(fill.style.transform, "scaleX(0.25)");
+
+	renderer.renderDisplayModel(model("rest", { sessionProgress: 0.5 }));
+	assert.equal(fill.style.transform, "scaleX(0.5)");
+
+	renderer.renderDisplayModel(model("rest_count_in", { sessionProgress: 2 }));
+	assert.equal(fill.style.transform, "scaleX(1)");
+
+	renderer.updatePauseButton(true);
+	assert.equal(fill.style.transform, "scaleX(1)");
+
+	renderer.updateSessionProgress(null);
+	assert.equal(track.hidden, true);
+	assert.equal(fill.style.transform, "scaleX(0)");
 });
 
 test("duplicate visual states skip class mutations while live values still update", () => {
@@ -374,7 +400,6 @@ test("running shows completed reps and pause adds the total target", () => {
 	assert.equal(elements["#total-separator"].hidden, false);
 	assert.equal(elements["#total-plan"].hidden, false);
 	assert.equal(elements["#total-plan"].textContent, "20");
-	assert.equal(elements["#time-left"].textContent, "0:40");
 	assert.equal(
 		elements["#session-runner-client"].classList.contains("is-paused"),
 		true,

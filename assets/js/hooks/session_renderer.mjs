@@ -26,12 +26,23 @@ export class SessionRenderer {
 
 	renderTimer(timeLeftSec) {
 		const formattedTime = this.formatTime(timeLeftSec);
-		const timeLeftEl = this.root.querySelector("#time-left");
 		const accessibleTime = this.root.querySelector("#session-time-accessible");
-		if (timeLeftEl) timeLeftEl.textContent = formattedTime;
 		if (accessibleTime) {
 			accessibleTime.textContent = `Session time remaining ${formattedTime}`;
 		}
+	}
+
+	updateSessionProgress(progress) {
+		const track = this.root.querySelector("#session-progress");
+		const fill = this.root.querySelector("#session-progress-fill");
+		const numericProgress = Number(progress);
+		const visible = progress != null && Number.isFinite(numericProgress);
+		const clampedProgress = visible
+			? Math.min(Math.max(numericProgress, 0), 1)
+			: 0;
+
+		if (track) track.hidden = !visible;
+		if (fill) fill.style.transform = `scaleX(${clampedProgress})`;
 	}
 
 	setVisualState(state) {
@@ -151,6 +162,7 @@ export class SessionRenderer {
 	resetReady() {
 		this.clearTimers();
 		this.setVisualState(null);
+		this.updateSessionProgress(null);
 		this.updateWorkFill(0);
 		this.lastPulseValue = null;
 		this.currentSetProgress = null;
@@ -196,6 +208,7 @@ export class SessionRenderer {
 			setProgress: model.setProgress,
 		});
 		this.setVisualState(visual.state);
+		this.updateSessionProgress(model.sessionProgress);
 
 		if (visual.state === "count_in") {
 			this.lastPulseValue = null;

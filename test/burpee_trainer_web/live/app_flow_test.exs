@@ -144,7 +144,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
            )
 
     assert has_element?(session, "#total-reps > span[aria-hidden='true']", "/")
-    assert has_element?(session, "#session-status-line #time-left[aria-hidden='true']")
+
+    assert has_element?(
+             session,
+             "#session-top-readout > #session-progress[hidden][aria-hidden='true'] > #session-progress-fill"
+           )
+
+    refute has_element?(session, "#session-status-line #time-left")
 
     assert has_element?(
              session,
