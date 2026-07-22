@@ -305,10 +305,12 @@ test("shared progress and contextual metrics preserve the premium hierarchy", ()
 	assert.match(status, /margin-top:\s*clamp\(1\.75rem,[^;]*2\.5rem\);/);
 	assert.match(status, /justify-content:\s*flex-start;/);
 	assert.match(total, /font-size:\s*clamp\(3\.25rem,[^;]*4\.5rem\);/);
+	assert.match(total, /font-weight:\s*500;/);
 	assert.match(
 		setProgress,
 		/inset-block-start:\s*calc\(50% \+ clamp\(6\.875rem, 20vw, 8\.75rem\)\);/,
 	);
+	assert.match(setProgress, /font-weight:\s*500;/);
 	assert.doesNotMatch(css, /#session-status-line #time-left/);
 
 	for (const state of ["is-working", "is-count-in"]) {
@@ -326,14 +328,20 @@ test("shared progress and contextual metrics preserve the premium hierarchy", ()
 		);
 	}
 
+	const workCount =
+		ruleFor("#session-runner-client.is-working #count")?.declarations || "";
+	const restCount =
+		ruleFor("#session-runner-client.is-rest #count")?.declarations || "";
 	assert.match(
-		ruleFor("#session-runner-client.is-working #count")?.declarations || "",
+		workCount,
 		/font-size:\s*clamp\(15rem,[^;]*55vw[^;]*45dvh[^;]*22\.5rem\);/,
 	);
+	assert.match(workCount, /font-weight:\s*500;/);
 	assert.match(
-		ruleFor("#session-runner-client.is-rest #count")?.declarations || "",
+		restCount,
 		/font-size:\s*clamp\(9\.375rem,[^;]*37vw[^;]*31dvh[^;]*14\.375rem\);/,
 	);
+	assert.match(restCount, /font-weight:\s*500;/);
 
 	const compactPortrait = blockFor("@media (max-width: 360px)");
 	assert.doesNotMatch(

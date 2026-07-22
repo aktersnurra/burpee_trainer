@@ -334,7 +334,7 @@ body {
 #session-runner-client.is-working #count {
   color: var(--session-active-ink);
   font-size: clamp(15rem, min(55vw, 45dvh), 22.5rem);
-  font-weight: 750;
+  font-weight: 500;
   line-height: 0.84;
 }
 
@@ -349,7 +349,7 @@ body {
 #session-runner-client.is-rest #count {
   color: var(--session-active-ink);
   font-size: clamp(9.375rem, min(37vw, 31dvh), 14.375rem);
-  font-weight: 750;
+  font-weight: 500;
   line-height: 0.88;
 }
 
@@ -421,7 +421,7 @@ body {
   transform: translateX(-50%);
   white-space: nowrap;
   font-size: clamp(2.375rem, 7vw, 3.25rem);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 0.9;
   letter-spacing: -0.06em;
 }
@@ -453,7 +453,7 @@ body {
   min-width: 0;
   white-space: nowrap;
   font-size: clamp(3.25rem, 11vw, 4.5rem);
-  font-weight: 650;
+  font-weight: 500;
   line-height: 0.9;
   letter-spacing: -0.07em;
 }
@@ -528,7 +528,7 @@ body {
 #count {
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   font-stretch: normal;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 #count.is-down-cue {
