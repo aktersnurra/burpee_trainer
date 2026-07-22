@@ -4,8 +4,10 @@ import SessionHook from "./session_hook.js";
 import { initialFlowState } from "./session_flow_fsm.mjs";
 import { initialSegmentState } from "./session_segment_fsm.mjs";
 import {
+	createPoseTracker,
 	requestPreferredCameraStream,
 	resolvePreviewVideo,
+	trackingFinishPayload,
 } from "./pose_tracker_impl.mjs";
 import * as PoseTrackerDiagnostics from "./pose_tracker_impl.mjs";
 
@@ -59,6 +61,18 @@ class FakeElement {
 		this.listeners.set(type, listeners);
 	}
 
+	removeEventListener(type, listener) {
+		const listeners = this.listeners.get(type) || [];
+		this.listeners.set(
+			type,
+			listeners.filter((candidate) => candidate !== listener),
+		);
+	}
+
+	listenerCount(type) {
+		return (this.listeners.get(type) || []).length;
+	}
+
 	dispatchEvent(event) {
 		for (const listener of this.listeners.get(event.type) || []) {
 			listener.call(this, event);
@@ -88,19 +102,44 @@ globalThis.CustomEvent = class {
 	constructor(type, init = {}) {
 		this.type = type;
 		this.detail = init.detail;
+		this.bubbles = Boolean(init.bubbles);
 	}
 };
 
+const documentListeners = new Map();
 globalThis.document = {
 	root: null,
+	documentElement: {},
 	createElement(tagName) {
 		return new FakeElement(tagName);
 	},
 	getElementById(id) {
 		return this.root?.findById(id) || null;
 	},
-	dispatchEvent() {},
+	addEventListener(type, listener) {
+		const listeners = documentListeners.get(type) || [];
+		listeners.push(listener);
+		documentListeners.set(type, listeners);
+	},
+	removeEventListener(type, listener) {
+		const listeners = documentListeners.get(type) || [];
+		documentListeners.set(
+			type,
+			listeners.filter((candidate) => candidate !== listener),
+		);
+	},
+	dispatchEvent(event) {
+		for (const listener of documentListeners.get(event.type) || []) {
+			listener.call(this, event);
+		}
+	},
 };
+
+globalThis.getComputedStyle = () => ({
+	getPropertyValue() {
+		return "";
+	},
+});
 
 globalThis.performance = {
 	now() {
@@ -209,6 +248,146 @@ function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
 	ctx.startTime = 0;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+}
+
+const trackerPoint = (score = 0.9, x = 0.5, y = 0.5) => ({ score, x, y });
+
+function trackerSample({ tMs = 0, closeness = 0.2, confidence = 0.9 } = {}) {
+	return {
+		tMs,
+		closeness,
+		confidence,
+		features: { visibleFraction: 0.5 },
+		keypoints: {
+			left_shoulder: trackerPoint(0.9, 0.42, 0.25),
+			right_shoulder: trackerPoint(0.9, 0.58, 0.25),
+			left_hip: trackerPoint(0.9, 0.45, 0.5),
+			right_hip: trackerPoint(0.9, 0.55, 0.5),
+			left_knee: trackerPoint(0.9, 0.46, 0.72),
+		},
+	};
+}
+
+function trackerFrame(sample, poseCount = 1) {
+	return {
+		poses: Array.from({ length: poseCount }, () => ({})),
+		sample,
+	};
+}
+
+function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
+	const pushes = [];
+	const localEvents = [];
+	const animationFrames = [];
+	const tracker = new FakeElement("div");
+	tracker.id = "pose-tracker";
+
+	const video = new FakeElement("video");
+	video.id = "pose-tracker-preview";
+	video.videoWidth = 640;
+	video.videoHeight = 480;
+	video.readyState = 4;
+	video.paused = false;
+	video.play = async () => {};
+	video.getBoundingClientRect = () => ({ width: 320, height: 240 });
+
+	const context = {
+		setTransform() {},
+		clearRect() {},
+	};
+	const canvas = new FakeElement("canvas");
+	canvas.id = "pose-tracker-canvas";
+	canvas.getBoundingClientRect = () => ({ width: 320, height: 240 });
+	canvas.getContext = () => context;
+	tracker.append(video, canvas);
+
+	for (const type of [
+		"pose-tracker:readiness",
+		"pose-tracker:rep",
+		"pose-tracker:status",
+	]) {
+		tracker.addEventListener(type, (event) => localEvents.push(event));
+	}
+
+	let nowMs = 0;
+	let currentFrame = null;
+	let consumedFrames = 0;
+	const stoppedTrack = {
+		stopped: false,
+		stop() {
+			this.stopped = true;
+		},
+	};
+	const detector = {
+		disposed: false,
+		estimatePoses() {
+			if (holdDetector) return new Promise(() => {});
+			currentFrame = frames[consumedFrames];
+			if (!currentFrame) throw new Error("unexpected pose frame");
+			consumedFrames += 1;
+			return currentFrame.poses;
+		},
+		dispose() {
+			this.disposed = true;
+		},
+	};
+
+	const hook = {
+		el: tracker,
+		pushEvent(name, payload) {
+			pushes.push({ name, payload });
+		},
+	};
+	const poseTracker = createPoseTracker(hook, {
+		createBlazePoseDetector: async () => detector,
+		mediaDevices: {
+			async getUserMedia() {
+				return { getTracks: () => [stoppedTrack] };
+			},
+		},
+		now: () => nowMs,
+		requestAnimationFrame(callback) {
+			animationFrames.push(callback);
+			return animationFrames.length;
+		},
+		cancelAnimationFrame() {},
+		sampleFromPose: () => currentFrame.sample,
+		waitForVideoFrame: async () => video,
+		webglAvailable: () => true,
+	});
+
+	const settle = async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	};
+
+	return {
+		tracker,
+		pushes,
+		localEvents,
+		detector,
+		poseTracker,
+		get consumedFrames() {
+			return consumedFrames;
+		},
+		async mount() {
+			await poseTracker.mounted();
+			await settle();
+		},
+		async runUntilConsumed(expectedCount) {
+			await settle();
+			while (consumedFrames < expectedCount) {
+				nowMs += 100;
+				const callback = animationFrames.shift();
+				assert.ok(
+					callback,
+					`missing animation frame before sample ${expectedCount}`,
+				);
+				await callback();
+				await settle();
+			}
+		},
+	};
 }
 
 test("capture prompt uses the mock hierarchy and stable actions", () => {
@@ -397,6 +576,175 @@ test("camera preview diagnostics report the rendered video boundary", () => {
 		paused: false,
 		parent_id: "pose-tracker-preview-frame",
 	});
+});
+
+test("tracker finish uses observer cadence instead of tracker-relative time", () => {
+	assert.deepEqual(
+		trackingFinishPayload({
+			durationMs: 10_000,
+			cadenceMs: [2_500, 5_100],
+		}),
+		{
+			reps: 2,
+			duration_ms: 10_000,
+			cadence_ms: [2_500, 5_100],
+		},
+	);
+});
+
+test("detector initialization reports initialized without marking pose readiness", async () => {
+	const harness = buildPoseTrackerHarness([], { holdDetector: true });
+
+	await harness.mount();
+
+	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
+	assert.deepEqual(
+		harness.pushes.filter(({ name }) => name.startsWith("tracker_")),
+		[{ name: "tracker_initialized", payload: {} }],
+	);
+	harness.poseTracker.destroyed();
+});
+
+test("readiness transitions update the dataset and emit local and server events", async () => {
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const lostFrames = Array.from({ length: 3 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: 800 + index * 100 }), 0),
+	);
+	const harness = buildPoseTrackerHarness([...readyFrames, ...lostFrames]);
+
+	await harness.mount();
+	await harness.runUntilConsumed(8);
+	assert.equal(harness.tracker.dataset.poseTrackerReady, "true");
+
+	await harness.runUntilConsumed(11);
+	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:readiness")
+			.map(({ bubbles, detail }) => ({ bubbles, detail })),
+		[
+			{ bubbles: true, detail: { state: "ready" } },
+			{ bubbles: true, detail: { state: "not_ready" } },
+		],
+	);
+	assert.deepEqual(
+		harness.pushes.filter(({ name }) => name === "tracker_readiness"),
+		[
+			{ name: "tracker_readiness", payload: { state: "ready" } },
+			{ name: "tracker_readiness", payload: { state: "not_ready" } },
+		],
+	);
+	harness.poseTracker.destroyed();
+});
+
+test("accepted rep emits only a bubbling local candidate", async () => {
+	const harness = buildPoseTrackerHarness(
+		[0.2, 0.5, 0.25, 0.2].map((closeness, index) =>
+			trackerFrame(
+				trackerSample({ tMs: [0, 500, 900, 1_100][index], closeness }),
+			),
+		),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(4);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:rep")
+			.map(({ bubbles, detail }) => ({ bubbles, detail })),
+		[{ bubbles: true, detail: { index: 1, confidence: 0.9 } }],
+	);
+	assert.equal(
+		harness.pushes.some(({ name }) => name === "rep"),
+		false,
+	);
+	harness.poseTracker.destroyed();
+});
+
+test("tracker reset clears detector phase and cadence and is removed on destroy", async () => {
+	const samples = [
+		[0, 0.2],
+		[500, 0.5],
+		[900, 0.25],
+		[1_100, 0.2],
+		[1_300, 0.5],
+		[1_400, 0.2],
+		[1_500, 0.5],
+		[1_600, 0.25],
+		[1_700, 0.2],
+	].map(([tMs, closeness]) => trackerFrame(trackerSample({ tMs, closeness })));
+	const harness = buildPoseTrackerHarness(samples);
+
+	await harness.mount();
+	await harness.runUntilConsumed(5);
+	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 1);
+	harness.tracker.dispatchEvent(new CustomEvent("pose-tracker:reset"));
+	await harness.runUntilConsumed(9);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:rep")
+			.map(({ detail }) => detail.index),
+		[1, 1],
+	);
+	harness.poseTracker.destroyed();
+	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 0);
+});
+
+test("tracker status emits matching deduplicated local and server transitions", async () => {
+	const harness = buildPoseTrackerHarness(
+		[0.9, 0.9, 0.1, 0.1, 0.9].map((confidence, index) =>
+			trackerFrame(trackerSample({ tMs: index * 100, confidence })),
+		),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(5);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:status")
+			.map(({ bubbles, detail }) => ({ bubbles, detail })),
+		[
+			{ bubbles: true, detail: { state: "live" } },
+			{ bubbles: true, detail: { state: "lost" } },
+			{ bubbles: true, detail: { state: "live" } },
+		],
+	);
+	assert.deepEqual(
+		harness.pushes.filter(({ name }) => name === "track"),
+		[
+			{ name: "track", payload: { state: "live" } },
+			{ name: "track", payload: { state: "lost" } },
+			{ name: "track", payload: { state: "live" } },
+		],
+	);
+	harness.poseTracker.destroyed();
+});
+
+test("invalid tracker finish retains the lost fallback", async () => {
+	const harness = buildPoseTrackerHarness([], { holdDetector: true });
+	await harness.mount();
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:finish", {
+			detail: { durationMs: -1, cadenceMs: [] },
+		}),
+	);
+
+	assert.deepEqual(
+		harness.pushes.filter(({ name }) => name === "track"),
+		[
+			{
+				name: "track",
+				payload: { state: "lost", reason: "invalid_finish" },
+			},
+		],
+	);
+	harness.poseTracker.destroyed();
 });
 
 test("camera selection matches the working debug page", async () => {

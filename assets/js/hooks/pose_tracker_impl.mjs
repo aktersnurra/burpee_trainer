@@ -1,5 +1,6 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
+import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
 import { drawPoseOverlay, resizePoseCanvas } from "./pose_overlay.mjs";
@@ -12,6 +13,10 @@ import {
 } from "./pose_capture_recorder.mjs";
 
 export { drawPoseOverlay, resizePoseCanvas };
+
+export function trackingFinishPayload({ durationMs, cadenceMs }) {
+	return buildFinishPayload({ durationMs, cadenceMs });
+}
 
 function configurePreviewVideo(video) {
 	video.muted = true;
@@ -57,13 +62,26 @@ export function requestPreferredCameraStream(mediaDevices) {
 	});
 }
 
-export function createPoseTracker(hook) {
+export function createPoseTracker(hook, runtime = {}) {
+	const createDetector =
+		runtime.createBlazePoseDetector || createBlazePoseDetector;
+	const mediaDevices = runtime.mediaDevices || navigator.mediaDevices;
+	const now = runtime.now || (() => performance.now());
+	const requestFrame =
+		runtime.requestAnimationFrame ||
+		((callback) => requestAnimationFrame(callback));
+	const cancelFrame = runtime.cancelAnimationFrame || cancelAnimationFrame;
+	const poseSample = runtime.sampleFromPose || sampleFromPose;
+	const waitForFrame = runtime.waitForVideoFrame || waitForVideoFrame;
+	const hasWebgl = runtime.webglAvailable || webglAvailable;
 	let stream = null;
 	let detector = null;
 	let video = null;
 	let canvas = null;
 	let raf = null;
 	let state = initialCounterState();
+	let readiness = initialPoseReadiness();
+	let lastReadinessStatus = readiness.status;
 	let startedAt = null;
 	let trackingState = "lost";
 	let mounted = true;
@@ -74,36 +92,43 @@ export function createPoseTracker(hook) {
 	const onCaptureSegment = (event) => {
 		captureSegment = event.detail?.segment || null;
 	};
+	const dispatchLocal = (type, detail) => {
+		hook.el.dispatchEvent(new CustomEvent(type, { bubbles: true, detail }));
+	};
+	const reset = () => {
+		state = initialCounterState();
+		lastFeature = null;
+	};
 
 	async function mountedHook() {
 		hook.el.addEventListener("pose-tracker:finish", finish);
+		hook.el.addEventListener("pose-tracker:reset", reset);
 		document.addEventListener("pose-capture:segment", onCaptureSegment);
 
 		try {
-			if (!webglAvailable()) {
+			if (!hasWebgl()) {
 				throw new Error(
 					"WebGL is unavailable; BlazePose cannot start in this browser/context",
 				);
 			}
 
-			stream = await requestPreferredCameraStream(navigator.mediaDevices);
+			stream = await requestPreferredCameraStream(mediaDevices);
 
 			video = resolvePreviewVideo(hook);
 			video.srcObject = stream;
 			await video.play();
-			await waitForVideoFrame(video);
+			await waitForFrame(video);
 
 			canvas = hook.el.querySelector("#pose-tracker-canvas");
 			if (!canvas) throw new Error("Pose tracker canvas is unavailable");
 			resizePoseCanvas(canvas);
 			hook.pushEvent("camera_preview_diagnostics", previewDiagnostics(video));
 
-			detector = await createBlazePoseDetector();
+			detector = await createDetector();
 
 			if (!mounted) return;
-			startedAt = performance.now();
-			hook.el.dataset.poseTrackerReady = "true";
-			hook.pushEvent("tracker_ready", {});
+			startedAt = now();
+			hook.pushEvent("tracker_initialized", {});
 			loop();
 		} catch (error) {
 			delete hook.el.dataset.poseTrackerReady;
@@ -118,12 +143,12 @@ export function createPoseTracker(hook) {
 	async function loop() {
 		if (!mounted || !detector || !video || startedAt === null) return;
 
-		const now = performance.now();
-		if (!shouldSamplePose(now, lastPoseMs)) {
-			raf = requestAnimationFrame(loop);
+		const sampledAt = now();
+		if (!shouldSamplePose(sampledAt, lastPoseMs)) {
+			raf = requestFrame(loop);
 			return;
 		}
-		lastPoseMs = now;
+		lastPoseMs = sampledAt;
 
 		let poses = [];
 		try {
@@ -138,13 +163,31 @@ export function createPoseTracker(hook) {
 		}
 		drawPoseOverlay(canvas, poses[0], video);
 
-		const sample = sampleFromPose(
+		const sample = poseSample(
 			poses[0],
-			now - startedAt,
+			sampledAt - startedAt,
 			video,
 			lastFeature,
 		);
 		lastFeature = sample.features;
+
+		const nextReadiness = stepPoseReadiness(readiness, {
+			poseCount: poses.length,
+			sample,
+		});
+		readiness = nextReadiness;
+
+		if (nextReadiness.status !== lastReadinessStatus) {
+			lastReadinessStatus = nextReadiness.status;
+			const ready =
+				nextReadiness.status === "ready" || nextReadiness.status === "optimal";
+			if (ready) hook.el.dataset.poseTrackerReady = "true";
+			else delete hook.el.dataset.poseTrackerReady;
+
+			const detail = { state: nextReadiness.status };
+			dispatchLocal("pose-tracker:readiness", detail);
+			hook.pushEvent("tracker_readiness", detail);
+		}
 
 		if (captureSegment) {
 			const recorded = recordPoseSample(captureRecorder, sample, {
@@ -158,40 +201,38 @@ export function createPoseTracker(hook) {
 		if (sample.confidence < 0.5 && trackingState !== "lost") {
 			trackingState = "lost";
 			hook.pushEvent("track", { state: "lost" });
+			dispatchLocal("pose-tracker:status", { state: trackingState });
 		}
 
 		if (sample.confidence >= 0.5 && trackingState !== "live") {
 			trackingState = "live";
 			hook.pushEvent("track", { state: "live" });
+			dispatchLocal("pose-tracker:status", { state: trackingState });
 		}
 
 		const result = countRep(state, sample);
 		state = result.state;
 
 		if (result.rep) {
-			hook.pushEvent("rep", {
+			dispatchLocal("pose-tracker:rep", {
 				index: state.cadenceMs.length,
-				t_ms: sample.tMs,
+				confidence: sample.confidence,
 			});
 		}
 
-		raf = requestAnimationFrame(loop);
+		raf = requestFrame(loop);
 	}
 
 	function finish(event) {
 		const flushed = flushPoseCaptureRecorder(captureRecorder, {
 			reason: "finish",
-			nowMs: performance.now() - (startedAt || performance.now()),
+			nowMs: now() - (startedAt || now()),
 		});
 		captureRecorder = flushed.state;
 		flushed.chunks.forEach(pushCaptureChunk);
 
-		const durationMs = event.detail?.durationMs;
 		try {
-			hook.pushEvent(
-				"finish",
-				buildFinishPayload({ durationMs, cadenceMs: state.cadenceMs }),
-			);
+			hook.pushEvent("finish", trackingFinishPayload(event.detail || {}));
 		} catch (_error) {
 			hook.pushEvent("track", { state: "lost", reason: "invalid_finish" });
 		}
@@ -205,8 +246,9 @@ export function createPoseTracker(hook) {
 		mounted = false;
 		delete hook.el.dataset.poseTrackerReady;
 		hook.el.removeEventListener("pose-tracker:finish", finish);
+		hook.el.removeEventListener("pose-tracker:reset", reset);
 		document.removeEventListener("pose-capture:segment", onCaptureSegment);
-		if (raf) cancelAnimationFrame(raf);
+		if (raf) cancelFrame(raf);
 		if (stream) stream.getTracks().forEach((track) => track.stop());
 		if (detector?.dispose) detector.dispose();
 	}
