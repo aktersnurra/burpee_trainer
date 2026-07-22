@@ -18,6 +18,14 @@ import {
 	sessionProgressForElapsed,
 } from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
+import {
+	finishTrackingObserver,
+	initialTrackingObserver,
+	observeTrackingRep,
+	startTrackingObserver,
+	updateTrackingReadiness,
+	updateTrackingStatus,
+} from "./pose_tracking_observer.mjs";
 
 const SessionHook = {
 	mounted() {
@@ -46,6 +54,25 @@ const SessionHook = {
 		this.doneReps = 0;
 		this.lastDownCueKey = null;
 		this.hiddenAt = null;
+		this.tracking = initialTrackingObserver();
+		this.trackerReadiness = "not_ready";
+		this.trackingCompletion = null;
+		this.onPoseTrackerRep = (event) => this.observePoseRep(event.detail || {});
+		this.onPoseTrackerStatus = (event) =>
+			this.updatePoseStatus(event.detail || {});
+		this.onPoseTrackerReadiness = (event) => {
+			this.trackerReadiness = event.detail?.state || "not_ready";
+			this.tracking = updateTrackingReadiness(
+				this.tracking,
+				this.trackerReadiness,
+			);
+		};
+		this.el.addEventListener("pose-tracker:rep", this.onPoseTrackerRep);
+		this.el.addEventListener("pose-tracker:status", this.onPoseTrackerStatus);
+		this.el.addEventListener(
+			"pose-tracker:readiness",
+			this.onPoseTrackerReadiness,
+		);
 
 		this.onVisibility = () => {
 			if (document.visibilityState === "hidden") {
@@ -66,6 +93,7 @@ const SessionHook = {
 						now: performance.now(),
 					});
 					this.startTime = this.segment.clock.startTime;
+					this.resetPoseTracker();
 				}
 				this.hiddenAt = null;
 				this.wakeLock.reacquireWhenVisible();
@@ -139,6 +167,15 @@ const SessionHook = {
 		document.removeEventListener("touchstart", this.primeAudio, {
 			capture: true,
 		});
+		this.el.removeEventListener("pose-tracker:rep", this.onPoseTrackerRep);
+		this.el.removeEventListener(
+			"pose-tracker:status",
+			this.onPoseTrackerStatus,
+		);
+		this.el.removeEventListener(
+			"pose-tracker:readiness",
+			this.onPoseTrackerReadiness,
+		);
 		this.wakeLock.release();
 		this.audio.close();
 	},
@@ -173,10 +210,20 @@ const SessionHook = {
 				this.pushEvent("choose_tracked", {});
 				break;
 			case "pushSessionComplete":
+				if (this.flow.captureMode !== "tracked") {
+					this.pushEvent("session_complete", command.payload);
+					break;
+				}
 				if (this.pushTrackedFinish(command.payload)) {
 					break;
 				}
-				this.pushEvent("session_complete", command.payload);
+				this.pushEvent("session_complete", {
+					...command.payload,
+					tracking: {
+						status: "degraded",
+						reason: this.trackingCompletion?.reason || "tracking_unavailable",
+					},
+				});
 				break;
 		}
 	},
@@ -569,6 +616,10 @@ const SessionHook = {
 			now: performance.now(),
 		});
 
+		if (this.activeSegment === "workout") {
+			this.startPoseObservation();
+		}
+
 		this.updatePauseActionsVisibility();
 
 		this.startTime = this.segment.clock.startTime;
@@ -713,6 +764,7 @@ const SessionHook = {
 		this.startTime = this.segment.clock.startTime;
 		this.paused = false;
 		this.hiddenAt = null;
+		this.resetPoseTracker();
 		if (!this.rafId) this.rafId = requestAnimationFrame(() => this.tick());
 		this.renderer.updatePauseButton(false);
 		this.updatePauseActionsVisibility();
@@ -752,18 +804,53 @@ const SessionHook = {
 		}
 	},
 
+	startPoseObservation() {
+		this.resetPoseTracker();
+		this.tracking = startTrackingObserver(this.tracking, this.trackerReadiness);
+	},
+
+	resetPoseTracker() {
+		this.el
+			.querySelector("#pose-tracker")
+			?.dispatchEvent(new CustomEvent("pose-tracker:reset"));
+	},
+
+	observePoseRep({ index }) {
+		const elapsedSec = this.segment.clock.elapsedSec || 0;
+		const frame = currentFrame(this.timeline, elapsedSec);
+		const eligible =
+			this.activeSegment === "workout" &&
+			this.segment.mode === "running" &&
+			this.segment.clock.hiddenAt === null &&
+			frame?.event?.kind === "work";
+
+		this.tracking = observeTrackingRep(this.tracking, {
+			index,
+			elapsedMs: Math.max(0, Math.round(elapsedSec * 1_000)),
+			eligible,
+		});
+	},
+
+	updatePoseStatus({ state }) {
+		this.tracking = updateTrackingStatus(this.tracking, state);
+	},
+
 	pushTrackedFinish(payload) {
+		const durationMs = Math.round(payload?.main?.duration_sec * 1_000);
+		const finished = finishTrackingObserver(this.tracking, durationMs);
+		this.tracking = finished.state;
+		this.trackingCompletion = finished.result;
+		if (!finished.result.trusted) return false;
+
 		const tracker = this.el.querySelector("#pose-tracker");
-		if (
-			!tracker ||
-			tracker.dataset?.poseTrackerReady !== "true" ||
-			!payload?.main
-		)
-			return false;
+		if (!tracker || tracker.dataset?.poseTrackerReady !== "true") return false;
 
 		tracker.dispatchEvent(
 			new CustomEvent("pose-tracker:finish", {
-				detail: { durationMs: Math.round(payload.main.duration_sec * 1000) },
+				detail: {
+					durationMs,
+					cadenceMs: finished.result.cadenceMs,
+				},
 			}),
 		);
 		return true;

@@ -4,6 +4,10 @@ import SessionHook from "./session_hook.js";
 import { initialFlowState } from "./session_flow_fsm.mjs";
 import { initialSegmentState } from "./session_segment_fsm.mjs";
 import {
+	initialTrackingObserver,
+	updateTrackingStatus,
+} from "./pose_tracking_observer.mjs";
+import {
 	createPoseTracker,
 	requestPreferredCameraStream,
 	resolvePreviewVideo,
@@ -155,6 +159,7 @@ globalThis.clearTimeout = () => {};
 function buildHarness({ poseTrackerReady = false } = {}) {
 	const events = [];
 	const renderedModels = [];
+	const totalUpdates = [];
 	const root = new FakeElement("div");
 	root.id = "burpee-session";
 	globalThis.document.root = root;
@@ -183,7 +188,9 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 
 	const renderer = {
 		resetReady() {},
-		updateTotalCounter() {},
+		updateTotalCounter(value) {
+			totalUpdates.push(value);
+		},
 		updateTotalGoal() {},
 		renderTimer() {},
 		enterWorkPhase() {},
@@ -234,7 +241,28 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		},
 		events,
 		renderedModels,
+		totalUpdates,
 	};
+}
+
+function trackedContext(timeline) {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	ctx.activeSegment = "workout";
+	ctx.timeline = timeline;
+	ctx.segment = {
+		...initialSegmentState(),
+		mode: "running",
+		timeline,
+		clock: {
+			...initialSegmentState().clock,
+			elapsedSec: 2.5,
+			totalDurationSec: 10,
+		},
+	};
+	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
+	ctx.trackerReadiness = "ready";
+	ctx.startPoseObservation();
+	return ctx;
 }
 
 function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
@@ -249,6 +277,111 @@ function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
 	ctx.startTime = 0;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 }
+
+test("tracked reps use session elapsed time without updating visible reps", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+
+	ctx.observePoseRep({ index: 1, confidence: 0.9 });
+
+	assert.deepEqual(ctx.tracking.cadenceMs, [2_500]);
+	assert.deepEqual(ctx.totalUpdates, []);
+});
+
+test("explicit rest and pause candidate reps are ignored", () => {
+	const resting = trackedContext([{ kind: "rest", duration_sec: 10 }]);
+	resting.observePoseRep({ index: 1, confidence: 0.9 });
+	assert.deepEqual(resting.tracking.cadenceMs, []);
+
+	const paused = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+	paused.segment = { ...paused.segment, mode: "paused" };
+	paused.observePoseRep({ index: 1, confidence: 0.9 });
+	assert.deepEqual(paused.tracking.cadenceMs, []);
+});
+
+test("tracking loss keeps workout state but forces timer fallback", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+	const timelineBefore = ctx.timeline;
+	ctx.updatePoseStatus({ state: "lost" });
+
+	assert.equal(ctx.segment.mode, "running");
+	assert.equal(ctx.timeline, timelineBefore);
+	assert.equal(ctx.pushTrackedFinish({ main: { duration_sec: 10 } }), false);
+	assert.equal(ctx.trackingCompletion.reason, "tracking_lost");
+});
+
+test("count-in hidden and completed candidate reps are ignored", () => {
+	for (const mode of ["countdown", "completed"]) {
+		const ctx = trackedContext([
+			{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+		]);
+		ctx.segment = { ...ctx.segment, mode };
+		ctx.observePoseRep({ index: 1 });
+		assert.deepEqual(ctx.tracking.cadenceMs, []);
+	}
+
+	const hidden = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+	hidden.segment = {
+		...hidden.segment,
+		clock: { ...hidden.segment.clock, hiddenAt: 1_000 },
+	};
+	hidden.observePoseRep({ index: 1 });
+	assert.deepEqual(hidden.tracking.cadenceMs, []);
+});
+
+test("main-work start resets the detector and starts observation", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	let resets = 0;
+	tracker.addEventListener("pose-tracker:reset", () => {
+		resets += 1;
+	});
+	ctx.activeSegment = "workout";
+	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
+	ctx.trackerReadiness = "ready";
+	ctx.dispatchSegment({
+		type: "SEGMENT_READY",
+		timeline: [{ kind: "work", reps: 2, sec_per_rep: 4 }],
+		burpeeCountTarget: 2,
+	});
+	ctx.dispatchSegment({ type: "COUNTDOWN_START", now: 0 });
+
+	ctx.beginSegment();
+
+	assert.equal(resets, 1);
+	assert.equal(ctx.tracking.mode, "observing");
+});
+
+test("detector reset after resume preserves accepted cadence", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	let resets = 0;
+	tracker.addEventListener("pose-tracker:reset", () => {
+		resets += 1;
+	});
+	ctx.observePoseRep({ index: 1 });
+	ctx.segment = {
+		...ctx.segment,
+		mode: "paused",
+		clock: { ...ctx.segment.clock, startTime: 0, pauseTime: 0 },
+	};
+	ctx.paused = true;
+	ctx.startTime = 0;
+
+	ctx.resume();
+
+	assert.equal(resets, 1);
+	assert.deepEqual(ctx.tracking.cadenceMs, [2_500]);
+});
 
 const trackerPoint = (score = 0.9, x = 0.5, y = 0.5) => ({ score, x, y });
 
@@ -389,6 +522,72 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		},
 	};
 }
+
+test("session hook removes pose observer listeners on destroy", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	ctx.handleEvent = () => {};
+
+	ctx.mounted();
+
+	assert.equal(ctx.el.listenerCount("pose-tracker:rep"), 1);
+	assert.equal(ctx.el.listenerCount("pose-tracker:status"), 1);
+	assert.equal(ctx.el.listenerCount("pose-tracker:readiness"), 1);
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:readiness", {
+			detail: { state: "ready" },
+			bubbles: true,
+		}),
+	);
+	assert.equal(ctx.trackerReadiness, "ready");
+
+	ctx.destroyed();
+
+	assert.equal(ctx.el.listenerCount("pose-tracker:rep"), 0);
+	assert.equal(ctx.el.listenerCount("pose-tracker:status"), 0);
+	assert.equal(ctx.el.listenerCount("pose-tracker:readiness"), 0);
+});
+
+test("visibility restoration resets detector phase", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.activeSegment = "workout";
+	ctx.timeline = [{ kind: "work", reps: 2, sec_per_rep: 4 }];
+	ctx.segment = {
+		...initialSegmentState(),
+		mode: "running",
+		timeline: ctx.timeline,
+		clock: {
+			...initialSegmentState().clock,
+			startTime: 100,
+			totalDurationSec: 8,
+		},
+	};
+	ctx.startTime = 100;
+	let resets = 0;
+	tracker.addEventListener("pose-tracker:reset", () => {
+		resets += 1;
+	});
+	const originalNow = performance.now;
+	const originalVisibility = document.visibilityState;
+	let now = 500;
+	performance.now = () => now;
+
+	try {
+		document.visibilityState = "hidden";
+		ctx.onVisibility();
+		now = 800;
+		document.visibilityState = "visible";
+		ctx.onVisibility();
+
+		assert.equal(resets, 1);
+	} finally {
+		performance.now = originalNow;
+		document.visibilityState = originalVisibility;
+		ctx.destroyed();
+	}
+});
 
 test("capture prompt uses the mock hierarchy and stable actions", () => {
 	const ctx = buildHarness();
@@ -872,6 +1071,28 @@ test("countdown pause enables Abort but keeps Finish early disabled", () => {
 	assert.equal(abort.hasAttribute("disabled"), false);
 });
 
+test("degraded tracked completion preserves timer result and adds metadata", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 5, sec_per_rep: 2 }]);
+	ctx.flow = { ...ctx.flow, captureMode: "tracked" };
+	ctx.updatePoseStatus({ state: "lost" });
+	const payload = {
+		warmup: { burpee_count_done: 0, duration_sec: 0 },
+		main: { burpee_count_done: 5, duration_sec: 10 },
+	};
+
+	ctx.runFlowCommand({ type: "pushSessionComplete", payload });
+
+	assert.deepEqual(ctx.events, [
+		{
+			name: "session_complete",
+			payload: {
+				...payload,
+				tracking: { status: "degraded", reason: "tracking_lost" },
+			},
+		},
+	]);
+});
+
 test("timed workout completion pushes log payload with completed reps", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 	const workoutTimeline = [{ kind: "work", reps: 5, sec_per_rep: 2 }];
@@ -907,7 +1128,9 @@ test("tracked workout completion sends finish to ready pose tracker", () => {
 	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
 	ctx.dispatchFlow({ type: "WARMUP_SKIP" });
 	ctx.dispatchFlow({ type: "WORKOUT_READY" });
-	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
+	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
+	ctx.trackerReadiness = "ready";
+	ctx.beginSegment();
 	ctx.startTime = 0;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 
@@ -915,5 +1138,5 @@ test("tracked workout completion sends finish to ready pose tracker", () => {
 		ctx.events.filter((event) => event.name === "session_complete"),
 		[],
 	);
-	assert.deepEqual(finishDetail, { durationMs: 10_000 });
+	assert.deepEqual(finishDetail, { durationMs: 10_000, cadenceMs: [] });
 });
