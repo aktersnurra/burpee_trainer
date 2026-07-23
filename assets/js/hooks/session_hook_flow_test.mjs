@@ -160,6 +160,7 @@ globalThis.clearTimeout = () => {};
 function buildHarness({ poseTrackerReady = false } = {}) {
 	const events = [];
 	const renderedModels = [];
+	const downCueValues = [];
 	const totalUpdates = [];
 	const root = new FakeElement("div");
 	root.id = "burpee-session";
@@ -195,7 +196,9 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		updateTotalGoal() {},
 		renderTimer() {},
 		enterWorkPhase() {},
-		triggerDown() {},
+		triggerDown(value) {
+			downCueValues.push(value);
+		},
 		updateCurrentSetRepCount() {},
 		updateWorkFill() {},
 		enterRestPhase() {},
@@ -243,6 +246,7 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		},
 		events,
 		renderedModels,
+		downCueValues,
 		totalUpdates,
 	};
 }
@@ -1157,6 +1161,34 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	assert.equal(actions.hasAttribute("inert"), true);
 	assert.equal(finishEarly.hasAttribute("disabled"), true);
 	assert.equal(abort.hasAttribute("disabled"), true);
+});
+
+test("running frames cue authoritative remaining reps during work recovery", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const timeline = Object.freeze([
+		Object.freeze({
+			kind: "work",
+			reps: 5,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+		}),
+	]);
+
+	ctx.dispatchSegment({
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 5,
+	});
+	ctx.activeSegment = "workout";
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
+
+	ctx.renderRunningFrame(4);
+	ctx.renderRunningFrame(5);
+	ctx.renderRunningFrame(10.5);
+
+	assert.equal(ctx.renderedModels[0].visual.state, "work_recovery");
+	assert.equal(ctx.renderedModels[0].primaryCount, "6");
+	assert.deepEqual(ctx.downCueValues, [5, 4]);
 });
 
 test("running frames derive rest set progress from the hook timeline", () => {

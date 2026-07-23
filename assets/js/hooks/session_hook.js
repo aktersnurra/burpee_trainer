@@ -657,6 +657,10 @@ const SessionHook = {
 
 		this.dispatchSegment({ type: "ACCOUNT_REPS", frame });
 		this.syncRepStateFromSegment();
+		const remainingReps = Math.max(
+			(frame?.event?.reps || 0) - this.doneReps,
+			0,
+		);
 
 		const totalDurationSec = this.segment.clock.totalDurationSec;
 		const sessionProgress =
@@ -673,7 +677,7 @@ const SessionHook = {
 			doneInEvent: this.doneReps,
 		});
 		this.renderer.renderDisplayModel(model);
-		this.triggerDownCueForFrame(frame, model.primaryCount);
+		this.triggerDownCueForFrame(frame, remainingReps);
 
 		this.dispatchSegment({ type: "BEEP_FRAME", frame });
 	},
