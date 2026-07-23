@@ -181,7 +181,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     })
 
     assert has_element?(session, "#session-completion-summary")
+    assert has_element?(session, "#session-actual-reps", "28")
+    assert has_element?(session, "#session-planned-reps", "30")
+    refute has_element?(session, "#session-count-source")
+    refute has_element?(session, "#tracked-review")
     assert has_element?(session, "#session-completion-form")
+    assert has_element?(session, "#session-completion-mood")
+    assert has_element?(session, "#session-completion-tags")
     assert has_element?(session, "#session-save-btn.min-h-11")
 
     assert has_element?(
@@ -348,9 +354,19 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
       "cadence_ms" => [5_000, 10_000, 15_000]
     })
 
-    assert has_element?(session, "#tracked-review")
     assert has_element?(session, "#session-completion-summary")
+    assert has_element?(session, "#session-actual-reps", "3")
+    assert has_element?(session, "#session-planned-reps", "30")
+    assert has_element?(session, "#session-count-source", "Counted by camera")
+    assert has_element?(session, "#session-completion-summary", "0:15")
+    refute has_element?(session, "#tracked-review")
+
     assert has_element?(session, "#session-completion-form")
+    assert has_element?(session, "#completion-reps-input")
+    assert has_element?(session, "#completion-duration-min-input")
+    assert has_element?(session, "#session-completion-mood button[phx-click='set_mood']")
+    assert has_element?(session, "#session-completion-tags button[phx-click='toggle_tag']")
+    assert has_element?(session, "#completion-note-input")
     assert has_element?(session, "#session-save-btn")
 
     assert has_element?(
@@ -374,6 +390,8 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     [saved] = Workouts.list_sessions(user)
     assert saved.capture_mode == :tracked
+    assert saved.burpee_count_actual == 3
+    assert saved.duration_sec_actual == 15
     assert saved.cadence_ms == "[5000,10000,15000]"
 
     [completed_run] = Repo.all(PoseCaptureRun)
@@ -387,6 +405,67 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     {:ok, _analysis, analysis_html} = live(conn, ~p"/stats/sessions/#{saved.id}")
     assert analysis_html =~ "Session analysis"
     assert analysis_html =~ "Pace by rep"
+  end
+
+  test "tracked completion explains when the camera count is edited", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user, %{"name" => "Edited Tracked Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(session, "finish", %{
+      "reps" => 3,
+      "duration_ms" => 15_000,
+      "cadence_ms" => [5_000, 10_000, 15_000]
+    })
+
+    session
+    |> form("#session-completion-form",
+      workout_session: %{
+        "burpee_type" => "six_count",
+        "burpee_count_planned" => "30",
+        "duration_sec_planned" => "180",
+        "burpee_count_actual" => "4",
+        "duration_min" => "0.25"
+      }
+    )
+    |> render_change()
+
+    assert has_element?(session, "#session-actual-reps", "4")
+    assert has_element?(session, "#session-planned-reps", "30")
+
+    assert has_element?(
+             session,
+             "#session-count-source",
+             "Edited · camera counted 3"
+           )
+  end
+
+  test "degraded completion keeps the timer result and reports interrupted camera tracking", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user, %{"name" => "Degraded Tracking Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(session, "session_complete", %{
+      "main" => %{"burpee_count_done" => 12, "duration_sec" => 75},
+      "tracking" => %{"status" => "degraded"}
+    })
+
+    assert has_element?(session, "#session-completion-summary")
+    assert has_element?(session, "#session-actual-reps", "12")
+    assert has_element?(session, "#session-planned-reps", "30")
+
+    assert has_element?(
+             session,
+             "#session-count-source",
+             "Camera view was interrupted"
+           )
+
+    assert has_element?(session, "#session-save-btn")
+    refute has_element?(session, "#tracked-review")
   end
 
   test "tracked camera setup rejects start while arming", %{conn: conn, user: user} do

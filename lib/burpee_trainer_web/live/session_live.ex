@@ -204,9 +204,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def handle_event("session_complete", payload, socket) do
     case parse_completion_payload(payload) do
       {:ok, %{main: main}} ->
+        tracking_state =
+          case payload do
+            %{"tracking" => %{"status" => "degraded"}} -> :degraded
+            _payload -> socket.assigns.tracking_state
+          end
+
         socket =
           socket
           |> assign(:phase, :done)
+          |> assign(:tracking_state, tracking_state)
           |> assign(
             :completion_form,
             build_completion_form(socket, main.burpee_count_done, main.duration_sec)
@@ -496,6 +503,20 @@ defmodule BurpeeTrainerWeb.SessionLive do
     |> completion_integer(:duration_sec_actual)
     |> Fmt.duration_sec()
   end
+
+  defp completion_count_source(:review, %{reps: camera_reps}, form) do
+    if completion_integer(form, :burpee_count_actual) == camera_reps do
+      "Counted by camera"
+    else
+      "Edited · camera counted #{camera_reps}"
+    end
+  end
+
+  defp completion_count_source(:degraded, _tracked_finish, _form) do
+    "Camera view was interrupted · Check the total"
+  end
+
+  defp completion_count_source(_tracking_state, _tracked_finish, _form), do: nil
 
   @impl true
   def render(assigns) do
@@ -844,31 +865,35 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <div class="mx-auto min-h-dvh w-full max-w-[430px] overflow-y-auto bg-[var(--session-bg)] px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))] text-[var(--session-ink)]">
       <section id="session-completion-summary" class="text-center">
-        <p class="qs-tabular text-[clamp(5rem,24vw,9rem)] font-semibold leading-none tracking-[-0.08em]">
+        <p
+          id="session-actual-reps"
+          class="qs-tabular text-[clamp(5rem,24vw,9rem)] font-semibold leading-none tracking-[-0.08em]"
+        >
           {completion_integer(@form, :burpee_count_actual)}
         </p>
-        <p class="mt-3 text-sm text-[var(--session-muted)]">done</p>
+        <p class="qs-tabular mt-4 text-sm text-[var(--session-muted)]">
+          of
+          <span id="session-planned-reps" class="font-medium text-[var(--session-ink)]">
+            {completion_integer(@form, :burpee_count_planned)}
+          </span>
+          planned
+        </p>
+        <p
+          :if={source = completion_count_source(@tracking_state, @tracked_finish, @form)}
+          id="session-count-source"
+          class="mt-3 text-xs text-[var(--session-muted)]"
+        >
+          {source}
+        </p>
         <p class="qs-tabular mt-8 text-3xl font-medium">
           {completion_duration_label(@form)}
         </p>
       </section>
 
-      <section
-        :if={@tracking_state == :review}
-        id="tracked-review"
-        class="mt-10 w-full border-y border-[var(--session-border)] py-6 text-center"
+      <div
+        id="session-completion-mood"
+        class="mt-10 flex border-y border-[var(--session-border)]"
       >
-        <h2 class="text-sm font-medium text-[var(--session-muted)]">
-          Review tracked session
-        </h2>
-        <p class="qs-tabular mt-3 text-5xl font-semibold tracking-[-0.06em]">
-          {@tracked_finish.reps}
-        </p>
-        <p class="mt-1 text-xs text-[var(--session-muted)]">Reps</p>
-        <span class="sr-only">{@tracked_finish.reps} reps</span>
-      </section>
-
-      <div class="mt-10 flex border-y border-[var(--session-border)]">
         <%= for {_icon, label, value} <- @mood_options do %>
           <button
             type="button"
@@ -939,7 +964,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           />
         </div>
 
-        <div class="border-t border-[var(--session-border)] py-6">
+        <div id="session-completion-tags" class="border-t border-[var(--session-border)] py-6">
           <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Tags</p>
           <div class="flex flex-wrap gap-2">
             <%= for tag <- @tag_options do %>
