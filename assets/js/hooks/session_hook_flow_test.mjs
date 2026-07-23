@@ -315,8 +315,8 @@ test("tracking loss keeps workout state but forces timer fallback", () => {
 	assert.equal(ctx.trackingCompletion.reason, "tracking_lost");
 });
 
-test("count-in hidden and completed candidate reps are ignored", () => {
-	for (const mode of ["countdown", "completed"]) {
+test("count-in hidden and done candidate reps are ignored", () => {
+	for (const mode of ["countdown", "done"]) {
 		const ctx = trackedContext([
 			{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
 		]);
@@ -378,9 +378,16 @@ test("detector reset after resume preserves accepted cadence", () => {
 	ctx.startTime = 0;
 
 	ctx.resume();
+	ctx.segment = {
+		...ctx.segment,
+		clock: { ...ctx.segment.clock, elapsedSec: 3.5 },
+	};
+	ctx.observePoseRep({ index: 2 });
 
 	assert.equal(resets, 1);
-	assert.deepEqual(ctx.tracking.cadenceMs, [2_500]);
+	assert.deepEqual(ctx.tracking.cadenceMs, [2_500, 3_500]);
+	assert.equal(ctx.tracking.lastIndex, 2);
+	assert.equal(ctx.tracking.mode, "observing");
 });
 
 const trackerPoint = (score = 0.9, x = 0.5, y = 0.5) => ({ score, x, y });
@@ -891,7 +898,7 @@ test("accepted rep emits only a bubbling local candidate", async () => {
 	harness.poseTracker.destroyed();
 });
 
-test("tracker reset clears detector phase and cadence and is removed on destroy", async () => {
+test("tracker reset clears detector phase but keeps candidate indexes increasing", async () => {
 	const samples = [
 		[0, 0.2],
 		[500, 0.5],
@@ -915,7 +922,7 @@ test("tracker reset clears detector phase and cadence and is removed on destroy"
 		harness.localEvents
 			.filter(({ type }) => type === "pose-tracker:rep")
 			.map(({ detail }) => detail.index),
-		[1, 1],
+		[1, 2],
 	);
 	harness.poseTracker.destroyed();
 	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 0);
@@ -1088,6 +1095,31 @@ test("degraded tracked completion preserves timer result and adds metadata", () 
 			payload: {
 				...payload,
 				tracking: { status: "degraded", reason: "tracking_lost" },
+			},
+		},
+	]);
+});
+
+test("missing tracker falls back to timer completion metadata", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+	ctx.flow = { ...ctx.flow, captureMode: "tracked" };
+	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
+	ctx.trackerReadiness = "ready";
+	ctx.startPoseObservation();
+	const payload = {
+		warmup: { burpee_count_done: 0, duration_sec: 0 },
+		main: { burpee_count_done: 5, duration_sec: 10 },
+	};
+
+	assert.equal(ctx.el.querySelector("#pose-tracker"), null);
+	ctx.runFlowCommand({ type: "pushSessionComplete", payload });
+
+	assert.deepEqual(ctx.events, [
+		{
+			name: "session_complete",
+			payload: {
+				...payload,
+				tracking: { status: "degraded", reason: "tracking_unavailable" },
 			},
 		},
 	]);

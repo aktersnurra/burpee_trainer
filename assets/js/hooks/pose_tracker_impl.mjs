@@ -80,6 +80,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	let canvas = null;
 	let raf = null;
 	let state = initialCounterState();
+	let candidateIndex = 0;
 	let readiness = initialPoseReadiness();
 	let lastReadinessStatus = readiness.status;
 	let startedAt = null;
@@ -214,8 +215,9 @@ export function createPoseTracker(hook, runtime = {}) {
 		state = result.state;
 
 		if (result.rep) {
+			candidateIndex += 1;
 			dispatchLocal("pose-tracker:rep", {
-				index: state.cadenceMs.length,
+				index: candidateIndex,
 				confidence: sample.confidence,
 			});
 		}
