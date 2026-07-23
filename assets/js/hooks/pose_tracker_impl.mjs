@@ -1,6 +1,7 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
+import { initialStartGesture, stepStartGesture } from "./pose_start_gesture.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
 import { drawPoseOverlay, resizePoseCanvas } from "./pose_overlay.mjs";
@@ -13,6 +14,9 @@ import {
 } from "./pose_capture_recorder.mjs";
 
 export { drawPoseOverlay, resizePoseCanvas };
+
+const CAMERA_SETUP_AUTO_CONFIRM_MS = 1500;
+const WARMUP_NO_GESTURE_TIMEOUT_MS = 4000;
 
 export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
@@ -71,6 +75,8 @@ export function createPoseTracker(hook, runtime = {}) {
 		runtime.requestAnimationFrame ||
 		((callback) => requestAnimationFrame(callback));
 	const cancelFrame = runtime.cancelAnimationFrame || cancelAnimationFrame;
+	const scheduleTimeout = runtime.setTimeout || ((cb, ms) => setTimeout(cb, ms));
+	const clearScheduledTimeout = runtime.clearTimeout || clearTimeout;
 	const poseSample = runtime.sampleFromPose || sampleFromPose;
 	const waitForFrame = runtime.waitForVideoFrame || waitForVideoFrame;
 	const hasWebgl = runtime.webglAvailable || webglAvailable;
@@ -83,6 +89,11 @@ export function createPoseTracker(hook, runtime = {}) {
 	let candidateIndex = 0;
 	let readiness = initialPoseReadiness();
 	let lastReadinessStatus = readiness.status;
+	let armedStep = null;
+	let armedHoldFramesRequired = 0;
+	let startGesture = initialStartGesture();
+	let autoConfirmTimeoutId = null;
+	let noGestureTimeoutId = null;
 	let startedAt = null;
 	let trackingState = "lost";
 	let mounted = true;
@@ -100,6 +111,38 @@ export function createPoseTracker(hook, runtime = {}) {
 		state = initialCounterState();
 		lastFeature = null;
 	};
+	const clearArmTimers = () => {
+		if (autoConfirmTimeoutId !== null) {
+			clearScheduledTimeout(autoConfirmTimeoutId);
+			autoConfirmTimeoutId = null;
+		}
+		if (noGestureTimeoutId !== null) {
+			clearScheduledTimeout(noGestureTimeoutId);
+			noGestureTimeoutId = null;
+		}
+	};
+	const armStep = (event) => {
+		clearArmTimers();
+		startGesture = initialStartGesture();
+		const detail = event.detail || {};
+		armedStep = detail.step || null;
+		armedHoldFramesRequired = detail.holdFramesRequired || 0;
+
+		if (armedStep === "camera_setup") {
+			autoConfirmTimeoutId = scheduleTimeout(() => {
+				autoConfirmTimeoutId = null;
+				dispatchLocal("pose-tracker:gesture-confirm", {});
+			}, CAMERA_SETUP_AUTO_CONFIRM_MS);
+		}
+
+		if (armedStep === "warmup") {
+			noGestureTimeoutId = scheduleTimeout(() => {
+				noGestureTimeoutId = null;
+				dispatchLocal("pose-tracker:gesture-timeout", {});
+			}, WARMUP_NO_GESTURE_TIMEOUT_MS);
+		}
+	};
+	hook.el.addEventListener("pose-tracker:arm", armStep);
 
 	async function mountedHook() {
 		hook.el.addEventListener("pose-tracker:finish", finish);
@@ -190,6 +233,18 @@ export function createPoseTracker(hook, runtime = {}) {
 			hook.pushEvent("tracker_readiness", detail);
 		}
 
+		if (armedStep && armedHoldFramesRequired > 0) {
+			const wasSatisfied = startGesture.satisfied;
+			startGesture = stepStartGesture(startGesture, {
+				sample,
+				holdFramesRequired: armedHoldFramesRequired,
+			});
+			if (startGesture.satisfied && !wasSatisfied) {
+				clearArmTimers();
+				dispatchLocal("pose-tracker:gesture-confirm", {});
+			}
+		}
+
 		if (captureSegment) {
 			const recorded = recordPoseSample(captureRecorder, sample, {
 				segment: captureSegment,
@@ -249,6 +304,8 @@ export function createPoseTracker(hook, runtime = {}) {
 		delete hook.el.dataset.poseTrackerReady;
 		hook.el.removeEventListener("pose-tracker:finish", finish);
 		hook.el.removeEventListener("pose-tracker:reset", reset);
+		hook.el.removeEventListener("pose-tracker:arm", armStep);
+		clearArmTimers();
 		document.removeEventListener("pose-capture:segment", onCaptureSegment);
 		if (raf) cancelFrame(raf);
 		if (stream) stream.getTracks().forEach((track) => track.stop());

@@ -530,7 +530,12 @@ test("detector reset after resume preserves accepted cadence", () => {
 
 const trackerPoint = (score = 0.9, x = 0.5, y = 0.5) => ({ score, x, y });
 
-function trackerSample({ tMs = 0, closeness = 0.2, confidence = 0.9 } = {}) {
+function trackerSample({
+	tMs = 0,
+	closeness = 0.2,
+	confidence = 0.9,
+	leftWristY = null,
+} = {}) {
 	return {
 		tMs,
 		closeness,
@@ -542,6 +547,9 @@ function trackerSample({ tMs = 0, closeness = 0.2, confidence = 0.9 } = {}) {
 			left_hip: trackerPoint(0.9, 0.45, 0.5),
 			right_hip: trackerPoint(0.9, 0.55, 0.5),
 			left_knee: trackerPoint(0.9, 0.46, 0.72),
+			...(leftWristY === null
+				? {}
+				: { left_wrist: trackerPoint(0.9, 0.42, leftWristY) }),
 		},
 	};
 }
@@ -583,6 +591,8 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		"pose-tracker:readiness",
 		"pose-tracker:rep",
 		"pose-tracker:status",
+		"pose-tracker:gesture-confirm",
+		"pose-tracker:gesture-timeout",
 	]) {
 		tracker.addEventListener(type, (event) => localEvents.push(event));
 	}
@@ -610,6 +620,10 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		},
 	};
 
+	let nextTimeoutId = 1;
+	const scheduledTimeouts = new Map();
+	const clearedTimeoutIds = [];
+
 	const hook = {
 		el: tracker,
 		pushEvent(name, payload) {
@@ -632,6 +646,16 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		sampleFromPose: () => currentFrame.sample,
 		waitForVideoFrame: async () => video,
 		webglAvailable: () => true,
+		setTimeout(callback) {
+			const id = nextTimeoutId;
+			nextTimeoutId += 1;
+			scheduledTimeouts.set(id, callback);
+			return id;
+		},
+		clearTimeout(id) {
+			clearedTimeoutIds.push(id);
+			scheduledTimeouts.delete(id);
+		},
 	});
 
 	const settle = async () => {
@@ -645,6 +669,14 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		localEvents,
 		detector,
 		poseTracker,
+		scheduledTimeouts,
+		clearedTimeoutIds,
+		fireTimeout(id) {
+			const callback = scheduledTimeouts.get(id);
+			assert.ok(callback, `no timeout scheduled with id ${id}`);
+			scheduledTimeouts.delete(id);
+			callback();
+		},
 		get consumedFrames() {
 			return consumedFrames;
 		},
@@ -819,6 +851,116 @@ test("camera setup timer fallback returns to the ordinary timed warmup flow", ()
 	assert.equal(ctx.flow.mode, "warmup_prompt");
 	assert.ok(ctx.el.querySelector("#warmup-yes-btn"));
 	assert.ok(ctx.el.querySelector("#warmup-skip-btn"));
+});
+
+test("armed camera-setup step dispatches gesture-confirm when wrist streak completes", async () => {
+	const raisedFrames = Array.from({ length: 3 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100, leftWristY: 0.1 })),
+	);
+	const harness = buildPoseTrackerHarness(raisedFrames);
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:arm", {
+			detail: { step: "camera_setup", holdFramesRequired: 3 },
+		}),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(3);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:gesture-confirm")
+			.map(({ type }) => type),
+		["pose-tracker:gesture-confirm"],
+	);
+
+	harness.poseTracker.destroyed();
+});
+
+test("camera setup auto-timer confirms without a gesture", async () => {
+	const notRaisedFrames = Array.from({ length: 2 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const harness = buildPoseTrackerHarness(notRaisedFrames);
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:arm", {
+			detail: { step: "camera_setup", holdFramesRequired: 15 },
+		}),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(2);
+
+	assert.equal(harness.scheduledTimeouts.size, 1);
+	const [timeoutId] = harness.scheduledTimeouts.keys();
+	harness.fireTimeout(timeoutId);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:gesture-confirm")
+			.map(({ type }) => type),
+		["pose-tracker:gesture-confirm"],
+	);
+
+	harness.poseTracker.destroyed();
+});
+
+test("armed warmup step dispatches gesture-timeout when no gesture arrives", async () => {
+	const notRaisedFrames = Array.from({ length: 2 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const harness = buildPoseTrackerHarness(notRaisedFrames);
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:arm", {
+			detail: { step: "warmup", holdFramesRequired: 15 },
+		}),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(2);
+
+	assert.equal(harness.scheduledTimeouts.size, 1);
+	const [timeoutId] = harness.scheduledTimeouts.keys();
+	harness.fireTimeout(timeoutId);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:gesture-timeout")
+			.map(({ type }) => type),
+		["pose-tracker:gesture-timeout"],
+	);
+
+	harness.poseTracker.destroyed();
+});
+
+test("gesture confirm during camera-setup arm cancels the pending auto-timer", async () => {
+	const raisedFrames = Array.from({ length: 2 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100, leftWristY: 0.1 })),
+	);
+	const harness = buildPoseTrackerHarness(raisedFrames);
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:arm", {
+			detail: { step: "camera_setup", holdFramesRequired: 2 },
+		}),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(2);
+
+	assert.deepEqual(
+		harness.localEvents
+			.filter(({ type }) => type === "pose-tracker:gesture-confirm")
+			.map(({ type }) => type),
+		["pose-tracker:gesture-confirm"],
+	);
+	assert.equal(harness.scheduledTimeouts.size, 0);
+	assert.equal(harness.clearedTimeoutIds.length, 1);
+
+	harness.poseTracker.destroyed();
 });
 
 test("pose tracker binds only to the preview rendered inside its hook", () => {
