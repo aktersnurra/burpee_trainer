@@ -153,8 +153,8 @@ body {
   --session-border: #DAD6CE;
   --session-track: #DDD6CF;
   --session-work: #E86F47;
-  --session-rest-light: color-mix(in srgb, var(--session-rest) 58%, var(--session-active-bg));
-  --session-rest: #7F95B5;
+  --session-rest-light: #D3DCEA;
+  --session-rest: #5C7096;
   --session-accent: #A77B5D;
   --session-accent-strong: #8F5F46;
   --session-toggle-bg: #F1F8FF;
