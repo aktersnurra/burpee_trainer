@@ -91,9 +91,9 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 	assert.match(lightTheme.declarations, /--session-work:\s*#E86F47;/);
 	assert.match(
 		lightTheme.declarations,
-		/--session-rest-light:\s*color-mix\(in srgb, var\(--session-rest\) 58%, var\(--session-active-bg\)\);/,
+		/--session-rest-light:\s*#D3DCEA;/,
 	);
-	assert.match(lightTheme.declarations, /--session-rest:\s*#7F95B5;/);
+	assert.match(lightTheme.declarations, /--session-rest:\s*#5C7096;/);
 
 	const runner = ruleFor("#session-runner-client")?.declarations || "";
 	assert.match(
