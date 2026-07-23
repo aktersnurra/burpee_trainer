@@ -114,6 +114,7 @@ const documentListeners = new Map();
 globalThis.document = {
 	root: null,
 	documentElement: {},
+	visibilityState: "visible",
 	createElement(tagName) {
 		return new FakeElement(tagName);
 	},
@@ -211,6 +212,7 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 		stop() {},
 		playLeadBeep() {},
 		playRepBeep() {},
+		close() {},
 	};
 
 	const wakeLock = {
@@ -278,6 +280,26 @@ function runTimedWorkoutToCompletion(ctx, workoutTimeline) {
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 }
 
+function mountedTrackedCountdown(timeline) {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const { renderer, audio, wakeLock } = ctx;
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.renderer = renderer;
+	ctx.audio = audio;
+	ctx.wakeLock = wakeLock;
+	ctx.activeSegment = "workout";
+	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
+	ctx.trackerReadiness = "ready";
+	ctx.dispatchSegment({
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: timeline[0].reps,
+	});
+	ctx.dispatchSegment({ type: "COUNTDOWN_START", now: performance.now() });
+	return ctx;
+}
+
 test("tracked reps use session elapsed time without updating visible reps", () => {
 	const ctx = trackedContext([
 		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
@@ -334,6 +356,118 @@ test("count-in hidden and done candidate reps are ignored", () => {
 	};
 	hidden.observePoseRep({ index: 1 });
 	assert.deepEqual(hidden.tracking.cadenceMs, []);
+});
+
+test("countdown completion while hidden records hidden state and rejects a rep", () => {
+	const originalNow = performance.now;
+	const originalVisibility = document.visibilityState;
+	performance.now = () => 500;
+	document.visibilityState = "hidden";
+	const ctx = mountedTrackedCountdown([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+
+	try {
+		ctx.beginSegment();
+		ctx.observePoseRep({ index: 1 });
+
+		assert.equal(ctx.segment.mode, "running");
+		assert.equal(ctx.segment.clock.startTime, 500);
+		assert.equal(ctx.segment.clock.hiddenAt, 500);
+		assert.equal(ctx.hiddenAt, 500);
+		assert.equal(ctx.rafId, null);
+		assert.deepEqual(ctx.tracking.cadenceMs, []);
+	} finally {
+		ctx.destroyed();
+		performance.now = originalNow;
+		document.visibilityState = originalVisibility;
+	}
+});
+
+test("hidden work candidates are rejected before visibility dispatch", () => {
+	const originalVisibility = document.visibilityState;
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+
+	try {
+		document.visibilityState = "hidden";
+		ctx.observePoseRep({ index: 1 });
+
+		assert.equal(ctx.segment.mode, "running");
+		assert.equal(ctx.segment.clock.hiddenAt, null);
+		assert.deepEqual(ctx.tracking.cadenceMs, []);
+	} finally {
+		document.visibilityState = originalVisibility;
+	}
+});
+
+test("visibility restoration after hidden countdown resumes at zero elapsed", () => {
+	const originalNow = performance.now;
+	const originalVisibility = document.visibilityState;
+	let now = 500;
+	performance.now = () => now;
+	document.visibilityState = "hidden";
+	const ctx = mountedTrackedCountdown([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+
+	try {
+		ctx.beginSegment();
+		now = 800;
+		document.visibilityState = "visible";
+		ctx.onVisibility();
+		ctx.tick();
+
+		assert.equal(ctx.segment.mode, "running");
+		assert.equal(ctx.segment.clock.startTime, 800);
+		assert.equal(ctx.segment.clock.hiddenAt, null);
+		assert.equal(ctx.segment.clock.elapsedSec, 0);
+	} finally {
+		ctx.destroyed();
+		performance.now = originalNow;
+		document.visibilityState = originalVisibility;
+	}
+});
+
+test("hidden pause overlap resumes once and accepts the next work rep", () => {
+	const originalNow = performance.now;
+	const originalVisibility = document.visibilityState;
+	let now = 100;
+	performance.now = () => now;
+	document.visibilityState = "visible";
+	const ctx = mountedTrackedCountdown([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
+	]);
+
+	try {
+		ctx.beginSegment();
+		now = 500;
+		document.visibilityState = "hidden";
+		ctx.onVisibility();
+		now = 700;
+		ctx.pause();
+		now = 800;
+		document.visibilityState = "visible";
+		ctx.onVisibility();
+		now = 1_000;
+		ctx.resume();
+		now = 1_200;
+		ctx.tick();
+		ctx.observePoseRep({ index: 1 });
+
+		assert.equal(ctx.segment.mode, "running");
+		assert.equal(ctx.segment.clock.startTime, 600);
+		assert.equal(ctx.segment.clock.pauseTime, null);
+		assert.equal(ctx.segment.clock.hiddenAt, null);
+		assert.equal(ctx.hiddenAt, null);
+		assert.equal(ctx.segment.clock.elapsedSec, 0.6);
+		assert.deepEqual(ctx.tracking.cadenceMs, [600]);
+	} finally {
+		ctx.destroyed();
+		performance.now = originalNow;
+		document.visibilityState = originalVisibility;
+	}
 });
 
 test("main-work start resets the detector and starts observation", () => {

@@ -611,10 +611,12 @@ const SessionHook = {
 	},
 
 	beginSegment() {
-		this.dispatchSegment({
-			type: "COUNTDOWN_DONE",
-			now: performance.now(),
-		});
+		const now = performance.now();
+		this.dispatchSegment({ type: "COUNTDOWN_DONE", now });
+		if (document.visibilityState === "hidden") {
+			this.dispatchSegment({ type: "VISIBILITY_HIDDEN", now });
+			this.hiddenAt = this.segment.clock.hiddenAt;
+		}
 
 		if (this.activeSegment === "workout") {
 			this.startPoseObservation();
@@ -822,6 +824,7 @@ const SessionHook = {
 			this.activeSegment === "workout" &&
 			this.segment.mode === "running" &&
 			this.segment.clock.hiddenAt === null &&
+			document.visibilityState === "visible" &&
 			frame?.event?.kind === "work";
 
 		this.tracking = observeTrackingRep(this.tracking, {

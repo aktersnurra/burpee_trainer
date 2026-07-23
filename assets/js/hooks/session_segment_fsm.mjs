@@ -531,10 +531,17 @@ export function segmentTransition(state, event) {
 			};
 
 		case "RESUME": {
-			const pausedFor = Math.max(
-				(event.now || 0) - (state.clock.pauseTime || 0),
-				0,
-			);
+			const inactiveStart = [state.clock.hiddenAt, state.clock.pauseTime]
+				.filter((time) => time !== null)
+				.reduce(
+					(earliest, time) =>
+						earliest === null ? time : Math.min(earliest, time),
+					null,
+				);
+			const inactiveFor =
+				inactiveStart === null
+					? 0
+					: Math.max((event.now || 0) - inactiveStart, 0);
 			return {
 				state: {
 					...state,
@@ -544,8 +551,9 @@ export function segmentTransition(state, event) {
 						startTime:
 							state.clock.startTime === null
 								? null
-								: state.clock.startTime + pausedFor,
+								: state.clock.startTime + inactiveFor,
 						pauseTime: null,
+						hiddenAt: null,
 					},
 				},
 				commands: [{ type: "startAnimationFrame" }],
