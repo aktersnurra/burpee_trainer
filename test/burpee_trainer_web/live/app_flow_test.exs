@@ -492,8 +492,7 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert Repo.all(PoseCaptureRun) == []
     refute has_element?(session, "#camera-setup-panel")
     refute has_element?(session, "#pose-tracker")
-    assert has_element?(session, "#start-overlay #warmup-yes-btn")
-    assert has_element?(session, "#start-overlay #warmup-skip-btn")
+    assert has_element?(session, "#session-runner-client")
   end
 
   test "stats deletion removes a saved session from history and home totals", %{

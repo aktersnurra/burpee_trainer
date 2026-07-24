@@ -9,7 +9,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   validates/saves completion.
 
   State machine (server-side phase):
-      :idle → :running → :done
+      :running → :done
 
   The client drives everything in between. When the workout completes the
   client pushes `session_complete` and the server shows the save modal.
@@ -38,9 +38,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
           |> assign(:execution_program, execution_program)
           |> assign(:target_pace_sec, program_target_pace_sec(execution_program))
           |> assign(:summary, summary)
-          |> assign(:phase, :idle)
+          |> assign(:phase, :running)
           |> assign(:mood, nil)
-          |> assign(:warmup_asked, false)
           |> assign(:completion_tags, [])
           |> assign(:completion_form, nil)
           |> assign(:client_session_id, Ecto.UUID.generate())
@@ -63,10 +62,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
-  def handle_event("session_started", _params, socket) do
-    {:noreply, socket |> assign(:phase, :running) |> assign(:warmup_asked, true)}
-  end
-
   def handle_event("choose_tracked", _, socket) do
     %{current_user: user, plan: plan} = socket.assigns
 
@@ -539,7 +534,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               tracking_state={@tracking_state}
               tracked_finish={@tracked_finish}
             />
-          <% phase when phase in [:idle, :running] -> %>
+          <% :running -> %>
             <%= if @capture_mode == :tracked do %>
               <div
                 id="pose-tracker-visibility"
@@ -583,9 +578,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
             <% end %>
 
             <.session_runner
-              phase={phase}
+              phase={@phase}
               summary={@summary}
-              warmup_asked={@warmup_asked}
             />
         <% end %>
       </div>
@@ -650,7 +644,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   attr(:phase, :atom, required: true)
   attr(:summary, :map, required: true)
-  attr(:warmup_asked, :boolean, required: true)
 
   defp session_runner(assigns) do
     ~H"""
@@ -777,59 +770,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
           </div>
         </div>
       </div>
-
-      <%= if @phase == :idle do %>
-        <.tap_to_start_overlay warmup_asked={@warmup_asked} />
-      <% end %>
-    </div>
-    """
-  end
-
-  attr(:warmup_asked, :boolean, required: true)
-
-  defp tap_to_start_overlay(assigns) do
-    ~H"""
-    <div
-      id="start-overlay"
-      class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-[var(--session-bg)] text-center text-[var(--session-ink)]"
-    >
-      <%= if not @warmup_asked do %>
-        <span class="text-sm font-medium text-[var(--session-muted)]">
-          Warmup?
-        </span>
-        <div class="flex gap-2">
-          <button
-            type="button"
-            id="warmup-yes-btn"
-            class="min-w-24 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-6 py-4 text-sm font-medium text-[var(--session-ink)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70"
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            id="warmup-skip-btn"
-            class="min-w-24 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-6 py-4 text-sm font-medium text-[var(--session-muted)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70 hover:text-[var(--session-ink)]"
-          >
-            Skip
-          </button>
-        </div>
-      <% else %>
-        <span class="text-sm font-medium text-[var(--session-muted)]">
-          How do you feel?
-        </span>
-        <div class="flex gap-2">
-          <%= for {icon, label, value} <- [{"hero-face-frown", "Tired", -1}, {"hero-minus-circle", "OK", 0}, {"hero-bolt", "Hyped", 1}] do %>
-            <button
-              type="button"
-              phx-click="session_started"
-              phx-value-mood={value}
-              class="min-w-20 rounded-xl border border-[var(--session-border)] bg-[var(--session-bg)]/55 px-4 py-4 text-sm font-medium text-[var(--session-ink)] transition active:scale-[0.98] hover:bg-[var(--session-track)]/70"
-            >
-              {label}
-            </button>
-          <% end %>
-        </div>
-      <% end %>
     </div>
     """
   end
