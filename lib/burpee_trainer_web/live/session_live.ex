@@ -577,10 +577,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
               />
             <% end %>
 
-            <.session_runner
-              phase={@phase}
-              summary={@summary}
-            />
+            <.session_runner summary={@summary} />
         <% end %>
       </div>
     </Layouts.app>
@@ -642,7 +639,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
-  attr(:phase, :atom, required: true)
   attr(:summary, :map, required: true)
 
   defp session_runner(assigns) do
