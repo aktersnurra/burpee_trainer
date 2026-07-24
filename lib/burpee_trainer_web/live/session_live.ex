@@ -620,14 +620,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
       </div>
 
       <button
-        id="camera-setup-start-btn"
-        type="button"
-        disabled={@setup_state != :ready}
-        class="pointer-events-auto row-start-3 min-h-14 w-full max-w-[430px] place-self-center rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition enabled:hover:opacity-90 enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
-      >
-        Start tracked session
-      </button>
-      <button
         id="camera-setup-timed-btn"
         type="button"
         class="pointer-events-auto row-start-3 mt-20 place-self-center px-5 py-3 text-sm text-[var(--session-muted)] underline decoration-[var(--session-track)] underline-offset-4"

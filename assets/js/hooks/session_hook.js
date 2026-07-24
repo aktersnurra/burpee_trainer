@@ -57,6 +57,7 @@ const SessionHook = {
 		this.tracking = initialTrackingObserver();
 		this.trackerReadiness = "not_ready";
 		this.trackingCompletion = null;
+		this.armedPoseStep = null;
 		this.onPoseTrackerRep = (event) => this.observePoseRep(event.detail || {});
 		this.onPoseTrackerStatus = (event) =>
 			this.updatePoseStatus(event.detail || {});
@@ -72,6 +73,16 @@ const SessionHook = {
 		this.el.addEventListener(
 			"pose-tracker:readiness",
 			this.onPoseTrackerReadiness,
+		);
+		this.onPoseTrackerGestureConfirm = () => this.handlePoseGestureConfirm();
+		this.onPoseTrackerGestureTimeout = () => this.handlePoseGestureTimeout();
+		this.el.addEventListener(
+			"pose-tracker:gesture-confirm",
+			this.onPoseTrackerGestureConfirm,
+		);
+		this.el.addEventListener(
+			"pose-tracker:gesture-timeout",
+			this.onPoseTrackerGestureTimeout,
 		);
 
 		this.onVisibility = () => {
@@ -126,7 +137,6 @@ const SessionHook = {
 			const workoutReady = e.target.closest("#workout-ready-btn");
 			const captureTracked = e.target.closest("#capture-tracked-btn");
 			const captureTimed = e.target.closest("#capture-timed-btn");
-			const cameraSetupStart = e.target.closest("#camera-setup-start-btn");
 			const cameraSetupTimed = e.target.closest("#camera-setup-timed-btn");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
@@ -136,7 +146,6 @@ const SessionHook = {
 			if (workoutReady) this.onWorkoutReady();
 			if (captureTracked) this.onCaptureTracked();
 			if (captureTimed) this.onCaptureTimed();
-			if (cameraSetupStart) this.onCameraSetupStart();
 			if (cameraSetupTimed) this.onCameraSetupTimed();
 			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
@@ -175,6 +184,14 @@ const SessionHook = {
 		this.el.removeEventListener(
 			"pose-tracker:readiness",
 			this.onPoseTrackerReadiness,
+		);
+		this.el.removeEventListener(
+			"pose-tracker:gesture-confirm",
+			this.onPoseTrackerGestureConfirm,
+		);
+		this.el.removeEventListener(
+			"pose-tracker:gesture-timeout",
+			this.onPoseTrackerGestureTimeout,
 		);
 		this.wakeLock.release();
 		this.audio.close();
@@ -346,23 +363,29 @@ const SessionHook = {
 		const buttons = document.createElement("div");
 		buttons.className = "grid w-full max-w-lg grid-cols-1 gap-3 sm:grid-cols-2";
 
+		const hiddenClass = this.flow.captureMode === "tracked" ? " hidden" : "";
+
 		const yes = document.createElement("button");
 		yes.type = "button";
 		yes.id = "warmup-yes-btn";
 		yes.className =
-			"min-h-14 w-full rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]";
+			"min-h-14 w-full rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-6 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]" +
+			hiddenClass;
 		yes.textContent = "Warm up";
 
 		const skip = document.createElement("button");
 		skip.type = "button";
 		skip.id = "warmup-skip-btn";
 		skip.className =
-			"min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-6 py-4 text-base font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-[0.98]";
+			"min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-6 py-4 text-base font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-[0.98]" +
+			hiddenClass;
 		skip.textContent = "Skip warmup";
 
 		buttons.append(yes, skip);
 		overlay.append(title, description, buttons);
 		parent.appendChild(overlay);
+
+		this.armPoseTrackerStep("warmup", 15);
 	},
 
 	showCapturePrompt() {
@@ -433,6 +456,8 @@ const SessionHook = {
 
 		overlay.className = "hidden";
 		overlay.replaceChildren();
+
+		this.armPoseTrackerStep("camera_setup", 15);
 	},
 
 	showWarmupDonePrompt() {
@@ -485,11 +510,14 @@ const SessionHook = {
 		button.type = "button";
 		button.id = "workout-ready-btn";
 		button.className =
-			"mt-2 min-h-14 w-full max-w-lg rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]";
+			"mt-2 min-h-14 w-full max-w-lg rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-8 py-4 text-base font-medium text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.98]" +
+			(this.flow.captureMode === "tracked" ? " hidden" : "");
 		button.textContent = "Start workout";
 
 		overlay.append(meta, title, button);
 		parent.appendChild(overlay);
+
+		this.armPoseTrackerStep("workout_start", 30);
 	},
 
 	onWarmupYes() {
@@ -506,7 +534,26 @@ const SessionHook = {
 	},
 
 	onWorkoutReady() {
+		this.disarmPoseTrackerStep();
 		this.dispatchFlow({ type: "WORKOUT_READY" });
+	},
+
+	handlePoseGestureConfirm() {
+		switch (this.armedPoseStep) {
+			case "camera_setup":
+				this.onCameraSetupStart();
+				break;
+			case "warmup":
+				this.onWarmupYes();
+				break;
+			case "workout_start":
+				this.onWorkoutReady();
+				break;
+		}
+	},
+
+	handlePoseGestureTimeout() {
+		if (this.armedPoseStep === "warmup") this.onWarmupSkip();
 	},
 
 	onCaptureTracked() {
@@ -819,6 +866,22 @@ const SessionHook = {
 		this.el
 			.querySelector("#pose-tracker")
 			?.dispatchEvent(new CustomEvent("pose-tracker:reset"));
+	},
+
+	armPoseTrackerStep(step, holdFramesRequired) {
+		this.armedPoseStep = step;
+		if (this.flow.captureMode !== "tracked") return;
+		this.el
+			.querySelector("#pose-tracker")
+			?.dispatchEvent(
+				new CustomEvent("pose-tracker:arm", {
+					detail: { step, holdFramesRequired },
+				}),
+			);
+	},
+
+	disarmPoseTrackerStep() {
+		this.armPoseTrackerStep(null, 0);
 	},
 
 	observePoseRep({ index }) {

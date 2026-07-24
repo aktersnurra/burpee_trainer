@@ -853,6 +853,186 @@ test("camera setup timer fallback returns to the ordinary timed warmup flow", ()
 	assert.ok(ctx.el.querySelector("#warmup-skip-btn"));
 });
 
+test("camera setup prompt arms the pose tracker for the camera_setup step", () => {
+	const ctx = buildHarness({ poseTrackerReady: false });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const armedEvents = [];
+	tracker.addEventListener("pose-tracker:arm", (event) => {
+		armedEvents.push(event.detail);
+	});
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+
+	assert.deepEqual(armedEvents.at(-1), {
+		step: "camera_setup",
+		holdFramesRequired: 15,
+	});
+});
+
+test("gesture-confirm on the pose tracker triggers camera setup start", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const { renderer, audio, wakeLock } = ctx;
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.renderer = renderer;
+	ctx.audio = audio;
+	ctx.wakeLock = wakeLock;
+	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:gesture-confirm", { bubbles: true }),
+	);
+
+	assert.equal(wrapper.style.visibility, "hidden");
+	assert.deepEqual(ctx.events.at(-1), {
+		name: "camera_setup_started",
+		payload: {},
+	});
+});
+
+test("warmup prompt arms the warmup step and hides tap buttons for tracked mode", () => {
+	const ctx = buildHarness({ poseTrackerReady: false });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const armedEvents = [];
+	tracker.addEventListener("pose-tracker:arm", (event) => {
+		armedEvents.push(event.detail);
+	});
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+
+	assert.deepEqual(armedEvents.at(-1), {
+		step: "warmup",
+		holdFramesRequired: 15,
+	});
+	assert.match(
+		ctx.el.querySelector("#warmup-yes-btn").className,
+		/\bhidden\b/,
+	);
+	assert.match(
+		ctx.el.querySelector("#warmup-skip-btn").className,
+		/\bhidden\b/,
+	);
+});
+
+test("warmup prompt leaves tap buttons visible for timer mode", () => {
+	const ctx = buildHarness();
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TIMED" });
+
+	assert.doesNotMatch(
+		ctx.el.querySelector("#warmup-yes-btn").className,
+		/\bhidden\b/,
+	);
+});
+
+test("gesture-confirm on the pose tracker during warmup answers yes", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const { renderer, audio, wakeLock } = ctx;
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.renderer = renderer;
+	ctx.audio = audio;
+	ctx.wakeLock = wakeLock;
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:gesture-confirm", { bubbles: true }),
+	);
+
+	assert.equal(ctx.flow.mode, "warmup_countdown");
+});
+
+test("gesture-timeout on the pose tracker during warmup skips warmup", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const { renderer, audio, wakeLock } = ctx;
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.renderer = renderer;
+	ctx.audio = audio;
+	ctx.wakeLock = wakeLock;
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:gesture-timeout", { bubbles: true }),
+	);
+
+	assert.equal(ctx.flow.mode, "workout_ready_prompt");
+});
+
+test("start-workout prompt arms the workout_start step with a longer hold and hides the tap button for tracked mode", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const armedEvents = [];
+	tracker.addEventListener("pose-tracker:arm", (event) => {
+		armedEvents.push(event.detail);
+	});
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+	ctx.dispatchFlow({ type: "WARMUP_SKIP" });
+
+	assert.deepEqual(armedEvents.at(-1), {
+		step: "workout_start",
+		holdFramesRequired: 30,
+	});
+	assert.match(
+		ctx.el.querySelector("#workout-ready-btn").className,
+		/\bhidden\b/,
+	);
+});
+
+test("gesture-confirm on the pose tracker during start-workout prompt starts the workout", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const { renderer, audio, wakeLock } = ctx;
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.renderer = renderer;
+	ctx.audio = audio;
+	ctx.wakeLock = wakeLock;
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+	ctx.dispatchFlow({ type: "WARMUP_SKIP" });
+
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:gesture-confirm", { bubbles: true }),
+	);
+
+	assert.equal(ctx.flow.mode, "workout_countdown");
+});
+
+test("starting the workout disarms the pose tracker so mid-workout arm-raises are ignored", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const armedEvents = [];
+	tracker.addEventListener("pose-tracker:arm", (event) => {
+		armedEvents.push(event.detail);
+	});
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+	ctx.dispatchFlow({ type: "CAMERA_SETUP_READY" });
+	ctx.dispatchFlow({ type: "WARMUP_SKIP" });
+
+	ctx.onWorkoutReady();
+
+	assert.deepEqual(armedEvents.at(-1), { step: null, holdFramesRequired: 0 });
+});
+
 test("armed camera-setup step dispatches gesture-confirm when wrist streak completes", async () => {
 	const raisedFrames = Array.from({ length: 3 }, (_, index) =>
 		trackerFrame(trackerSample({ tMs: index * 100, leftWristY: 0.1 })),

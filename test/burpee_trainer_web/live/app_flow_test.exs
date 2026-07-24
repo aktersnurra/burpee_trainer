@@ -306,18 +306,15 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     assert has_element?(
              session,
-             "#camera-setup-panel.pointer-events-auto #camera-setup-start-btn"
+             "#camera-setup-panel.pointer-events-auto"
            )
 
-    assert has_element?(session, "#camera-setup-panel #camera-setup-start-btn[disabled]")
     assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-preview")
     assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-canvas")
 
     render_hook(session, "tracker_initialized", %{})
-    assert has_element?(session, "#camera-setup-start-btn[disabled]")
 
     render_hook(session, "tracker_readiness", %{"state" => "ready"})
-    refute has_element?(session, "#camera-setup-start-btn[disabled]")
     assert has_element?(session, "#camera-setup-timed-btn")
 
     render_hook(session, "camera_setup_started", %{})
@@ -476,10 +473,8 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     render_hook(session, "camera_setup_started", %{})
 
     assert has_element?(session, "#camera-setup-panel")
-    assert has_element?(session, "#camera-setup-start-btn[disabled]")
 
     render_hook(session, "tracker_readiness", %{"state" => "optimal"})
-    refute has_element?(session, "#camera-setup-start-btn[disabled]")
 
     render_hook(session, "camera_setup_started", %{})
     refute has_element?(session, "#camera-setup-panel")
