@@ -575,9 +575,6 @@ const SessionHook = {
 	},
 
 	onCameraSetupStart() {
-		const tracker = this.el.querySelector("#pose-tracker");
-		if (tracker?.dataset?.poseTrackerReady !== "true") return;
-
 		const cameraVisibility = this.el.querySelector("#pose-tracker-visibility");
 		if (cameraVisibility) {
 			cameraVisibility.style.visibility = "hidden";

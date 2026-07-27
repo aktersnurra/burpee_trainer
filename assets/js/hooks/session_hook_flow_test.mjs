@@ -811,17 +811,6 @@ test("tracked camera prompt leaves preview rendering to PoseTracker", () => {
 	assert.match(ctx.el.querySelector("#start-overlay").className, /\bhidden\b/);
 });
 
-test("camera confirmation is ignored until stable pose readiness", () => {
-	const ctx = buildHarness();
-	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
-
-	ctx.onCameraSetupStart();
-
-	assert.equal(wrapper.style.visibility, undefined);
-	assert.equal(wrapper.attributes.get("aria-hidden"), undefined);
-	assert.deepEqual(ctx.events, []);
-});
-
 test("camera confirmation hides the patchable wrapper without unmounting PoseTracker", () => {
 	const ctx = buildHarness({ poseTrackerReady: true });
 	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
@@ -833,6 +822,22 @@ test("camera confirmation hides the patchable wrapper without unmounting PoseTra
 	assert.equal(wrapper.attributes.get("aria-hidden"), "true");
 	assert.equal(ctx.el.querySelector("#pose-tracker"), tracker);
 	assert.equal(tracker.removed, undefined);
+	assert.deepEqual(ctx.events, [{ name: "camera_setup_started", payload: {} }]);
+});
+
+test("camera confirmation still proceeds when readiness dips at the moment of confirm", () => {
+	// Regression test: a raised-hand gesture can itself transiently fail the
+	// stricter core-pose readiness check (shoulders/hips/knees visibility) in
+	// the same frame the gesture streak is satisfied. onCameraSetupStart must
+	// not re-check readiness at confirm time -- the gesture/auto-timer already
+	// only fire once the system decided readiness was established.
+	const ctx = buildHarness({ poseTrackerReady: false });
+	const wrapper = ctx.el.querySelector("#pose-tracker-visibility");
+
+	ctx.onCameraSetupStart();
+
+	assert.equal(wrapper.style.visibility, "hidden");
+	assert.equal(wrapper.attributes.get("aria-hidden"), "true");
 	assert.deepEqual(ctx.events, [{ name: "camera_setup_started", payload: {} }]);
 });
 
@@ -1101,11 +1106,17 @@ test("armed camera-setup step dispatches gesture-confirm when wrist streak compl
 	harness.poseTracker.destroyed();
 });
 
-test("camera setup auto-timer confirms without a gesture", async () => {
-	const notRaisedFrames = Array.from({ length: 2 }, (_, index) =>
-		trackerFrame(trackerSample({ tMs: index * 100 })),
+test("camera setup auto-timer does not start until readiness is actually achieved", async () => {
+	// Regression test: arming happens the instant the user picks tracked
+	// mode, well before the pose network has ever seen a stable person in
+	// frame. The auto-confirm timer must not start ticking until readiness
+	// genuinely becomes ready/optimal -- otherwise camera setup silently
+	// auto-confirms ~1.5s after arming regardless of whether anyone is even
+	// in the picture.
+	const notReadyFrames = Array.from({ length: 3 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 }), 0),
 	);
-	const harness = buildPoseTrackerHarness(notRaisedFrames);
+	const harness = buildPoseTrackerHarness(notReadyFrames);
 
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
@@ -1114,9 +1125,34 @@ test("camera setup auto-timer confirms without a gesture", async () => {
 	);
 
 	await harness.mount();
-	await harness.runUntilConsumed(2);
+	await harness.runUntilConsumed(3);
 
+	assert.equal(harness.scheduledTimeouts.size, 0);
+	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
+
+	harness.poseTracker.destroyed();
+});
+
+test("camera setup auto-timer starts once readiness becomes ready while armed", async () => {
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const harness = buildPoseTrackerHarness(readyFrames);
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:arm", {
+			detail: { step: "camera_setup", holdFramesRequired: 15 },
+		}),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(7);
+	assert.equal(harness.scheduledTimeouts.size, 0);
+
+	await harness.runUntilConsumed(8);
+	assert.equal(harness.tracker.dataset.poseTrackerReady, "true");
 	assert.equal(harness.scheduledTimeouts.size, 1);
+
 	const [timeoutId] = harness.scheduledTimeouts.keys();
 	harness.fireTimeout(timeoutId);
 
@@ -1125,6 +1161,38 @@ test("camera setup auto-timer confirms without a gesture", async () => {
 			.filter(({ type }) => type === "pose-tracker:gesture-confirm")
 			.map(({ type }) => type),
 		["pose-tracker:gesture-confirm"],
+	);
+
+	harness.poseTracker.destroyed();
+});
+
+test("camera setup auto-timer stops if readiness is lost before it fires", async () => {
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const lostFrames = Array.from({ length: 3 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: 800 + index * 100 }), 0),
+	);
+	const harness = buildPoseTrackerHarness([...readyFrames, ...lostFrames]);
+
+	harness.tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:arm", {
+			detail: { step: "camera_setup", holdFramesRequired: 15 },
+		}),
+	);
+
+	await harness.mount();
+	await harness.runUntilConsumed(8);
+	assert.equal(harness.scheduledTimeouts.size, 1);
+
+	await harness.runUntilConsumed(11);
+	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
+	assert.equal(harness.scheduledTimeouts.size, 0);
+	assert.deepEqual(
+		harness.localEvents.filter(
+			({ type }) => type === "pose-tracker:gesture-confirm",
+		),
+		[],
 	);
 
 	harness.poseTracker.destroyed();
@@ -1160,10 +1228,15 @@ test("armed warmup step dispatches gesture-timeout when no gesture arrives", asy
 });
 
 test("gesture confirm during camera-setup arm cancels the pending auto-timer", async () => {
-	const raisedFrames = Array.from({ length: 2 }, (_, index) =>
-		trackerFrame(trackerSample({ tMs: index * 100, leftWristY: 0.1 })),
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
-	const harness = buildPoseTrackerHarness(raisedFrames);
+	const raisedFrames = Array.from({ length: 2 }, (_, index) =>
+		trackerFrame(
+			trackerSample({ tMs: 800 + index * 100, leftWristY: 0.1 }),
+		),
+	);
+	const harness = buildPoseTrackerHarness([...readyFrames, ...raisedFrames]);
 
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
@@ -1172,7 +1245,10 @@ test("gesture confirm during camera-setup arm cancels the pending auto-timer", a
 	);
 
 	await harness.mount();
-	await harness.runUntilConsumed(2);
+	await harness.runUntilConsumed(8);
+	assert.equal(harness.scheduledTimeouts.size, 1);
+
+	await harness.runUntilConsumed(10);
 
 	assert.deepEqual(
 		harness.localEvents

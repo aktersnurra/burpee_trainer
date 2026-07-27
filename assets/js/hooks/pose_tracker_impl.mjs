@@ -121,6 +121,20 @@ export function createPoseTracker(hook, runtime = {}) {
 			noGestureTimeoutId = null;
 		}
 	};
+	const startCameraSetupAutoConfirmTimer = () => {
+		if (autoConfirmTimeoutId !== null) return;
+		autoConfirmTimeoutId = scheduleTimeout(() => {
+			autoConfirmTimeoutId = null;
+			dispatchLocal("pose-tracker:gesture-confirm", {});
+		}, CAMERA_SETUP_AUTO_CONFIRM_MS);
+	};
+
+	const stopCameraSetupAutoConfirmTimer = () => {
+		if (autoConfirmTimeoutId === null) return;
+		clearScheduledTimeout(autoConfirmTimeoutId);
+		autoConfirmTimeoutId = null;
+	};
+
 	const armStep = (event) => {
 		clearArmTimers();
 		startGesture = initialStartGesture();
@@ -129,10 +143,9 @@ export function createPoseTracker(hook, runtime = {}) {
 		armedHoldFramesRequired = detail.holdFramesRequired || 0;
 
 		if (armedStep === "camera_setup") {
-			autoConfirmTimeoutId = scheduleTimeout(() => {
-				autoConfirmTimeoutId = null;
-				dispatchLocal("pose-tracker:gesture-confirm", {});
-			}, CAMERA_SETUP_AUTO_CONFIRM_MS);
+			const currentlyReady =
+				lastReadinessStatus === "ready" || lastReadinessStatus === "optimal";
+			if (currentlyReady) startCameraSetupAutoConfirmTimer();
 		}
 
 		if (armedStep === "warmup") {
@@ -228,6 +241,11 @@ export function createPoseTracker(hook, runtime = {}) {
 				nextReadiness.status === "ready" || nextReadiness.status === "optimal";
 			if (ready) hook.el.dataset.poseTrackerReady = "true";
 			else delete hook.el.dataset.poseTrackerReady;
+
+			if (armedStep === "camera_setup") {
+				if (ready) startCameraSetupAutoConfirmTimer();
+				else stopCameraSetupAutoConfirmTimer();
+			}
 
 			const detail = { state: nextReadiness.status };
 			dispatchLocal("pose-tracker:readiness", detail);
