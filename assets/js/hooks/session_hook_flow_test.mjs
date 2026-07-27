@@ -870,6 +870,49 @@ test("camera setup prompt arms the pose tracker for the camera_setup step", () =
 	});
 });
 
+test("arming survives the pose tracker mounting after the prompt already showed", () => {
+	// Regression test: in production, #pose-tracker only enters the DOM after
+	// the server round-trip from choose_tracked re-renders capture_mode:
+	// :tracked. CAPTURE_TRACKED's showCameraSetupPrompt command runs
+	// synchronously and immediately, before that round-trip completes, so
+	// #pose-tracker does not exist yet when armPoseTrackerStep first fires.
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const { renderer, audio, wakeLock } = ctx;
+	ctx.handleEvent = () => {};
+	ctx.mounted();
+	ctx.renderer = renderer;
+	ctx.audio = audio;
+	ctx.wakeLock = wakeLock;
+	assert.equal(ctx.el.querySelector("#pose-tracker"), null);
+
+	ctx.dispatchFlow({ type: "SESSION_READY", workoutTimeline: [] });
+	ctx.dispatchFlow({ type: "CAPTURE_TRACKED" });
+
+	assert.equal(ctx.armedPoseStep, "camera_setup");
+
+	// Simulate the LiveView re-render mounting #pose-tracker, followed by
+	// PoseTracker announcing it has initialized.
+	const trackerVisibility = new FakeElement("div");
+	trackerVisibility.id = "pose-tracker-visibility";
+	const tracker = new FakeElement("div");
+	tracker.id = "pose-tracker";
+	trackerVisibility.append(tracker);
+	ctx.el.append(trackerVisibility);
+
+	const armedEvents = [];
+	tracker.addEventListener("pose-tracker:arm", (event) => {
+		armedEvents.push(event.detail);
+	});
+
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:initialized", { bubbles: true }),
+	);
+
+	assert.deepEqual(armedEvents, [
+		{ step: "camera_setup", holdFramesRequired: 15 },
+	]);
+});
+
 test("gesture-confirm on the pose tracker triggers camera setup start", () => {
 	const ctx = buildHarness({ poseTrackerReady: true });
 	const { renderer, audio, wakeLock } = ctx;

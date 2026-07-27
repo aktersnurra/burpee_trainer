@@ -173,6 +173,7 @@ export function createPoseTracker(hook, runtime = {}) {
 			if (!mounted) return;
 			startedAt = now();
 			hook.pushEvent("tracker_initialized", {});
+			dispatchLocal("pose-tracker:initialized", {});
 			loop();
 		} catch (error) {
 			delete hook.el.dataset.poseTrackerReady;

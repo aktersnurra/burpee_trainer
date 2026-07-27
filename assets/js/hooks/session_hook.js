@@ -58,6 +58,8 @@ const SessionHook = {
 		this.trackerReadiness = "not_ready";
 		this.trackingCompletion = null;
 		this.armedPoseStep = null;
+		this.armedPoseHoldFramesRequired = 0;
+		this.onPoseTrackerInitialized = () => this.reissuePendingArm();
 		this.onPoseTrackerRep = (event) => this.observePoseRep(event.detail || {});
 		this.onPoseTrackerStatus = (event) =>
 			this.updatePoseStatus(event.detail || {});
@@ -83,6 +85,10 @@ const SessionHook = {
 		this.el.addEventListener(
 			"pose-tracker:gesture-timeout",
 			this.onPoseTrackerGestureTimeout,
+		);
+		this.el.addEventListener(
+			"pose-tracker:initialized",
+			this.onPoseTrackerInitialized,
 		);
 
 		this.onVisibility = () => {
@@ -192,6 +198,10 @@ const SessionHook = {
 		this.el.removeEventListener(
 			"pose-tracker:gesture-timeout",
 			this.onPoseTrackerGestureTimeout,
+		);
+		this.el.removeEventListener(
+			"pose-tracker:initialized",
+			this.onPoseTrackerInitialized,
 		);
 		this.wakeLock.release();
 		this.audio.close();
@@ -870,6 +880,7 @@ const SessionHook = {
 
 	armPoseTrackerStep(step, holdFramesRequired) {
 		this.armedPoseStep = step;
+		this.armedPoseHoldFramesRequired = holdFramesRequired;
 		if (this.flow.captureMode !== "tracked") return;
 		this.el
 			.querySelector("#pose-tracker")
@@ -882,6 +893,20 @@ const SessionHook = {
 
 	disarmPoseTrackerStep() {
 		this.armPoseTrackerStep(null, 0);
+	},
+
+	reissuePendingArm() {
+		if (this.flow.captureMode !== "tracked" || !this.armedPoseStep) return;
+		this.el
+			.querySelector("#pose-tracker")
+			?.dispatchEvent(
+				new CustomEvent("pose-tracker:arm", {
+					detail: {
+						step: this.armedPoseStep,
+						holdFramesRequired: this.armedPoseHoldFramesRequired,
+					},
+				}),
+			);
 	},
 
 	observePoseRep({ index }) {
