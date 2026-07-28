@@ -24,6 +24,120 @@ export class SessionRenderer {
 		this.downCueActive = false;
 	}
 
+	renderFlowState(state) {
+		const visibleId = {
+			capture_choice: "session-capture-choice",
+			camera_starting: "session-camera-status",
+			camera_error: "session-camera-status",
+			camera_setup: "session-camera-setup",
+			warmup_choice: "session-warmup-choice",
+			warmup_running: "session-runner-client",
+			workout_ready: "session-workout-ready",
+			workout_running: "session-runner-client",
+			completion_review: "session-completion-review",
+		}[state.mode];
+
+		for (const panel of this.root.querySelectorAll("[data-session-panel]")) {
+			const visible = panel.id === visibleId;
+			panel.hidden = !visible;
+			panel.toggleAttribute("inert", !visible);
+		}
+
+		this.renderCameraStatus(state);
+		this.renderCameraSetup(state);
+		this.renderCaptureControls(state);
+		this.focusPanelHeading(visibleId);
+	}
+
+	renderCameraSetup(state) {
+		const arming = this.root.querySelector("#camera-setup-arming");
+		const ready = this.root.querySelector("#camera-setup-ready");
+		const cameraReady = ["ready", "optimal"].includes(state.camera?.readiness);
+
+		if (arming) {
+			arming.hidden = cameraReady;
+			arming.toggleAttribute("inert", cameraReady);
+		}
+		if (ready) {
+			ready.hidden = !cameraReady;
+			ready.toggleAttribute("inert", !cameraReady);
+		}
+	}
+
+	renderCameraStatus(state) {
+		const starting = this.root.querySelector("#camera-status-starting");
+		const error = this.root.querySelector("#camera-status-error");
+		const failed = state.mode === "camera_error";
+		if (starting) {
+			starting.hidden = failed;
+			starting.toggleAttribute("inert", failed);
+		}
+		if (error) {
+			error.hidden = !failed;
+			error.toggleAttribute("inert", !failed);
+		}
+	}
+
+	renderCaptureControls(state) {
+		const manual = state.captureMode === "no_camera";
+		const manualWarmup = this.root.querySelector("#warmup-manual-controls");
+		const trackedWarmup = this.root.querySelector(
+			"#warmup-tracked-instruction",
+		);
+		const warmupCountdown = this.root.querySelector("#warmup-skip-countdown");
+		const manualStart = this.root.querySelector("#workout-ready-btn");
+		const trackedStart = this.root.querySelector("#workout-ready-instruction");
+		const cameraEscape = this.root.querySelector("#workout-ready-continue");
+
+		for (const element of [manualWarmup, manualStart]) {
+			if (!element) continue;
+			element.hidden = !manual;
+			element.toggleAttribute("inert", !manual);
+		}
+		for (const element of [
+			trackedWarmup,
+			warmupCountdown,
+			trackedStart,
+			cameraEscape,
+		]) {
+			if (!element) continue;
+			element.hidden = manual;
+			element.toggleAttribute("inert", manual);
+		}
+	}
+
+	focusPanelHeading(panelId) {
+		if (!panelId) return;
+		const headingIds = {
+			"session-capture-choice": "session-capture-choice-heading",
+			"session-camera-status": "camera-status-heading",
+			"session-camera-setup": "camera-setup-heading",
+			"session-warmup-choice": "session-warmup-heading",
+			"session-workout-ready": "session-workout-ready-heading",
+			"session-runner-client": "session-runner-heading",
+			"session-completion-review": "session-completion-heading",
+		};
+		this.root.querySelector(`#${headingIds[panelId]}`)?.focus?.();
+	}
+
+	renderCompletion(completion) {
+		if (!completion) return;
+		const actualReps = this.root.querySelector("#session-actual-reps");
+		const plannedReps = this.root.querySelector("#session-planned-reps");
+		const duration = this.root.querySelector("#session-actual-duration");
+		const repsInput = this.root.querySelector("#completion-reps-input");
+		const durationInput = this.root.querySelector("#completion-duration-input");
+		if (actualReps)
+			actualReps.textContent = String(completion.burpeeCountActual);
+		if (plannedReps)
+			plannedReps.textContent = String(completion.burpeeCountPlanned);
+		if (duration)
+			duration.textContent = this.formatTime(completion.durationSecActual);
+		if (repsInput) repsInput.value = String(completion.burpeeCountActual);
+		if (durationInput)
+			durationInput.value = String(completion.durationSecActual);
+	}
+
 	renderTimer(timeLeftSec) {
 		const formattedTime = this.formatTime(timeLeftSec);
 		const accessibleTime = this.root.querySelector("#session-time-accessible");
@@ -83,24 +197,23 @@ export class SessionRenderer {
 		const target = this.root.querySelector("#ring-container");
 		const status = this.root.querySelector("#session-accessible-status");
 		const accessibleSetProgress = this.formatSetProgress(setProgress);
-		const statusText =
-			["work", "work_active"].includes(state)
-				? `${primaryCount} reps remaining`
-				: state === "work_recovery"
-					? `Recovery time remaining ${primaryCount}${
+		const statusText = ["work", "work_active"].includes(state)
+			? `${primaryCount} reps remaining`
+			: state === "work_recovery"
+				? `Recovery time remaining ${primaryCount}${
+						accessibleSetProgress
+							? `, set progress ${accessibleSetProgress}`
+							: ""
+					}`
+				: state === "rest"
+					? `Rest${
 							accessibleSetProgress
 								? `, set progress ${accessibleSetProgress}`
 								: ""
 						}`
-					: state === "rest"
-						? `Rest${
-								accessibleSetProgress
-									? `, set progress ${accessibleSetProgress}`
-									: ""
-							}`
-						: state === "rest_count_in"
-							? `Rest time remaining ${primaryCount}`
-							: "Workout starting";
+					: state === "rest_count_in"
+						? `Rest time remaining ${primaryCount}`
+						: "Workout starting";
 
 		if (target) {
 			target.setAttribute(
