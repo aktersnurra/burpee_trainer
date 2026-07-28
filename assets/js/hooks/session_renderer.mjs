@@ -127,6 +127,7 @@ export class SessionRenderer {
 		const duration = this.root.querySelector("#session-actual-duration");
 		const repsInput = this.root.querySelector("#completion-reps-input");
 		const durationInput = this.root.querySelector("#completion-duration-input");
+		const noteInput = this.root.querySelector("#completion-note-input");
 		if (actualReps)
 			actualReps.textContent = String(completion.burpeeCountActual);
 		if (plannedReps)
@@ -136,6 +137,20 @@ export class SessionRenderer {
 		if (repsInput) repsInput.value = String(completion.burpeeCountActual);
 		if (durationInput)
 			durationInput.value = String(completion.durationSecActual);
+		if (noteInput) noteInput.value = completion.notePost || "";
+
+		for (const button of this.root.querySelectorAll("[data-mood]")) {
+			button.setAttribute(
+				"aria-pressed",
+				String(Number(button.dataset.mood) === completion.mood),
+			);
+		}
+		for (const button of this.root.querySelectorAll("[data-tag]")) {
+			button.setAttribute(
+				"aria-pressed",
+				String((completion.tags || []).includes(button.dataset.tag)),
+			);
+		}
 	}
 
 	renderTimer(timeLeftSec) {

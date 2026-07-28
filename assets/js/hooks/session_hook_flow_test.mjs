@@ -45,6 +45,10 @@ class FakeElement {
 		this.attributes.set(name, String(value));
 	}
 
+	getAttribute(name) {
+		return this.attributes.get(name) ?? null;
+	}
+
 	removeAttribute(name) {
 		this.attributes.delete(name);
 	}
@@ -113,9 +117,14 @@ class FakeElement {
 	querySelectorAll(selector) {
 		const matches = [];
 		const visit = (element) => {
+			const datasetKey = selector.match(/^\[data-([a-z-]+)\]$/)?.[1];
+			const camelKey = datasetKey?.replace(/-([a-z])/g, (_, letter) =>
+				letter.toUpperCase(),
+			);
 			if (
-				selector === "[data-session-panel]" &&
-				element.hasAttribute?.("data-session-panel")
+				(selector === "[data-session-panel]" &&
+					element.hasAttribute?.("data-session-panel")) ||
+				(camelKey && Object.hasOwn(element.dataset || {}, camelKey))
 			) {
 				matches.push(element);
 			}
@@ -250,6 +259,8 @@ function appendStablePanels(root) {
 		["session-count-source", "p", ""],
 		["completion-reps-input", "input", ""],
 		["completion-duration-input", "input", ""],
+		["completion-note-input", "textarea", ""],
+		["session-discard-btn", "button", "Discard"],
 	];
 	for (const [id, tag, text] of stableElements) {
 		const element = new FakeElement(tag);
@@ -258,6 +269,9 @@ function appendStablePanels(root) {
 		if (id === "camera-setup-ready") {
 			element.hidden = true;
 			element.setAttribute("inert", "");
+		}
+		if (id === "session-discard-btn") {
+			element.dataset.confirm = "Discard this session?";
 		}
 		const panel = id.startsWith("camera-choice")
 			? root.findById("session-capture-choice")
@@ -272,9 +286,21 @@ function appendStablePanels(root) {
 							: root.findById("session-completion-review");
 		panel.append(element);
 	}
+
+	const completion = root.findById("session-completion-review");
+	for (const mood of [-1, 0, 1]) {
+		const button = new FakeElement("button");
+		button.dataset.mood = String(mood);
+		completion.append(button);
+	}
+	for (const tag of ["tired", "great_energy", "bad_sleep"]) {
+		const button = new FakeElement("button");
+		button.dataset.tag = tag;
+		completion.append(button);
+	}
 }
 
-function buildHarness({ poseTrackerReady = false } = {}) {
+function buildHarness({ poseTrackerReady = false, openSessionStore } = {}) {
 	const events = [];
 	const renderedModels = [];
 	const downCueValues = [];
@@ -353,6 +379,7 @@ function buildHarness({ poseTrackerReady = false } = {}) {
 	return {
 		...SessionHook,
 		el: root,
+		...(openSessionStore ? { openSessionStore } : {}),
 		renderer,
 		audio,
 		wakeLock,
@@ -1130,6 +1157,335 @@ test("mount bootstraps the local flow synchronously from the root dataset", () =
 	assert.deepEqual(ctx.timeline, []);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
+});
+
+const flushHookPromises = () =>
+	new Promise((resolve) => setImmediate(resolve));
+
+function completionDraft(overrides = {}) {
+	return {
+		client_session_id: "original-client",
+		plan_id: "plan-1",
+		program_hash: "hash-1",
+		burpee_count_actual: 4,
+		burpee_count_planned: 5,
+		duration_sec_actual: 9,
+		duration_sec_planned: 10,
+		tracking: {
+			enabled: true,
+			trust: "finished",
+			detected_reps: 4,
+			detected_duration_sec: 9,
+			cadence_ms: [2_000, 4_000, 6_000, 8_000],
+		},
+		mood: 1,
+		tags: ["great_energy"],
+		note_post: "Strong finish",
+		...overrides,
+	};
+}
+
+test("trace chunks serialize without blocking the tracker event callback", async () => {
+	let resolveFirst;
+	const calls = [];
+	const store = {
+		loadDraft: async () => null,
+		appendTraceChunk(_clientSessionId, chunk) {
+			calls.push(chunk.chunk_index);
+			if (chunk.chunk_index === 0) {
+				return new Promise((resolve) => {
+					resolveFirst = resolve;
+				});
+			}
+			return Promise.resolve();
+		},
+	};
+	let openCalls = 0;
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => {
+			openCalls += 1;
+			return store;
+		},
+	});
+
+	const firstResult = ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:trace-chunk", {
+			detail: { chunk_index: 0, payload: { frame: 0 } },
+			bubbles: true,
+		}),
+	);
+	ctx.el.dispatchEvent(
+		new CustomEvent("pose-tracker:trace-chunk", {
+			detail: { chunk_index: 1, payload: { frame: 1 } },
+			bubbles: true,
+		}),
+	);
+	await flushHookPromises();
+
+	assert.equal(firstResult, true);
+	assert.equal(openCalls, 1);
+	assert.deepEqual(calls, [0]);
+	resolveFirst();
+	await ctx.traceWrite;
+	assert.deepEqual(calls, [0, 1]);
+	assert.equal(ctx.el.listenerCount("pose-tracker:trace-chunk"), 1);
+	ctx.destroyed();
+	assert.equal(ctx.el.listenerCount("pose-tracker:trace-chunk"), 0);
+});
+
+test("storage rejection leaves the local workout and completion operational", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => {
+			throw new Error("storage failed");
+		},
+	});
+
+	assert.equal(ctx.flow.mode, "capture_choice");
+	click(ctx, "camera-choice-no");
+	click(ctx, "warmup-skip-btn");
+	click(ctx, "workout-ready-btn");
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	await flushHookPromises();
+
+	assert.equal(ctx.traceRetentionAvailable, false);
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 5);
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("trace write rejection degrades retention without changing workout flow", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => null,
+			appendTraceChunk: async () => {
+				throw new Error("write failed");
+			},
+		}),
+	});
+	const flow = ctx.flow;
+	trackerEvent(ctx, "pose-tracker:trace-chunk", {
+		chunk_index: 0,
+		payload: { frame: 0 },
+	});
+	await ctx.traceWrite;
+
+	assert.equal(ctx.traceRetentionAvailable, false);
+	assert.equal(ctx.flow, flow);
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("completion display and every stable edit queue the full draft", async () => {
+	const saved = [];
+	const store = {
+		loadDraft: async () => null,
+		async saveDraft(draft) {
+			saved.push(structuredClone(draft));
+		},
+	};
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => store,
+	});
+	await ctx.draftRestore;
+	const renderCompletion = ctx.renderer.renderCompletion.bind(ctx.renderer);
+	ctx.renderer.renderCompletion = (completion) => {
+		assert.ok(ctx.inMemoryCompletionDraft, "draft must be queued before render");
+		renderCompletion(completion);
+	};
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
+	};
+	ctx.dispatchFlow({
+		type: "SESSION_DONE",
+		result: {
+			burpeeCountDone: 4,
+			durationSec: 9,
+			detectedReps: 4,
+			detectedDurationSec: 9,
+			cadenceMs: [2_000, 4_000, 6_000, 8_000],
+		},
+	});
+	await ctx.draftWrite;
+
+	assert.equal(saved.length, 1);
+	assert.deepEqual(
+		saved[0],
+		completionDraft({
+			client_session_id: "client-1",
+			tracking: {
+				enabled: true,
+				trust: "observing",
+				detected_reps: 4,
+				detected_duration_sec: 9,
+				cadence_ms: [2_000, 4_000, 6_000, 8_000],
+			},
+			mood: 0,
+			tags: [],
+			note_post: "",
+		}),
+	);
+
+	const reps = ctx.el.querySelector("#completion-reps-input");
+	reps.value = "5";
+	ctx.el.dispatchEvent({ type: "input", target: reps });
+	await ctx.draftWrite;
+	assert.equal(saved.at(-1).burpee_count_actual, 5);
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
+
+	const mood = ctx.el
+		.querySelectorAll("[data-mood]")
+		.find((button) => button.dataset.mood === "1");
+	ctx.el.dispatchEvent({ type: "click", target: mood });
+	await ctx.draftWrite;
+	assert.equal(saved.at(-1).mood, 1);
+
+	const tag = ctx.el
+		.querySelectorAll("[data-tag]")
+		.find((button) => button.dataset.tag === "great_energy");
+	ctx.el.dispatchEvent({ type: "click", target: tag });
+	await ctx.draftWrite;
+	assert.deepEqual(saved.at(-1).tags, ["great_energy"]);
+
+	const note = ctx.el.querySelector("#completion-note-input");
+	note.value = "Strong finish";
+	ctx.el.dispatchEvent({ type: "input", target: note });
+	await ctx.draftWrite;
+	assert.equal(saved.at(-1).note_post, "Strong finish");
+	assert.equal(saved.length, 5);
+	ctx.destroyed();
+});
+
+test("exact plan and program draft restores its original client UUID", async () => {
+	const store = { loadDraft: async () => completionDraft() };
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => store,
+	});
+	await ctx.draftRestore;
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.clientSessionId, "original-client");
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
+	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
+	assert.equal(ctx.el.querySelector("#completion-note-input").value, "Strong finish");
+	assert.equal(
+		ctx.el
+			.querySelectorAll("[data-mood]")
+			.find((button) => button.dataset.mood === "1")
+			.getAttribute("aria-pressed"),
+		"true",
+	);
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("mismatched plan or program draft is ignored", async () => {
+	for (const mismatch of [
+		{ plan_id: "other-plan" },
+		{ program_hash: "other-hash" },
+	]) {
+		const ctx = mountedFlowHarness({
+			poseTrackerReady: true,
+			openSessionStore: async () => ({
+				loadDraft: async () => completionDraft(mismatch),
+			}),
+		});
+		await ctx.draftRestore;
+		assert.equal(ctx.flow.mode, "capture_choice");
+		assert.equal(ctx.clientSessionId, "client-1");
+		ctx.destroyed();
+	}
+});
+
+test("confirmed discard clears local session data and emits zero server events", async () => {
+	const local = { draft: true, chunks: [0, 1], upload: true };
+	const store = {
+		loadDraft: async () => completionDraft(),
+		async discardSession(clientSessionId) {
+			assert.equal(clientSessionId, "original-client");
+			local.draft = false;
+			local.chunks = [];
+			local.upload = false;
+		},
+	};
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = {
+		confirm: () => true,
+		location: { assign: (path) => navigations.push(path) },
+	};
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => store,
+	});
+	const trackerStops = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:stop", () => trackerStops.push("stop"));
+
+	try {
+		await ctx.draftRestore;
+		click(ctx, "session-discard-btn");
+		await ctx.discardWrite;
+
+		assert.deepEqual(local, { draft: false, chunks: [], upload: false });
+		assert.deepEqual(trackerStops, ["stop"]);
+		assert.deepEqual(navigations, ["/workouts"]);
+		assert.deepEqual(ctx.events, []);
+		assert.equal(ctx.flow.mode, "discarded");
+		assert.equal(ctx.flow.completion, null);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("discard still navigates when storage is unavailable", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = {
+		confirm: () => true,
+		location: { assign: (path) => navigations.push(path) },
+	};
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => {
+			throw new Error("unavailable");
+		},
+	});
+	ctx.flow = {
+		...ctx.flow,
+		mode: "completion_review",
+		completion: {
+			burpeeCountActual: 1,
+			burpeeCountPlanned: 1,
+			durationSecActual: 2,
+			durationSecPlanned: 2,
+			trackingTrust: "disabled",
+			cadenceMs: [],
+		},
+	};
+
+	try {
+		click(ctx, "session-discard-btn");
+		await ctx.discardWrite;
+		assert.deepEqual(navigations, ["/workouts"]);
+		assert.equal(ctx.flow.completion, null);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
 });
 
 test("camera through completion review requires no server event", () => {

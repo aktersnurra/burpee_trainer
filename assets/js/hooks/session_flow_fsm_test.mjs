@@ -169,7 +169,40 @@ test("degraded camera completion keeps timer actuals and sanitizes detection ana
   assert.deepEqual(result.state.completion.cadenceMs, []);
 });
 
-test("completion edits only change timer-derived actual fields", () => {
+test("restored completion draft enters review without replaying workout", () => {
+  const restored = step(
+    step(initialFlowState(), {
+      type: "SESSION_READY",
+      workoutTimeline: [{ kind: "work", reps: 10, sec_per_rep: 5 }],
+    }).state,
+    {
+      type: "RESTORE_COMPLETION_DRAFT",
+      captureMode: "camera",
+      trackingReason: "restored",
+      completion: {
+        burpeeCountActual: 9,
+        burpeeCountPlanned: 10,
+        durationSecActual: 52,
+        durationSecPlanned: 50,
+        detectedReps: 9,
+        detectedDurationSec: 52,
+        trackingTrust: "finished",
+        cadenceMs: [5_000, 10_000],
+        mood: 1,
+        tags: ["great_energy"],
+        notePost: "Strong finish",
+      },
+    },
+  );
+
+  assert.equal(restored.state.mode, "completion_review");
+  assert.equal(restored.state.captureMode, "camera");
+  assert.equal(restored.state.trackingTrust, "finished");
+  assert.equal(restored.state.completion.notePost, "Strong finish");
+  assert.deepEqual(restored.commands, [{ type: "showCompletion", restored: true }]);
+});
+
+test("completion edits only change approved draft fields", () => {
   const completed = step(
     {
       ...initialFlowState(),
@@ -201,6 +234,9 @@ test("completion edits only change timer-derived actual fields", () => {
       detectedReps: 999,
       detectedDurationSec: 999,
       cadenceMs: [1],
+      mood: 1,
+      tags: ["great_energy"],
+      notePost: "Strong finish",
     },
   });
 
@@ -213,5 +249,8 @@ test("completion edits only change timer-derived actual fields", () => {
     detectedDurationSec: 49,
     trackingTrust: "observing",
     cadenceMs: [6100, 6200],
+    mood: 1,
+    tags: ["great_energy"],
+    notePost: "Strong finish",
   });
 });

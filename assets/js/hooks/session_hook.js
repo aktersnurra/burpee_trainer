@@ -18,6 +18,7 @@ import {
 	sessionProgressForElapsed,
 } from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
+import { openSessionStore } from "./session_store.mjs";
 import {
 	finishTrackingObserver,
 	initialTrackingObserver,
@@ -64,6 +65,14 @@ const SessionHook = {
 		this.warmupTimeoutId = null;
 		this.warmupTimeoutRafId = null;
 		this.trackerFinished = null;
+		this.traceRetentionAvailable = true;
+		this.store = null;
+		this.storeReady = null;
+		this.traceWrite = Promise.resolve();
+		this.draftWrite = Promise.resolve();
+		this.draftRestore = Promise.resolve();
+		this.inMemoryCompletionDraft = null;
+		this.discarding = false;
 		this.onPoseTrackerInitialized = () => this.reissuePendingArm();
 		this.onPoseTrackerStarted = () =>
 			this.dispatchFlow({ type: "CAMERA_STARTED" });
@@ -89,6 +98,9 @@ const SessionHook = {
 		this.onPoseTrackerFinished = (event) => {
 			this.trackerFinished = event.detail || null;
 		};
+		this.onPoseTrackerTraceChunk = (event) => {
+			this.queueTraceChunk(event.detail || {});
+		};
 		this.el.addEventListener("pose-tracker:started", this.onPoseTrackerStarted);
 		this.el.addEventListener(
 			"pose-tracker:start-failed",
@@ -113,6 +125,10 @@ const SessionHook = {
 		this.el.addEventListener(
 			"pose-tracker:finished",
 			this.onPoseTrackerFinished,
+		);
+		this.el.addEventListener(
+			"pose-tracker:trace-chunk",
+			this.onPoseTrackerTraceChunk,
 		);
 
 		this.onVisibility = () => {
@@ -164,6 +180,7 @@ const SessionHook = {
 		this.planId = this.el.dataset.planId;
 		this.programHash = this.el.dataset.programHash;
 		this.clientSessionId = this.el.dataset.clientSessionId;
+		this.initializeSessionStore();
 		this.renderer.resetReady();
 		this.dispatchFlow({
 			type: "SESSION_READY",
@@ -183,6 +200,9 @@ const SessionHook = {
 				e.target.closest("#workout-ready-continue");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
+			const discard = e.target.closest("#session-discard-btn");
+			const mood = e.target.dataset?.mood;
+			const tag = e.target.dataset?.tag;
 
 			if (warmupYes) this.onWarmupYes();
 			if (warmupSkip) this.onWarmupSkip();
@@ -195,7 +215,31 @@ const SessionHook = {
 			}
 			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
+			if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
+			if (tag !== undefined) this.toggleCompletionTag(tag);
+			if (
+				discard &&
+				window.confirm(
+					discard.dataset.confirm || "Discard this session?",
+				)
+			) {
+				this.discardSessionLocally();
+			}
 		});
+
+		this.onCompletionInput = (event) => {
+			const { id, value } = event.target;
+			if (id === "completion-reps-input") {
+				this.editCompletionNumber("burpeeCountActual", value);
+			}
+			if (id === "completion-duration-input") {
+				this.editCompletionNumber("durationSecActual", value);
+			}
+			if (id === "completion-note-input") {
+				this.editCompletion({ notePost: value });
+			}
+		};
+		this.el.addEventListener("input", this.onCompletionInput);
 
 		this.el.addEventListener("keydown", (e) => {
 			const ringContainer = e.target.closest("#ring-container");
@@ -205,6 +249,171 @@ const SessionHook = {
 			e.preventDefault();
 			if (!e.repeat) this.togglePause();
 		});
+	},
+
+	initializeSessionStore() {
+		const openStore = this.openSessionStore || openSessionStore;
+		let opened;
+		try {
+			opened = openStore();
+		} catch (error) {
+			opened = Promise.reject(error);
+		}
+
+		this.storeReady = Promise.resolve(opened)
+			.then((store) => {
+				this.store = store;
+				return store;
+			})
+			.catch(() => {
+				this.traceRetentionAvailable = false;
+				this.store = null;
+				return null;
+			});
+
+		this.draftRestore = this.storeReady
+			.then(async (store) => {
+				if (!store) return;
+				const draft = await store.loadDraft({
+					planId: this.planId,
+					programHash: this.programHash,
+				});
+				this.restoreCompletionDraft(draft);
+			})
+			.catch(() => {
+				this.traceRetentionAvailable = false;
+			});
+	},
+
+	queueTraceChunk(chunk) {
+		if (this.discarding) return;
+		const clientSessionId = this.clientSessionId;
+		this.traceWrite = this.traceWrite
+			.then(async () => {
+				const store = await this.storeReady;
+				if (store) await store.appendTraceChunk(clientSessionId, chunk);
+			})
+			.catch(() => {
+				this.traceRetentionAvailable = false;
+			});
+	},
+
+	completionDraft() {
+		const completion = this.flow.completion;
+		if (!completion) return null;
+		return {
+			client_session_id: this.clientSessionId,
+			plan_id: this.planId,
+			program_hash: this.programHash,
+			burpee_count_actual: completion.burpeeCountActual,
+			burpee_count_planned: completion.burpeeCountPlanned,
+			duration_sec_actual: completion.durationSecActual,
+			duration_sec_planned: completion.durationSecPlanned,
+			tracking: {
+				enabled: this.flow.captureMode === "camera",
+				trust: completion.trackingTrust,
+				detected_reps: completion.detectedReps,
+				detected_duration_sec: completion.detectedDurationSec,
+				cadence_ms: [...(completion.cadenceMs || [])],
+			},
+			mood: completion.mood ?? 0,
+			tags: [...(completion.tags || [])],
+			note_post: completion.notePost || "",
+		};
+	},
+
+	queueCompletionDraft() {
+		if (this.discarding) return;
+		const draft = this.completionDraft();
+		if (!draft) return;
+		this.inMemoryCompletionDraft = draft;
+		this.draftWrite = this.draftWrite
+			.then(async () => {
+				const store = await this.storeReady;
+				if (store) await store.saveDraft(draft);
+			})
+			.catch(() => {
+				this.traceRetentionAvailable = false;
+			});
+	},
+
+	restoreCompletionDraft(draft) {
+		if (
+			!draft ||
+			draft.plan_id !== this.planId ||
+			draft.program_hash !== this.programHash ||
+			!draft.client_session_id ||
+			this.flow.mode !== "capture_choice"
+		) {
+			return;
+		}
+
+		const tracking = draft.tracking || {};
+		const completion = {
+			burpeeCountActual: draft.burpee_count_actual ?? 0,
+			burpeeCountPlanned: draft.burpee_count_planned ?? 0,
+			durationSecActual: draft.duration_sec_actual ?? 0,
+			durationSecPlanned: draft.duration_sec_planned ?? 0,
+			detectedReps: tracking.detected_reps ?? null,
+			detectedDurationSec: tracking.detected_duration_sec ?? null,
+			trackingTrust: tracking.trust || "disabled",
+			cadenceMs: [...(tracking.cadence_ms || [])],
+			mood: draft.mood ?? 0,
+			tags: [...(draft.tags || [])],
+			notePost: draft.note_post || "",
+		};
+
+		this.clientSessionId = draft.client_session_id;
+		this.inMemoryCompletionDraft = draft;
+		this.dispatchFlow({
+			type: "RESTORE_COMPLETION_DRAFT",
+			captureMode: tracking.enabled ? "camera" : "no_camera",
+			trackingReason: tracking.reason || null,
+			completion,
+		});
+	},
+
+	editCompletionNumber(field, value) {
+		const number = Number(value);
+		if (!Number.isFinite(number) || number < 0) return;
+		this.editCompletion({ [field]: number });
+	},
+
+	editCompletion(changes) {
+		if (this.flow.mode !== "completion_review") return;
+		this.dispatchFlow({ type: "COMPLETION_EDITED", changes });
+		this.queueCompletionDraft();
+		this.renderer.renderCompletion(this.flow.completion);
+	},
+
+	toggleCompletionTag(tag) {
+		if (this.flow.mode !== "completion_review") return;
+		const current = this.flow.completion.tags || [];
+		const tags = current.includes(tag)
+			? current.filter((currentTag) => currentTag !== tag)
+			: [...current, tag];
+		this.editCompletion({ tags });
+	},
+
+	discardSessionLocally() {
+		if (this.flow.mode !== "completion_review" || this.discarding) return;
+		this.discarding = true;
+		const clientSessionId = this.clientSessionId;
+		this.cancelWarmupTimeout();
+		this.dispatchTrackerCommand("pose-tracker:stop");
+		this.quiesceCompletedWorkout();
+		this.inMemoryCompletionDraft = null;
+		this.dispatchFlow({ type: "DISCARD_LOCAL" });
+
+		this.discardWrite = Promise.all([this.traceWrite, this.draftWrite])
+			.then(async () => {
+				const store = await this.storeReady;
+				if (store) await store.discardSession(clientSessionId);
+			})
+			.catch(() => {
+				this.traceRetentionAvailable = false;
+			})
+			.then(() => window.location.assign("/workouts"));
 	},
 
 	canTogglePause() {
@@ -261,6 +470,11 @@ const SessionHook = {
 			"pose-tracker:finished",
 			this.onPoseTrackerFinished,
 		);
+		this.el.removeEventListener(
+			"pose-tracker:trace-chunk",
+			this.onPoseTrackerTraceChunk,
+		);
+		this.el.removeEventListener("input", this.onCompletionInput);
 		this.wakeLock.release();
 		this.audio.close();
 	},
@@ -309,6 +523,7 @@ const SessionHook = {
 			case "showCompletion":
 				this.cancelWarmupTimeout();
 				this.quiesceCompletedWorkout();
+				this.queueCompletionDraft();
 				this.renderer.renderCompletion(this.flow.completion);
 				this.renderer.renderFlowState(this.flow);
 				break;

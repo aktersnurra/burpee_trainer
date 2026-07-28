@@ -64,6 +64,9 @@ function completionFor(state, result) {
       : (result.detectedDurationSec ?? null),
     trackingTrust: state.trackingTrust,
     cadenceMs: trackingDegraded ? [] : result.cadenceMs || [],
+    mood: 0,
+    tags: [],
+    notePost: "",
   };
 }
 
@@ -420,20 +423,54 @@ export function flowTransition(state, event) {
       if (state.mode !== "workout_running") return unchanged(state);
       return finishWorkout(state, event.result);
 
+    case "RESTORE_COMPLETION_DRAFT":
+      if (state.mode !== "capture_choice" || !event.completion) {
+        return unchanged(state);
+      }
+      return moved(
+        state,
+        {
+          mode: "completion_review",
+          captureMode: event.captureMode || "no_camera",
+          trackingTrust: event.completion.trackingTrust || "disabled",
+          trackingReason: event.trackingReason || null,
+          workoutResult: {
+            burpeeCountDone: event.completion.burpeeCountActual || 0,
+            durationSec: event.completion.durationSecActual || 0,
+          },
+          completion: event.completion,
+          saveStatus: "idle",
+        },
+        [{ type: "showCompletion", restored: true }],
+      );
+
     case "COMPLETION_EDITED": {
       if (state.mode !== "completion_review") return unchanged(state);
       const changes = event.changes || {};
       const completion = { ...state.completion };
 
-      if (Object.hasOwn(changes, "burpeeCountActual")) {
-        completion.burpeeCountActual = changes.burpeeCountActual;
+      for (const field of [
+        "burpeeCountActual",
+        "durationSecActual",
+        "mood",
+        "notePost",
+      ]) {
+        if (Object.hasOwn(changes, field)) completion[field] = changes[field];
       }
-      if (Object.hasOwn(changes, "durationSecActual")) {
-        completion.durationSecActual = changes.durationSecActual;
+      if (Object.hasOwn(changes, "tags")) {
+        completion.tags = [...changes.tags];
       }
 
       return moved(state, { completion, saveStatus: "idle" });
     }
+
+    case "DISCARD_LOCAL":
+      if (state.mode !== "completion_review") return unchanged(state);
+      return moved(
+        state,
+        { mode: "discarded", completion: null, workoutResult: null },
+        [],
+      );
 
     case "SAVE_STARTED":
       if (state.mode !== "completion_review") return unchanged(state);
