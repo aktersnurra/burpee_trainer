@@ -51,15 +51,19 @@ function plannedDurationSec(timeline) {
 }
 
 function completionFor(state, result) {
+  const trackingDegraded = state.trackingTrust === "degraded";
+
   return {
     burpeeCountActual: result.burpeeCountDone || 0,
     burpeeCountPlanned: plannedBurpees(state.workoutTimeline),
     durationSecActual: result.durationSec || 0,
     durationSecPlanned: plannedDurationSec(state.workoutTimeline),
-    detectedReps: result.detectedReps ?? null,
-    detectedDurationSec: result.detectedDurationSec ?? null,
+    detectedReps: trackingDegraded ? null : (result.detectedReps ?? null),
+    detectedDurationSec: trackingDegraded
+      ? null
+      : (result.detectedDurationSec ?? null),
     trackingTrust: state.trackingTrust,
-    cadenceMs: result.cadenceMs || [],
+    cadenceMs: trackingDegraded ? [] : result.cadenceMs || [],
   };
 }
 
@@ -299,13 +303,13 @@ export function flowTransition(state, event) {
       const isReady = cameraReady(nextState);
 
       if (state.mode === "warmup_choice") {
-        if (!isReady) {
+        if (wasReady && !isReady) {
           return moved(nextState, {}, [
             { type: "pauseWarmupTimeout" },
             { type: "renderFlow" },
           ]);
         }
-        if (!wasReady) {
+        if (!wasReady && isReady) {
           return moved(nextState, {}, [
             { type: "resumeWarmupTimeout" },
             { type: "renderFlow" },
@@ -416,12 +420,20 @@ export function flowTransition(state, event) {
       if (state.mode !== "workout_running") return unchanged(state);
       return finishWorkout(state, event.result);
 
-    case "COMPLETION_EDITED":
+    case "COMPLETION_EDITED": {
       if (state.mode !== "completion_review") return unchanged(state);
-      return moved(state, {
-        completion: { ...state.completion, ...event.changes },
-        saveStatus: "idle",
-      });
+      const changes = event.changes || {};
+      const completion = { ...state.completion };
+
+      if (Object.hasOwn(changes, "burpeeCountActual")) {
+        completion.burpeeCountActual = changes.burpeeCountActual;
+      }
+      if (Object.hasOwn(changes, "durationSecActual")) {
+        completion.durationSecActual = changes.durationSecActual;
+      }
+
+      return moved(state, { completion, saveStatus: "idle" });
+    }
 
     case "SAVE_STARTED":
       if (state.mode !== "completion_review") return unchanged(state);

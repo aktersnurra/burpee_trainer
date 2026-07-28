@@ -94,7 +94,16 @@ test("warmup timeout pauses on readiness loss and ignores stale expiry", () => {
     { type: "renderFlow" },
   ]);
 
-  const stale = step(lost.state, { type: "WARMUP_TIMEOUT", step: "warmup" });
+  const stillLost = step(lost.state, {
+    type: "CAMERA_READINESS",
+    readiness: "not_ready",
+  });
+  assert.deepEqual(stillLost.commands, [{ type: "renderFlow" }]);
+
+  const stale = step(stillLost.state, {
+    type: "WARMUP_TIMEOUT",
+    step: "warmup",
+  });
   assert.equal(stale.state.mode, "warmup_choice");
   assert.deepEqual(stale.commands, []);
 });
@@ -128,4 +137,81 @@ test("session result enters local completion review", () => {
   assert.equal(result.state.mode, "completion_review");
   assert.equal(result.state.completion.burpeeCountActual, 12);
   assert.deepEqual(result.commands, [{ type: "showCompletion" }]);
+});
+
+test("degraded camera completion keeps timer actuals and sanitizes detection analytics", () => {
+  let state = {
+    ...initialFlowState(),
+    mode: "workout_running",
+    captureMode: "camera",
+    trackingTrust: "observing",
+  };
+  state = step(state, {
+    type: "TRACKING_DEGRADED",
+    reason: "detector_error",
+  }).state;
+
+  const result = step(state, {
+    type: "SESSION_DONE",
+    result: {
+      burpeeCountDone: 14,
+      durationSec: 91,
+      detectedReps: 13,
+      detectedDurationSec: 84,
+      cadenceMs: [6000, 6200],
+    },
+  });
+
+  assert.equal(result.state.completion.burpeeCountActual, 14);
+  assert.equal(result.state.completion.durationSecActual, 91);
+  assert.equal(result.state.completion.detectedReps, null);
+  assert.equal(result.state.completion.detectedDurationSec, null);
+  assert.deepEqual(result.state.completion.cadenceMs, []);
+});
+
+test("completion edits only change timer-derived actual fields", () => {
+  const completed = step(
+    {
+      ...initialFlowState(),
+      mode: "workout_running",
+      captureMode: "camera",
+      trackingTrust: "observing",
+      workoutTimeline: [{ kind: "work", reps: 10, sec_per_rep: 5 }],
+    },
+    {
+      type: "SESSION_DONE",
+      result: {
+        burpeeCountDone: 9,
+        durationSec: 52,
+        detectedReps: 8,
+        detectedDurationSec: 49,
+        cadenceMs: [6100, 6200],
+      },
+    },
+  ).state;
+
+  const result = step(completed, {
+    type: "COMPLETION_EDITED",
+    changes: {
+      burpeeCountActual: 10,
+      durationSecActual: 55,
+      burpeeCountPlanned: 999,
+      durationSecPlanned: 999,
+      trackingTrust: "degraded",
+      detectedReps: 999,
+      detectedDurationSec: 999,
+      cadenceMs: [1],
+    },
+  });
+
+  assert.deepEqual(result.state.completion, {
+    burpeeCountActual: 10,
+    burpeeCountPlanned: 10,
+    durationSecActual: 55,
+    durationSecPlanned: 50,
+    detectedReps: 8,
+    detectedDurationSec: 49,
+    trackingTrust: "observing",
+    cadenceMs: [6100, 6200],
+  });
 });
