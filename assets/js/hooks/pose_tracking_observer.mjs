@@ -28,6 +28,10 @@ export function updateTrackingReadiness(state, readiness) {
 }
 
 export function startTrackingObserver(state, readiness) {
+	if (state.mode === "degraded") {
+		return { ...state, readiness };
+	}
+
 	const next = {
 		...initialTrackingObserver(),
 		trackerStatus: state.trackerStatus,

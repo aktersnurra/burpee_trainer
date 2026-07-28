@@ -561,9 +561,15 @@ function trackerFrame(sample, poseCount = 1) {
 	};
 }
 
-function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
+function poseTrackerHarness({
+	frames = [],
+	holdDetector = false,
+	getUserMedia,
+	detectorThrowsAfterReady = false,
+} = {}) {
 	const pushes = [];
 	const localEvents = [];
+	const events = [];
 	const animationFrames = [];
 	const tracker = new FakeElement("div");
 	tracker.id = "pose-tracker";
@@ -588,13 +594,20 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 	tracker.append(video, canvas);
 
 	for (const type of [
+		"pose-tracker:started",
+		"pose-tracker:start-failed",
 		"pose-tracker:readiness",
 		"pose-tracker:rep",
 		"pose-tracker:status",
 		"pose-tracker:gesture-confirm",
 		"pose-tracker:gesture-timeout",
+		"pose-tracker:trace-chunk",
+		"pose-tracker:finished",
 	]) {
-		tracker.addEventListener(type, (event) => localEvents.push(event));
+		tracker.addEventListener(type, (event) => {
+			localEvents.push(event);
+			events.push({ type: event.type, detail: event.detail });
+		});
 	}
 
 	let nowMs = 0;
@@ -610,6 +623,9 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		disposed: false,
 		estimatePoses() {
 			if (holdDetector) return new Promise(() => {});
+			if (detectorThrowsAfterReady && consumedFrames === 8) {
+				throw new Error("detector exploded");
+			}
 			currentFrame = frames[consumedFrames];
 			if (!currentFrame) throw new Error("unexpected pose frame");
 			consumedFrames += 1;
@@ -621,6 +637,7 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 	};
 
 	let nextTimeoutId = 1;
+	let mediaRequests = 0;
 	const scheduledTimeouts = new Map();
 	const clearedTimeoutIds = [];
 
@@ -634,6 +651,8 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		createBlazePoseDetector: async () => detector,
 		mediaDevices: {
 			async getUserMedia() {
+				mediaRequests += 1;
+				if (getUserMedia) return getUserMedia();
 				return { getTracks: () => [stoppedTrack] };
 			},
 		},
@@ -666,8 +685,11 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 	return {
 		tracker,
 		pushes,
+		serverPushes: pushes,
 		localEvents,
+		events,
 		detector,
+		impl: poseTracker,
 		poseTracker,
 		scheduledTimeouts,
 		clearedTimeoutIds,
@@ -680,9 +702,28 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		get consumedFrames() {
 			return consumedFrames;
 		},
+		get mediaRequests() {
+			return mediaRequests;
+		},
+		flushPromises: settle,
 		async mount() {
 			await poseTracker.mounted();
+			tracker.dispatchEvent(new CustomEvent("pose-tracker:start"));
 			await settle();
+		},
+		async start() {
+			tracker.dispatchEvent(new CustomEvent("pose-tracker:start"));
+			await settle();
+		},
+		async startAndArm(step, holdFramesRequired) {
+			await poseTracker.mounted();
+			tracker.dispatchEvent(
+				new CustomEvent("pose-tracker:arm", {
+					detail: { step, holdFramesRequired },
+				}),
+			);
+			await this.start();
+			await this.runUntilConsumed(frames.length);
 		},
 		async runUntilConsumed(expectedCount) {
 			await settle();
@@ -699,6 +740,94 @@ function buildPoseTrackerHarness(frames = [], { holdDetector = false } = {}) {
 		},
 	};
 }
+
+function buildPoseTrackerHarness(frames = [], options = {}) {
+	return poseTrackerHarness({ ...options, frames });
+}
+
+test("pose tracker mount is lazy and emits local startup failure", async () => {
+	const harness = poseTrackerHarness({
+		getUserMedia: async () => {
+			throw new Error("permission denied");
+		},
+	});
+	await harness.impl.mounted();
+	assert.equal(harness.mediaRequests, 0);
+	harness.tracker.dispatchEvent(new CustomEvent("pose-tracker:start"));
+	await harness.flushPromises();
+	assert.equal(harness.mediaRequests, 1);
+	assert.deepEqual(harness.events.at(-1), {
+		type: "pose-tracker:start-failed",
+		detail: { reason: "permission denied" },
+	});
+	assert.deepEqual(harness.serverPushes, []);
+});
+
+test("pose tracker stop is safe while camera startup is pending", async () => {
+	let resolveCamera;
+	const track = {
+		stopped: false,
+		stop() {
+			this.stopped = true;
+		},
+	};
+	const harness = poseTrackerHarness({
+		getUserMedia: () =>
+			new Promise((resolve) => {
+				resolveCamera = resolve;
+			}),
+	});
+	await harness.impl.mounted();
+	harness.tracker.dispatchEvent(new CustomEvent("pose-tracker:start"));
+	await harness.flushPromises();
+	harness.tracker.dispatchEvent(new CustomEvent("pose-tracker:stop"));
+	resolveCamera({ getTracks: () => [track] });
+	await harness.flushPromises();
+	assert.equal(track.stopped, true);
+	assert.equal(
+		harness.events.some((event) => event.type === "pose-tracker:started"),
+		false,
+	);
+});
+
+test("camera gesture cannot confirm while readiness is not_ready", async () => {
+	const gestureFrames = Array.from({ length: 4 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100, leftWristY: 0.1 }), 0),
+	);
+	const harness = poseTrackerHarness({ frames: gestureFrames });
+	await harness.startAndArm("camera_setup", 3);
+	assert.equal(
+		harness.events.some(
+			(event) => event.type === "pose-tracker:gesture-confirm",
+		),
+		false,
+	);
+});
+
+test("detector exception emits one local lost event and clears readiness", async () => {
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const harness = poseTrackerHarness({
+		frames: readyFrames,
+		detectorThrowsAfterReady: true,
+	});
+	await harness.impl.mounted();
+	await harness.start();
+	await harness.runUntilConsumed(8);
+	await harness.runUntilConsumed(9).catch(() => {});
+	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
+	assert.deepEqual(
+		harness.events
+			.filter((event) => event.type === "pose-tracker:status")
+			.at(-1),
+		{
+			type: "pose-tracker:status",
+			detail: { state: "lost", reason: "detector_error" },
+		},
+	);
+	assert.deepEqual(harness.serverPushes, []);
+});
 
 test("session hook removes pose observer listeners on destroy", () => {
 	const ctx = buildHarness({ poseTrackerReady: true });
@@ -958,10 +1087,7 @@ test("warmup prompt arms the warmup step and hides tap buttons for tracked mode"
 		step: "warmup",
 		holdFramesRequired: 15,
 	});
-	assert.match(
-		ctx.el.querySelector("#warmup-yes-btn").className,
-		/\bhidden\b/,
-	);
+	assert.match(ctx.el.querySelector("#warmup-yes-btn").className, /\bhidden\b/);
 	assert.match(
 		ctx.el.querySelector("#warmup-skip-btn").className,
 		/\bhidden\b/,
@@ -1081,20 +1207,24 @@ test("starting the workout disarms the pose tracker so mid-workout arm-raises ar
 	assert.deepEqual(armedEvents.at(-1), { step: null, holdFramesRequired: 0 });
 });
 
-test("armed camera-setup step dispatches gesture-confirm when wrist streak completes", async () => {
-	const raisedFrames = Array.from({ length: 3 }, (_, index) =>
-		trackerFrame(trackerSample({ tMs: index * 100, leftWristY: 0.1 })),
+test("ready armed camera-setup dispatches one gesture-confirm when wrist streak completes", async () => {
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
-	const harness = buildPoseTrackerHarness(raisedFrames);
+	const raisedFrames = Array.from({ length: 3 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: 800 + index * 100, leftWristY: 0.1 })),
+	);
+	const harness = buildPoseTrackerHarness([...readyFrames, ...raisedFrames]);
 
+	await harness.impl.mounted();
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
 			detail: { step: "camera_setup", holdFramesRequired: 3 },
 		}),
 	);
 
-	await harness.mount();
-	await harness.runUntilConsumed(3);
+	await harness.start();
+	await harness.runUntilConsumed(11);
 
 	assert.deepEqual(
 		harness.localEvents
@@ -1118,13 +1248,14 @@ test("camera setup auto-timer does not start until readiness is actually achieve
 	);
 	const harness = buildPoseTrackerHarness(notReadyFrames);
 
+	await harness.impl.mounted();
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
 			detail: { step: "camera_setup", holdFramesRequired: 15 },
 		}),
 	);
 
-	await harness.mount();
+	await harness.start();
 	await harness.runUntilConsumed(3);
 
 	assert.equal(harness.scheduledTimeouts.size, 0);
@@ -1139,13 +1270,14 @@ test("camera setup auto-timer starts once readiness becomes ready while armed", 
 	);
 	const harness = buildPoseTrackerHarness(readyFrames);
 
+	await harness.impl.mounted();
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
 			detail: { step: "camera_setup", holdFramesRequired: 15 },
 		}),
 	);
 
-	await harness.mount();
+	await harness.start();
 	await harness.runUntilConsumed(7);
 	assert.equal(harness.scheduledTimeouts.size, 0);
 
@@ -1175,13 +1307,14 @@ test("camera setup auto-timer stops if readiness is lost before it fires", async
 	);
 	const harness = buildPoseTrackerHarness([...readyFrames, ...lostFrames]);
 
+	await harness.impl.mounted();
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
 			detail: { step: "camera_setup", holdFramesRequired: 15 },
 		}),
 	);
 
-	await harness.mount();
+	await harness.start();
 	await harness.runUntilConsumed(8);
 	assert.equal(harness.scheduledTimeouts.size, 1);
 
@@ -1198,30 +1331,28 @@ test("camera setup auto-timer stops if readiness is lost before it fires", async
 	harness.poseTracker.destroyed();
 });
 
-test("armed warmup step dispatches gesture-timeout when no gesture arrives", async () => {
+test("armed warmup step leaves no-gesture timeout to the session hook", async () => {
 	const notRaisedFrames = Array.from({ length: 2 }, (_, index) =>
 		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
 	const harness = buildPoseTrackerHarness(notRaisedFrames);
 
+	await harness.impl.mounted();
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
 			detail: { step: "warmup", holdFramesRequired: 15 },
 		}),
 	);
 
-	await harness.mount();
+	await harness.start();
 	await harness.runUntilConsumed(2);
 
-	assert.equal(harness.scheduledTimeouts.size, 1);
-	const [timeoutId] = harness.scheduledTimeouts.keys();
-	harness.fireTimeout(timeoutId);
-
+	assert.equal(harness.scheduledTimeouts.size, 0);
 	assert.deepEqual(
-		harness.localEvents
-			.filter(({ type }) => type === "pose-tracker:gesture-timeout")
-			.map(({ type }) => type),
-		["pose-tracker:gesture-timeout"],
+		harness.localEvents.filter(
+			({ type }) => type === "pose-tracker:gesture-timeout",
+		),
+		[],
 	);
 
 	harness.poseTracker.destroyed();
@@ -1232,19 +1363,18 @@ test("gesture confirm during camera-setup arm cancels the pending auto-timer", a
 		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
 	const raisedFrames = Array.from({ length: 2 }, (_, index) =>
-		trackerFrame(
-			trackerSample({ tMs: 800 + index * 100, leftWristY: 0.1 }),
-		),
+		trackerFrame(trackerSample({ tMs: 800 + index * 100, leftWristY: 0.1 })),
 	);
 	const harness = buildPoseTrackerHarness([...readyFrames, ...raisedFrames]);
 
+	await harness.impl.mounted();
 	harness.tracker.dispatchEvent(
 		new CustomEvent("pose-tracker:arm", {
 			detail: { step: "camera_setup", holdFramesRequired: 2 },
 		}),
 	);
 
-	await harness.mount();
+	await harness.start();
 	await harness.runUntilConsumed(8);
 	assert.equal(harness.scheduledTimeouts.size, 1);
 
@@ -1405,20 +1535,21 @@ test("tracker finish uses observer cadence instead of tracker-relative time", ()
 	);
 });
 
-test("detector initialization reports initialized without marking pose readiness", async () => {
+test("detector initialization emits local started without marking pose readiness", async () => {
 	const harness = buildPoseTrackerHarness([], { holdDetector: true });
 
 	await harness.mount();
 
 	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
 	assert.deepEqual(
-		harness.pushes.filter(({ name }) => name.startsWith("tracker_")),
-		[{ name: "tracker_initialized", payload: {} }],
+		harness.events.filter(({ type }) => type === "pose-tracker:started"),
+		[{ type: "pose-tracker:started", detail: {} }],
 	);
+	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
 });
 
-test("readiness transitions update the dataset and emit local and server events", async () => {
+test("readiness transitions update the dataset and stay local", async () => {
 	const readyFrames = Array.from({ length: 8 }, (_, index) =>
 		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
@@ -1442,13 +1573,7 @@ test("readiness transitions update the dataset and emit local and server events"
 			{ bubbles: true, detail: { state: "not_ready" } },
 		],
 	);
-	assert.deepEqual(
-		harness.pushes.filter(({ name }) => name === "tracker_readiness"),
-		[
-			{ name: "tracker_readiness", payload: { state: "ready" } },
-			{ name: "tracker_readiness", payload: { state: "not_ready" } },
-		],
-	);
+	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
 });
 
@@ -1507,7 +1632,7 @@ test("tracker reset clears detector phase but keeps candidate indexes increasing
 	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 0);
 });
 
-test("tracker status emits matching deduplicated local and server transitions", async () => {
+test("tracker status emits deduplicated local transitions without server pushes", async () => {
 	const harness = buildPoseTrackerHarness(
 		[0.9, 0.9, 0.1, 0.1, 0.9].map((confidence, index) =>
 			trackerFrame(trackerSample({ tMs: index * 100, confidence })),
@@ -1523,18 +1648,14 @@ test("tracker status emits matching deduplicated local and server transitions", 
 			.map(({ bubbles, detail }) => ({ bubbles, detail })),
 		[
 			{ bubbles: true, detail: { state: "live" } },
-			{ bubbles: true, detail: { state: "lost" } },
+			{
+				bubbles: true,
+				detail: { state: "lost", reason: "confidence_lost" },
+			},
 			{ bubbles: true, detail: { state: "live" } },
 		],
 	);
-	assert.deepEqual(
-		harness.pushes.filter(({ name }) => name === "track"),
-		[
-			{ name: "track", payload: { state: "live" } },
-			{ name: "track", payload: { state: "lost" } },
-			{ name: "track", payload: { state: "live" } },
-		],
-	);
+	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
 });
 
@@ -1549,14 +1670,13 @@ test("invalid tracker finish retains the lost fallback", async () => {
 	);
 
 	assert.deepEqual(
-		harness.pushes.filter(({ name }) => name === "track"),
-		[
-			{
-				name: "track",
-				payload: { state: "lost", reason: "invalid_finish" },
-			},
-		],
+		harness.events.filter(({ type }) => type === "pose-tracker:status").at(-1),
+		{
+			type: "pose-tracker:status",
+			detail: { state: "lost", reason: "invalid_finish" },
+		},
 	);
+	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
 });
 

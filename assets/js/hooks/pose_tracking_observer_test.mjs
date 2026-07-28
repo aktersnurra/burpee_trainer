@@ -59,7 +59,11 @@ test("feet-limited ready quality remains trustworthy", () => {
 test("tracking loss is sticky and forces fallback", () => {
 	const lost = updateTrackingStatus(liveReadyObserver(), "lost");
 	const recovered = updateTrackingStatus(lost, "live");
-	const finished = finishTrackingObserver(recovered, 10_000);
+	const restarted = startTrackingObserver(
+		updateTrackingReadiness(recovered, "optimal"),
+		"optimal",
+	);
+	const finished = finishTrackingObserver(restarted, 10_000);
 	assert.equal(finished.result.trusted, false);
 	assert.equal(finished.result.reason, "tracking_lost");
 });

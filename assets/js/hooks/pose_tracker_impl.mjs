@@ -1,7 +1,10 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
-import { initialStartGesture, stepStartGesture } from "./pose_start_gesture.mjs";
+import {
+	initialStartGesture,
+	stepStartGesture,
+} from "./pose_start_gesture.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
 import { drawPoseOverlay, resizePoseCanvas } from "./pose_overlay.mjs";
@@ -16,7 +19,6 @@ import {
 export { drawPoseOverlay, resizePoseCanvas };
 
 const CAMERA_SETUP_AUTO_CONFIRM_MS = 1500;
-const WARMUP_NO_GESTURE_TIMEOUT_MS = 4000;
 
 export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
@@ -75,7 +77,8 @@ export function createPoseTracker(hook, runtime = {}) {
 		runtime.requestAnimationFrame ||
 		((callback) => requestAnimationFrame(callback));
 	const cancelFrame = runtime.cancelAnimationFrame || cancelAnimationFrame;
-	const scheduleTimeout = runtime.setTimeout || ((cb, ms) => setTimeout(cb, ms));
+	const scheduleTimeout =
+		runtime.setTimeout || ((cb, ms) => setTimeout(cb, ms));
 	const clearScheduledTimeout = runtime.clearTimeout || clearTimeout;
 	const poseSample = runtime.sampleFromPose || sampleFromPose;
 	const waitForFrame = runtime.waitForVideoFrame || waitForVideoFrame;
@@ -93,40 +96,27 @@ export function createPoseTracker(hook, runtime = {}) {
 	let armedHoldFramesRequired = 0;
 	let startGesture = initialStartGesture();
 	let autoConfirmTimeoutId = null;
-	let noGestureTimeoutId = null;
 	let startedAt = null;
 	let trackingState = "lost";
-	let mounted = true;
+	let mounted = false;
+	let running = false;
+	let startGeneration = 0;
 	let lastPoseMs = -Infinity;
 	let lastFeature = null;
 	let captureSegment = null;
 	let captureRecorder = initialPoseCaptureRecorder({ flushIntervalMs: 3000 });
-	const onCaptureSegment = (event) => {
-		captureSegment = event.detail?.segment || null;
-	};
+
 	const dispatchLocal = (type, detail) => {
 		hook.el.dispatchEvent(new CustomEvent(type, { bubbles: true, detail }));
 	};
+
+	const onCaptureSegment = (event) => {
+		captureSegment = event.detail?.segment || null;
+	};
+
 	const reset = () => {
 		state = initialCounterState();
 		lastFeature = null;
-	};
-	const clearArmTimers = () => {
-		if (autoConfirmTimeoutId !== null) {
-			clearScheduledTimeout(autoConfirmTimeoutId);
-			autoConfirmTimeoutId = null;
-		}
-		if (noGestureTimeoutId !== null) {
-			clearScheduledTimeout(noGestureTimeoutId);
-			noGestureTimeoutId = null;
-		}
-	};
-	const startCameraSetupAutoConfirmTimer = () => {
-		if (autoConfirmTimeoutId !== null) return;
-		autoConfirmTimeoutId = scheduleTimeout(() => {
-			autoConfirmTimeoutId = null;
-			dispatchLocal("pose-tracker:gesture-confirm", {});
-		}, CAMERA_SETUP_AUTO_CONFIRM_MS);
 	};
 
 	const stopCameraSetupAutoConfirmTimer = () => {
@@ -135,32 +125,67 @@ export function createPoseTracker(hook, runtime = {}) {
 		autoConfirmTimeoutId = null;
 	};
 
-	const armStep = (event) => {
-		clearArmTimers();
+	const clearArmState = () => {
+		stopCameraSetupAutoConfirmTimer();
+		armedStep = null;
+		armedHoldFramesRequired = 0;
 		startGesture = initialStartGesture();
+	};
+
+	const readyForGesture = () =>
+		lastReadinessStatus === "ready" || lastReadinessStatus === "optimal";
+
+	const confirmArmedStep = (expectedStep) => {
+		if (armedStep !== expectedStep) return false;
+		if (expectedStep === "camera_setup" && !readyForGesture()) return false;
+		clearArmState();
+		dispatchLocal("pose-tracker:gesture-confirm", {});
+		return true;
+	};
+
+	const startCameraSetupAutoConfirmTimer = () => {
+		if (autoConfirmTimeoutId !== null || !readyForGesture()) return;
+		autoConfirmTimeoutId = scheduleTimeout(() => {
+			autoConfirmTimeoutId = null;
+			confirmArmedStep("camera_setup");
+		}, CAMERA_SETUP_AUTO_CONFIRM_MS);
+	};
+
+	const armStep = (event) => {
+		clearArmState();
 		const detail = event.detail || {};
 		armedStep = detail.step || null;
 		armedHoldFramesRequired = detail.holdFramesRequired || 0;
-
-		if (armedStep === "camera_setup") {
-			const currentlyReady =
-				lastReadinessStatus === "ready" || lastReadinessStatus === "optimal";
-			if (currentlyReady) startCameraSetupAutoConfirmTimer();
-		}
-
-		if (armedStep === "warmup") {
-			noGestureTimeoutId = scheduleTimeout(() => {
-				noGestureTimeoutId = null;
-				dispatchLocal("pose-tracker:gesture-timeout", {});
-			}, WARMUP_NO_GESTURE_TIMEOUT_MS);
-		}
+		if (armedStep === "camera_setup") startCameraSetupAutoConfirmTimer();
 	};
-	hook.el.addEventListener("pose-tracker:arm", armStep);
 
-	async function mountedHook() {
-		hook.el.addEventListener("pose-tracker:finish", finish);
-		hook.el.addEventListener("pose-tracker:reset", reset);
-		document.addEventListener("pose-capture:segment", onCaptureSegment);
+	function markLost(reason) {
+		delete hook.el.dataset.poseTrackerReady;
+		readiness = initialPoseReadiness();
+		lastReadinessStatus = readiness.status;
+		stopCameraSetupAutoConfirmTimer();
+		startGesture = initialStartGesture();
+		trackingState = "lost";
+		dispatchLocal("pose-tracker:status", { state: "lost", reason });
+	}
+
+	function releaseResources() {
+		if (raf !== null) cancelFrame(raf);
+		raf = null;
+		if (stream) stream.getTracks().forEach((track) => track.stop());
+		stream = null;
+		if (video) video.srcObject = null;
+		if (detector?.dispose) detector.dispose();
+		detector = null;
+		video = null;
+		canvas = null;
+		startedAt = null;
+	}
+
+	async function start() {
+		if (!mounted || running) return;
+		running = true;
+		const generation = ++startGeneration;
 
 		try {
 			if (!hasWebgl()) {
@@ -169,37 +194,47 @@ export function createPoseTracker(hook, runtime = {}) {
 				);
 			}
 
-			stream = await requestPreferredCameraStream(mediaDevices);
+			const requestedStream = await requestPreferredCameraStream(mediaDevices);
+			if (!mounted || !running || generation !== startGeneration) {
+				requestedStream.getTracks().forEach((track) => track.stop());
+				return;
+			}
+			stream = requestedStream;
 
 			video = resolvePreviewVideo(hook);
 			video.srcObject = stream;
 			await video.play();
 			await waitForFrame(video);
+			if (!mounted || !running || generation !== startGeneration) return;
 
 			canvas = hook.el.querySelector("#pose-tracker-canvas");
 			if (!canvas) throw new Error("Pose tracker canvas is unavailable");
 			resizePoseCanvas(canvas);
-			hook.pushEvent("camera_preview_diagnostics", previewDiagnostics(video));
 
-			detector = await createDetector();
+			const createdDetector = await createDetector();
+			if (!mounted || !running || generation !== startGeneration) {
+				createdDetector?.dispose?.();
+				return;
+			}
+			detector = createdDetector;
 
-			if (!mounted) return;
 			startedAt = now();
-			hook.pushEvent("tracker_initialized", {});
-			dispatchLocal("pose-tracker:initialized", {});
+			dispatchLocal("pose-tracker:started", {});
 			loop();
 		} catch (error) {
-			delete hook.el.dataset.poseTrackerReady;
-			console.error("PoseTracker failed", error);
-			hook.pushEvent("track", {
-				state: "lost",
-				reason: error?.message || error?.name || "tracker_error",
-			});
+			if (!mounted || generation !== startGeneration) return;
+			running = false;
+			const reason = error?.message || error?.name || "tracker_error";
+			markLost(reason);
+			releaseResources();
+			dispatchLocal("pose-tracker:start-failed", { reason });
 		}
 	}
 
 	async function loop() {
-		if (!mounted || !detector || !video || startedAt === null) return;
+		if (!mounted || !running || !detector || !video || startedAt === null) {
+			return;
+		}
 
 		const sampledAt = now();
 		if (!shouldSamplePose(sampledAt, lastPoseMs)) {
@@ -208,19 +243,19 @@ export function createPoseTracker(hook, runtime = {}) {
 		}
 		lastPoseMs = sampledAt;
 
-		let poses = [];
+		let poses;
 		try {
 			poses = await detector.estimatePoses(video);
-		} catch (error) {
-			console.error("BlazePose frame failed", error);
-			hook.pushEvent("track", {
-				state: "lost",
-				reason: error?.message || "blazepose_frame_failed",
-			});
+		} catch (_error) {
+			if (!running) return;
+			running = false;
+			markLost("detector_error");
+			releaseResources();
 			return;
 		}
-		drawPoseOverlay(canvas, poses[0], video);
+		if (!mounted || !running) return;
 
+		drawPoseOverlay(canvas, poses[0], video);
 		const sample = poseSample(
 			poses[0],
 			sampledAt - startedAt,
@@ -237,8 +272,7 @@ export function createPoseTracker(hook, runtime = {}) {
 
 		if (nextReadiness.status !== lastReadinessStatus) {
 			lastReadinessStatus = nextReadiness.status;
-			const ready =
-				nextReadiness.status === "ready" || nextReadiness.status === "optimal";
+			const ready = readyForGesture();
 			if (ready) hook.el.dataset.poseTrackerReady = "true";
 			else delete hook.el.dataset.poseTrackerReady;
 
@@ -247,21 +281,19 @@ export function createPoseTracker(hook, runtime = {}) {
 				else stopCameraSetupAutoConfirmTimer();
 			}
 
-			const detail = { state: nextReadiness.status };
-			dispatchLocal("pose-tracker:readiness", detail);
-			hook.pushEvent("tracker_readiness", detail);
+			dispatchLocal("pose-tracker:readiness", {
+				state: nextReadiness.status,
+			});
 		}
 
 		if (armedStep && armedHoldFramesRequired > 0) {
+			const step = armedStep;
 			const wasSatisfied = startGesture.satisfied;
 			startGesture = stepStartGesture(startGesture, {
 				sample,
 				holdFramesRequired: armedHoldFramesRequired,
 			});
-			if (startGesture.satisfied && !wasSatisfied) {
-				clearArmTimers();
-				dispatchLocal("pose-tracker:gesture-confirm", {});
-			}
+			if (startGesture.satisfied && !wasSatisfied) confirmArmedStep(step);
 		}
 
 		if (captureSegment) {
@@ -270,24 +302,20 @@ export function createPoseTracker(hook, runtime = {}) {
 				nowMs: sample.tMs,
 			});
 			captureRecorder = recorded.state;
-			recorded.chunks.forEach(pushCaptureChunk);
+			recorded.chunks.forEach(dispatchCaptureChunk);
 		}
 
 		if (sample.confidence < 0.5 && trackingState !== "lost") {
-			trackingState = "lost";
-			hook.pushEvent("track", { state: "lost" });
-			dispatchLocal("pose-tracker:status", { state: trackingState });
+			markLost("confidence_lost");
 		}
 
 		if (sample.confidence >= 0.5 && trackingState !== "live") {
 			trackingState = "live";
-			hook.pushEvent("track", { state: "live" });
-			dispatchLocal("pose-tracker:status", { state: trackingState });
+			dispatchLocal("pose-tracker:status", { state: "live" });
 		}
 
 		const result = countRep(state, sample);
 		state = result.state;
-
 		if (result.rep) {
 			candidateIndex += 1;
 			dispatchLocal("pose-tracker:rep", {
@@ -300,36 +328,62 @@ export function createPoseTracker(hook, runtime = {}) {
 	}
 
 	function finish(event) {
+		const elapsedMs = startedAt === null ? 0 : now() - startedAt;
 		const flushed = flushPoseCaptureRecorder(captureRecorder, {
 			reason: "finish",
-			nowMs: now() - (startedAt || now()),
+			nowMs: elapsedMs,
 		});
 		captureRecorder = flushed.state;
-		flushed.chunks.forEach(pushCaptureChunk);
+		flushed.chunks.forEach(dispatchCaptureChunk);
 
 		try {
-			hook.pushEvent("finish", trackingFinishPayload(event.detail || {}));
+			dispatchLocal(
+				"pose-tracker:finished",
+				trackingFinishPayload(event.detail || {}),
+			);
 		} catch (_error) {
-			hook.pushEvent("track", { state: "lost", reason: "invalid_finish" });
+			markLost("invalid_finish");
 		}
 	}
 
-	function pushCaptureChunk(chunk) {
-		hook.pushEvent("pose_capture_chunk", chunk);
+	function dispatchCaptureChunk(chunk) {
+		dispatchLocal("pose-tracker:trace-chunk", { chunk });
+	}
+
+	function stop() {
+		startGeneration += 1;
+		running = false;
+		clearArmState();
+		delete hook.el.dataset.poseTrackerReady;
+		readiness = initialPoseReadiness();
+		lastReadinessStatus = readiness.status;
+		trackingState = "lost";
+		lastPoseMs = -Infinity;
+		releaseResources();
+	}
+
+	async function mountedHook() {
+		if (mounted) return;
+		mounted = true;
+		hook.el.addEventListener("pose-tracker:start", start);
+		hook.el.addEventListener("pose-tracker:stop", stop);
+		hook.el.addEventListener("pose-tracker:finish", finish);
+		hook.el.addEventListener("pose-tracker:reset", reset);
+		hook.el.addEventListener("pose-tracker:arm", armStep);
+		document.addEventListener("pose-capture:segment", onCaptureSegment);
 	}
 
 	function destroyed() {
+		if (!mounted) return;
+		stop();
 		mounted = false;
-		delete hook.el.dataset.poseTrackerReady;
+		hook.el.removeEventListener("pose-tracker:start", start);
+		hook.el.removeEventListener("pose-tracker:stop", stop);
 		hook.el.removeEventListener("pose-tracker:finish", finish);
 		hook.el.removeEventListener("pose-tracker:reset", reset);
 		hook.el.removeEventListener("pose-tracker:arm", armStep);
-		clearArmTimers();
 		document.removeEventListener("pose-capture:segment", onCaptureSegment);
-		if (raf) cancelFrame(raf);
-		if (stream) stream.getTracks().forEach((track) => track.stop());
-		if (detector?.dispose) detector.dispose();
 	}
 
-	return { mounted: mountedHook, destroyed };
+	return { mounted: mountedHook, start, stop, destroyed };
 }
