@@ -128,6 +128,10 @@ const SessionHook = {
 					this.audio.stop();
 				}
 			} else {
+				if (!this.activeRuntimeForFlow()) {
+					this.hiddenAt = null;
+					return;
+				}
 				if (!this.paused && this.hiddenAt !== null && this.startTime !== null) {
 					this.dispatchSegment({
 						type: "VISIBILITY_VISIBLE",
@@ -205,6 +209,15 @@ const SessionHook = {
 
 	canTogglePause() {
 		return this.startTime !== null || this.countdownCount !== null;
+	},
+
+	activeRuntimeForFlow() {
+		return (
+			(this.flow.mode === "warmup_running" &&
+				this.activeSegment === "warmup") ||
+			(this.flow.mode === "workout_running" &&
+				this.activeSegment === "workout")
+		);
 	},
 
 	destroyed() {
@@ -295,10 +308,32 @@ const SessionHook = {
 				break;
 			case "showCompletion":
 				this.cancelWarmupTimeout();
+				this.quiesceCompletedWorkout();
 				this.renderer.renderCompletion(this.flow.completion);
 				this.renderer.renderFlowState(this.flow);
 				break;
 		}
+	},
+
+	quiesceCompletedWorkout() {
+		if (this.rafId) cancelAnimationFrame(this.rafId);
+		if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
+		if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
+		this.rafId = null;
+		this.countdownRafId = null;
+		this.countdownTimeoutId = null;
+		this.countdownCount = null;
+		this.countdownStartedAt = null;
+		this.countdownElapsedMs = 0;
+		this.renderCountdownFrame = null;
+		this.countdownStepStarted = null;
+		this.countdownStepElapsed = 0;
+		this.countdownPaused = false;
+		this.startTime = null;
+		this.hiddenAt = null;
+		this.paused = false;
+		this.activeSegment = null;
+		this.wakeLock.release();
 	},
 
 	dispatchTrackerCommand(type, detail = undefined) {

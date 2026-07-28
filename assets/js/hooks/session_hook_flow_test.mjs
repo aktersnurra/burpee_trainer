@@ -405,6 +405,7 @@ function mountedTrackedCountdown(timeline) {
 	ctx.renderer = renderer;
 	ctx.audio = audio;
 	ctx.wakeLock = wakeLock;
+	ctx.flow = { ...ctx.flow, mode: "workout_running" };
 	ctx.activeSegment = "workout";
 	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
 	ctx.trackerReadiness = "ready";
@@ -1050,6 +1051,7 @@ test("visibility restoration resets detector phase", () => {
 	const tracker = ctx.el.querySelector("#pose-tracker");
 	ctx.handleEvent = () => {};
 	ctx.mounted();
+	ctx.flow = { ...ctx.flow, mode: "workout_running" };
 	ctx.activeSegment = "workout";
 	ctx.timeline = [{ kind: "work", reps: 2, sec_per_rep: 4 }];
 	ctx.segment = {
@@ -1203,6 +1205,73 @@ test("camera through completion review requires no server event", () => {
 		),
 	);
 	ctx.destroyed();
+});
+
+test("completed workout stays quiescent across hidden and visible lifecycle", () => {
+	const originalVisibility = document.visibilityState;
+	const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+	const scheduledFrames = [];
+	globalThis.requestAnimationFrame = (callback) => {
+		scheduledFrames.push(callback);
+		return scheduledFrames.length;
+	};
+
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	let wakeLockReleases = 0;
+	let wakeLockReacquires = 0;
+	ctx.wakeLock = {
+		acquire() {},
+		release() {
+			wakeLockReleases += 1;
+		},
+		reacquireWhenVisible() {
+			wakeLockReacquires += 1;
+		},
+	};
+
+	try {
+		click(ctx, "camera-choice-no");
+		click(ctx, "warmup-skip-btn");
+		click(ctx, "workout-ready-btn");
+		ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+		ctx.startTime = 1;
+		scheduledFrames.length = 0;
+		ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+
+		assert.equal(ctx.flow.mode, "completion_review");
+		assert.equal(
+			ctx.el.querySelector("#session-completion-review").hidden,
+			false,
+		);
+		assert.equal(ctx.activeSegment, null);
+		assert.equal(ctx.startTime, null);
+		assert.equal(ctx.rafId, null);
+		assert.equal(ctx.countdownTimeoutId, null);
+		assert.equal(ctx.countdownRafId, null);
+		assert.equal(wakeLockReleases, 1);
+		const completedFlow = ctx.flow;
+		const completedSegment = ctx.segment;
+
+		document.visibilityState = "hidden";
+		ctx.onVisibility();
+		document.visibilityState = "visible";
+		ctx.onVisibility();
+
+		assert.deepEqual(scheduledFrames, []);
+		assert.equal(wakeLockReacquires, 0);
+		assert.equal(ctx.segment, completedSegment);
+		assert.equal(ctx.flow, completedFlow);
+		assert.equal(ctx.segment.mode, "done");
+		assert.equal(ctx.flow.mode, "completion_review");
+		assert.equal(
+			ctx.el.querySelector("#session-completion-review").hidden,
+			false,
+		);
+	} finally {
+		document.visibilityState = originalVisibility;
+		globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+		ctx.destroyed();
+	}
 });
 
 test("camera failure during workout keeps timer result authoritative", () => {
