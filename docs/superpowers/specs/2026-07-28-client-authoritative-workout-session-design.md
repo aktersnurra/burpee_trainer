@@ -131,7 +131,9 @@ Events that do not match the current state are ignored. Gesture and timeout even
 
 The client-owned surface remains under `phx-update="ignore"`. `SessionHook` toggles stable panels and fills values; it no longer creates/replaces `#start-overlay` markup. This preserves immediate transitions, stable focus targets, Tailwind-visible classes, and deterministic test selectors.
 
-`PoseTracker` is mounted lazily: mount registers local handlers, while a local `pose-tracker:start` command requests camera/model resources only after **Yes, use camera**.
+The initial HTML embeds the serialized execution program, plan identity, program hash, and `client_session_id` on the hook root. `SessionHook` boots synchronously from those values instead of waiting for a post-mount `session_ready` push.
+
+`PoseTracker` is mounted lazily: mount registers local handlers, while a local `pose-tracker:start` command requests camera/model resources only after **Yes, use camera**. Camera startup may fetch same-origin static model/WASM assets; that resource load is not a session-state API dependency, and failure transitions locally to camera-unavailable recovery.
 
 ## Camera choice and terminology
 
@@ -246,7 +248,7 @@ Detector confidence loss, camera loss, and detector exceptions all use one local
 
 Once degraded, camera results cannot become trusted again during that workout. Completion uses timer-derived reps and duration with no camera cadence analytics.
 
-No `pushEvent`, fetch, or trace upload occurs because of tracking status during exercise.
+No application API request, LiveView event, telemetry push, or trace upload occurs because of tracking status during exercise. Same-origin camera model/WASM asset loading is limited to camera startup and may fail without blocking the no-camera workout path.
 
 ## Intra-rep recovery and rest
 
@@ -290,6 +292,8 @@ The client fills:
    - camera failure never interrupts completion.
 
 The completion draft is written to IndexedDB before display and after each edit. Reloading the same session route restores the latest unsaved draft, including its original `client_session_id`.
+
+Discard remains client-local before Save: after confirmation it stops camera resources, deletes the completion draft and buffered trace chunks, and navigates back to workouts without a server event.
 
 ## Final Save contract
 
@@ -462,7 +466,7 @@ The implementation plan may adjust exact file boundaries after targeted inspecti
 
 ## Acceptance criteria
 
-1. No network request or server event is required from camera choice through completion review.
+1. No application API request, LiveView event, telemetry push, or trace upload is required from camera choice through completion review; optional same-origin camera assets may load during camera startup.
 2. Poor or absent network cannot delay, pause, restart, or terminate a workout.
 3. Camera/pose failure during exercise produces no visible interruption and uses timer-derived completion.
 4. Camera gestures are readiness-gated, step-tagged, and consumed once.
