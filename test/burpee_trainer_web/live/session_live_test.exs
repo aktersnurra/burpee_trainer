@@ -4,6 +4,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
+  alias BurpeeTrainer.Workouts
+
   setup %{conn: conn} do
     user = user_fixture()
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
@@ -12,25 +14,71 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
   test "renders the complete client-owned session surface once", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+    {:ok, program} = Workouts.compile_plan(plan)
+    document = view |> render() |> LazyHTML.from_fragment()
+
+    stable_ids =
+      ~w[
+        burpee-session
+        session-capture-choice
+        session-camera-status
+        session-camera-setup
+        session-warmup-choice
+        session-workout-ready
+        session-runner-client
+        session-completion-review
+        pose-tracker
+        camera-choice-yes
+        camera-choice-no
+        camera-status-retry
+        camera-status-continue
+        camera-setup-continue
+        warmup-yes-btn
+        warmup-skip-btn
+        workout-ready-btn
+        workout-ready-continue
+        ring-container
+        finish-early-btn
+        session-abort-btn
+        session-completion-form
+        completion-reps-input
+        completion-duration-input
+        completion-note-input
+        session-save-btn
+        session-discard-btn
+        session-live-status
+        session-save-errors
+        completion-reps-error
+        completion-duration-error
+        completion-note-error
+      ]
+
+    for id <- stable_ids do
+      assert has_element?(view, "##{id}")
+      assert selector_count(document, "##{id}") == 1
+    end
 
     assert has_element?(
              view,
-             "#burpee-session[phx-hook='SessionHook'][phx-update='ignore'][data-session-program][data-plan-id='#{plan.id}'][data-program-hash][data-client-session-id]"
+             "#burpee-session[phx-hook='SessionHook'][phx-update='ignore'][data-session-program][data-plan-id][data-program-hash][data-client-session-id]"
            )
 
-    for id <- ~w[
-          session-capture-choice
-          session-camera-status
-          session-camera-setup
-          session-warmup-choice
-          session-workout-ready
-          session-runner-client
-          session-completion-review
-          session-live-status
-          session-save-errors
-        ] do
-      assert has_element?(view, "##{id}")
-    end
+    session = LazyHTML.query(document, "#burpee-session")
+    [serialized_program] = LazyHTML.attribute(session, "data-session-program")
+    [plan_id] = LazyHTML.attribute(session, "data-plan-id")
+    [program_hash] = LazyHTML.attribute(session, "data-program-hash")
+    [client_session_id] = LazyHTML.attribute(session, "data-client-session-id")
+    decoded_program = Jason.decode!(serialized_program)
+
+    assert plan_id == Integer.to_string(plan.id)
+    assert program_hash == program.content_hash
+    assert decoded_program["program_id"] == program.id
+    assert decoded_program["program_hash"] == program_hash
+    assert decoded_program["target_reps"] == program.target_reps
+    assert decoded_program["target_duration_sec"] == program.target_duration_sec
+    assert is_list(decoded_program["events"])
+    assert is_map(decoded_program["display"])
+    assert Ecto.UUID.cast(client_session_id) == {:ok, client_session_id}
 
     assert has_element?(view, "#pose-tracker[phx-hook='PoseTracker'][phx-update='ignore']")
     assert has_element?(view, "#session-capture-choice", "Track burpees with the camera?")
@@ -69,6 +117,28 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#completion-reps-input")
     assert has_element?(view, "#completion-duration-input")
     assert has_element?(view, "#completion-note-input")
+  end
+
+  test "pre-renders empty completion field errors and associates each input once", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+    document = view |> render() |> LazyHTML.from_fragment()
+
+    for field <- ~w[reps duration note] do
+      input_selector =
+        "#completion-#{field}-input[aria-describedby='completion-#{field}-error']"
+
+      error_selector = "#completion-#{field}-error[hidden]"
+
+      assert has_element?(view, input_selector)
+      assert has_element?(view, error_selector)
+      assert selector_count(document, input_selector) == 1
+      assert selector_count(document, error_selector) == 1
+      assert document |> LazyHTML.query(error_selector) |> LazyHTML.text() == ""
+    end
   end
 
   test "renders exact camera and hands-free prompt contract", %{conn: conn, user: user} do
@@ -118,5 +188,12 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       refute has_element?(view, "[phx-change='#{event}']")
       refute has_element?(view, "[phx-submit='#{event}']")
     end
+  end
+
+  defp selector_count(document, selector) do
+    document
+    |> LazyHTML.query(selector)
+    |> LazyHTML.to_tree()
+    |> length()
   end
 end

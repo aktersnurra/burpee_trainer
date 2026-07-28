@@ -379,8 +379,10 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             label="Reps"
             min="0"
             inputmode="numeric"
+            aria-describedby="completion-reps-error"
             class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
           />
+          <p id="completion-reps-error" hidden></p>
           <.input
             field={@form[:duration_sec_actual]}
             id="completion-duration-input"
@@ -388,8 +390,10 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             label="Seconds"
             min="0"
             inputmode="numeric"
+            aria-describedby="completion-duration-error"
             class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
           />
+          <p id="completion-duration-error" hidden></p>
           <.input
             field={@form[:note_post]}
             id="completion-note-input"
@@ -397,8 +401,10 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             label="Note"
             rows="3"
             placeholder="How did it go?"
+            aria-describedby="completion-note-error"
             class="w-full resize-none rounded-xl border border-[var(--session-border)] bg-transparent px-4 py-3 text-sm text-[var(--session-ink)]"
           />
+          <p id="completion-note-error" hidden></p>
 
           <div id="session-completion-tags" class="border-t border-[var(--session-border)] py-6">
             <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Tags</p>
