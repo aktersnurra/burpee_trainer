@@ -93,10 +93,15 @@ class FakeElement {
 	}
 
 	dispatchEvent(event) {
+		if (!event.target) event.target = this;
+		event.currentTarget = this;
 		for (const listener of this.listeners.get(event.type) || []) {
 			listener.call(this, event);
 		}
 
+		if (event.bubbles && this.parentElement) {
+			return this.parentElement.dispatchEvent(event);
+		}
 		return true;
 	}
 
@@ -679,12 +684,14 @@ function poseTrackerHarness({
 	getUserMedia,
 	estimatePoses,
 	detectorThrowsAfterReady = false,
+	trackerElement = null,
 } = {}) {
 	const pushes = [];
 	const localEvents = [];
 	const events = [];
 	const animationFrames = [];
-	const tracker = new FakeElement("div");
+	const cancelledAnimationFrameIds = [];
+	const tracker = trackerElement || new FakeElement("div");
 	tracker.id = "pose-tracker";
 
 	const video = new FakeElement("video");
@@ -788,7 +795,9 @@ function poseTrackerHarness({
 			animationFrames.push(callback);
 			return animationFrames.length;
 		},
-		cancelAnimationFrame() {},
+		cancelAnimationFrame(id) {
+			cancelledAnimationFrameIds.push(id);
+		},
 		sampleFromPose: () => currentFrame.sample,
 		waitForVideoFrame: async () => video,
 		webglAvailable: () => true,
@@ -837,6 +846,9 @@ function poseTrackerHarness({
 		},
 		get pendingAnimationFrames() {
 			return animationFrames.length;
+		},
+		get cancelledAnimationFrameIds() {
+			return [...cancelledAnimationFrameIds];
 		},
 		get resourceCleanupCalls() {
 			return stoppedTrack.stopCalls + detector.disposeCalls;
@@ -983,7 +995,7 @@ test("camera gesture cannot confirm while readiness is not_ready", async () => {
 	);
 });
 
-test("detector exception emits one local lost event and clears readiness", async () => {
+test("detector exception emits local readiness loss and lost status", async () => {
 	const readyFrames = Array.from({ length: 8 }, (_, index) =>
 		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
@@ -996,15 +1008,16 @@ test("detector exception emits one local lost event and clears readiness", async
 	await harness.runUntilConsumed(8);
 	await harness.runUntilConsumed(9).catch(() => {});
 	assert.equal(harness.tracker.dataset.poseTrackerReady, undefined);
-	assert.deepEqual(
-		harness.events
-			.filter((event) => event.type === "pose-tracker:status")
-			.at(-1),
+	assert.deepEqual(harness.events.slice(-2), [
+		{
+			type: "pose-tracker:readiness",
+			detail: { state: "not_ready" },
+		},
 		{
 			type: "pose-tracker:status",
 			detail: { state: "lost", reason: "detector_error" },
 		},
-	);
+	]);
 	assert.deepEqual(harness.serverPushes, []);
 });
 
@@ -1275,6 +1288,42 @@ test("warmup timeout pauses while not ready and resumes monotonically", () => {
 	ctx.destroyed();
 });
 
+test("confidence loss during warmup pauses timeout and stale expiry cannot skip warmup", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: false });
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const confidenceLostFrame = trackerFrame(
+		trackerSample({ tMs: 800, confidence: 0.1 }),
+	);
+	const harness = poseTrackerHarness({
+		frames: [...readyFrames, confidenceLostFrame],
+		trackerElement: ctx.el.querySelector("#pose-tracker"),
+	});
+
+	try {
+		await harness.impl.mounted();
+		click(ctx, "camera-choice-yes");
+		await harness.flushAllPromises();
+		await harness.runUntilConsumed(8);
+		trackerEvent(ctx, "pose-tracker:gesture-confirm", {
+			step: "camera_setup",
+		});
+		assert.equal(ctx.flow.mode, "warmup_choice");
+		assert.notEqual(ctx.warmupTimeoutDeadline, null);
+
+		await harness.runUntilConsumed(9);
+
+		assert.equal(ctx.trackerReadiness, "not_ready");
+		assert.equal(ctx.warmupTimeoutDeadline, null);
+		ctx.finishWarmupTimeout();
+		assert.equal(ctx.flow.mode, "warmup_choice");
+	} finally {
+		harness.poseTracker.destroyed();
+		ctx.destroyed();
+	}
+});
+
 test("warmup timeout refreshes the visible seconds without tracker help", () => {
 	const originalNow = performance.now;
 	const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -1311,6 +1360,26 @@ test("second warmup gesture cannot restart warmup", () => {
 	const firstSegment = ctx.segment;
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "warmup" });
 	assert.equal(ctx.segment, firstSegment);
+	ctx.destroyed();
+});
+
+test("delayed stale gesture confirms cannot act on the next armed step", () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	click(ctx, "camera-choice-yes");
+	trackerEvent(ctx, "pose-tracker:started");
+	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "warmup_choice");
+
+	trackerEvent(ctx, "pose-tracker:gesture-confirm");
+	assert.equal(ctx.flow.mode, "warmup_choice");
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "warmup_choice");
+
+	ctx.finishWarmupTimeout();
+	assert.equal(ctx.flow.mode, "workout_ready");
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "warmup" });
+	assert.equal(ctx.flow.mode, "workout_ready");
 	ctx.destroyed();
 });
 
@@ -1367,8 +1436,8 @@ test("ready armed camera-setup dispatches one gesture-confirm when wrist streak 
 	assert.deepEqual(
 		harness.localEvents
 			.filter(({ type }) => type === "pose-tracker:gesture-confirm")
-			.map(({ type }) => type),
-		["pose-tracker:gesture-confirm"],
+			.map(({ detail }) => detail),
+		[{ step: "camera_setup" }],
 	);
 
 	harness.poseTracker.destroyed();
@@ -1941,6 +2010,118 @@ test("countdown pause enables Abort but keeps Finish early disabled", () => {
 	assert.equal(actions.style.pointerEvents, "auto");
 	assert.equal(finishEarly.hasAttribute("disabled"), true);
 	assert.equal(abort.hasAttribute("disabled"), false);
+});
+
+function prepareTrustedCompletion(ctx) {
+	const timeline = [{ kind: "work", reps: 5, sec_per_rep: 2 }];
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
+	ctx.activeSegment = "workout";
+	ctx.timeline = timeline;
+	ctx.segment = {
+		...initialSegmentState(),
+		mode: "running",
+		timeline,
+		clock: {
+			...initialSegmentState().clock,
+			elapsedSec: 2.5,
+			totalDurationSec: 10,
+		},
+	};
+	ctx.tracking = updateTrackingStatus(initialTrackingObserver(), "live");
+	ctx.trackerReadiness = "ready";
+	ctx.startPoseObservation();
+	ctx.observePoseRep({ index: 1 });
+	ctx.segment = {
+		...ctx.segment,
+		clock: { ...ctx.segment.clock, elapsedSec: 5.1 },
+	};
+	ctx.observePoseRep({ index: 2 });
+}
+
+test("trusted completion consumes synchronous tracker output before stop", () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const commandOrder = [];
+	const trackerOutput = {
+		reps: 3,
+		duration_ms: 9_500,
+		cadence_ms: [2_000, 4_000, 7_000],
+	};
+	tracker.addEventListener("pose-tracker:finish", () => {
+		commandOrder.push("finish");
+		tracker.dispatchEvent(
+			new CustomEvent("pose-tracker:finished", {
+				bubbles: true,
+				detail: trackerOutput,
+			}),
+		);
+	});
+	tracker.addEventListener("pose-tracker:stop", () => {
+		commandOrder.push("stop");
+		assert.deepEqual(ctx.trackerFinished, trackerOutput);
+	});
+	prepareTrustedCompletion(ctx);
+
+	const result = ctx.workoutCompletionResult({
+		burpeeCountDone: 5,
+		durationSec: 10,
+	});
+
+	assert.deepEqual(result, {
+		burpeeCountDone: 5,
+		durationSec: 10,
+		detectedReps: 3,
+		detectedDurationSec: 9.5,
+		cadenceMs: [2_000, 4_000, 7_000],
+	});
+	assert.deepEqual(commandOrder, ["finish", "stop"]);
+	ctx.destroyed();
+});
+
+test("real trusted completion handshake preserves finish data and cleans tracker resources", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	const harness = poseTrackerHarness({
+		frames: [trackerFrame(trackerSample())],
+		trackerElement: ctx.el.querySelector("#pose-tracker"),
+	});
+
+	try {
+		await harness.impl.mounted();
+		await harness.start();
+		await harness.runUntilConsumed(1);
+		prepareTrustedCompletion(ctx);
+		assert.equal(harness.resourceCleanupCalls, 0);
+		assert.equal(harness.pendingAnimationFrames, 1);
+
+		const result = ctx.workoutCompletionResult({
+			burpeeCountDone: 5,
+			durationSec: 10,
+		});
+
+		assert.deepEqual(ctx.trackerFinished, {
+			reps: 2,
+			duration_ms: 10_000,
+			cadence_ms: [2_500, 5_100],
+		});
+		assert.deepEqual(result, {
+			burpeeCountDone: 5,
+			durationSec: 10,
+			detectedReps: 2,
+			detectedDurationSec: 10,
+			cadenceMs: [2_500, 5_100],
+		});
+		assert.equal(harness.resourceCleanupCalls, 2);
+		assert.equal(harness.detector.disposed, true);
+		assert.deepEqual(harness.cancelledAnimationFrameIds, [1]);
+	} finally {
+		harness.poseTracker.destroyed();
+		ctx.destroyed();
+	}
 });
 
 test("pose tracker finished output stays local", () => {

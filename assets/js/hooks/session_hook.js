@@ -499,9 +499,10 @@ const SessionHook = {
 	},
 
 	handlePoseGestureConfirm({ step }) {
+		if (!step) return;
 		this.dispatchFlow({
 			type: "GESTURE_CONFIRM",
-			step: step || this.armedPoseStep,
+			step,
 			warmupTimeline: warmupTimelineFromProgram(this.program),
 			burpeeCountTarget: programBurpeeCount(
 				warmupTimelineFromProgram(this.program),
@@ -855,18 +856,26 @@ const SessionHook = {
 		const finished = finishTrackingObserver(this.tracking, durationMs);
 		this.tracking = finished.state;
 		this.trackingCompletion = finished.result;
+		this.trackerFinished = null;
 		this.dispatchTrackerCommand("pose-tracker:finish", {
 			durationMs,
 			cadenceMs: finished.result.trusted ? finished.result.cadenceMs : [],
 		});
-		if (!finished.result.trusted || this.flow.trackingTrust === "degraded") {
+		const trackerFinished = this.trackerFinished;
+		this.dispatchTrackerCommand("pose-tracker:stop");
+
+		if (
+			!finished.result.trusted ||
+			this.flow.trackingTrust === "degraded" ||
+			!trackerFinished
+		) {
 			return { ...timerResult, cadenceMs: [] };
 		}
 		return {
 			...timerResult,
-			detectedReps: finished.result.reps,
-			detectedDurationSec: timerResult.durationSec,
-			cadenceMs: finished.result.cadenceMs,
+			detectedReps: trackerFinished.reps,
+			detectedDurationSec: trackerFinished.duration_ms / 1_000,
+			cadenceMs: trackerFinished.cadence_ms,
 		};
 	},
 

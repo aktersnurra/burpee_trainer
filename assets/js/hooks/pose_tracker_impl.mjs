@@ -138,8 +138,9 @@ export function createPoseTracker(hook, runtime = {}) {
 	const confirmArmedStep = (expectedStep) => {
 		if (armedStep !== expectedStep) return false;
 		if (expectedStep === "camera_setup" && !readyForGesture()) return false;
+		const step = armedStep;
 		clearArmState();
-		dispatchLocal("pose-tracker:gesture-confirm", {});
+		dispatchLocal("pose-tracker:gesture-confirm", { step });
 		return true;
 	};
 
@@ -166,6 +167,7 @@ export function createPoseTracker(hook, runtime = {}) {
 		stopCameraSetupAutoConfirmTimer();
 		startGesture = initialStartGesture();
 		trackingState = "lost";
+		dispatchLocal("pose-tracker:readiness", { state: "not_ready" });
 		dispatchLocal("pose-tracker:status", { state: "lost", reason });
 	}
 
