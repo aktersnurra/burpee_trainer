@@ -220,7 +220,7 @@ export function createPoseTracker(hook, runtime = {}) {
 
 			startedAt = now();
 			dispatchLocal("pose-tracker:started", {});
-			loop();
+			loop(generation);
 		} catch (error) {
 			if (!mounted || generation !== startGeneration) return;
 			running = false;
@@ -231,14 +231,26 @@ export function createPoseTracker(hook, runtime = {}) {
 		}
 	}
 
-	async function loop() {
-		if (!mounted || !running || !detector || !video || startedAt === null) {
+	async function loop(generation) {
+		if (
+			!mounted ||
+			!running ||
+			generation !== startGeneration ||
+			!detector ||
+			!video ||
+			startedAt === null
+		) {
 			return;
 		}
 
+		const scheduleNextFrame = () => {
+			if (!mounted || !running || generation !== startGeneration) return;
+			raf = requestFrame(() => loop(generation));
+		};
+
 		const sampledAt = now();
 		if (!shouldSamplePose(sampledAt, lastPoseMs)) {
-			raf = requestFrame(loop);
+			scheduleNextFrame();
 			return;
 		}
 		lastPoseMs = sampledAt;
@@ -247,13 +259,13 @@ export function createPoseTracker(hook, runtime = {}) {
 		try {
 			poses = await detector.estimatePoses(video);
 		} catch (_error) {
-			if (!running) return;
+			if (!mounted || !running || generation !== startGeneration) return;
 			running = false;
 			markLost("detector_error");
 			releaseResources();
 			return;
 		}
-		if (!mounted || !running) return;
+		if (!mounted || !running || generation !== startGeneration) return;
 
 		drawPoseOverlay(canvas, poses[0], video);
 		const sample = poseSample(
@@ -324,7 +336,7 @@ export function createPoseTracker(hook, runtime = {}) {
 			});
 		}
 
-		raf = requestFrame(loop);
+		scheduleNextFrame();
 	}
 
 	function finish(event) {

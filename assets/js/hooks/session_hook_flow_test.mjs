@@ -565,6 +565,7 @@ function poseTrackerHarness({
 	frames = [],
 	holdDetector = false,
 	getUserMedia,
+	estimatePoses,
 	detectorThrowsAfterReady = false,
 } = {}) {
 	const pushes = [];
@@ -613,16 +614,29 @@ function poseTrackerHarness({
 	let nowMs = 0;
 	let currentFrame = null;
 	let consumedFrames = 0;
+	let inferenceCalls = 0;
 	const stoppedTrack = {
 		stopped: false,
+		stopCalls: 0,
 		stop() {
 			this.stopped = true;
+			this.stopCalls += 1;
 		},
 	};
 	const detector = {
 		disposed: false,
+		disposeCalls: 0,
 		estimatePoses() {
 			if (holdDetector) return new Promise(() => {});
+			if (estimatePoses) {
+				const callIndex = inferenceCalls;
+				inferenceCalls += 1;
+				return Promise.resolve(estimatePoses(callIndex)).then((frame) => {
+					currentFrame = frame;
+					consumedFrames += 1;
+					return frame.poses;
+				});
+			}
 			if (detectorThrowsAfterReady && consumedFrames === 8) {
 				throw new Error("detector exploded");
 			}
@@ -633,6 +647,7 @@ function poseTrackerHarness({
 		},
 		dispose() {
 			this.disposed = true;
+			this.disposeCalls += 1;
 		},
 	};
 
@@ -681,6 +696,9 @@ function poseTrackerHarness({
 		await Promise.resolve();
 		await Promise.resolve();
 	};
+	const settleAll = async () => {
+		for (let index = 0; index < 8; index += 1) await Promise.resolve();
+	};
 
 	return {
 		tracker,
@@ -705,7 +723,14 @@ function poseTrackerHarness({
 		get mediaRequests() {
 			return mediaRequests;
 		},
+		get pendingAnimationFrames() {
+			return animationFrames.length;
+		},
+		get resourceCleanupCalls() {
+			return stoppedTrack.stopCalls + detector.disposeCalls;
+		},
 		flushPromises: settle,
+		flushAllPromises: settleAll,
 		async mount() {
 			await poseTracker.mounted();
 			tracker.dispatchEvent(new CustomEvent("pose-tracker:start"));
@@ -788,6 +813,48 @@ test("pose tracker stop is safe while camera startup is pending", async () => {
 		harness.events.some((event) => event.type === "pose-tracker:started"),
 		false,
 	);
+});
+
+test("stale inference settlement cannot affect a restarted tracker", async () => {
+	for (const settlement of ["resolve", "reject"]) {
+		let settleStaleInference;
+		const harness = poseTrackerHarness({
+			estimatePoses(callIndex) {
+				if (callIndex === 0) {
+					return new Promise((resolve, reject) => {
+						settleStaleInference =
+							settlement === "resolve"
+								? () =>
+										resolve(trackerFrame(trackerSample({ confidence: 0.1 }), 0))
+								: () => reject(new Error("stale detector exploded"));
+					});
+				}
+				return trackerFrame(trackerSample());
+			},
+		});
+
+		await harness.impl.mounted();
+		await harness.start();
+		harness.tracker.dispatchEvent(new CustomEvent("pose-tracker:stop"));
+		await harness.start();
+		await harness.flushAllPromises();
+		const cleanupCalls = harness.resourceCleanupCalls;
+		assert.equal(harness.pendingAnimationFrames, 1, settlement);
+
+		settleStaleInference();
+		await harness.flushAllPromises();
+
+		assert.equal(harness.pendingAnimationFrames, 1, settlement);
+		assert.equal(harness.resourceCleanupCalls, cleanupCalls, settlement);
+		assert.equal(
+			harness.events.some(
+				(event) =>
+					event.type === "pose-tracker:status" && event.detail.state === "lost",
+			),
+			false,
+			settlement,
+		);
+	}
 });
 
 test("camera gesture cannot confirm while readiness is not_ready", async () => {
