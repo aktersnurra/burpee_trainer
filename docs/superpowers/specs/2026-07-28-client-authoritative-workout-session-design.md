@@ -255,11 +255,11 @@ No application API request, LiveView event, telemetry push, or trace upload occu
 The semantic states remain distinct:
 
 - `work_active`: orange active movement fill;
-- `work_recovery`: static muted-blue full-screen recovery with centered bare seconds;
-- `rest`: subtly breathing set-rest field;
+- `work_recovery`: muted-blue full-screen recovery with centered bare seconds;
+- `rest`: muted-blue set-rest field;
 - `rest_count_in`: still, field-free final three-second count-in.
 
-Use the existing `is-work-recovery` class in CSS. It must not inherit the between-set breathing animation. Do not add active-workout labels, cards, or extra chrome.
+All blue rest screens, including `work_recovery`, use the same subtle breathing animation. The `is-work-recovery` class preserves recovery semantics without disabling that motion. Do not add active-workout labels, cards, or extra chrome.
 
 ## Client completion review
 
@@ -399,7 +399,7 @@ Likely modifications:
   - completion draft store;
   - pose-trace queue/uploader.
 - `assets/js/hooks/session_renderer.mjs` and `assets/css/app.css`
-  - announcements and distinct static work recovery.
+  - announcements and breathing blue rest/recovery states.
 - focused JS and ExUnit flow tests.
 
 The implementation plan may adjust exact file boundaries after targeted inspection, but it must preserve the ownership and network contracts above.
@@ -475,6 +475,6 @@ The implementation plan may adjust exact file boundaries after targeted inspecti
 7. Corrected camera results save successfully without cadence analytics.
 8. Final Save is idempotent and returns usable structured errors.
 9. Pose traces are written locally during exercise and uploaded only after Save.
-10. Intra-rep recovery is static and visually distinct from breathing set rest.
+10. All blue rest screens breathe, including intra-rep recovery, while preserving distinct recovery semantics.
 11. Focus/live-region behavior covers prompts, count-in, pause/resume, completion, and errors.
 12. JavaScript tests, focused ExUnit, `mix precommit`, and `mix assets.build` pass.

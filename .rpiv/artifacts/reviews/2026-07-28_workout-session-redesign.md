@@ -235,7 +235,7 @@ Announce the current countdown numeral, add an announced completion heading/stat
 `assets/js/hooks/session_renderer.mjs:58`
 
 **Fix**
-Use the existing `is-work-recovery` class to make intra-rep recovery static and visually distinct from breathing between-set rest without adding visual clutter.
+Use the existing `is-work-recovery` class to preserve intra-rep recovery semantics while sharing the breathing blue rest field and centered bare seconds without adding visual clutter.
 
 ---
 

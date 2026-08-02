@@ -180,19 +180,15 @@ test("between-set rest breathes across the full blue screen", () => {
 	assert.doesNotMatch(rest, /border-radius:|transform:|opacity:/);
 });
 
-test("intra-rep work recovery is static and has no label", () => {
+test("all blue rest screens breathe without adding a label", () => {
 	const recovery =
 		ruleFor("#session-runner-client.is-work-recovery")?.declarations || "";
 
-	assert.match(recovery, /background:\s*var\(--session-rest\);/);
-	assert.match(recovery, /animation:\s*none;/);
-	assert.doesNotMatch(recovery, /session-blue-breathe/);
-
-	const reducedMotion = blockFor("@media (prefers-reduced-motion: reduce)");
 	assert.match(
-		reducedMotion,
-		/#session-runner-client\.is-work-recovery\s*\{[^}]*background:\s*var\(--session-rest\);/,
+		renderer,
+		/work_recovery:\s*\["is-rest",\s*"is-work-recovery"\]/,
 	);
+	assert.doesNotMatch(recovery, /animation:\s*none/);
 	assert.doesNotMatch(sessionSurface, />\s*RECOVER\s*</i);
 });
 

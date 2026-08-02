@@ -23,7 +23,7 @@
 - Final Save is idempotent by authenticated user plus `client_session_id`.
 - Corrected or degraded camera results persist no cadence/pace analytics.
 - Pose chunks are buffered in IndexedDB during exercise and uploaded only after Save.
-- Intra-rep recovery is static muted blue; between-set rest retains breathing motion.
+- All blue rest screens breathe, including intra-rep recovery; recovery remains a distinct semantic state.
 - Keep global zoom and hidden-scrollbar behavior unchanged.
 - Add no third-party state, storage, or upload dependency.
 - Follow `docs/superpowers/specs/2026-07-28-client-authoritative-workout-session-design.md` and resolve the verified findings in `.rpiv/artifacts/reviews/2026-07-28_workout-session-redesign.md`.
@@ -56,7 +56,7 @@
 - `assets/js/hooks/session_renderer.mjs` — focus/live announcements and recovery state.
 - `assets/js/hooks/session_renderer_test.mjs` — accessibility and recovery assertions.
 - `assets/js/app.js` — global deferred trace queue drain triggers.
-- `assets/css/app.css` — stable panel states and static `is-work-recovery` treatment.
+- `assets/css/app.css` — stable panel states and breathing blue rest/recovery treatment.
 - `lib/burpee_trainer_web/live/session_live.ex` — bootstrap/static surface and structured final-Save reply only.
 - `lib/burpee_trainer/workouts.ex` — corrected/degraded persistence and deferred trace ingestion.
 - `lib/burpee_trainer/workouts/pose_capture_run.ex` — completed deferred-upload run changeset.
@@ -1234,7 +1234,7 @@ jj new
 
 - `SessionRenderer.announce(text)` updates `#session-live-status` only when text changes.
 - `SessionRenderer.focusPanelHeading(panelId)` focuses the stable heading with `preventScroll: true`.
-- `is-work-recovery` is static and never inherits `session-blue-breathe`.
+- `is-work-recovery` remains semantically distinct and inherits `session-blue-breathe` through `is-rest`.
 
 - [ ] **Step 1: Write failing renderer and stable-markup tests**
 
@@ -1260,7 +1260,7 @@ test("work recovery keeps its distinct class", () => {
 });
 ```
 
-Add a source/style assertion that `.is-work-recovery` disables the breathing animation without adding labels.
+Add a source/style assertion that `.is-work-recovery` retains the breathing animation without adding labels.
 
 - [ ] **Step 2: Run focused tests and observe failures**
 
@@ -1293,16 +1293,9 @@ Stable headings use `tabindex="-1"` and `data-session-heading`.
 
 Announce exact operation/state language, not generic “Loading.”
 
-- [ ] **Step 4: Add static recovery CSS**
+- [ ] **Step 4: Preserve breathing recovery CSS**
 
-Add after the normal rest rule:
-
-```css
-#session-runner-client.is-work-recovery {
-  background: var(--session-rest);
-  animation: none;
-}
-```
+Keep `work_recovery` on the `is-rest` visual class so it inherits `session-blue-breathe`. Do not add an `animation: none` override for `is-work-recovery`.
 
 Keep centered bare seconds, set progress, and overall progress behavior from the approved runner contract. Do not add a `RECOVER` label.
 
@@ -1387,7 +1380,7 @@ Expected: no session transition waits for an application API request or LiveView
 
 - [ ] **Step 6: Verify responsive and room-distance UX**
 
-Check portrait, 640×360 short landscape, safe areas, keyboard pause, reduced motion, camera setup, strict hands-free warmup/start, static intra-rep recovery, breathing set rest, completion errors, and focus/live announcements.
+Check portrait, 640×360 short landscape, safe areas, keyboard pause, reduced motion, camera setup, strict hands-free warmup/start, breathing intra-rep recovery and set rest, completion errors, and focus/live announcements.
 
 Expected: no clipping, hidden primary state, stale gesture action, or competing active-workout chrome.
 
