@@ -1221,7 +1221,7 @@ test("trace chunks serialize without blocking the tracker event callback", async
 	const store = {
 		loadDraft: async () => null,
 		appendTraceChunk(_clientSessionId, chunk) {
-			calls.push(chunk.chunk_index);
+			calls.push(structuredClone(chunk));
 			if (chunk.chunk_index === 0) {
 				return new Promise((resolve) => {
 					resolveFirst = resolve;
@@ -1239,15 +1239,17 @@ test("trace chunks serialize without blocking the tracker event callback", async
 		},
 	});
 
+	const firstChunk = { chunk_index: 0, payload: { frame: 0 } };
+	const secondChunk = { chunk_index: 1, payload: { frame: 1 } };
 	const firstResult = ctx.el.dispatchEvent(
 		new CustomEvent("pose-tracker:trace-chunk", {
-			detail: { chunk_index: 0, payload: { frame: 0 } },
+			detail: { chunk: firstChunk },
 			bubbles: true,
 		}),
 	);
 	ctx.el.dispatchEvent(
 		new CustomEvent("pose-tracker:trace-chunk", {
-			detail: { chunk_index: 1, payload: { frame: 1 } },
+			detail: { chunk: secondChunk },
 			bubbles: true,
 		}),
 	);
@@ -1255,10 +1257,10 @@ test("trace chunks serialize without blocking the tracker event callback", async
 
 	assert.equal(firstResult, true);
 	assert.equal(openCalls, 1);
-	assert.deepEqual(calls, [0]);
+	assert.deepEqual(calls, [firstChunk]);
 	resolveFirst();
 	await ctx.traceWrite;
-	assert.deepEqual(calls, [0, 1]);
+	assert.deepEqual(calls, [firstChunk, secondChunk]);
 	assert.equal(ctx.el.listenerCount("pose-tracker:trace-chunk"), 1);
 	ctx.destroyed();
 	assert.equal(ctx.el.listenerCount("pose-tracker:trace-chunk"), 0);
@@ -1300,8 +1302,7 @@ test("trace write rejection degrades retention without changing workout flow", a
 	});
 	const flow = ctx.flow;
 	trackerEvent(ctx, "pose-tracker:trace-chunk", {
-		chunk_index: 0,
-		payload: { frame: 0 },
+		chunk: { chunk_index: 0, payload: { frame: 0 } },
 	});
 	await ctx.traceWrite;
 

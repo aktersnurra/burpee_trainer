@@ -106,7 +106,8 @@ const SessionHook = {
 			this.trackerFinished = event.detail || null;
 		};
 		this.onPoseTrackerTraceChunk = (event) => {
-			this.queueTraceChunk(event.detail || {});
+			const chunk = event.detail?.chunk;
+			if (chunk) this.queueTraceChunk(chunk);
 		};
 		this.el.addEventListener("pose-tracker:started", this.onPoseTrackerStarted);
 		this.el.addEventListener(

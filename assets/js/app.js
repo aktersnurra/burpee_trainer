@@ -30,6 +30,8 @@ import PoseTracker from "./hooks/pose_tracker";
 import PoseDebug from "./hooks/pose_debug";
 import PoseCalibrationButton from "./hooks/pose_calibration_button";
 import PoseTraceButton from "./hooks/pose_trace_button";
+import { createPoseTraceUploader } from "./hooks/pose_trace_uploader.mjs";
+import { openSessionStore } from "./hooks/session_store.mjs";
 
 const themeStorage = {
 	get() {
@@ -106,13 +108,33 @@ const liveSocket = new LiveSocket("/live", Socket, {
 	},
 });
 
+const traceUploaderReady = openSessionStore().then((store) =>
+	createPoseTraceUploader({
+		store,
+		fetch: window.fetch.bind(window),
+		csrfToken,
+	}),
+);
+const drainPoseTraces = () => {
+	void traceUploaderReady
+		.then((uploader) => uploader.drain())
+		.catch(() => undefined);
+};
+
+window.addEventListener("online", drainPoseTraces);
+window.addEventListener("burpee:trace-upload-ready", drainPoseTraces);
+
 // Show progress bar on live navigation and form submits
 topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
 window.addEventListener("phx:page-loading-start", (_info) => topbar.show(300));
-window.addEventListener("phx:page-loading-stop", (_info) => topbar.hide());
+window.addEventListener("phx:page-loading-stop", (_info) => {
+	topbar.hide();
+	drainPoseTraces();
+});
 
 // connect if there are any LiveViews on the page
 liveSocket.connect();
+drainPoseTraces();
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()

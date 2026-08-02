@@ -21,6 +21,16 @@ defmodule BurpeeTrainerWeb.Router do
     plug(:redirect_if_user_is_authenticated)
   end
 
+  pipeline :authenticated_json do
+    plug(:accepts, ["json"])
+    plug(:fetch_session)
+    plug(:fetch_live_flash)
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
+    plug(:fetch_current_user)
+    plug(:require_authenticated_user)
+  end
+
   scope "/", BurpeeTrainerWeb do
     pipe_through([:browser, :redirect_if_authed])
 
@@ -32,6 +42,12 @@ defmodule BurpeeTrainerWeb.Router do
     pipe_through(:browser)
 
     delete("/logout", SessionController, :delete)
+  end
+
+  scope "/api", BurpeeTrainerWeb do
+    pipe_through(:authenticated_json)
+
+    post("/session-pose-traces", PoseTraceUploadController, :create)
   end
 
   scope "/", BurpeeTrainerWeb do

@@ -6,6 +6,7 @@ defmodule BurpeeTrainer.Workouts do
 
   import Ecto.Query
 
+  alias Ecto.Multi
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.{ExecutionPrograms, PlanCompiler}
   alias BurpeeTrainer.Goals
@@ -310,6 +311,171 @@ defmodule BurpeeTrainer.Workouts do
       nil ->
         {:error, :not_found}
     end
+  end
+
+  @doc """
+  Ingest a deferred pose-trace batch for an already-saved, user-scoped session.
+
+  Chunk indexes are idempotent per run. The run is completed only when the
+  caller marks the final acknowledged batch complete.
+  """
+  @spec ingest_pose_trace_batch(User.t(), String.t(), [map()], boolean()) ::
+          {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
+          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
+  def ingest_pose_trace_batch(
+        %User{id: user_id},
+        client_session_id,
+        chunks,
+        complete?
+      )
+      when is_binary(client_session_id) and is_list(chunks) and is_boolean(complete?) do
+    Multi.new()
+    |> Multi.run(:session, fn repo, _changes ->
+      case repo.get_by(WorkoutSession,
+             user_id: user_id,
+             client_session_id: client_session_id
+           ) do
+        %WorkoutSession{plan_id: plan_id} = session when not is_nil(plan_id) ->
+          {:ok, session}
+
+        _session ->
+          {:error, :not_found}
+      end
+    end)
+    |> Multi.run(:run, fn repo, %{session: session} ->
+      get_or_insert_deferred_pose_run(repo, user_id, session)
+    end)
+    |> Multi.run(:chunks, fn repo, %{run: run} ->
+      insert_deferred_pose_chunks(repo, run, chunks)
+    end)
+    |> Multi.run(:completion, fn repo, %{run: run, session: session} ->
+      complete_deferred_pose_run(repo, run, session, complete?)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{chunks: accepted_indexes, completion: run}} ->
+        {:ok, %{accepted_indexes: accepted_indexes, complete: run.status == :completed}}
+
+      {:error, _step, reason, _changes} ->
+        {:error, reason}
+    end
+  end
+
+  def ingest_pose_trace_batch(%User{}, _client_session_id, _chunks, _complete?),
+    do: {:error, :invalid_batch}
+
+  defp get_or_insert_deferred_pose_run(repo, user_id, session) do
+    case repo.get_by(PoseCaptureRun,
+           workout_session_id: session.id,
+           user_id: user_id
+         ) do
+      %PoseCaptureRun{} = run ->
+        {:ok, run}
+
+      nil ->
+        changeset =
+          %PoseCaptureRun{
+            user_id: user_id,
+            plan_id: session.plan_id,
+            workout_session_id: session.id,
+            status: :active
+          }
+          |> PoseCaptureRun.start_changeset(%{"started_at" => DateTime.utc_now(:second)})
+
+        case repo.insert(changeset) do
+          {:ok, run} ->
+            {:ok, run}
+
+          {:error, changeset} ->
+            case repo.get_by(PoseCaptureRun,
+                   workout_session_id: session.id,
+                   user_id: user_id
+                 ) do
+              %PoseCaptureRun{} = run -> {:ok, run}
+              nil -> {:error, changeset}
+            end
+        end
+    end
+  end
+
+  defp insert_deferred_pose_chunks(repo, run, chunks) do
+    with {:ok, prepared} <- prepare_deferred_pose_chunks(run, chunks) do
+      Enum.reduce_while(prepared, {:ok, []}, fn {index, changeset}, {:ok, indexes} ->
+        case repo.insert(changeset,
+               on_conflict: :nothing,
+               conflict_target: [:pose_capture_run_id, :chunk_index]
+             ) do
+          {:ok, _chunk} -> {:cont, {:ok, [index | indexes]}}
+          {:error, changeset} -> {:halt, {:error, changeset}}
+        end
+      end)
+      |> case do
+        {:ok, indexes} -> {:ok, indexes |> Enum.reverse() |> Enum.uniq() |> Enum.sort()}
+        {:error, changeset} -> {:error, changeset}
+      end
+    end
+  end
+
+  defp prepare_deferred_pose_chunks(run, chunks) do
+    chunks
+    |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, prepared} ->
+      changeset = deferred_pose_chunk_changeset(run, attrs)
+
+      if changeset.valid? do
+        index = Ecto.Changeset.get_field(changeset, :chunk_index)
+        {:cont, {:ok, [{index, changeset} | prepared]}}
+      else
+        {:halt, {:error, changeset}}
+      end
+    end)
+    |> case do
+      {:ok, prepared} -> {:ok, Enum.reverse(prepared)}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp deferred_pose_chunk_changeset(run, attrs) when is_map(attrs) do
+    payload = chunk_value(attrs, "payload")
+
+    normalized = %{
+      "segment" => chunk_value(attrs, "segment"),
+      "chunk_index" => chunk_value(attrs, "chunk_index"),
+      "started_at_ms" => chunk_value(attrs, "started_at_ms"),
+      "ended_at_ms" => chunk_value(attrs, "ended_at_ms"),
+      "sample_count" => chunk_value(attrs, "sample_count"),
+      "payload_json" => Jason.encode!(payload)
+    }
+
+    %PoseTraceChunk{pose_capture_run_id: run.id}
+    |> PoseTraceChunk.changeset(normalized)
+  end
+
+  defp deferred_pose_chunk_changeset(run, _attrs) do
+    %PoseTraceChunk{pose_capture_run_id: run.id}
+    |> PoseTraceChunk.changeset(%{})
+  end
+
+  defp chunk_value(attrs, key) do
+    Map.get(attrs, key) || Map.get(attrs, String.to_existing_atom(key))
+  end
+
+  defp complete_deferred_pose_run(
+         _repo,
+         %PoseCaptureRun{status: :completed} = run,
+         _session,
+         _complete?
+       ),
+       do: {:ok, run}
+
+  defp complete_deferred_pose_run(_repo, run, _session, false), do: {:ok, run}
+
+  defp complete_deferred_pose_run(repo, run, session, true) do
+    run
+    |> PoseCaptureRun.complete_changeset(%{
+      "workout_session_id" => session.id,
+      "completed_at" => DateTime.utc_now(:second)
+    })
+    |> repo.update()
   end
 
   defp get_user_pose_capture_run(user_id, run_id) do

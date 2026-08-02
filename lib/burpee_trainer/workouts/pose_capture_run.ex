@@ -34,6 +34,9 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
     |> cast(attrs, [:capture_version, :started_at])
     |> validate_required([:user_id, :plan_id, :status, :capture_version, :started_at])
     |> validate_number(:capture_version, greater_than: 0)
+    |> unique_constraint(:workout_session_id,
+      name: :pose_capture_runs_workout_session_id_unique_index
+    )
   end
 
   @spec complete_changeset(t(), map()) :: Ecto.Changeset.t()
