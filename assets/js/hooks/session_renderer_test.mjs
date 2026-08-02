@@ -32,6 +32,8 @@ function element() {
 	const children = [];
 	let textContent = "";
 	let textContentAssignments = 0;
+	let focusCalls = 0;
+	let focusOptions;
 	const node = {
 		attributes,
 		children,
@@ -54,6 +56,16 @@ function element() {
 		},
 		get textContentAssignments() {
 			return textContentAssignments;
+		},
+		get focusCalls() {
+			return focusCalls;
+		},
+		get focusOptions() {
+			return focusOptions;
+		},
+		focus(options) {
+			focusCalls += 1;
+			focusOptions = options;
 		},
 		get firstChild() {
 			return children[0] || null;
@@ -103,6 +115,8 @@ function harness() {
 		"#total-separator": element(),
 		"#total-plan": element(),
 		"#pause-icon": element(),
+		"#session-live-status": element(),
+		"#session-completion-review [data-session-heading]": element(),
 		"#session-save-errors": element(),
 		"#completion-reps-error": element(),
 		"#completion-duration-error": element(),
@@ -118,6 +132,7 @@ function harness() {
 	const root = {
 		classList: classList(),
 		querySelector: (selector) => elements[selector] || null,
+		querySelectorAll: () => [],
 	};
 	return { renderer: new SessionRenderer(root), elements };
 }
@@ -135,6 +150,49 @@ function model(state, overrides = {}) {
 		...overrides,
 	};
 }
+
+test("camera, count-in, pause, completion, save, and errors are announced", () => {
+	const { renderer, elements } = harness();
+	const status = elements["#session-live-status"];
+
+	renderer.renderFlowState({ mode: "camera_starting" });
+	assert.equal(status.textContent, "Starting camera");
+
+	renderer.renderFlowState({ mode: "camera_error" });
+	assert.equal(status.textContent, "Camera unavailable");
+
+	renderer.renderDisplayModel(model("count_in", { primaryCount: 3 }));
+	assert.equal(status.textContent, "Workout starts in 3");
+
+	renderer.updatePauseButton(true);
+	assert.equal(status.textContent, "Workout paused");
+
+	renderer.renderFlowState({ mode: "completion_review", saveStatus: "idle" });
+	assert.equal(status.textContent, "Workout complete");
+
+	renderer.renderFlowState({ mode: "completion_review", saveStatus: "saving" });
+	assert.equal(status.textContent, "Saving session");
+
+	renderer.renderSaveErrors({
+		global_errors: ["Could not save. Try again."],
+	});
+	assert.equal(status.textContent, "Could not save. Try again.");
+
+	const assignments = status.textContentAssignments;
+	renderer.announce("Could not save. Try again.");
+	assert.equal(status.textContentAssignments, assignments);
+});
+
+test("panel heading focus prevents scroll", () => {
+	const { renderer, elements } = harness();
+	const heading =
+		elements["#session-completion-review [data-session-heading]"];
+
+	renderer.focusPanelHeading("session-completion-review");
+
+	assert.equal(heading.focusCalls, 1);
+	assert.deepEqual(heading.focusOptions, { preventScroll: true });
+});
 
 test("active fill rises from neutral to full orange without scaling", () => {
 	const { renderer, elements } = harness();
@@ -269,6 +327,10 @@ test("intra-rep recovery uses the full rest screen and exact seconds", () => {
 	renderer.renderDisplayModel(model("work_recovery"));
 	assert.equal(
 		elements["#session-runner-client"].classList.contains("is-rest"),
+		true,
+	);
+	assert.equal(
+		elements["#session-runner-client"].classList.contains("is-work-recovery"),
 		true,
 	);
 	assert.equal(

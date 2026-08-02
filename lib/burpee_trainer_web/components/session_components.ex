@@ -19,6 +19,8 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
         <h1
           id="session-capture-choice-heading"
+          data-session-heading
+          tabindex="-1"
           class="qs-heading-tight text-4xl font-medium leading-tight"
         >
           Track burpees with the camera?
@@ -54,7 +56,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     <.panel id="session-camera-status" heading_id="camera-status-heading" hidden={@hidden}>
       <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
         <div id="camera-status-starting">
-          <h1 id="camera-status-heading" class="qs-heading-tight text-4xl font-medium leading-tight">
+          <h1
+            id="camera-status-heading"
+            data-session-heading
+            tabindex="-1"
+            class="qs-heading-tight text-4xl font-medium leading-tight"
+          >
             Starting camera
           </h1>
         </div>
@@ -92,7 +99,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       <div class="session-camera-layout absolute inset-0 grid text-center">
         <div class="row-start-1 w-full max-w-[430px] place-self-center self-center px-5">
           <div id="camera-setup-arming">
-            <h1 id="camera-setup-heading" class="qs-heading-tight text-3xl font-medium leading-tight">
+            <h1
+              id="camera-setup-heading"
+              data-session-heading
+              tabindex="-1"
+              class="qs-heading-tight text-3xl font-medium leading-tight"
+            >
               Step into frame
             </h1>
             <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
@@ -147,7 +159,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     ~H"""
     <.panel id="session-warmup-choice" heading_id="session-warmup-heading" hidden={@hidden}>
       <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
-        <h1 id="session-warmup-heading" class="qs-heading-tight text-4xl font-medium leading-tight">
+        <h1
+          id="session-warmup-heading"
+          data-session-heading
+          tabindex="-1"
+          class="qs-heading-tight text-4xl font-medium leading-tight"
+        >
           Warm up first?
         </h1>
         <p id="warmup-tracked-instruction" class="mt-4 text-lg text-[var(--session-muted)]">
@@ -185,6 +202,8 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
         <h1
           id="session-workout-ready-heading"
+          data-session-heading
+          tabindex="-1"
           class="qs-heading-tight text-4xl font-medium leading-tight"
         >
           Ready when you are
@@ -219,7 +238,9 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   def runner(assigns) do
     ~H"""
     <.panel id="session-runner-client" heading_id="session-runner-heading" hidden={@hidden}>
-      <h1 id="session-runner-heading" class="sr-only">Workout in progress</h1>
+      <h1 id="session-runner-heading" data-session-heading tabindex="-1" class="sr-only">
+        Workout in progress
+      </h1>
       <div class="relative min-h-dvh w-full overflow-hidden">
         <div
           id="session-visual-layers"
@@ -335,7 +356,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
       <div class="mx-auto min-h-dvh w-full max-w-[430px] overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))]">
         <section id="session-completion-summary" class="text-center">
-          <h1 id="session-completion-heading" class="qs-heading-tight text-3xl font-medium">
+          <h1
+            id="session-completion-heading"
+            data-session-heading
+            tabindex="-1"
+            class="qs-heading-tight text-3xl font-medium"
+          >
             Workout complete
           </h1>
           <p

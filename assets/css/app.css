@@ -276,6 +276,11 @@ body {
   animation: session-blue-breathe 5s ease-in-out infinite;
 }
 
+#session-runner-client.is-work-recovery {
+  background: var(--session-rest);
+  animation: none;
+}
+
 #session-runner-client.is-rest.is-paused {
   animation-play-state: paused;
 }
@@ -416,6 +421,10 @@ body {
 
   #session-runner-client.is-rest {
     background: var(--session-rest-light);
+  }
+
+  #session-runner-client.is-work-recovery {
+    background: var(--session-rest);
   }
 }
 

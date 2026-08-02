@@ -16,6 +16,7 @@ export class SessionRenderer {
 		this.paused = false;
 		this.lastPulseValue = null;
 		this.appliedVisualState = undefined;
+		this.visiblePanelId = undefined;
 	}
 
 	clearTimers() {
@@ -46,7 +47,24 @@ export class SessionRenderer {
 		this.renderCameraStatus(state);
 		this.renderCameraSetup(state);
 		this.renderCaptureControls(state);
-		this.focusPanelHeading(visibleId);
+		if (visibleId !== this.visiblePanelId) {
+			this.visiblePanelId = visibleId;
+			this.focusPanelHeading(visibleId);
+		}
+		if (state.mode === "camera_starting") {
+			this.announce("Starting camera");
+		} else if (state.mode === "camera_error") {
+			this.announce("Camera unavailable");
+		} else if (
+			state.mode === "completion_review" &&
+			state.saveStatus === "saving"
+		) {
+			this.announce("Saving session");
+		} else if (state.mode === "completion_review") {
+			this.announce("Workout complete");
+		} else if (state.mode === "persisted") {
+			this.announce("Session saved");
+		}
 	}
 
 	renderCameraSetup(state) {
@@ -106,18 +124,16 @@ export class SessionRenderer {
 		}
 	}
 
+	announce(text) {
+		const status = this.root.querySelector("#session-live-status");
+		if (status && status.textContent !== text) status.textContent = text;
+	}
+
 	focusPanelHeading(panelId) {
 		if (!panelId) return;
-		const headingIds = {
-			"session-capture-choice": "session-capture-choice-heading",
-			"session-camera-status": "camera-status-heading",
-			"session-camera-setup": "camera-setup-heading",
-			"session-warmup-choice": "session-warmup-heading",
-			"session-workout-ready": "session-workout-ready-heading",
-			"session-runner-client": "session-runner-heading",
-			"session-completion-review": "session-completion-heading",
-		};
-		this.root.querySelector(`#${headingIds[panelId]}`)?.focus?.();
+		this.root
+			.querySelector(`#${panelId} [data-session-heading]`)
+			?.focus({ preventScroll: true });
 	}
 
 	renderCompletion(completion) {
@@ -178,6 +194,7 @@ export class SessionRenderer {
 
 	renderSaveErrors(reply = {}) {
 		this.clearSaveErrors();
+		const fieldMessages = [];
 		const fields = {
 			burpee_count_actual: ["#completion-reps-error", "#completion-reps-input"],
 			duration_sec_actual: [
@@ -199,6 +216,7 @@ export class SessionRenderer {
 				error.textContent = text;
 				error.hidden = false;
 			}
+			if (text) fieldMessages.push(text);
 			if (input && text) input.setAttribute("aria-invalid", "true");
 		}
 
@@ -211,6 +229,10 @@ export class SessionRenderer {
 			global.hidden = false;
 			global.classList.remove("hidden");
 		}
+
+		const announcement =
+			globalMessages.join(" ") || fieldMessages.join(" ");
+		if (announcement) this.announce(announcement);
 	}
 
 	renderTimer(timeLeftSec) {
@@ -342,6 +364,7 @@ export class SessionRenderer {
 			primaryCount: this.currentPrimaryCount,
 			setProgress: this.currentSetProgress,
 		});
+		this.announce(paused ? "Workout paused" : "Workout resumed");
 	}
 
 	resetReady() {
@@ -387,6 +410,9 @@ export class SessionRenderer {
 		};
 		this.currentVisualState = visual.state;
 		this.currentPrimaryCount = model.primaryCount;
+		if (visual.state === "count_in") {
+			this.announce(`Workout starts in ${model.primaryCount}`);
+		}
 		this.currentSetProgress = model.setProgress;
 		this.updateAccessibleState({
 			state: visual.state,

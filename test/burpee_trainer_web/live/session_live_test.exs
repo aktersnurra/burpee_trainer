@@ -109,6 +109,18 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-live-status[role='status'][aria-live='polite']")
     assert has_element?(view, "#session-save-errors[tabindex='-1']")
 
+    for heading_id <- ~w[
+          session-capture-choice-heading
+          camera-status-heading
+          camera-setup-heading
+          session-warmup-heading
+          session-workout-ready-heading
+          session-runner-heading
+          session-completion-heading
+        ] do
+      assert has_element?(view, "##{heading_id}[data-session-heading][tabindex='-1']")
+    end
+
     assert has_element?(
              view,
              "#session-completion-form:not([phx-change]):not([phx-submit])"

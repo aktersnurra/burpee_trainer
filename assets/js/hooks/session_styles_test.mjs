@@ -163,7 +163,7 @@ test("pause freezes the underlying full-screen rest breath", () => {
 	);
 });
 
-test("normal and intra-rep rest breathe across the full blue screen", () => {
+test("between-set rest breathes across the full blue screen", () => {
 	const breathing = blockFor("@keyframes session-blue-breathe");
 	assert.match(
 		breathing,
@@ -178,6 +178,22 @@ test("normal and intra-rep rest breathe across the full blue screen", () => {
 		/animation:\s*session-blue-breathe\s+5s\s+ease-in-out\s+infinite;/,
 	);
 	assert.doesNotMatch(rest, /border-radius:|transform:|opacity:/);
+});
+
+test("intra-rep work recovery is static and has no label", () => {
+	const recovery =
+		ruleFor("#session-runner-client.is-work-recovery")?.declarations || "";
+
+	assert.match(recovery, /background:\s*var\(--session-rest\);/);
+	assert.match(recovery, /animation:\s*none;/);
+	assert.doesNotMatch(recovery, /session-blue-breathe/);
+
+	const reducedMotion = blockFor("@media (prefers-reduced-motion: reduce)");
+	assert.match(
+		reducedMotion,
+		/#session-runner-client\.is-work-recovery\s*\{[^}]*background:\s*var\(--session-rest\);/,
+	);
+	assert.doesNotMatch(sessionSurface, />\s*RECOVER\s*</i);
 });
 
 test("rest_count_in is paper-only with undecorated center content", () => {
