@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPoseTraceUploader } from "./pose_trace_uploader.mjs";
+import {
+	canDrainPoseTraces,
+	createPoseTraceUploader,
+} from "./pose_trace_uploader.mjs";
 
 function chunk(index) {
 	return {
@@ -59,6 +62,17 @@ function parseJson(body) {
 		assert.fail(`request body must be valid JSON: ${error.message}`);
 	}
 }
+
+test("deferred uploads stay idle while a workout session owns the page", () => {
+	const activeSessionDocument = {
+		querySelector: (selector) =>
+			selector === "#burpee-session" ? { id: "burpee-session" } : null,
+	};
+	const nonSessionDocument = { querySelector: () => null };
+
+	assert.equal(canDrainPoseTraces(activeSessionDocument), false);
+	assert.equal(canDrainPoseTraces(nonSessionDocument), true);
+});
 
 test("uploader acknowledges only accepted chunks", async () => {
 	const store = uploadStore([chunk(0), chunk(1)]);

@@ -70,6 +70,29 @@ test("resume excludes overlapping hidden and paused time exactly once", () => {
 	assert.deepEqual(resumed.commands, [{ type: "startAnimationFrame" }]);
 });
 
+test("natural completion clamps a delayed animation tick to timeline duration", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20 }];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 3,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_START", now: 1 }).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 1 }).state;
+
+	const completed = segmentTransition(state, { type: "TICK", elapsedSec: 170 });
+	const done = completed.commands.find(
+		(command) => command.type === "segmentDone",
+	);
+	const rendered = completed.commands.find(
+		(command) => command.type === "renderRunningFrame",
+	);
+
+	assert.equal(completed.state.clock.elapsedSec, 60);
+	assert.equal(rendered.elapsedSec, 60);
+	assert.deepEqual(done.result, { burpeeCountDone: 3, durationSec: 60 });
+});
+
 test("pause-only and visibility-only recovery retain their clock shifts", () => {
 	const running = {
 		...initialSegmentState(),

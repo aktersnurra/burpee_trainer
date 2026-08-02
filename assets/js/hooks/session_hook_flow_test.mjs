@@ -290,18 +290,19 @@ function appendStablePanels(root) {
 		if (id.endsWith("-error") || id === "session-save-errors") {
 			element.hidden = true;
 		}
-		const panel = id.startsWith("camera-choice")
-			? root.findById("session-capture-choice")
-			: id.startsWith("camera-status")
-				? root.findById("session-camera-status")
-				: id.startsWith("camera-setup")
-					? root.findById("session-camera-setup")
-					: id.startsWith("warmup")
-						? root.findById("session-warmup-choice")
-						: id.startsWith("workout-ready")
-							? root.findById("session-workout-ready")
-							: root.findById("session-completion-review");
-		panel.append(element);
+		let panelId = "session-completion-review";
+		if (id.startsWith("camera-choice")) {
+			panelId = "session-capture-choice";
+		} else if (id.startsWith("camera-status")) {
+			panelId = "session-camera-status";
+		} else if (id.startsWith("camera-setup")) {
+			panelId = "session-camera-setup";
+		} else if (id.startsWith("warmup")) {
+			panelId = "session-warmup-choice";
+		} else if (id.startsWith("workout-ready")) {
+			panelId = "session-workout-ready";
+		}
+		root.findById(panelId).append(element);
 	}
 
 	const completion = root.findById("session-completion-review");

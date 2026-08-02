@@ -1,6 +1,10 @@
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_ENDPOINT = "/api/session-pose-traces";
 
+export function canDrainPoseTraces(documentRoot) {
+	return !documentRoot.querySelector("#burpee-session");
+}
+
 export function createPoseTraceUploader({
 	store,
 	fetch,

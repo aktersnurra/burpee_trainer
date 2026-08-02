@@ -85,6 +85,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#camera-choice-yes", "Yes, use camera")
     assert has_element?(view, "#camera-choice-no", "No, continue")
     refute has_element?(view, "[phx-click='session_started']")
+    refute has_element?(view, "nav")
+    refute has_element?(view, "#flash-group")
   end
 
   test "renders inactive panels hidden and inert with the static completion form", %{

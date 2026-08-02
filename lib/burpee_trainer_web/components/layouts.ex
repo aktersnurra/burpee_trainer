@@ -15,6 +15,8 @@ defmodule BurpeeTrainerWeb.Layouts do
   attr(:current_user, :any, default: nil)
   attr(:current_level, :atom, default: nil)
   attr(:current_page, :atom, default: nil)
+  attr(:navigation?, :boolean, default: true)
+  attr(:flash?, :boolean, default: true)
   slot(:inner_block, required: true)
 
   def app(assigns) do
@@ -22,7 +24,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       Map.put(assigns, :session_surface_page?, session_surface_page?(assigns.current_page))
 
     ~H"""
-    <%= if @current_user do %>
+    <%= if @current_user && @navigation? do %>
       <%!-- Desktop top nav — hidden on mobile --%>
       <nav class={[
         "hidden sm:flex items-center justify-center gap-2 px-4 py-3 border-b",
@@ -127,7 +129,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       {render_slot(@inner_block)}
     </main>
 
-    <%= if @current_user do %>
+    <%= if @current_user && @navigation? do %>
       <div class={[
         "sm:hidden",
         @session_surface_page? &&
@@ -136,7 +138,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       ]} />
     <% end %>
 
-    <.flash_group flash={@flash} />
+    <.flash_group :if={@flash?} flash={@flash} />
     """
   end
 

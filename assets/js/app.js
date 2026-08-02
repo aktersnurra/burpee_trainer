@@ -30,7 +30,10 @@ import PoseTracker from "./hooks/pose_tracker";
 import PoseDebug from "./hooks/pose_debug";
 import PoseCalibrationButton from "./hooks/pose_calibration_button";
 import PoseTraceButton from "./hooks/pose_trace_button";
-import { createPoseTraceUploader } from "./hooks/pose_trace_uploader.mjs";
+import {
+	canDrainPoseTraces,
+	createPoseTraceUploader,
+} from "./hooks/pose_trace_uploader.mjs";
 import { openSessionStore } from "./hooks/session_store.mjs";
 
 const themeStorage = {
@@ -116,6 +119,8 @@ const traceUploaderReady = openSessionStore().then((store) =>
 	}),
 );
 const drainPoseTraces = () => {
+	if (!canDrainPoseTraces(document)) return;
+
 	void traceUploaderReady
 		.then((uploader) => uploader.drain())
 		.catch(() => undefined);

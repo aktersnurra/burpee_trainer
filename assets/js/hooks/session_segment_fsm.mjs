@@ -324,21 +324,22 @@ function tickSegment(state, event) {
 		state,
 		frame ? accountReps(frame, null, repsAfterFrame) : repsAfterFrame,
 	);
+	const completionElapsedSec = state.clock.totalDurationSec;
 
 	return {
 		state: {
 			...state,
 			mode: "done",
-			clock: { ...state.clock, elapsedSec: event.elapsedSec },
+			clock: { ...state.clock, elapsedSec: completionElapsedSec },
 			reps: nextReps,
 		},
 		commands: [
-			{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
+			{ type: "renderRunningFrame", elapsedSec: completionElapsedSec },
 			{
 				type: "segmentDone",
 				result: {
 					burpeeCountDone: nextReps.burpeeCountDone,
-					durationSec: Math.round(event.elapsedSec),
+					durationSec: Math.round(completionElapsedSec),
 				},
 			},
 		],
