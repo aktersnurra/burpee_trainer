@@ -300,7 +300,12 @@ function appendStablePanels(root) {
 	}
 }
 
-function buildHarness({ poseTrackerReady = false, openSessionStore } = {}) {
+function buildHarness({
+	poseTrackerReady = false,
+	openSessionStore,
+	setTimeout: hookSetTimeout,
+	clearTimeout: hookClearTimeout,
+} = {}) {
 	const events = [];
 	const renderedModels = [];
 	const downCueValues = [];
@@ -380,6 +385,8 @@ function buildHarness({ poseTrackerReady = false, openSessionStore } = {}) {
 		...SessionHook,
 		el: root,
 		...(openSessionStore ? { openSessionStore } : {}),
+		...(hookSetTimeout ? { setTimeout: hookSetTimeout } : {}),
+		...(hookClearTimeout ? { clearTimeout: hookClearTimeout } : {}),
 		renderer,
 		audio,
 		wakeLock,
@@ -1159,8 +1166,7 @@ test("mount bootstraps the local flow synchronously from the root dataset", () =
 	ctx.destroyed();
 });
 
-const flushHookPromises = () =>
-	new Promise((resolve) => setImmediate(resolve));
+const flushHookPromises = () => new Promise((resolve) => setImmediate(resolve));
 
 function completionDraft(overrides = {}) {
 	return {
@@ -1174,6 +1180,7 @@ function completionDraft(overrides = {}) {
 		tracking: {
 			enabled: true,
 			trust: "finished",
+			reason: null,
 			detected_reps: 4,
 			detected_duration_sec: 9,
 			cadence_ms: [2_000, 4_000, 6_000, 8_000],
@@ -1296,7 +1303,10 @@ test("completion display and every stable edit queue the full draft", async () =
 	await ctx.draftRestore;
 	const renderCompletion = ctx.renderer.renderCompletion.bind(ctx.renderer);
 	ctx.renderer.renderCompletion = (completion) => {
-		assert.ok(ctx.inMemoryCompletionDraft, "draft must be queued before render");
+		assert.ok(
+			ctx.inMemoryCompletionDraft,
+			"draft must be queued before render",
+		);
 		renderCompletion(completion);
 	};
 	ctx.flow = {
@@ -1326,6 +1336,7 @@ test("completion display and every stable edit queue the full draft", async () =
 			tracking: {
 				enabled: true,
 				trust: "observing",
+				reason: null,
 				detected_reps: 4,
 				detected_duration_sec: 9,
 				cadence_ms: [2_000, 4_000, 6_000, 8_000],
@@ -1342,6 +1353,16 @@ test("completion display and every stable edit queue the full draft", async () =
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).burpee_count_actual, 5);
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
+
+	const duration = ctx.el.querySelector("#completion-duration-input");
+	duration.value = "11";
+	ctx.el.dispatchEvent({ type: "input", target: duration });
+	await ctx.draftWrite;
+	assert.equal(saved.at(-1).duration_sec_actual, 11);
+	assert.equal(
+		ctx.el.querySelector("#session-actual-duration").textContent,
+		"0:11",
+	);
 
 	const mood = ctx.el
 		.querySelectorAll("[data-mood]")
@@ -1362,7 +1383,7 @@ test("completion display and every stable edit queue the full draft", async () =
 	ctx.el.dispatchEvent({ type: "input", target: note });
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).note_post, "Strong finish");
-	assert.equal(saved.length, 5);
+	assert.equal(saved.length, 6);
 	ctx.destroyed();
 });
 
@@ -1378,7 +1399,10 @@ test("exact plan and program draft restores its original client UUID", async () 
 	assert.equal(ctx.clientSessionId, "original-client");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
 	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
-	assert.equal(ctx.el.querySelector("#completion-note-input").value, "Strong finish");
+	assert.equal(
+		ctx.el.querySelector("#completion-note-input").value,
+		"Strong finish",
+	);
 	assert.equal(
 		ctx.el
 			.querySelectorAll("[data-mood]")
@@ -1388,6 +1412,105 @@ test("exact plan and program draft restores its original client UUID", async () 
 	);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
+});
+
+test("degraded tracking reason survives completion draft round-trip exactly", async () => {
+	const saved = [];
+	const first = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => null,
+			async saveDraft(draft) {
+				saved.push(structuredClone(draft));
+			},
+		}),
+	});
+	await first.draftRestore;
+	first.flow = {
+		...first.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "degraded",
+		trackingReason: "confidence_lost/core-pose",
+		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
+	};
+	first.dispatchFlow({
+		type: "SESSION_DONE",
+		result: { burpeeCountDone: 4, durationSec: 9 },
+	});
+	await first.draftWrite;
+
+	assert.equal(saved.length, 1);
+	assert.equal(saved[0].tracking.reason, "confidence_lost/core-pose");
+	first.destroyed();
+
+	const restoredWrites = [];
+	const restored = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => saved[0],
+			async saveDraft(draft) {
+				restoredWrites.push(structuredClone(draft));
+			},
+		}),
+	});
+	await restored.draftRestore;
+	await restored.draftWrite;
+
+	assert.equal(restored.flow.mode, "completion_review");
+	assert.equal(restored.flow.trackingReason, "confidence_lost/core-pose");
+	assert.equal(
+		restoredWrites.at(-1).tracking.reason,
+		"confidence_lost/core-pose",
+	);
+	assert.deepEqual(restored.events, []);
+	restored.destroyed();
+});
+
+test("draft load settlement after destroy cannot restore, render, or save", async () => {
+	let resolveDraft;
+	let signalLoadStarted;
+	const draftPending = new Promise((resolve) => {
+		resolveDraft = resolve;
+	});
+	const loadStarted = new Promise((resolve) => {
+		signalLoadStarted = resolve;
+	});
+	const saved = [];
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft() {
+				signalLoadStarted();
+				return draftPending;
+			},
+			async saveDraft(draft) {
+				saved.push(draft);
+			},
+		}),
+	});
+	await loadStarted;
+	const dispatched = [];
+	const dispatchFlow = ctx.dispatchFlow.bind(ctx);
+	ctx.dispatchFlow = (event) => {
+		dispatched.push(event.type);
+		dispatchFlow(event);
+	};
+	let completionRenders = 0;
+	ctx.renderer.renderCompletion = () => {
+		completionRenders += 1;
+	};
+
+	ctx.destroyed();
+	resolveDraft(completionDraft());
+	await ctx.draftRestore;
+	await ctx.draftWrite;
+
+	assert.equal(ctx.flow.mode, "capture_choice");
+	assert.equal(ctx.clientSessionId, "client-1");
+	assert.deepEqual(dispatched, []);
+	assert.equal(completionRenders, 0);
+	assert.deepEqual(saved, []);
 });
 
 test("mismatched plan or program draft is ignored", async () => {
@@ -1447,6 +1570,90 @@ test("confirmed discard clears local session data and emits zero server events",
 		assert.equal(ctx.flow.completion, null);
 	} finally {
 		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("discard navigates by a local deadline when store open remains pending", async () => {
+	let resolveOpen;
+	const opened = new Promise((resolve) => {
+		resolveOpen = resolve;
+	});
+	const storageCalls = [];
+	const scheduled = new Map();
+	let nextTimerId = 1;
+	const navigations = [];
+	let destroyed = false;
+	const originalWindow = globalThis.window;
+	globalThis.window = {
+		confirm: () => true,
+		location: { assign: (path) => navigations.push(path) },
+	};
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: () => opened,
+		setTimeout(callback, delayMs) {
+			const id = nextTimerId++;
+			scheduled.set(id, { callback, delayMs });
+			return id;
+		},
+		clearTimeout(id) {
+			scheduled.delete(id);
+		},
+	});
+	const trackerStops = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:stop", () => trackerStops.push("stop"));
+	ctx.flow = {
+		...ctx.flow,
+		mode: "completion_review",
+		completion: {
+			burpeeCountActual: 4,
+			burpeeCountPlanned: 5,
+			durationSecActual: 9,
+			durationSecPlanned: 10,
+			trackingTrust: "disabled",
+			cadenceMs: [],
+		},
+	};
+	ctx.activeSegment = "workout";
+	ctx.startTime = 1;
+	ctx.queueCompletionDraft();
+
+	try {
+		click(ctx, "session-discard-btn");
+
+		assert.equal(ctx.flow.mode, "discarded");
+		assert.equal(ctx.activeSegment, null);
+		assert.equal(ctx.startTime, null);
+		assert.deepEqual(trackerStops, ["stop"]);
+		assert.deepEqual(navigations, []);
+		assert.equal(scheduled.size, 1);
+		const [{ callback, delayMs }] = scheduled.values();
+		assert.ok(delayMs <= 250, `discard deadline was ${delayMs}ms`);
+		callback();
+		assert.deepEqual(navigations, ["/workouts"]);
+		ctx.destroyed();
+		destroyed = true;
+
+		resolveOpen({
+			async loadDraft() {
+				storageCalls.push("restore");
+				return completionDraft();
+			},
+			async saveDraft() {
+				storageCalls.push("save");
+			},
+			async discardSession(clientSessionId) {
+				storageCalls.push(`discard:${clientSessionId}`);
+			},
+		});
+		await ctx.discardWrite;
+		assert.deepEqual(storageCalls, ["discard:client-1"]);
+		assert.deepEqual(navigations, ["/workouts"]);
+	} finally {
+		if (!destroyed) ctx.destroyed();
 		globalThis.window = originalWindow;
 	}
 });

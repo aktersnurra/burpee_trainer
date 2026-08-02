@@ -28,8 +28,12 @@ import {
 	updateTrackingStatus,
 } from "./pose_tracking_observer.mjs";
 
+const DISCARD_NAVIGATION_DEADLINE_MS = 100;
+
 const SessionHook = {
 	mounted() {
+		this.lifecycleGeneration = (this.lifecycleGeneration || 0) + 1;
+		this.lifecycleDestroyed = false;
 		this.audio = new SessionAudio();
 		this.renderer = new SessionRenderer(this.el);
 		this.wakeLock = new SessionWakeLock();
@@ -219,9 +223,7 @@ const SessionHook = {
 			if (tag !== undefined) this.toggleCompletionTag(tag);
 			if (
 				discard &&
-				window.confirm(
-					discard.dataset.confirm || "Discard this session?",
-				)
+				window.confirm(discard.dataset.confirm || "Discard this session?")
 			) {
 				this.discardSessionLocally();
 			}
@@ -251,7 +253,12 @@ const SessionHook = {
 		});
 	},
 
+	lifecycleActive(generation) {
+		return !this.lifecycleDestroyed && generation === this.lifecycleGeneration;
+	},
+
 	initializeSessionStore() {
+		const generation = this.lifecycleGeneration;
 		const openStore = this.openSessionStore || openSessionStore;
 		let opened;
 		try {
@@ -262,39 +269,52 @@ const SessionHook = {
 
 		this.storeReady = Promise.resolve(opened)
 			.then((store) => {
-				this.store = store;
+				if (this.lifecycleActive(generation)) this.store = store;
 				return store;
 			})
 			.catch(() => {
-				this.traceRetentionAvailable = false;
-				this.store = null;
+				if (this.lifecycleActive(generation)) {
+					this.traceRetentionAvailable = false;
+					this.store = null;
+				}
 				return null;
 			});
 
 		this.draftRestore = this.storeReady
 			.then(async (store) => {
-				if (!store) return;
+				if (!store || this.discarding || !this.lifecycleActive(generation)) {
+					return;
+				}
 				const draft = await store.loadDraft({
 					planId: this.planId,
 					programHash: this.programHash,
 				});
-				this.restoreCompletionDraft(draft);
+				if (this.lifecycleActive(generation) && !this.discarding) {
+					this.restoreCompletionDraft(draft);
+				}
 			})
 			.catch(() => {
-				this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) {
+					this.traceRetentionAvailable = false;
+				}
 			});
 	},
 
 	queueTraceChunk(chunk) {
-		if (this.discarding) return;
+		const generation = this.lifecycleGeneration;
+		if (this.discarding || !this.lifecycleActive(generation)) return;
 		const clientSessionId = this.clientSessionId;
 		this.traceWrite = this.traceWrite
 			.then(async () => {
 				const store = await this.storeReady;
-				if (store) await store.appendTraceChunk(clientSessionId, chunk);
+				if (store && !this.discarding && this.lifecycleActive(generation)) {
+					await store.appendTraceChunk(clientSessionId, chunk);
+				}
 			})
 			.catch(() => {
-				this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) {
+					this.traceRetentionAvailable = false;
+				}
 			});
 	},
 
@@ -312,6 +332,7 @@ const SessionHook = {
 			tracking: {
 				enabled: this.flow.captureMode === "camera",
 				trust: completion.trackingTrust,
+				reason: this.flow.trackingReason ?? null,
 				detected_reps: completion.detectedReps,
 				detected_duration_sec: completion.detectedDurationSec,
 				cadence_ms: [...(completion.cadenceMs || [])],
@@ -323,17 +344,22 @@ const SessionHook = {
 	},
 
 	queueCompletionDraft() {
-		if (this.discarding) return;
+		const generation = this.lifecycleGeneration;
+		if (this.discarding || !this.lifecycleActive(generation)) return;
 		const draft = this.completionDraft();
 		if (!draft) return;
 		this.inMemoryCompletionDraft = draft;
 		this.draftWrite = this.draftWrite
 			.then(async () => {
 				const store = await this.storeReady;
-				if (store) await store.saveDraft(draft);
+				if (store && !this.discarding && this.lifecycleActive(generation)) {
+					await store.saveDraft(draft);
+				}
 			})
 			.catch(() => {
-				this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) {
+					this.traceRetentionAvailable = false;
+				}
 			});
 	},
 
@@ -368,7 +394,7 @@ const SessionHook = {
 		this.dispatchFlow({
 			type: "RESTORE_COMPLETION_DRAFT",
 			captureMode: tracking.enabled ? "camera" : "no_camera",
-			trackingReason: tracking.reason || null,
+			trackingReason: tracking.reason ?? null,
 			completion,
 		});
 	},
@@ -405,6 +431,23 @@ const SessionHook = {
 		this.inMemoryCompletionDraft = null;
 		this.dispatchFlow({ type: "DISCARD_LOCAL" });
 
+		let navigated = false;
+		const clearTimer = this.clearTimeout || clearTimeout;
+		const navigate = () => {
+			if (navigated) return;
+			navigated = true;
+			if (this.discardNavigationTimeoutId) {
+				clearTimer(this.discardNavigationTimeoutId);
+				this.discardNavigationTimeoutId = null;
+			}
+			window.location.assign("/workouts");
+		};
+		const scheduleTimer = this.setTimeout || setTimeout;
+		this.discardNavigationTimeoutId = scheduleTimer(
+			navigate,
+			DISCARD_NAVIGATION_DEADLINE_MS,
+		);
+
 		this.discardWrite = Promise.all([this.traceWrite, this.draftWrite])
 			.then(async () => {
 				const store = await this.storeReady;
@@ -413,7 +456,7 @@ const SessionHook = {
 			.catch(() => {
 				this.traceRetentionAvailable = false;
 			})
-			.then(() => window.location.assign("/workouts"));
+			.then(navigate);
 	},
 
 	canTogglePause() {
@@ -424,12 +467,13 @@ const SessionHook = {
 		return (
 			(this.flow.mode === "warmup_running" &&
 				this.activeSegment === "warmup") ||
-			(this.flow.mode === "workout_running" &&
-				this.activeSegment === "workout")
+			(this.flow.mode === "workout_running" && this.activeSegment === "workout")
 		);
 	},
 
 	destroyed() {
+		this.lifecycleDestroyed = true;
+		this.lifecycleGeneration = (this.lifecycleGeneration || 0) + 1;
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
 		if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
