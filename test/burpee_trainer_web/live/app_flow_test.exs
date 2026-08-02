@@ -4,8 +4,8 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.{Repo, Workouts}
-  alias BurpeeTrainer.Workouts.PoseCaptureRun
+  alias BurpeeTrainer.Workouts
+  alias BurpeeTrainerWeb.SessionLive
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -37,225 +37,238 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(home, "#home-start-workout[href='/session/#{created.id}']")
   end
 
-  test "session runner exposes the distance-safe stable runner contract", %{
-    conn: conn,
-    user: user
-  } do
+  test "session renders the stable client-owned runner contract", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Accessible Flow"})
-
-    document =
-      conn
-      |> get(~p"/session/#{plan.id}")
-      |> html_response(200)
-      |> LazyHTML.from_document()
-
-    [{"meta", viewport_attributes, []}] =
-      document
-      |> LazyHTML.query("meta[name='viewport']")
-      |> LazyHTML.to_tree()
-
-    viewport_content = Map.new(viewport_attributes)["content"]
-    assert viewport_content =~ "viewport-fit=cover"
-    assert viewport_content =~ "maximum-scale=1"
-    assert viewport_content =~ "user-scalable=no"
-
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-    assert_push_event(session, "session_ready", payload)
-
-    work_event = Enum.find(payload.events, &(&1.kind == "work"))
-
-    assert %{sec_per_rep: cadence, sec_per_burpee: active_duration} = work_event
-    assert active_duration > 0
-    assert active_duration <= cadence
-
-    assert has_element?(session, "main[class*='safe-area-inset-top']")
-    assert has_element?(session, "#ring-container[aria-label='Pause session']")
 
     assert has_element?(
              session,
-             "#session-accessible-status[role='status'][aria-live='polite'][aria-atomic='true']",
-             "Workout starting"
+             "#burpee-session[phx-hook='SessionHook'][phx-update='ignore'][data-plan-id='#{plan.id}'][data-program-hash][data-client-session-id]"
            )
 
-    assert has_element?(session, "#ring-container #count[aria-hidden='true']")
-
-    assert has_element?(
-             session,
-             "#ring-container > #set-progress[hidden][aria-hidden='true']"
-           )
-
-    refute has_element?(session, "#session-top-readout #set-progress")
-    refute has_element?(session, "#count[aria-label]")
-    refute has_element?(session, "#ring-container #session-accessible-status")
-
-    for center_id <- ["ring-container", "count"],
-        decoration_class <- ["border", "ring", "shadow", "outline"] do
-      refute has_element?(session, "##{center_id}[class*='#{decoration_class}']")
+    for id <- [
+          "session-capture-choice",
+          "session-camera-status",
+          "session-camera-setup",
+          "session-warmup-choice",
+          "session-workout-ready",
+          "session-runner-client",
+          "session-completion-review"
+        ] do
+      assert has_element?(session, "##{id}[data-session-panel]")
     end
 
-    refute has_element?(session, "#session-work-track")
+    assert has_element?(session, "#ring-container[aria-label='Pause session']")
     assert has_element?(session, "#session-work-fill")
-    refute has_element?(session, "#session-work-threshold")
-    refute has_element?(session, "#session-rest-shape")
-    refute has_element?(session, "#session-work-fill[class*='scale-y-']")
-
-    assert has_element?(
-             session,
-             "#session-pause-actions[inert][aria-hidden='true'].pointer-events-none"
-           )
-
-    assert has_element?(
-             session,
-             "#finish-early-btn[disabled].session-finish-early-action"
-           )
+    assert has_element?(session, "#session-pause-actions[inert][aria-hidden='true']")
+    assert has_element?(session, "#finish-early-btn[disabled].session-finish-early-action")
 
     assert has_element?(
              session,
              "#session-abort-btn[disabled][class*='text-[var(--session-active-ink)]']"
            )
 
-    refute has_element?(
-             session,
-             "#session-abort-btn[class*='text-[var(--session-active-muted)]']"
-           )
-
-    for prominent_class <- ["w-full", "border", "bg-", "rounded", "shadow", "ring"] do
-      refute has_element?(session, "#session-abort-btn[class*='#{prominent_class}']")
-    end
-
-    for anchor_id <- ["session-top-readout", "ring-container", "session-pause-actions"] do
-      assert has_element?(session, "#session-runner-layout > ##{anchor_id}")
-    end
-
-    assert has_element?(session, "#session-top-readout > #session-status-line")
-    assert has_element?(session, "#session-status-line #total-reps[hidden]")
-
-    assert has_element?(
-             session,
-             "#total-reps #total-reps-accessible.sr-only",
-             "0 of #{plan.burpee_count_target} total reps"
-           )
-
-    assert has_element?(session, "#total-reps #total-done[aria-hidden='true']:not(.sr-only)", "0")
-
-    assert has_element?(
-             session,
-             "#total-reps #total-plan[aria-hidden='true']:not(.sr-only)",
-             Integer.to_string(plan.burpee_count_target)
-           )
-
-    assert has_element?(session, "#total-reps > span[aria-hidden='true']", "/")
-
-    assert has_element?(
-             session,
-             "#session-top-readout > #session-progress[hidden][aria-hidden='true'] > #session-progress-fill"
-           )
-
-    refute has_element?(session, "#session-status-line #time-left")
-
-    assert has_element?(
-             session,
-             "#session-status-line #session-time-accessible.sr-only",
-             "Session time remaining"
-           )
-
-    for forbidden_label <- ["done", "left", "reps left", "sets", "phase"] do
-      refute has_element?(session, "#session-status-line", forbidden_label)
-    end
+    refute has_element?(session, "[phx-click='choose_tracked']")
+    refute has_element?(session, "[phx-click='fallback_to_timed']")
+    refute has_element?(session, "#session-completion-form[phx-submit]")
   end
 
-  test "planned workout can be started, completed, saved, and reviewed in stats", %{
-    conn: conn,
-    user: user
-  } do
-    plan = plan_fixture(user, %{"name" => "Flow Plan"})
+  test "Save returns structured success and validation replies", %{user: user} do
+    plan = plan_fixture(user, %{"name" => "Reply Flow"})
 
-    {:ok, home, _html} = live(conn, ~p"/")
-    assert has_element?(home, "#home-start-workout[href='/session/#{plan.id}']")
+    socket = %Phoenix.LiveView.Socket{
+      assigns: %{current_user: user, plan: plan, target_pace_sec: 5.0}
+    }
 
+    client_session_id = Ecto.UUID.generate()
+
+    assert {:reply,
+            %{
+              status: "ok",
+              session_id: session_id,
+              redirect_to: "/stats"
+            }, ^socket} =
+             SessionLive.handle_event(
+               "save_session",
+               save_payload(client_session_id, %{
+                 "burpee_count_actual" => 20,
+                 "duration_sec_actual" => 60
+               }),
+               socket
+             )
+
+    assert Workouts.get_session!(user, session_id).client_session_id == client_session_id
+
+    assert {:reply,
+            %{
+              status: "invalid",
+              field_errors: %{"burpee_count_actual" => ["must be greater than or equal to 0"]},
+              global_errors: []
+            }, ^socket} =
+             SessionLive.handle_event(
+               "save_session",
+               save_payload(Ecto.UUID.generate(), %{
+                 "burpee_count_actual" => -1,
+                 "duration_sec_actual" => 60
+               }),
+               socket
+             )
+  end
+
+  test "no-camera Save persists timer-authoritative session", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Timer Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    client_session_id = Ecto.UUID.generate()
 
-    render_hook(session, "session_complete", %{
-      "main" => %{"burpee_count_done" => 28, "duration_sec" => 95},
-      "warmup" => %{"burpee_count_done" => 5, "duration_sec" => 60}
-    })
-
-    assert has_element?(session, "#session-completion-summary")
-    assert has_element?(session, "#session-actual-reps", "28")
-    assert has_element?(session, "#session-planned-reps", "30")
-    refute has_element?(session, "#session-count-source")
-    refute has_element?(session, "#tracked-review")
-    assert has_element?(session, "#session-completion-form")
-    assert has_element?(session, "#session-completion-mood")
-    assert has_element?(session, "#session-completion-tags")
-    assert has_element?(session, "#session-save-btn.min-h-11")
-
-    assert has_element?(
-             session,
-             "label[for='completion-reps-input']",
-             "Reps"
-           )
-
-    assert has_element?(
-             session,
-             "#completion-reps-input.min-h-11[name='workout_session[burpee_count_actual]']"
-           )
-
-    assert has_element?(
-             session,
-             "label[for='completion-duration-min-input']",
-             "Minutes"
-           )
-
-    assert has_element?(
-             session,
-             "#completion-duration-min-input.min-h-11[name='workout_session[duration_min]']"
-           )
-
-    assert has_element?(
-             session,
-             "label[for='completion-note-input']",
-             "Note"
-           )
-
-    assert has_element?(
-             session,
-             "#completion-note-input[name='workout_session[note_post]']"
-           )
-
-    assert has_element?(session, "button[phx-click='set_mood'].min-h-14")
-    assert has_element?(session, "button[phx-click='toggle_tag'].min-h-11")
-
-    assert has_element?(
-             session,
-             "#session-discard-btn.min-h-11[data-confirm='Discard this session?']"
-           )
-
-    session
-    |> form("#session-completion-form",
-      workout_session: %{
-        "burpee_type" => "six_count",
-        "burpee_count_planned" => "30",
-        "duration_sec_planned" => "180",
-        "burpee_count_actual" => "28",
-        "duration_min" => "1.6",
+    render_hook(
+      session,
+      "save_session",
+      save_payload(client_session_id, %{
+        "burpee_count_actual" => 28,
+        "duration_sec_actual" => 95,
         "note_post" => "edge-to-edge saved"
-      }
+      })
     )
-    |> render_submit()
-
-    assert_redirect(session, ~p"/stats")
 
     [saved] = Workouts.list_sessions(user)
     assert saved.plan_id == plan.id
+    assert saved.client_session_id == client_session_id
+    assert saved.capture_mode == :timed
     assert saved.burpee_count_actual == 28
-    assert saved.duration_sec_actual == 96
+    assert saved.duration_sec_actual == 95
     assert saved.note_post == "edge-to-edge saved"
-    refute saved.tags == "warmup"
+    assert saved.cadence_ms == nil
+  end
 
-    {:ok, stats, stats_html} = live(conn, ~p"/stats")
-    assert stats_html =~ "Flow Plan"
-    assert has_element?(stats, "#session-delete-#{saved.id}")
+  test "trusted unchanged camera Save persists validated cadence", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Tracked Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(
+      session,
+      "save_session",
+      save_payload(
+        Ecto.UUID.generate(),
+        %{"burpee_count_actual" => 3, "duration_sec_actual" => 15},
+        %{
+          "enabled" => true,
+          "trust" => "finished",
+          "detected_reps" => 3,
+          "detected_duration_sec" => 15,
+          "cadence_ms" => [5_000, 10_000, 15_000]
+        }
+      )
+    )
+
+    [saved] = Workouts.list_sessions(user)
+    assert saved.capture_mode == :tracked
+    assert saved.burpee_count_actual == 3
+    assert saved.duration_sec_actual == 15
+    assert saved.cadence_ms == "[5000,10000,15000]"
+    assert saved.target_pace_sec
+    assert saved.pace_consistency == 1.0
+  end
+
+  test "corrected camera Save stays tracked without cadence analytics", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Edited Tracked Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(
+      session,
+      "save_session",
+      save_payload(
+        Ecto.UUID.generate(),
+        %{"burpee_count_actual" => 4, "duration_sec_actual" => 15},
+        %{
+          "enabled" => true,
+          "trust" => "finished",
+          "detected_reps" => 3,
+          "detected_duration_sec" => 15,
+          "cadence_ms" => [5_000, 10_000, 15_000]
+        }
+      )
+    )
+
+    [saved] = Workouts.list_sessions(user)
+    assert saved.capture_mode == :tracked
+    assert saved.burpee_count_actual == 4
+    assert saved.cadence_ms == nil
+    assert saved.target_pace_sec == nil
+    assert saved.pace_consistency == nil
+  end
+
+  test "degraded camera Save uses ordinary timer persistence", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Degraded Tracking Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(
+      session,
+      "save_session",
+      save_payload(
+        Ecto.UUID.generate(),
+        %{"burpee_count_actual" => 12, "duration_sec_actual" => 75},
+        %{
+          "enabled" => true,
+          "trust" => "degraded",
+          "reason" => "detector_error",
+          "detected_reps" => 99,
+          "detected_duration_sec" => 5,
+          "cadence_ms" => [1_000]
+        }
+      )
+    )
+
+    [saved] = Workouts.list_sessions(user)
+    assert saved.capture_mode == :timed
+    assert saved.burpee_count_actual == 12
+    assert saved.duration_sec_actual == 75
+    assert saved.cadence_ms == nil
+  end
+
+  test "invalid Save leaves the session unsaved for client correction", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Invalid Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+
+    render_hook(
+      session,
+      "save_session",
+      save_payload(Ecto.UUID.generate(), %{
+        "burpee_count_actual" => -1,
+        "duration_sec_actual" => 10
+      })
+    )
+
+    assert Workouts.list_sessions(user) == []
+    assert has_element?(session, "#session-completion-form")
+  end
+
+  test "repeated client session id returns the existing saved session", %{conn: conn, user: user} do
+    plan = plan_fixture(user, %{"name" => "Idempotent Flow"})
+    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    client_session_id = Ecto.UUID.generate()
+
+    render_hook(
+      session,
+      "save_session",
+      save_payload(client_session_id, %{
+        "burpee_count_actual" => 10,
+        "duration_sec_actual" => 60
+      })
+    )
+
+    render_hook(
+      session,
+      "save_session",
+      save_payload(client_session_id, %{
+        "burpee_count_actual" => 99,
+        "duration_sec_actual" => 99
+      })
+    )
+
+    assert [saved] = Workouts.list_sessions(user)
+    assert saved.client_session_id == client_session_id
+    assert saved.burpee_count_actual == 10
+    assert saved.duration_sec_actual == 60
   end
 
   test "home log past session saves manual work and refreshes history", %{conn: conn, user: user} do
@@ -288,213 +301,6 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(stats, "#session-delete-#{logged.id}")
   end
 
-  test "tracked workout saves cadence, pose chunks, and opens analysis", %{conn: conn, user: user} do
-    plan = plan_fixture(user, %{"name" => "Tracked Flow"})
-    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    render_hook(session, "choose_tracked", %{})
-
-    assert has_element?(
-             session,
-             "#pose-tracker-visibility #pose-tracker[phx-hook='PoseTracker'][phx-update='ignore'] #pose-tracker-preview[muted][playsinline]"
-           )
-
-    assert has_element?(
-             session,
-             "#pose-tracker-preview-frame #pose-tracker-canvas"
-           )
-
-    assert has_element?(
-             session,
-             "#camera-setup-panel.pointer-events-auto"
-           )
-
-    assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-preview")
-    assert has_element?(session, "#pose-tracker-preview-frame #pose-tracker-canvas")
-
-    render_hook(session, "tracker_initialized", %{})
-
-    render_hook(session, "tracker_readiness", %{"state" => "ready"})
-    assert has_element?(session, "#camera-setup-timed-btn")
-
-    render_hook(session, "camera_setup_started", %{})
-
-    refute has_element?(session, "#camera-setup-panel")
-
-    render_hook(session, "tracker_readiness", %{"state" => "not_ready"})
-    refute has_element?(session, "#camera-setup-panel")
-
-    assert has_element?(session, "#pose-tracker-visibility.invisible[aria-hidden='true']")
-
-    assert has_element?(
-             session,
-             "#pose-tracker-visibility #pose-tracker[phx-hook='PoseTracker'][phx-update='ignore']"
-           )
-
-    assert has_element?(session, "#pose-tracker #pose-tracker-preview-frame")
-
-    render_hook(session, "pose_capture_chunk", %{
-      "segment" => "main",
-      "chunk_index" => 0,
-      "started_at_ms" => 0,
-      "ended_at_ms" => 3_000,
-      "sample_count" => 1,
-      "payload" => %{"version" => 1, "samples" => [%{"tMs" => 0}]}
-    })
-
-    [run] = Repo.all(PoseCaptureRun)
-    assert Repo.preload(run, :pose_trace_chunks).pose_trace_chunks != []
-
-    render_hook(session, "finish", %{
-      "reps" => 3,
-      "duration_ms" => 15_000,
-      "cadence_ms" => [5_000, 10_000, 15_000]
-    })
-
-    assert has_element?(session, "#session-completion-summary")
-    assert has_element?(session, "#session-actual-reps", "3")
-    assert has_element?(session, "#session-planned-reps", "30")
-    assert has_element?(session, "#session-count-source", "Counted by camera")
-    assert has_element?(session, "#session-completion-summary", "0:15")
-    refute has_element?(session, "#tracked-review")
-
-    assert has_element?(session, "#session-completion-form")
-    assert has_element?(session, "#completion-reps-input")
-    assert has_element?(session, "#completion-duration-min-input")
-    assert has_element?(session, "#session-completion-mood button[phx-click='set_mood']")
-    assert has_element?(session, "#session-completion-tags button[phx-click='toggle_tag']")
-    assert has_element?(session, "#completion-note-input")
-    assert has_element?(session, "#session-save-btn")
-
-    assert has_element?(
-             session,
-             "#session-discard-btn[data-confirm='Discard this session?']"
-           )
-
-    session
-    |> form("#session-completion-form",
-      workout_session: %{
-        "burpee_type" => "six_count",
-        "burpee_count_planned" => "30",
-        "duration_sec_planned" => "180",
-        "burpee_count_actual" => "3",
-        "duration_min" => "0.25"
-      }
-    )
-    |> render_submit()
-
-    assert_redirect(session, ~p"/stats")
-
-    [saved] = Workouts.list_sessions(user)
-    assert saved.capture_mode == :tracked
-    assert saved.burpee_count_actual == 3
-    assert saved.duration_sec_actual == 15
-    assert saved.cadence_ms == "[5000,10000,15000]"
-
-    [completed_run] = Repo.all(PoseCaptureRun)
-    assert completed_run.status == :completed
-    assert completed_run.workout_session_id == saved.id
-
-    {:ok, _stats, stats_html} = live(conn, ~p"/stats")
-    assert stats_html =~ "Tracked"
-    assert stats_html =~ ~s(href="/stats/sessions/#{saved.id}")
-
-    {:ok, _analysis, analysis_html} = live(conn, ~p"/stats/sessions/#{saved.id}")
-    assert analysis_html =~ "Session analysis"
-    assert analysis_html =~ "Pace by rep"
-  end
-
-  test "tracked completion explains when the camera count is edited", %{
-    conn: conn,
-    user: user
-  } do
-    plan = plan_fixture(user, %{"name" => "Edited Tracked Flow"})
-    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    render_hook(session, "finish", %{
-      "reps" => 3,
-      "duration_ms" => 15_000,
-      "cadence_ms" => [5_000, 10_000, 15_000]
-    })
-
-    session
-    |> form("#session-completion-form",
-      workout_session: %{
-        "burpee_type" => "six_count",
-        "burpee_count_planned" => "30",
-        "duration_sec_planned" => "180",
-        "burpee_count_actual" => "4",
-        "duration_min" => "0.25"
-      }
-    )
-    |> render_change()
-
-    assert has_element?(session, "#session-actual-reps", "4")
-    assert has_element?(session, "#session-planned-reps", "30")
-
-    assert has_element?(
-             session,
-             "#session-count-source",
-             "Edited · camera counted 3"
-           )
-  end
-
-  test "degraded completion keeps the timer result and reports interrupted camera tracking", %{
-    conn: conn,
-    user: user
-  } do
-    plan = plan_fixture(user, %{"name" => "Degraded Tracking Flow"})
-    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    render_hook(session, "session_complete", %{
-      "main" => %{"burpee_count_done" => 12, "duration_sec" => 75},
-      "tracking" => %{"status" => "degraded"}
-    })
-
-    assert has_element?(session, "#session-completion-summary")
-    assert has_element?(session, "#session-actual-reps", "12")
-    assert has_element?(session, "#session-planned-reps", "30")
-
-    assert has_element?(
-             session,
-             "#session-count-source",
-             "Camera view was interrupted"
-           )
-
-    assert has_element?(session, "#session-save-btn")
-    refute has_element?(session, "#tracked-review")
-  end
-
-  test "tracked camera setup rejects start while arming", %{conn: conn, user: user} do
-    plan = plan_fixture(user, %{"name" => "Readiness Gate"})
-    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    render_hook(session, "choose_tracked", %{})
-    render_hook(session, "camera_setup_started", %{})
-
-    assert has_element?(session, "#camera-setup-panel")
-
-    render_hook(session, "tracker_readiness", %{"state" => "optimal"})
-
-    render_hook(session, "camera_setup_started", %{})
-    refute has_element?(session, "#camera-setup-panel")
-  end
-
-  test "tracked camera setup can fall back to the timed warmup flow", %{conn: conn, user: user} do
-    plan = plan_fixture(user, %{"name" => "Timer Fallback"})
-    {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-
-    render_hook(session, "choose_tracked", %{})
-    assert [_run] = Repo.all(PoseCaptureRun)
-
-    render_hook(session, "fallback_to_timed", %{})
-
-    assert Repo.all(PoseCaptureRun) == []
-    refute has_element?(session, "#camera-setup-panel")
-    refute has_element?(session, "#pose-tracker")
-    assert has_element?(session, "#session-runner-client")
-  end
-
   test "stats deletion removes a saved session from history and home totals", %{
     conn: conn,
     user: user
@@ -512,5 +318,26 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     {:ok, home, _html} = live(conn, ~p"/")
     assert has_element?(home, "#home-week-progress[aria-valuenow='0']")
+  end
+
+  defp save_payload(client_session_id, session_attrs, tracking \\ %{"enabled" => false}) do
+    %{
+      "workout_session" =>
+        Map.merge(
+          %{
+            "burpee_type" => "six_count",
+            "burpee_count_actual" => 30,
+            "burpee_count_planned" => 30,
+            "duration_sec_actual" => 120,
+            "duration_sec_planned" => 1_200,
+            "client_session_id" => client_session_id,
+            "mood" => 0,
+            "tags" => "",
+            "note_post" => ""
+          },
+          session_attrs
+        ),
+      "tracking" => tracking
+    }
   end
 end

@@ -8,7 +8,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.{ExecutionProgram, WorkoutSession}
-  alias BurpeeTrainerWeb.SessionComponents
+  alias BurpeeTrainerWeb.{CoreComponents, SessionComponents}
 
   @impl true
   def mount(%{"plan_id" => plan_id}, _session, socket) do
@@ -45,6 +45,34 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
+  def handle_event(
+        "save_session",
+        %{"workout_session" => attrs, "tracking" => tracking},
+        socket
+      )
+      when is_map(attrs) and is_map(tracking) do
+    result =
+      persist_completion(
+        socket.assigns.current_user,
+        socket.assigns.plan,
+        attrs,
+        tracking,
+        socket.assigns.target_pace_sec
+      )
+
+    {:reply, save_reply(result), socket}
+  end
+
+  def handle_event("save_session", _payload, socket) do
+    {:reply,
+     %{
+       status: "invalid",
+       field_errors: %{},
+       global_errors: ["Completion data is invalid."]
+     }, socket}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_level={@current_level}>
@@ -77,6 +105,100 @@ defmodule BurpeeTrainerWeb.SessionLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp persist_completion(user, plan, attrs, tracking, target_pace_sec) do
+    case persistence_mode(attrs, tracking, target_pace_sec) do
+      {:trusted, cadence, target_pace} ->
+        Workouts.create_tracked_session_from_plan(
+          user,
+          plan,
+          attrs,
+          {:trusted, cadence, target_pace}
+        )
+
+      :manual_correction ->
+        Workouts.create_tracked_session_from_plan(user, plan, attrs, :manual_correction)
+
+      :timer ->
+        Workouts.create_session_from_plan(user, plan, attrs)
+    end
+  end
+
+  defp persistence_mode(attrs, tracking, target_pace_sec) do
+    enabled? = tracking["enabled"] == true
+    trust = tracking["trust"]
+
+    cond do
+      not enabled? ->
+        :timer
+
+      trust == "degraded" ->
+        :timer
+
+      trust == "finished" and detected_result_unchanged?(attrs, tracking) ->
+        cadence = if is_list(tracking["cadence_ms"]), do: tracking["cadence_ms"], else: []
+        {:trusted, cadence, target_pace_sec}
+
+      trust == "finished" ->
+        :manual_correction
+
+      true ->
+        :timer
+    end
+  end
+
+  defp detected_result_unchanged?(attrs, tracking) do
+    with {:ok, actual_reps} <- parse_integer(attrs["burpee_count_actual"]),
+         {:ok, actual_duration} <- parse_number(attrs["duration_sec_actual"]),
+         {:ok, detected_reps} <- parse_integer(tracking["detected_reps"]),
+         {:ok, detected_duration} <- parse_number(tracking["detected_duration_sec"]) do
+      actual_reps == detected_reps and actual_duration == detected_duration
+    else
+      _ -> false
+    end
+  end
+
+  defp parse_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
+
+  defp parse_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
+      _ -> :error
+    end
+  end
+
+  defp parse_integer(_value), do: :error
+
+  defp parse_number(value) when is_number(value) and value >= 0, do: {:ok, value}
+
+  defp parse_number(value) when is_binary(value) do
+    case Float.parse(value) do
+      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
+      _ -> :error
+    end
+  end
+
+  defp parse_number(_value), do: :error
+
+  defp save_reply({:ok, session}) do
+    %{status: "ok", session_id: session.id, redirect_to: ~p"/stats"}
+  end
+
+  defp save_reply({:error, %Ecto.Changeset{} = changeset}) do
+    errors = Ecto.Changeset.traverse_errors(changeset, &CoreComponents.translate_error/1)
+    {global_errors, field_errors} = Map.pop(errors, :base, [])
+
+    %{
+      status: "invalid",
+      field_errors:
+        Map.new(field_errors, fn {field, messages} -> {Atom.to_string(field), messages} end),
+      global_errors: global_errors
+    }
+  end
+
+  defp save_reply({:error, _reason}) do
+    %{status: "error", message: "Could not save. Try again.", retryable: true}
   end
 
   defp program_summary(%ExecutionProgram{} = program) do

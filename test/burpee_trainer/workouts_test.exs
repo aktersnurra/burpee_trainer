@@ -94,6 +94,66 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert %{cadence_ms: ["must finish within session duration"]} = errors_on(changeset)
     end
+
+    test "manual camera correction saves tracked without cadence analytics", %{
+      user: user,
+      plan: plan
+    } do
+      assert {:ok, session} =
+               Workouts.create_tracked_session_from_plan(
+                 user,
+                 plan,
+                 %{
+                   "burpee_count_actual" => 4,
+                   "duration_sec_actual" => 15,
+                   "client_session_id" => Ecto.UUID.generate(),
+                   "cadence_ms" => [5_000, 10_000, 15_000],
+                   "target_pace_sec" => "5.0"
+                 },
+                 :manual_correction
+               )
+
+      assert session.capture_mode == :tracked
+      assert session.burpee_count_actual == 4
+      assert session.cadence_ms == nil
+      assert session.target_pace_sec == nil
+      assert session.pace_consistency == nil
+    end
+
+    test "trusted camera result retains strict cadence validation", %{user: user, plan: plan} do
+      assert {:error, changeset} =
+               Workouts.create_tracked_session_from_plan(
+                 user,
+                 plan,
+                 %{
+                   "burpee_count_actual" => 4,
+                   "duration_sec_actual" => 15,
+                   "client_session_id" => Ecto.UUID.generate()
+                 },
+                 {:trusted, [5_000, 10_000, 15_000], 5.0}
+               )
+
+      assert "must contain one timestamp per rep" in errors_on(changeset).cadence_ms
+    end
+
+    test "trusted camera result rejects non-numeric cadence without crashing", %{
+      user: user,
+      plan: plan
+    } do
+      assert {:error, changeset} =
+               Workouts.create_tracked_session_from_plan(
+                 user,
+                 plan,
+                 %{
+                   "burpee_count_actual" => 3,
+                   "duration_sec_actual" => 15,
+                   "client_session_id" => Ecto.UUID.generate()
+                 },
+                 {:trusted, ["bad", "cadence", "values"], 5.0}
+               )
+
+      assert "must be monotonic non-negative timestamps" in errors_on(changeset).cadence_ms
+    end
   end
 
   describe "plans" do

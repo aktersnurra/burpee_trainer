@@ -575,12 +575,28 @@ defmodule BurpeeTrainer.Workouts do
 
   def create_session_from_plan(%User{}, %WorkoutPlan{}, _attrs), do: {:error, :not_found}
 
+  @type tracked_session_mode ::
+          {:trusted, [non_neg_integer()], number() | String.t() | nil} | :manual_correction
+
   @spec create_tracked_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def create_tracked_session_from_plan(%User{} = user, %WorkoutPlan{} = plan, attrs) do
+    cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
+    target_pace = Map.get(attrs, "target_pace_sec") || Map.get(attrs, :target_pace_sec)
+    create_tracked_session_from_plan(user, plan, attrs, {:trusted, cadence, target_pace})
+  end
+
+  @spec create_tracked_session_from_plan(
+          User.t(),
+          WorkoutPlan.t(),
+          map,
+          tracked_session_mode()
+        ) :: {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def create_tracked_session_from_plan(
         %User{id: user_id},
         %WorkoutPlan{user_id: user_id} = plan,
-        attrs
+        attrs,
+        tracking_mode
       ) do
     with {:ok, planned_attrs} <- planned_session_attrs(plan) do
       attrs =
@@ -588,20 +604,12 @@ defmodule BurpeeTrainer.Workouts do
         |> with_client_session_id()
         |> Map.merge(planned_attrs)
 
-      cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
-      cadence_json = Jason.encode!(cadence)
-      consistency = PaceConsistency.score(cadence)
-
       changeset =
         %WorkoutSession{user_id: user_id, plan_id: plan.id}
         |> WorkoutSession.from_plan_changeset(attrs)
-        |> validate_tracked_capture(cadence)
-        |> Ecto.Changeset.change(
-          capture_mode: :tracked,
-          cadence_ms: cadence_json,
-          target_pace_sec: parse_optional_float(Map.get(attrs, "target_pace_sec")),
-          pace_consistency: consistency,
-          execution_program_id: Map.fetch!(planned_attrs, "execution_program_id")
+        |> apply_tracked_session_mode(
+          tracking_mode,
+          Map.fetch!(planned_attrs, "execution_program_id")
         )
         |> with_derived_session_fields(user_id)
         |> maybe_carry_style_name(plan)
@@ -620,7 +628,36 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def create_tracked_session_from_plan(%User{}, %WorkoutPlan{}, _attrs), do: {:error, :not_found}
+  def create_tracked_session_from_plan(%User{}, %WorkoutPlan{}, _attrs, _tracking_mode),
+    do: {:error, :not_found}
+
+  defp apply_tracked_session_mode(changeset, :manual_correction, execution_program_id) do
+    Ecto.Changeset.change(changeset,
+      capture_mode: :tracked,
+      cadence_ms: nil,
+      target_pace_sec: nil,
+      pace_consistency: nil,
+      execution_program_id: execution_program_id
+    )
+  end
+
+  defp apply_tracked_session_mode(
+         changeset,
+         {:trusted, cadence, target_pace},
+         execution_program_id
+       ) do
+    consistency = if valid_cadence_values?(cadence), do: PaceConsistency.score(cadence)
+
+    changeset
+    |> validate_tracked_capture(cadence)
+    |> Ecto.Changeset.change(
+      capture_mode: :tracked,
+      cadence_ms: Jason.encode!(cadence),
+      target_pace_sec: parse_optional_float(target_pace),
+      pace_consistency: consistency,
+      execution_program_id: execution_program_id
+    )
+  end
 
   defp planned_session_attrs(%WorkoutPlan{} = plan) do
     with {:ok, program} <- compile_plan(plan) do
@@ -1058,12 +1095,7 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp validate_cadence_values(changeset, cadence) do
-    valid? =
-      is_list(cadence) and
-        Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) and
-        cadence == Enum.sort(cadence)
-
-    if valid?,
+    if valid_cadence_values?(cadence),
       do: changeset,
       else:
         Ecto.Changeset.add_error(
@@ -1071,6 +1103,12 @@ defmodule BurpeeTrainer.Workouts do
           :cadence_ms,
           "must be monotonic non-negative timestamps"
         )
+  end
+
+  defp valid_cadence_values?(cadence) do
+    is_list(cadence) and
+      Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) and
+      cadence == Enum.sort(cadence)
   end
 
   defp validate_cadence_length(changeset, cadence, reps) when is_integer(reps) do
