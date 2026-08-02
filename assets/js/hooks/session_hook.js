@@ -29,6 +29,7 @@ import {
 } from "./pose_tracking_observer.mjs";
 
 const DISCARD_NAVIGATION_DEADLINE_MS = 100;
+const SAVE_NAVIGATION_DEADLINE_MS = 100;
 
 const SessionHook = {
 	mounted() {
@@ -77,6 +78,8 @@ const SessionHook = {
 		this.draftRestore = Promise.resolve();
 		this.inMemoryCompletionDraft = null;
 		this.discarding = false;
+		this.saveCleanup = Promise.resolve();
+		this.saveNavigationTimeoutId = null;
 		this.onPoseTrackerInitialized = () => this.reissuePendingArm();
 		this.onPoseTrackerStarted = () =>
 			this.dispatchFlow({ type: "CAMERA_STARTED" });
@@ -242,6 +245,12 @@ const SessionHook = {
 			}
 		};
 		this.el.addEventListener("input", this.onCompletionInput);
+		this.onCompletionSubmit = (event) => {
+			if (!event.target.closest("#session-completion-form")) return;
+			event.preventDefault();
+			this.saveCompletion();
+		};
+		this.el.addEventListener("submit", this.onCompletionSubmit);
 
 		this.el.addEventListener("keydown", (e) => {
 			const ringContainer = e.target.closest("#ring-container");
@@ -361,6 +370,116 @@ const SessionHook = {
 					this.traceRetentionAvailable = false;
 				}
 			});
+	},
+
+	completionPayload() {
+		const completion = this.flow.completion;
+		if (!completion) return null;
+		const burpeeType = this.el.querySelector(
+			"#workout_session_burpee_type",
+		)?.value;
+		return {
+			workout_session: {
+				burpee_type: burpeeType || null,
+				burpee_count_actual: completion.burpeeCountActual,
+				burpee_count_planned: completion.burpeeCountPlanned,
+				duration_sec_actual: completion.durationSecActual,
+				duration_sec_planned: completion.durationSecPlanned,
+				client_session_id: this.clientSessionId,
+				mood: completion.mood ?? 0,
+				tags: [...(completion.tags || [])].sort().join(","),
+				note_post: completion.notePost || "",
+			},
+			tracking: {
+				enabled: this.flow.captureMode === "camera",
+				trust: completion.trackingTrust,
+				reason: this.flow.trackingReason ?? null,
+				detected_reps: completion.detectedReps,
+				detected_duration_sec: completion.detectedDurationSec,
+				cadence_ms: [...(completion.cadenceMs || [])],
+			},
+		};
+	},
+
+	saveCompletion() {
+		if (this.flow.mode !== "completion_review" || this.discarding) return;
+		const payload = this.completionPayload();
+		if (!payload) return;
+		const generation = this.lifecycleGeneration;
+		this.renderer.clearSaveErrors();
+		this.dispatchFlow({ type: "SAVE_STARTED" });
+
+		try {
+			this.pushEvent("save_session", payload, (reply) => {
+				if (!this.lifecycleActive(generation)) return;
+				void this.handleSaveReply(reply, generation);
+			});
+		} catch (_error) {
+			this.handleSaveFailure({
+				status: "error",
+				message: "Could not save. Try again.",
+				retryable: true,
+			});
+		}
+	},
+
+	handleSaveReply(reply, generation) {
+		if (!this.lifecycleActive(generation)) return;
+		if (reply?.status !== "ok") {
+			this.handleSaveFailure(reply || {});
+			return;
+		}
+
+		this.dispatchFlow({ type: "SAVE_SUCCEEDED" });
+		let navigated = false;
+		const clearTimer = this.clearTimeout || clearTimeout;
+		const navigate = () => {
+			if (navigated || !this.lifecycleActive(generation)) return;
+			navigated = true;
+			if (this.saveNavigationTimeoutId) {
+				clearTimer(this.saveNavigationTimeoutId);
+				this.saveNavigationTimeoutId = null;
+			}
+			window.location.assign(reply.redirect_to);
+		};
+		const scheduleTimer = this.setTimeout || setTimeout;
+		this.saveNavigationTimeoutId = scheduleTimer(
+			navigate,
+			SAVE_NAVIGATION_DEADLINE_MS,
+		);
+
+		this.saveCleanup = Promise.all([this.traceWrite, this.draftWrite])
+			.then(async () => {
+				const store = await this.storeReady;
+				if (store && (await store.hasTraceChunks(this.clientSessionId))) {
+					await store.markTraceReady(this.clientSessionId, reply.session_id);
+					window.dispatchEvent(new CustomEvent("burpee:trace-upload-ready"));
+				}
+				if (store) await store.deleteDraft(this.clientSessionId);
+			})
+			.catch(() => {
+				this.traceRetentionAvailable = false;
+			})
+			.then(() => {
+				if (this.lifecycleActive(generation)) {
+					this.inMemoryCompletionDraft = null;
+				}
+				navigate();
+			});
+	},
+
+	handleSaveFailure(reply) {
+		this.dispatchFlow({ type: "SAVE_FAILED" });
+		const globalErrors = [...(reply.global_errors || [])];
+		if (reply.message) globalErrors.push(reply.message);
+		if (globalErrors.length === 0 && reply.status === "error") {
+			globalErrors.push("Could not save. Try again.");
+		}
+		this.renderer.renderSaveErrors({
+			...reply,
+			field_errors: reply.field_errors || {},
+			global_errors: globalErrors,
+		});
 	},
 
 	restoreCompletionDraft(draft) {
@@ -519,6 +638,11 @@ const SessionHook = {
 			this.onPoseTrackerTraceChunk,
 		);
 		this.el.removeEventListener("input", this.onCompletionInput);
+		this.el.removeEventListener("submit", this.onCompletionSubmit);
+		if (this.saveNavigationTimeoutId) {
+			clearTimeout(this.saveNavigationTimeoutId);
+			this.saveNavigationTimeoutId = null;
+		}
 		this.wakeLock.release();
 		this.audio.close();
 	},
@@ -1163,8 +1287,15 @@ const SessionHook = {
 			this.flow.trackingTrust === "degraded" ||
 			!trackerFinished
 		) {
+			if (this.flow.trackingTrust !== "degraded") {
+				this.dispatchFlow({
+					type: "TRACKING_DEGRADED",
+					reason: "tracking_incomplete",
+				});
+			}
 			return { ...timerResult, cadenceMs: [] };
 		}
+		this.dispatchFlow({ type: "TRACKING_FINISHED" });
 		return {
 			...timerResult,
 			detectedReps: trackerFinished.reps,

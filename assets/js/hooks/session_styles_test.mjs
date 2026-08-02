@@ -18,6 +18,14 @@ const sessionLive = readFileSync(
 	),
 	"utf8",
 );
+const sessionComponents = readFileSync(
+	new URL(
+		"../../../lib/burpee_trainer_web/components/session_components.ex",
+		import.meta.url,
+	),
+	"utf8",
+);
+const sessionSurface = `${sessionLive}\n${sessionComponents}`;
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
 	([, selectors, declarations]) => ({
 		selectors: selectors.split(",").map((selector) => selector.trim()),
@@ -89,27 +97,24 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 	}
 
 	assert.match(lightTheme.declarations, /--session-work:\s*#E86F47;/);
-	assert.match(
-		lightTheme.declarations,
-		/--session-rest-light:\s*#D3DCEA;/,
-	);
+	assert.match(lightTheme.declarations, /--session-rest-light:\s*#D3DCEA;/);
 	assert.match(lightTheme.declarations, /--session-rest:\s*#5C7096;/);
 
 	const runner = ruleFor("#session-runner-client")?.declarations || "";
-	assert.match(
-		runner,
-		/--session-progress-track:\s*var\(--session-track\);/,
-	);
+	assert.match(runner, /--session-progress-track:\s*var\(--session-track\);/);
 
 	const workFill = ruleFor("#session-work-fill")?.declarations || "";
 	assert.match(workFill, /background:\s*var\(--session-work\);/);
 	assert.match(workFill, /clip-path:\s*inset\(100% 0 0 0\);/);
-	assert.doesNotMatch(workFill, /linear-gradient|var\(--session-rest\)|opacity:/);
+	assert.doesNotMatch(
+		workFill,
+		/linear-gradient|var\(--session-rest\)|opacity:/,
+	);
 	assert.doesNotMatch(workFill, /transform:\s*scaleY/);
 	assert.doesNotMatch(css, /#session-work-(?:track|threshold)/);
 	assert.doesNotMatch(css, /#session-rest-shape/);
-	assert.doesNotMatch(sessionLive, /session-work-(?:track|threshold)/);
-	assert.doesNotMatch(sessionLive, /session-rest-shape/);
+	assert.doesNotMatch(sessionSurface, /session-work-(?:track|threshold)/);
+	assert.doesNotMatch(sessionSurface, /session-rest-shape/);
 
 	for (const state of ["is-working", "is-rest-count-in", "is-count-in"]) {
 		const declarations =
@@ -133,7 +138,7 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 });
 
 test("Abort uses the actual fixed active ink with normal-text contrast on every underlying field", () => {
-	const abortClass = sessionLive.match(
+	const abortClass = sessionSurface.match(
 		/id="session-abort-btn"[\s\S]*?class="([^"]+)"/,
 	)?.[1];
 	assert.ok(abortClass, "Abort should retain an explicit class list");
@@ -164,10 +169,7 @@ test("normal and intra-rep rest breathe across the full blue screen", () => {
 		breathing,
 		/0%,\s*100%[^}]*background-color:\s*var\(--session-rest-light\);/,
 	);
-	assert.match(
-		breathing,
-		/50%[^}]*background-color:\s*var\(--session-rest\);/,
-	);
+	assert.match(breathing, /50%[^}]*background-color:\s*var\(--session-rest\);/);
 
 	const rest = ruleFor("#session-runner-client.is-rest")?.declarations || "";
 	assert.match(rest, /background:\s*var\(--session-rest-light\);/);
@@ -375,7 +377,10 @@ test("scrollbars are hidden globally without clipping page overflow", () => {
 		/\*\s*\{\s*scrollbar-width:\s*none;\s*\}[\s\S]*?\*::-webkit-scrollbar\s*\{\s*display:\s*none;\s*\}/,
 	)?.[0];
 
-	assert.ok(scrollbarRules, "global Firefox and WebKit scrollbar rules must exist");
+	assert.ok(
+		scrollbarRules,
+		"global Firefox and WebKit scrollbar rules must exist",
+	);
 	assert.doesNotMatch(scrollbarRules, /overflow:\s*hidden;/);
 	assert.doesNotMatch(css, /@media\s*\(max-width:\s*768px\)/);
 });

@@ -70,6 +70,12 @@ function element() {
 		setAttribute(name, value) {
 			attributes.set(name, String(value));
 		},
+		removeAttribute(name) {
+			attributes.delete(name);
+		},
+		hasAttribute(name) {
+			return attributes.has(name);
+		},
 		getAttribute(name) {
 			return attributes.get(name) || null;
 		},
@@ -97,6 +103,13 @@ function harness() {
 		"#total-separator": element(),
 		"#total-plan": element(),
 		"#pause-icon": element(),
+		"#session-save-errors": element(),
+		"#completion-reps-error": element(),
+		"#completion-duration-error": element(),
+		"#completion-note-error": element(),
+		"#completion-reps-input": element(),
+		"#completion-duration-input": element(),
+		"#completion-note-input": element(),
 	};
 	elements["#session-progress"].hidden = true;
 	elements["#total-reps"].hidden = true;
@@ -234,7 +247,10 @@ test("initial count-in renders the same centered numeral as rest count-in", () =
 	);
 	assert.equal(elements["#count"].textContent, "3");
 	assert.equal(elements["#count"].children.length, 0);
-	assert.equal(elements["#count"].classList.contains("is-countdown-dots"), false);
+	assert.equal(
+		elements["#count"].classList.contains("is-countdown-dots"),
+		false,
+	);
 	assert.equal(elements["#set-progress"].hidden, true);
 });
 
@@ -491,5 +507,53 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 	assert.equal(
 		elements["#ring-container"].getAttribute("aria-label"),
 		"Resume session",
+	);
+});
+
+test("structured Save errors reuse stable field and global targets", () => {
+	const { renderer, elements } = harness();
+
+	renderer.renderSaveErrors({
+		field_errors: {
+			burpee_count_actual: ["must be at least 0"],
+			duration_sec_actual: ["is invalid"],
+		},
+		global_errors: ["Could not save. Try again."],
+	});
+
+	assert.equal(
+		elements["#completion-reps-error"].textContent,
+		"must be at least 0",
+	);
+	assert.equal(elements["#completion-reps-error"].hidden, false);
+	assert.equal(
+		elements["#completion-duration-error"].textContent,
+		"is invalid",
+	);
+	assert.equal(elements["#completion-duration-error"].hidden, false);
+	assert.equal(elements["#completion-note-error"].hidden, true);
+	assert.equal(
+		elements["#session-save-errors"].textContent,
+		"Could not save. Try again.",
+	);
+	assert.equal(elements["#session-save-errors"].hidden, false);
+	assert.equal(
+		elements["#completion-reps-input"].getAttribute("aria-invalid"),
+		"true",
+	);
+
+	renderer.clearSaveErrors();
+	for (const selector of [
+		"#completion-reps-error",
+		"#completion-duration-error",
+		"#completion-note-error",
+		"#session-save-errors",
+	]) {
+		assert.equal(elements[selector].textContent, "");
+		assert.equal(elements[selector].hidden, true);
+	}
+	assert.equal(
+		elements["#completion-reps-input"].hasAttribute("aria-invalid"),
+		false,
 	);
 });

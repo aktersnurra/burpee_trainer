@@ -23,6 +23,12 @@ class FakeElement {
 		this.id = "";
 		this.type = "";
 		this.className = "";
+		const classes = new Set();
+		this.classList = {
+			add: (...names) => names.forEach((name) => classes.add(name)),
+			remove: (...names) => names.forEach((name) => classes.delete(name)),
+			contains: (name) => classes.has(name),
+		};
 		this.textContent = "";
 		this.value = "";
 		this.hidden = false;
@@ -260,6 +266,13 @@ function appendStablePanels(root) {
 		["completion-reps-input", "input", ""],
 		["completion-duration-input", "input", ""],
 		["completion-note-input", "textarea", ""],
+		["workout_session_burpee_type", "input", ""],
+		["session-completion-form", "form", ""],
+		["session-save-btn", "button", "Save session"],
+		["session-save-errors", "div", ""],
+		["completion-reps-error", "p", ""],
+		["completion-duration-error", "p", ""],
+		["completion-note-error", "p", ""],
 		["session-discard-btn", "button", "Discard"],
 	];
 	for (const [id, tag, text] of stableElements) {
@@ -272,6 +285,10 @@ function appendStablePanels(root) {
 		}
 		if (id === "session-discard-btn") {
 			element.dataset.confirm = "Discard this session?";
+		}
+		if (id === "workout_session_burpee_type") element.value = "six_count";
+		if (id.endsWith("-error") || id === "session-save-errors") {
+			element.hidden = true;
 		}
 		const panel = id.startsWith("camera-choice")
 			? root.findById("session-capture-choice")
@@ -310,6 +327,7 @@ function buildHarness({
 	const renderedModels = [];
 	const downCueValues = [];
 	const totalUpdates = [];
+	const saveErrorReplies = [];
 	const root = new FakeElement("div");
 	root.id = "burpee-session";
 	root.dataset.sessionProgram = JSON.stringify({
@@ -365,6 +383,10 @@ function buildHarness({
 		},
 		updatePauseButton() {},
 		clearTimers() {},
+		clearSaveErrors() {},
+		renderSaveErrors(reply) {
+			saveErrorReplies.push(reply);
+		},
 	};
 
 	const audio = {
@@ -408,6 +430,7 @@ function buildHarness({
 		renderedModels,
 		downCueValues,
 		totalUpdates,
+		saveErrorReplies,
 	};
 }
 
@@ -2712,6 +2735,26 @@ test("trusted completion consumes synchronous tracker output before stop", () =>
 		cadenceMs: [2_000, 4_000, 7_000],
 	});
 	assert.deepEqual(commandOrder, ["finish", "stop"]);
+	assert.equal(ctx.flow.trackingTrust, "finished");
+	ctx.destroyed();
+});
+
+test("missing tracker finish degrades completion to timer authority", () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	prepareTrustedCompletion(ctx);
+
+	const result = ctx.workoutCompletionResult({
+		burpeeCountDone: 5,
+		durationSec: 10,
+	});
+
+	assert.deepEqual(result, {
+		burpeeCountDone: 5,
+		durationSec: 10,
+		cadenceMs: [],
+	});
+	assert.equal(ctx.flow.trackingTrust, "degraded");
+	assert.equal(ctx.flow.trackingReason, "tracking_incomplete");
 	ctx.destroyed();
 });
 
@@ -2771,4 +2814,257 @@ test("pose tracker finished output stays local", () => {
 	});
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
+});
+
+function prepareSaveReview(ctx, overrides = {}) {
+	ctx.clientSessionId = "client-save";
+	ctx.flow = {
+		...ctx.flow,
+		mode: "completion_review",
+		captureMode: "camera",
+		trackingReason: null,
+		completion: {
+			burpeeCountActual: 4,
+			burpeeCountPlanned: 5,
+			durationSecActual: 9,
+			durationSecPlanned: 10,
+			detectedReps: 4,
+			detectedDurationSec: 9,
+			trackingTrust: "finished",
+			cadenceMs: [2_000, 4_000, 6_000, 8_000],
+			mood: 1,
+			tags: ["tired", "great_energy"],
+			notePost: "Strong finish",
+			...overrides,
+		},
+	};
+	ctx.inMemoryCompletionDraft = ctx.completionDraft();
+}
+
+function submitCompletion(ctx) {
+	let prevented = false;
+	ctx.el.dispatchEvent({
+		type: "submit",
+		target: ctx.el.querySelector("#session-completion-form"),
+		preventDefault() {
+			prevented = true;
+		},
+	});
+	return prevented;
+}
+
+test("final Save is the only server event and keeps invalid drafts editable", async () => {
+	const store = {
+		loadDraft: async () => null,
+	};
+	const ctx = mountedFlowHarness({
+		openSessionStore: async () => store,
+	});
+	prepareSaveReview(ctx);
+	const draft = ctx.inMemoryCompletionDraft;
+	const calls = [];
+	ctx.pushEvent = (name, payload, callback) => {
+		calls.push({ name, payload });
+		callback({
+			status: "invalid",
+			field_errors: { burpee_count_actual: ["must be at least 0"] },
+			global_errors: ["Could not save. Try again."],
+		});
+	};
+
+	assert.equal(submitCompletion(ctx), true);
+	await flushHookPromises();
+
+	assert.deepEqual(calls, [
+		{
+			name: "save_session",
+			payload: {
+				workout_session: {
+					burpee_type: "six_count",
+					burpee_count_actual: 4,
+					burpee_count_planned: 5,
+					duration_sec_actual: 9,
+					duration_sec_planned: 10,
+					client_session_id: "client-save",
+					mood: 1,
+					tags: "great_energy,tired",
+					note_post: "Strong finish",
+				},
+				tracking: {
+					enabled: true,
+					trust: "finished",
+					reason: null,
+					detected_reps: 4,
+					detected_duration_sec: 9,
+					cadence_ms: [2_000, 4_000, 6_000, 8_000],
+				},
+			},
+		},
+	]);
+	assert.equal(
+		ctx.el.querySelector("#completion-reps-error").textContent,
+		"must be at least 0",
+	);
+	assert.equal(ctx.el.querySelector("#completion-reps-error").hidden, false);
+	assert.equal(
+		ctx.el.querySelector("#session-save-errors").textContent,
+		"Could not save. Try again.",
+	);
+	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+	assert.equal(ctx.inMemoryCompletionDraft, draft);
+	assert.equal(
+		ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"),
+		false,
+	);
+	ctx.destroyed();
+});
+
+test("successful Save marks buffered traces ready before deleting draft and navigating", async () => {
+	const order = [];
+	const store = {
+		loadDraft: async () => null,
+		hasTraceChunks: async (clientSessionId) => {
+			order.push(["has", clientSessionId]);
+			return true;
+		},
+		markTraceReady: async (clientSessionId, sessionId) => {
+			order.push(["mark", clientSessionId, sessionId]);
+		},
+		deleteDraft: async (clientSessionId) => {
+			order.push(["delete", clientSessionId]);
+		},
+	};
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	const readyEvents = [];
+	globalThis.window = {
+		location: { assign: (path) => navigations.push(path) },
+		dispatchEvent: (event) => readyEvents.push(event.type),
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store });
+	prepareSaveReview(ctx);
+	ctx.pushEvent = (name, payload, callback) => {
+		assert.equal(name, "save_session");
+		callback({ status: "ok", session_id: 99, redirect_to: "/stats" });
+	};
+
+	try {
+		assert.equal(submitCompletion(ctx), true);
+		await flushHookPromises();
+		await flushHookPromises();
+
+		assert.deepEqual(order, [
+			["has", "client-save"],
+			["mark", "client-save", 99],
+			["delete", "client-save"],
+		]);
+		assert.deepEqual(readyEvents, ["burpee:trace-upload-ready"]);
+		assert.deepEqual(navigations, ["/stats"]);
+		assert.equal(ctx.inMemoryCompletionDraft, null);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("successful Save without trace chunks skips upload marker", async () => {
+	const calls = [];
+	const store = {
+		loadDraft: async () => null,
+		hasTraceChunks: async () => false,
+		markTraceReady: async () => calls.push("mark"),
+		deleteDraft: async () => calls.push("delete"),
+	};
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	const readyEvents = [];
+	globalThis.window = {
+		location: { assign: (path) => navigations.push(path) },
+		dispatchEvent: (event) => readyEvents.push(event.type),
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store });
+	prepareSaveReview(ctx, {
+		trackingTrust: "disabled",
+		detectedReps: null,
+		detectedDurationSec: null,
+		cadenceMs: [],
+	});
+	ctx.flow.captureMode = "no_camera";
+	ctx.pushEvent = (_name, _payload, callback) =>
+		callback({ status: "ok", session_id: 100, redirect_to: "/stats" });
+
+	try {
+		submitCompletion(ctx);
+		await flushHookPromises();
+		await flushHookPromises();
+		assert.deepEqual(calls, ["delete"]);
+		assert.deepEqual(readyEvents, []);
+		assert.deepEqual(navigations, ["/stats"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("disconnected Save keeps controls and local draft available", () => {
+	const ctx = mountedFlowHarness({
+		openSessionStore: async () => ({ loadDraft: async () => null }),
+	});
+	prepareSaveReview(ctx);
+	let callback;
+	ctx.pushEvent = (_name, _payload, reply) => {
+		callback = reply;
+	};
+
+	submitCompletion(ctx);
+
+	assert.equal(typeof callback, "function");
+	assert.ok(ctx.inMemoryCompletionDraft);
+	assert.equal(
+		ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"),
+		false,
+	);
+	assert.equal(ctx.flow.mode, "completion_review");
+	ctx.destroyed();
+});
+
+test("successful Save navigates by a deadline when local storage remains pending", () => {
+	const opened = new Promise(() => {});
+	const scheduled = new Map();
+	let nextTimerId = 1;
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = {
+		location: { assign: (path) => navigations.push(path) },
+		dispatchEvent() {},
+	};
+	const ctx = mountedFlowHarness({
+		openSessionStore: () => opened,
+		setTimeout(callback, delayMs) {
+			const id = nextTimerId++;
+			scheduled.set(id, { callback, delayMs });
+			return id;
+		},
+		clearTimeout(id) {
+			scheduled.delete(id);
+		},
+	});
+	prepareSaveReview(ctx);
+	ctx.pushEvent = (_name, _payload, callback) =>
+		callback({ status: "ok", session_id: 101, redirect_to: "/stats" });
+
+	try {
+		submitCompletion(ctx);
+
+		assert.equal(ctx.flow.mode, "persisted");
+		assert.deepEqual(navigations, []);
+		assert.equal(scheduled.size, 1);
+		const [{ callback, delayMs }] = scheduled.values();
+		assert.ok(delayMs <= 250, `save deadline was ${delayMs}ms`);
+		callback();
+		assert.deepEqual(navigations, ["/stats"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
 });

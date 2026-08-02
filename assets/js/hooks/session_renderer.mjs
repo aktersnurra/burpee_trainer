@@ -153,6 +153,66 @@ export class SessionRenderer {
 		}
 	}
 
+	clearSaveErrors() {
+		const fields = [
+			["#completion-reps-error", "#completion-reps-input"],
+			["#completion-duration-error", "#completion-duration-input"],
+			["#completion-note-error", "#completion-note-input"],
+		];
+		for (const [errorSelector, inputSelector] of fields) {
+			const error = this.root.querySelector(errorSelector);
+			if (error) {
+				error.textContent = "";
+				error.hidden = true;
+			}
+			this.root.querySelector(inputSelector)?.removeAttribute("aria-invalid");
+		}
+
+		const global = this.root.querySelector("#session-save-errors");
+		if (global) {
+			global.textContent = "";
+			global.hidden = true;
+			global.classList.add("hidden");
+		}
+	}
+
+	renderSaveErrors(reply = {}) {
+		this.clearSaveErrors();
+		const fields = {
+			burpee_count_actual: ["#completion-reps-error", "#completion-reps-input"],
+			duration_sec_actual: [
+				"#completion-duration-error",
+				"#completion-duration-input",
+			],
+			note_post: ["#completion-note-error", "#completion-note-input"],
+		};
+
+		for (const [field, messages] of Object.entries(reply.field_errors || {})) {
+			const targets = fields[field];
+			if (!targets) continue;
+			const error = this.root.querySelector(targets[0]);
+			const input = this.root.querySelector(targets[1]);
+			const text = (Array.isArray(messages) ? messages : [messages])
+				.filter(Boolean)
+				.join(" ");
+			if (error && text) {
+				error.textContent = text;
+				error.hidden = false;
+			}
+			if (input && text) input.setAttribute("aria-invalid", "true");
+		}
+
+		const globalMessages = Array.isArray(reply.global_errors)
+			? reply.global_errors.filter(Boolean)
+			: [];
+		const global = this.root.querySelector("#session-save-errors");
+		if (global && globalMessages.length > 0) {
+			global.textContent = globalMessages.join(" ");
+			global.hidden = false;
+			global.classList.remove("hidden");
+		}
+	}
+
 	renderTimer(timeLeftSec) {
 		const formattedTime = this.formatTime(timeLeftSec);
 		const accessibleTime = this.root.querySelector("#session-time-accessible");

@@ -415,6 +415,19 @@ export function flowTransition(state, event) {
         trackingReason: event.reason || null,
       });
 
+		case "TRACKING_FINISHED":
+			if (
+				state.mode !== "workout_running" ||
+				state.captureMode !== "camera" ||
+				state.trackingTrust === "degraded"
+			) {
+				return unchanged(state);
+			}
+			return moved(state, {
+				trackingTrust: "finished",
+				trackingReason: null,
+			});
+
     case "SESSION_DONE":
       if (state.mode !== "workout_running") return unchanged(state);
       return finishWorkout(state, event.result);
