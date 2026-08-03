@@ -354,7 +354,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
 
     ~H"""
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
-      <div class="mx-auto min-h-dvh w-full max-w-[430px] overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))]">
+      <div class="mx-auto h-dvh w-full max-w-[430px] overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))]">
         <section id="session-completion-summary" class="text-center">
           <h1
             id="session-completion-heading"

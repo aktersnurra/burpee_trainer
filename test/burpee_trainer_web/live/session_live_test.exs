@@ -128,6 +128,16 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
              "#session-completion-form:not([phx-change]):not([phx-submit])"
            )
 
+    assert has_element?(
+             view,
+             "#session-completion-review > div.h-dvh.overflow-y-auto"
+           )
+
+    refute has_element?(
+             view,
+             "#session-completion-review > div.min-h-dvh.overflow-y-auto"
+           )
+
     assert has_element?(view, "#completion-reps-input")
     assert has_element?(view, "#completion-duration-input")
     assert has_element?(view, "#completion-note-input")
