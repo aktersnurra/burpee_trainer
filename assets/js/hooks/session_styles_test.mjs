@@ -137,6 +137,15 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 	assert.match(finish, /color:\s*var\(--session-active-bg\);/);
 });
 
+test("completion choices visibly distinguish their pressed state", () => {
+	const pressed =
+		ruleFor('.session-choice-toggle[aria-pressed="true"]')?.declarations || "";
+
+	assert.match(pressed, /border-color:\s*var\(--session-ink\);/);
+	assert.match(pressed, /background:\s*var\(--session-ink\);/);
+	assert.match(pressed, /color:\s*var\(--session-bg\);/);
+});
+
 test("Abort uses the actual fixed active ink with normal-text contrast on every underlying field", () => {
 	const abortClass = sessionSurface.match(
 		/id="session-abort-btn"[\s\S]*?class="([^"]+)"/,

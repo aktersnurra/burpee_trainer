@@ -84,6 +84,17 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-capture-choice", "Track burpees with the camera?")
     assert has_element?(view, "#camera-choice-yes", "Yes, use camera")
     assert has_element?(view, "#camera-choice-no", "No, continue")
+
+    assert selector_count(
+             document,
+             ".session-choice-toggle[data-mood][aria-pressed='false']"
+           ) == 3
+
+    assert selector_count(
+             document,
+             ".session-choice-toggle[data-tag][aria-pressed='false']"
+           ) == 6
+
     refute has_element?(view, "[phx-click='session_started']")
     refute has_element?(view, "nav")
     refute has_element?(view, "#flash-group")

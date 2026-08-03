@@ -405,6 +405,12 @@ body {
   color: var(--session-active-bg);
 }
 
+.session-choice-toggle[aria-pressed="true"] {
+  border-color: var(--session-ink);
+  background: var(--session-ink);
+  color: var(--session-bg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   #session-work-fill,
   #session-runner-client.is-rest,

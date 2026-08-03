@@ -390,7 +390,8 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <button
               type="button"
               data-mood={value}
-              class="min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)]"
+              aria-pressed="false"
+              class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
             >
               {label}
             </button>
@@ -439,7 +440,8 @@ defmodule BurpeeTrainerWeb.SessionComponents do
                 <button
                   type="button"
                   data-tag={tag}
-                  class="min-h-11 rounded-full border border-[var(--session-border)] px-4 py-2 text-xs text-[var(--session-muted)]"
+                  aria-pressed="false"
+                  class="session-choice-toggle min-h-11 rounded-full border border-[var(--session-border)] px-4 py-2 text-xs text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
                 >
                   {String.replace(tag, "_", " ")}
                 </button>
