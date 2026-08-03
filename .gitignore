@@ -55,6 +55,9 @@ SPEC_FEAT_UI.md
 # Mock/scratch images
 /mock/
 
+# Agent-driven browser E2E evidence and temporary reports
+/.e2e-artifacts/
+
 /deploy/SERVER_SETUP.md
 
 /videos/
