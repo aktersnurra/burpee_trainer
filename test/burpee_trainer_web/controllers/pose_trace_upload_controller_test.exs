@@ -116,6 +116,34 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.aggregate(PoseTraceChunk, :count) == 2
   end
 
+  test "bounded near-limit request ingests and idempotently acknowledges all chunk indexes", %{
+    conn: conn
+  } do
+    user = user_fixture()
+    {_plan, session} = saved_session(user)
+
+    payload =
+      upload_payload(
+        session.client_session_id,
+        Enum.map(0..2, &near_limit_chunk/1)
+      )
+
+    assert byte_size(Jason.encode!(payload)) <= 512 * 1024
+
+    first = conn |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
+
+    second =
+      conn
+      |> recycle()
+      |> authenticated_json(user)
+      |> post(~p"/api/session-pose-traces", payload)
+
+    assert json_response(first, 200)["accepted_indexes"] == [0, 1, 2]
+    assert json_response(second, 200)["accepted_indexes"] == [0, 1, 2]
+    assert Repo.aggregate(PoseCaptureRun, :count) == 1
+    assert Repo.aggregate(PoseTraceChunk, :count) == 3
+  end
+
   test "invalid oversized chunk rolls back run creation and leaves session unchanged", %{
     conn: conn
   } do
@@ -168,6 +196,13 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
       "chunks" => chunks,
       "complete" => complete
     }
+  end
+
+  defp near_limit_chunk(index) do
+    chunk(index)
+    |> put_in(["payload", "samples"], [
+      %{"tMs" => index * 1_000, "blob" => String.duplicate("x", 170_000)}
+    ])
   end
 
   defp chunk(index) do

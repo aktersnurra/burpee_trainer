@@ -1,4 +1,9 @@
 const DEFAULT_FLUSH_INTERVAL_MS = 3000;
+export const MAX_TRACE_CHUNK_BYTES = 200_000;
+
+export function serializedJsonBytes(value) {
+	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
 
 export function initialPoseCaptureRecorder(options = {}) {
 	return {
@@ -7,6 +12,7 @@ export function initialPoseCaptureRecorder(options = {}) {
 		pendingSegment: null,
 		pendingStartedAtMs: null,
 		pendingSamples: [],
+		diagnostics: [],
 	};
 }
 
@@ -18,6 +24,29 @@ export function recordPoseSample(state, sample, { segment, nowMs }) {
 		const flushed = flushPending(current);
 		current = flushed.state;
 		chunks.push(flushed.chunk);
+	}
+
+	const candidateSamples = [...current.pendingSamples, sample];
+
+	if (serializedJsonBytes(payloadFor(candidateSamples)) >= MAX_TRACE_CHUNK_BYTES) {
+		if (current.pendingSamples.length > 0) {
+			const flushed = flushPending(current);
+			current = flushed.state;
+			chunks.push(flushed.chunk);
+		}
+
+		if (serializedJsonBytes(payloadFor([sample])) >= MAX_TRACE_CHUNK_BYTES) {
+			return {
+				state: {
+					...current,
+					diagnostics: [
+						...current.diagnostics,
+						{ type: "sample_exceeds_chunk_byte_budget", tMs: sample.tMs },
+					],
+				},
+				chunks,
+			};
+		}
 	}
 
 	const pendingStartedAtMs =
@@ -53,6 +82,13 @@ export function flushPoseCaptureRecorder(state, _options = {}) {
 	return { state: flushed.state, chunks: [flushed.chunk] };
 }
 
+function payloadFor(samples) {
+	return {
+		version: 1,
+		samples,
+	};
+}
+
 function flushPending(state) {
 	const samples = state.pendingSamples;
 	const chunk = {
@@ -61,10 +97,7 @@ function flushPending(state) {
 		started_at_ms: state.pendingStartedAtMs,
 		ended_at_ms: samples[samples.length - 1].tMs,
 		sample_count: samples.length,
-		payload: {
-			version: 1,
-			samples,
-		},
+		payload: payloadFor(samples),
 	};
 
 	return {

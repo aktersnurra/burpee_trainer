@@ -1,5 +1,8 @@
+import { serializedJsonBytes } from "./pose_capture_recorder.mjs";
+
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_ENDPOINT = "/api/session-pose-traces";
+export const MAX_TRACE_REQUEST_BYTES = 512 * 1024;
 
 export function canDrainPoseTraces(documentRoot) {
 	return !documentRoot.querySelector("#burpee-session");
@@ -23,19 +26,30 @@ export function createPoseTraceUploader({
 				return;
 			}
 
-			const batch = chunks.slice(0, batchSize);
+			const batch = [];
+
+			for (const chunk of chunks) {
+				if (batch.length === batchSize) break;
+
+				const candidate = [...batch, stripStoreFields(chunk)];
+				const candidateRequest = traceRequest(upload, candidate, candidate.length === chunks.length);
+
+				if (serializedJsonBytes(candidateRequest) > MAX_TRACE_REQUEST_BYTES) break;
+
+				batch.push(stripStoreFields(chunk));
+			}
+
+			if (batch.length === 0) return;
+
 			const finalBatch = batch.length === chunks.length;
+			const body = JSON.stringify(traceRequest(upload, batch, finalBatch));
 			const response = await fetch(endpoint, {
 				method: "POST",
 				headers: {
 					"content-type": "application/json",
 					"x-csrf-token": csrfToken,
 				},
-				body: JSON.stringify({
-					client_session_id: upload.client_session_id,
-					chunks: batch.map(stripStoreFields),
-					complete: finalBatch,
-				}),
+				body,
 			});
 
 			if (!response.ok) return;
@@ -87,6 +101,14 @@ export function createPoseTraceUploader({
 
 			return inFlight;
 		},
+	};
+}
+
+function traceRequest(upload, chunks, complete) {
+	return {
+		client_session_id: upload.client_session_id,
+		chunks,
+		complete,
 	};
 }
 

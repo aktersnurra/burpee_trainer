@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+	MAX_TRACE_REQUEST_BYTES,
 	canDrainPoseTraces,
 	createPoseTraceUploader,
 } from "./pose_trace_uploader.mjs";
@@ -16,6 +17,20 @@ function chunk(index) {
 		sample_count: 1,
 		payload: { version: 1, samples: [{ tMs: index * 1_000 }] },
 	};
+}
+
+function largeChunk(index, bytes = 170_000) {
+	return {
+		...chunk(index),
+		payload: {
+			version: 1,
+			samples: [{ tMs: index * 1_000, landmark_data: "x".repeat(bytes) }],
+		},
+	};
+}
+
+function nearBudgetChunks() {
+	return [largeChunk(0), largeChunk(1), largeChunk(2), largeChunk(3)];
 }
 
 function uploadStore(initialChunks, { ready = true } = {}) {
@@ -162,6 +177,55 @@ test("uploader sends bounded batches and completes only the final batch", async 
 	);
 	assert.deepEqual(store.remainingIndexes(), []);
 	assert.equal(store.uploadMarkerExists(), false);
+});
+
+test("uploader splits a ready queue by serialized request bytes", async () => {
+	const store = uploadStore(nearBudgetChunks());
+	const requests = [];
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async (_path, options) => {
+			const body = parseJson(options.body);
+			requests.push({ raw: options.body, body });
+			return jsonResponse({
+				accepted_indexes: body.chunks.map(({ chunk_index }) => chunk_index),
+				complete: body.complete,
+			});
+		},
+		csrfToken: "token",
+	});
+
+	await uploader.drain();
+
+	assert.ok(requests.length > 1);
+	assert.ok(requests.every(({ body }) => body.chunks.length > 0));
+	assert.ok(
+		requests.every(
+			({ raw }) =>
+				new TextEncoder().encode(raw).byteLength <= MAX_TRACE_REQUEST_BYTES,
+		),
+	);
+	assert.deepEqual(store.remainingIndexes(), []);
+	assert.equal(store.uploadMarkerExists(), false);
+});
+
+test("413 retains the queued chunks and ready marker", async () => {
+	const store = uploadStore([largeChunk(0, 400_000)]);
+	let requests = 0;
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async () => {
+			requests += 1;
+			return { ok: false, status: 413 };
+		},
+		csrfToken: "token",
+	});
+
+	await uploader.drain();
+
+	assert.equal(requests, 1);
+	assert.deepEqual(store.remainingIndexes(), [0]);
+	assert.equal(store.uploadMarkerExists(), true);
 });
 
 test("concurrent drains share one in-flight request", async () => {
