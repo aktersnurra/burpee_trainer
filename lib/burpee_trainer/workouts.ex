@@ -499,7 +499,7 @@ defmodule BurpeeTrainer.Workouts do
   def list_sessions(%User{id: user_id}) do
     Repo.all(
       from(session in WorkoutSession,
-        where: session.user_id == ^user_id,
+        where: session.user_id == ^user_id and session.status == :reported,
         order_by: [desc: session.inserted_at]
       )
     )
@@ -509,7 +509,9 @@ defmodule BurpeeTrainer.Workouts do
   def list_sessions(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
     Repo.all(
       from(session in WorkoutSession,
-        where: session.user_id == ^user_id and session.burpee_type == ^burpee_type,
+        where:
+          session.user_id == ^user_id and session.status == :reported and
+            session.burpee_type == ^burpee_type,
         order_by: [desc: session.inserted_at]
       )
     )
@@ -525,7 +527,7 @@ defmodule BurpeeTrainer.Workouts do
       Repo.all(
         from(s in WorkoutSession,
           where:
-            s.user_id == ^user_id and
+            s.user_id == ^user_id and s.status == :reported and
               (is_nil(s.tags) or s.tags != "warmup"),
           select: %{inserted_at: s.inserted_at, duration_sec_actual: s.duration_sec_actual}
         )
@@ -558,7 +560,7 @@ defmodule BurpeeTrainer.Workouts do
     Repo.all(
       from(s in WorkoutSession,
         where:
-          s.user_id == ^user_id and
+          s.user_id == ^user_id and s.status == :reported and
             (is_nil(s.tags) or s.tags != "warmup") and
             s.inserted_at >= ^week_start_dt and
             s.inserted_at <= ^week_end_dt,
@@ -825,9 +827,7 @@ defmodule BurpeeTrainer.Workouts do
         {:error, :not_found}
 
       %WorkoutSession{status: status} = session when status in [:running, :report_pending] ->
-        session
-        |> WorkoutSession.abort_changeset()
-        |> Repo.update()
+        abort_lifecycle_session(session, user_id, client_session_id)
 
       %WorkoutSession{status: :aborted} = session ->
         {:ok, session}
@@ -907,24 +907,70 @@ defmodule BurpeeTrainer.Workouts do
     changeset = report_changeset_with_tracking(session, report_attrs, tracking_attrs)
 
     if changeset.valid? do
-      fingerprint = report_fingerprint(changeset)
+      changeset =
+        changeset
+        |> Ecto.Changeset.put_change(:report_fingerprint, report_fingerprint(changeset))
+        |> with_derived_session_fields(user_id)
+        |> maybe_carry_lifecycle_style(session)
+        |> Ecto.Changeset.put_change(:updated_at, DateTime.utc_now(:second))
 
-      changeset
-      |> Ecto.Changeset.put_change(:report_fingerprint, fingerprint)
-      |> with_derived_session_fields(user_id)
-      |> maybe_carry_lifecycle_style(session)
-      |> Repo.update()
-      |> case do
-        {:ok, reported} ->
+      case conditional_session_update(user_id, session.client_session_id, changeset.changes) do
+        :updated ->
+          reported = get_session_by_client_session_id(user_id, session.client_session_id)
           maybe_upsert_style_performance(reported, user_id)
           {:ok, reported, :reported}
 
-        {:error, changeset} ->
-          {:error, changeset}
+        :not_updated ->
+          resolve_report_transition(user_id, session.client_session_id, changeset)
       end
     else
       {:error, changeset}
     end
+  end
+
+  defp resolve_report_transition(user_id, client_session_id, changeset) do
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      %WorkoutSession{status: :reported} = session -> replay_report(session, changeset)
+      %WorkoutSession{status: :aborted} -> {:error, :aborted}
+      nil -> {:error, :not_found}
+      %WorkoutSession{} -> {:error, :report_conflict}
+    end
+  end
+
+  defp abort_lifecycle_session(session, user_id, client_session_id) do
+    changes =
+      session
+      |> WorkoutSession.abort_changeset()
+      |> Ecto.Changeset.put_change(:updated_at, DateTime.utc_now(:second))
+      |> Map.fetch!(:changes)
+
+    case conditional_session_update(user_id, client_session_id, changes) do
+      :updated ->
+        {:ok, get_session_by_client_session_id(user_id, client_session_id)}
+
+      :not_updated ->
+        case get_session_by_client_session_id(user_id, client_session_id) do
+          %WorkoutSession{status: :aborted} = current -> {:ok, current}
+          %WorkoutSession{status: :reported} -> {:error, :already_reported}
+          nil -> {:error, :not_found}
+          %WorkoutSession{} -> {:error, :already_reported}
+        end
+    end
+  end
+
+  defp conditional_session_update(user_id, client_session_id, changes) do
+    {count, _} =
+      Repo.update_all(
+        from(session in WorkoutSession,
+          where:
+            session.user_id == ^user_id and
+              session.client_session_id == ^client_session_id and
+              session.status in [:running, :report_pending]
+        ),
+        set: Map.to_list(changes)
+      )
+
+    if count == 1, do: :updated, else: :not_updated
   end
 
   defp replay_report(session, changeset) do
@@ -1671,7 +1717,7 @@ defmodule BurpeeTrainer.Workouts do
   defp fetch_prev_session(user_id, burpee_type) do
     Repo.one(
       from(s in WorkoutSession,
-        where: s.user_id == ^user_id and s.burpee_type == ^burpee_type,
+        where: s.user_id == ^user_id and s.status == :reported and s.burpee_type == ^burpee_type,
         order_by: [desc: s.inserted_at],
         limit: 1
       )
@@ -1685,8 +1731,8 @@ defmodule BurpeeTrainer.Workouts do
       Repo.all(
         from(s in WorkoutSession,
           where:
-            s.user_id == ^user_id and s.burpee_type == ^burpee_type and
-              not is_nil(s.rate_per_min_actual),
+            s.user_id == ^user_id and s.status == :reported and
+              s.burpee_type == ^burpee_type and not is_nil(s.rate_per_min_actual),
           order_by: [desc: s.inserted_at],
           limit: 2,
           select: s.rate_per_min_actual
@@ -1694,11 +1740,25 @@ defmodule BurpeeTrainer.Workouts do
       )
 
     # Oldest first, then current session — EMA gives more weight to recent.
-    ema(Enum.reverse(prev_rates) ++ [current_rate], 0.5)
+    prev_rates
+    |> Enum.reverse()
+    |> List.insert_at(-1, current_rate)
+    |> ema(0.5)
   end
 
-  defp ema([r | rest], alpha) do
-    Enum.reduce(rest, r, fn rate, acc -> alpha * rate + (1.0 - alpha) * acc end)
+  defp ema(rates, alpha) do
+    case rates do
+      [] ->
+        nil
+
+      [rate] ->
+        rate
+
+      [rate | rest] ->
+        Enum.reduce(rest, rate, fn current_rate, acc ->
+          alpha * current_rate + (1.0 - alpha) * acc
+        end)
+    end
   end
 
   defp time_of_day_bucket(hour) do

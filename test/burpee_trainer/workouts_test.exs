@@ -899,6 +899,92 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert pending_reported.id == pending.id
     end
 
+    test "immediate facts exclude running lifecycle rows" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      reported = free_form_session_fixture(user, %{"duration_sec_actual" => 120})
+      last_week = Date.add(Date.beginning_of_week(Date.utc_today(), :monday), -7)
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^reported.id),
+        set: [inserted_at: DateTime.new!(last_week, ~T[10:00:00], "Etc/UTC")]
+      )
+
+      assert {:ok, running} = Workouts.begin_plan_session(user, plan, Ecto.UUID.generate())
+
+      assert [listed] = Workouts.list_sessions(user)
+      assert listed.id == reported.id
+      assert [%{week_start: ^last_week, minutes: 2.0}] = Workouts.weekly_minutes(user)
+      assert Workouts.this_week_trained_days(user) == MapSet.new()
+      assert running.status == :running
+    end
+
+    test "reporting derives fields from a prior reported fact, not its running row" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      prior =
+        free_form_session_fixture(user, %{
+          "burpee_count_actual" => 10,
+          "duration_sec_actual" => 60
+        })
+
+      two_days_ago = Date.add(Date.utc_today(), -2)
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^prior.id),
+        set: [inserted_at: DateTime.new!(two_days_ago, ~T[10:00:00], "Etc/UTC")]
+      )
+
+      client_session_id = Ecto.UUID.generate()
+      assert {:ok, _running} = Workouts.begin_plan_session(user, plan, client_session_id)
+
+      assert {:ok, reported, :reported} =
+               Workouts.report_session(
+                 user,
+                 client_session_id,
+                 %{"burpee_count_actual" => 20, "duration_sec_actual" => 60},
+                 %{}
+               )
+
+      assert reported.days_since_last == 2
+      assert reported.rate_delta == 10.0
+    end
+
+    test "terminal transitions use the current persisted result" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      aborted_id = Ecto.UUID.generate()
+      reported_id = Ecto.UUID.generate()
+
+      assert {:ok, aborted} = Workouts.begin_plan_session(user, plan, aborted_id)
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^aborted.id),
+        set: [status: :aborted, aborted_at: DateTime.utc_now(:second)]
+      )
+
+      assert {:error, :aborted} =
+               Workouts.report_session(
+                 user,
+                 aborted_id,
+                 %{"burpee_count_actual" => 10, "duration_sec_actual" => 60},
+                 %{}
+               )
+
+      assert Repo.get!(WorkoutSession, aborted.id).status == :aborted
+
+      assert {:ok, reported} = Workouts.begin_plan_session(user, plan, reported_id)
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^reported.id),
+        set: [status: :reported, reported_at: DateTime.utc_now(:second)]
+      )
+
+      assert {:error, :already_reported} = Workouts.abort_session(user, reported_id)
+      assert Repo.get!(WorkoutSession, reported.id).status == :reported
+    end
+
     test "abort_session/2 is idempotent and rejects reported rows" do
       user = user_fixture()
       plan = plan_fixture(user)
