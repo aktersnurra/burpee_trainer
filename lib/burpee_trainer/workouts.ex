@@ -584,6 +584,7 @@ defmodule BurpeeTrainer.Workouts do
           on: p.id == s.plan_id,
           where:
             s.user_id == ^user_id and
+              s.status == :reported and
               not is_nil(s.plan_id) and
               (is_nil(s.tags) or s.tags != "warmup"),
           order_by: [desc: s.inserted_at],
@@ -608,7 +609,7 @@ defmodule BurpeeTrainer.Workouts do
 
     query =
       from(s in WorkoutSession,
-        where: s.user_id == ^user_id,
+        where: s.user_id == ^user_id and s.status == :reported,
         order_by: [desc: s.inserted_at],
         limit: ^(limit + 1),
         preload: [:plan, :goal]
@@ -774,16 +775,46 @@ defmodule BurpeeTrainer.Workouts do
       nil ->
         {:error, :not_found}
 
-      %WorkoutSession{status: :running} = session ->
-        session
-        |> WorkoutSession.report_pending_changeset()
-        |> Repo.update()
+      %WorkoutSession{status: :running} ->
+        now = DateTime.utc_now(:second)
+
+        {count, _} =
+          Repo.update_all(
+            from(session in WorkoutSession,
+              where:
+                session.user_id == ^user_id and
+                  session.client_session_id == ^client_session_id and
+                  session.status == :running
+            ),
+            set: [status: :report_pending, report_pending_at: now, updated_at: now]
+          )
+
+        case count do
+          1 -> {:ok, get_session_by_client_session_id(user_id, client_session_id)}
+          0 -> resolve_report_pending_transition(user_id, client_session_id)
+        end
 
       %WorkoutSession{status: status} = session when status in [:report_pending, :reported] ->
         {:ok, session}
 
       %WorkoutSession{status: :aborted} ->
         {:error, :aborted}
+    end
+  end
+
+  defp resolve_report_pending_transition(user_id, client_session_id) do
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      %WorkoutSession{status: status} = session when status in [:report_pending, :reported] ->
+        {:ok, session}
+
+      %WorkoutSession{status: :aborted} ->
+        {:error, :aborted}
+
+      %WorkoutSession{status: :running} ->
+        mark_report_pending(%User{id: user_id}, client_session_id)
+
+      nil ->
+        {:error, :not_found}
     end
   end
 

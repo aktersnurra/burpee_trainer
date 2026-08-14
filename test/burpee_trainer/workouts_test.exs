@@ -831,7 +831,7 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert session.burpee_count_planned == 12
     end
 
-    test "mark_report_pending/2 transitions a running session idempotently and rejects aborted rows" do
+    test "mark_report_pending/2 atomically transitions a running session and preserves terminal rows" do
       user = user_fixture()
       plan = plan_fixture(user)
       client_session_id = Ecto.UUID.generate()
@@ -844,10 +844,66 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert {:ok, replayed} = Workouts.mark_report_pending(user, client_session_id)
       assert replayed.id == pending.id
+      assert replayed.report_pending_at == pending.report_pending_at
 
       assert {:ok, aborted} = Workouts.abort_session(user, client_session_id)
       assert aborted.status == :aborted
       assert {:error, :aborted} = Workouts.mark_report_pending(user, client_session_id)
+
+      reported_id = Ecto.UUID.generate()
+      assert {:ok, reported} = Workouts.begin_plan_session(user, plan, reported_id)
+      handler_id = {:mark_report_pending_cas, make_ref()}
+      test_pid = self()
+      ref = make_ref()
+
+      task =
+        Task.async(fn ->
+          send(test_pid, {:mark_report_pending_task, self()})
+
+          receive do
+            :mark_report_pending -> Workouts.mark_report_pending(user, reported_id)
+          end
+        end)
+
+      assert_receive {:mark_report_pending_task, task_pid}
+
+      :ok =
+        :telemetry.attach(
+          handler_id,
+          [:burpee_trainer, :repo, :query],
+          fn _event,
+             _measurements,
+             _metadata,
+             %{handler_id: handler_id, ref: ref, task_pid: task_pid, test_pid: test_pid} ->
+            if self() == task_pid and Process.get(handler_id) != true do
+              Process.put(handler_id, true)
+              send(test_pid, {:mark_report_pending_read, ref, self()})
+
+              receive do
+                {:continue_mark_report_pending, ^ref} -> :ok
+              end
+            end
+          end,
+          %{handler_id: handler_id, ref: ref, task_pid: task_pid, test_pid: test_pid}
+        )
+
+      try do
+        send(task_pid, :mark_report_pending)
+        assert_receive {:mark_report_pending_read, ^ref, handler_pid}
+
+        Repo.update_all(
+          from(s in WorkoutSession, where: s.id == ^reported.id),
+          set: [status: :reported, reported_at: DateTime.utc_now(:second)]
+        )
+
+        send(handler_pid, {:continue_mark_report_pending, ref})
+
+        assert {:ok, persisted} = Task.await(task)
+        assert persisted.status == :reported
+        assert persisted.report_pending_at == nil
+      after
+        :telemetry.detach(handler_id)
+      end
     end
 
     test "report_session/4 reports original running or pending row idempotently" do
@@ -917,6 +973,41 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert [%{week_start: ^last_week, minutes: 2.0}] = Workouts.weekly_minutes(user)
       assert Workouts.this_week_trained_days(user) == MapSet.new()
       assert running.status == :running
+    end
+
+    test "paginated history excludes running, report-pending, and aborted lifecycle rows" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      older = free_form_session_fixture(user)
+      newer = free_form_session_fixture(user)
+      older_at = ~U[2026-01-01 10:00:00Z]
+      newer_at = ~U[2026-01-02 10:00:00Z]
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^older.id),
+        set: [inserted_at: older_at]
+      )
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^newer.id),
+        set: [inserted_at: newer_at]
+      )
+
+      assert {:ok, running} = Workouts.begin_plan_session(user, plan, Ecto.UUID.generate())
+      assert {[first], true} = Workouts.list_sessions_page(user, 1)
+      assert first.id == newer.id
+      assert {[second], false} = Workouts.list_sessions_page(user, 1, before: newer_at)
+      assert second.id == older.id
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^running.id),
+        set: [status: :aborted, aborted_at: DateTime.utc_now(:second)]
+      )
+
+      assert {:ok, pending} = Workouts.begin_plan_session(user, plan, Ecto.UUID.generate())
+      assert {:ok, _} = Workouts.mark_report_pending(user, pending.client_session_id)
+      assert {[listed], true} = Workouts.list_sessions_page(user, 1)
+      assert listed.id == newer.id
     end
 
     test "reporting derives fields from a prior reported fact, not its running row" do
@@ -1509,6 +1600,32 @@ defmodule BurpeeTrainer.WorkoutsTest do
       )
 
       assert Workouts.last_run_plan(user) == nil
+    end
+
+    test "excludes running, report-pending, and aborted plan sessions", %{user: user} do
+      reported_plan = plan_fixture(user, %{name: "Reported"})
+      lifecycle_plan = plan_fixture(user, %{name: "Lifecycle"})
+      reported = session_from_plan_fixture(user, reported_plan)
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^reported.id),
+        set: [inserted_at: ~U[2026-01-01 10:00:00Z]]
+      )
+
+      client_session_id = Ecto.UUID.generate()
+      assert {:ok, running} = Workouts.begin_plan_session(user, lifecycle_plan, client_session_id)
+      assert Workouts.last_run_plan(user).id == reported_plan.id
+
+      assert {:ok, pending} = Workouts.mark_report_pending(user, client_session_id)
+      assert pending.id == running.id
+      assert Workouts.last_run_plan(user).id == reported_plan.id
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^pending.id),
+        set: [status: :aborted, aborted_at: DateTime.utc_now(:second)]
+      )
+
+      assert Workouts.last_run_plan(user).id == reported_plan.id
     end
   end
 
