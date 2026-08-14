@@ -729,6 +729,74 @@ defmodule BurpeeTrainer.WorkoutsTest do
     end
   end
 
+  describe "durable workout lifecycle" do
+    test "a running plan session accepts nil actuals but a report requires them" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      start_changeset =
+        WorkoutSession.start_changeset(
+          %WorkoutSession{user_id: user.id, plan_id: plan.id},
+          %{
+            client_session_id: Ecto.UUID.generate(),
+            source: :plan,
+            burpee_type: :six_count,
+            burpee_count_planned: 30,
+            duration_sec_planned: 120
+          }
+        )
+
+      assert start_changeset.valid?
+      assert Ecto.Changeset.get_field(start_changeset, :status) == :running
+      assert Ecto.Changeset.get_field(start_changeset, :burpee_count_actual) == nil
+      assert Ecto.Changeset.get_field(start_changeset, :duration_sec_actual) == nil
+
+      report_changeset =
+        start_changeset
+        |> Ecto.Changeset.apply_changes()
+        |> WorkoutSession.report_changeset(%{})
+
+      refute report_changeset.valid?
+
+      assert %{burpee_count_actual: ["can't be blank"], duration_sec_actual: ["can't be blank"]} =
+               errors_on(report_changeset)
+    end
+
+    test "aborting a session records the abort time without browser attrs" do
+      changeset = WorkoutSession.abort_changeset(%WorkoutSession{})
+
+      assert Ecto.Changeset.get_change(changeset, :status) == :aborted
+      assert %DateTime{} = Ecto.Changeset.get_change(changeset, :aborted_at)
+    end
+
+    test "only one unresolved session may be inserted for a user" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      assert {:ok, _session} =
+               %WorkoutSession{user_id: user.id, plan_id: plan.id}
+               |> WorkoutSession.start_changeset(running_plan_attrs())
+               |> Repo.insert()
+
+      assert {:error, changeset} =
+               %WorkoutSession{user_id: user.id, plan_id: plan.id}
+               |> WorkoutSession.start_changeset(running_plan_attrs())
+               |> Repo.insert()
+
+      assert %{user_id: [_]} = errors_on(changeset)
+    end
+
+    defp running_plan_attrs do
+      %{
+        client_session_id: Ecto.UUID.generate(),
+        source: :plan,
+        burpee_type: :six_count,
+        burpee_count_planned: 30,
+        duration_sec_planned: 120
+      }
+    end
+  end
+
   describe "last_session_for_type/2" do
     test "returns most recent qualifying session (20 min ± 10 sec, positive burpees)" do
       user = user_fixture()
