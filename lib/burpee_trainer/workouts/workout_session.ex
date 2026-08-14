@@ -131,6 +131,17 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
   end
 
   @doc """
+  Changeset for marking a running session ready for reporting.
+  """
+  @spec report_pending_changeset(t()) :: Ecto.Changeset.t()
+  def report_pending_changeset(session) do
+    change(session,
+      status: :report_pending,
+      report_pending_at: DateTime.utc_now(:second)
+    )
+  end
+
+  @doc """
   Changeset for reporting a completed session.
   """
   @spec report_changeset(t(), map()) :: Ecto.Changeset.t()

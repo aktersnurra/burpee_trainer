@@ -786,6 +786,193 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert %{user_id: [_]} = errors_on(changeset)
     end
 
+    test "begin_plan_session/3 persists server-derived running data and is idempotent" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      client_session_id = Ecto.UUID.generate()
+
+      assert {:ok, first} = Workouts.begin_plan_session(user, plan, client_session_id)
+      assert first.status == :running
+      assert first.source == :plan
+      assert first.plan_id == plan.id
+      assert first.execution_program_id
+      assert first.burpee_type == :six_count
+      assert first.burpee_count_planned == 30
+      assert first.duration_sec_planned == 1200
+      assert first.burpee_count_actual == nil
+      assert first.duration_sec_actual == nil
+
+      assert {:ok, second} = Workouts.begin_plan_session(user, plan, client_session_id)
+      assert second.id == first.id
+
+      assert {:error, {:unresolved_session, unresolved}} =
+               Workouts.begin_plan_session(user, plan, Ecto.UUID.generate())
+
+      assert unresolved.id == first.id
+      assert %{plan: %WorkoutPlan{}, video: nil} = Workouts.get_unresolved_session(user)
+    end
+
+    test "begin_video_session/3 persists video-derived source data" do
+      user = user_fixture()
+
+      video =
+        video_fixture(%{
+          burpee_type: :navy_seal,
+          duration_sec: 75,
+          burpee_count: 12
+        })
+
+      assert {:ok, session} = Workouts.begin_video_session(user, video, Ecto.UUID.generate())
+      assert session.status == :running
+      assert session.source == :video
+      assert session.video_id == video.id
+      assert session.burpee_type == :navy_seal
+      assert session.duration_sec_planned == 75
+      assert session.burpee_count_planned == 12
+    end
+
+    test "mark_report_pending/2 transitions a running session idempotently and rejects aborted rows" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      client_session_id = Ecto.UUID.generate()
+
+      assert {:ok, running} = Workouts.begin_plan_session(user, plan, client_session_id)
+      assert {:ok, pending} = Workouts.mark_report_pending(user, client_session_id)
+      assert pending.id == running.id
+      assert pending.status == :report_pending
+      assert %DateTime{} = pending.report_pending_at
+
+      assert {:ok, replayed} = Workouts.mark_report_pending(user, client_session_id)
+      assert replayed.id == pending.id
+
+      assert {:ok, aborted} = Workouts.abort_session(user, client_session_id)
+      assert aborted.status == :aborted
+      assert {:error, :aborted} = Workouts.mark_report_pending(user, client_session_id)
+    end
+
+    test "report_session/4 reports original running or pending row idempotently" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      report_attrs = %{
+        "burpee_count_actual" => "27",
+        "duration_sec_actual" => "123",
+        "note_post" => "finished",
+        "mood" => "1",
+        "tags" => "test"
+      }
+
+      running_id = Ecto.UUID.generate()
+      assert {:ok, running} = Workouts.begin_plan_session(user, plan, running_id)
+
+      assert {:ok, reported, :reported} =
+               Workouts.report_session(user, running_id, report_attrs, %{})
+
+      assert reported.id == running.id
+      assert reported.status == :reported
+      assert reported.capture_mode == :timed
+      assert %DateTime{} = reported.reported_at
+      assert is_binary(reported.report_fingerprint)
+
+      assert {:ok, replayed, :existing} =
+               Workouts.report_session(user, running_id, report_attrs, %{})
+
+      assert replayed.id == reported.id
+
+      assert {:error, :report_conflict} =
+               Workouts.report_session(
+                 user,
+                 running_id,
+                 Map.put(report_attrs, "burpee_count_actual", "28"),
+                 %{}
+               )
+
+      assert Repo.get!(WorkoutSession, reported.id).burpee_count_actual == 27
+
+      pending_id = Ecto.UUID.generate()
+      assert {:ok, pending} = Workouts.begin_plan_session(user, plan, pending_id)
+      assert {:ok, _} = Workouts.mark_report_pending(user, pending_id)
+
+      assert {:ok, pending_reported, :reported} =
+               Workouts.report_session(user, pending_id, report_attrs, %{})
+
+      assert pending_reported.id == pending.id
+    end
+
+    test "abort_session/2 is idempotent and rejects reported rows" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      aborted_id = Ecto.UUID.generate()
+
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, aborted_id)
+      assert {:ok, aborted} = Workouts.abort_session(user, aborted_id)
+      assert aborted.status == :aborted
+      assert %DateTime{} = aborted.aborted_at
+      assert {:ok, replayed} = Workouts.abort_session(user, aborted_id)
+      assert replayed.id == aborted.id
+
+      reported_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, reported_id)
+
+      assert {:ok, _reported, :reported} =
+               Workouts.report_session(
+                 user,
+                 reported_id,
+                 %{
+                   "burpee_count_actual" => "10",
+                   "duration_sec_actual" => "60"
+                 },
+                 %{}
+               )
+
+      assert {:error, :already_reported} = Workouts.abort_session(user, reported_id)
+    end
+
+    test "change_session_for_report/2 preserves the lifecycle row source fields" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      assert {:ok, session} = Workouts.begin_plan_session(user, plan, Ecto.UUID.generate())
+
+      changeset =
+        Workouts.change_session_for_report(session, %{
+          "burpee_count_actual" => "10",
+          "duration_sec_actual" => "60"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :plan_id) == plan.id
+      assert Ecto.Changeset.get_field(changeset, :source) == :plan
+      assert Ecto.Changeset.get_field(changeset, :burpee_count_planned) == 30
+    end
+
+    test "legacy direct session creation remains reported with source and capture mode" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      assert {:ok, plan_session} =
+               Workouts.create_session_from_plan(user, plan, %{
+                 "burpee_count_actual" => "10",
+                 "duration_sec_actual" => "60"
+               })
+
+      assert plan_session.status == :reported
+      assert plan_session.source == :plan
+      assert plan_session.capture_mode == :timed
+      assert %DateTime{} = plan_session.reported_at
+
+      assert {:ok, free_form_session} =
+               Workouts.create_free_form_session(user, %{
+                 "burpee_type" => "six_count",
+                 "burpee_count_actual" => "10",
+                 "duration_sec_actual" => "60"
+               })
+
+      assert free_form_session.status == :reported
+      assert free_form_session.source == :manual
+      assert free_form_session.capture_mode == :logged
+      assert %DateTime{} = free_form_session.reported_at
+    end
+
     defp running_plan_attrs do
       %{
         client_session_id: Ecto.UUID.generate(),

@@ -22,7 +22,8 @@ defmodule BurpeeTrainer.Workouts do
     PoseTraceChunk,
     StylePerformance,
     WorkoutPlan,
-    WorkoutSession
+    WorkoutSession,
+    WorkoutVideo
   }
 
   # A session is eligible to set a pace PR only when it is a genuine effort:
@@ -702,6 +703,305 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Starts a server-derived plan session, idempotent for its client UUID.
+  """
+  @spec begin_plan_session(User.t(), WorkoutPlan.t(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, term()}
+  def begin_plan_session(
+        %User{id: user_id},
+        %WorkoutPlan{user_id: user_id} = plan,
+        client_session_id
+      ) do
+    with {:ok, planned_attrs} <- planned_session_attrs(plan) do
+      %WorkoutSession{user_id: user_id, plan_id: plan.id}
+      |> WorkoutSession.start_changeset(
+        planned_attrs
+        |> Map.put("client_session_id", client_session_id)
+        |> Map.put("source", :plan)
+      )
+      |> Ecto.Changeset.change(
+        execution_program_id: Map.fetch!(planned_attrs, "execution_program_id")
+      )
+      |> begin_session(user_id, :plan, plan.id)
+    end
+  end
+
+  def begin_plan_session(%User{}, %WorkoutPlan{}, _client_session_id), do: {:error, :not_found}
+
+  @doc """
+  Starts a server-derived video session, idempotent for its client UUID.
+  """
+  @spec begin_video_session(User.t(), WorkoutVideo.t(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, term()}
+  def begin_video_session(%User{id: user_id}, %WorkoutVideo{} = video, client_session_id) do
+    %WorkoutSession{user_id: user_id, video_id: video.id}
+    |> WorkoutSession.start_changeset(%{
+      "client_session_id" => client_session_id,
+      "source" => :video,
+      "burpee_type" => video.burpee_type,
+      "burpee_count_planned" => video.burpee_count,
+      "duration_sec_planned" => video.duration_sec
+    })
+    |> begin_session(user_id, :video, video.id)
+  end
+
+  @doc """
+  Returns one unresolved session, with its source association loaded.
+  """
+  @spec get_unresolved_session(User.t()) :: WorkoutSession.t() | nil
+  def get_unresolved_session(%User{id: user_id}), do: get_unresolved_session_by_user_id(user_id)
+
+  defp get_unresolved_session_by_user_id(user_id) do
+    Repo.one(
+      from(session in WorkoutSession,
+        where: session.user_id == ^user_id and session.status in [:running, :report_pending],
+        order_by: [asc: session.inserted_at],
+        limit: 1,
+        preload: [:plan, :video]
+      )
+    )
+  end
+
+  @doc """
+  Marks a running session ready to report. Repeating the transition is safe.
+  """
+  @spec mark_report_pending(User.t(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, :not_found | :aborted}
+  def mark_report_pending(%User{id: user_id}, client_session_id) do
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      nil ->
+        {:error, :not_found}
+
+      %WorkoutSession{status: :running} = session ->
+        session
+        |> WorkoutSession.report_pending_changeset()
+        |> Repo.update()
+
+      %WorkoutSession{status: status} = session when status in [:report_pending, :reported] ->
+        {:ok, session}
+
+      %WorkoutSession{status: :aborted} ->
+        {:error, :aborted}
+    end
+  end
+
+  @doc """
+  Reports a running or pending session. A matching replay returns the existing
+  row; a different report for the same UUID is rejected without mutation.
+  """
+  @spec report_session(User.t(), Ecto.UUID.t(), map(), map()) ::
+          {:ok, WorkoutSession.t(), :reported | :existing}
+          | {:error,
+             :not_found | :aborted | :report_conflict | {:unresolved_session, WorkoutSession.t()}}
+          | {:error, Ecto.Changeset.t()}
+  def report_session(%User{id: user_id}, client_session_id, report_attrs, tracking_attrs)
+      when is_map(report_attrs) and is_map(tracking_attrs) do
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      nil ->
+        {:error, :not_found}
+
+      %WorkoutSession{status: :aborted} ->
+        {:error, :aborted}
+
+      %WorkoutSession{status: :reported} = session ->
+        case report_changeset_with_tracking(session, report_attrs, tracking_attrs) do
+          %{valid?: false} = changeset -> {:error, changeset}
+          changeset -> replay_report(session, changeset)
+        end
+
+      %WorkoutSession{status: status} = session when status in [:running, :report_pending] ->
+        report_lifecycle_session(session, user_id, report_attrs, tracking_attrs)
+    end
+  end
+
+  @doc """
+  Aborts a running or pending session. Reported sessions cannot be aborted.
+  """
+  @spec abort_session(User.t(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, :not_found | :already_reported}
+  def abort_session(%User{id: user_id}, client_session_id) do
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      nil ->
+        {:error, :not_found}
+
+      %WorkoutSession{status: status} = session when status in [:running, :report_pending] ->
+        session
+        |> WorkoutSession.abort_changeset()
+        |> Repo.update()
+
+      %WorkoutSession{status: :aborted} = session ->
+        {:ok, session}
+
+      %WorkoutSession{status: :reported} ->
+        {:error, :already_reported}
+    end
+  end
+
+  @doc """
+  Builds a report form changeset without allowing report attrs to replace the
+  session's source-derived values.
+  """
+  @spec change_session_for_report(WorkoutSession.t(), map()) :: Ecto.Changeset.t()
+  def change_session_for_report(%WorkoutSession{} = session, attrs \\ %{}) do
+    WorkoutSession.report_changeset(session, attrs)
+  end
+
+  defp begin_session(changeset, user_id, source, source_id) do
+    client_session_id = Ecto.Changeset.get_field(changeset, :client_session_id)
+
+    case get_session_by_client_session_id(user_id, client_session_id) do
+      %WorkoutSession{} = session ->
+        cond do
+          session.source == source and source_reference_matches?(session, source_id) ->
+            {:ok, session}
+
+          session.status in [:running, :report_pending] ->
+            {:error, {:unresolved_session, session}}
+
+          true ->
+            {:error, :not_found}
+        end
+
+      nil ->
+        case get_unresolved_session_by_user_id(user_id) do
+          %WorkoutSession{} = session ->
+            {:error, {:unresolved_session, session}}
+
+          nil ->
+            insert_started_session(changeset, user_id, source, source_id)
+        end
+    end
+  end
+
+  defp insert_started_session(changeset, user_id, source, source_id) do
+    case Repo.insert(changeset) do
+      {:ok, session} ->
+        {:ok, session}
+
+      {:error, changeset} ->
+        case get_session_by_client_session_id(
+               user_id,
+               Ecto.Changeset.get_field(changeset, :client_session_id)
+             ) do
+          %WorkoutSession{} = session ->
+            if session.source == source and source_reference_matches?(session, source_id) do
+              {:ok, session}
+            else
+              {:error, {:unresolved_session, session}}
+            end
+
+          nil ->
+            case get_unresolved_session_by_user_id(user_id) do
+              %WorkoutSession{} = session -> {:error, {:unresolved_session, session}}
+              nil -> {:error, changeset}
+            end
+        end
+    end
+  end
+
+  defp source_reference_matches?(%WorkoutSession{source: :plan, plan_id: id}, id), do: true
+  defp source_reference_matches?(%WorkoutSession{source: :video, video_id: id}, id), do: true
+  defp source_reference_matches?(_session, _source_id), do: false
+
+  defp report_lifecycle_session(session, user_id, report_attrs, tracking_attrs) do
+    changeset = report_changeset_with_tracking(session, report_attrs, tracking_attrs)
+
+    if changeset.valid? do
+      fingerprint = report_fingerprint(changeset)
+
+      changeset
+      |> Ecto.Changeset.put_change(:report_fingerprint, fingerprint)
+      |> with_derived_session_fields(user_id)
+      |> maybe_carry_lifecycle_style(session)
+      |> Repo.update()
+      |> case do
+        {:ok, reported} ->
+          maybe_upsert_style_performance(reported, user_id)
+          {:ok, reported, :reported}
+
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    else
+      {:error, changeset}
+    end
+  end
+
+  defp replay_report(session, changeset) do
+    if session.report_fingerprint == report_fingerprint(changeset) do
+      {:ok, session, :existing}
+    else
+      {:error, :report_conflict}
+    end
+  end
+
+  defp report_changeset_with_tracking(session, report_attrs, tracking_attrs) do
+    session
+    |> WorkoutSession.report_changeset(report_attrs)
+    |> apply_report_tracking(session, tracking_attrs)
+  end
+
+  defp apply_report_tracking(changeset, %WorkoutSession{source: :plan} = session, tracking_attrs) do
+    case tracking_value(tracking_attrs, :cadence_ms) do
+      cadence when is_list(cadence) ->
+        apply_tracked_session_mode(
+          changeset,
+          {:trusted, cadence, tracking_value(tracking_attrs, :target_pace_sec)},
+          session.execution_program_id
+        )
+
+      _ ->
+        Ecto.Changeset.change(changeset,
+          capture_mode: :timed,
+          cadence_ms: nil,
+          target_pace_sec: nil,
+          pace_consistency: nil
+        )
+    end
+  end
+
+  defp apply_report_tracking(changeset, _session, _tracking_attrs) do
+    Ecto.Changeset.change(changeset,
+      capture_mode: :logged,
+      cadence_ms: nil,
+      target_pace_sec: nil,
+      pace_consistency: nil
+    )
+  end
+
+  defp tracking_value(attrs, key), do: Map.get(attrs, Atom.to_string(key)) || Map.get(attrs, key)
+
+  defp report_fingerprint(changeset) do
+    [
+      burpee_count_actual: Ecto.Changeset.get_field(changeset, :burpee_count_actual),
+      duration_sec_actual: Ecto.Changeset.get_field(changeset, :duration_sec_actual),
+      note_post: Ecto.Changeset.get_field(changeset, :note_post),
+      mood: Ecto.Changeset.get_field(changeset, :mood),
+      tags: Ecto.Changeset.get_field(changeset, :tags),
+      capture_mode: Ecto.Changeset.get_field(changeset, :capture_mode),
+      cadence_ms: Ecto.Changeset.get_field(changeset, :cadence_ms),
+      target_pace_sec: Ecto.Changeset.get_field(changeset, :target_pace_sec),
+      pace_consistency: Ecto.Changeset.get_field(changeset, :pace_consistency)
+    ]
+    |> :erlang.term_to_binary()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp maybe_carry_lifecycle_style(changeset, %WorkoutSession{
+         source: :plan,
+         plan_id: plan_id,
+         user_id: user_id
+       }) do
+    case Repo.get_by(WorkoutPlan, id: plan_id, user_id: user_id) do
+      nil -> changeset
+      plan -> maybe_carry_style_name(changeset, plan)
+    end
+  end
+
+  defp maybe_carry_lifecycle_style(changeset, _session), do: changeset
+
+  @doc """
   Create a session that followed a plan. `user_id` and `plan_id` are
   set programmatically. Derived analytics fields (rate, rolling average,
   days since last, time-of-day bucket) are computed before insert.
@@ -720,7 +1020,10 @@ defmodule BurpeeTrainer.Workouts do
         |> WorkoutSession.from_plan_changeset(attrs)
         |> Ecto.Changeset.change(
           capture_mode: :timed,
-          execution_program_id: Map.fetch!(planned_attrs, "execution_program_id")
+          execution_program_id: Map.fetch!(planned_attrs, "execution_program_id"),
+          status: :reported,
+          source: :plan,
+          reported_at: DateTime.utc_now(:second)
         )
         |> with_derived_session_fields(user_id)
         |> maybe_carry_style_name(plan)
@@ -776,6 +1079,11 @@ defmodule BurpeeTrainer.Workouts do
         |> apply_tracked_session_mode(
           tracking_mode,
           Map.fetch!(planned_attrs, "execution_program_id")
+        )
+        |> Ecto.Changeset.change(
+          status: :reported,
+          source: :plan,
+          reported_at: DateTime.utc_now(:second)
         )
         |> with_derived_session_fields(user_id)
         |> maybe_carry_style_name(plan)
@@ -882,7 +1190,12 @@ defmodule BurpeeTrainer.Workouts do
     changeset =
       %WorkoutSession{user_id: user_id}
       |> WorkoutSession.free_form_changeset(with_client_session_id(attrs))
-      |> Ecto.Changeset.change(capture_mode: :logged)
+      |> Ecto.Changeset.change(
+        capture_mode: :logged,
+        status: :reported,
+        source: :manual,
+        reported_at: DateTime.utc_now(:second)
+      )
       |> with_derived_session_fields(user_id)
 
     case insert_idempotent_session(changeset, user_id) do
@@ -1383,9 +1696,6 @@ defmodule BurpeeTrainer.Workouts do
     # Oldest first, then current session — EMA gives more weight to recent.
     ema(Enum.reverse(prev_rates) ++ [current_rate], 0.5)
   end
-
-  defp ema([], _alpha), do: nil
-  defp ema([r], _alpha), do: r
 
   defp ema([r | rest], alpha) do
     Enum.reduce(rest, r, fn rate, acc -> alpha * rate + (1.0 - alpha) * acc end)
