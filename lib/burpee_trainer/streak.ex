@@ -141,7 +141,7 @@ defmodule BurpeeTrainer.Streak do
   defp fetch_sessions(user_id) do
     Repo.all(
       from s in BurpeeTrainer.Workouts.WorkoutSession,
-        where: s.user_id == ^user_id,
+        where: s.user_id == ^user_id and s.status == :reported,
         select: %{
           date: fragment("date(?)", s.inserted_at),
           duration_min: s.duration_sec_actual / 60.0

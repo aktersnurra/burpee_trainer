@@ -168,7 +168,7 @@ defmodule BurpeeTrainer.WorkoutFeed do
   defp load_last_used(user_id, plan_ids) do
     Repo.all(
       from s in WorkoutSession,
-        where: s.user_id == ^user_id and s.plan_id in ^plan_ids,
+        where: s.user_id == ^user_id and s.status == :reported and s.plan_id in ^plan_ids,
         group_by: s.plan_id,
         select: {s.plan_id, max(s.inserted_at)}
     )

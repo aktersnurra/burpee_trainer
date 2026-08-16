@@ -9,7 +9,7 @@ defmodule BurpeeTrainerWeb.SessionAnalysisLive do
     user = socket.assigns.current_user
     session = Workouts.get_session!(user, String.to_integer(id))
 
-    if tracked?(session) do
+    if session.status == :reported and tracked?(session) do
       {:ok,
        socket
        |> assign(:session, session)

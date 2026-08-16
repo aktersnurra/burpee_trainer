@@ -645,6 +645,7 @@ defmodule BurpeeTrainer.Workouts do
       from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
+            s.status == :reported and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual >= 1190 and
@@ -666,6 +667,7 @@ defmodule BurpeeTrainer.Workouts do
       from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
+            s.status == :reported and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual >= 1190 and
@@ -686,6 +688,7 @@ defmodule BurpeeTrainer.Workouts do
       from(s in WorkoutSession,
         where:
           s.user_id == ^user_id and
+            s.status == :reported and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual > 0,
@@ -1429,7 +1432,13 @@ defmodule BurpeeTrainer.Workouts do
   `BurpeeTrainer.Milestones`). Returns `[]` when nothing of note happened.
   """
   @spec session_milestones(User.t(), WorkoutSession.t(), Date.t()) :: [map]
-  def session_milestones(%User{id: user_id} = user, %WorkoutSession{} = session, today \\ nil) do
+  def session_milestones(user, session, today \\ nil)
+
+  def session_milestones(%User{}, %WorkoutSession{status: status}, _today)
+      when status != :reported,
+      do: []
+
+  def session_milestones(%User{id: user_id} = user, %WorkoutSession{} = session, today) do
     today = today || DateTime.to_date(session.inserted_at)
     after_sessions = scoring_sessions(user)
     before_sessions = Enum.reject(after_sessions, &(&1.id == session.id))
@@ -1528,7 +1537,7 @@ defmodule BurpeeTrainer.Workouts do
   defp scoring_sessions(%User{id: user_id}) do
     Repo.all(
       from(s in WorkoutSession,
-        where: s.user_id == ^user_id,
+        where: s.user_id == ^user_id and s.status == :reported,
         select: %{
           id: s.id,
           burpee_type: s.burpee_type,
@@ -1818,7 +1827,7 @@ defmodule BurpeeTrainer.Workouts do
     level =
       Repo.all(
         from(s in WorkoutSession,
-          where: s.user_id == ^user_id and s.burpee_type == ^bt,
+          where: s.user_id == ^user_id and s.status == :reported and s.burpee_type == ^bt,
           select: %{
             burpee_type: s.burpee_type,
             burpee_count_actual: s.burpee_count_actual,

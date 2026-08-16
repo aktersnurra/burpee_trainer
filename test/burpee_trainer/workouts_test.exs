@@ -1161,6 +1161,54 @@ defmodule BurpeeTrainer.WorkoutsTest do
     end
   end
 
+  describe "reported-only fact reads" do
+    test "keeps baseline, PB, chart, and gamification reads limited to reported facts" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      reported =
+        free_form_session_fixture(user, %{
+          "burpee_type" => "six_count",
+          "burpee_count_actual" => 100,
+          "duration_sec_actual" => 1200,
+          "inserted_at" => ~U[2026-01-01 10:00:00Z]
+        })
+
+      for status <- [:running, :report_pending, :aborted] do
+        client_session_id = Ecto.UUID.generate()
+        assert {:ok, lifecycle} = Workouts.begin_plan_session(user, plan, client_session_id)
+
+        if status == :report_pending do
+          assert {:ok, _} = Workouts.mark_report_pending(user, client_session_id)
+        end
+
+        Repo.update_all(
+          from(s in WorkoutSession, where: s.id == ^lifecycle.id),
+          set: [
+            status: status,
+            burpee_count_actual: 300,
+            duration_sec_actual: 1200,
+            inserted_at: ~U[2026-01-02 10:00:00Z]
+          ]
+        )
+
+        assert Workouts.last_session_for_type(user, :six_count).id == reported.id
+        assert Workouts.best_qualifying_session(user, :six_count).id == reported.id
+        assert [chart_session] = Workouts.list_sessions_for_chart(user, :six_count)
+        assert chart_session.id == reported.id
+        assert Workouts.current_week_pushups(user, ~D[2026-01-01]) == 100
+
+        assert Workouts.session_milestones(user, %{lifecycle | status: status}, ~D[2026-01-01]) ==
+                 []
+
+        Repo.update_all(
+          from(s in WorkoutSession, where: s.id == ^lifecycle.id),
+          set: [status: :aborted, aborted_at: DateTime.utc_now(:second)]
+        )
+      end
+    end
+  end
+
   describe "last_session_for_type/2" do
     test "returns most recent qualifying session (20 min ± 10 sec, positive burpees)" do
       user = user_fixture()
