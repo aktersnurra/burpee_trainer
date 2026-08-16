@@ -1162,6 +1162,36 @@ defmodule BurpeeTrainer.WorkoutsTest do
   end
 
   describe "reported-only fact reads" do
+    test "persists style performance from reported facts only" do
+      user = user_fixture()
+      plan = plan_fixture(user, %{"style_name" => "power"})
+      high_performing_id = Ecto.UUID.generate()
+
+      assert {:ok, high_performing} =
+               Workouts.begin_plan_session(user, plan, high_performing_id)
+
+      Repo.update_all(
+        from(s in WorkoutSession, where: s.id == ^high_performing.id),
+        set: [burpee_count_actual: 325, duration_sec_actual: 1200]
+      )
+
+      assert {:ok, %{status: :aborted}} = Workouts.abort_session(user, high_performing_id)
+
+      reported_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, reported_id)
+
+      assert {:ok, %{style_name: "power"}, :reported} =
+               Workouts.report_session(
+                 user,
+                 reported_id,
+                 %{"burpee_count_actual" => 30, "duration_sec_actual" => 120},
+                 %{}
+               )
+
+      assert [%{style_name: "power", level: "level_1a", session_count: 1}] =
+               Workouts.list_style_performances(user)
+    end
+
     test "keeps baseline, PB, chart, and gamification reads limited to reported facts" do
       user = user_fixture()
       plan = plan_fixture(user)
