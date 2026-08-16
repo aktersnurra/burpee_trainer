@@ -118,6 +118,32 @@ export class SessionRenderer {
 		}
 	}
 
+	clearBeginConflict() {
+		const conflict = this.root.querySelector("#session-begin-conflict");
+		if (!conflict) return;
+
+		conflict.hidden = true;
+		conflict.toggleAttribute("inert", true);
+	}
+
+	renderBeginConflict(reply = {}) {
+		const conflict = this.root.querySelector("#session-begin-conflict");
+		const message = this.root.querySelector("#session-begin-conflict-message");
+		const resolve = this.root.querySelector("#session-begin-conflict-resolve");
+		const text =
+			reply.message ||
+			"Finish or discard your current workout before starting another one.";
+
+		if (message) message.textContent = text;
+		if (resolve && reply.resolve_to)
+			resolve.setAttribute("href", reply.resolve_to);
+		if (conflict) {
+			conflict.hidden = false;
+			conflict.toggleAttribute("inert", false);
+		}
+		this.announce(text);
+	}
+
 	renderCaptureControls(state) {
 		const manual = state.captureMode === "no_camera";
 		const manualWarmup = this.root.querySelector("#warmup-manual-controls");
@@ -252,8 +278,7 @@ export class SessionRenderer {
 			global.classList.remove("hidden");
 		}
 
-		const announcement =
-			globalMessages.join(" ") || fieldMessages.join(" ");
+		const announcement = globalMessages.join(" ") || fieldMessages.join(" ");
 		if (announcement) this.announce(announcement);
 	}
 

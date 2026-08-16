@@ -413,6 +413,7 @@ const SessionHook = {
 
 	requestBeginSession() {
 		const generation = this.lifecycleGeneration;
+		this.renderer.clearBeginConflict();
 		void this.queueLifecycleCommand(this.lifecycleCommand("begin_session")).then(() => {
 			if (!this.lifecycleActive(generation) || this.flow.mode !== "starting_session") return;
 			try {
@@ -465,6 +466,11 @@ const SessionHook = {
 	},
 
 	handleLifecycleFailure(reply = {}) {
+		if (reply.reason === "unresolved_session" && reply.resolve_to) {
+			this.renderer.renderBeginConflict(reply);
+			return;
+		}
+
 		this.renderer.renderSaveErrors({
 			field_errors: {},
 			global_errors: [reply.message || "Could not update workout lifecycle. Try again."],

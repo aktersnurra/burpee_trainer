@@ -232,6 +232,29 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     """
   end
 
+  def begin_conflict(assigns) do
+    ~H"""
+    <div
+      id="session-begin-conflict"
+      hidden
+      inert="inert"
+      role="alert"
+      class="absolute inset-x-0 top-0 z-10 mx-auto w-full max-w-[430px] px-6 pt-6"
+    >
+      <div class="rounded-2xl border border-amber-500/40 bg-amber-50 p-4 text-left text-amber-950 shadow-lg">
+        <p id="session-begin-conflict-message" class="text-sm leading-relaxed"></p>
+        <a
+          id="session-begin-conflict-resolve"
+          href=""
+          class="mt-3 inline-flex min-h-11 items-center rounded-xl bg-amber-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-900 focus:outline-2 focus:outline-offset-2 focus:outline-amber-950"
+        >
+          Review current workout
+        </a>
+      </div>
+    </div>
+    """
+  end
+
   attr(:hidden, :boolean, default: true)
   attr(:summary, :map, required: true)
 

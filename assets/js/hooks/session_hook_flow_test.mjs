@@ -240,6 +240,17 @@ function appendStablePanels(root) {
 		root.append(panel);
 	}
 
+	const beginConflict = new FakeElement("div");
+	beginConflict.id = "session-begin-conflict";
+	beginConflict.hidden = true;
+	beginConflict.setAttribute("inert", "");
+	const beginConflictMessage = new FakeElement("p");
+	beginConflictMessage.id = "session-begin-conflict-message";
+	const beginConflictResolve = new FakeElement("a");
+	beginConflictResolve.id = "session-begin-conflict-resolve";
+	beginConflict.append(beginConflictMessage, beginConflictResolve);
+	root.append(beginConflict);
+
 	const stableElements = [
 		["camera-choice-yes", "button", "Yes, use camera"],
 		["camera-choice-no", "button", "No, continue"],
@@ -3054,6 +3065,50 @@ test("disconnected Save keeps controls and local draft available", () => {
 		false,
 	);
 	assert.equal(ctx.flow.mode, "completion_review");
+	ctx.destroyed();
+});
+
+test("begin lifecycle conflicts restore the ready UI and surface server resolution", async () => {
+	const store = {
+		loadDraft: async () => null,
+		saveLifecycleCommand: async () => {},
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
+	await ctx.draftRestore;
+	ctx.flow = { ...ctx.flow, mode: "workout_ready", captureMode: "no_camera" };
+	let beginConflictsCleared = 0;
+	const clearBeginConflict = ctx.renderer.clearBeginConflict.bind(ctx.renderer);
+	ctx.renderer.clearBeginConflict = () => {
+		beginConflictsCleared += 1;
+		clearBeginConflict();
+	};
+	ctx.pushEvent = (name, payload, callback) => {
+		assert.equal(name, "begin_session");
+		assert.deepEqual(payload, { client_session_id: "client-1" });
+		callback({
+			status: "error",
+			reason: "unresolved_session",
+			message: "Finish or discard your current workout before starting another one.",
+			resolve_to: "/sessions/42/resolve",
+		});
+	};
+
+	ctx.onWorkoutReady();
+	await flushHookPromises();
+	await flushHookPromises();
+
+	assert.equal(ctx.flow.mode, "workout_ready");
+	assert.equal(beginConflictsCleared, 1);
+	assert.equal(ctx.el.querySelector("#session-begin-conflict").hidden, false);
+	assert.equal(
+		ctx.el.querySelector("#session-begin-conflict-message").textContent,
+		"Finish or discard your current workout before starting another one.",
+	);
+	assert.equal(
+		ctx.el.querySelector("#session-begin-conflict-resolve").getAttribute("href"),
+		"/sessions/42/resolve",
+	);
+	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, true);
 	ctx.destroyed();
 });
 

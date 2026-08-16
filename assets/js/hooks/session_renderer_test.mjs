@@ -120,6 +120,9 @@ function harness() {
 		"#total-plan": element(),
 		"#pause-icon": element(),
 		"#session-live-status": element(),
+		"#session-begin-conflict": element(),
+		"#session-begin-conflict-message": element(),
+		"#session-begin-conflict-resolve": element(),
 		"#session-completion-review [data-session-heading]": element(),
 		"#session-save-errors": element(),
 		"#session-report-pending-status": element(),
@@ -132,6 +135,8 @@ function harness() {
 		"#completion-note-input": element(),
 	};
 	elements["#session-progress"].hidden = true;
+	elements["#session-begin-conflict"].hidden = true;
+	elements["#session-begin-conflict"].setAttribute("inert", "");
 	elements["#total-reps"].hidden = true;
 	elements["#total-separator"].hidden = true;
 	elements["#total-plan"].hidden = true;
@@ -197,6 +202,28 @@ test("camera, count-in, pause, completion, save, and errors are announced", () =
 	const assignments = status.textContentAssignments;
 	renderer.announce("Could not save. Try again.");
 	assert.equal(status.textContentAssignments, assignments);
+});
+
+test("begin conflicts are visible and link to the server-provided resolution route", () => {
+	const { renderer, elements } = harness();
+	const conflict = elements["#session-begin-conflict"];
+	const message = elements["#session-begin-conflict-message"];
+	const resolve = elements["#session-begin-conflict-resolve"];
+
+	renderer.renderBeginConflict({
+		message: "Finish or discard your current workout before starting another one.",
+		resolve_to: "/sessions/42/resolve",
+	});
+
+	assert.equal(conflict.hidden, false);
+	assert.equal(conflict.hasAttribute("inert"), false);
+	assert.equal(message.textContent, "Finish or discard your current workout before starting another one.");
+	assert.equal(resolve.getAttribute("href"), "/sessions/42/resolve");
+	assert.equal(elements["#session-live-status"].textContent, message.textContent);
+
+	renderer.clearBeginConflict();
+	assert.equal(conflict.hidden, true);
+	assert.equal(conflict.hasAttribute("inert"), true);
 });
 
 test("pending report states keep the completion panel visible and expose retry only after failure", () => {

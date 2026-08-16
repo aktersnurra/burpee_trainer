@@ -131,6 +131,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         class="session-surface fixed inset-0 z-[60] min-h-dvh overflow-hidden bg-[var(--session-bg)] text-[var(--session-ink)]"
       >
         <SessionComponents.capture_choice hidden={false} />
+        <SessionComponents.begin_conflict />
         <SessionComponents.camera_status />
         <SessionComponents.camera_setup target_pace_sec={@target_pace_sec} />
         <SessionComponents.warmup_choice />
