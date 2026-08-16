@@ -73,31 +73,31 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     refute has_element?(session, "#session-completion-form[phx-submit]")
   end
 
-  test "Save returns structured success and validation replies", %{user: user} do
+  test "Save returns structured success, validation, replay, and conflict replies", %{user: user} do
     plan = plan_fixture(user, %{"name" => "Reply Flow"})
+    client_session_id = Ecto.UUID.generate()
 
     socket = %Phoenix.LiveView.Socket{
-      assigns: %{current_user: user, plan: plan, target_pace_sec: 5.0}
+      assigns: %{
+        current_user: user,
+        plan: plan,
+        client_session_id: client_session_id,
+        target_pace_sec: 5.0
+      }
     }
-
-    client_session_id = Ecto.UUID.generate()
 
     assert {:reply,
             %{
               status: "ok",
+              client_session_id: ^client_session_id,
               session_id: session_id,
-              redirect_to: "/stats"
+              lifecycle_status: "running"
             }, ^socket} =
              SessionLive.handle_event(
-               "save_session",
-               save_payload(client_session_id, %{
-                 "burpee_count_actual" => 20,
-                 "duration_sec_actual" => 60
-               }),
+               "begin_session",
+               %{"client_session_id" => client_session_id},
                socket
              )
-
-    assert Workouts.get_session!(user, session_id).client_session_id == client_session_id
 
     assert {:reply,
             %{
@@ -107,18 +107,49 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
             }, ^socket} =
              SessionLive.handle_event(
                "save_session",
-               save_payload(Ecto.UUID.generate(), %{
+               save_payload(client_session_id, %{
                  "burpee_count_actual" => -1,
                  "duration_sec_actual" => 60
                }),
                socket
              )
+
+    payload =
+      save_payload(client_session_id, %{
+        "burpee_count_actual" => 20,
+        "duration_sec_actual" => 60
+      })
+
+    assert {:reply,
+            %{
+              status: "ok",
+              session_id: ^session_id,
+              lifecycle_status: "reported",
+              report_status: "reported",
+              redirect_to: "/stats"
+            }, ^socket} =
+             SessionLive.handle_event("save_session", payload, socket)
+
+    assert {:reply, %{status: "ok", report_status: "existing"}, ^socket} =
+             SessionLive.handle_event("save_session", payload, socket)
+
+    assert {:reply, %{status: "error", reason: "report_conflict"}, ^socket} =
+             SessionLive.handle_event(
+               "save_session",
+               save_payload(client_session_id, %{
+                 "burpee_count_actual" => 99,
+                 "duration_sec_actual" => 99
+               }),
+               socket
+             )
+
+    assert Workouts.get_session!(user, session_id).client_session_id == client_session_id
   end
 
   test "no-camera Save persists timer-authoritative session", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Timer Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-    client_session_id = Ecto.UUID.generate()
+    client_session_id = begin_session(session, user)
 
     render_hook(
       session,
@@ -143,12 +174,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
   test "trusted unchanged camera Save persists validated cadence", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Tracked Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    client_session_id = begin_session(session, user)
 
     render_hook(
       session,
       "save_session",
       save_payload(
-        Ecto.UUID.generate(),
+        client_session_id,
         %{"burpee_count_actual" => 3, "duration_sec_actual" => 15},
         %{
           "enabled" => true,
@@ -172,12 +204,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
   test "corrected camera Save stays tracked without cadence analytics", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Edited Tracked Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    client_session_id = begin_session(session, user)
 
     render_hook(
       session,
       "save_session",
       save_payload(
-        Ecto.UUID.generate(),
+        client_session_id,
         %{"burpee_count_actual" => 4, "duration_sec_actual" => 15},
         %{
           "enabled" => true,
@@ -200,12 +233,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
   test "degraded camera Save uses ordinary timer persistence", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Degraded Tracking Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    client_session_id = begin_session(session, user)
 
     render_hook(
       session,
       "save_session",
       save_payload(
-        Ecto.UUID.generate(),
+        client_session_id,
         %{"burpee_count_actual" => 12, "duration_sec_actual" => 75},
         %{
           "enabled" => true,
@@ -225,45 +259,42 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert saved.cadence_ms == nil
   end
 
-  test "invalid Save leaves the session unsaved for client correction", %{conn: conn, user: user} do
+  test "invalid Save leaves the lifecycle session unreported for client correction", %{
+    conn: conn,
+    user: user
+  } do
     plan = plan_fixture(user, %{"name" => "Invalid Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
+    client_session_id = begin_session(session, user)
 
     render_hook(
       session,
       "save_session",
-      save_payload(Ecto.UUID.generate(), %{
+      save_payload(client_session_id, %{
         "burpee_count_actual" => -1,
         "duration_sec_actual" => 10
       })
     )
 
-    assert Workouts.list_sessions(user) == []
+    assert %{client_session_id: ^client_session_id, status: :running} =
+             Workouts.get_unresolved_session(user)
+
     assert has_element?(session, "#session-completion-form")
   end
 
-  test "repeated client session id returns the existing saved session", %{conn: conn, user: user} do
+  test "repeated client session id replays the existing saved session", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Idempotent Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
-    client_session_id = Ecto.UUID.generate()
+    client_session_id = begin_session(session, user)
 
-    render_hook(
-      session,
-      "save_session",
+    payload =
       save_payload(client_session_id, %{
         "burpee_count_actual" => 10,
         "duration_sec_actual" => 60
       })
-    )
 
-    render_hook(
-      session,
-      "save_session",
-      save_payload(client_session_id, %{
-        "burpee_count_actual" => 99,
-        "duration_sec_actual" => 99
-      })
-    )
+    render_hook(session, "save_session", payload)
+    render_hook(session, "save_session", payload)
 
     assert [saved] = Workouts.list_sessions(user)
     assert saved.client_session_id == client_session_id
@@ -318,6 +349,24 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     {:ok, home, _html} = live(conn, ~p"/")
     assert has_element?(home, "#home-week-progress[aria-valuenow='0']")
+  end
+
+  defp begin_session(view, user) do
+    client_session_id = mounted_client_session_id(view)
+
+    render_hook(view, "begin_session", %{"client_session_id" => client_session_id})
+
+    assert %{client_session_id: ^client_session_id, status: :running} =
+             Workouts.get_unresolved_session(user)
+
+    client_session_id
+  end
+
+  defp mounted_client_session_id(view) do
+    document = view |> render() |> LazyHTML.from_fragment()
+    session = LazyHTML.query(document, "#burpee-session")
+    [client_session_id] = LazyHTML.attribute(session, "data-client-session-id")
+    client_session_id
   end
 
   defp save_payload(client_session_id, session_attrs, tracking \\ %{"enabled" => false}) do

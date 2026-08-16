@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.WorkoutFeedTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase, async: false
 
   import Ecto.Query
   import BurpeeTrainer.Fixtures

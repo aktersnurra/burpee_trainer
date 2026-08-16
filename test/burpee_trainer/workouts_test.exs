@@ -955,6 +955,122 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert pending_reported.id == pending.id
     end
 
+    test "report_session/4 preserves camera provenance for plan lifecycle rows" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      trusted_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, trusted_id)
+
+      assert {:ok, trusted, :reported} =
+               Workouts.report_session(
+                 user,
+                 trusted_id,
+                 %{"burpee_count_actual" => 3, "duration_sec_actual" => 15},
+                 %{
+                   "enabled" => true,
+                   "trust" => "finished",
+                   "detected_reps" => 3,
+                   "detected_duration_sec" => 15,
+                   "cadence_ms" => [5_000, 10_000, 15_000],
+                   "target_pace_sec" => 999.0
+                 }
+               )
+
+      assert trusted.capture_mode == :tracked
+      assert trusted.cadence_ms == "[5000,10000,15000]"
+      assert trusted.target_pace_sec == 40.0
+      assert trusted.pace_consistency == 1.0
+
+      corrected_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, corrected_id)
+
+      assert {:ok, corrected, :reported} =
+               Workouts.report_session(
+                 user,
+                 corrected_id,
+                 %{"burpee_count_actual" => 4, "duration_sec_actual" => 15},
+                 %{
+                   "enabled" => true,
+                   "trust" => "finished",
+                   "detected_reps" => 3,
+                   "detected_duration_sec" => 15,
+                   "cadence_ms" => [5_000, 10_000, 15_000]
+                 }
+               )
+
+      assert corrected.capture_mode == :tracked
+      assert corrected.cadence_ms == nil
+      assert corrected.target_pace_sec == nil
+      assert corrected.pace_consistency == nil
+
+      degraded_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, degraded_id)
+
+      assert {:ok, degraded, :reported} =
+               Workouts.report_session(
+                 user,
+                 degraded_id,
+                 %{"burpee_count_actual" => 12, "duration_sec_actual" => 75},
+                 %{
+                   "enabled" => true,
+                   "trust" => "degraded",
+                   "detected_reps" => 99,
+                   "detected_duration_sec" => 5,
+                   "cadence_ms" => [1_000]
+                 }
+               )
+
+      assert degraded.capture_mode == :timed
+      assert degraded.cadence_ms == nil
+      assert degraded.target_pace_sec == nil
+      assert degraded.pace_consistency == nil
+
+      no_camera_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, no_camera_id)
+
+      assert {:ok, no_camera, :reported} =
+               Workouts.report_session(
+                 user,
+                 no_camera_id,
+                 %{"burpee_count_actual" => 12, "duration_sec_actual" => 75},
+                 %{
+                   "enabled" => false,
+                   "trust" => "finished",
+                   "detected_reps" => 12,
+                   "detected_duration_sec" => 75,
+                   "cadence_ms" => [1_000]
+                 }
+               )
+
+      assert no_camera.capture_mode == :timed
+      assert no_camera.cadence_ms == nil
+      assert no_camera.target_pace_sec == nil
+      assert no_camera.pace_consistency == nil
+
+      malformed_id = Ecto.UUID.generate()
+      assert {:ok, _} = Workouts.begin_plan_session(user, plan, malformed_id)
+
+      assert {:ok, malformed, :reported} =
+               Workouts.report_session(
+                 user,
+                 malformed_id,
+                 %{"burpee_count_actual" => 12, "duration_sec_actual" => 75},
+                 %{
+                   "enabled" => true,
+                   "trust" => "finished",
+                   "detected_reps" => "not-a-number",
+                   "detected_duration_sec" => 75,
+                   "cadence_ms" => [1_000]
+                 }
+               )
+
+      assert malformed.capture_mode == :timed
+      assert malformed.cadence_ms == nil
+      assert malformed.target_pace_sec == nil
+      assert malformed.pace_consistency == nil
+    end
+
     test "immediate facts exclude running lifecycle rows" do
       user = user_fixture()
       plan = plan_fixture(user)

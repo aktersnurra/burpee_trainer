@@ -1022,21 +1022,19 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp apply_report_tracking(changeset, %WorkoutSession{source: :plan} = session, tracking_attrs) do
-    case tracking_value(tracking_attrs, :cadence_ms) do
-      cadence when is_list(cadence) ->
+    case report_tracking_mode(changeset, tracking_attrs) do
+      {:trusted, cadence} ->
         apply_tracked_session_mode(
           changeset,
-          {:trusted, cadence, tracking_value(tracking_attrs, :target_pace_sec)},
+          {:trusted, cadence, execution_program_target_pace_sec(session.execution_program_id)},
           session.execution_program_id
         )
 
-      _ ->
-        Ecto.Changeset.change(changeset,
-          capture_mode: :timed,
-          cadence_ms: nil,
-          target_pace_sec: nil,
-          pace_consistency: nil
-        )
+      :manual_correction ->
+        apply_tracked_session_mode(changeset, :manual_correction, session.execution_program_id)
+
+      :timed ->
+        apply_timed_session_mode(changeset)
     end
   end
 
@@ -1047,6 +1045,91 @@ defmodule BurpeeTrainer.Workouts do
       target_pace_sec: nil,
       pace_consistency: nil
     )
+  end
+
+  defp apply_timed_session_mode(changeset) do
+    Ecto.Changeset.change(changeset,
+      capture_mode: :timed,
+      cadence_ms: nil,
+      target_pace_sec: nil,
+      pace_consistency: nil
+    )
+  end
+
+  defp report_tracking_mode(changeset, tracking_attrs) do
+    with true <- tracking_value(tracking_attrs, :enabled) == true,
+         "finished" <- tracking_value(tracking_attrs, :trust),
+         {:ok, detected_reps} <-
+           parse_non_negative_integer(tracking_value(tracking_attrs, :detected_reps)),
+         {:ok, detected_duration} <-
+           parse_non_negative_number(tracking_value(tracking_attrs, :detected_duration_sec)),
+         {:ok, actual_reps} <-
+           parse_non_negative_integer(Ecto.Changeset.get_field(changeset, :burpee_count_actual)),
+         {:ok, actual_duration} <-
+           parse_non_negative_number(Ecto.Changeset.get_field(changeset, :duration_sec_actual)) do
+      cadence =
+        case tracking_value(tracking_attrs, :cadence_ms) do
+          value when is_list(value) -> value
+          _ -> []
+        end
+
+      if actual_reps == detected_reps and actual_duration == detected_duration do
+        {:trusted, cadence}
+      else
+        :manual_correction
+      end
+    else
+      _ -> :timed
+    end
+  end
+
+  defp parse_non_negative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
+
+  defp parse_non_negative_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
+      _ -> :error
+    end
+  end
+
+  defp parse_non_negative_integer(_value), do: :error
+
+  defp parse_non_negative_number(value) when is_number(value) and value >= 0, do: {:ok, value}
+
+  defp parse_non_negative_number(value) when is_binary(value) do
+    case Float.parse(value) do
+      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
+      _ -> :error
+    end
+  end
+
+  defp parse_non_negative_number(_value), do: :error
+
+  defp execution_program_target_pace_sec(nil), do: nil
+
+  defp execution_program_target_pace_sec(execution_program_id) do
+    case Repo.get(ExecutionProgram, execution_program_id) do
+      %ExecutionProgram{} = program ->
+        {reps_total, sec_total} =
+          program.program_json
+          |> tracking_value(:events)
+          |> Enum.reduce({0, 0.0}, fn event, {reps_total, sec_total} ->
+            case tracking_value(event, :kind) do
+              "work" ->
+                reps = tracking_value(event, :reps)
+                sec_per_rep = tracking_value(event, :sec_per_rep_us) / 1_000_000
+                {reps_total + reps, sec_total + reps * sec_per_rep}
+
+              _other ->
+                {reps_total, sec_total}
+            end
+          end)
+
+        if reps_total == 0, do: nil, else: Float.round(sec_total / reps_total, 3)
+
+      nil ->
+        nil
+    end
   end
 
   defp tracking_value(attrs, key), do: Map.get(attrs, Atom.to_string(key)) || Map.get(attrs, key)

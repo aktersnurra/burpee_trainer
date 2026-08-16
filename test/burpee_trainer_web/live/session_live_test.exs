@@ -1,5 +1,5 @@
 defmodule BurpeeTrainerWeb.SessionLiveTest do
-  use BurpeeTrainerWeb.ConnCase, async: true
+  use BurpeeTrainerWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
