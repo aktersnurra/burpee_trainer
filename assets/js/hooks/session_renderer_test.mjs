@@ -82,6 +82,10 @@ function element() {
 		setAttribute(name, value) {
 			attributes.set(name, String(value));
 		},
+		toggleAttribute(name, force) {
+			if (force) this.setAttribute(name, "");
+			else this.removeAttribute(name);
+		},
 		removeAttribute(name) {
 			attributes.delete(name);
 		},
@@ -118,6 +122,8 @@ function harness() {
 		"#session-live-status": element(),
 		"#session-completion-review [data-session-heading]": element(),
 		"#session-save-errors": element(),
+		"#session-report-pending-status": element(),
+		"#session-report-pending-retry": element(),
 		"#completion-reps-error": element(),
 		"#completion-duration-error": element(),
 		"#completion-note-error": element(),
@@ -129,12 +135,22 @@ function harness() {
 	elements["#total-reps"].hidden = true;
 	elements["#total-separator"].hidden = true;
 	elements["#total-plan"].hidden = true;
+	const panels = [
+		"session-capture-choice",
+		"session-camera-status",
+		"session-camera-setup",
+		"session-warmup-choice",
+		"session-workout-ready",
+		"session-runner-client",
+		"session-completion-review",
+	].map((id) => ({ ...element(), id }));
 	const root = {
 		classList: classList(),
 		querySelector: (selector) => elements[selector] || null,
-		querySelectorAll: () => [],
+		querySelectorAll: (selector) =>
+			selector === "[data-session-panel]" ? panels : [],
 	};
-	return { renderer: new SessionRenderer(root), elements };
+	return { renderer: new SessionRenderer(root), elements, panels };
 }
 
 function model(state, overrides = {}) {
@@ -181,6 +197,24 @@ test("camera, count-in, pause, completion, save, and errors are announced", () =
 	const assignments = status.textContentAssignments;
 	renderer.announce("Could not save. Try again.");
 	assert.equal(status.textContentAssignments, assignments);
+});
+
+test("pending report states keep the completion panel visible and expose retry only after failure", () => {
+	const { renderer, elements, panels } = harness();
+	const completionPanel = panels.find(
+		(panel) => panel.id === "session-completion-review",
+	);
+
+	renderer.renderFlowState({ mode: "reporting_completion" });
+	assert.equal(completionPanel.hidden, false);
+	assert.equal(elements["#session-report-pending-status"].hidden, true);
+	assert.equal(elements["#session-report-pending-retry"].hidden, true);
+
+	renderer.renderFlowState({ mode: "completion_pending_failed" });
+	assert.equal(completionPanel.hidden, false);
+	assert.equal(elements["#session-report-pending-status"].hidden, false);
+	assert.equal(elements["#session-report-pending-retry"].hidden, false);
+	assert.equal(elements["#session-live-status"].textContent, "Could not prepare workout report. Try again.");
 });
 
 test("panel heading focus prevents scroll", () => {

@@ -193,12 +193,31 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp lifecycle_reply({:error, reason}), do: lifecycle_error_reply(reason)
 
-  defp lifecycle_error_reply(reason) do
+  defp lifecycle_error_reply({:unresolved_session, %WorkoutSession{} = session}) do
+    %{
+      status: "error",
+      reason: "unresolved_session",
+      message: "Finish or discard your current workout before starting another one.",
+      retryable: true,
+      session_id: session.id,
+      resolve_to: ~p"/sessions/#{session.id}/resolve"
+    }
+  end
+
+  defp lifecycle_error_reply(reason) when is_atom(reason) do
     %{
       status: "error",
       reason: Atom.to_string(reason),
       message: "Could not update workout lifecycle. Try again.",
       retryable: reason not in [:aborted, :already_reported, :report_conflict]
+    }
+  end
+
+  defp lifecycle_error_reply(_reason) do
+    %{
+      status: "error",
+      message: "Could not update workout lifecycle. Try again.",
+      retryable: true
     }
   end
 

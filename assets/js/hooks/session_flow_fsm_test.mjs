@@ -148,6 +148,30 @@ test("session result waits for report-pending acknowledgement before completion 
   assert.equal(acknowledged.state.mode, "completion_review");
 });
 
+test("failed pending report retries without changing the completion draft", () => {
+  const completion = {
+    burpeeCountActual: 12,
+    burpeeCountPlanned: 12,
+    durationSecActual: 75,
+    durationSecPlanned: 75,
+  };
+  const failed = step(
+    { ...initialFlowState(), mode: "reporting_completion", completion },
+    { type: "REPORT_PENDING_FAILED" },
+  );
+
+  assert.equal(failed.state.mode, "completion_pending_failed");
+  assert.equal(failed.state.completion, completion);
+
+  const retried = step(failed.state, { type: "RETRY_REPORT_PENDING" });
+  assert.equal(retried.state.mode, "reporting_completion");
+  assert.equal(retried.state.completion, completion);
+  assert.deepEqual(retried.commands, [
+    { type: "requestPending" },
+    { type: "renderFlow" },
+  ]);
+});
+
 test("degraded camera completion keeps timer actuals and sanitizes detection analytics", () => {
   let state = {
     ...initialFlowState(),

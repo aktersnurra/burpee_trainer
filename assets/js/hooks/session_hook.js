@@ -208,6 +208,9 @@ const SessionHook = {
 				e.target.closest("#workout-ready-continue");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
+			const retryReportPending = e.target.closest(
+				"#session-report-pending-retry",
+			);
 			const discard = e.target.closest("#session-discard-btn");
 			const mood = e.target.dataset?.mood;
 			const tag = e.target.dataset?.tag;
@@ -223,6 +226,9 @@ const SessionHook = {
 			}
 			if (ringContainer && this.canTogglePause()) this.togglePause();
 			if (finishEarly) this.onFinishEarly();
+			if (retryReportPending) {
+				this.dispatchFlow({ type: "RETRY_REPORT_PENDING" });
+			}
 			if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
 			if (tag !== undefined) this.toggleCompletionTag(tag);
 			if (

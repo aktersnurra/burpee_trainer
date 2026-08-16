@@ -270,6 +270,8 @@ function appendStablePanels(root) {
 		["session-completion-form", "form", ""],
 		["session-save-btn", "button", "Save session"],
 		["session-save-errors", "div", ""],
+		["session-report-pending-status", "div", ""],
+		["session-report-pending-retry", "button", "Try again"],
 		["completion-reps-error", "p", ""],
 		["completion-duration-error", "p", ""],
 		["completion-note-error", "p", ""],
@@ -3096,7 +3098,7 @@ test("lifecycle begin and pending commands persist before their server events", 
 	ctx.destroyed();
 });
 
-test("pending and abort failures retain local recovery data", async () => {
+test("pending failure retains recovery data and retry resends its persisted command", async () => {
 	const calls = [];
 	const store = {
 		loadDraft: async () => null,
@@ -3107,9 +3109,6 @@ test("pending and abort failures retain local recovery data", async () => {
 			calls.push("command");
 		},
 		loadLifecycleCommand: async () => null,
-		async discardSession() {
-			calls.push("discard");
-		},
 	};
 	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
 	await ctx.draftRestore;
@@ -3119,17 +3118,36 @@ test("pending and abort failures retain local recovery data", async () => {
 		captureMode: "no_camera",
 		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
 	};
-	ctx.pushEvent = (_name, _payload, callback) =>
-		callback({ status: "error", message: "offline" });
+	let pendingAttempts = 0;
+	ctx.pushEvent = (name, payload, callback) => {
+		calls.push(`event:${name}`);
+		assert.equal(name, "mark_report_pending");
+		assert.deepEqual(payload, { client_session_id: "client-1" });
+		pendingAttempts += 1;
+		callback(
+			pendingAttempts === 1
+				? { status: "error", message: "offline" }
+				: { status: "ok", session_id: 7, lifecycle_status: "report_pending" },
+		);
+	};
 	ctx.dispatchFlow({ type: "SESSION_DONE", result: { burpeeCountDone: 5, durationSec: 10 } });
 	await flushHookPromises();
 	await flushHookPromises();
+
+	const draft = ctx.inMemoryCompletionDraft;
 	assert.equal(ctx.flow.mode, "completion_pending_failed");
-	assert.deepEqual(calls, ["draft", "command"]);
-	ctx.flow = { ...ctx.flow, mode: "completion_review" };
-	ctx.discardSessionLocally();
+	assert.deepEqual(calls, ["draft", "command", "event:mark_report_pending"]);
+
+	click(ctx, "session-report-pending-retry");
+	await flushHookPromises();
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(calls.includes("discard"), false);
+	assert.equal(ctx.inMemoryCompletionDraft, draft);
+	assert.deepEqual(calls, [
+		"draft",
+		"command",
+		"event:mark_report_pending",
+		"event:mark_report_pending",
+	]);
 	ctx.destroyed();
 });
 

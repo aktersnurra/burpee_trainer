@@ -385,6 +385,26 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
+        <div
+          id="session-report-pending-status"
+          role="status"
+          aria-live="polite"
+          hidden
+          inert="inert"
+          class="mt-8 rounded-2xl border border-red-300/50 px-4 py-3 text-sm text-red-700"
+        >
+          We could not prepare this workout for saving. Your workout details are still here.
+        </div>
+        <button
+          id="session-report-pending-retry"
+          type="button"
+          hidden
+          inert="inert"
+          class="mt-3 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
+        >
+          Try again
+        </button>
+
         <div id="session-completion-mood" class="mt-10 flex border-y border-[var(--session-border)]">
           <%= for {label, value} <- @mood_options do %>
             <button

@@ -35,6 +35,8 @@ export class SessionRenderer {
 			warmup_running: "session-runner-client",
 			workout_ready: "session-workout-ready",
 			workout_running: "session-runner-client",
+			reporting_completion: "session-completion-review",
+			completion_pending_failed: "session-completion-review",
 			completion_review: "session-completion-review",
 		}[state.mode];
 
@@ -47,6 +49,7 @@ export class SessionRenderer {
 		this.renderCameraStatus(state);
 		this.renderCameraSetup(state);
 		this.renderCaptureControls(state);
+		this.renderReportPendingStatus(state);
 		if (visibleId !== this.visiblePanelId) {
 			this.visiblePanelId = visibleId;
 			this.focusPanelHeading(visibleId);
@@ -55,6 +58,10 @@ export class SessionRenderer {
 			this.announce("Starting camera");
 		} else if (state.mode === "camera_error") {
 			this.announce("Camera unavailable");
+		} else if (state.mode === "reporting_completion") {
+			this.announce("Preparing workout report");
+		} else if (state.mode === "completion_pending_failed") {
+			this.announce("Could not prepare workout report. Try again.");
 		} else if (
 			state.mode === "completion_review" &&
 			state.saveStatus === "saving"
@@ -93,6 +100,21 @@ export class SessionRenderer {
 		if (error) {
 			error.hidden = !failed;
 			error.toggleAttribute("inert", !failed);
+		}
+	}
+
+	renderReportPendingStatus(state) {
+		const failed = state.mode === "completion_pending_failed";
+		const status = this.root.querySelector("#session-report-pending-status");
+		const retry = this.root.querySelector("#session-report-pending-retry");
+
+		if (status) {
+			status.hidden = !failed;
+			status.toggleAttribute("inert", !failed);
+		}
+		if (retry) {
+			retry.hidden = !failed;
+			retry.toggleAttribute("inert", !failed);
 		}
 	}
 

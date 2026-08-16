@@ -48,6 +48,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
         session-discard-btn
         session-live-status
         session-save-errors
+        session-report-pending-status
+        session-report-pending-retry
         completion-reps-error
         completion-duration-error
         completion-note-error
@@ -121,6 +123,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-capture-choice:not([hidden])[data-session-panel]")
     assert has_element?(view, "#session-live-status[role='status'][aria-live='polite']")
     assert has_element?(view, "#session-save-errors[tabindex='-1']")
+    assert has_element?(view, "#session-report-pending-status[role='status'][hidden][inert]")
+    assert has_element?(view, "#session-report-pending-retry[hidden][inert]")
 
     for heading_id <- ~w[
           session-capture-choice-heading
@@ -240,6 +244,42 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert {:error, {:live_redirect, %{to: ^expected_path}}} =
              live(conn, ~p"/session/#{next_plan.id}")
+  end
+
+  test "concurrent begin returns a retry-safe unresolved session reply", %{user: user} do
+    running_plan = plan_fixture(user)
+
+    assert {:ok, unresolved} =
+             Workouts.begin_plan_session(user, running_plan, Ecto.UUID.generate())
+
+    plan = plan_fixture(user)
+    client_session_id = Ecto.UUID.generate()
+
+    socket = %Phoenix.LiveView.Socket{
+      assigns: %{
+        current_user: user,
+        plan: plan,
+        client_session_id: client_session_id,
+        target_pace_sec: 5.0
+      }
+    }
+
+    assert {:reply,
+            %{
+              status: "error",
+              reason: "unresolved_session",
+              retryable: true,
+              session_id: unresolved_id,
+              resolve_to: resolve_to
+            }, ^socket} =
+             BurpeeTrainerWeb.SessionLive.handle_event(
+               "begin_session",
+               %{"client_session_id" => client_session_id},
+               socket
+             )
+
+    assert unresolved_id == unresolved.id
+    assert resolve_to == "/sessions/#{unresolved.id}/resolve"
   end
 
   test "lifecycle hook events use the mounted UUID and report the existing row", %{user: user} do
