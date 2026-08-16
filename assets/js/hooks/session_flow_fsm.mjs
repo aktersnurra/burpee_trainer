@@ -11,6 +11,7 @@ export function initialFlowState() {
     workoutResult: null,
     completion: null,
     saveStatus: "idle",
+    pendingRuntime: null,
   };
 }
 
@@ -101,38 +102,63 @@ function enterWorkoutReady(state, commands = []) {
   ]);
 }
 
+function requestRuntime(state, pendingRuntime, commands = []) {
+  return moved(
+    state,
+    { mode: "starting_session", armedStep: null, pendingRuntime },
+    [...commands, { type: "persistBeginAndRequest", pendingRuntime }, { type: "renderFlow" }],
+  );
+}
+
 function startWarmup(state, event, commands = []) {
-  return moved(state, { mode: "warmup_running", armedStep: null }, [
-    ...commands,
+  return requestRuntime(
+    state,
     {
-      type: "startSegment",
+      mode: "warmup_running",
+      readyMode: "warmup_choice",
       segment: "warmup",
       timeline: event.warmupTimeline || [],
       burpeeCountTarget: event.burpeeCountTarget,
     },
-  ]);
+    commands,
+  );
 }
 
 function startWorkout(state, commands = []) {
-  return moved(
+  return requestRuntime(
     state,
     {
       mode: "workout_running",
-      armedStep: null,
-      trackingTrust:
-        state.captureMode === "camera" && state.trackingTrust !== "degraded"
-          ? "observing"
-          : state.trackingTrust,
+      readyMode: "workout_ready",
+      segment: "workout",
+      timeline: state.workoutTimeline,
     },
-    [
-      ...commands,
-      {
-        type: "startSegment",
-        segment: "workout",
-        timeline: state.workoutTimeline,
-      },
-    ],
+    commands,
   );
+}
+
+function beginAcknowledged(state) {
+  const pendingRuntime = state.pendingRuntime;
+  if (!pendingRuntime) return unchanged(state);
+  const nextState = {
+    ...state,
+    mode: pendingRuntime.mode,
+    pendingRuntime: null,
+    trackingTrust:
+      pendingRuntime.mode === "workout_running" &&
+      state.captureMode === "camera" &&
+      state.trackingTrust !== "degraded"
+        ? "observing"
+        : state.trackingTrust,
+  };
+  return moved(nextState, {}, [
+    {
+      type: "startSegment",
+      segment: pendingRuntime.segment,
+      timeline: pendingRuntime.timeline,
+      burpeeCountTarget: pendingRuntime.burpeeCountTarget,
+    },
+  ]);
 }
 
 function finishWorkout(state, result) {
@@ -140,12 +166,12 @@ function finishWorkout(state, result) {
   return moved(
     state,
     {
-      mode: "completion_review",
+      mode: "reporting_completion",
       workoutResult,
       completion: completionFor(state, workoutResult),
       saveStatus: "idle",
     },
-    [{ type: "showCompletion" }],
+    [{ type: "persistCompletionAndRequestPending" }, { type: "renderFlow" }],
   );
 }
 
@@ -355,6 +381,19 @@ export function flowTransition(state, event) {
 
       return unchanged(state);
 
+    case "SESSION_BEGIN_ACKNOWLEDGED":
+      if (state.mode !== "starting_session") return unchanged(state);
+      return beginAcknowledged(state);
+
+    case "SESSION_BEGIN_FAILED":
+      if (state.mode !== "starting_session" || !state.pendingRuntime) {
+        return unchanged(state);
+      }
+      return moved(state, {
+        mode: state.pendingRuntime.readyMode,
+        pendingRuntime: null,
+      });
+
     case "WARMUP_TIMEOUT_TICK":
       if (
         state.mode !== "warmup_choice" ||
@@ -443,7 +482,9 @@ export function flowTransition(state, event) {
       return moved(
         state,
         {
-          mode: "completion_review",
+          mode: event.pendingAcknowledgement
+            ? "reporting_completion"
+            : "completion_review",
           captureMode: event.captureMode || "no_camera",
           trackingTrust: event.completion.trackingTrust || "disabled",
           trackingReason: event.trackingReason || null,
@@ -454,8 +495,25 @@ export function flowTransition(state, event) {
           completion: event.completion,
           saveStatus: "idle",
         },
-        [{ type: "showCompletion", restored: true }],
+        event.pendingAcknowledgement
+          ? [{ type: "requestPending" }, { type: "renderFlow" }]
+          : [{ type: "showCompletion", restored: true }],
       );
+
+    case "REPORT_PENDING_ACKNOWLEDGED":
+      if (state.mode !== "reporting_completion") return unchanged(state);
+      return moved(state, { mode: "completion_review" }, [{ type: "showCompletion" }]);
+
+    case "REPORT_PENDING_FAILED":
+      if (state.mode !== "reporting_completion") return unchanged(state);
+      return moved(state, { mode: "completion_pending_failed" });
+
+    case "RETRY_REPORT_PENDING":
+      if (state.mode !== "completion_pending_failed") return unchanged(state);
+      return moved(state, { mode: "reporting_completion" }, [
+        { type: "requestPending" },
+        { type: "renderFlow" },
+      ]);
 
     case "COMPLETION_EDITED": {
       if (state.mode !== "completion_review") return unchanged(state);

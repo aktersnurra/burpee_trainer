@@ -38,6 +38,7 @@ function memoryEngine() {
     },
     async discardSession(clientSessionId) {
       bucket("completion_drafts").delete(clientSessionId);
+      bucket("lifecycle_commands").delete(clientSessionId);
       bucket("trace_uploads").delete(clientSessionId);
       for (const [chunkKey, chunk] of bucket("pose_trace_chunks")) {
         if (chunk.client_session_id === clientSessionId) {
@@ -154,6 +155,31 @@ test("loadDraft returns the latest exact plan and program match", async () => {
   }
 });
 
+test("lifecycle commands and exact UUID drafts are independently addressable", async () => {
+  const store = createSessionStore(memoryEngine());
+  await store.saveDraft({
+    client_session_id: "session-1",
+    plan_id: 7,
+    program_hash: "abc",
+  });
+  await store.saveLifecycleCommand({
+    client_session_id: "session-1",
+    kind: "mark_report_pending",
+    payload: { client_session_id: "session-1" },
+  });
+
+  assert.equal(
+    (await store.loadDraftByClientSessionId("session-1")).program_hash,
+    "abc",
+  );
+  assert.equal(
+    (await store.loadLifecycleCommand("session-1")).kind,
+    "mark_report_pending",
+  );
+  await store.deleteLifecycleCommand("session-1");
+  assert.equal(await store.loadLifecycleCommand("session-1"), null);
+});
+
 test("trace chunks are ordered and acknowledged selectively", async () => {
   const store = createSessionStore(memoryEngine());
   await store.appendTraceChunk("session-1", {
@@ -245,12 +271,17 @@ test("completing an empty trace upload removes its ready marker", async () => {
   assert.deepEqual(await store.listReadyTraceUploads(), []);
 });
 
-test("discard removes draft, chunks, and upload marker", async () => {
+test("discard removes draft, lifecycle command, chunks, and upload marker", async () => {
   const store = createSessionStore(memoryEngine());
   await store.saveDraft({
     client_session_id: "session-1",
     plan_id: 7,
     program_hash: "abc",
+  });
+  await store.saveLifecycleCommand({
+    client_session_id: "session-1",
+    kind: "mark_report_pending",
+    payload: { client_session_id: "session-1" },
   });
   await store.appendTraceChunk("session-1", {
     chunk_index: 0,
@@ -261,6 +292,7 @@ test("discard removes draft, chunks, and upload marker", async () => {
   await store.discardSession("session-1");
 
   assert.equal(await store.loadDraft({ planId: 7, programHash: "abc" }), null);
+  assert.equal(await store.loadLifecycleCommand("session-1"), null);
   assert.deepEqual(await store.listTraceChunks("session-1"), []);
   assert.deepEqual(await store.listReadyTraceUploads(), []);
 });
@@ -273,6 +305,7 @@ test("IndexedDB adapter creates key paths and commits compound operations atomic
     [...fake.schema],
     [
       ["completion_drafts", { keyPath: "client_session_id" }],
+      ["lifecycle_commands", { keyPath: "client_session_id" }],
       ["pose_trace_chunks", { keyPath: ["client_session_id", "chunk_index"] }],
       ["trace_uploads", { keyPath: "client_session_id" }],
     ],
@@ -302,6 +335,7 @@ test("IndexedDB adapter creates key paths and commits compound operations atomic
   const discardTransaction = fake.transactions.at(-1);
   assert.deepEqual(discardTransaction.names, [
     "completion_drafts",
+    "lifecycle_commands",
     "pose_trace_chunks",
     "trace_uploads",
   ]);

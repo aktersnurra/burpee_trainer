@@ -225,6 +225,87 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     end
   end
 
+  test "redirects an unresolved lifecycle before booting another runner", %{
+    conn: conn,
+    user: user
+  } do
+    running_plan = plan_fixture(user)
+
+    assert {:ok, lifecycle} =
+             Workouts.begin_plan_session(user, running_plan, Ecto.UUID.generate())
+
+    next_plan = plan_fixture(user)
+
+    expected_path = "/sessions/#{lifecycle.id}/resolve"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             live(conn, ~p"/session/#{next_plan.id}")
+  end
+
+  test "lifecycle hook events use the mounted UUID and report the existing row", %{user: user} do
+    plan = plan_fixture(user)
+    client_session_id = Ecto.UUID.generate()
+
+    socket = %Phoenix.LiveView.Socket{
+      assigns: %{
+        current_user: user,
+        plan: plan,
+        client_session_id: client_session_id,
+        target_pace_sec: 5.0
+      }
+    }
+
+    assert {:reply,
+            %{
+              status: "ok",
+              client_session_id: ^client_session_id,
+              session_id: session_id,
+              lifecycle_status: "running"
+            }, ^socket} =
+             BurpeeTrainerWeb.SessionLive.handle_event(
+               "begin_session",
+               %{"client_session_id" => client_session_id},
+               socket
+             )
+
+    assert {:reply, %{status: "ok", lifecycle_status: "report_pending"}, ^socket} =
+             BurpeeTrainerWeb.SessionLive.handle_event(
+               "mark_report_pending",
+               %{"client_session_id" => client_session_id},
+               socket
+             )
+
+    attrs = %{
+      "client_session_id" => client_session_id,
+      "burpee_type" => "six_count",
+      "burpee_count_actual" => 4,
+      "duration_sec_actual" => 20,
+      "mood" => 0,
+      "tags" => "",
+      "note_post" => ""
+    }
+
+    assert {:reply, %{status: "ok", session_id: ^session_id, lifecycle_status: "reported"},
+            ^socket} =
+             BurpeeTrainerWeb.SessionLive.handle_event(
+               "save_session",
+               %{"workout_session" => attrs, "tracking" => %{}},
+               socket
+             )
+
+    assert [%{id: ^session_id}] = Workouts.list_sessions(user)
+
+    assert {:reply, %{status: "error", reason: "not_found"}, ^socket} =
+             BurpeeTrainerWeb.SessionLive.handle_event(
+               "save_session",
+               %{
+                 "workout_session" => Map.put(attrs, "client_session_id", Ecto.UUID.generate()),
+                 "tracking" => %{}
+               },
+               socket
+             )
+  end
+
   defp selector_count(document, selector) do
     document
     |> LazyHTML.query(selector)

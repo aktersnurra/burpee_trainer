@@ -67,10 +67,13 @@ test("warmup arm is consumed before warmup begins", () => {
     step: "warmup",
     warmupTimeline: [{ kind: "work", reps: 2, sec_per_rep: 5 }],
   });
-  assert.equal(started.state.mode, "warmup_running");
+  assert.equal(started.state.mode, "starting_session");
   assert.equal(started.state.armedStep, null);
 
-  const stale = step(started.state, {
+  const acknowledged = step(started.state, { type: "SESSION_BEGIN_ACKNOWLEDGED" });
+  assert.equal(acknowledged.state.mode, "warmup_running");
+
+  const stale = step(acknowledged.state, {
     type: "GESTURE_CONFIRM",
     step: "warmup",
   });
@@ -124,7 +127,7 @@ test("camera failure during workout degrades tracking without leaving workout", 
   assert.equal(result.state.trackingReason, "detector_error");
 });
 
-test("session result enters local completion review", () => {
+test("session result waits for report-pending acknowledgement before completion review", () => {
   const state = {
     ...initialFlowState(),
     mode: "workout_running",
@@ -134,9 +137,15 @@ test("session result enters local completion review", () => {
     type: "SESSION_DONE",
     result: { burpeeCountDone: 12, durationSec: 75 },
   });
-  assert.equal(result.state.mode, "completion_review");
+  assert.equal(result.state.mode, "reporting_completion");
   assert.equal(result.state.completion.burpeeCountActual, 12);
-  assert.deepEqual(result.commands, [{ type: "showCompletion" }]);
+  assert.deepEqual(result.commands, [
+    { type: "persistCompletionAndRequestPending" },
+    { type: "renderFlow" },
+  ]);
+
+  const acknowledged = step(result.state, { type: "REPORT_PENDING_ACKNOWLEDGED" });
+  assert.equal(acknowledged.state.mode, "completion_review");
 });
 
 test("degraded camera completion keeps timer actuals and sanitizes detection analytics", () => {
@@ -222,8 +231,11 @@ test("completion edits only change approved draft fields", () => {
       },
     },
   ).state;
+  const completedReview = step(completed, {
+    type: "REPORT_PENDING_ACKNOWLEDGED",
+  }).state;
 
-  const result = step(completed, {
+  const result = step(completedReview, {
     type: "COMPLETION_EDITED",
     changes: {
       burpeeCountActual: 10,

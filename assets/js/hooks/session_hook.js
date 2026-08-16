@@ -28,7 +28,6 @@ import {
 	updateTrackingStatus,
 } from "./pose_tracking_observer.mjs";
 
-const DISCARD_NAVIGATION_DEADLINE_MS = 100;
 const SAVE_NAVIGATION_DEADLINE_MS = 100;
 
 const SessionHook = {
@@ -75,6 +74,7 @@ const SessionHook = {
 		this.storeReady = null;
 		this.traceWrite = Promise.resolve();
 		this.draftWrite = Promise.resolve();
+		this.lifecycleWrite = Promise.resolve();
 		this.draftRestore = Promise.resolve();
 		this.inMemoryCompletionDraft = null;
 		this.discarding = false;
@@ -300,7 +300,11 @@ const SessionHook = {
 					programHash: this.programHash,
 				});
 				if (this.lifecycleActive(generation) && !this.discarding) {
-					this.restoreCompletionDraft(draft);
+					const command =
+						draft?.client_session_id && store.loadLifecycleCommand
+							? await store.loadLifecycleCommand(draft.client_session_id)
+							: null;
+					this.restoreCompletionDraft(draft, command);
 				}
 			})
 			.catch(() => {
@@ -371,6 +375,94 @@ const SessionHook = {
 					this.traceRetentionAvailable = false;
 				}
 			});
+	},
+
+	queueLifecycleCommand(command) {
+		const generation = this.lifecycleGeneration;
+		this.lifecycleWrite = this.lifecycleWrite
+			.then(async () => {
+				const store = await this.storeReady;
+				if (
+					store &&
+					store.saveLifecycleCommand &&
+					!this.discarding &&
+					this.lifecycleActive(generation)
+				) {
+					await store.saveLifecycleCommand(command);
+				}
+			})
+			.catch(() => {
+				if (this.lifecycleActive(generation)) this.traceRetentionAvailable = false;
+			});
+		return this.lifecycleWrite;
+	},
+
+	lifecycleCommand(kind) {
+		return {
+			client_session_id: this.clientSessionId,
+			kind,
+			payload: { client_session_id: this.clientSessionId },
+		};
+	},
+
+	requestBeginSession() {
+		const generation = this.lifecycleGeneration;
+		void this.queueLifecycleCommand(this.lifecycleCommand("begin_session")).then(() => {
+			if (!this.lifecycleActive(generation) || this.flow.mode !== "starting_session") return;
+			try {
+				this.pushEvent("begin_session", { client_session_id: this.clientSessionId }, (reply) => {
+					if (!this.lifecycleActive(generation)) return;
+					if (reply?.status === "ok") {
+						void this.deleteAcknowledgedLifecycleCommand(generation).then(() =>
+							this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" }),
+						);
+					} else {
+						this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
+						this.handleLifecycleFailure(reply);
+					}
+				});
+			} catch (_error) {
+				this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
+				this.handleLifecycleFailure({ message: "Could not start workout. Try again." });
+			}
+		});
+	},
+
+	requestReportPending() {
+		const generation = this.lifecycleGeneration;
+		try {
+			this.pushEvent("mark_report_pending", { client_session_id: this.clientSessionId }, (reply) => {
+				if (!this.lifecycleActive(generation)) return;
+				if (reply?.status === "ok") {
+					this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
+				} else {
+					this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
+					this.handleLifecycleFailure(reply);
+				}
+			});
+		} catch (_error) {
+			this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
+			this.handleLifecycleFailure({ message: "Could not finish workout. Try again." });
+		}
+	},
+
+	deleteAcknowledgedLifecycleCommand(generation = this.lifecycleGeneration) {
+		return this.storeReady
+			.then((store) =>
+				store && store.deleteLifecycleCommand && this.lifecycleActive(generation)
+					? store.deleteLifecycleCommand(this.clientSessionId)
+					: undefined,
+			)
+			.catch(() => {
+				if (this.lifecycleActive(generation)) this.traceRetentionAvailable = false;
+			});
+	},
+
+	handleLifecycleFailure(reply = {}) {
+		this.renderer.renderSaveErrors({
+			field_errors: {},
+			global_errors: [reply.message || "Could not update workout lifecycle. Try again."],
+		});
 	},
 
 	completionPayload() {
@@ -449,14 +541,19 @@ const SessionHook = {
 			SAVE_NAVIGATION_DEADLINE_MS,
 		);
 
-		this.saveCleanup = Promise.all([this.traceWrite, this.draftWrite])
+		this.saveCleanup = Promise.all([this.traceWrite, this.draftWrite, this.lifecycleWrite])
 			.then(async () => {
 				const store = await this.storeReady;
 				if (store && (await store.hasTraceChunks(this.clientSessionId))) {
 					await store.markTraceReady(this.clientSessionId, reply.session_id);
 					window.dispatchEvent(new CustomEvent("burpee:trace-upload-ready"));
 				}
-				if (store) await store.deleteDraft(this.clientSessionId);
+				if (store) {
+					if (store.deleteLifecycleCommand) {
+						await store.deleteLifecycleCommand(this.clientSessionId);
+					}
+					await store.deleteDraft(this.clientSessionId);
+				}
 			})
 			.catch(() => {
 				this.traceRetentionAvailable = false;
@@ -483,7 +580,7 @@ const SessionHook = {
 		});
 	},
 
-	restoreCompletionDraft(draft) {
+	restoreCompletionDraft(draft, command = null) {
 		if (
 			!draft ||
 			draft.plan_id !== this.planId ||
@@ -516,6 +613,7 @@ const SessionHook = {
 			captureMode: tracking.enabled ? "camera" : "no_camera",
 			trackingReason: tracking.reason ?? null,
 			completion,
+			pendingAcknowledgement: command?.kind === "mark_report_pending",
 		});
 	},
 
@@ -544,6 +642,25 @@ const SessionHook = {
 	discardSessionLocally() {
 		if (this.flow.mode !== "completion_review" || this.discarding) return;
 		this.discarding = true;
+		const generation = this.lifecycleGeneration;
+
+		try {
+			this.pushEvent("abort_session", { client_session_id: this.clientSessionId }, (reply) => {
+				if (!this.lifecycleActive(generation)) return;
+				if (reply?.status !== "ok") {
+					this.discarding = false;
+					this.handleLifecycleFailure(reply);
+					return;
+				}
+				this.finishLocalDiscard(generation);
+			});
+		} catch (_error) {
+			this.discarding = false;
+			this.handleLifecycleFailure({ message: "Could not discard workout. Try again." });
+		}
+	},
+
+	finishLocalDiscard(generation) {
 		const clientSessionId = this.clientSessionId;
 		this.cancelWarmupTimeout();
 		this.dispatchTrackerCommand("pose-tracker:stop");
@@ -551,32 +668,17 @@ const SessionHook = {
 		this.inMemoryCompletionDraft = null;
 		this.dispatchFlow({ type: "DISCARD_LOCAL" });
 
-		let navigated = false;
-		const clearTimer = this.clearTimeout || clearTimeout;
-		const navigate = () => {
-			if (navigated) return;
-			navigated = true;
-			if (this.discardNavigationTimeoutId) {
-				clearTimer(this.discardNavigationTimeoutId);
-				this.discardNavigationTimeoutId = null;
-			}
-			window.location.assign("/workouts");
-		};
-		const scheduleTimer = this.setTimeout || setTimeout;
-		this.discardNavigationTimeoutId = scheduleTimer(
-			navigate,
-			DISCARD_NAVIGATION_DEADLINE_MS,
-		);
-
-		this.discardWrite = Promise.all([this.traceWrite, this.draftWrite])
+		this.discardWrite = Promise.all([this.traceWrite, this.draftWrite, this.lifecycleWrite])
 			.then(async () => {
 				const store = await this.storeReady;
 				if (store) await store.discardSession(clientSessionId);
 			})
 			.catch(() => {
-				this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) this.traceRetentionAvailable = false;
 			})
-			.then(navigate);
+			.then(() => {
+				if (this.lifecycleActive(generation)) window.location.assign("/workouts");
+			});
 	},
 
 	canTogglePause() {
@@ -651,7 +753,7 @@ const SessionHook = {
 	dispatchFlow(event) {
 		const result = flowTransition(this.flow, event);
 		this.flow = result.state;
-		result.commands.forEach((command) => this.runFlowCommand(command));
+		for (const command of result.commands) this.runFlowCommand(command);
 	},
 
 	runFlowCommand(command) {
@@ -689,10 +791,22 @@ const SessionHook = {
 			case "startSegment":
 				this.startSegment(command);
 				break;
-			case "showCompletion":
+			case "persistBeginAndRequest":
+				this.requestBeginSession();
+				break;
+			case "persistCompletionAndRequestPending":
 				this.cancelWarmupTimeout();
 				this.quiesceCompletedWorkout();
 				this.queueCompletionDraft();
+				void Promise.all([
+					this.draftWrite,
+					this.queueLifecycleCommand(this.lifecycleCommand("mark_report_pending")),
+				]).then(() => this.requestReportPending());
+				break;
+			case "requestPending":
+				this.requestReportPending();
+				break;
+			case "showCompletion":
 				this.renderer.renderCompletion(this.flow.completion);
 				this.renderer.renderFlowState(this.flow);
 				break;
@@ -816,7 +930,7 @@ const SessionHook = {
 		const result = segmentTransition(this.segment, event);
 		this.segment = result.state;
 		this.timeline = this.segment.timeline;
-		result.commands.forEach((command) => this.runSegmentCommand(command));
+		for (const command of result.commands) this.runSegmentCommand(command);
 	},
 
 	runSegmentCommand(command) {

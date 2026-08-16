@@ -323,6 +323,7 @@ function buildHarness({
 	openSessionStore,
 	setTimeout: hookSetTimeout,
 	clearTimeout: hookClearTimeout,
+	realLifecycle = false,
 } = {}) {
 	const events = [];
 	const renderedModels = [];
@@ -413,6 +414,16 @@ function buildHarness({
 		renderer,
 		audio,
 		wakeLock,
+		...(realLifecycle
+			? {}
+			: {
+					requestBeginSession() {
+						this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" });
+					},
+					requestReportPending() {
+						this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
+					},
+				}),
 		flow: initialFlowState(),
 		segment: initialSegmentState(),
 		activeSegment: null,
@@ -424,7 +435,19 @@ function buildHarness({
 		countdownCount: null,
 		countdownTimeoutId: null,
 		lastDownCueKey: null,
-		pushEvent(name, payload) {
+		pushEvent(name, payload, callback) {
+			if (name === "begin_session") {
+				callback?.({ status: "ok", session_id: 1, lifecycle_status: "running" });
+				return;
+			}
+			if (name === "mark_report_pending") {
+				callback?.({ status: "ok", session_id: 1, lifecycle_status: "report_pending" });
+				return;
+			}
+			if (name === "abort_session") {
+				callback?.({ status: "ok", session_id: 1, lifecycle_status: "aborted" });
+				return;
+			}
 			events.push({ name, payload });
 		},
 		events,
@@ -1352,6 +1375,8 @@ test("completion display and every stable edit queue the full draft", async () =
 		},
 	});
 	await ctx.draftWrite;
+	await flushHookPromises();
+	await flushHookPromises();
 
 	assert.equal(saved.length, 1);
 	assert.deepEqual(
@@ -1484,10 +1509,7 @@ test("degraded tracking reason survives completion draft round-trip exactly", as
 
 	assert.equal(restored.flow.mode, "completion_review");
 	assert.equal(restored.flow.trackingReason, "confidence_lost/core-pose");
-	assert.equal(
-		restoredWrites.at(-1).tracking.reason,
-		"confidence_lost/core-pose",
-	);
+	assert.deepEqual(restoredWrites, []);
 	assert.deepEqual(restored.events, []);
 	restored.destroyed();
 });
@@ -1599,7 +1621,7 @@ test("confirmed discard clears local session data and emits zero server events",
 	}
 });
 
-test("discard navigates by a local deadline when store open remains pending", async () => {
+test("discard retains recovery data until the abort acknowledgement and local cleanup complete", async () => {
 	let resolveOpen;
 	const opened = new Promise((resolve) => {
 		resolveOpen = resolve;
@@ -1654,13 +1676,8 @@ test("discard navigates by a local deadline when store open remains pending", as
 		assert.equal(ctx.startTime, null);
 		assert.deepEqual(trackerStops, ["stop"]);
 		assert.deepEqual(navigations, []);
-		assert.equal(scheduled.size, 1);
-		const [{ callback, delayMs }] = scheduled.values();
-		assert.ok(delayMs <= 250, `discard deadline was ${delayMs}ms`);
-		callback();
-		assert.deepEqual(navigations, ["/workouts"]);
-		ctx.destroyed();
-		destroyed = true;
+		assert.equal(scheduled.size, 0);
+		assert.deepEqual(navigations, []);
 
 		resolveOpen({
 			async loadDraft() {
@@ -1677,6 +1694,8 @@ test("discard navigates by a local deadline when store open remains pending", as
 		await ctx.discardWrite;
 		assert.deepEqual(storageCalls, ["discard:client-1"]);
 		assert.deepEqual(navigations, ["/workouts"]);
+		ctx.destroyed();
+		destroyed = true;
 	} finally {
 		if (!destroyed) ctx.destroyed();
 		globalThis.window = originalWindow;
@@ -1720,7 +1739,7 @@ test("discard still navigates when storage is unavailable", async () => {
 	}
 });
 
-test("camera through completion review requires no server event", () => {
+test("camera through completion review requires no server event", async () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	const tracker = ctx.el.querySelector("#pose-tracker");
 	const trackerCommands = [];
@@ -1774,6 +1793,8 @@ test("camera through completion review requires no server event", () => {
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	await flushHookPromises();
+	await flushHookPromises();
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(
@@ -1795,7 +1816,7 @@ test("camera through completion review requires no server event", () => {
 	ctx.destroyed();
 });
 
-test("completed workout stays quiescent across hidden and visible lifecycle", () => {
+test("completed workout stays quiescent across hidden and visible lifecycle", async () => {
 	const originalVisibility = document.visibilityState;
 	const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
 	const scheduledFrames = [];
@@ -1825,6 +1846,8 @@ test("completed workout stays quiescent across hidden and visible lifecycle", ()
 		ctx.startTime = 1;
 		scheduledFrames.length = 0;
 		ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+		await flushHookPromises();
+		await flushHookPromises();
 
 		assert.equal(ctx.flow.mode, "completion_review");
 		assert.equal(
@@ -1885,7 +1908,7 @@ test("camera failure during workout keeps timer result authoritative", () => {
 	ctx.destroyed();
 });
 
-test("manual no-camera journey reaches local completion review", () => {
+test("manual no-camera journey reaches local completion review", async () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	const arms = [];
 	ctx.el
@@ -1901,6 +1924,8 @@ test("manual no-camera journey reaches local completion review", () => {
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	await flushHookPromises();
+	await flushHookPromises();
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(
@@ -3027,6 +3052,84 @@ test("disconnected Save keeps controls and local draft available", () => {
 		false,
 	);
 	assert.equal(ctx.flow.mode, "completion_review");
+	ctx.destroyed();
+});
+
+test("lifecycle begin and pending commands persist before their server events", async () => {
+	const order = [];
+	const store = {
+		loadDraft: async () => null,
+		async saveDraft() {
+			order.push("draft");
+		},
+		async saveLifecycleCommand(command) {
+			order.push(`command:${command.kind}`);
+		},
+		loadLifecycleCommand: async () => null,
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
+	await ctx.draftRestore;
+	ctx.flow = { ...ctx.flow, mode: "workout_ready", captureMode: "no_camera" };
+	ctx.pushEvent = (name, _payload, callback) => {
+		order.push(`event:${name}`);
+		callback({ status: "ok", session_id: 7, lifecycle_status: "running" });
+	};
+
+	ctx.onWorkoutReady();
+	await flushHookPromises();
+	await flushHookPromises();
+	assert.deepEqual(order.slice(0, 2), ["command:begin_session", "event:begin_session"]);
+	assert.equal(ctx.flow.mode, "workout_running");
+
+	ctx.dispatchFlow({
+		type: "SESSION_DONE",
+		result: { burpeeCountDone: 5, durationSec: 10 },
+	});
+	await flushHookPromises();
+	await flushHookPromises();
+	assert.deepEqual(order.slice(-3), [
+		"draft",
+		"command:mark_report_pending",
+		"event:mark_report_pending",
+	]);
+	assert.equal(ctx.flow.mode, "completion_review");
+	ctx.destroyed();
+});
+
+test("pending and abort failures retain local recovery data", async () => {
+	const calls = [];
+	const store = {
+		loadDraft: async () => null,
+		async saveDraft() {
+			calls.push("draft");
+		},
+		async saveLifecycleCommand() {
+			calls.push("command");
+		},
+		loadLifecycleCommand: async () => null,
+		async discardSession() {
+			calls.push("discard");
+		},
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
+	await ctx.draftRestore;
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "no_camera",
+		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
+	};
+	ctx.pushEvent = (_name, _payload, callback) =>
+		callback({ status: "error", message: "offline" });
+	ctx.dispatchFlow({ type: "SESSION_DONE", result: { burpeeCountDone: 5, durationSec: 10 } });
+	await flushHookPromises();
+	await flushHookPromises();
+	assert.equal(ctx.flow.mode, "completion_pending_failed");
+	assert.deepEqual(calls, ["draft", "command"]);
+	ctx.flow = { ...ctx.flow, mode: "completion_review" };
+	ctx.discardSessionLocally();
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(calls.includes("discard"), false);
 	ctx.destroyed();
 });
 

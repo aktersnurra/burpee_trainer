@@ -1,6 +1,7 @@
 const DATABASE = "burpee-session-runtime";
-const VERSION = 1;
+const VERSION = 2;
 const DRAFTS = "completion_drafts";
+const LIFECYCLE_COMMANDS = "lifecycle_commands";
 const CHUNKS = "pose_trace_chunks";
 const UPLOADS = "trace_uploads";
 
@@ -29,6 +30,22 @@ export function createSessionStore(engine) {
 
     async deleteDraft(clientSessionId) {
       await engine.delete(DRAFTS, clientSessionId);
+    },
+
+    loadDraftByClientSessionId(clientSessionId) {
+      return engine.get(DRAFTS, clientSessionId);
+    },
+
+    async saveLifecycleCommand(command) {
+      await engine.put(LIFECYCLE_COMMANDS, command);
+    },
+
+    loadLifecycleCommand(clientSessionId) {
+      return engine.get(LIFECYCLE_COMMANDS, clientSessionId);
+    },
+
+    async deleteLifecycleCommand(clientSessionId) {
+      await engine.delete(LIFECYCLE_COMMANDS, clientSessionId);
     },
 
     async appendTraceChunk(clientSessionId, chunk) {
@@ -99,6 +116,11 @@ function openDatabase(indexedDB) {
       const database = request.result;
       if (!database.objectStoreNames.contains(DRAFTS)) {
         database.createObjectStore(DRAFTS, {
+          keyPath: "client_session_id",
+        });
+      }
+      if (!database.objectStoreNames.contains(LIFECYCLE_COMMANDS)) {
+        database.createObjectStore(LIFECYCLE_COMMANDS, {
           keyPath: "client_session_id",
         });
       }
@@ -175,16 +197,26 @@ function indexedDbEngine(database) {
       });
     },
     discardSession(clientSessionId) {
-      return compound([DRAFTS, CHUNKS, UPLOADS], (transaction, reject) => {
+      return compound(
+        [DRAFTS, LIFECYCLE_COMMANDS, CHUNKS, UPLOADS],
+        (transaction, reject) => {
         const draftRequest = transaction
           .objectStore(DRAFTS)
+          .delete(clientSessionId);
+        const commandRequest = transaction
+          .objectStore(LIFECYCLE_COMMANDS)
           .delete(clientSessionId);
         const uploadRequest = transaction
           .objectStore(UPLOADS)
           .delete(clientSessionId);
         const chunksRequest = transaction.objectStore(CHUNKS).getAll();
 
-        for (const request of [draftRequest, uploadRequest, chunksRequest]) {
+        for (const request of [
+          draftRequest,
+          commandRequest,
+          uploadRequest,
+          chunksRequest,
+        ]) {
           request.onerror = () => reject(request.error);
         }
         chunksRequest.onsuccess = () => {
@@ -197,7 +229,8 @@ function indexedDbEngine(database) {
             }
           }
         };
-      });
+      },
+      );
     },
   };
 }

@@ -14,6 +14,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def mount(%{"plan_id" => plan_id}, _session, socket) do
     user = socket.assigns.current_user
 
+    case Workouts.get_unresolved_session(user) do
+      %WorkoutSession{} = workout_session ->
+        {:ok, push_navigate(socket, to: ~p"/sessions/#{workout_session.id}/resolve")}
+
+      nil ->
+        mount_plan_session(plan_id, user, socket)
+    end
+  end
+
+  defp mount_plan_session(plan_id, user, socket) do
     case Integer.parse(plan_id) do
       {id, ""} ->
         plan = Workouts.get_plan!(user, id)
@@ -45,20 +55,48 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
+  def handle_event("begin_session", %{"client_session_id" => client_session_id}, socket) do
+    {:reply, lifecycle_reply(begin_session(socket, client_session_id)), socket}
+  end
+
+  def handle_event("begin_session", _payload, socket) do
+    {:reply, lifecycle_error_reply(:not_found), socket}
+  end
+
+  def handle_event("mark_report_pending", %{"client_session_id" => client_session_id}, socket) do
+    {:reply, lifecycle_reply(mark_report_pending(socket, client_session_id)), socket}
+  end
+
+  def handle_event("mark_report_pending", _payload, socket) do
+    {:reply, lifecycle_error_reply(:not_found), socket}
+  end
+
+  def handle_event("abort_session", %{"client_session_id" => client_session_id}, socket) do
+    {:reply, lifecycle_reply(abort_session(socket, client_session_id)), socket}
+  end
+
+  def handle_event("abort_session", _payload, socket) do
+    {:reply, lifecycle_error_reply(:not_found), socket}
+  end
+
   def handle_event(
         "save_session",
-        %{"workout_session" => attrs, "tracking" => tracking},
+        %{
+          "workout_session" => %{"client_session_id" => client_session_id} = attrs,
+          "tracking" => tracking
+        },
         socket
       )
       when is_map(attrs) and is_map(tracking) do
     result =
-      persist_completion(
-        socket.assigns.current_user,
-        socket.assigns.plan,
-        attrs,
-        tracking,
-        socket.assigns.target_pace_sec
-      )
+      with :ok <- mounted_client_session?(socket, client_session_id) do
+        Workouts.report_session(
+          socket.assigns.current_user,
+          client_session_id,
+          attrs,
+          tracking
+        )
+      end
 
     {:reply, save_reply(result), socket}
   end
@@ -113,82 +151,65 @@ defmodule BurpeeTrainerWeb.SessionLive do
     """
   end
 
-  defp persist_completion(user, plan, attrs, tracking, target_pace_sec) do
-    case persistence_mode(attrs, tracking, target_pace_sec) do
-      {:trusted, cadence, target_pace} ->
-        Workouts.create_tracked_session_from_plan(
-          user,
-          plan,
-          attrs,
-          {:trusted, cadence, target_pace}
-        )
-
-      :manual_correction ->
-        Workouts.create_tracked_session_from_plan(user, plan, attrs, :manual_correction)
-
-      :timer ->
-        Workouts.create_session_from_plan(user, plan, attrs)
+  defp begin_session(socket, client_session_id) do
+    with :ok <- mounted_client_session?(socket, client_session_id) do
+      Workouts.begin_plan_session(
+        socket.assigns.current_user,
+        socket.assigns.plan,
+        client_session_id
+      )
     end
   end
 
-  defp persistence_mode(attrs, tracking, target_pace_sec) do
-    enabled? = tracking["enabled"] == true
-    trust = tracking["trust"]
-
-    cond do
-      not enabled? ->
-        :timer
-
-      trust == "degraded" ->
-        :timer
-
-      trust == "finished" and detected_result_unchanged?(attrs, tracking) ->
-        cadence = if is_list(tracking["cadence_ms"]), do: tracking["cadence_ms"], else: []
-        {:trusted, cadence, target_pace_sec}
-
-      trust == "finished" ->
-        :manual_correction
-
-      true ->
-        :timer
+  defp mark_report_pending(socket, client_session_id) do
+    with :ok <- mounted_client_session?(socket, client_session_id) do
+      Workouts.mark_report_pending(socket.assigns.current_user, client_session_id)
     end
   end
 
-  defp detected_result_unchanged?(attrs, tracking) do
-    with {:ok, actual_reps} <- parse_integer(attrs["burpee_count_actual"]),
-         {:ok, actual_duration} <- parse_number(attrs["duration_sec_actual"]),
-         {:ok, detected_reps} <- parse_integer(tracking["detected_reps"]),
-         {:ok, detected_duration} <- parse_number(tracking["detected_duration_sec"]) do
-      actual_reps == detected_reps and actual_duration == detected_duration
+  defp abort_session(socket, client_session_id) do
+    with :ok <- mounted_client_session?(socket, client_session_id) do
+      Workouts.abort_session(socket.assigns.current_user, client_session_id)
+    end
+  end
+
+  defp mounted_client_session?(socket, client_session_id) do
+    if client_session_id == socket.assigns.client_session_id and
+         match?({:ok, _}, Ecto.UUID.cast(client_session_id)) do
+      :ok
     else
-      _ -> false
+      {:error, :not_found}
     end
   end
 
-  defp parse_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
-
-  defp parse_integer(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
-      _ -> :error
-    end
+  defp lifecycle_reply({:ok, session}) do
+    %{
+      status: "ok",
+      client_session_id: session.client_session_id,
+      session_id: session.id,
+      lifecycle_status: Atom.to_string(session.status)
+    }
   end
 
-  defp parse_integer(_value), do: :error
+  defp lifecycle_reply({:error, reason}), do: lifecycle_error_reply(reason)
 
-  defp parse_number(value) when is_number(value) and value >= 0, do: {:ok, value}
-
-  defp parse_number(value) when is_binary(value) do
-    case Float.parse(value) do
-      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
-      _ -> :error
-    end
+  defp lifecycle_error_reply(reason) do
+    %{
+      status: "error",
+      reason: Atom.to_string(reason),
+      message: "Could not update workout lifecycle. Try again.",
+      retryable: reason not in [:aborted, :already_reported, :report_conflict]
+    }
   end
 
-  defp parse_number(_value), do: :error
-
-  defp save_reply({:ok, session}) do
-    %{status: "ok", session_id: session.id, redirect_to: ~p"/stats"}
+  defp save_reply({:ok, session, result}) do
+    %{
+      status: "ok",
+      session_id: session.id,
+      lifecycle_status: Atom.to_string(session.status),
+      report_status: Atom.to_string(result),
+      redirect_to: ~p"/stats"
+    }
   end
 
   defp save_reply({:error, %Ecto.Changeset{} = changeset}) do
@@ -200,6 +221,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
       field_errors:
         Map.new(field_errors, fn {field, messages} -> {Atom.to_string(field), messages} end),
       global_errors: global_errors
+    }
+  end
+
+  defp save_reply({:error, reason}) when reason in [:report_conflict, :aborted, :not_found] do
+    %{
+      status: "error",
+      reason: Atom.to_string(reason),
+      message: "Could not save. Try again.",
+      retryable: reason == :not_found
     }
   end
 
