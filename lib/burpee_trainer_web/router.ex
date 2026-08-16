@@ -63,6 +63,7 @@ defmodule BurpeeTrainerWeb.Router do
       live("/workouts/:id/edit", PlansLive.Edit, :edit)
 
       live("/session/:plan_id", SessionLive)
+      live("/sessions/:id/resolve", SessionResolutionLive)
 
       live("/stats", StatsLive)
       live("/stats/sessions/:id", SessionAnalysisLive)
