@@ -90,7 +90,11 @@ test("video end waits for report-pending success and retains retry after a failu
   video.emit("ended");
 
   assert.equal(calls[1].name, "mark_video_report_pending");
-  calls[1].callback({ status: "error", message: "Try again." });
+  calls[1].callback({
+    status: "error",
+    message: "Try again.",
+    retryable: true,
+  });
   assert.equal(controls["video-report-retry"].hidden, false);
 
   controls["video-report-retry"].emit("click");
@@ -99,4 +103,32 @@ test("video end waits for report-pending success and retains retry after a failu
     calls[2].payload.client_session_id,
     calls[0].payload.client_session_id,
   );
+});
+
+test("non-retryable video end failure provides a terminal restart route", (t) => {
+  const { video, controls, calls, restoreDocument } = mountedHook();
+  t.after(restoreDocument);
+
+  controls["video-start-workout"].emit("click");
+  calls[0].callback({ status: "ok" });
+  video.emit("ended");
+  calls[1].callback({
+    status: "error",
+    message: "This session was aborted.",
+    retryable: false,
+  });
+
+  assert.equal(controls["video-start-workout"].disabled, true);
+  assert.equal(controls["video-report-retry"].hidden, true);
+  assert.equal(controls["video-resolve-session"].hidden, false);
+  assert.equal(controls["video-resolve-session"].href, "/workouts");
+  assert.equal(
+    controls["video-resolve-session"].textContent,
+    "Choose another workout and start again",
+  );
+  assert.match(
+    controls["video-lifecycle-status"].textContent,
+    /can no longer be completed/,
+  );
+  assert.equal(calls.length, 2);
 });

@@ -65,7 +65,14 @@ const VideoHook = {
         if (reply.status === "ok") {
           this.showStatus("Workout complete. Your report is ready below.");
         } else {
-          this.retryButton.hidden = false;
+          if (reply.retryable === true) {
+            this.retryButton.hidden = false;
+          } else {
+            this.showStatus(
+              "This workout can no longer be completed. Choose another workout to start again.",
+            );
+            this.showTerminalRecovery(reply);
+          }
           this.showError(reply);
         }
       },
@@ -82,6 +89,13 @@ const VideoHook = {
       this.error.textContent = "";
     }
     if (this.resolverLink) this.resolverLink.hidden = true;
+  },
+
+  showTerminalRecovery(reply) {
+    if (!this.resolverLink) return;
+    this.resolverLink.href = reply.resolve_to || "/workouts";
+    this.resolverLink.textContent = "Choose another workout and start again";
+    this.resolverLink.hidden = false;
   },
 
   showError(reply) {
