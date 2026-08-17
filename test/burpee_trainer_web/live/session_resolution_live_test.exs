@@ -27,7 +27,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
            )
 
     assert has_element?(view, "#session-resolution-status", "must be logged or discarded")
-    assert has_element?(view, "#session-resolution-form[phx-submit='report']")
+    assert has_element?(view, "#session-resolution-form")
     assert has_element?(view, "#session-resolution-abort[phx-click='abort']")
     assert has_element?(view, "#session-resolution-source", "Recovery plan")
     assert has_element?(view, "#session-resolution-planned-count", "30")
@@ -55,7 +55,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     assert Repo.get!(WorkoutSession, session.id).status == :report_pending
   end
 
-  test "manual report pushes a stable recovery acknowledgement before redirect", %{
+  test "manual report returns the browser recovery acknowledgement without navigating", %{
     conn: conn,
     user: user
   } do
@@ -63,9 +63,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     session = lifecycle_session(user, plan, pending?: true)
     {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
 
-    view
-    |> element("#session-resolution-form")
-    |> render_submit(%{
+    render_hook(view, "report", %{
       "workout_session" => %{
         "burpee_count_actual" => "17",
         "duration_sec_actual" => "95",
@@ -76,8 +74,16 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     })
 
     session_id = session.id
-    assert_push_event(view, "session_reported", %{session_id: ^session_id})
-    assert_redirect(view, ~p"/stats")
+    client_session_id = session.client_session_id
+
+    assert_reply(view, %{
+      status: "ok",
+      session_id: ^session_id,
+      client_session_id: ^client_session_id,
+      redirect_to: "/stats"
+    })
+
+    refute_redirected(view)
   end
 
   test "manual reporting updates the exact running or pending row without another row", %{
@@ -90,9 +96,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
       session_count = Repo.aggregate(WorkoutSession, :count, :id)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
 
-      view
-      |> element("#session-resolution-form")
-      |> render_submit(%{
+      render_hook(view, "report", %{
         "workout_session" => %{
           "burpee_count_actual" => "17",
           "duration_sec_actual" => "95",
@@ -102,7 +106,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
         }
       })
 
-      assert_redirect(view, ~p"/stats")
+      assert_reply(view, %{status: "ok", redirect_to: "/stats"})
 
       reported = Repo.get!(WorkoutSession, session.id)
       assert reported.status == :reported
@@ -160,12 +164,11 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     session = lifecycle_session(user, plan)
     {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
 
-    view
-    |> element("#session-resolution-form")
-    |> render_submit(%{
+    render_hook(view, "report", %{
       "workout_session" => %{"burpee_count_actual" => "", "duration_sec_actual" => ""}
     })
 
+    assert_reply(view, %{status: "error"})
     assert has_element?(view, "#session-resolution-form")
     assert has_element?(view, "#session-resolution-errors[role='alert']", "can't be blank")
     assert Repo.get!(WorkoutSession, session.id).status == :running

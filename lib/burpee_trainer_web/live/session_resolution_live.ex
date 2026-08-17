@@ -36,16 +36,16 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
            %{}
          ) do
       {:ok, reported, _result} ->
-        {:noreply,
-         socket
-         |> push_event("session_reported", %{
+        {:reply,
+         %{
+           status: "ok",
            session_id: reported.id,
-           client_session_id: reported.client_session_id
-         })
-         |> push_navigate(to: ~p"/stats")}
+           client_session_id: reported.client_session_id,
+           redirect_to: ~p"/stats"
+         }, socket}
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply,
+        {:reply, %{status: "error"},
          socket
          |> assign(:form, to_form(changeset, action: :validate))
          |> assign(:form_errors, error_messages(changeset))}
@@ -159,7 +159,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
           </div>
         </section>
 
-        <.form for={@form} id="session-resolution-form" phx-submit="report" class="space-y-4">
+        <.form for={@form} id="session-resolution-form" class="space-y-4">
           <div
             :if={@form_errors != []}
             id="session-resolution-errors"

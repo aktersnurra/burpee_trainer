@@ -5,22 +5,41 @@ const SessionRecoveryHook = {
     this.clientSessionId = this.el.dataset.clientSessionId;
     this.sessionStatus = this.el.dataset.sessionStatus;
     this.store = null;
+    this.touchedInputs = new WeakSet();
+    this.reportForm = this.el.querySelector("#session-resolution-form");
+    this.trackManualReportChanges();
+    this.storeReady = this.initializeStore();
     this.recovery = this.recover();
 
-    this.handleEvent("session_reported", (reply) =>
-      this.acknowledgeReportedSession(reply),
-    );
+    this.reportForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.submitReport();
+    });
+  },
+
+  async initializeStore() {
+    try {
+      const openStore = this.openSessionStore || openSessionStore;
+      const store = await openStore();
+      this.store = store;
+      return store;
+    } catch (_error) {
+      // Reporting still succeeds when IndexedDB is unavailable.
+      return null;
+    }
   },
 
   async recover() {
     if (!this.clientSessionId) return;
 
     try {
-      const openStore = this.openSessionStore || openSessionStore;
-      const store = await openStore();
-      this.store = store;
-      const draft = await store.loadDraftByClientSessionId(this.clientSessionId);
+      const store = await this.storeReady;
+      if (!store) return;
 
+      const draft = await store.loadDraftByClientSessionId(
+        this.clientSessionId,
+      );
       if (!this.matchesClientSession(draft)) return;
 
       if (this.sessionStatus === "running") {
@@ -57,36 +76,118 @@ const SessionRecoveryHook = {
     });
   },
 
+  trackManualReportChanges() {
+    for (const selector of this.reportFieldSelectors()) {
+      const input = this.el.querySelector(selector);
+      if (!input) continue;
+
+      const markTouched = () => this.touchedInputs.add(input);
+      input.addEventListener("input", markTouched);
+      input.addEventListener("change", markTouched);
+    }
+  },
+
+  reportFieldSelectors() {
+    return [
+      "#session-resolution-count",
+      "#session-resolution-duration",
+      "#session-resolution-mood",
+      "#session-resolution-tags",
+      "#session-resolution-notes",
+    ];
+  },
+
   prefillReport(draft) {
     const fields = [
       ["#session-resolution-count", draft.burpee_count_actual],
       ["#session-resolution-duration", draft.duration_sec_actual],
       ["#session-resolution-mood", draft.mood],
-      ["#session-resolution-tags", Array.isArray(draft.tags) ? draft.tags.join(",") : draft.tags],
+      [
+        "#session-resolution-tags",
+        Array.isArray(draft.tags) ? draft.tags.join(",") : draft.tags,
+      ],
       ["#session-resolution-notes", draft.note_post],
     ];
 
     for (const [selector, value] of fields) {
       if (value === undefined || value === null) continue;
       const input = this.el.querySelector(selector);
-      if (!input) continue;
+      if (!this.canPrefill(input)) continue;
+
       input.value = String(value);
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     }
   },
 
-  async acknowledgeReportedSession(reply) {
-    if (!this.store || !Number.isInteger(reply?.session_id)) return;
+  canPrefill(input) {
+    return (
+      input &&
+      !input.disabled &&
+      input.value === "" &&
+      !this.touchedInputs.has(input)
+    );
+  },
+
+  reportAttributes() {
+    const attrs = {};
+
+    for (const input of this.reportForm?.elements || []) {
+      const field = /^workout_session\[([^\]]+)\]$/.exec(input.name || "")?.[1];
+      if (field) attrs[field] = input.value;
+    }
+
+    return attrs;
+  },
+
+  async submitReport() {
+    if (this.reporting) return;
+    this.reporting = true;
 
     try {
-      await this.store.markTraceReady(this.clientSessionId, reply.session_id);
-      window.dispatchEvent(new CustomEvent("burpee:trace-upload-ready"));
-      await this.store.deleteLifecycleCommand(this.clientSessionId);
-      await this.store.deleteDraft(this.clientSessionId);
+      const reply = await this.pushEventReply("report", {
+        workout_session: this.reportAttributes(),
+      });
+
+      if (reply?.status !== "ok") return;
+
+      const acknowledged = await this.acknowledgeReportedSession(reply);
+      if (!acknowledged) return;
+
+      this.navigateTo(reply.redirect_to);
     } catch (_error) {
-      // Retain recovery data if acknowledgement cleanup is incomplete.
+      // The form remains available for a replay-safe retry.
+    } finally {
+      this.reporting = false;
     }
+  },
+
+  async acknowledgeReportedSession(reply) {
+    if (
+      !Number.isInteger(reply?.session_id) ||
+      reply.client_session_id !== this.clientSessionId
+    ) {
+      return false;
+    }
+
+    const store = await this.storeReady;
+    if (!store) return true;
+
+    try {
+      await store.markTraceReady(this.clientSessionId, reply.session_id);
+      window.dispatchEvent(new CustomEvent("burpee:trace-upload-ready"));
+      await store.deleteLifecycleCommand(this.clientSessionId);
+      await store.deleteDraft(this.clientSessionId);
+      return true;
+    } catch (_error) {
+      // Retain recovery data so a replayed report can retry this acknowledgement.
+      return false;
+    }
+  },
+
+  navigateTo(target) {
+    if (typeof target !== "string" || !target.startsWith("/")) return;
+    window.location.assign(target);
   },
 };
 

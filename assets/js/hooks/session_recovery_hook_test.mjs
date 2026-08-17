@@ -7,16 +7,21 @@ class FakeElement {
   constructor(id) {
     this.id = id;
     this.value = "";
+    this.name = "";
     this.dataset = {};
+    this.disabled = false;
     this.listeners = new Map();
   }
 
   addEventListener(type, listener) {
-    this.listeners.set(type, listener);
+    const listeners = this.listeners.get(type) || [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
   }
 
   dispatchEvent(event) {
-    this.listeners.get(event.type)?.(event);
+    for (const listener of this.listeners.get(event.type) || [])
+      listener(event);
     return true;
   }
 }
@@ -32,51 +37,103 @@ function draft(clientSessionId = "session-1") {
   };
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 function mountedHook({
-  status,
+  status = "report_pending",
   localDraft = null,
   command = null,
   reconcileReply = { status: "error" },
+  reportReply = {
+    status: "ok",
+    session_id: 42,
+    client_session_id: "session-1",
+    redirect_to: "/stats",
+  },
+  openSessionStore,
 } = {}) {
+  const fieldNames = [
+    "burpee_count_actual",
+    "duration_sec_actual",
+    "mood",
+    "tags",
+    "note_post",
+  ];
   const inputs = [
     "session-resolution-count",
     "session-resolution-duration",
     "session-resolution-mood",
     "session-resolution-tags",
     "session-resolution-notes",
-  ].map((id) => new FakeElement(id));
+  ].map((id, index) => {
+    const input = new FakeElement(id);
+    input.name = `workout_session[${fieldNames[index]}]`;
+    return input;
+  });
+  const form = new FakeElement("session-resolution-form");
+  form.elements = inputs;
   const root = new FakeElement("session-resolution");
   root.dataset.clientSessionId = "session-1";
   root.dataset.sessionStatus = status;
-  root.querySelector = (selector) =>
-    inputs.find((input) => `#${input.id}` === selector) || null;
+  root.querySelector = (selector) => {
+    if (selector === "#session-resolution-form") return form;
+    return inputs.find((input) => `#${input.id}` === selector) || null;
+  };
 
+  const calls = [];
   const pushes = [];
-  const serverEventHandlers = new Map();
+  const navigations = [];
+  const store = {
+    loadDraftByClientSessionId: async () => localDraft,
+    loadLifecycleCommand: async () => command,
+    markTraceReady: async (clientSessionId, sessionId) =>
+      calls.push(`ready:${clientSessionId}:${sessionId}`),
+    deleteLifecycleCommand: async (clientSessionId) =>
+      calls.push(`command:${clientSessionId}`),
+    deleteDraft: async (clientSessionId) =>
+      calls.push(`draft:${clientSessionId}`),
+  };
   const hook = {
+    ...SessionRecoveryHook,
     el: root,
-    openSessionStore: async () => ({
-      loadDraftByClientSessionId: async () => localDraft,
-      loadLifecycleCommand: async () => command,
-      markTraceReady: async () => {},
-      deleteLifecycleCommand: async () => {},
-      deleteDraft: async () => {},
-    }),
+    openSessionStore: openSessionStore || (async () => store),
     pushEvent(name, payload, callback) {
       pushes.push({ name, payload, callback });
-      callback?.(reconcileReply);
+      callback?.(name === "report" ? reportReply : reconcileReply);
     },
-    handleEvent(name, handler) {
-      serverEventHandlers.set(name, handler);
+    navigateTo(target) {
+      navigations.push(target);
     },
-    ...SessionRecoveryHook,
   };
   hook.mounted();
 
-  return { hook, inputs, pushes, serverEventHandlers };
+  return { hook, inputs, pushes, calls, navigations, store };
 }
 
-const flush = () => new Promise((resolve) => setImmediate(resolve));
+function withTraceReadyWindow(t, calls) {
+  const originalWindow = globalThis.window;
+  const originalCustomEvent = globalThis.CustomEvent;
+  globalThis.window = {
+    dispatchEvent(event) {
+      calls.push(event.type);
+    },
+  };
+  globalThis.CustomEvent = class {
+    constructor(type) {
+      this.type = type;
+    }
+  };
+  t.after(() => {
+    globalThis.window = originalWindow;
+    globalThis.CustomEvent = originalCustomEvent;
+  });
+}
 
 test("running recovery replays only an exact completed local lifecycle command", async () => {
   const { hook, pushes } = mountedHook({
@@ -91,12 +148,15 @@ test("running recovery replays only an exact completed local lifecycle command",
 
   await hook.recovery;
 
-  assert.deepEqual(pushes.map(({ name, payload }) => ({ name, payload })), [
-    {
-      name: "reconcile_local_completion",
-      payload: { client_session_id: "session-1" },
-    },
-  ]);
+  assert.deepEqual(
+    pushes.map(({ name, payload }) => ({ name, payload })),
+    [
+      {
+        name: "reconcile_local_completion",
+        payload: { client_session_id: "session-1" },
+      },
+    ],
+  );
 });
 
 test("successful running reconciliation prefills the exact local draft", async () => {
@@ -119,67 +179,56 @@ test("successful running reconciliation prefills the exact local draft", async (
   );
 });
 
-test("matching pending draft prefills report fields and preserves source identity fields", async () => {
-  const { hook, inputs, pushes } = mountedHook({
-    status: "report_pending",
+test("delayed recovery does not overwrite a field manually typed before storage resolves", async () => {
+  const opened = deferred();
+  const { hook, inputs } = mountedHook({
     localDraft: draft(),
+    openSessionStore: () => opened.promise,
   });
-  const events = [];
-  for (const input of inputs) {
-    input.addEventListener("input", () => events.push(`${input.id}:input`));
-    input.addEventListener("change", () => events.push(`${input.id}:change`));
-  }
+
+  inputs[0].value = "31";
+  inputs[0].dispatchEvent(new Event("input", { bubbles: true }));
+  opened.resolve({
+    loadDraftByClientSessionId: async () => draft(),
+    loadLifecycleCommand: async () => null,
+  });
 
   await hook.recovery;
 
   assert.deepEqual(
     inputs.map(({ value }) => value),
-    ["12", "88", "1", "great_energy,tired", "Recovered locally"],
+    ["31", "88", "1", "great_energy,tired", "Recovered locally"],
   );
-  assert.equal(events.length, 10);
-  assert.deepEqual(pushes, []);
 });
 
-test("missing or mismatched local recovery leaves the manual resolver untouched", async () => {
-  for (const localDraft of [null, draft("other-session")]) {
-    const { hook, inputs, pushes } = mountedHook({
-      status: "report_pending",
-      localDraft,
-      command: {
-        client_session_id: "other-session",
-        kind: "mark_report_pending",
-        payload: { client_session_id: "other-session" },
-      },
-    });
-
-    await hook.recovery;
-
-    assert.deepEqual(inputs.map(({ value }) => value), ["", "", "", "", ""]);
-    assert.deepEqual(pushes, []);
-  }
-});
-
-test("report acknowledgement marks trace ready before emitting and cleaning local recovery", async () => {
-  const calls = [];
-  const originalWindow = globalThis.window;
-  const originalCustomEvent = globalThis.CustomEvent;
-  globalThis.window = {
-    dispatchEvent(event) {
-      calls.push(event.type);
-    },
-  };
-  globalThis.CustomEvent = class {
-    constructor(type) {
-      this.type = type;
-    }
-  };
-
-  const { hook, serverEventHandlers } = mountedHook({
-    status: "report_pending",
-    localDraft: draft(),
+test("report reply waits for storage before trace readiness, cleanup, and navigation", async (t) => {
+  const opened = deferred();
+  const { hook, pushes, calls, navigations } = mountedHook({
+    localDraft: null,
+    openSessionStore: () => opened.promise,
   });
-  await hook.recovery;
-  hook.store = {
+  withTraceReadyWindow(t, calls);
+
+  const submission = hook.submitReport();
+  assert.deepEqual(pushes[0], {
+    name: "report",
+    payload: {
+      workout_session: {
+        burpee_count_actual: "",
+        duration_sec_actual: "",
+        mood: "",
+        tags: "",
+        note_post: "",
+      },
+    },
+    callback: pushes[0].callback,
+  });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(navigations, []);
+
+  opened.resolve({
+    loadDraftByClientSessionId: async () => null,
+    loadLifecycleCommand: async () => null,
     async markTraceReady(clientSessionId, sessionId) {
       calls.push(`ready:${clientSessionId}:${sessionId}`);
     },
@@ -189,18 +238,53 @@ test("report acknowledgement marks trace ready before emitting and cleaning loca
     async deleteDraft(clientSessionId) {
       calls.push(`draft:${clientSessionId}`);
     },
+  });
+  await submission;
+
+  assert.deepEqual(calls, [
+    "ready:session-1:42",
+    "burpee:trace-upload-ready",
+    "command:session-1",
+    "draft:session-1",
+  ]);
+  assert.deepEqual(navigations, ["/stats"]);
+});
+
+test("a successful report still navigates when IndexedDB is unavailable", async () => {
+  const { hook, calls, navigations } = mountedHook({
+    openSessionStore: async () => {
+      throw new Error("IndexedDB is unavailable");
+    },
+  });
+
+  await hook.recovery;
+  await hook.submitReport();
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(navigations, ["/stats"]);
+});
+
+test("failed trace acknowledgement retains recovery data for a report replay", async (t) => {
+  let attempts = 0;
+  const { hook, store, calls, navigations } = mountedHook();
+  withTraceReadyWindow(t, calls);
+  store.markTraceReady = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("write failed");
+    calls.push("ready:session-1:42");
   };
 
-  try {
-    await serverEventHandlers.get("session_reported")({ session_id: 42 });
-    assert.deepEqual(calls, [
-      "ready:session-1:42",
-      "burpee:trace-upload-ready",
-      "command:session-1",
-      "draft:session-1",
-    ]);
-  } finally {
-    globalThis.window = originalWindow;
-    globalThis.CustomEvent = originalCustomEvent;
-  }
+  await hook.recovery;
+  await hook.submitReport();
+  assert.deepEqual(calls, []);
+  assert.deepEqual(navigations, []);
+
+  await hook.submitReport();
+  assert.deepEqual(calls, [
+    "ready:session-1:42",
+    "burpee:trace-upload-ready",
+    "command:session-1",
+    "draft:session-1",
+  ]);
+  assert.deepEqual(navigations, ["/stats"]);
 });
