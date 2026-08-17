@@ -81,6 +81,71 @@ test("warmup arm is consumed before warmup begins", () => {
   assert.deepEqual(stale.commands, []);
 });
 
+test("camera begin conflict restores the warmup gesture and timeout", () => {
+  const warmupTimeline = [{ kind: "work", reps: 2, sec_per_rep: 5 }];
+  let state = readyCameraState();
+  state = step(state, {
+    type: "GESTURE_CONFIRM",
+    step: "camera_setup",
+  }).state;
+
+  const requested = step(state, {
+    type: "GESTURE_CONFIRM",
+    step: "warmup",
+    warmupTimeline,
+    burpeeCountTarget: 2,
+  });
+  const recovered = step(requested.state, { type: "SESSION_BEGIN_FAILED" });
+
+  assert.equal(recovered.state.mode, "warmup_choice");
+  assert.equal(recovered.state.armedStep, "warmup");
+  assert.equal(recovered.state.pendingRuntime, null);
+  assert.deepEqual(recovered.commands, [
+    { type: "armGesture", step: "warmup" },
+    { type: "startWarmupTimeout", step: "warmup" },
+    { type: "renderFlow" },
+  ]);
+
+  const retried = step(recovered.state, {
+    type: "GESTURE_CONFIRM",
+    step: "warmup",
+    warmupTimeline,
+    burpeeCountTarget: 2,
+  });
+  assert.equal(retried.state.mode, "starting_session");
+  assert.deepEqual(retried.state.pendingRuntime, requested.state.pendingRuntime);
+});
+
+test("camera begin conflict restores the workout-start gesture", () => {
+  let state = readyCameraState();
+  state = step(state, {
+    type: "GESTURE_CONFIRM",
+    step: "camera_setup",
+  }).state;
+  state = step(state, { type: "WARMUP_TIMEOUT", step: "warmup" }).state;
+
+  const requested = step(state, {
+    type: "GESTURE_CONFIRM",
+    step: "workout_start",
+  });
+  const recovered = step(requested.state, { type: "SESSION_BEGIN_FAILED" });
+
+  assert.equal(recovered.state.mode, "workout_ready");
+  assert.equal(recovered.state.armedStep, "workout_start");
+  assert.equal(recovered.state.pendingRuntime, null);
+  assert.deepEqual(recovered.commands, [
+    { type: "armGesture", step: "workout_start" },
+    { type: "renderFlow" },
+  ]);
+
+  const retried = step(recovered.state, {
+    type: "GESTURE_CONFIRM",
+    step: "workout_start",
+  });
+  assert.equal(retried.state.mode, "starting_session");
+  assert.deepEqual(retried.state.pendingRuntime, requested.state.pendingRuntime);
+});
+
 test("warmup timeout pauses on readiness loss and ignores stale expiry", () => {
   let state = readyCameraState();
   state = step(state, {

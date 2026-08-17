@@ -103,10 +103,21 @@ function enterWorkoutReady(state, commands = []) {
 }
 
 function requestRuntime(state, pendingRuntime, commands = []) {
+  const restartWarmupTimeout =
+    state.captureMode === "camera" &&
+    state.mode === "warmup_choice" &&
+    state.armedStep === "warmup";
+  const pending = {
+    ...pendingRuntime,
+    restoreArmedStep:
+      state.captureMode === "camera" ? state.armedStep : null,
+    restartWarmupTimeout,
+  };
+
   return moved(
     state,
-    { mode: "starting_session", armedStep: null, pendingRuntime },
-    [...commands, { type: "persistBeginAndRequest", pendingRuntime }, { type: "renderFlow" }],
+    { mode: "starting_session", armedStep: null, pendingRuntime: pending },
+    [...commands, { type: "persistBeginAndRequest", pendingRuntime: pending }, { type: "renderFlow" }],
   );
 }
 
@@ -385,14 +396,33 @@ export function flowTransition(state, event) {
       if (state.mode !== "starting_session") return unchanged(state);
       return beginAcknowledged(state);
 
-    case "SESSION_BEGIN_FAILED":
+    case "SESSION_BEGIN_FAILED": {
       if (state.mode !== "starting_session" || !state.pendingRuntime) {
         return unchanged(state);
       }
-      return moved(state, {
-        mode: state.pendingRuntime.readyMode,
-        pendingRuntime: null,
-      });
+
+      const pendingRuntime = state.pendingRuntime;
+      const commands = [];
+      if (pendingRuntime.restoreArmedStep) {
+        commands.push({
+          type: "armGesture",
+          step: pendingRuntime.restoreArmedStep,
+        });
+      }
+      if (pendingRuntime.restartWarmupTimeout) {
+        commands.push({ type: "startWarmupTimeout", step: "warmup" });
+      }
+
+      return moved(
+        state,
+        {
+          mode: pendingRuntime.readyMode,
+          armedStep: pendingRuntime.restoreArmedStep,
+          pendingRuntime: null,
+        },
+        [...commands, { type: "renderFlow" }],
+      );
+    }
 
     case "WARMUP_TIMEOUT_TICK":
       if (
