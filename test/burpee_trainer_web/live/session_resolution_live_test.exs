@@ -23,7 +23,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
 
     assert has_element?(
              view,
-             "#session-resolution[data-client-session-id='#{session.client_session_id}']"
+             "#session-resolution[phx-hook='SessionRecoveryHook'][data-client-session-id='#{session.client_session_id}'][data-session-status='running']"
            )
 
     assert has_element?(view, "#session-resolution-status", "must be logged or discarded")
@@ -32,6 +32,52 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     assert has_element?(view, "#session-resolution-source", "Recovery plan")
     assert has_element?(view, "#session-resolution-planned-count", "30")
     assert has_element?(view, "#session-resolution-planned-duration", "20:00")
+  end
+
+  test "reconciles only the mounted running session UUID", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    session = lifecycle_session(user, plan)
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
+
+    render_hook(view, "reconcile_local_completion", %{})
+    assert Repo.get!(WorkoutSession, session.id).status == :running
+
+    render_hook(view, "reconcile_local_completion", %{
+      "client_session_id" => Ecto.UUID.generate()
+    })
+
+    assert Repo.get!(WorkoutSession, session.id).status == :running
+
+    render_hook(view, "reconcile_local_completion", %{
+      "client_session_id" => session.client_session_id
+    })
+
+    assert Repo.get!(WorkoutSession, session.id).status == :report_pending
+  end
+
+  test "manual report pushes a stable recovery acknowledgement before redirect", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user)
+    session = lifecycle_session(user, plan, pending?: true)
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
+
+    view
+    |> element("#session-resolution-form")
+    |> render_submit(%{
+      "workout_session" => %{
+        "burpee_count_actual" => "17",
+        "duration_sec_actual" => "95",
+        "mood" => "1",
+        "tags" => "great_energy",
+        "note_post" => "Recovered manually"
+      }
+    })
+
+    session_id = session.id
+    assert_push_event(view, "session_reported", %{session_id: ^session_id})
+    assert_redirect(view, ~p"/stats")
   end
 
   test "manual reporting updates the exact running or pending row without another row", %{

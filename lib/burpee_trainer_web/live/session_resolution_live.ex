@@ -35,8 +35,14 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
            attrs,
            %{}
          ) do
-      {:ok, _reported, _result} ->
-        {:noreply, push_navigate(socket, to: ~p"/stats")}
+      {:ok, reported, _result} ->
+        {:noreply,
+         socket
+         |> push_event("session_reported", %{
+           session_id: reported.id,
+           client_session_id: reported.client_session_id
+         })
+         |> push_navigate(to: ~p"/stats")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply,
@@ -50,6 +56,30 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
          |> put_flash(:error, "This workout is no longer available to report.")
          |> push_navigate(to: ~p"/stats")}
     end
+  end
+
+  def handle_event(
+        "reconcile_local_completion",
+        %{"client_session_id" => client_session_id},
+        socket
+      ) do
+    session = socket.assigns.session
+
+    with true <- client_session_id == session.client_session_id,
+         :running <- session.status,
+         {:ok, reconciled} <-
+           Workouts.mark_report_pending(socket.assigns.current_user, client_session_id) do
+      {:reply, lifecycle_reply(reconciled),
+       socket
+       |> assign(:session, reconciled)
+       |> assign(:form, to_form(Workouts.change_session_for_report(reconciled)))}
+    else
+      _ -> {:reply, lifecycle_error_reply(), socket}
+    end
+  end
+
+  def handle_event("reconcile_local_completion", _params, socket) do
+    {:reply, lifecycle_error_reply(), socket}
   end
 
   def handle_event("report", _params, socket) do
@@ -88,7 +118,9 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
     >
       <div
         id="session-resolution"
+        phx-hook="SessionRecoveryHook"
         data-client-session-id={@session.client_session_id}
+        data-session-status={@session.status}
         class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]"
       >
         <section class="space-y-2">
@@ -197,6 +229,23 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp lifecycle_reply(session) do
+    %{
+      status: "ok",
+      session_id: session.id,
+      client_session_id: session.client_session_id,
+      lifecycle_status: Atom.to_string(session.status)
+    }
+  end
+
+  defp lifecycle_error_reply do
+    %{
+      status: "error",
+      message: "Could not update workout lifecycle. Try again.",
+      retryable: true
+    }
   end
 
   defp unresolved_session(user, id) do

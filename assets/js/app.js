@@ -25,6 +25,7 @@ import { LiveSocket } from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
 import SessionHook from "./hooks/session_hook";
+import SessionRecoveryHook from "./hooks/session_recovery_hook";
 import VideoHook from "./hooks/video_hook";
 import PoseTracker from "./hooks/pose_tracker";
 import PoseDebug from "./hooks/pose_debug";
@@ -103,6 +104,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
 	hooks: {
 		ChartHook,
 		SessionHook,
+		SessionRecoveryHook,
 		VideoHook,
 		PoseTracker,
 		PoseDebug,
