@@ -18,28 +18,69 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    video = Videos.get_video!(String.to_integer(id))
-    duration_min = div(video.duration_sec, 60)
+    user = socket.assigns.current_user
 
-    changeset =
-      Workouts.change_free_form_session(%WorkoutSession{}, %{
-        "burpee_type" => Atom.to_string(video.burpee_type),
-        "duration_sec_actual" => video.duration_sec
-      })
+    case Workouts.get_unresolved_session(user) do
+      %WorkoutSession{} = workout_session ->
+        {:ok, push_navigate(socket, to: ~p"/sessions/#{workout_session.id}/resolve")}
 
-    {:ok,
-     socket
-     |> assign(:video, video)
-     |> assign(:log_visible, false)
-     |> assign(:mood, 0)
-     |> assign(:log_tags, [])
-     |> assign(:duration_min, to_string(duration_min))
-     |> assign(:form, to_form(changeset))}
+      nil ->
+        video = Videos.get_video!(String.to_integer(id))
+
+        {:ok,
+         socket
+         |> assign(:video, video)
+         |> assign(:client_session_id, nil)
+         |> assign(:lifecycle_session, nil)
+         |> assign(:video_started, false)
+         |> assign(:log_visible, false)
+         |> assign(:mood, 0)
+         |> assign(:log_tags, [])
+         |> assign(:duration_min, to_string(div(video.duration_sec, 60)))
+         |> assign(:form, to_form(Workouts.change_free_form_session(%WorkoutSession{})))}
+    end
   end
 
   @impl true
-  def handle_event("video_ended", _params, socket) do
-    {:noreply, assign(socket, :log_visible, true)}
+  def handle_event("begin_video_session", %{"client_session_id" => client_session_id}, socket) do
+    case begin_video_session(socket, client_session_id) do
+      {:ok, session} ->
+        {:reply, lifecycle_reply({:ok, session}),
+         socket
+         |> assign(:client_session_id, session.client_session_id)
+         |> assign(:lifecycle_session, session)
+         |> assign(:video_started, true)}
+
+      {:error, reason} ->
+        {:reply, lifecycle_error_reply(reason), socket}
+    end
+  end
+
+  def handle_event("begin_video_session", _params, socket) do
+    {:reply, lifecycle_error_reply(:not_found), socket}
+  end
+
+  def handle_event(
+        "mark_video_report_pending",
+        %{"client_session_id" => client_session_id},
+        socket
+      ) do
+    case mark_video_report_pending(socket, client_session_id) do
+      {:ok, session} ->
+        {:reply, lifecycle_reply({:ok, session}),
+         socket
+         |> assign(:lifecycle_session, session)
+         |> assign(:log_visible, true)
+         |> assign(:form, to_form(report_changeset(session, default_report_attrs(session))))
+         |> assign(:duration_min, to_string(div(session.duration_sec_planned || 0, 60)))}
+
+      {:error, reason} ->
+        {:reply, lifecycle_error_reply(reason), socket}
+    end
+  end
+
+  def handle_event("mark_video_report_pending", _params, socket) do
+    {:reply, lifecycle_error_reply(:not_found), socket}
   end
 
   def handle_event("set_mood", %{"mood" => mood_str}, socket) do
@@ -60,13 +101,13 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   def handle_event("validate", %{"workout_session" => params}, socket) do
     {params, duration_min} = apply_duration_min(params)
+    changeset = report_changeset(socket.assigns.lifecycle_session, params)
 
-    changeset =
-      %WorkoutSession{}
-      |> Workouts.change_free_form_session(params)
-      |> Map.put(:action, :validate)
-
-    {:noreply, assign(socket, form: to_form(changeset), duration_min: duration_min)}
+    {:noreply,
+     assign(socket,
+       form: to_form(Map.put(changeset, :action, :validate)),
+       duration_min: duration_min
+     )}
   end
 
   def handle_event("save", %{"workout_session" => params}, socket) do
@@ -77,8 +118,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       |> Map.put("mood", socket.assigns.mood)
       |> Map.put("tags", socket.assigns.log_tags |> Enum.sort() |> Enum.join(","))
 
-    case Workouts.create_free_form_session(socket.assigns.current_user, params) do
-      {:ok, session} ->
+    case report_video_session(socket, params) do
+      {:ok, session, _result} ->
         _events = Workouts.session_milestones(socket.assigns.current_user, session)
 
         {:noreply,
@@ -86,9 +127,110 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
          |> put_flash(:info, "Session logged.")
          |> push_navigate(to: ~p"/stats")}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, form: to_form(changeset), duration_min: duration_min)}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not save this workout. Try again.")
+         |> assign(:duration_min, duration_min)}
     end
+  end
+
+  defp begin_video_session(socket, client_session_id) do
+    with :ok <- claim_client_session_id(socket, client_session_id) do
+      Workouts.begin_video_session(
+        socket.assigns.current_user,
+        socket.assigns.video,
+        client_session_id
+      )
+    end
+  end
+
+  defp mark_video_report_pending(socket, client_session_id) do
+    with :ok <- mounted_client_session?(socket, client_session_id) do
+      Workouts.mark_report_pending(socket.assigns.current_user, client_session_id)
+    end
+  end
+
+  defp report_video_session(socket, params) do
+    with :ok <- mounted_client_session?(socket, socket.assigns.client_session_id) do
+      Workouts.report_session(
+        socket.assigns.current_user,
+        socket.assigns.client_session_id,
+        params,
+        %{"enabled" => false, "trust" => "manual"}
+      )
+    end
+  end
+
+  defp claim_client_session_id(socket, client_session_id) do
+    if socket.assigns.client_session_id in [nil, client_session_id] and
+         match?({:ok, _}, Ecto.UUID.cast(client_session_id)) do
+      :ok
+    else
+      {:error, :not_found}
+    end
+  end
+
+  defp mounted_client_session?(socket, client_session_id) do
+    if socket.assigns.client_session_id == client_session_id and
+         match?({:ok, _}, Ecto.UUID.cast(client_session_id)) do
+      :ok
+    else
+      {:error, :not_found}
+    end
+  end
+
+  defp default_report_attrs(session) do
+    %{
+      "burpee_count_actual" => session.burpee_count_planned,
+      "duration_sec_actual" => session.duration_sec_planned
+    }
+  end
+
+  defp report_changeset(session, attrs)
+
+  defp report_changeset(%WorkoutSession{} = session, attrs) do
+    Workouts.change_session_for_report(session, attrs)
+  end
+
+  defp report_changeset(nil, attrs) do
+    Workouts.change_free_form_session(%WorkoutSession{}, attrs)
+  end
+
+  defp lifecycle_reply({:ok, session}) do
+    %{
+      status: "ok",
+      client_session_id: session.client_session_id,
+      session_id: session.id,
+      lifecycle_status: Atom.to_string(session.status)
+    }
+  end
+
+  defp lifecycle_error_reply({:unresolved_session, %WorkoutSession{} = session}) do
+    %{
+      status: "error",
+      reason: "unresolved_session",
+      message: "Finish or discard your current workout before starting another one.",
+      retryable: true,
+      session_id: session.id,
+      resolve_to: ~p"/sessions/#{session.id}/resolve"
+    }
+  end
+
+  defp lifecycle_error_reply(reason) when is_atom(reason) do
+    %{
+      status: "error",
+      reason: Atom.to_string(reason),
+      message: "Could not update workout lifecycle. Try again.",
+      retryable: reason not in [:aborted, :already_reported, :report_conflict]
+    }
+  end
+
+  defp lifecycle_error_reply(_reason) do
+    %{status: "error", message: "Could not update workout lifecycle. Try again.", retryable: true}
   end
 
   defp apply_duration_min(params) do
@@ -152,11 +294,53 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
             id="workout-video"
             phx-hook="VideoHook"
             src={~p"/videos/stream/#{@video.filename}"}
-            controls
+            controls={@video_started}
             class="w-full"
           >
           </video>
         </div>
+
+        <section class="space-y-3" aria-label="Video workout lifecycle">
+          <button
+            id="video-start-workout"
+            type="button"
+            disabled={@video_started}
+            class="w-full rounded-md bg-[var(--session-ink)] px-4 py-3 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {if @video_started, do: "Workout started", else: "Start workout"}
+          </button>
+          <p
+            id="video-lifecycle-status"
+            role="status"
+            aria-live="polite"
+            class="text-sm text-[var(--session-muted)]"
+          >
+            Start the workout to enable video playback and durable reporting.
+          </p>
+          <p
+            id="video-lifecycle-error"
+            role="alert"
+            hidden
+            class="text-sm text-red-700"
+          >
+          </p>
+          <.link
+            id="video-resolve-session"
+            navigate={~p"/workouts"}
+            hidden
+            class="text-sm font-medium text-[var(--session-ink)] underline underline-offset-4"
+          >
+            Finish your current workout
+          </.link>
+          <button
+            id="video-report-retry"
+            type="button"
+            hidden
+            class="rounded-md border border-[var(--session-border)] px-4 py-2 text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70"
+          >
+            Retry showing the report form
+          </button>
+        </section>
 
         <%= if not @log_visible do %>
           <.qs_surface class="flex items-center justify-between gap-4 bg-[var(--session-surface)]/55 p-5">
@@ -182,6 +366,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
             <.form
               for={@form}
               id="video-log-form"
+              data-client-session-id={@client_session_id}
               phx-change="validate"
               phx-submit="save"
               class="space-y-5"
