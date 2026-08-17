@@ -24,6 +24,11 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadController do
         |> put_status(:not_found)
         |> json(%{error: "not_found"})
 
+      {:error, :chunk_conflict} ->
+        conn
+        |> put_status(:conflict)
+        |> json(%{error: "chunk_conflict"})
+
       {:error, :invalid_batch} ->
         invalid_batch(conn)
 

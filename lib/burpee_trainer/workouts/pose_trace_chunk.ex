@@ -17,6 +17,7 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
     field(:ended_at_ms, :integer)
     field(:sample_count, :integer)
     field(:payload_json, :string)
+    field(:payload_digest, :string)
 
     belongs_to(:pose_capture_run, PoseCaptureRun)
 
@@ -52,6 +53,8 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
     |> validate_number(:sample_count, greater_than: 0, less_than_or_equal_to: @max_sample_count)
     |> validate_ended_after_started()
     |> validate_payload_json()
+    |> put_payload_digest()
+    |> validate_required([:payload_digest])
     |> unique_constraint(:chunk_index,
       name: :pose_trace_chunks_pose_capture_run_id_chunk_index_index
     )
@@ -90,6 +93,22 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
         add_error(changeset, :payload_json, "must be valid JSON")
     end
   end
+
+  defp put_payload_digest(%{valid?: true} = changeset) do
+    case get_field(changeset, :payload_json) do
+      payload_json when is_binary(payload_json) ->
+        put_change(
+          changeset,
+          :payload_digest,
+          :crypto.hash(:sha256, payload_json) |> Base.encode16(case: :lower)
+        )
+
+      _payload_json ->
+        changeset
+    end
+  end
+
+  defp put_payload_digest(changeset), do: changeset
 
   defp validate_ended_after_started(changeset) do
     started_at_ms = get_field(changeset, :started_at_ms)

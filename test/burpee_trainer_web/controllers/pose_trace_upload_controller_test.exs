@@ -49,9 +49,13 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert run.workout_session_id == session.id
     assert run.status == :active
     assert Enum.map(Repo.all(PoseTraceChunk), & &1.chunk_index) |> Enum.sort() == [0, 1]
+
+    assert Repo.get_by!(PoseTraceChunk, chunk_index: 0).payload_digest ==
+             :crypto.hash(:sha256, Jason.encode!(chunk(0)["payload"]))
+             |> Base.encode16(case: :lower)
   end
 
-  test "repeated batches acknowledge existing indexes without duplicates", %{conn: conn} do
+  test "repeated payloads acknowledge existing indexes without duplicates", %{conn: conn} do
     user = user_fixture()
     {_plan, session} = saved_session(user)
     payload = upload_payload(session.client_session_id, [chunk(0), chunk(1)])
@@ -65,6 +69,64 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert json_response(second, 200)["accepted_indexes"] == [0, 1]
     assert Repo.aggregate(PoseCaptureRun, :count) == 1
     assert Repo.aggregate(PoseTraceChunk, :count) == 2
+  end
+
+  test "client supplied digest is ignored in favor of the stored payload digest", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = saved_session(user)
+    poisoned_chunk = Map.put(chunk(0), "payload_digest", "client-supplied")
+
+    conn =
+      conn
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(session.client_session_id, [poisoned_chunk])
+      )
+
+    assert json_response(conn, 200)["accepted_indexes"] == [0]
+    refute Repo.get_by!(PoseTraceChunk, chunk_index: 0).payload_digest == "client-supplied"
+  end
+
+  test "changed duplicate payload returns conflict and rolls back the whole batch", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = saved_session(user)
+
+    first =
+      conn
+      |> authenticated_json(user)
+      |> post(~p"/api/session-pose-traces", upload_payload(session.client_session_id, [chunk(0)]))
+
+    assert json_response(first, 200)["accepted_indexes"] == [0]
+
+    changed_duplicate = put_in(chunk(0), ["payload", "samples"], [%{"tMs" => 999}])
+
+    conflict =
+      conn
+      |> recycle()
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(session.client_session_id, [chunk(1), changed_duplicate])
+      )
+
+    assert json_response(conflict, 409) == %{"error" => "chunk_conflict"}
+    assert Repo.all(PoseTraceChunk) |> Enum.map(& &1.chunk_index) == [0]
+  end
+
+  test "unresolved lifecycle session cannot receive deferred traces", %{conn: conn} do
+    user = user_fixture()
+    plan = plan_fixture(user)
+    client_session_id = Ecto.UUID.generate()
+    assert {:ok, _session} = Workouts.begin_plan_session(user, plan, client_session_id)
+
+    conn =
+      conn
+      |> authenticated_json(user)
+      |> post(~p"/api/session-pose-traces", upload_payload(client_session_id, [chunk(0)]))
+
+    assert json_response(conn, 404) == %{"error" => "not_found"}
+    assert Repo.all(PoseCaptureRun) == []
   end
 
   test "final batch marks the existing run completed", %{conn: conn} do
@@ -173,13 +235,20 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
 
   defp saved_session(user) do
     plan = plan_fixture(user)
+    client_session_id = Ecto.UUID.generate()
 
-    {:ok, session} =
-      Workouts.create_session_from_plan(user, plan, %{
-        "burpee_count_actual" => 30,
-        "duration_sec_actual" => 120,
-        "client_session_id" => Ecto.UUID.generate()
-      })
+    assert {:ok, _session} = Workouts.begin_plan_session(user, plan, client_session_id)
+
+    assert {:ok, session, :reported} =
+             Workouts.report_session(
+               user,
+               client_session_id,
+               %{
+                 "burpee_count_actual" => 30,
+                 "duration_sec_actual" => 120
+               },
+               %{}
+             )
 
     {plan, session}
   end

@@ -317,12 +317,13 @@ defmodule BurpeeTrainer.Workouts do
   @doc """
   Ingest a deferred pose-trace batch for an already-saved, user-scoped session.
 
-  Chunk indexes are idempotent per run. The run is completed only when the
-  caller marks the final acknowledged batch complete.
+  Chunk indexes are idempotent per run only when their stored payload digest
+  matches. The run is completed only when the caller marks the final
+  acknowledged batch complete.
   """
   @spec ingest_pose_trace_batch(User.t(), String.t(), [map()], boolean()) ::
           {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
-          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
+          | {:error, Ecto.Changeset.t() | :chunk_conflict | :invalid_batch | :not_found}
   def ingest_pose_trace_batch(
         %User{id: user_id},
         client_session_id,
@@ -336,7 +337,7 @@ defmodule BurpeeTrainer.Workouts do
              user_id: user_id,
              client_session_id: client_session_id
            ) do
-        %WorkoutSession{plan_id: plan_id} = session when not is_nil(plan_id) ->
+        %WorkoutSession{plan_id: plan_id, status: :reported} = session when not is_nil(plan_id) ->
           {:ok, session}
 
         _session ->
@@ -406,14 +407,30 @@ defmodule BurpeeTrainer.Workouts do
                on_conflict: :nothing,
                conflict_target: [:pose_capture_run_id, :chunk_index]
              ) do
-          {:ok, _chunk} -> {:cont, {:ok, [index | indexes]}}
-          {:error, changeset} -> {:halt, {:error, changeset}}
+          {:ok, _chunk} ->
+            case acknowledge_matching_chunk(repo, run.id, index, changeset) do
+              :ok -> {:cont, {:ok, [index | indexes]}}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
+
+          {:error, changeset} ->
+            {:halt, {:error, changeset}}
         end
       end)
       |> case do
         {:ok, indexes} -> {:ok, indexes |> Enum.reverse() |> Enum.uniq() |> Enum.sort()}
-        {:error, changeset} -> {:error, changeset}
+        {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  defp acknowledge_matching_chunk(repo, run_id, index, changeset) do
+    digest = Ecto.Changeset.get_field(changeset, :payload_digest)
+
+    case repo.get_by(PoseTraceChunk, pose_capture_run_id: run_id, chunk_index: index) do
+      %PoseTraceChunk{payload_digest: ^digest} -> :ok
+      %PoseTraceChunk{} -> {:error, :chunk_conflict}
+      nil -> {:error, :chunk_conflict}
     end
   end
 

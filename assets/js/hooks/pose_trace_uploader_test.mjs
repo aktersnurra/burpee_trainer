@@ -228,6 +228,20 @@ test("413 retains the queued chunks and ready marker", async () => {
 	assert.equal(store.uploadMarkerExists(), true);
 });
 
+test("409 conflict retains every queued chunk and ready marker", async () => {
+	const store = uploadStore([chunk(0), chunk(1)]);
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async () => ({ ok: false, status: 409 }),
+		csrfToken: "token",
+	});
+
+	await uploader.drain();
+
+	assert.deepEqual(store.remainingIndexes(), [0, 1]);
+	assert.equal(store.uploadMarkerExists(), true);
+});
+
 test("concurrent drains share one in-flight request", async () => {
 	const store = uploadStore([chunk(0)]);
 	let resolveRequest;
