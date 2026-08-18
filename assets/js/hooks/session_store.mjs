@@ -14,20 +14,6 @@ export function createSessionStore(engine) {
       });
     },
 
-    async loadDraft({ planId, programHash }) {
-      const drafts = await engine.all(DRAFTS);
-      const matches = drafts.filter(
-        (draft) =>
-          draft.plan_id === planId && draft.program_hash === programHash,
-      );
-
-      return (
-        matches.sort(
-          (left, right) => right.updated_at_ms - left.updated_at_ms,
-        )[0] || null
-      );
-    },
-
     async deleteDraft(clientSessionId) {
       await engine.delete(DRAFTS, clientSessionId);
     },

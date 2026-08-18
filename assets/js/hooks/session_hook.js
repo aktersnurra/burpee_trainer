@@ -299,14 +299,14 @@ const SessionHook = {
 				if (!store || this.discarding || !this.lifecycleActive(generation)) {
 					return;
 				}
-				const draft = await store.loadDraft({
-					planId: this.planId,
-					programHash: this.programHash,
-				});
+				const clientSessionId = this.clientSessionId;
+				const draft = store.loadDraftByClientSessionId
+					? await store.loadDraftByClientSessionId(clientSessionId)
+					: null;
 				if (this.lifecycleActive(generation) && !this.discarding) {
 					const command =
-						draft?.client_session_id && store.loadLifecycleCommand
-							? await store.loadLifecycleCommand(draft.client_session_id)
+						draft && store.loadLifecycleCommand
+							? await store.loadLifecycleCommand(clientSessionId)
 							: null;
 					this.restoreCompletionDraft(draft, command);
 				}
@@ -594,6 +594,7 @@ const SessionHook = {
 			draft.plan_id !== this.planId ||
 			draft.program_hash !== this.programHash ||
 			!draft.client_session_id ||
+			draft.client_session_id !== this.clientSessionId ||
 			this.flow.mode !== "capture_choice"
 		) {
 			return;
@@ -614,7 +615,6 @@ const SessionHook = {
 			notePost: draft.note_post || "",
 		};
 
-		this.clientSessionId = draft.client_session_id;
 		this.inMemoryCompletionDraft = draft;
 		this.dispatchFlow({
 			type: "RESTORE_COMPLETION_DRAFT",
@@ -1011,6 +1011,7 @@ const SessionHook = {
 					this.activeSegment === "workout"
 						? this.workoutCompletionResult(command.result)
 						: command.result;
+				if (!result) break;
 				const cameraFinished =
 					this.activeSegment === "workout" &&
 					this.flow.captureMode === "camera" &&
@@ -1408,7 +1409,7 @@ const SessionHook = {
 			trackerFinished.duration_ms < 0 ||
 			!Array.isArray(trackerFinished.cadence_ms)
 		) {
-			return { ...timerResult, cadenceMs: [] };
+			return null;
 		}
 
 		this.dispatchFlow({ type: "TRACKING_FINISHED" });

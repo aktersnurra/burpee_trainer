@@ -1252,7 +1252,7 @@ test("trace chunks serialize without blocking the tracker event callback", async
 	let resolveFirst;
 	const calls = [];
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		appendTraceChunk(_clientSessionId, chunk) {
 			calls.push(structuredClone(chunk));
 			if (chunk.chunk_index === 0) {
@@ -1327,7 +1327,7 @@ test("trace write rejection degrades retention without changing workout flow", a
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
-			loadDraft: async () => null,
+			loadDraftByClientSessionId: async () => null,
 			appendTraceChunk: async () => {
 				throw new Error("write failed");
 			},
@@ -1348,7 +1348,7 @@ test("trace write rejection degrades retention without changing workout flow", a
 test("completion display and every stable edit queue the full draft", async () => {
 	const saved = [];
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		async saveDraft(draft) {
 			saved.push(structuredClone(draft));
 		},
@@ -1445,8 +1445,17 @@ test("completion display and every stable edit queue the full draft", async () =
 	ctx.destroyed();
 });
 
-test("exact plan and program draft restores its original client UUID", async () => {
-	const store = { loadDraft: async () => completionDraft() };
+test("completion draft restores only for the server-minted client UUID", async () => {
+	const exactDraft = completionDraft({
+		client_session_id: "client-1",
+		note_post: "Server lifecycle draft",
+	});
+	const store = {
+		loadDraftByClientSessionId: async (clientSessionId) => {
+			assert.equal(clientSessionId, "client-1");
+			return exactDraft;
+		},
+	};
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => store,
@@ -1454,12 +1463,12 @@ test("exact plan and program draft restores its original client UUID", async () 
 	await ctx.draftRestore;
 
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(ctx.clientSessionId, "original-client");
+	assert.equal(ctx.clientSessionId, "client-1");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
 	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
 	assert.equal(
 		ctx.el.querySelector("#completion-note-input").value,
-		"Strong finish",
+		"Server lifecycle draft",
 	);
 	assert.equal(
 		ctx.el
@@ -1477,7 +1486,7 @@ test("completion drafts omit absent-observation provenance", async () => {
 	const first = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
-			loadDraft: async () => null,
+			loadDraftByClientSessionId: async () => null,
 			async saveDraft(draft) {
 				saved.push(structuredClone(draft));
 			},
@@ -1523,7 +1532,7 @@ test("draft load settlement after destroy cannot restore, render, or save", asyn
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
-			loadDraft() {
+			loadDraftByClientSessionId() {
 				signalLoadStarted();
 				return draftPending;
 			},
@@ -1556,15 +1565,16 @@ test("draft load settlement after destroy cannot restore, render, or save", asyn
 	assert.deepEqual(saved, []);
 });
 
-test("mismatched plan or program draft is ignored", async () => {
+test("drafts with a mismatched plan, program, or lifecycle UUID are ignored", async () => {
 	for (const mismatch of [
 		{ plan_id: "other-plan" },
 		{ program_hash: "other-hash" },
+		{ client_session_id: "newest-client" },
 	]) {
 		const ctx = mountedFlowHarness({
 			poseTrackerReady: true,
 			openSessionStore: async () => ({
-				loadDraft: async () => completionDraft(mismatch),
+				loadDraftByClientSessionId: async () => completionDraft(mismatch),
 			}),
 		});
 		await ctx.draftRestore;
@@ -1577,9 +1587,10 @@ test("mismatched plan or program draft is ignored", async () => {
 test("confirmed discard clears local session data and emits zero server events", async () => {
 	const local = { draft: true, chunks: [0, 1], upload: true };
 	const store = {
-		loadDraft: async () => completionDraft(),
+		loadDraftByClientSessionId: async () =>
+			completionDraft({ client_session_id: "client-1" }),
 		async discardSession(clientSessionId) {
-			assert.equal(clientSessionId, "original-client");
+			assert.equal(clientSessionId, "client-1");
 			local.draft = false;
 			local.chunks = [];
 			local.upload = false;
@@ -1676,7 +1687,7 @@ test("discard retains recovery data until the abort acknowledgement and local cl
 		assert.deepEqual(navigations, []);
 
 		resolveOpen({
-			async loadDraft() {
+			async loadDraftByClientSessionId() {
 				storageCalls.push("restore");
 				return completionDraft();
 			},
@@ -1748,6 +1759,13 @@ test("camera through completion review requires no server event", async () => {
 			trackerCommands.push({ type, detail: event.detail }),
 		);
 	}
+	tracker.addEventListener("pose-tracker:finish", () => {
+		trackerEvent(ctx, "pose-tracker:finished", {
+			reps: 0,
+			duration_ms: 10_000,
+			cadence_ms: [],
+		});
+	});
 
 	assert.equal(ctx.flow.mode, "capture_choice");
 	assert.equal(ctx.el.querySelector("#session-capture-choice").hidden, false);
@@ -1797,7 +1815,7 @@ test("camera through completion review requires no server event", async () => {
 		ctx.el.querySelector("#session-completion-review").hidden,
 		false,
 	);
-	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "0");
 	assert.equal(
 		ctx.el.querySelector("#session-actual-duration").textContent,
 		"0:10",
@@ -2747,20 +2765,18 @@ test("trusted completion consumes synchronous tracker output before stop", () =>
 	ctx.destroyed();
 });
 
-test("missing tracker finish does not classify the camera session as degraded", () => {
+test("unavailable tracker finish cannot complete a camera session with timer values", () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	prepareTrustedCompletion(ctx);
 
-	const result = ctx.workoutCompletionResult({
-		burpeeCountDone: 5,
-		durationSec: 10,
+	ctx.runSegmentCommand({
+		type: "segmentDone",
+		result: { burpeeCountDone: 5, durationSec: 10 },
 	});
 
-	assert.deepEqual(result, {
-		burpeeCountDone: 5,
-		durationSec: 10,
-		cadenceMs: [],
-	});
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.flow.completion, null);
+	assert.equal(ctx.inMemoryCompletionDraft, null);
 	assert.equal(ctx.flow.trackingTrust, "observing");
 	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
 	ctx.destroyed();
@@ -2862,7 +2878,7 @@ function submitCompletion(ctx) {
 
 test("final Save is the only server event and keeps invalid drafts editable", async () => {
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 	};
 	const ctx = mountedFlowHarness({
 		openSessionStore: async () => store,
@@ -2928,7 +2944,7 @@ test("final Save is the only server event and keeps invalid drafts editable", as
 test("successful Save marks buffered traces ready before deleting draft and navigating", async () => {
 	const order = [];
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		hasTraceChunks: async (clientSessionId) => {
 			order.push(["has", clientSessionId]);
 			return true;
@@ -2976,7 +2992,7 @@ test("successful Save marks buffered traces ready before deleting draft and navi
 test("successful Save without trace chunks skips upload marker", async () => {
 	const calls = [];
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		hasTraceChunks: async () => false,
 		markTraceReady: async () => calls.push("mark"),
 		deleteDraft: async () => calls.push("delete"),
@@ -3014,7 +3030,7 @@ test("successful Save without trace chunks skips upload marker", async () => {
 
 test("disconnected Save keeps controls and local draft available", () => {
 	const ctx = mountedFlowHarness({
-		openSessionStore: async () => ({ loadDraft: async () => null }),
+		openSessionStore: async () => ({ loadDraftByClientSessionId: async () => null }),
 	});
 	prepareSaveReview(ctx);
 	let callback;
@@ -3036,7 +3052,7 @@ test("disconnected Save keeps controls and local draft available", () => {
 
 test("begin lifecycle conflicts restore the ready UI and surface server resolution", async () => {
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		saveLifecycleCommand: async () => {},
 	};
 	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
@@ -3081,7 +3097,7 @@ test("begin lifecycle conflicts restore the ready UI and surface server resoluti
 test("lifecycle begin and pending commands persist before their server events", async () => {
 	const order = [];
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		async saveDraft() {
 			order.push("draft");
 		},
@@ -3122,7 +3138,7 @@ test("lifecycle begin and pending commands persist before their server events", 
 test("pending failure retains recovery data and retry resends its persisted command", async () => {
 	const calls = [];
 	const store = {
-		loadDraft: async () => null,
+		loadDraftByClientSessionId: async () => null,
 		async saveDraft() {
 			calls.push("draft");
 		},

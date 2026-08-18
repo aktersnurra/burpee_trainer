@@ -117,42 +117,25 @@ function fakeIndexedDbHarness() {
 
 const flushEvents = () => new Promise((resolve) => setImmediate(resolve));
 
-test("loadDraft returns the latest exact plan and program match", async () => {
-  const originalNow = Date.now;
-  const timestamps = [100, 200, 300];
-  Date.now = () => timestamps.shift();
+test("draft lookup restores only the requested client UUID", async () => {
+  const store = createSessionStore(memoryEngine());
+  await store.saveDraft({
+    client_session_id: "session-1",
+    plan_id: 7,
+    program_hash: "abc",
+    burpee_count_actual: 12,
+  });
+  await store.saveDraft({
+    client_session_id: "session-2",
+    plan_id: 7,
+    program_hash: "abc",
+    burpee_count_actual: 13,
+  });
 
-  try {
-    const store = createSessionStore(memoryEngine());
-    await store.saveDraft({
-      client_session_id: "session-1",
-      plan_id: 7,
-      program_hash: "abc",
-      burpee_count_actual: 12,
-    });
-    await store.saveDraft({
-      client_session_id: "session-2",
-      plan_id: 7,
-      program_hash: "abc",
-      burpee_count_actual: 13,
-    });
-    await store.saveDraft({
-      client_session_id: "session-3",
-      plan_id: 7,
-      program_hash: "different",
-      burpee_count_actual: 99,
-    });
-
-    const draft = await store.loadDraft({ planId: 7, programHash: "abc" });
-    assert.equal(draft.client_session_id, "session-2");
-    assert.equal(draft.burpee_count_actual, 13);
-    assert.equal(
-      await store.loadDraft({ planId: 8, programHash: "abc" }),
-      null,
-    );
-  } finally {
-    Date.now = originalNow;
-  }
+  const draft = await store.loadDraftByClientSessionId("session-1");
+  assert.equal(draft.client_session_id, "session-1");
+  assert.equal(draft.burpee_count_actual, 12);
+  assert.equal(await store.loadDraftByClientSessionId("unknown-session"), null);
 });
 
 test("lifecycle commands and exact UUID drafts are independently addressable", async () => {
@@ -291,7 +274,7 @@ test("discard removes draft, lifecycle command, chunks, and upload marker", asyn
 
   await store.discardSession("session-1");
 
-  assert.equal(await store.loadDraft({ planId: 7, programHash: "abc" }), null);
+  assert.equal(await store.loadDraftByClientSessionId("session-1"), null);
   assert.equal(await store.loadLifecycleCommand("session-1"), null);
   assert.deepEqual(await store.listTraceChunks("session-1"), []);
   assert.deepEqual(await store.listReadyTraceUploads(), []);
@@ -385,10 +368,9 @@ test("deleteDraft removes only the selected completion", async () => {
 
   await store.deleteDraft("session-1");
 
-  assert.equal(await store.loadDraft({ planId: 7, programHash: "abc" }), null);
+  assert.equal(await store.loadDraftByClientSessionId("session-1"), null);
   assert.equal(
-    (await store.loadDraft({ planId: 8, programHash: "def" }))
-      .client_session_id,
+    (await store.loadDraftByClientSessionId("session-2")).client_session_id,
     "session-2",
   );
 });
