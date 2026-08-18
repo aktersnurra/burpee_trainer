@@ -343,6 +343,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	}
 
 	function finish(event) {
+		if (!running) return;
 		const elapsedMs = startedAt === null ? 0 : now() - startedAt;
 		const flushed = flushPoseCaptureRecorder(captureRecorder, {
 			reason: "finish",

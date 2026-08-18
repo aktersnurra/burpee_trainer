@@ -2782,6 +2782,39 @@ test("unavailable tracker finish cannot complete a camera session with timer val
 	ctx.destroyed();
 });
 
+test("detector error followed by segment end creates no trusted camera completion or draft", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	const readyFrames = Array.from({ length: 8 }, (_, index) =>
+		trackerFrame(trackerSample({ tMs: index * 100 })),
+	);
+	const harness = poseTrackerHarness({
+		frames: readyFrames,
+		detectorThrowsAfterReady: true,
+		trackerElement: ctx.el.querySelector("#pose-tracker"),
+	});
+
+	try {
+		await harness.impl.mounted();
+		await harness.start();
+		await harness.runUntilConsumed(8);
+		await harness.runUntilConsumed(9).catch(() => {});
+		prepareTrustedCompletion(ctx);
+
+		ctx.runSegmentCommand({
+			type: "segmentDone",
+			result: { burpeeCountDone: 5, durationSec: 10 },
+		});
+
+		assert.equal(ctx.flow.mode, "workout_running");
+		assert.equal(ctx.flow.completion, null);
+		assert.equal(ctx.inMemoryCompletionDraft, null);
+		assert.equal(ctx.flow.trackingTrust, "observing");
+	} finally {
+		harness.poseTracker.destroyed();
+		ctx.destroyed();
+	}
+});
+
 test("real trusted completion handshake preserves finish data and cleans tracker resources", async () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	const harness = poseTrackerHarness({
