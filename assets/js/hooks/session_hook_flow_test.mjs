@@ -450,15 +450,27 @@ function buildHarness({
 		lastDownCueKey: null,
 		pushEvent(name, payload, callback) {
 			if (name === "begin_session") {
-				callback?.({ status: "ok", session_id: 1, lifecycle_status: "running" });
+				callback?.({
+					status: "ok",
+					session_id: 1,
+					lifecycle_status: "running",
+				});
 				return;
 			}
 			if (name === "mark_report_pending") {
-				callback?.({ status: "ok", session_id: 1, lifecycle_status: "report_pending" });
+				callback?.({
+					status: "ok",
+					session_id: 1,
+					lifecycle_status: "report_pending",
+				});
 				return;
 			}
 			if (name === "abort_session") {
-				callback?.({ status: "ok", session_id: 1, lifecycle_status: "aborted" });
+				callback?.({
+					status: "ok",
+					session_id: 1,
+					lifecycle_status: "aborted",
+				});
 				return;
 			}
 			events.push({ name, payload });
@@ -3063,7 +3075,9 @@ test("successful Save without trace chunks skips upload marker", async () => {
 
 test("disconnected Save keeps controls and local draft available", () => {
 	const ctx = mountedFlowHarness({
-		openSessionStore: async () => ({ loadDraftByClientSessionId: async () => null }),
+		openSessionStore: async () => ({
+			loadDraftByClientSessionId: async () => null,
+		}),
 	});
 	prepareSaveReview(ctx);
 	let callback;
@@ -3088,7 +3102,10 @@ test("begin lifecycle conflicts restore the ready UI and surface server resoluti
 		loadDraftByClientSessionId: async () => null,
 		saveLifecycleCommand: async () => {},
 	};
-	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
+	const ctx = mountedFlowHarness({
+		openSessionStore: async () => store,
+		realLifecycle: true,
+	});
 	await ctx.draftRestore;
 	ctx.flow = { ...ctx.flow, mode: "workout_ready", captureMode: "no_camera" };
 	let beginConflictsCleared = 0;
@@ -3103,7 +3120,8 @@ test("begin lifecycle conflicts restore the ready UI and surface server resoluti
 		callback({
 			status: "error",
 			reason: "unresolved_session",
-			message: "Finish or discard your current workout before starting another one.",
+			message:
+				"Finish or discard your current workout before starting another one.",
 			resolve_to: "/sessions/42/resolve",
 		});
 	};
@@ -3120,7 +3138,9 @@ test("begin lifecycle conflicts restore the ready UI and surface server resoluti
 		"Finish or discard your current workout before starting another one.",
 	);
 	assert.equal(
-		ctx.el.querySelector("#session-begin-conflict-resolve").getAttribute("href"),
+		ctx.el
+			.querySelector("#session-begin-conflict-resolve")
+			.getAttribute("href"),
 		"/sessions/42/resolve",
 	);
 	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, true);
@@ -3139,7 +3159,10 @@ test("lifecycle begin and pending commands persist before their server events", 
 		},
 		loadLifecycleCommand: async () => null,
 	};
-	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
+	const ctx = mountedFlowHarness({
+		openSessionStore: async () => store,
+		realLifecycle: true,
+	});
 	await ctx.draftRestore;
 	ctx.flow = { ...ctx.flow, mode: "workout_ready", captureMode: "no_camera" };
 	ctx.pushEvent = (name, _payload, callback) => {
@@ -3150,7 +3173,10 @@ test("lifecycle begin and pending commands persist before their server events", 
 	ctx.onWorkoutReady();
 	await flushHookPromises();
 	await flushHookPromises();
-	assert.deepEqual(order.slice(0, 2), ["command:begin_session", "event:begin_session"]);
+	assert.deepEqual(order.slice(0, 2), [
+		"command:begin_session",
+		"event:begin_session",
+	]);
 	assert.equal(ctx.flow.mode, "workout_running");
 
 	ctx.dispatchFlow({
@@ -3180,7 +3206,10 @@ test("pending failure retains recovery data and retry resends its persisted comm
 		},
 		loadLifecycleCommand: async () => null,
 	};
-	const ctx = mountedFlowHarness({ openSessionStore: async () => store, realLifecycle: true });
+	const ctx = mountedFlowHarness({
+		openSessionStore: async () => store,
+		realLifecycle: true,
+	});
 	await ctx.draftRestore;
 	ctx.flow = {
 		...ctx.flow,
@@ -3200,7 +3229,10 @@ test("pending failure retains recovery data and retry resends its persisted comm
 				: { status: "ok", session_id: 7, lifecycle_status: "report_pending" },
 		);
 	};
-	ctx.dispatchFlow({ type: "SESSION_DONE", result: { burpeeCountDone: 5, durationSec: 10 } });
+	ctx.dispatchFlow({
+		type: "SESSION_DONE",
+		result: { burpeeCountDone: 5, durationSec: 10 },
+	});
 	await flushHookPromises();
 	await flushHookPromises();
 
