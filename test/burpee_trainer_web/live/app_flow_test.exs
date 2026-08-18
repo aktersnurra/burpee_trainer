@@ -37,6 +37,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(home, "#home-start-workout[href='/session/#{created.id}']")
   end
 
+  test "workout camera debug copy omits calibration", %{conn: conn} do
+    {:ok, workouts, _html} = live(conn, ~p"/workouts")
+
+    assert has_element?(workouts, "#workouts-camera-debug", "Inspect pose tracking")
+    refute has_element?(workouts, "#workouts-camera-debug", "Calibrate and inspect pose tracking")
+  end
+
   test "tracking diagnostics omit calibration and template controls", %{conn: conn} do
     {:ok, tracking, _html} = live(conn, ~p"/tracking-test")
 

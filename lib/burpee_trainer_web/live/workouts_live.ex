@@ -291,7 +291,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
             navigate={~p"/tracking-test"}
             icon="hero-camera"
             label="Camera debug"
-            description="Calibrate and inspect pose tracking"
+            description="Inspect pose tracking"
           />
         </.qs_surface>
       </div>
