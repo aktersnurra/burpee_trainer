@@ -8,8 +8,14 @@ defmodule BurpeeTrainer.Workouts do
 
   alias Ecto.Multi
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.{ExecutionPrograms, PlanCompiler}
+  alias BurpeeTrainer.Coach.Policy
+
+  alias BurpeeTrainer.{CoachReconciler, PlanCompiler, UserTime}
+
+  alias BurpeeTrainer.PlanCompiler.{Program, ProgramHash, WorkoutDefinition}
+
   alias BurpeeTrainer.Goals
+  alias BurpeeTrainer.Goals.Goal
   alias BurpeeTrainer.Levels
   alias BurpeeTrainer.Milestones
   alias BurpeeTrainer.Repo
@@ -17,10 +23,10 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Workouts.PaceConsistency
 
   alias BurpeeTrainer.Workouts.{
-    ExecutionProgram,
+    CoachRecommendation,
+    Error,
     PoseCaptureRun,
     PoseTraceChunk,
-    StylePerformance,
     WorkoutPlan,
     WorkoutSession,
     WorkoutVideo
@@ -30,23 +36,962 @@ defmodule BurpeeTrainer.Workouts do
   # a full-length-ish bout (≤ 20 min) of at least this many burpees.
   @pace_pr_min_count 20
   @pace_pr_max_duration 1200
+  @coach_evidence_plan_limit 24
+  @coach_evidence_plan_page_size @coach_evidence_plan_limit * 2
+  @coach_evidence_plan_scan_limit @coach_evidence_plan_limit * 10
+  @pose_chunk_identity_fields [
+    :segment,
+    :chunk_index,
+    :started_at_ms,
+    :ended_at_ms,
+    :sample_count,
+    :payload_json,
+    :payload_digest
+  ]
 
   # ---------------------------------------------------------------------------
   # Plans
   # ---------------------------------------------------------------------------
 
-  @doc """
-  List all source plans for a user.
-  """
-  @spec list_plans(User.t()) :: [WorkoutPlan.t()]
-  def list_plans(%User{id: user_id}) do
+  @doc "Lists the user's published plans together with shared published built-ins."
+  @spec list_library(User.t()) :: [WorkoutPlan.t()]
+  def list_library(%User{id: user_id}) do
     Repo.all(
       from(plan in WorkoutPlan,
-        where: plan.user_id == ^user_id,
-        order_by: [desc: plan.updated_at]
+        where:
+          plan.state == :published and
+            (plan.user_id == ^user_id or (is_nil(plan.user_id) and plan.origin == :built_in)),
+        order_by: [asc: plan.name, asc: plan.id]
       )
     )
   end
+
+  @doc "Lists only drafts owned by the user."
+  @spec list_drafts(User.t()) :: [WorkoutPlan.t()]
+  def list_drafts(%User{id: user_id}) do
+    Repo.all(
+      from(plan in WorkoutPlan,
+        where: plan.user_id == ^user_id and plan.state == :draft,
+        order_by: [desc: plan.updated_at, desc: plan.id]
+      )
+    )
+  end
+
+  @type recommendation_selection :: {:plan, pos_integer()} | {:video, pos_integer()}
+
+  @doc "Ensures one fallback-backed recommendation for a deterministic user slot."
+  @spec ensure_recommendation(User.t(), map()) ::
+          {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def ensure_recommendation(%User{id: user_id}, attrs) when is_map(attrs) do
+    immediate_lifecycle_transaction(fn ->
+      with slot_key when is_binary(slot_key) and slot_key != "" <-
+             Map.get(attrs, :slot_key) || Map.get(attrs, "slot_key"),
+           %Date{} = slot_date <- Map.get(attrs, :slot_date) || Map.get(attrs, "slot_date"),
+           {:ok, fallback} <- built_in_fallback() do
+        rationale = Map.get(attrs, :rationale) || Map.get(attrs, "rationale")
+
+        %CoachRecommendation{user_id: user_id}
+        |> CoachRecommendation.changeset(%{
+          slot_key: slot_key,
+          slot_date: slot_date,
+          rationale: rationale,
+          selected_workout_plan_id: fallback.id,
+          selected_workout_video_id: nil
+        })
+        |> Repo.insert(
+          on_conflict: :nothing,
+          conflict_target: [:user_id, :slot_key]
+        )
+
+        case Repo.get_by(CoachRecommendation, user_id: user_id, slot_key: slot_key) do
+          %CoachRecommendation{} = recommendation -> {:ok, recommendation}
+          nil -> {:error, Error.new(:invalid_recommendation_selection)}
+        end
+      else
+        {:error, %Error{} = error} -> {:error, error}
+        _invalid -> {:error, Error.new(:invalid_recommendation_selection)}
+      end
+    end)
+  end
+
+  def ensure_recommendation(%User{}, _attrs),
+    do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  @doc "Selects one currently available published plan or video."
+  @spec select_recommendation(User.t(), pos_integer(), recommendation_selection(), String.t()) ::
+          {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def select_recommendation(%User{} = user, recommendation_id, selection, rationale) do
+    select_recommendation_if_current(user, recommendation_id, selection, rationale, :any)
+  end
+
+  @doc "Selects a plan or video only while the recommendation retains the expected selection."
+  @spec select_recommendation_if_current(
+          User.t(),
+          pos_integer(),
+          recommendation_selection(),
+          String.t(),
+          recommendation_selection() | :any
+        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def select_recommendation_if_current(
+        %User{id: user_id} = user,
+        recommendation_id,
+        selection,
+        rationale,
+        expected_selection
+      )
+      when is_integer(recommendation_id) and recommendation_id > 0 and is_binary(rationale) do
+    immediate_lifecycle_transaction(fn ->
+      with %CoachRecommendation{} = recommendation <-
+             Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id),
+           :ok <- recommendation_selection_matches(recommendation, expected_selection),
+           {:ok, selection_attrs} <- recommendation_selection_attrs(user, selection),
+           {:ok, updated} <-
+             recommendation
+             |> CoachRecommendation.selection_changeset(
+               Map.put(selection_attrs, :rationale, rationale)
+             )
+             |> Repo.update() do
+        {:ok, updated}
+      else
+        {:error, %Error{} = error} ->
+          {:error, error}
+
+        {:error, %Ecto.Changeset{}} ->
+          {:error, Error.new(:invalid_recommendation_selection)}
+
+        _missing ->
+          {:error, Error.new(:invalid_recommendation_selection)}
+      end
+    end)
+  end
+
+  def select_recommendation_if_current(
+        %User{},
+        _recommendation_id,
+        _selection,
+        _rationale,
+        _expected_selection
+      ),
+      do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  @doc "Atomically verifies and selects an existing provider candidate against current facts."
+  @spec select_recommendation_candidate_if_current(
+          User.t(),
+          pos_integer(),
+          pos_integer(),
+          String.t(),
+          recommendation_selection()
+        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def select_recommendation_candidate_if_current(
+        %User{id: user_id} = user,
+        recommendation_id,
+        plan_id,
+        rationale,
+        expected_selection
+      )
+      when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(plan_id) and
+             plan_id > 0 and is_binary(rationale) do
+    immediate_lifecycle_transaction(fn ->
+      with %CoachRecommendation{} = recommendation <-
+             Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id),
+           :ok <- recommendation_selection_matches(recommendation, expected_selection),
+           {:ok, %WorkoutPlan{} = plan} <- get_library_plan(user, plan_id),
+           :ok <- candidate_matches_slot_policy(user, recommendation, plan),
+           {:ok, updated} <-
+             recommendation
+             |> CoachRecommendation.selection_changeset(%{
+               selected_workout_plan_id: plan.id,
+               selected_workout_video_id: nil,
+               rationale: rationale
+             })
+             |> Repo.update() do
+        {:ok, updated}
+      else
+        {:error, %Error{code: :recommendation_selection_changed} = error} ->
+          {:error, error}
+
+        {:error, %Error{}} ->
+          {:error, Error.new(:invalid_recommendation_selection, %{reason: :policy_mismatch})}
+
+        {:error, %Ecto.Changeset{}} ->
+          {:error, Error.new(:invalid_recommendation_selection)}
+
+        _missing ->
+          {:error, Error.new(:invalid_recommendation_selection)}
+      end
+    end)
+  end
+
+  def select_recommendation_candidate_if_current(
+        %User{},
+        _recommendation_id,
+        _plan_id,
+        _rationale,
+        _expected_selection
+      ),
+      do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  @doc "Creates a verified coach draft and attaches it only if the candidate slot is empty."
+  @spec attach_candidate(User.t(), pos_integer(), map()) ::
+          {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def attach_candidate(%User{} = user, recommendation_id, attrs) do
+    attach_candidate_if_current(user, recommendation_id, attrs, :any)
+  end
+
+  @doc "Attaches a verified draft only while the recommendation retains the expected selection."
+  @spec attach_candidate_if_current(
+          User.t(),
+          pos_integer(),
+          map(),
+          recommendation_selection() | :any
+        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def attach_candidate_if_current(
+        %User{id: user_id} = user,
+        recommendation_id,
+        attrs,
+        expected_selection
+      )
+      when is_integer(recommendation_id) and recommendation_id > 0 and is_map(attrs) do
+    immediate_lifecycle_transaction(fn ->
+      recommendation =
+        Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id)
+
+      with %CoachRecommendation{pending_draft_id: nil} <- recommendation,
+           :ok <- recommendation_selection_matches(recommendation, expected_selection),
+           {:ok, draft} <- create_coach_draft(user, provider_draft_attrs(attrs)),
+           :ok <- candidate_matches_slot_policy(user, recommendation, draft),
+           {1, _rows} <-
+             Repo.update_all(
+               from(candidate in CoachRecommendation,
+                 where:
+                   candidate.id == ^recommendation_id and candidate.user_id == ^user_id and
+                     is_nil(candidate.pending_draft_id)
+               ),
+               set: candidate_attachment_updates(attrs, draft.id)
+             ),
+           %CoachRecommendation{} = attached <- Repo.get(CoachRecommendation, recommendation_id) do
+        {:ok, attached}
+      else
+        {:error, %Error{} = error} -> {:error, error}
+        _stale -> {:error, Error.new(:candidate_no_longer_current)}
+      end
+    end)
+  end
+
+  def attach_candidate_if_current(
+        %User{},
+        _recommendation_id,
+        _attrs,
+        _expected_selection
+      ),
+      do: {:error, Error.new(:candidate_no_longer_current)}
+
+  @doc "Atomically accepts the exact pending draft against the caller's expected selection."
+  @spec accept_candidate(
+          User.t(),
+          pos_integer(),
+          pos_integer(),
+          recommendation_selection()
+        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def accept_candidate(
+        %User{id: user_id},
+        recommendation_id,
+        draft_id,
+        expected_selection
+      )
+      when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(draft_id) and
+             draft_id > 0 do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, recommendation} <-
+             current_candidate(user_id, recommendation_id, draft_id, expected_selection),
+           {1, _rows} <- clear_current_candidate(recommendation, draft_id, expected_selection),
+           %WorkoutPlan{user_id: ^user_id, state: :draft} = draft <-
+             Repo.get(WorkoutPlan, draft_id),
+           :ok <- verify_stored_draft(draft),
+           {:ok, published} <-
+             draft
+             |> WorkoutPlan.publish_changeset(lifecycle_now())
+             |> Repo.update()
+             |> normalize_plan_write(),
+           %CoachRecommendation{} = detached <-
+             Repo.one(
+               from(candidate in CoachRecommendation,
+                 where:
+                   candidate.id == ^recommendation_id and candidate.user_id == ^user_id and
+                     is_nil(candidate.pending_draft_id)
+               )
+             ),
+           {:ok, selected} <-
+             detached
+             |> CoachRecommendation.selection_changeset(%{
+               selected_workout_plan_id: published.id,
+               selected_workout_video_id: nil
+             })
+             |> Repo.update() do
+        {:ok, selected}
+      else
+        {:error, %Error{} = error} ->
+          {:error, error}
+
+        {:error, %Ecto.Changeset{}} ->
+          {:error, Error.new(:candidate_no_longer_current)}
+
+        _stale ->
+          {:error, Error.new(:candidate_no_longer_current)}
+      end
+    end)
+  end
+
+  def accept_candidate(%User{}, _recommendation_id, _draft_id, _expected_selection),
+    do: {:error, Error.new(:candidate_no_longer_current)}
+
+  @doc "Atomically rejects and deletes the exact pending draft without changing selection."
+  @spec reject_candidate(
+          User.t(),
+          pos_integer(),
+          pos_integer(),
+          recommendation_selection()
+        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def reject_candidate(
+        %User{id: user_id},
+        recommendation_id,
+        draft_id,
+        expected_selection
+      )
+      when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(draft_id) and
+             draft_id > 0 do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, recommendation} <-
+             current_candidate(user_id, recommendation_id, draft_id, expected_selection),
+           {1, _rows} <- clear_current_candidate(recommendation, draft_id, expected_selection),
+           %WorkoutPlan{user_id: ^user_id, state: :draft} = draft <-
+             Repo.get(WorkoutPlan, draft_id),
+           {:ok, _deleted} <- Repo.delete(draft),
+           %CoachRecommendation{} = retained <- Repo.get(CoachRecommendation, recommendation_id) do
+        {:ok, retained}
+      else
+        {:error, %Error{} = error} -> {:error, error}
+        _stale -> {:error, Error.new(:candidate_no_longer_current)}
+      end
+    end)
+  end
+
+  def reject_candidate(%User{}, _recommendation_id, _draft_id, _expected_selection),
+    do: {:error, Error.new(:candidate_no_longer_current)}
+
+  @doc "Keeps a recommendation startable by selecting the built-in fallback when its source disappears."
+  @spec ensure_recommendation_selection_available(User.t(), pos_integer()) ::
+          {:ok, CoachRecommendation.t()} | {:error, Error.t()}
+  def ensure_recommendation_selection_available(%User{id: user_id} = user, recommendation_id)
+      when is_integer(recommendation_id) and recommendation_id > 0 do
+    immediate_lifecycle_transaction(fn ->
+      case Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id) do
+        %CoachRecommendation{} = recommendation ->
+          if recommendation_selection_available?(user, recommendation) do
+            {:ok, recommendation}
+          else
+            with {:ok, fallback} <- built_in_fallback(),
+                 {:ok, available} <-
+                   recommendation
+                   |> CoachRecommendation.selection_changeset(%{
+                     selected_workout_plan_id: fallback.id,
+                     selected_workout_video_id: nil
+                   })
+                   |> Repo.update() do
+              {:ok, available}
+            else
+              {:error, %Error{} = error} ->
+                {:error, error}
+
+              {:error, %Ecto.Changeset{}} ->
+                {:error, Error.new(:invalid_recommendation_selection)}
+            end
+          end
+
+        nil ->
+          {:error, Error.new(:invalid_recommendation_selection)}
+      end
+    end)
+  end
+
+  def ensure_recommendation_selection_available(%User{}, _recommendation_id),
+    do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  @spec get_library_plan(User.t(), pos_integer()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def get_library_plan(%User{id: user_id}, plan_id)
+      when is_integer(plan_id) and plan_id > 0 do
+    case Repo.get(WorkoutPlan, plan_id) do
+      %WorkoutPlan{state: :published, user_id: ^user_id} = plan ->
+        {:ok, plan}
+
+      %WorkoutPlan{state: :published, user_id: nil, origin: :built_in} = plan ->
+        {:ok, plan}
+
+      %WorkoutPlan{state: :archived, user_id: ^user_id} ->
+        {:error, Error.new(:archived_workout, %{plan_id: plan_id})}
+
+      %WorkoutPlan{user_id: ^user_id} ->
+        {:error, Error.new(:published_required, %{plan_id: plan_id})}
+
+      _unavailable ->
+        {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+    end
+  end
+
+  def get_library_plan(%User{}, plan_id),
+    do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+
+  @spec get_draft(User.t(), pos_integer()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def get_draft(%User{id: user_id}, draft_id) when is_integer(draft_id) and draft_id > 0 do
+    case Repo.get(WorkoutPlan, draft_id) do
+      %WorkoutPlan{user_id: ^user_id, state: :draft} = draft ->
+        {:ok, draft}
+
+      %WorkoutPlan{user_id: ^user_id} ->
+        {:error, Error.new(:draft_required, %{draft_id: draft_id})}
+
+      %WorkoutPlan{} ->
+        {:error, Error.new(:draft_not_owned, %{draft_id: draft_id})}
+
+      nil ->
+        {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
+    end
+  end
+
+  def get_draft(%User{}, draft_id),
+    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
+
+  @spec create_user_draft(User.t(), map()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def create_user_draft(%User{} = user, attrs) when is_map(attrs) do
+    create_draft(user, :user, attrs)
+  end
+
+  @doc false
+  @spec create_coach_draft(User.t(), map()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def create_coach_draft(%User{} = user, attrs) when is_map(attrs) do
+    create_draft(user, :coach, attrs)
+  end
+
+  @spec replace_draft(User.t(), pos_integer(), map()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def replace_draft(%User{} = user, draft_id, attrs)
+      when is_integer(draft_id) and draft_id > 0 and is_map(attrs) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, draft} <- get_mutable_draft(user, draft_id),
+           :ok <- compare_expected_draft_revision(draft, attrs),
+           {:ok, content} <- canonical_draft_content(attrs),
+           {:ok, replaced} <-
+             draft
+             |> WorkoutPlan.replace_draft_changeset(content)
+             |> Repo.update()
+             |> normalize_plan_write() do
+        {:ok, replaced}
+      end
+    end)
+  end
+
+  def replace_draft(%User{}, draft_id, _attrs),
+    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
+
+  @spec publish_draft(User.t(), pos_integer()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def publish_draft(%User{} = user, draft_id) when is_integer(draft_id) and draft_id > 0 do
+    immediate_lifecycle_transaction(fn -> publish_unattached_draft(user, draft_id) end)
+  end
+
+  def publish_draft(%User{}, draft_id),
+    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
+
+  @spec copy_to_draft(User.t(), pos_integer()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def copy_to_draft(%User{id: user_id} = user, plan_id)
+      when is_integer(plan_id) and plan_id > 0 do
+    case Repo.get(WorkoutPlan, plan_id) do
+      %WorkoutPlan{state: state, user_id: ^user_id} = source
+      when state in [:published, :archived] ->
+        copy_library_source(user, source)
+
+      %WorkoutPlan{state: :published, user_id: nil, origin: :built_in} = source ->
+        copy_library_source(user, source)
+
+      %WorkoutPlan{state: :draft, user_id: ^user_id} ->
+        {:error, Error.new(:published_required, %{plan_id: plan_id})}
+
+      _unavailable ->
+        {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+    end
+  end
+
+  def copy_to_draft(%User{}, plan_id),
+    do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+
+  @spec archive_plan(User.t(), pos_integer()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def archive_plan(%User{} = user, plan_id) when is_integer(plan_id) and plan_id > 0 do
+    immediate_lifecycle_transaction(fn -> archive_owned_plan(user, plan_id) end)
+  end
+
+  def archive_plan(%User{}, plan_id),
+    do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+
+  @spec delete_draft(User.t(), pos_integer()) :: :ok | {:error, Error.t()}
+  def delete_draft(%User{} = user, draft_id) when is_integer(draft_id) and draft_id > 0 do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, draft} <- get_mutable_draft(user, draft_id),
+           false <- candidate_attached?(draft.id),
+           {:ok, _draft} <- Repo.delete(draft) do
+        :ok
+      else
+        true -> {:error, Error.new(:candidate_attached, %{draft_id: draft_id})}
+        {:error, %Error{} = error} -> {:error, error}
+        {:error, reason} -> {:error, Error.new(:workout_immutable, %{reason: reason})}
+      end
+    end)
+  end
+
+  def delete_draft(%User{}, draft_id),
+    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
+
+  @draft_revision_fields [
+    :id,
+    :user_id,
+    :name,
+    :origin,
+    :state,
+    :request_text,
+    :definition_json,
+    :program_json,
+    :content_hash,
+    :burpee_type,
+    :target_reps,
+    :target_duration_sec,
+    :published_at,
+    :archived_at,
+    :inserted_at,
+    :updated_at
+  ]
+
+  @definition_keys ~w[
+    version name burpee_type target_duration_sec target_reps pacing_style rationale events
+  ]
+  @definition_atom_keys [
+    :version,
+    :name,
+    :burpee_type,
+    :target_duration_sec,
+    :target_reps,
+    :pacing_style,
+    :rationale,
+    :events
+  ]
+
+  defp create_draft(%User{id: user_id}, origin, attrs) when origin in [:user, :coach] do
+    with {:ok, content} <- canonical_draft_content(attrs) do
+      %WorkoutPlan{user_id: user_id, origin: origin, state: :draft}
+      |> WorkoutPlan.new_draft_changeset(content)
+      |> Repo.insert()
+      |> normalize_plan_write()
+    end
+  end
+
+  defp canonical_draft_content(attrs) do
+    with {:ok, definition_attrs} <- draft_definition(attrs),
+         {:ok, definition} <- WorkoutDefinition.new(definition_attrs),
+         {:ok, program} <- PlanCompiler.compile(definition) do
+      {:ok,
+       %{
+         name: definition.name,
+         request_text: draft_request_text(attrs),
+         definition_json: WorkoutDefinition.canonical_map(definition),
+         program_json: ProgramHash.canonical_map(program),
+         content_hash: ProgramHash.hash(program),
+         burpee_type: definition.burpee_type,
+         target_reps: definition.target_reps,
+         target_duration_sec: definition.target_duration_sec
+       }}
+    end
+  end
+
+  defp draft_definition(attrs) do
+    definition =
+      Map.get(attrs, :definition) || Map.get(attrs, "definition") ||
+        Map.get(attrs, :definition_json) || Map.get(attrs, "definition_json")
+
+    cond do
+      is_map(definition) ->
+        {:ok, definition}
+
+      Map.has_key?(attrs, :version) or Map.has_key?(attrs, "version") ->
+        {:ok, Map.take(attrs, @definition_keys ++ @definition_atom_keys)}
+
+      true ->
+        {:error, Error.new(:invalid_workout_definition, %{field: :definition})}
+    end
+  end
+
+  defp draft_request_text(attrs) do
+    Map.get(attrs, :request_text) || Map.get(attrs, "request_text")
+  end
+
+  defp compare_expected_draft_revision(draft, attrs) do
+    case Map.fetch(attrs, :expected_revision) do
+      :error ->
+        :ok
+
+      {:ok, %WorkoutPlan{} = expected} ->
+        if Map.take(draft, @draft_revision_fields) == Map.take(expected, @draft_revision_fields) do
+          :ok
+        else
+          {:error, Error.new(:draft_stale)}
+        end
+
+      {:ok, _invalid} ->
+        {:error, Error.new(:draft_stale)}
+    end
+  end
+
+  defp normalize_plan_write({:ok, %WorkoutPlan{} = plan}), do: {:ok, plan}
+
+  defp normalize_plan_write({:error, %Ecto.Changeset{} = changeset}) do
+    {:error,
+     Error.new(:infeasible_workout_definition, %{
+       errors: Enum.map(changeset.errors, fn {field, {message, _opts}} -> {field, message} end)
+     })}
+  end
+
+  defp get_mutable_draft(%User{} = user, draft_id) do
+    case get_draft(user, draft_id) do
+      {:error, %Error{code: :draft_required}} ->
+        {:error, Error.new(:workout_immutable, %{draft_id: draft_id})}
+
+      result ->
+        result
+    end
+  end
+
+  defp publish_unattached_draft(%User{} = user, draft_id) do
+    with {:ok, draft} <- get_mutable_draft(user, draft_id),
+         false <- candidate_attached?(draft.id),
+         :ok <- verify_stored_draft(draft),
+         {:ok, published} <-
+           draft
+           |> WorkoutPlan.publish_changeset(lifecycle_now())
+           |> Repo.update()
+           |> normalize_plan_write() do
+      {:ok, published}
+    else
+      true -> {:error, Error.new(:candidate_attached, %{draft_id: draft_id})}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  defp verify_stored_draft(%WorkoutPlan{} = draft) do
+    with {:ok, expected} <-
+           canonical_draft_content(%{
+             definition: draft.definition_json,
+             request_text: draft.request_text
+           }) do
+      exact? =
+        draft.name == expected.name and draft.definition_json == expected.definition_json and
+          draft.program_json == expected.program_json and
+          draft.content_hash == expected.content_hash and
+          draft.burpee_type == expected.burpee_type and
+          draft.target_reps == expected.target_reps and
+          draft.target_duration_sec == expected.target_duration_sec
+
+      if exact? do
+        :ok
+      else
+        {:error,
+         Error.new(:infeasible_workout_definition, %{
+           draft_id: draft.id,
+           reason: :stored_program_mismatch
+         })}
+      end
+    end
+  end
+
+  @copy_name_suffix " (copy)"
+  @max_plan_name_graphemes 80
+
+  defp copy_library_source(%User{} = user, %WorkoutPlan{} = source) do
+    definition = Map.put(source.definition_json, "name", copied_plan_name(source.name))
+    create_user_draft(user, %{definition: definition, request_text: source.request_text})
+  end
+
+  defp copied_plan_name(source_name) do
+    prefix_length = @max_plan_name_graphemes - String.length(@copy_name_suffix)
+    String.slice(source_name, 0, prefix_length) <> @copy_name_suffix
+  end
+
+  defp archive_owned_plan(%User{id: user_id}, plan_id) do
+    with {:ok, plan} <- published_plan_for_archive(user_id, plan_id),
+         {:ok, fallback} <- built_in_fallback(),
+         {:ok, archived} <-
+           plan
+           |> WorkoutPlan.archive_changeset(lifecycle_now())
+           |> Repo.update()
+           |> normalize_plan_write() do
+      now = lifecycle_now()
+
+      Repo.update_all(
+        from(recommendation in CoachRecommendation,
+          where: recommendation.selected_workout_plan_id == ^plan.id
+        ),
+        set: [
+          selected_workout_plan_id: fallback.id,
+          selected_workout_video_id: nil,
+          updated_at: now
+        ]
+      )
+
+      {:ok, archived}
+    end
+  end
+
+  defp published_plan_for_archive(user_id, plan_id) do
+    case Repo.get(WorkoutPlan, plan_id) do
+      %WorkoutPlan{user_id: ^user_id, state: :published} = plan ->
+        {:ok, plan}
+
+      %WorkoutPlan{user_id: ^user_id, state: :archived} ->
+        {:error, Error.new(:archived_workout, %{plan_id: plan_id})}
+
+      %WorkoutPlan{user_id: ^user_id} ->
+        {:error, Error.new(:published_required, %{plan_id: plan_id})}
+
+      _unavailable ->
+        {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+    end
+  end
+
+  defp recommendation_selection_attrs(%User{} = user, {:plan, plan_id})
+       when is_integer(plan_id) and plan_id > 0 do
+    case get_library_plan(user, plan_id) do
+      {:ok, %WorkoutPlan{}} ->
+        {:ok, %{selected_workout_plan_id: plan_id, selected_workout_video_id: nil}}
+
+      {:error, %Error{}} ->
+        {:error, Error.new(:invalid_recommendation_selection, %{plan_id: plan_id})}
+    end
+  end
+
+  defp recommendation_selection_attrs(%User{}, {:video, video_id})
+       when is_integer(video_id) and video_id > 0 do
+    case Repo.get(WorkoutVideo, video_id) do
+      %WorkoutVideo{available: true} ->
+        {:ok, %{selected_workout_plan_id: nil, selected_workout_video_id: video_id}}
+
+      _unavailable ->
+        {:error, Error.new(:invalid_recommendation_selection, %{video_id: video_id})}
+    end
+  end
+
+  defp recommendation_selection_attrs(%User{}, _selection),
+    do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  defp candidate_matches_slot_policy(
+         %User{} = user,
+         %CoachRecommendation{slot_date: %Date{} = slot_date},
+         %WorkoutPlan{} = draft
+       ) do
+    Policy.verify_candidate(user, slot_date, draft)
+  end
+
+  defp candidate_matches_slot_policy(%User{}, %CoachRecommendation{}, %WorkoutPlan{}),
+    do: {:error, Error.new(:invalid_recommendation_selection, %{reason: :policy_mismatch})}
+
+  defp candidate_attachment_updates(attrs, draft_id) do
+    base = [pending_draft_id: draft_id, updated_at: lifecycle_now()]
+
+    case Map.get(attrs, :rationale) || Map.get(attrs, "rationale") do
+      rationale when is_binary(rationale) and rationale != "" ->
+        Keyword.put(base, :rationale, rationale)
+
+      _missing ->
+        base
+    end
+  end
+
+  defp provider_draft_attrs(attrs) do
+    %{
+      definition:
+        Map.get(attrs, :definition) || Map.get(attrs, "definition") ||
+          Map.get(attrs, :definition_json) || Map.get(attrs, "definition_json"),
+      request_text: Map.get(attrs, :request_text) || Map.get(attrs, "request_text")
+    }
+  end
+
+  defp current_candidate(user_id, recommendation_id, draft_id, expected_selection) do
+    case Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id) do
+      %CoachRecommendation{pending_draft_id: ^draft_id} = recommendation ->
+        if current_recommendation_selection(recommendation) == expected_selection do
+          {:ok, recommendation}
+        else
+          {:error, Error.new(:recommendation_selection_changed)}
+        end
+
+      _stale ->
+        {:error, Error.new(:candidate_no_longer_current)}
+    end
+  end
+
+  defp clear_current_candidate(recommendation, draft_id, expected_selection) do
+    query =
+      from(candidate in CoachRecommendation,
+        where:
+          candidate.id == ^recommendation.id and candidate.user_id == ^recommendation.user_id and
+            candidate.pending_draft_id == ^draft_id
+      )
+      |> constrain_expected_selection(expected_selection)
+
+    Repo.update_all(query, set: [pending_draft_id: nil, updated_at: lifecycle_now()])
+  end
+
+  defp constrain_expected_selection(query, {:plan, plan_id})
+       when is_integer(plan_id) and plan_id > 0 do
+    from(candidate in query,
+      where:
+        candidate.selected_workout_plan_id == ^plan_id and
+          is_nil(candidate.selected_workout_video_id)
+    )
+  end
+
+  defp constrain_expected_selection(query, {:video, video_id})
+       when is_integer(video_id) and video_id > 0 do
+    from(candidate in query,
+      where:
+        candidate.selected_workout_video_id == ^video_id and
+          is_nil(candidate.selected_workout_plan_id)
+    )
+  end
+
+  defp constrain_expected_selection(query, _invalid), do: where(query, [candidate], false)
+
+  defp recommendation_selection_matches(%CoachRecommendation{}, :any), do: :ok
+
+  defp recommendation_selection_matches(
+         %CoachRecommendation{} = recommendation,
+         expected_selection
+       ) do
+    if current_recommendation_selection(recommendation) == expected_selection do
+      :ok
+    else
+      {:error, Error.new(:recommendation_selection_changed)}
+    end
+  end
+
+  defp current_recommendation_selection(%CoachRecommendation{
+         selected_workout_plan_id: plan_id,
+         selected_workout_video_id: nil
+       })
+       when is_integer(plan_id) and plan_id > 0,
+       do: {:plan, plan_id}
+
+  defp current_recommendation_selection(%CoachRecommendation{
+         selected_workout_plan_id: nil,
+         selected_workout_video_id: video_id
+       })
+       when is_integer(video_id) and video_id > 0,
+       do: {:video, video_id}
+
+  defp current_recommendation_selection(_invalid), do: :invalid
+
+  defp recommendation_selection_available?(
+         %User{} = user,
+         %CoachRecommendation{} = recommendation
+       ) do
+    case current_recommendation_selection(recommendation) do
+      {:plan, plan_id} ->
+        match?({:ok, %WorkoutPlan{}}, get_library_plan(user, plan_id))
+
+      {:video, video_id} ->
+        match?(%WorkoutVideo{available: true}, Repo.get(WorkoutVideo, video_id))
+
+      :invalid ->
+        false
+    end
+  end
+
+  defp built_in_fallback do
+    case Repo.one(
+           from(plan in WorkoutPlan,
+             where:
+               is_nil(plan.user_id) and plan.origin == :built_in and plan.state == :published,
+             order_by: [asc: plan.id],
+             limit: 1
+           )
+         ) do
+      %WorkoutPlan{} = fallback -> {:ok, fallback}
+      nil -> {:error, Error.new(:source_unavailable, %{source: :built_in_fallback})}
+    end
+  end
+
+  defp candidate_attached?(draft_id) do
+    Repo.exists?(
+      from(recommendation in CoachRecommendation,
+        where: recommendation.pending_draft_id == ^draft_id
+      )
+    )
+  end
+
+  defp immediate_lifecycle_transaction(fun) when is_function(fun, 0) do
+    case Repo.immediate_transaction(fn ->
+           case fun.() do
+             {:ok, value} -> value
+             :ok -> :ok
+             {:error, %Error{} = error} -> Repo.rollback(error)
+           end
+         end) do
+      {:ok, :ok} -> :ok
+      {:ok, value} -> {:ok, value}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  defp lifecycle_now, do: DateTime.utc_now() |> DateTime.truncate(:second)
+
+  @doc "Returns user-owned published plans with supported self-contained program snapshots."
+  @spec list_owned_supported_plans(User.t()) :: [WorkoutPlan.t()]
+  def list_owned_supported_plans(%User{id: user_id}) do
+    user_id
+    |> list_owned_supported_library_plans_page(0, [])
+    |> Enum.take(@coach_evidence_plan_limit)
+  end
+
+  defp list_owned_supported_library_plans_page(user_id, offset, acc)
+       when offset < @coach_evidence_plan_scan_limit and length(acc) < @coach_evidence_plan_limit do
+    query_limit = min(@coach_evidence_plan_page_size, @coach_evidence_plan_scan_limit - offset)
+
+    batch =
+      Repo.all(
+        from(plan in WorkoutPlan,
+          where:
+            plan.user_id == ^user_id and plan.state == :published and
+              not is_nil(plan.program_json) and not is_nil(plan.content_hash),
+          order_by: [asc: plan.name, asc: plan.id],
+          limit: ^query_limit,
+          offset: ^offset
+        )
+      )
+
+    next_acc = acc ++ Enum.filter(batch, &owned_supported_library_plan?/1)
+
+    cond do
+      batch == [] or length(next_acc) >= @coach_evidence_plan_limit or
+          length(batch) < query_limit ->
+        next_acc
+
+      true ->
+        list_owned_supported_library_plans_page(user_id, offset + length(batch), next_acc)
+    end
+  end
+
+  defp list_owned_supported_library_plans_page(_user_id, _offset, acc), do: acc
 
   @doc """
   Fetch a source plan by id for a user.
@@ -61,187 +1006,54 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  @doc """
-  Return a blank changeset for a new plan, suitable for rendering a
-  create form.
-  """
-  @spec change_plan(WorkoutPlan.t(), map) :: Ecto.Changeset.t()
-  def change_plan(%WorkoutPlan{} = plan, attrs \\ %{}) do
-    WorkoutPlan.changeset(plan, normalize_plan_attrs(attrs))
-  end
-
-  @doc """
-  Create a plan for a user. `user_id` is set programmatically — never
-  trust it from form attrs.
-  """
-  @spec create_plan(User.t(), map) ::
-          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t() | term()}
-  def create_plan(%User{id: user_id}, attrs) do
-    with source when is_map(source) <- source_json_from_attrs(attrs),
-         {:ok, program} <- PlanCompiler.compile(source),
-         {:ok, persisted_program} <- ExecutionPrograms.get_or_insert(program) do
-      attrs =
-        attrs
-        |> Map.put("current_execution_program_id", persisted_program.id)
-        |> Map.put("source_json", source)
-        |> put_source_summary(program, source)
-
-      %WorkoutPlan{user_id: user_id}
-      |> WorkoutPlan.changeset(normalize_plan_attrs(attrs))
-      |> Repo.insert()
+  defp owned_supported_library_plan?(%WorkoutPlan{} = plan) do
+    with {:ok, definition} <- WorkoutDefinition.new(plan.definition_json),
+         {:ok, %Program{} = program} <- PlanCompiler.compile(definition) do
+      program.burpee_type == plan.burpee_type and
+        program.target_reps == plan.target_reps and
+        program.target_duration_sec == plan.target_duration_sec and
+        ProgramHash.hash(program) == plan.content_hash
     else
-      {:error, _reason} = error -> error
-      _missing_or_invalid_source -> PlanCompiler.compile(%{})
+      _invalid -> false
     end
   end
 
-  @doc """
-  Update a plan. Caller must have obtained the plan via `get_plan!/2`
-  so ownership is already enforced.
-  """
-  @spec update_plan(WorkoutPlan.t(), map) ::
-          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t() | term()}
-  def update_plan(%WorkoutPlan{} = plan, attrs) do
-    attrs =
-      if source_json_from_attrs(attrs) do
-        attrs
-      else
-        Map.put(attrs, "source_json", plan.source_json)
-      end
-
-    with source when is_map(source) <- source_json_from_attrs(attrs),
-         {:ok, program} <- PlanCompiler.compile(source),
-         {:ok, persisted_program} <- ExecutionPrograms.get_or_insert(program) do
-      attrs =
-        attrs
-        |> Map.put("current_execution_program_id", persisted_program.id)
-        |> Map.put("source_json", source)
-        |> put_source_summary(program, source)
-
-      plan
-      |> WorkoutPlan.changeset(normalize_plan_attrs(attrs))
-      |> Repo.update()
-    else
-      {:error, _reason} = error -> error
-      _missing_or_invalid_source -> PlanCompiler.compile(%{})
+  defp field_value(map, key) when is_map(map) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> value
+      :error -> Map.get(map, Atom.to_string(key))
     end
   end
 
-  @spec compile_plan(WorkoutPlan.t()) :: {:ok, ExecutionProgram.t()} | {:error, term()}
-  def compile_plan(%WorkoutPlan{current_execution_program_id: id} = plan)
-      when is_integer(id) do
-    current_program = ExecutionPrograms.get!(id)
-
-    if current_program.schema_version == PlanCompiler.schema_version() do
-      {:ok, current_program}
-    else
-      case compile_current_program(plan) do
-        {:ok, upgraded_program} -> {:ok, upgraded_program}
-        {:error, _reason} -> {:ok, current_program}
-      end
-    end
-  end
-
-  def compile_plan(%WorkoutPlan{source_json: source} = plan) when is_map(source) do
-    compile_current_program(plan)
-  end
-
-  def compile_plan(%WorkoutPlan{}), do: {:error, :missing_source_json}
-
-  defp compile_current_program(%WorkoutPlan{source_json: source} = plan) when is_map(source) do
-    with {:ok, program} <- PlanCompiler.compile(source),
-         {:ok, persisted_program} <- ExecutionPrograms.get_or_insert(program),
-         :ok <- put_current_execution_program(plan, persisted_program) do
-      {:ok, persisted_program}
-    end
-  end
-
-  defp compile_current_program(%WorkoutPlan{}), do: {:error, :missing_source_json}
-
-  defp put_current_execution_program(%WorkoutPlan{id: nil}, _program), do: :ok
-
-  defp put_current_execution_program(%WorkoutPlan{} = plan, %ExecutionProgram{} = program) do
-    plan
-    |> Ecto.Changeset.change(current_execution_program_id: program.id)
-    |> Repo.update()
-    |> case do
-      {:ok, _plan} -> :ok
-      {:error, changeset} -> {:error, changeset}
-    end
-  end
-
-  defp source_json_from_attrs(attrs) do
-    Map.get(attrs, "source_json") || Map.get(attrs, :source_json)
-  end
-
-  defp put_source_summary(attrs, %BurpeeTrainer.PlanCompiler.Program{} = program, source) do
-    attrs
-    |> Map.put("burpee_type", Atom.to_string(program.burpee_type))
-    |> Map.put("target_duration_min", round(program.target_duration_sec / 60))
-    |> Map.put("burpee_count_target", program.target_reps)
-    |> Map.put("sec_per_burpee", average_work_pace(program))
-    |> Map.put("pacing_style", source_pacing_style(source))
-  end
-
-  defp source_pacing_style(%{"pacing_style" => style}) when is_atom(style),
-    do: Atom.to_string(style)
-
-  defp source_pacing_style(%{"pacing_style" => style}) when is_binary(style), do: style
-  defp source_pacing_style(%{pacing_style: style}) when is_atom(style), do: Atom.to_string(style)
-  defp source_pacing_style(%{pacing_style: style}) when is_binary(style), do: style
-
-  defp average_work_pace(%{metadata: %{work_interval_sec: pace}}) when is_number(pace),
-    do: Float.round(pace, 1)
-
-  defp average_work_pace(program) do
-    work_events =
-      Enum.filter(program.events, &match?(%BurpeeTrainer.PlanCompiler.ProgramEvent.Work{}, &1))
-
-    total_reps = Enum.reduce(work_events, 0, &(&1.reps + &2))
-    total_work = Enum.reduce(work_events, 0.0, &(&1.reps * &1.sec_per_burpee + &2))
-
-    if total_reps > 0, do: Float.round(total_work / total_reps, 1), else: 0.0
-  end
-
-  @doc """
-  Delete a plan. Sessions that referenced the plan have their `plan_id` nilified.
-  """
-  @spec delete_plan(WorkoutPlan.t()) :: {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
-  def delete_plan(%WorkoutPlan{} = plan), do: Repo.delete(plan)
-
-  @doc """
-  Duplicate a source plan (new row, same source, suffixed name) and compile a fresh program.
-  """
-  @spec duplicate_plan(WorkoutPlan.t()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
-  def duplicate_plan(%WorkoutPlan{} = source) do
-    attrs = %{
-      "name" => source.name <> " (copy)",
-      "source_json" => source.source_json
-    }
-
-    create_plan(%User{id: source.user_id}, attrs)
-  end
+  defp field_value(_value, _key), do: nil
 
   # ---------------------------------------------------------------------------
   # Pose capture
   # ---------------------------------------------------------------------------
 
-  @doc """
-  Start a pose capture run for a user's plan.
-  """
-  @spec start_pose_capture_run(User.t(), WorkoutPlan.t(), map()) ::
-          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t()}
+  @doc "Starts a pose capture run bound to an already-created session authority."
+  @spec start_pose_capture_run(User.t(), WorkoutSession.t(), map()) ::
+          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def start_pose_capture_run(
         %User{id: user_id},
-        %WorkoutPlan{id: plan_id, user_id: user_id},
+        %WorkoutSession{id: session_id},
         attrs \\ %{}
       ) do
-    attrs = Map.put_new(attrs, "started_at", DateTime.utc_now(:second))
+    case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
+      %WorkoutSession{} ->
+        attrs = Map.put_new(attrs, "started_at", DateTime.utc_now(:second))
 
-    %PoseCaptureRun{user_id: user_id, plan_id: plan_id, status: :active}
-    |> PoseCaptureRun.start_changeset(attrs)
-    |> Repo.insert()
+        %PoseCaptureRun{
+          user_id: user_id,
+          workout_session_id: session_id,
+          status: :active
+        }
+        |> PoseCaptureRun.start_changeset(attrs)
+        |> Repo.insert()
+
+      nil ->
+        {:error, :not_found}
+    end
   end
 
   @doc """
@@ -264,30 +1076,23 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  @doc """
-  Mark a capture run as completed and link it to the saved workout session.
-  """
+  @doc "Marks an owned capture run complete without changing its session binding."
   @spec complete_pose_capture_run(User.t(), PoseCaptureRun.t(), WorkoutSession.t()) ::
           {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
   def complete_pose_capture_run(
         %User{id: user_id},
         %PoseCaptureRun{id: run_id},
-        %WorkoutSession{id: session_id, user_id: user_id}
+        %WorkoutSession{id: session_id}
       ) do
-    case get_user_pose_capture_run(user_id, run_id) do
-      %PoseCaptureRun{status: :active} = run ->
-        run
-        |> PoseCaptureRun.complete_changeset(%{
-          "workout_session_id" => session_id,
-          "completed_at" => DateTime.utc_now(:second)
-        })
-        |> Repo.update()
-
-      %PoseCaptureRun{} ->
-        {:error, :not_found}
-
-      nil ->
-        {:error, :not_found}
+    with %WorkoutSession{state: :completed} <-
+           Repo.get_by(WorkoutSession, id: session_id, user_id: user_id, state: :completed),
+         %PoseCaptureRun{status: :active, workout_session_id: ^session_id} = run <-
+           get_user_pose_capture_run(user_id, run_id) do
+      run
+      |> PoseCaptureRun.complete_changeset(%{"completed_at" => DateTime.utc_now(:second)})
+      |> Repo.update()
+    else
+      _missing_or_mismatched -> {:error, :not_found}
     end
   end
 
@@ -317,31 +1122,37 @@ defmodule BurpeeTrainer.Workouts do
   @doc """
   Ingest a deferred pose-trace batch for an already-saved, user-scoped session.
 
-  Chunk indexes are idempotent per run only when their stored payload digest
-  matches. The run is completed only when the caller marks the final
-  acknowledged batch complete.
+  Chunk indexes are idempotent per run. The run is completed only when the
+  caller marks the final acknowledged batch complete.
   """
-  @spec ingest_pose_trace_batch(User.t(), String.t(), [map()], boolean()) ::
+  @spec ingest_pose_trace_batch(
+          User.t(),
+          pos_integer(),
+          Ecto.UUID.t(),
+          [map()],
+          boolean()
+        ) ::
           {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
-          | {:error, Ecto.Changeset.t() | :chunk_conflict | :invalid_batch | :not_found}
+          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
   def ingest_pose_trace_batch(
         %User{id: user_id},
+        session_id,
         client_session_id,
         chunks,
         complete?
       )
-      when is_binary(client_session_id) and is_list(chunks) and is_boolean(complete?) do
+      when is_integer(session_id) and session_id > 0 and is_binary(client_session_id) and
+             is_list(chunks) and is_boolean(complete?) do
     Multi.new()
     |> Multi.run(:session, fn repo, _changes ->
       case repo.get_by(WorkoutSession,
+             id: session_id,
              user_id: user_id,
-             client_session_id: client_session_id
+             client_session_id: client_session_id,
+             state: :completed
            ) do
-        %WorkoutSession{plan_id: plan_id, status: :reported} = session when not is_nil(plan_id) ->
-          {:ok, session}
-
-        _session ->
-          {:error, :not_found}
+        %WorkoutSession{state: :completed} = session -> {:ok, session}
+        nil -> {:error, :not_found}
       end
     end)
     |> Multi.run(:run, fn repo, %{session: session} ->
@@ -363,8 +1174,14 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def ingest_pose_trace_batch(%User{}, _client_session_id, _chunks, _complete?),
-    do: {:error, :invalid_batch}
+  def ingest_pose_trace_batch(
+        %User{},
+        _session_id,
+        _client_session_id,
+        _chunks,
+        _complete?
+      ),
+      do: {:error, :invalid_batch}
 
   defp get_or_insert_deferred_pose_run(repo, user_id, session) do
     case repo.get_by(PoseCaptureRun,
@@ -378,7 +1195,6 @@ defmodule BurpeeTrainer.Workouts do
         changeset =
           %PoseCaptureRun{
             user_id: user_id,
-            plan_id: session.plan_id,
             workout_session_id: session.id,
             status: :active
           }
@@ -400,7 +1216,40 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp insert_deferred_pose_chunks(repo, run, chunks) do
+  defp insert_deferred_pose_chunks(
+         repo,
+         %PoseCaptureRun{status: :completed} = run,
+         chunks
+       ) do
+    with {:ok, prepared} <- prepare_deferred_pose_chunks(run, chunks) do
+      indexes = prepared |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> Enum.sort()
+
+      persisted_by_index =
+        if indexes == [] do
+          %{}
+        else
+          repo.all(
+            from(chunk in PoseTraceChunk,
+              where: chunk.pose_capture_run_id == ^run.id and chunk.chunk_index in ^indexes
+            )
+          )
+          |> Map.new(&{&1.chunk_index, &1})
+        end
+
+      if Enum.all?(prepared, fn {index, changeset} ->
+           case Map.get(persisted_by_index, index) do
+             %PoseTraceChunk{} = persisted -> pose_chunk_matches?(persisted, changeset)
+             nil -> false
+           end
+         end) do
+        {:ok, indexes}
+      else
+        {:error, :invalid_batch}
+      end
+    end
+  end
+
+  defp insert_deferred_pose_chunks(repo, %PoseCaptureRun{status: :active} = run, chunks) do
     with {:ok, prepared} <- prepare_deferred_pose_chunks(run, chunks) do
       Enum.reduce_while(prepared, {:ok, []}, fn {index, changeset}, {:ok, indexes} ->
         case repo.insert(changeset,
@@ -408,9 +1257,19 @@ defmodule BurpeeTrainer.Workouts do
                conflict_target: [:pose_capture_run_id, :chunk_index]
              ) do
           {:ok, _chunk} ->
-            case acknowledge_matching_chunk(repo, run.id, index, changeset) do
-              :ok -> {:cont, {:ok, [index | indexes]}}
-              {:error, reason} -> {:halt, {:error, reason}}
+            case repo.get_by(PoseTraceChunk,
+                   pose_capture_run_id: run.id,
+                   chunk_index: index
+                 ) do
+              %PoseTraceChunk{} = persisted ->
+                if pose_chunk_matches?(persisted, changeset) do
+                  {:cont, {:ok, [index | indexes]}}
+                else
+                  {:halt, {:error, :invalid_batch}}
+                end
+
+              nil ->
+                {:halt, {:error, :invalid_batch}}
             end
 
           {:error, changeset} ->
@@ -424,14 +1283,10 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp acknowledge_matching_chunk(repo, run_id, index, changeset) do
-    digest = Ecto.Changeset.get_field(changeset, :payload_digest)
-
-    case repo.get_by(PoseTraceChunk, pose_capture_run_id: run_id, chunk_index: index) do
-      %PoseTraceChunk{payload_digest: ^digest} -> :ok
-      %PoseTraceChunk{} -> {:error, :chunk_conflict}
-      nil -> {:error, :chunk_conflict}
-    end
+  defp pose_chunk_matches?(%PoseTraceChunk{} = persisted, changeset) do
+    Enum.all?(@pose_chunk_identity_fields, fn field ->
+      Map.fetch!(persisted, field) == Ecto.Changeset.get_field(changeset, field)
+    end)
   end
 
   defp prepare_deferred_pose_chunks(run, chunks) do
@@ -508,6 +1363,338 @@ defmodule BurpeeTrainer.Workouts do
   # Sessions
   # ---------------------------------------------------------------------------
 
+  @spec start_plan(User.t(), pos_integer(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def start_plan(%User{id: user_id}, plan_id, client_session_id)
+      when is_integer(plan_id) and plan_id > 0 and is_binary(client_session_id) do
+    start_session(user_id, client_session_id, fn ->
+      with {:ok, plan} <- get_visible_plan_for_start(user_id, plan_id),
+           :ok <- startable_plan(plan) do
+        {:ok,
+         %WorkoutSession{
+           user_id: user_id,
+           state: :started,
+           source_kind: :plan,
+           plan_id: plan.id,
+           display_name_snapshot: plan.name,
+           workout_type_snapshot: plan.burpee_type,
+           burpee_type: plan.burpee_type,
+           burpee_count_planned: plan.target_reps,
+           duration_sec_planned: plan.target_duration_sec,
+           program_snapshot: plan.program_json,
+           content_hash: plan.content_hash,
+           client_session_id: client_session_id,
+           started_at: session_now()
+         }}
+      end
+    end)
+  end
+
+  def start_plan(%User{}, plan_id, _client_session_id),
+    do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+
+  @spec start_video(User.t(), pos_integer(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def start_video(%User{id: user_id}, video_id, client_session_id)
+      when is_integer(video_id) and video_id > 0 and is_binary(client_session_id) do
+    start_session(user_id, client_session_id, fn ->
+      with {:ok, video} <- get_available_video_for_start(video_id),
+           {:ok, snapshot, content_hash} <-
+             ProgramHash.video_snapshot(%{
+               "name" => video.name,
+               "filename" => video.filename,
+               "type" => Atom.to_string(video.burpee_type),
+               "duration" => video.duration_sec,
+               "count" => video.burpee_count,
+               "format" => Atom.to_string(video.format)
+             }) do
+        {:ok,
+         %WorkoutSession{
+           user_id: user_id,
+           state: :started,
+           source_kind: :video,
+           workout_video_id: video.id,
+           display_name_snapshot: video.name,
+           workout_type_snapshot: video.burpee_type,
+           burpee_type: video.burpee_type,
+           burpee_count_planned: video.burpee_count,
+           duration_sec_planned: video.duration_sec,
+           video_snapshot: snapshot,
+           content_hash: content_hash,
+           client_session_id: client_session_id,
+           started_at: session_now()
+         }}
+      else
+        {:error, %Error{code: :invalid_video_snapshot}} ->
+          {:error, Error.new(:source_unavailable, %{video_id: video_id})}
+
+        {:error, %Error{} = error} ->
+          {:error, error}
+      end
+    end)
+  end
+
+  def start_video(%User{}, video_id, _client_session_id),
+    do: {:error, Error.new(:source_unavailable, %{video_id: video_id})}
+
+  defp start_session(user_id, client_session_id, source) when is_function(source, 0) do
+    Repo.immediate_transaction(fn ->
+      case Repo.get_by(WorkoutSession,
+             user_id: user_id,
+             client_session_id: client_session_id
+           ) do
+        %WorkoutSession{} = session ->
+          session
+
+        nil ->
+          with {:ok, session} <- source.() do
+            case session |> WorkoutSession.start_changeset() |> Repo.insert() do
+              {:ok, inserted} -> inserted
+              {:error, %Ecto.Changeset{} = changeset} -> Repo.rollback(changeset)
+            end
+          else
+            {:error, %Error{} = error} -> Repo.rollback(error)
+          end
+      end
+    end)
+    |> case do
+      {:ok, %WorkoutSession{} = session} ->
+        {:ok, session}
+
+      {:error, %Error{} = error} ->
+        {:error, error}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, Error.new(:source_unavailable, %{errors: changeset.errors})}
+    end
+  end
+
+  defp get_visible_plan_for_start(user_id, plan_id) do
+    case Repo.one(
+           from(plan in WorkoutPlan,
+             where:
+               plan.id == ^plan_id and
+                 (plan.user_id == ^user_id or
+                    (is_nil(plan.user_id) and plan.origin == :built_in))
+           )
+         ) do
+      %WorkoutPlan{} = plan -> {:ok, plan}
+      nil -> {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+    end
+  end
+
+  defp startable_plan(%WorkoutPlan{state: :published}), do: :ok
+
+  defp startable_plan(%WorkoutPlan{state: :draft, id: id}),
+    do: {:error, Error.new(:draft_cannot_start, %{plan_id: id})}
+
+  defp startable_plan(%WorkoutPlan{state: :archived, id: id}),
+    do: {:error, Error.new(:archived_workout, %{plan_id: id})}
+
+  defp get_available_video_for_start(video_id) do
+    case Repo.get(WorkoutVideo, video_id) do
+      %WorkoutVideo{available: true, format: :follow_along} = video -> {:ok, video}
+      _missing_or_unavailable -> {:error, Error.new(:source_unavailable, %{video_id: video_id})}
+    end
+  end
+
+  @spec current_started_session(User.t()) :: WorkoutSession.t() | nil
+  def current_started_session(%User{id: user_id}) do
+    Repo.one(
+      from(session in WorkoutSession,
+        where: session.user_id == ^user_id and session.state == :started,
+        order_by: [desc: session.started_at, desc: session.id],
+        limit: 1
+      )
+    )
+  end
+
+  @spec resume_session(User.t(), pos_integer()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def resume_session(%User{id: user_id}, session_id)
+      when is_integer(session_id) and session_id > 0 do
+    case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
+      %WorkoutSession{state: :started} = session ->
+        {:ok, session}
+
+      %WorkoutSession{state: :completed} ->
+        {:error, Error.new(:session_already_completed, %{session_id: session_id})}
+
+      nil ->
+        {:error, Error.new(:session_not_owned, %{session_id: session_id})}
+    end
+  end
+
+  def resume_session(%User{}, session_id),
+    do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
+
+  @spec complete_session(User.t(), pos_integer(), map(), term()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t() | Ecto.Changeset.t()}
+  def complete_session(%User{id: user_id} = user, session_id, attrs, capture)
+      when is_integer(session_id) and session_id > 0 and is_map(attrs) do
+    Repo.immediate_transaction(fn ->
+      case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
+        %WorkoutSession{state: :completed} ->
+          Repo.rollback(Error.new(:session_already_completed, %{session_id: session_id}))
+
+        %WorkoutSession{state: :started} = session ->
+          changeset =
+            session
+            |> WorkoutSession.completion_changeset(attrs, session_now())
+            |> apply_session_capture(capture)
+            |> maybe_with_snapshot_deviation(session)
+            |> with_derived_session_fields(user_id, user.timezone)
+
+          persist_completed_session(user, changeset, &Repo.update/1)
+
+        nil ->
+          Repo.rollback(Error.new(:session_not_owned, %{session_id: session_id}))
+      end
+    end)
+    |> case do
+      {:ok, %WorkoutSession{} = session} ->
+        best_effort_coach_wake(user_id, :completion)
+        {:ok, session}
+
+      {:error, %Error{} = error} ->
+        {:error, error}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  def complete_session(%User{}, session_id, _attrs, _capture),
+    do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
+
+  defp best_effort_coach_wake(user_id, reason) do
+    try do
+      CoachReconciler.wake(user_id, reason)
+    rescue
+      _error -> :ok
+    catch
+      _kind, _reason -> :ok
+    end
+
+    :ok
+  end
+
+  defp persist_completed_session(%User{} = user, changeset, persist)
+       when is_function(persist, 1) do
+    {changeset, achieved_goal} = attribute_achieved_goal(user, changeset)
+
+    case persist.(changeset) do
+      {:ok, %WorkoutSession{} = completed} ->
+        case mark_goal_achieved(achieved_goal) do
+          :ok -> completed
+          {:error, %Ecto.Changeset{} = goal_changeset} -> Repo.rollback(goal_changeset)
+        end
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Repo.rollback(changeset)
+    end
+  end
+
+  defp attribute_achieved_goal(%User{} = user, changeset) do
+    if changeset.valid? do
+      burpee_type = Ecto.Changeset.get_field(changeset, :burpee_type)
+      count = Ecto.Changeset.get_field(changeset, :burpee_count_actual)
+      duration = Ecto.Changeset.get_field(changeset, :duration_sec_actual)
+      completed_at = Ecto.Changeset.get_field(changeset, :completed_at)
+      goal = Goals.get_active_goal(user, burpee_type)
+
+      if goal && goal_achieved_by_completion?(goal, count, duration, completed_at, user.timezone) do
+        {Ecto.Changeset.put_change(changeset, :goal_id, goal.id), goal}
+      else
+        {changeset, nil}
+      end
+    else
+      {changeset, nil}
+    end
+  end
+
+  defp goal_achieved_by_completion?(
+         %Goal{burpee_count_target: target, date_baseline: baseline},
+         count,
+         duration,
+         %DateTime{} = completed_at,
+         timezone
+       )
+       when is_integer(count) and count > 0 and is_integer(duration) and duration >= 1190 and
+              duration <= 1210 do
+    with {:ok, completed_date} <- UserTime.local_date(completed_at, timezone) do
+      Date.compare(completed_date, baseline) != :lt and
+        round(count / duration * 1200.0) >= target
+    else
+      {:error, _reason} -> false
+    end
+  end
+
+  defp goal_achieved_by_completion?(%Goal{}, _count, _duration, _completed_at, _timezone),
+    do: false
+
+  defp mark_goal_achieved(nil), do: :ok
+
+  defp mark_goal_achieved(%Goal{} = goal) do
+    case Goals.mark_achieved(goal) do
+      {:ok, %Goal{}} -> :ok
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+    end
+  end
+
+  defp apply_session_capture(changeset, :timed) do
+    Ecto.Changeset.change(changeset,
+      capture_mode: :timed,
+      cadence_ms: nil,
+      target_pace_sec: nil,
+      pace_consistency: nil
+    )
+  end
+
+  defp apply_session_capture(changeset, :logged) do
+    Ecto.Changeset.change(changeset,
+      capture_mode: :logged,
+      cadence_ms: nil,
+      target_pace_sec: nil,
+      pace_consistency: nil
+    )
+  end
+
+  defp apply_session_capture(changeset, :manual_correction),
+    do: apply_tracked_session_mode(changeset, :manual_correction)
+
+  defp apply_session_capture(changeset, {:trusted, cadence, target_pace}),
+    do: apply_tracked_session_mode(changeset, {:trusted, cadence, target_pace})
+
+  defp apply_session_capture(changeset, %{mode: :tracked} = capture) do
+    apply_session_capture(
+      changeset,
+      {:trusted, Map.get(capture, :cadence_ms, []), Map.get(capture, :target_pace_sec)}
+    )
+  end
+
+  defp apply_session_capture(changeset, %{mode: :timed}),
+    do: apply_session_capture(changeset, :timed)
+
+  defp apply_session_capture(changeset, %{mode: :logged}),
+    do: apply_session_capture(changeset, :logged)
+
+  defp apply_session_capture(changeset, _invalid) do
+    Ecto.Changeset.add_error(changeset, :capture_mode, "is invalid")
+  end
+
+  defp maybe_with_snapshot_deviation(changeset, %WorkoutSession{
+         source_kind: :plan,
+         program_snapshot: program_snapshot
+       })
+       when is_map(program_snapshot) do
+    with_program_deviation_fields(changeset, program_snapshot)
+  end
+
+  defp maybe_with_snapshot_deviation(changeset, %WorkoutSession{}), do: changeset
+
+  defp session_now, do: DateTime.utc_now(:second)
+
   @doc """
   List sessions for a user, most recent first. Optional `burpee_type`
   filter.
@@ -516,8 +1703,8 @@ defmodule BurpeeTrainer.Workouts do
   def list_sessions(%User{id: user_id}) do
     Repo.all(
       from(session in WorkoutSession,
-        where: session.user_id == ^user_id and session.status == :reported,
-        order_by: [desc: session.inserted_at]
+        where: session.user_id == ^user_id and session.state == :completed,
+        order_by: [desc: session.completed_at, desc: session.id]
       )
     )
   end
@@ -527,32 +1714,109 @@ defmodule BurpeeTrainer.Workouts do
     Repo.all(
       from(session in WorkoutSession,
         where:
-          session.user_id == ^user_id and session.status == :reported and
+          session.user_id == ^user_id and session.state == :completed and
             session.burpee_type == ^burpee_type,
-        order_by: [desc: session.inserted_at]
+        order_by: [desc: session.completed_at, desc: session.id]
       )
     )
   end
+
+  @doc "Returns authoritative sessions in the exact trailing six-week preparation window."
+  @spec list_trailing_authoritative_sessions(User.t(), DateTime.t()) :: [WorkoutSession.t()]
+  def list_trailing_authoritative_sessions(%User{id: user_id}, %DateTime{} = now) do
+    lower_bound = DateTime.add(now, -42 * 24 * 60 * 60, :second)
+
+    Repo.all(
+      from(session in WorkoutSession,
+        where:
+          session.user_id == ^user_id and session.state == :completed and
+            session.completed_at >= ^lower_bound and session.completed_at <= ^now,
+        order_by: [desc: session.completed_at, desc: session.id]
+      )
+    )
+    |> preload_session_execution_refs()
+    |> Enum.filter(&BurpeeTrainer.Coach.AuthoritativeSession.confirmed_non_warmup?/1)
+  end
+
+  @doc "Returns the latest 16 non-warmup sessions used by coach memory and generation."
+  @spec list_recent_training_sessions(User.t()) :: [WorkoutSession.t()]
+  def list_recent_training_sessions(%User{id: user_id}) do
+    Repo.all(
+      from(session in WorkoutSession,
+        where:
+          session.user_id == ^user_id and session.state == :completed and
+            (is_nil(session.tags) or session.tags != "warmup"),
+        order_by: [desc: session.completed_at, desc: session.id],
+        limit: 16
+      )
+    )
+    |> preload_session_execution_refs()
+  end
+
+  @doc "Returns non-warmup sessions in the user's local current week."
+  @spec list_current_week_training_sessions(User.t(), DateTime.t()) :: [WorkoutSession.t()]
+  def list_current_week_training_sessions(%User{id: user_id} = user, %DateTime{} = now) do
+    with {:ok, context} <- UserTime.context(user, now),
+         {:ok, week_start_utc, week_end_utc} <- UserTime.week_bounds_utc(context) do
+      Repo.all(
+        from(session in WorkoutSession,
+          where:
+            session.user_id == ^user_id and session.state == :completed and
+              (is_nil(session.tags) or session.tags != "warmup") and
+              session.completed_at >= ^week_start_utc and
+              session.completed_at < ^week_end_utc,
+          order_by: [desc: session.completed_at, desc: session.id]
+        )
+      )
+      |> preload_session_execution_refs()
+    else
+      {:error, _reason} -> []
+    end
+  end
+
+  defp preload_session_execution_refs(sessions) when is_list(sessions), do: sessions
+
+  @doc """
+  Return the newest persisted coach recommendation for a user.
+  """
+  @spec current_coach_recommendation(User.t()) :: CoachRecommendation.t() | nil
+  def current_coach_recommendation(%User{id: user_id}) do
+    Repo.one(
+      from(recommendation in CoachRecommendation,
+        where: recommendation.user_id == ^user_id,
+        order_by: [desc: recommendation.inserted_at, desc: recommendation.id],
+        limit: 1,
+        preload: [:selected_workout_plan, :selected_workout_video, :pending_draft]
+      )
+    )
+  end
+
+  @doc """
+  Return the latest unresolved clarification for a recommendation, if present.
+  """
+  @spec pending_coach_clarification(CoachRecommendation.t()) :: String.t() | nil
+  def pending_coach_clarification(%CoachRecommendation{}), do: nil
 
   @doc """
   Return per-ISO-week training minutes for a user, excluding warmup sessions.
   Weeks are Mon–Sun. Result is sorted descending by `week_start`.
   """
   @spec weekly_minutes(User.t()) :: [%{week_start: Date.t(), minutes: float, met_goal: bool}]
-  def weekly_minutes(%User{id: user_id}) do
+  def weekly_minutes(%User{id: user_id, timezone: timezone}) do
     sessions =
       Repo.all(
         from(s in WorkoutSession,
           where:
-            s.user_id == ^user_id and s.status == :reported and
+            s.user_id == ^user_id and s.state == :completed and
               (is_nil(s.tags) or s.tags != "warmup"),
-          select: %{inserted_at: s.inserted_at, duration_sec_actual: s.duration_sec_actual}
+          select: %{completed_at: s.completed_at, duration_sec_actual: s.duration_sec_actual}
         )
       )
 
     sessions
-    |> Enum.group_by(fn %{inserted_at: dt} ->
-      dt |> DateTime.to_date() |> Date.beginning_of_week(:monday)
+    |> Enum.group_by(fn %{completed_at: completed_at} ->
+      {:ok, local_date} = UserTime.local_date(completed_at, timezone)
+      Date.beginning_of_week(local_date, :monday)
     end)
     |> Enum.map(fn {week_start, rows} ->
       minutes = Enum.sum_by(rows, & &1.duration_sec_actual) / 60.0
@@ -561,31 +1825,43 @@ defmodule BurpeeTrainer.Workouts do
     |> Enum.sort_by(& &1.week_start, {:desc, Date})
   end
 
+  @doc "Returns current local-week minutes and trained dates for Home."
+  @spec current_week_summary(User.t(), DateTime.t()) :: %{
+          week_start: Date.t(),
+          minutes: float(),
+          met_goal: boolean(),
+          trained_days: MapSet.t()
+        }
+  def current_week_summary(user, now \\ DateTime.utc_now()) do
+    {:ok, context} = UserTime.context(user, now)
+    sessions = list_current_week_training_sessions(user, now)
+    minutes = Enum.sum_by(sessions, & &1.duration_sec_actual) / 60.0
+
+    trained_days =
+      sessions
+      |> Enum.map(fn session ->
+        {:ok, local_date} = UserTime.local_date(session.completed_at, context.timezone)
+        local_date
+      end)
+      |> MapSet.new()
+
+    %{
+      week_start: context.week_start,
+      minutes: minutes,
+      met_goal: minutes >= 80.0,
+      trained_days: trained_days
+    }
+  end
+
   @doc """
-  Returns a MapSet of dates (Mon–Sun of the current ISO week) on which the
+  Returns a MapSet of local dates in the user's current week on which the
   user completed at least one non-warmup session.
   """
   @spec this_week_trained_days(User.t()) :: MapSet.t()
-  def this_week_trained_days(%User{id: user_id}) do
-    today = Date.utc_today()
-    week_start = Date.beginning_of_week(today, :monday)
-    week_end = Date.add(week_start, 6)
-
-    week_start_dt = DateTime.new!(week_start, ~T[00:00:00], "Etc/UTC")
-    week_end_dt = DateTime.new!(week_end, ~T[23:59:59], "Etc/UTC")
-
-    Repo.all(
-      from(s in WorkoutSession,
-        where:
-          s.user_id == ^user_id and s.status == :reported and
-            (is_nil(s.tags) or s.tags != "warmup") and
-            s.inserted_at >= ^week_start_dt and
-            s.inserted_at <= ^week_end_dt,
-        select: s.inserted_at
-      )
-    )
-    |> Enum.map(&DateTime.to_date/1)
-    |> MapSet.new()
+  def this_week_trained_days(user) do
+    user
+    |> current_week_summary()
+    |> Map.fetch!(:trained_days)
   end
 
   @doc """
@@ -600,11 +1876,10 @@ defmodule BurpeeTrainer.Workouts do
           join: p in WorkoutPlan,
           on: p.id == s.plan_id,
           where:
-            s.user_id == ^user_id and
-              s.status == :reported and
+            s.user_id == ^user_id and s.state == :completed and
               not is_nil(s.plan_id) and
               (is_nil(s.tags) or s.tags != "warmup"),
-          order_by: [desc: s.inserted_at],
+          order_by: [desc: s.completed_at, desc: s.id],
           limit: 1,
           select: p
         )
@@ -614,33 +1889,59 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
-  Cursor-based paginated sessions. Returns `{sessions, has_more?}`.
+  Cursor-based paginated completed sessions. Returns `{sessions, has_more?}`.
 
-  Pass `before: datetime` to fetch the page older than that cursor.
-  Fetches `limit + 1` rows to determine if another page exists.
+  Pass `before: {completed_at, id}` using the final row from the prior page.
+  The compound cursor matches the descending `completed_at, id` ordering, so
+  sessions sharing a completion timestamp are neither skipped nor repeated.
+  Malformed cursors return `{:error, :invalid_cursor}`.
   """
   @spec list_sessions_page(User.t(), pos_integer(), keyword()) ::
-          {[WorkoutSession.t()], boolean()}
+          {[WorkoutSession.t()], boolean()} | {:error, :invalid_cursor}
   def list_sessions_page(%User{id: user_id}, limit, opts \\ []) do
-    before_dt = Keyword.get(opts, :before)
-
     query =
       from(s in WorkoutSession,
-        where: s.user_id == ^user_id and s.status == :reported,
-        order_by: [desc: s.inserted_at],
+        where: s.user_id == ^user_id and s.state == :completed,
+        order_by: [desc: s.completed_at, desc: s.id],
         limit: ^(limit + 1),
         preload: [:plan, :goal]
       )
 
-    query =
-      if before_dt,
-        do: where(query, [s], s.inserted_at < ^before_dt),
-        else: query
+    case Keyword.fetch(opts, :before) do
+      :error ->
+        session_page(query, limit)
 
+      {:ok, {%DateTime{} = completed_at, id}} when is_integer(id) and id > 0 ->
+        query
+        |> where(
+          [s],
+          s.completed_at < ^completed_at or
+            (s.completed_at == ^completed_at and s.id < ^id)
+        )
+        |> session_page(limit)
+
+      {:ok, _malformed_cursor} ->
+        {:error, :invalid_cursor}
+    end
+  end
+
+  defp session_page(query, limit) do
     rows = Repo.all(query)
     has_more = length(rows) > limit
     {Enum.take(rows, limit), has_more}
   end
+
+  @spec get_session(User.t(), integer) :: WorkoutSession.t() | nil
+  def get_session(%User{id: user_id}, id) when is_integer(id) and id > 0 do
+    Repo.one(
+      from(s in WorkoutSession,
+        where: s.user_id == ^user_id and s.id == ^id,
+        preload: [:plan, :goal]
+      )
+    )
+  end
+
+  def get_session(%User{}, _invalid_id), do: nil
 
   @spec get_session!(User.t(), integer) :: WorkoutSession.t()
   def get_session!(%User{id: user_id}, id) do
@@ -661,13 +1962,12 @@ defmodule BurpeeTrainer.Workouts do
     Repo.one(
       from(s in WorkoutSession,
         where:
-          s.user_id == ^user_id and
-            s.status == :reported and
+          s.user_id == ^user_id and s.state == :completed and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual >= 1190 and
             s.duration_sec_actual <= 1210,
-        order_by: [desc: s.inserted_at],
+        order_by: [desc: s.completed_at, desc: s.id],
         limit: 1
       )
     )
@@ -683,13 +1983,12 @@ defmodule BurpeeTrainer.Workouts do
     Repo.one(
       from(s in WorkoutSession,
         where:
-          s.user_id == ^user_id and
-            s.status == :reported and
+          s.user_id == ^user_id and s.state == :completed and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual >= 1190 and
             s.duration_sec_actual <= 1210,
-        order_by: [desc: s.burpee_count_actual],
+        order_by: [desc: s.burpee_count_actual, desc: s.completed_at, desc: s.id],
         limit: 1
       )
     )
@@ -704,608 +2003,25 @@ defmodule BurpeeTrainer.Workouts do
     Repo.all(
       from(s in WorkoutSession,
         where:
-          s.user_id == ^user_id and
-            s.status == :reported and
+          s.user_id == ^user_id and s.state == :completed and
             s.burpee_type == ^burpee_type and
             s.burpee_count_actual > 0 and
             s.duration_sec_actual > 0,
-        order_by: [asc: s.inserted_at]
+        order_by: [asc: s.completed_at, asc: s.id]
       )
     )
   end
 
-  @doc """
-  Tags a session as the one that achieved a goal by setting its goal_id.
-  """
-  @spec tag_session_as_goal_reached(WorkoutSession.t(), integer) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
-  def tag_session_as_goal_reached(%WorkoutSession{} = session, goal_id) do
-    session
-    |> Ecto.Changeset.change(goal_id: goal_id)
-    |> Repo.update()
-  end
-
-  @doc """
-  Starts a server-derived plan session, idempotent for its client UUID.
-  """
-  @spec begin_plan_session(User.t(), WorkoutPlan.t(), Ecto.UUID.t()) ::
-          {:ok, WorkoutSession.t()} | {:error, term()}
-  def begin_plan_session(
-        %User{id: user_id},
-        %WorkoutPlan{user_id: user_id} = plan,
-        client_session_id
-      ) do
-    with {:ok, planned_attrs} <- planned_session_attrs(plan) do
-      %WorkoutSession{user_id: user_id, plan_id: plan.id}
-      |> WorkoutSession.start_changeset(
-        planned_attrs
-        |> Map.put("client_session_id", client_session_id)
-        |> Map.put("source", :plan)
-      )
-      |> Ecto.Changeset.change(
-        execution_program_id: Map.fetch!(planned_attrs, "execution_program_id")
-      )
-      |> begin_session(user_id, :plan, plan.id)
-    end
-  end
-
-  def begin_plan_session(%User{}, %WorkoutPlan{}, _client_session_id), do: {:error, :not_found}
-
-  @doc """
-  Starts a server-derived video session, idempotent for its client UUID.
-  """
-  @spec begin_video_session(User.t(), WorkoutVideo.t(), Ecto.UUID.t()) ::
-          {:ok, WorkoutSession.t()} | {:error, term()}
-  def begin_video_session(%User{id: user_id}, %WorkoutVideo{} = video, client_session_id) do
-    %WorkoutSession{user_id: user_id, video_id: video.id}
-    |> WorkoutSession.start_changeset(%{
-      "client_session_id" => client_session_id,
-      "source" => :video,
-      "burpee_type" => video.burpee_type,
-      "burpee_count_planned" => video.burpee_count,
-      "duration_sec_planned" => video.duration_sec
-    })
-    |> begin_session(user_id, :video, video.id)
-  end
-
-  @doc """
-  Returns one unresolved session, with its source association loaded.
-  """
-  @spec get_unresolved_session(User.t()) :: WorkoutSession.t() | nil
-  def get_unresolved_session(%User{id: user_id}), do: get_unresolved_session_by_user_id(user_id)
-
-  defp get_unresolved_session_by_user_id(user_id) do
-    Repo.one(
-      from(session in WorkoutSession,
-        where: session.user_id == ^user_id and session.status in [:running, :report_pending],
-        order_by: [asc: session.inserted_at],
-        limit: 1,
-        preload: [:plan, :video]
-      )
-    )
-  end
-
-  @doc """
-  Marks a running session ready to report. Repeating the transition is safe.
-  """
-  @spec mark_report_pending(User.t(), Ecto.UUID.t()) ::
-          {:ok, WorkoutSession.t()} | {:error, :not_found | :aborted}
-  def mark_report_pending(%User{id: user_id}, client_session_id) do
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      nil ->
-        {:error, :not_found}
-
-      %WorkoutSession{status: :running} ->
-        now = DateTime.utc_now(:second)
-
-        {count, _} =
-          Repo.update_all(
-            from(session in WorkoutSession,
-              where:
-                session.user_id == ^user_id and
-                  session.client_session_id == ^client_session_id and
-                  session.status == :running
-            ),
-            set: [status: :report_pending, report_pending_at: now, updated_at: now]
-          )
-
-        case count do
-          1 -> {:ok, get_session_by_client_session_id(user_id, client_session_id)}
-          0 -> resolve_report_pending_transition(user_id, client_session_id)
-        end
-
-      %WorkoutSession{status: status} = session when status in [:report_pending, :reported] ->
-        {:ok, session}
-
-      %WorkoutSession{status: :aborted} ->
-        {:error, :aborted}
-    end
-  end
-
-  defp resolve_report_pending_transition(user_id, client_session_id) do
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      %WorkoutSession{status: status} = session when status in [:report_pending, :reported] ->
-        {:ok, session}
-
-      %WorkoutSession{status: :aborted} ->
-        {:error, :aborted}
-
-      %WorkoutSession{status: :running} ->
-        mark_report_pending(%User{id: user_id}, client_session_id)
-
-      nil ->
-        {:error, :not_found}
-    end
-  end
-
-  @doc """
-  Reports a running or pending session. A matching replay returns the existing
-  row; a different report for the same UUID is rejected without mutation.
-  """
-  @spec report_session(User.t(), Ecto.UUID.t(), map(), map()) ::
-          {:ok, WorkoutSession.t(), :reported | :existing}
-          | {:error,
-             :not_found | :aborted | :report_conflict | {:unresolved_session, WorkoutSession.t()}}
-          | {:error, Ecto.Changeset.t()}
-  def report_session(%User{id: user_id}, client_session_id, report_attrs, tracking_attrs)
-      when is_map(report_attrs) and is_map(tracking_attrs) do
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      nil ->
-        {:error, :not_found}
-
-      %WorkoutSession{status: :aborted} ->
-        {:error, :aborted}
-
-      %WorkoutSession{status: :reported} = session ->
-        case report_changeset_with_tracking(session, report_attrs, tracking_attrs) do
-          %{valid?: false} = changeset -> {:error, changeset}
-          changeset -> replay_report(session, changeset)
-        end
-
-      %WorkoutSession{status: status} = session when status in [:running, :report_pending] ->
-        report_lifecycle_session(session, user_id, report_attrs, tracking_attrs)
-    end
-  end
-
-  @doc """
-  Aborts a running or pending session. Reported sessions cannot be aborted.
-  """
-  @spec abort_session(User.t(), Ecto.UUID.t()) ::
-          {:ok, WorkoutSession.t()} | {:error, :not_found | :already_reported}
-  def abort_session(%User{id: user_id}, client_session_id) do
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      nil ->
-        {:error, :not_found}
-
-      %WorkoutSession{status: status} = session when status in [:running, :report_pending] ->
-        abort_lifecycle_session(session, user_id, client_session_id)
-
-      %WorkoutSession{status: :aborted} = session ->
-        {:ok, session}
-
-      %WorkoutSession{status: :reported} ->
-        {:error, :already_reported}
-    end
-  end
-
-  @doc """
-  Builds a report form changeset without allowing report attrs to replace the
-  session's source-derived values.
-  """
-  @spec change_session_for_report(WorkoutSession.t(), map()) :: Ecto.Changeset.t()
-  def change_session_for_report(%WorkoutSession{} = session, attrs \\ %{}) do
-    WorkoutSession.report_changeset(session, attrs)
-  end
-
-  defp begin_session(changeset, user_id, source, source_id) do
-    client_session_id = Ecto.Changeset.get_field(changeset, :client_session_id)
-
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      %WorkoutSession{} = session ->
-        cond do
-          session.source == source and source_reference_matches?(session, source_id) ->
-            {:ok, session}
-
-          session.status in [:running, :report_pending] ->
-            {:error, {:unresolved_session, session}}
-
-          true ->
-            {:error, :not_found}
-        end
-
-      nil ->
-        case get_unresolved_session_by_user_id(user_id) do
-          %WorkoutSession{} = session ->
-            {:error, {:unresolved_session, session}}
-
-          nil ->
-            insert_started_session(changeset, user_id, source, source_id)
-        end
-    end
-  end
-
-  defp insert_started_session(changeset, user_id, source, source_id) do
-    case Repo.insert(changeset) do
-      {:ok, session} ->
-        {:ok, session}
-
-      {:error, changeset} ->
-        case get_session_by_client_session_id(
-               user_id,
-               Ecto.Changeset.get_field(changeset, :client_session_id)
-             ) do
-          %WorkoutSession{} = session ->
-            if session.source == source and source_reference_matches?(session, source_id) do
-              {:ok, session}
-            else
-              {:error, {:unresolved_session, session}}
-            end
-
-          nil ->
-            case get_unresolved_session_by_user_id(user_id) do
-              %WorkoutSession{} = session -> {:error, {:unresolved_session, session}}
-              nil -> {:error, changeset}
-            end
-        end
-    end
-  end
-
-  defp source_reference_matches?(%WorkoutSession{source: :plan, plan_id: id}, id), do: true
-  defp source_reference_matches?(%WorkoutSession{source: :video, video_id: id}, id), do: true
-  defp source_reference_matches?(_session, _source_id), do: false
-
-  defp report_lifecycle_session(session, user_id, report_attrs, tracking_attrs) do
-    changeset = report_changeset_with_tracking(session, report_attrs, tracking_attrs)
-
-    if changeset.valid? do
-      changeset =
-        changeset
-        |> Ecto.Changeset.put_change(:report_fingerprint, report_fingerprint(changeset))
-        |> with_derived_session_fields(user_id)
-        |> maybe_carry_lifecycle_style(session)
-        |> Ecto.Changeset.put_change(:updated_at, DateTime.utc_now(:second))
-
-      case conditional_session_update(user_id, session.client_session_id, changeset.changes) do
-        :updated ->
-          reported = get_session_by_client_session_id(user_id, session.client_session_id)
-          maybe_upsert_style_performance(reported, user_id)
-          {:ok, reported, :reported}
-
-        :not_updated ->
-          resolve_report_transition(user_id, session.client_session_id, changeset)
-      end
-    else
-      {:error, changeset}
-    end
-  end
-
-  defp resolve_report_transition(user_id, client_session_id, changeset) do
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      %WorkoutSession{status: :reported} = session -> replay_report(session, changeset)
-      %WorkoutSession{status: :aborted} -> {:error, :aborted}
-      nil -> {:error, :not_found}
-      %WorkoutSession{} -> {:error, :report_conflict}
-    end
-  end
-
-  defp abort_lifecycle_session(session, user_id, client_session_id) do
-    changes =
-      session
-      |> WorkoutSession.abort_changeset()
-      |> Ecto.Changeset.put_change(:updated_at, DateTime.utc_now(:second))
-      |> Map.fetch!(:changes)
-
-    case conditional_session_update(user_id, client_session_id, changes) do
-      :updated ->
-        {:ok, get_session_by_client_session_id(user_id, client_session_id)}
-
-      :not_updated ->
-        case get_session_by_client_session_id(user_id, client_session_id) do
-          %WorkoutSession{status: :aborted} = current -> {:ok, current}
-          %WorkoutSession{status: :reported} -> {:error, :already_reported}
-          nil -> {:error, :not_found}
-          %WorkoutSession{} -> {:error, :already_reported}
-        end
-    end
-  end
-
-  defp conditional_session_update(user_id, client_session_id, changes) do
-    {count, _} =
-      Repo.update_all(
-        from(session in WorkoutSession,
-          where:
-            session.user_id == ^user_id and
-              session.client_session_id == ^client_session_id and
-              session.status in [:running, :report_pending]
-        ),
-        set: Map.to_list(changes)
-      )
-
-    if count == 1, do: :updated, else: :not_updated
-  end
-
-  defp replay_report(session, changeset) do
-    if session.report_fingerprint == report_fingerprint(changeset) do
-      {:ok, session, :existing}
-    else
-      {:error, :report_conflict}
-    end
-  end
-
-  defp report_changeset_with_tracking(session, report_attrs, tracking_attrs) do
-    session
-    |> WorkoutSession.report_changeset(report_attrs)
-    |> apply_report_tracking(session, tracking_attrs)
-  end
-
-  defp apply_report_tracking(changeset, %WorkoutSession{source: :plan} = session, tracking_attrs) do
-    case report_tracking_mode(changeset, tracking_attrs) do
-      {:trusted, cadence} ->
-        apply_tracked_session_mode(
-          changeset,
-          {:trusted, cadence, execution_program_target_pace_sec(session.execution_program_id)},
-          session.execution_program_id
-        )
-
-      :manual_correction ->
-        apply_tracked_session_mode(changeset, :manual_correction, session.execution_program_id)
-
-      :timed ->
-        apply_timed_session_mode(changeset)
-
-      :invalid_tracking ->
-        Ecto.Changeset.add_error(changeset, :tracking, "must be a finished camera result")
-    end
-  end
-
-  defp apply_report_tracking(changeset, _session, _tracking_attrs) do
-    Ecto.Changeset.change(changeset,
-      capture_mode: :logged,
-      cadence_ms: nil,
-      target_pace_sec: nil,
-      pace_consistency: nil
-    )
-  end
-
-  defp apply_timed_session_mode(changeset) do
-    Ecto.Changeset.change(changeset,
-      capture_mode: :timed,
-      cadence_ms: nil,
-      target_pace_sec: nil,
-      pace_consistency: nil
-    )
-  end
-
-  defp report_tracking_mode(changeset, tracking_attrs) do
-    if tracking_value(tracking_attrs, :enabled) == true do
-      with "finished" <- tracking_value(tracking_attrs, :trust),
-           {:ok, detected_reps} <-
-             parse_non_negative_integer(tracking_value(tracking_attrs, :detected_reps)),
-           {:ok, detected_duration} <-
-             parse_non_negative_number(tracking_value(tracking_attrs, :detected_duration_sec)),
-           {:ok, actual_reps} <-
-             parse_non_negative_integer(Ecto.Changeset.get_field(changeset, :burpee_count_actual)),
-           {:ok, actual_duration} <-
-             parse_non_negative_number(Ecto.Changeset.get_field(changeset, :duration_sec_actual)) do
-        cadence =
-          case tracking_value(tracking_attrs, :cadence_ms) do
-            value when is_list(value) -> value
-            _ -> []
-          end
-
-        if actual_reps == detected_reps and actual_duration == detected_duration do
-          {:trusted, cadence}
-        else
-          :manual_correction
-        end
-      else
-        _ -> :invalid_tracking
-      end
-    else
-      :timed
-    end
-  end
-
-  defp parse_non_negative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
-
-  defp parse_non_negative_integer(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
-      _ -> :error
-    end
-  end
-
-  defp parse_non_negative_integer(_value), do: :error
-
-  defp parse_non_negative_number(value) when is_number(value) and value >= 0, do: {:ok, value}
-
-  defp parse_non_negative_number(value) when is_binary(value) do
-    case Float.parse(value) do
-      {parsed, ""} when parsed >= 0 -> {:ok, parsed}
-      _ -> :error
-    end
-  end
-
-  defp parse_non_negative_number(_value), do: :error
-
-  defp execution_program_target_pace_sec(nil), do: nil
-
-  defp execution_program_target_pace_sec(execution_program_id) do
-    case Repo.get(ExecutionProgram, execution_program_id) do
-      %ExecutionProgram{} = program ->
-        {reps_total, sec_total} =
-          program.program_json
-          |> tracking_value(:events)
-          |> Enum.reduce({0, 0.0}, fn event, {reps_total, sec_total} ->
-            case tracking_value(event, :kind) do
-              "work" ->
-                reps = tracking_value(event, :reps)
-                sec_per_rep = tracking_value(event, :sec_per_rep_us) / 1_000_000
-                {reps_total + reps, sec_total + reps * sec_per_rep}
-
-              _other ->
-                {reps_total, sec_total}
-            end
-          end)
-
-        if reps_total == 0, do: nil, else: Float.round(sec_total / reps_total, 3)
-
-      nil ->
-        nil
-    end
-  end
-
-  defp tracking_value(attrs, key), do: Map.get(attrs, Atom.to_string(key)) || Map.get(attrs, key)
-
-  defp report_fingerprint(changeset) do
-    [
-      burpee_count_actual: Ecto.Changeset.get_field(changeset, :burpee_count_actual),
-      duration_sec_actual: Ecto.Changeset.get_field(changeset, :duration_sec_actual),
-      note_post: Ecto.Changeset.get_field(changeset, :note_post),
-      mood: Ecto.Changeset.get_field(changeset, :mood),
-      tags: Ecto.Changeset.get_field(changeset, :tags),
-      capture_mode: Ecto.Changeset.get_field(changeset, :capture_mode),
-      cadence_ms: Ecto.Changeset.get_field(changeset, :cadence_ms),
-      target_pace_sec: Ecto.Changeset.get_field(changeset, :target_pace_sec),
-      pace_consistency: Ecto.Changeset.get_field(changeset, :pace_consistency)
-    ]
-    |> :erlang.term_to_binary()
-    |> then(&:crypto.hash(:sha256, &1))
-    |> Base.encode16(case: :lower)
-  end
-
-  defp maybe_carry_lifecycle_style(changeset, %WorkoutSession{
-         source: :plan,
-         plan_id: plan_id,
-         user_id: user_id
-       }) do
-    case Repo.get_by(WorkoutPlan, id: plan_id, user_id: user_id) do
-      nil -> changeset
-      plan -> maybe_carry_style_name(changeset, plan)
-    end
-  end
-
-  defp maybe_carry_lifecycle_style(changeset, _session), do: changeset
-
-  @doc """
-  Create a session that followed a plan. `user_id` and `plan_id` are
-  set programmatically. Derived analytics fields (rate, rolling average,
-  days since last, time-of-day bucket) are computed before insert.
-  """
-  @spec create_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def create_session_from_plan(%User{id: user_id}, %WorkoutPlan{user_id: user_id} = plan, attrs) do
-    with {:ok, planned_attrs} <- planned_session_attrs(plan) do
-      attrs =
-        attrs
-        |> with_client_session_id()
-        |> Map.merge(planned_attrs)
-
-      changeset =
-        %WorkoutSession{user_id: user_id, plan_id: plan.id}
-        |> WorkoutSession.from_plan_changeset(attrs)
-        |> Ecto.Changeset.change(
-          capture_mode: :timed,
-          execution_program_id: Map.fetch!(planned_attrs, "execution_program_id"),
-          status: :reported,
-          source: :plan,
-          reported_at: DateTime.utc_now(:second)
-        )
-        |> with_derived_session_fields(user_id)
-        |> maybe_carry_style_name(plan)
-
-      case insert_idempotent_session(changeset, user_id) do
-        {:ok, session, :inserted} ->
-          maybe_upsert_style_performance(session, user_id)
-          {:ok, session}
-
-        {:ok, session, :existing} ->
-          {:ok, session}
-
-        {:error, changeset} ->
-          {:error, changeset}
-      end
-    end
-  end
-
-  def create_session_from_plan(%User{}, %WorkoutPlan{}, _attrs), do: {:error, :not_found}
-
-  @type tracked_session_mode ::
-          {:trusted, [non_neg_integer()], number() | String.t() | nil} | :manual_correction
-
-  @spec create_tracked_session_from_plan(User.t(), WorkoutPlan.t(), map) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def create_tracked_session_from_plan(%User{} = user, %WorkoutPlan{} = plan, attrs) do
-    cadence = Map.get(attrs, "cadence_ms") || Map.get(attrs, :cadence_ms) || []
-    target_pace = Map.get(attrs, "target_pace_sec") || Map.get(attrs, :target_pace_sec)
-    create_tracked_session_from_plan(user, plan, attrs, {:trusted, cadence, target_pace})
-  end
-
-  @spec create_tracked_session_from_plan(
-          User.t(),
-          WorkoutPlan.t(),
-          map,
-          tracked_session_mode()
-        ) :: {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def create_tracked_session_from_plan(
-        %User{id: user_id},
-        %WorkoutPlan{user_id: user_id} = plan,
-        attrs,
-        tracking_mode
-      ) do
-    with {:ok, planned_attrs} <- planned_session_attrs(plan) do
-      attrs =
-        attrs
-        |> with_client_session_id()
-        |> Map.merge(planned_attrs)
-
-      changeset =
-        %WorkoutSession{user_id: user_id, plan_id: plan.id}
-        |> WorkoutSession.from_plan_changeset(attrs)
-        |> apply_tracked_session_mode(
-          tracking_mode,
-          Map.fetch!(planned_attrs, "execution_program_id")
-        )
-        |> Ecto.Changeset.change(
-          status: :reported,
-          source: :plan,
-          reported_at: DateTime.utc_now(:second)
-        )
-        |> with_derived_session_fields(user_id)
-        |> maybe_carry_style_name(plan)
-
-      case insert_idempotent_session(changeset, user_id) do
-        {:ok, session, :inserted} ->
-          maybe_upsert_style_performance(session, user_id)
-          {:ok, session}
-
-        {:ok, session, :existing} ->
-          {:ok, session}
-
-        {:error, changeset} ->
-          {:error, changeset}
-      end
-    end
-  end
-
-  def create_tracked_session_from_plan(%User{}, %WorkoutPlan{}, _attrs, _tracking_mode),
-    do: {:error, :not_found}
-
-  defp apply_tracked_session_mode(changeset, :manual_correction, execution_program_id) do
+  defp apply_tracked_session_mode(changeset, :manual_correction) do
     Ecto.Changeset.change(changeset,
       capture_mode: :tracked,
       cadence_ms: nil,
       target_pace_sec: nil,
-      pace_consistency: nil,
-      execution_program_id: execution_program_id
+      pace_consistency: nil
     )
   end
 
-  defp apply_tracked_session_mode(
-         changeset,
-         {:trusted, cadence, target_pace},
-         execution_program_id
-       ) do
+  defp apply_tracked_session_mode(changeset, {:trusted, cadence, target_pace}) do
     consistency = if valid_cadence_values?(cadence), do: PaceConsistency.score(cadence)
 
     changeset
@@ -1314,79 +2030,24 @@ defmodule BurpeeTrainer.Workouts do
       capture_mode: :tracked,
       cadence_ms: Jason.encode!(cadence),
       target_pace_sec: parse_optional_float(target_pace),
-      pace_consistency: consistency,
-      execution_program_id: execution_program_id
+      pace_consistency: consistency
     )
   end
 
-  defp planned_session_attrs(%WorkoutPlan{} = plan) do
-    with {:ok, program} <- compile_plan(plan) do
-      {:ok,
-       %{
-         "burpee_type" => Atom.to_string(program.burpee_type),
-         "burpee_count_planned" => program.target_reps,
-         "duration_sec_planned" => program.target_duration_sec,
-         "execution_program_id" => program.id
-       }}
-    end
-  end
-
-  defp with_client_session_id(attrs) do
-    case Map.get(attrs, "client_session_id") || Map.get(attrs, :client_session_id) do
-      value when is_binary(value) and value != "" -> attrs
-      _ -> Map.put(attrs, "client_session_id", Ecto.UUID.generate())
-    end
-  end
-
-  defp insert_idempotent_session(changeset, user_id) do
-    client_session_id = Ecto.Changeset.get_field(changeset, :client_session_id)
-
-    case get_session_by_client_session_id(user_id, client_session_id) do
-      %WorkoutSession{} = session ->
-        {:ok, session, :existing}
-
-      nil ->
-        case Repo.insert(changeset) do
-          {:ok, session} ->
-            {:ok, session, :inserted}
-
-          {:error, changeset} ->
-            case get_session_by_client_session_id(user_id, client_session_id) do
-              %WorkoutSession{} = session -> {:ok, session, :existing}
-              nil -> {:error, changeset}
-            end
-        end
-    end
-  end
-
-  defp get_session_by_client_session_id(_user_id, nil), do: nil
-  defp get_session_by_client_session_id(_user_id, ""), do: nil
-
-  defp get_session_by_client_session_id(user_id, client_session_id) do
-    Repo.get_by(WorkoutSession, user_id: user_id, client_session_id: client_session_id)
-  end
-
-  @doc """
-  Create a free-form session (no plan reference). `user_id` is set
-  programmatically. Same derived-field computation as plan sessions.
-  """
+  @doc "Inserts a completed manual session at its validated historical completion time."
   @spec create_free_form_session(User.t(), map) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
-  def create_free_form_session(%User{id: user_id}, attrs) do
-    changeset =
-      %WorkoutSession{user_id: user_id}
-      |> WorkoutSession.free_form_changeset(with_client_session_id(attrs))
-      |> Ecto.Changeset.change(
-        capture_mode: :logged,
-        status: :reported,
-        source: :manual,
-        reported_at: DateTime.utc_now(:second)
-      )
-      |> with_derived_session_fields(user_id)
-
-    case insert_idempotent_session(changeset, user_id) do
-      {:ok, session, _status} -> {:ok, session}
-      {:error, changeset} -> {:error, changeset}
+  def create_free_form_session(%User{id: user_id} = user, attrs) when is_map(attrs) do
+    Repo.immediate_transaction(fn ->
+      %WorkoutSession{user_id: user_id, state: :completed, source_kind: :manual}
+      |> WorkoutSession.free_form_changeset(attrs)
+      |> Ecto.Changeset.change(capture_mode: :logged)
+      |> with_derived_session_fields(user_id, user.timezone)
+      |> then(&persist_completed_session(user, &1, fn changeset -> Repo.insert(changeset) end))
+    end)
+    |> case do
+      {:ok, %WorkoutSession{} = session} -> {:ok, session}
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
     end
   end
 
@@ -1436,76 +2097,9 @@ defmodule BurpeeTrainer.Workouts do
     WorkoutSession.free_form_changeset(session, attrs)
   end
 
-  @spec change_session_from_plan(WorkoutSession.t(), map) :: Ecto.Changeset.t()
-  def change_session_from_plan(%WorkoutSession{} = session, attrs \\ %{}) do
-    WorkoutSession.from_plan_changeset(session, attrs)
-  end
-
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
-
-  @doc """
-  List all style performances for a user.
-  """
-  @spec list_style_performances(User.t()) :: [StylePerformance.t()]
-  def list_style_performances(%User{id: user_id}) do
-    Repo.all(from(sp in StylePerformance, where: sp.user_id == ^user_id))
-  end
-
-  @doc """
-  Persist a wizard-generated (unsaved) `%WorkoutPlan{}` struct for a user.
-  Converts the struct to changeset-compatible attrs.
-  """
-  @spec save_generated_plan(User.t(), WorkoutPlan.t()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Ecto.Changeset.t()}
-  def save_generated_plan(%User{} = user, %WorkoutPlan{} = plan) do
-    attrs = %{
-      "name" => plan.name,
-      "source_json" => plan_source_attrs(plan),
-      "style_name" => plan.style_name,
-      "coach_suggestion_kind" => plan.coach_suggestion_kind,
-      "coach_target_reps" => plan.coach_target_reps
-    }
-
-    create_plan(user, attrs)
-  end
-
-  defp plan_source_attrs(%WorkoutPlan{source_json: source}) when is_map(source), do: source
-  defp plan_source_attrs(%WorkoutPlan{}), do: nil
-
-  defp normalize_plan_attrs(attrs) when is_map(attrs) do
-    attrs
-    |> normalize_metadata_key("plan_solver_metadata")
-    |> normalize_metadata_key(:plan_solver_metadata)
-  end
-
-  defp normalize_metadata_key(attrs, key) do
-    case Map.fetch(attrs, key) do
-      {:ok, metadata} -> Map.put(attrs, key, stringify_metadata(metadata))
-      :error -> attrs
-    end
-  end
-
-  defp stringify_metadata(nil), do: nil
-
-  defp stringify_metadata(metadata) when is_map(metadata) do
-    Map.new(metadata, fn {key, value} -> {to_string(key), stringify_metadata_value(value)} end)
-  end
-
-  defp stringify_metadata_value(value) when is_map(value), do: stringify_metadata(value)
-
-  defp stringify_metadata_value(values) when is_list(values),
-    do: Enum.map(values, &stringify_metadata_value/1)
-
-  defp stringify_metadata_value(value) when is_tuple(value),
-    do: value |> Tuple.to_list() |> stringify_metadata_value()
-
-  defp stringify_metadata_value(value) when value in [nil, true, false], do: value
-
-  defp stringify_metadata_value(value) when is_atom(value), do: Atom.to_string(value)
-
-  defp stringify_metadata_value(value), do: value
 
   @doc false
   def preload_plan(%WorkoutPlan{} = plan), do: plan
@@ -1521,6 +2115,7 @@ defmodule BurpeeTrainer.Workouts do
   def current_week_pushups(%User{} = user, today \\ Date.utc_today()) do
     user
     |> scoring_sessions()
+    |> localize_scoring_sessions(user.timezone)
     |> Scoring.week_pushups(today)
   end
 
@@ -1532,25 +2127,31 @@ defmodule BurpeeTrainer.Workouts do
   def gamification_stats(%User{id: user_id}), do: read_gamification_stats(user_id)
 
   @doc """
-  Detect and persist the milestones triggered by `session` having just been
-  saved. Marks any newly achieved goal, updates personal bests in
-  `user_stats`, and returns the ordered list of celebration events (see
-  `BurpeeTrainer.Milestones`). Returns `[]` when nothing of note happened.
+  Presents milestones for a completed session and updates aggregate bests.
+
+  Goal attribution is read-only here: completion already persisted `goal_id`
+  and the achieved goal atomically with the session transition.
   """
   @spec session_milestones(User.t(), WorkoutSession.t(), Date.t()) :: [map]
-  def session_milestones(user, session, today \\ nil)
+  def session_milestones(
+        %User{id: user_id, timezone: timezone},
+        %WorkoutSession{state: :completed, completed_at: %DateTime{} = completed_at} = session,
+        today \\ nil
+      ) do
+    {:ok, completed_date} = UserTime.local_date(completed_at, timezone)
+    today = today || completed_date
 
-  def session_milestones(%User{}, %WorkoutSession{status: status}, _today)
-      when status != :reported,
-      do: []
+    before_sessions =
+      user_id
+      |> scoring_sessions_before(completed_at)
+      |> localize_scoring_sessions(timezone)
 
-  def session_milestones(%User{id: user_id} = user, %WorkoutSession{} = session, today) do
-    today = today || DateTime.to_date(session.inserted_at)
-    after_sessions = scoring_sessions(user)
-    before_sessions = Enum.reject(after_sessions, &(&1.id == session.id))
+    after_sessions =
+      before_sessions ++
+        localize_scoring_sessions([scoring_session_map(session)], timezone)
 
-    week_date = DateTime.to_date(session.inserted_at)
-    stats = read_gamification_stats(user_id)
+    week_date = completed_date
+    stats = gamification_stats_before(before_sessions)
 
     session_pushups = Scoring.session_pushups(session_map(session))
     week_after = Scoring.week_pushups(after_sessions, week_date)
@@ -1574,47 +2175,45 @@ defmodule BurpeeTrainer.Workouts do
       lifetime_milestone_before: stats.lifetime_pushup_milestone,
       balanced_before?: Scoring.balanced_week?(week_sessions(before_sessions, week_date)),
       balanced_after?: Scoring.balanced_week?(week_sessions(after_sessions, week_date)),
-      goal: detect_goal(user, session, today),
+      goal: attributed_goal(user_id, session, today),
       days_since_last: session.days_since_last
     }
 
     events = Milestones.detect(input)
 
-    persist_bests(user_id, today, %{
-      week_after: week_after,
-      best_week: stats.best_week_pushups,
-      session_pushups: session_pushups,
-      best_session: stats.best_session_pushups,
-      pace: pace,
-      pace_qualifies?: pace_qualifies?,
-      best_pace: stats.best_pace_sec_per_burpee,
-      lifetime_after: lifetime_after,
-      lifetime_milestone: stats.lifetime_pushup_milestone
-    })
+    unless future_completed_session?(user_id, completed_at) do
+      persist_bests(user_id, today, %{
+        week_after: week_after,
+        best_week: stats.best_week_pushups,
+        session_pushups: session_pushups,
+        best_session: stats.best_session_pushups,
+        pace: pace,
+        pace_qualifies?: pace_qualifies?,
+        best_pace: stats.best_pace_sec_per_burpee,
+        lifetime_after: lifetime_after,
+        lifetime_milestone: stats.lifetime_pushup_milestone
+      })
+    end
 
     events
   end
 
-  # Detect a goal that this session just achieved for its type. Marks the goal
-  # achieved, tags the achieving session, and returns a payload describing how
-  # the deadline was met (or nil when no goal was completed).
-  defp detect_goal(%User{} = user, %WorkoutSession{burpee_type: type}, today) do
-    with goal when not is_nil(goal) <- Goals.get_active_goal(user, type),
-         best when not is_nil(best) <- best_qualifying_session(user, type),
-         normalized = round(best.burpee_count_actual / best.duration_sec_actual * 1200.0),
-         true <- normalized >= goal.burpee_count_target do
-      Goals.mark_achieved(goal)
-      tag_session_as_goal_reached(best, goal.id)
+  defp attributed_goal(user_id, %WorkoutSession{goal_id: goal_id}, today)
+       when is_integer(goal_id) do
+    case Repo.get_by(Goal, id: goal_id, user_id: user_id, status: :achieved) do
+      %Goal{} = goal ->
+        %{
+          burpee_type: goal.burpee_type,
+          target: goal.burpee_count_target,
+          deadline: deadline_category(today, goal.date_target)
+        }
 
-      %{
-        burpee_type: type,
-        target: goal.burpee_count_target,
-        deadline: deadline_category(today, goal.date_target)
-      }
-    else
-      _ -> nil
+      nil ->
+        nil
     end
   end
+
+  defp attributed_goal(_user_id, %WorkoutSession{}, _today), do: nil
 
   defp deadline_category(today, target) do
     case Date.compare(today, target) do
@@ -1635,26 +2234,114 @@ defmodule BurpeeTrainer.Workouts do
   defp week_sessions(sessions, date) do
     week_start = Date.beginning_of_week(date, :monday)
 
-    Enum.filter(sessions, fn %{inserted_at: dt} ->
-      Date.compare(DateTime.to_date(dt) |> Date.beginning_of_week(:monday), week_start) == :eq
+    Enum.filter(sessions, fn session ->
+      session_date = DateTime.to_date(session.completed_at)
+      Date.beginning_of_week(session_date, :monday) == week_start
     end)
   end
 
   defp scoring_sessions(%User{id: user_id}) do
     Repo.all(
       from(s in WorkoutSession,
-        where: s.user_id == ^user_id and s.status == :reported,
+        where: s.user_id == ^user_id and s.state == :completed,
         select: %{
           id: s.id,
           burpee_type: s.burpee_type,
           burpee_count_actual: s.burpee_count_actual,
           duration_sec_actual: s.duration_sec_actual,
-          inserted_at: s.inserted_at,
+          completed_at: s.completed_at,
           tags: s.tags
         }
       )
     )
   end
+
+  defp future_completed_session?(user_id, completed_at) do
+    Repo.exists?(
+      from(s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and s.state == :completed and
+            s.completed_at > ^completed_at
+      )
+    )
+  end
+
+  defp scoring_sessions_before(user_id, completed_at) do
+    Repo.all(
+      from(s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and s.state == :completed and
+            s.completed_at < ^completed_at,
+        select: %{
+          id: s.id,
+          burpee_type: s.burpee_type,
+          burpee_count_actual: s.burpee_count_actual,
+          duration_sec_actual: s.duration_sec_actual,
+          completed_at: s.completed_at,
+          tags: s.tags
+        }
+      )
+    )
+  end
+
+  defp scoring_session_map(%WorkoutSession{} = session) do
+    %{
+      id: session.id,
+      burpee_type: session.burpee_type,
+      burpee_count_actual: session.burpee_count_actual,
+      duration_sec_actual: session.duration_sec_actual,
+      completed_at: session.completed_at,
+      tags: session.tags
+    }
+  end
+
+  defp localize_scoring_sessions(sessions, timezone) do
+    Enum.map(sessions, fn session ->
+      local_completed_at = DateTime.shift_zone!(session.completed_at, timezone)
+      %{session | completed_at: local_completed_at}
+    end)
+  end
+
+  defp gamification_stats_before(sessions) do
+    session_pushups = Enum.map(sessions, &Scoring.session_pushups/1)
+    lifetime = Enum.sum(session_pushups)
+
+    best_week =
+      sessions
+      |> Enum.group_by(&Date.beginning_of_week(DateTime.to_date(&1.completed_at), :monday))
+      |> Enum.map(fn {_week, week_sessions} ->
+        week_sessions |> Enum.map(&Scoring.session_pushups/1) |> Enum.sum()
+      end)
+      |> max_or_zero()
+
+    best_pace =
+      sessions
+      |> Enum.flat_map(fn session ->
+        count = session.burpee_count_actual
+        duration = session.duration_sec_actual
+
+        if is_integer(count) and count >= @pace_pr_min_count and is_integer(duration) and
+             duration > 0 and duration <= @pace_pr_max_duration,
+           do: [duration / count],
+           else: []
+      end)
+      |> min_or_nil()
+
+    %{
+      best_week_pushups: best_week,
+      best_session_pushups: max_or_zero(session_pushups),
+      best_pace_sec_per_burpee: best_pace,
+      lifetime_pushup_milestone:
+        Milestones.lifetime_milestones()
+        |> Enum.filter(&(&1 <= lifetime))
+        |> max_or_zero()
+    }
+  end
+
+  defp max_or_zero([]), do: 0
+  defp max_or_zero(values), do: Enum.max(values)
+  defp min_or_nil([]), do: nil
+  defp min_or_nil(values), do: Enum.min(values)
 
   defp session_map(%WorkoutSession{} = s) do
     %{
@@ -1813,39 +2500,254 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp with_derived_session_fields(changeset, user_id) do
+  defp with_program_deviation_fields(changeset, program_snapshot) when is_map(program_snapshot) do
+    if changeset.valid? do
+      Ecto.Changeset.change(
+        changeset,
+        compute_program_deviation_fields(changeset, program_snapshot)
+      )
+    else
+      changeset
+    end
+  end
+
+  defp compute_program_deviation_fields(changeset, program_snapshot) do
+    actual_reps = Ecto.Changeset.get_field(changeset, :burpee_count_actual)
+    actual_duration = Ecto.Changeset.get_field(changeset, :duration_sec_actual)
+    target_reps = Ecto.Changeset.get_field(changeset, :burpee_count_planned)
+    target_duration = Ecto.Changeset.get_field(changeset, :duration_sec_planned)
+    cadence_intervals = cadence_intervals_from_changeset(changeset)
+    expected_intervals = expected_program_intervals(program_snapshot)
+
+    %{
+      reps_delta: reps_delta(actual_reps, target_reps),
+      shortened: shortened?(actual_duration, target_duration),
+      prescribed_sets_completed: prescribed_sets_completed(program_snapshot, actual_reps),
+      recovery_delta_sec: recovery_delta_sec(cadence_intervals, expected_intervals),
+      pace_delta_sec: pace_delta_sec(cadence_intervals, expected_intervals),
+      cadence_decline: cadence_decline(cadence_intervals, expected_intervals)
+    }
+  end
+
+  defp reps_delta(actual_reps, target_reps)
+       when is_integer(actual_reps) and is_integer(target_reps),
+       do: actual_reps - target_reps
+
+  defp reps_delta(_actual_reps, _target_reps), do: nil
+
+  defp shortened?(actual_duration, target_duration)
+       when is_integer(actual_duration) and is_integer(target_duration),
+       do: actual_duration < target_duration
+
+  defp shortened?(_actual_duration, _target_duration), do: nil
+
+  defp prescribed_sets_completed(program_snapshot, actual_reps)
+       when is_map(program_snapshot) and is_integer(actual_reps) and actual_reps >= 0 do
+    program_snapshot
+    |> program_work_events()
+    |> Enum.reduce_while({0, actual_reps}, fn %{reps: reps}, {completed, remaining_reps} ->
+      if remaining_reps >= reps do
+        {:cont, {completed + 1, remaining_reps - reps}}
+      else
+        {:halt, {completed, remaining_reps}}
+      end
+    end)
+    |> elem(0)
+  end
+
+  defp prescribed_sets_completed(_program_snapshot, _actual_reps), do: nil
+
+  defp cadence_intervals_from_changeset(changeset) do
+    case Ecto.Changeset.get_field(changeset, :cadence_ms) do
+      cadence when is_binary(cadence) ->
+        with {:ok, timestamps} <- Jason.decode(cadence),
+             true <- valid_cadence_values?(timestamps) do
+          cadence_intervals(timestamps)
+        else
+          _other -> nil
+        end
+
+      _other ->
+        nil
+    end
+  end
+
+  defp cadence_intervals(timestamps) when is_list(timestamps) do
+    timestamps
+    |> Enum.reduce({0, []}, fn timestamp, {previous_timestamp, acc} ->
+      {timestamp, [(timestamp - previous_timestamp) / 1_000 | acc]}
+    end)
+    |> elem(1)
+    |> Enum.reverse()
+  end
+
+  defp expected_program_intervals(program_snapshot) when is_map(program_snapshot) do
+    program_snapshot
+    |> program_events()
+    |> Enum.reduce({[], nil}, fn
+      %{kind: :work, reps: reps, sec_per_rep: sec_per_rep}, {acc, pending_rest_sec}
+      when is_integer(reps) and reps > 0 ->
+        first_interval =
+          if is_integer(pending_rest_sec) and pending_rest_sec > 0 do
+            [{:boundary, pending_rest_sec + sec_per_rep}]
+          else
+            [{:work, sec_per_rep}]
+          end
+
+        work_intervals = List.duplicate({:work, sec_per_rep}, max(reps - 1, 0))
+        {acc ++ first_interval ++ work_intervals, nil}
+
+      %{kind: :rest, duration_sec: duration_sec}, {acc, _pending_rest_sec}
+      when is_integer(duration_sec) and duration_sec >= 0 ->
+        {acc, duration_sec}
+
+      _other, acc ->
+        acc
+    end)
+    |> elem(0)
+  end
+
+  defp pace_delta_sec(nil, _expected_intervals), do: nil
+
+  defp pace_delta_sec(cadence_intervals, expected_intervals) do
+    cadence_intervals
+    |> comparable_interval_pairs(expected_intervals, :work)
+    |> average_interval_delta()
+  end
+
+  defp recovery_delta_sec(nil, _expected_intervals), do: nil
+
+  defp recovery_delta_sec(_cadence_intervals, _expected_intervals), do: nil
+
+  defp cadence_decline(nil, _expected_intervals), do: nil
+
+  defp cadence_decline(cadence_intervals, expected_intervals) do
+    work_intervals =
+      cadence_intervals
+      |> comparable_interval_pairs(expected_intervals, :work)
+      |> Enum.map(&elem(&1, 0))
+
+    window_size = min(3, div(length(work_intervals), 2))
+
+    if window_size > 0 do
+      Float.round(
+        average(Enum.take(work_intervals, -window_size)) -
+          average(Enum.take(work_intervals, window_size)),
+        3
+      )
+    else
+      nil
+    end
+  end
+
+  defp comparable_interval_pairs(cadence_intervals, expected_intervals, kind) do
+    cadence_intervals
+    |> Enum.zip(expected_intervals)
+    |> Enum.flat_map(fn
+      {actual, {:work, expected}} when kind == :work -> [{actual, expected}]
+      {actual, {:boundary, expected}} when kind == :boundary -> [{actual, expected}]
+      _other -> []
+    end)
+  end
+
+  defp average_interval_delta([]), do: nil
+
+  defp average_interval_delta(pairs) do
+    {actual_total, expected_total, count} =
+      Enum.reduce(pairs, {0.0, 0.0, 0}, fn {actual, expected},
+                                           {actual_acc, expected_acc, count} ->
+        {actual_acc + actual, expected_acc + expected, count + 1}
+      end)
+
+    Float.round(actual_total / count - expected_total / count, 3)
+  end
+
+  defp average(values) do
+    Enum.sum(values) / length(values)
+  end
+
+  defp program_work_events(program_snapshot) when is_map(program_snapshot) do
+    program_snapshot
+    |> program_events()
+    |> Enum.filter(&match?(%{kind: :work}, &1))
+  end
+
+  defp program_events(program_snapshot) when is_map(program_snapshot) do
+    program_snapshot
+    |> field_value(:events)
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      event when is_map(event) -> [execution_program_event(event)]
+      _other -> []
+    end)
+  end
+
+  defp execution_program_event(event) do
+    case field_value(event, :kind) do
+      kind when kind in ["work", :work] ->
+        %{
+          kind: :work,
+          reps: field_value(event, :reps),
+          sec_per_rep: execution_program_sec_per_rep(event)
+        }
+
+      kind when kind in ["rest", :rest] ->
+        %{
+          kind: :rest,
+          duration_sec: execution_program_rest_duration(event)
+        }
+
+      _other ->
+        %{kind: :unknown}
+    end
+  end
+
+  defp execution_program_sec_per_rep(event) do
+    case field_value(event, :sec_per_rep_us) do
+      value when is_integer(value) -> value / 1_000_000
+      _other -> 0.0
+    end
+  end
+
+  defp execution_program_rest_duration(event) do
+    case field_value(event, :duration_ms) do
+      value when is_integer(value) -> div(value, 1_000)
+      _other -> 0
+    end
+  end
+
+  defp with_derived_session_fields(changeset, user_id, timezone) do
     if changeset.valid? do
       burpee_type = Ecto.Changeset.get_field(changeset, :burpee_type)
-      derived = compute_session_derived_fields(user_id, burpee_type, changeset)
+      derived = compute_session_derived_fields(user_id, burpee_type, changeset, timezone)
       Ecto.Changeset.change(changeset, derived)
     else
       changeset
     end
   end
 
-  defp compute_session_derived_fields(user_id, burpee_type, changeset) do
+  defp compute_session_derived_fields(user_id, burpee_type, changeset, timezone) do
     count = Ecto.Changeset.get_field(changeset, :burpee_count_actual)
     duration = Ecto.Changeset.get_field(changeset, :duration_sec_actual)
-    inserted_at_override = Ecto.Changeset.get_field(changeset, :inserted_at)
+    completed_at = Ecto.Changeset.get_field(changeset, :completed_at)
 
     rate =
       if is_integer(count) and is_integer(duration) and duration > 0,
         do: count / duration * 60
 
-    session_date =
-      if inserted_at_override,
-        do: DateTime.to_date(inserted_at_override),
-        else: Date.utc_today()
+    local_completed_at =
+      (completed_at || DateTime.utc_now())
+      |> DateTime.shift_zone!(timezone)
 
-    bucket_hour =
-      if inserted_at_override,
-        do: inserted_at_override.hour,
-        else: DateTime.utc_now().hour
-
-    prev = fetch_prev_session(user_id, burpee_type)
+    session_date = DateTime.to_date(local_completed_at)
+    bucket_hour = local_completed_at.hour
+    prev = fetch_prev_session(user_id, burpee_type, completed_at)
 
     days_since =
-      if prev, do: Date.diff(session_date, DateTime.to_date(prev.inserted_at))
+      if prev do
+        {:ok, previous_date} = UserTime.local_date(prev.completed_at, timezone)
+        Date.diff(session_date, previous_date)
+      end
 
     rate_delta =
       if prev && is_number(rate) && is_number(prev.rate_per_min_actual),
@@ -1856,55 +2758,46 @@ defmodule BurpeeTrainer.Workouts do
       time_of_day_bucket: time_of_day_bucket(bucket_hour),
       days_since_last: days_since,
       rate_delta: rate_delta,
-      rate_avg_rolling_3: compute_rate_rolling(user_id, burpee_type, rate)
+      rate_avg_rolling_3: compute_rate_rolling(user_id, burpee_type, rate, completed_at)
     }
   end
 
-  defp fetch_prev_session(user_id, burpee_type) do
+  defp fetch_prev_session(user_id, burpee_type, completed_at) do
     Repo.one(
       from(s in WorkoutSession,
-        where: s.user_id == ^user_id and s.status == :reported and s.burpee_type == ^burpee_type,
-        order_by: [desc: s.inserted_at],
+        where:
+          s.user_id == ^user_id and s.burpee_type == ^burpee_type and
+            s.state == :completed and s.completed_at < ^completed_at,
+        order_by: [desc: s.completed_at, desc: s.id],
         limit: 1
       )
     )
   end
 
-  defp compute_rate_rolling(_user_id, _burpee_type, nil), do: nil
+  defp compute_rate_rolling(_user_id, _burpee_type, nil, _completed_at), do: nil
 
-  defp compute_rate_rolling(user_id, burpee_type, current_rate) do
+  defp compute_rate_rolling(user_id, burpee_type, current_rate, completed_at) do
     prev_rates =
       Repo.all(
         from(s in WorkoutSession,
           where:
-            s.user_id == ^user_id and s.status == :reported and
-              s.burpee_type == ^burpee_type and not is_nil(s.rate_per_min_actual),
-          order_by: [desc: s.inserted_at],
+            s.user_id == ^user_id and s.burpee_type == ^burpee_type and
+              s.state == :completed and s.completed_at < ^completed_at and
+              not is_nil(s.rate_per_min_actual),
+          order_by: [desc: s.completed_at, desc: s.id],
           limit: 2,
           select: s.rate_per_min_actual
         )
       )
 
     # Oldest first, then current session — EMA gives more weight to recent.
-    prev_rates
-    |> Enum.reverse()
-    |> List.insert_at(-1, current_rate)
-    |> ema(0.5)
+    ema(Enum.reverse(prev_rates) ++ [current_rate], 0.5)
   end
 
-  defp ema(rates, alpha) do
-    case rates do
-      [] ->
-        nil
+  defp ema([r], _alpha), do: r
 
-      [rate] ->
-        rate
-
-      [rate | rest] ->
-        Enum.reduce(rest, rate, fn current_rate, acc ->
-          alpha * current_rate + (1.0 - alpha) * acc
-        end)
-    end
+  defp ema([r | rest], alpha) do
+    Enum.reduce(rest, r, fn rate, acc -> alpha * rate + (1.0 - alpha) * acc end)
   end
 
   defp time_of_day_bucket(hour) do
@@ -1914,101 +2807,5 @@ defmodule BurpeeTrainer.Workouts do
       hour in 17..20 -> "evening"
       true -> "night"
     end
-  end
-
-  # Copy the plan's style_name onto the session changeset when present.
-  defp maybe_carry_style_name(changeset, %{style_name: name}) when is_binary(name) do
-    Ecto.Changeset.put_change(changeset, :style_name, name)
-  end
-
-  defp maybe_carry_style_name(changeset, _plan), do: changeset
-
-  # No-op when the session has no style attribution.
-  defp maybe_upsert_style_performance(%{style_name: nil}, _user_id), do: :ok
-  defp maybe_upsert_style_performance(%{style_name: ""}, _user_id), do: :ok
-
-  defp maybe_upsert_style_performance(session, user_id) do
-    bt = session.burpee_type
-
-    level =
-      Repo.all(
-        from(s in WorkoutSession,
-          where: s.user_id == ^user_id and s.status == :reported and s.burpee_type == ^bt,
-          select: %{
-            burpee_type: s.burpee_type,
-            burpee_count_actual: s.burpee_count_actual,
-            duration_sec_actual: s.duration_sec_actual
-          }
-        )
-      )
-      |> Levels.level_for_type(bt)
-      |> Atom.to_string()
-
-    completion_ratio =
-      if is_integer(session.burpee_count_planned) and session.burpee_count_planned > 0,
-        do: session.burpee_count_actual / session.burpee_count_planned,
-        else: 1.0
-
-    upsert_style_performance_record(%{
-      user_id: user_id,
-      style_name: session.style_name,
-      burpee_type: bt,
-      mood: session.mood || 0,
-      level: level,
-      time_of_day_bucket: session.time_of_day_bucket || "morning",
-      completion_ratio: completion_ratio,
-      rate: session.rate_per_min_actual || 0.0
-    })
-  end
-
-  defp upsert_style_performance_record(%{
-         user_id: user_id,
-         style_name: style_name,
-         burpee_type: bt,
-         mood: mood,
-         level: level,
-         time_of_day_bucket: bucket,
-         completion_ratio: cr,
-         rate: rate
-       }) do
-    key = [
-      user_id: user_id,
-      style_name: style_name,
-      burpee_type: bt,
-      mood: mood,
-      level: level,
-      time_of_day_bucket: bucket
-    ]
-
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-    case Repo.get_by(StylePerformance, key) do
-      nil ->
-        Repo.insert!(%StylePerformance{
-          user_id: user_id,
-          style_name: style_name,
-          burpee_type: bt,
-          mood: mood,
-          level: level,
-          time_of_day_bucket: bucket,
-          session_count: 1,
-          completion_ratio_sum: cr,
-          rate_sum: rate,
-          inserted_at: now,
-          updated_at: now
-        })
-
-      existing ->
-        existing
-        |> Ecto.Changeset.change(%{
-          session_count: existing.session_count + 1,
-          completion_ratio_sum: existing.completion_ratio_sum + cr,
-          rate_sum: existing.rate_sum + rate,
-          updated_at: now
-        })
-        |> Repo.update!()
-    end
-
-    :ok
   end
 end

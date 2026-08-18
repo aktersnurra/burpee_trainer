@@ -31,10 +31,12 @@ defmodule BurpeeTrainerWeb.StatsLive do
     user = socket.assigns.current_user
     today = Date.utc_today()
     all_sessions = Workouts.list_sessions(user)
-    {detailed_sessions, _has_more} = Workouts.list_sessions_page(user, 5_000)
     period_start = period_start_date(period, today)
     period_sessions = filter_sessions(all_sessions, period_start)
-    period_detailed_sessions = filter_sessions(detailed_sessions, period_start)
+
+    {sessions, sessions_cursor, sessions_has_more} =
+      load_period_sessions(user, period_start, nil, visible_count)
+
     goals = Goals.list_current_goals(user)
     all_six_sessions = Workouts.list_sessions_for_chart(user, :six_count)
     all_seal_sessions = Workouts.list_sessions_for_chart(user, :navy_seal)
@@ -50,7 +52,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
     |> assign(:all_time_pushups, Scoring.total_pushups(all_sessions))
     |> assign(:goals, goals)
     |> assign(:sessions_visible_count, visible_count)
-    |> assign_period_sessions(period_detailed_sessions, visible_count)
+    |> assign(:sessions, sessions)
+    |> assign(:sessions_cursor, sessions_cursor)
+    |> assign(:sessions_has_more, sessions_has_more)
     |> assign(:goal_modal_type, socket.assigns[:goal_modal_type])
     |> assign(:goal_baseline_session, socket.assigns[:goal_baseline_session])
     |> assign(:weekly_data, Workouts.weekly_minutes(user) |> filter_weekly_data(period_start))
@@ -62,13 +66,40 @@ defmodule BurpeeTrainerWeb.StatsLive do
     |> assign_gamification(all_sessions, today)
   end
 
-  defp assign_period_sessions(socket, period_detailed_sessions, visible_count) do
-    assign(socket,
-      period_detailed_sessions: period_detailed_sessions,
-      sessions: Enum.take(period_detailed_sessions, visible_count),
-      sessions_has_more: length(period_detailed_sessions) > visible_count
-    )
+  defp load_period_sessions(user, period_start, cursor, limit) do
+    do_load_period_sessions(user, period_start, cursor, limit, [])
   end
+
+  defp do_load_period_sessions(user, period_start, cursor, remaining, sessions) do
+    page_limit = min(@page_size, remaining)
+    opts = if cursor, do: [before: cursor], else: []
+    {page, database_has_more} = Workouts.list_sessions_page(user, page_limit, opts)
+    matching = Enum.take_while(page, &session_in_period?(&1, period_start))
+    sessions = Enum.reverse(matching, sessions)
+    cursor = page_cursor(page) || cursor
+    crossed_period_start? = length(matching) < length(page)
+    remaining = remaining - length(matching)
+
+    cond do
+      crossed_period_start? or not database_has_more ->
+        {Enum.reverse(sessions), cursor, false}
+
+      remaining == 0 ->
+        {Enum.reverse(sessions), cursor, true}
+
+      true ->
+        do_load_period_sessions(user, period_start, cursor, remaining, sessions)
+    end
+  end
+
+  defp session_in_period?(_session, nil), do: true
+
+  defp session_in_period?(session, period_start) do
+    Date.compare(DateTime.to_date(session.completed_at), period_start) in [:gt, :eq]
+  end
+
+  defp page_cursor([]), do: nil
+  defp page_cursor(page), do: page |> List.last() |> then(&{&1.completed_at, &1.id})
 
   # Push-up score, personal best, balance, and level-maintenance status.
   defp assign_gamification(socket, sessions, today) do
@@ -77,7 +108,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     this_week =
       Enum.filter(sessions, fn s ->
         Date.compare(
-          DateTime.to_date(s.inserted_at) |> Date.beginning_of_week(:monday),
+          DateTime.to_date(s.completed_at) |> Date.beginning_of_week(:monday),
           week_start
         ) == :eq
       end)
@@ -96,12 +127,24 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   @impl true
   def handle_event("load_more_sessions", _, socket) do
-    visible_count = socket.assigns.sessions_visible_count + @page_size
+    if socket.assigns.sessions_has_more do
+      {sessions, cursor, has_more} =
+        load_period_sessions(
+          socket.assigns.current_user,
+          socket.assigns.period_start,
+          socket.assigns.sessions_cursor,
+          @page_size
+        )
 
-    {:noreply,
-     socket
-     |> assign(:sessions_visible_count, visible_count)
-     |> assign_period_sessions(socket.assigns.period_detailed_sessions, visible_count)}
+      {:noreply,
+       socket
+       |> assign(:sessions_visible_count, socket.assigns.sessions_visible_count + @page_size)
+       |> assign(:sessions, socket.assigns.sessions ++ sessions)
+       |> assign(:sessions_cursor, cursor)
+       |> assign(:sessions_has_more, has_more)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("delete_session", %{"id" => id}, socket) do
@@ -167,7 +210,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp filter_sessions(sessions, start_date) do
     Enum.filter(sessions, fn session ->
-      Date.compare(DateTime.to_date(session.inserted_at), start_date) in [:gt, :eq]
+      Date.compare(DateTime.to_date(session.completed_at), start_date) in [:gt, :eq]
     end)
   end
 
@@ -560,7 +603,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
 
   defp session_row(assigns) do
     today = Date.utc_today()
-    date = DateTime.to_date(assigns.session.inserted_at)
+    date = DateTime.to_date(assigns.session.completed_at)
 
     date_str =
       if date.year == today.year,
@@ -571,11 +614,28 @@ defmodule BurpeeTrainerWeb.StatsLive do
       assign(assigns,
         date_str: date_str,
         capture_badge: capture_badge(assigns.session),
-        session_tags: session_tags(assigns.session)
+        session_tags: session_tags(assigns.session),
+        display_name: history_display_name(assigns.session),
+        workout_type: assigns.session.workout_type_snapshot || assigns.session.burpee_type
       )
 
     ~H"""
-    <div class="relative grid grid-cols-[3.75rem_4rem_1fr_4.25rem] items-start gap-3 px-4 py-3 transition hover:bg-[var(--session-bg)]/45">
+    <div
+      id={"history-session-#{@session.id}"}
+      data-display-name={@display_name}
+      data-completed-at={@session.completed_at}
+      data-planned-reps={@session.burpee_count_planned}
+      data-actual-reps={@session.burpee_count_actual}
+      data-planned-duration-sec={@session.duration_sec_planned}
+      data-actual-duration-sec={@session.duration_sec_actual}
+      data-prescribed-sets-completed={@session.prescribed_sets_completed}
+      data-reps-delta={@session.reps_delta}
+      data-shortened={@session.shortened}
+      data-recovery-delta-sec={@session.recovery_delta_sec}
+      data-pace-delta-sec={@session.pace_delta_sec}
+      data-cadence-decline={@session.cadence_decline}
+      class="relative grid grid-cols-[3.75rem_4rem_1fr_4.25rem] items-start gap-3 px-4 py-3 transition hover:bg-[var(--session-bg)]/45"
+    >
       <.link
         :if={@capture_badge && @capture_badge.label == "Tracked"}
         navigate={~p"/stats/sessions/#{@session.id}"}
@@ -585,7 +645,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
         <span class="sr-only">Open session analysis</span>
       </.link>
 
-      <p class="text-lg font-semibold leading-none tabular-nums text-[var(--session-ink)]">
+      <p class="history-session-reps text-lg font-semibold leading-none tabular-nums text-[var(--session-ink)]">
         {if @session.burpee_count_actual, do: @session.burpee_count_actual, else: "—"}
       </p>
 
@@ -596,10 +656,10 @@ defmodule BurpeeTrainerWeb.StatsLive do
       <div class="min-w-0 space-y-1.5">
         <div class="flex min-w-0 items-center gap-2">
           <span class="text-sm font-medium text-[var(--session-ink)]">
-            {Fmt.burpee_type(@session.burpee_type)}
+            {Fmt.burpee_type(@workout_type)}
           </span>
-          <span :if={@session.plan} class="truncate text-xs text-[var(--session-muted)]">
-            {@session.plan.name}
+          <span class="history-session-name truncate text-xs text-[var(--session-muted)]">
+            {@display_name}
           </span>
         </div>
         <div class="flex flex-wrap items-center gap-1.5">
@@ -617,7 +677,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
       </div>
 
       <div class="relative z-10 flex flex-col items-end gap-1 pt-0.5 text-right">
-        <span class="shrink-0 text-xs text-[var(--session-muted)]">
+        <span class="history-session-date shrink-0 text-xs text-[var(--session-muted)]">
           {@date_str}
         </span>
         <button
@@ -650,7 +710,7 @@ defmodule BurpeeTrainerWeb.StatsLive do
     base =
       []
       |> maybe_add_tag(session.goal, %{label: "Goal reached", tone: "tag", icon: "hero-trophy"})
-      |> maybe_add_tag(session.plan == nil, %{
+      |> maybe_add_tag(session.source_kind == :manual, %{
         label: "Manual",
         tone: "neutral",
         icon: "hero-pencil-square"
@@ -673,6 +733,14 @@ defmodule BurpeeTrainerWeb.StatsLive do
     end)
     |> Enum.reverse()
   end
+
+  defp history_display_name(%{display_name_snapshot: name})
+       when is_binary(name) and name != "",
+       do: name
+
+  defp history_display_name(%{source_kind: :video}), do: "Video workout"
+  defp history_display_name(%{source_kind: :plan}), do: "Workout"
+  defp history_display_name(_session), do: "Manual workout"
 
   defp maybe_add_tag(tags, nil, _tag), do: tags
   defp maybe_add_tag(tags, false, _tag), do: tags

@@ -6,16 +6,17 @@ Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks
 
 ## Features
 
-- **Workout planning** — generate and edit prescriptions with explicit work, pace, and recovery structure.
-- **Compiled execution programs** — editable plans compile into immutable programs so completed sessions retain the exact workout that was run.
-- **Live session runner** — client-owned timing, audio cues, screen wake lock, pause/resume, rest breathing, count-in, and per-rep work pacing.
-- **Optional camera tracking** — BlazePose-based pose capture and rep tracking with timer-mode fallback.
-- **Progress and history** — completed sessions, goals, trends, milestones, and workout statistics.
+- **Durable workout library** — `workout_plans` is canonical. Valid drafts can be refined in natural language, explicitly published, copied, or deleted; published plans are immutable, reusable, startable, and archivable.
+- **Safe LLM authoring** — create and refine each make one bounded `Req` request. Valid output is persisted only as a draft; invalid output persists nothing. A generated recommendation is published and selected only after **Use this workout**; rejection deletes the alternative draft.
+- **Deterministic coaching** — Home projects the weekly target, done-today state, fallback, and recommendation pointer from persisted facts. A supervised transient reconciler recovers missing recommendations without durable jobs, attempts, leases, checkpoints, or outboxes.
+- **Immutable execution** — Start creates the exact `started` session ID and stores a plan Work/Rest or video snapshot. Resume reads that snapshot; completion updates the same row exactly once and remains offline-capable during the runner.
+- **Stable History and Stats** — completed views use session snapshots, so later plan archival or video changes cannot rewrite the workout that was performed.
+- **Live session runner** — terminal-active timing, audio cues, wake lock, pause/resume, breathing, count-in, and optional BlazePose rep tracking with timer fallback.
 - **Single-user authentication** — bcrypt password hashing with all application data scoped to the user.
 
 ## Stack
 
-- Elixir `~> 1.20` and Phoenix 1.8 with LiveView
+- Elixir `~> 1.19` and Phoenix 1.8 with LiveView
 - Ecto with SQLite via `ecto_sqlite3`
 - Tailwind CSS v4
 - Vanilla JavaScript modules and LiveView hooks
@@ -97,13 +98,15 @@ Run the Elixir test suite:
 mix test
 ```
 
-Run the full project gate before finishing a change:
+Run the full project gates before finishing a change:
 
 ```bash
-mix precommit
+(cd assets && npm test)
+mix assets.build
+MIX_ENV=test mix precommit
 ```
 
-`mix precommit` compiles with warnings treated as errors, checks for unused dependencies, checks formatting, and runs the Elixir tests.
+`mix precommit` compiles with warnings treated as errors, checks for unused dependencies and formatting, and runs ExUnit. The deletion-first migration rehearsal and authenticated browser procedure are documented in `TESTING.md` and `docs/testing/workout-session-e2e.md`.
 
 ## Production configuration
 
@@ -118,6 +121,10 @@ Production releases read their runtime configuration from environment variables.
 | `PORT` | No | HTTP port; defaults to `4000`. |
 | `POOL_SIZE` | No | SQLite connection pool size; defaults to `5`. |
 | `DNS_CLUSTER_QUERY` | No | Optional DNS-based cluster discovery query. |
+| `LLM_PROVIDER_URL` | For LLM authoring | Provider endpoint for natural-language create/refine and recommendation generation. |
+| `LLM_PROVIDER_API_KEY` | For LLM authoring | Provider credential. If either provider value is absent, LLM HTTP is disabled and deterministic fallback remains usable. |
+| `LLM_PROVIDER_MODEL` | No | Provider model; defaults to `openai/gpt-5-mini`. |
+| `LLM_PROVIDER_TIMEOUT_MS` | No | Request timeout from 1,000–60,000 ms; defaults to 20,000. |
 
 The SQLite database and uploaded/runtime data must live in persistent paths managed by the target machine, not under the release directory that deployment replaces.
 

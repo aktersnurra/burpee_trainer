@@ -3,6 +3,17 @@ defmodule BurpeeTrainer.PlanCompiler.Program do
 
   alias BurpeeTrainer.PlanCompiler.{CompileError, ProgramEvent}
 
+  @fields [
+    :schema_version,
+    :solver_version,
+    :burpee_type,
+    :target_reps,
+    :target_duration_sec,
+    :events,
+    :metadata
+  ]
+  @canonical_semantic_keys MapSet.new(["definition_hash", "pacing_style"])
+
   @enforce_keys [
     :schema_version,
     :solver_version,
@@ -28,6 +39,13 @@ defmodule BurpeeTrainer.PlanCompiler.Program do
   def new(attrs) when is_list(attrs), do: attrs |> Map.new() |> new()
 
   def new(attrs) when is_map(attrs) do
+    with :ok <- reject_unknown_fields(attrs),
+         :ok <- validate_canonical_semantics(attrs) do
+      build(attrs)
+    end
+  end
+
+  defp build(attrs) do
     program = %__MODULE__{
       schema_version: Map.fetch!(attrs, :schema_version),
       solver_version: Map.fetch!(attrs, :solver_version),
@@ -42,6 +60,56 @@ defmodule BurpeeTrainer.PlanCompiler.Program do
   rescue
     KeyError ->
       {:error, CompileError.new(:invalid_program, "Program is missing required fields")}
+  end
+
+  defp reject_unknown_fields(attrs) do
+    unknown = Map.keys(attrs) -- @fields
+
+    if unknown == [] do
+      :ok
+    else
+      {:error,
+       CompileError.new(:invalid_program, "Program contains unknown fields", %{fields: unknown})}
+    end
+  end
+
+  defp validate_canonical_semantics(%{schema_version: 3, metadata: metadata})
+       when is_map(metadata) do
+    with {:ok, normalized} <- normalize_semantic_keys(metadata),
+         true <- MapSet.equal?(Map.keys(normalized) |> MapSet.new(), @canonical_semantic_keys) do
+      :ok
+    else
+      _reason ->
+        {:error,
+         CompileError.new(:invalid_program, "Program contains invalid semantics", %{
+           value: metadata
+         })}
+    end
+  end
+
+  defp validate_canonical_semantics(%{schema_version: 3} = attrs) do
+    {:error,
+     CompileError.new(:invalid_program, "Program contains invalid semantics", %{
+       value: Map.get(attrs, :metadata)
+     })}
+  end
+
+  defp validate_canonical_semantics(_attrs), do: :ok
+
+  defp normalize_semantic_keys(metadata) do
+    Enum.reduce_while(metadata, {:ok, %{}}, fn
+      {key, value}, {:ok, normalized} when is_atom(key) or is_binary(key) ->
+        key = to_string(key)
+
+        if Map.has_key?(normalized, key) do
+          {:halt, :error}
+        else
+          {:cont, {:ok, Map.put(normalized, key, value)}}
+        end
+
+      _entry, _acc ->
+        {:halt, :error}
+    end)
   end
 
   @spec events(t()) :: [ProgramEvent.t()]

@@ -7,18 +7,22 @@ defmodule BurpeeTrainer.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      BurpeeTrainerWeb.Telemetry,
-      BurpeeTrainer.Repo,
-      {Ecto.Migrator,
-       repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
-      {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
-      # Start a worker by calling: BurpeeTrainer.Worker.start_link(arg)
-      # {BurpeeTrainer.Worker, arg},
-      # Start to serve requests, typically the last entry
-      BurpeeTrainerWeb.Endpoint
-    ]
+    children =
+      [
+        BurpeeTrainerWeb.Telemetry,
+        BurpeeTrainer.Repo,
+        {Ecto.Migrator,
+         repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
+        {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: BurpeeTrainer.PubSub}
+      ] ++
+        coach_children() ++
+        [
+          # Start a worker by calling: BurpeeTrainer.Worker.start_link(arg)
+          # {BurpeeTrainer.Worker, arg},
+          # Start to serve requests, typically the last entry
+          BurpeeTrainerWeb.Endpoint
+        ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -32,6 +36,16 @@ defmodule BurpeeTrainer.Application do
   def config_change(changed, _new, removed) do
     BurpeeTrainerWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp coach_children do
+    config = Application.get_env(:burpee_trainer, :coach_reconciler, [])
+
+    if Keyword.get(config, :enabled, true) do
+      [{BurpeeTrainer.CoachSupervisor, reconciler_options: Keyword.delete(config, :enabled)}]
+    else
+      []
+    end
   end
 
   defp skip_migrations?() do

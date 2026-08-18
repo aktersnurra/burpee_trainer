@@ -35,8 +35,6 @@ export class SessionRenderer {
 			warmup_running: "session-runner-client",
 			workout_ready: "session-workout-ready",
 			workout_running: "session-runner-client",
-			reporting_completion: "session-completion-review",
-			completion_pending_failed: "session-completion-review",
 			completion_review: "session-completion-review",
 		}[state.mode];
 
@@ -49,7 +47,7 @@ export class SessionRenderer {
 		this.renderCameraStatus(state);
 		this.renderCameraSetup(state);
 		this.renderCaptureControls(state);
-		this.renderReportPendingStatus(state);
+		this.renderCompletionControls(state);
 		if (visibleId !== this.visiblePanelId) {
 			this.visiblePanelId = visibleId;
 			this.focusPanelHeading(visibleId);
@@ -58,10 +56,6 @@ export class SessionRenderer {
 			this.announce("Starting camera");
 		} else if (state.mode === "camera_error") {
 			this.announce("Camera unavailable");
-		} else if (state.mode === "reporting_completion") {
-			this.announce("Preparing workout report");
-		} else if (state.mode === "completion_pending_failed") {
-			this.announce("Could not prepare workout report. Try again.");
 		} else if (
 			state.mode === "completion_review" &&
 			state.saveStatus === "saving"
@@ -103,45 +97,67 @@ export class SessionRenderer {
 		}
 	}
 
-	renderReportPendingStatus(state) {
-		const failed = state.mode === "completion_pending_failed";
-		const status = this.root.querySelector("#session-report-pending-status");
-		const retry = this.root.querySelector("#session-report-pending-retry");
+	renderCompletionControls(state) {
+		const saving =
+			state.mode === "completion_review" && state.saveStatus === "saving";
+		const locked =
+			state.mode === "completion_review" && state.completionLocked === true;
+		const factsDisabled = saving || locked;
+		const factIds = [
+			"completion-reps-input",
+			"completion-duration-input",
+			"completion-note-input",
+			"completion-context-low-energy",
+			"completion-context-high-energy",
+			"completion-context-heat-affected",
+			"completion-primary-limiter",
+			"completion-preference-feedback",
+			"workout_session_burpee_type",
+		];
 
-		if (status) {
-			status.hidden = !failed;
-			status.toggleAttribute("inert", !failed);
+		for (const id of factIds) {
+			this.root
+				.querySelector(`#${id}`)
+				?.toggleAttribute("disabled", factsDisabled);
 		}
-		if (retry) {
-			retry.hidden = !failed;
-			retry.toggleAttribute("inert", !failed);
+		for (const input of this.root
+			.querySelector("#session-completion-form")
+			?.querySelectorAll?.("input, textarea, select") || []) {
+			input.toggleAttribute("disabled", factsDisabled);
 		}
-	}
-
-	clearBeginConflict() {
-		const conflict = this.root.querySelector("#session-begin-conflict");
-		if (!conflict) return;
-
-		conflict.hidden = true;
-		conflict.toggleAttribute("inert", true);
-	}
-
-	renderBeginConflict(reply = {}) {
-		const conflict = this.root.querySelector("#session-begin-conflict");
-		const message = this.root.querySelector("#session-begin-conflict-message");
-		const resolve = this.root.querySelector("#session-begin-conflict-resolve");
-		const text =
-			reply.message ||
-			"Finish or discard your current workout before starting another one.";
-
-		if (message) message.textContent = text;
-		if (resolve && reply.resolve_to)
-			resolve.setAttribute("href", reply.resolve_to);
-		if (conflict) {
-			conflict.hidden = false;
-			conflict.toggleAttribute("inert", false);
+		for (const button of [
+			...this.root.querySelectorAll("[data-mood]"),
+			...this.root.querySelectorAll("[data-tag]"),
+		]) {
+			button.toggleAttribute("disabled", factsDisabled);
 		}
-		this.announce(text);
+
+		const save = this.root.querySelector("#session-save-btn");
+		if (save) {
+			save.toggleAttribute("disabled", saving);
+			if (locked) save.dataset.localOnly = "true";
+			else delete save.dataset.localOnly;
+			save.textContent = locked
+				? saving
+					? "Finalizing local evidence…"
+					: "Retry finalization"
+				: saving
+					? "Saving session…"
+					: "Save session";
+		}
+
+		const leave = this.root.querySelector("#session-leave-btn");
+		if (leave) {
+			const disabled = saving || locked;
+			leave.setAttribute("aria-disabled", String(disabled));
+			leave.toggleAttribute("tabindex", disabled);
+			if (disabled) leave.setAttribute("tabindex", "-1");
+			leave.textContent = locked
+				? "Session saved—finish local finalization"
+				: saving
+					? "Save in progress—stay on this page"
+					: "Leave and resume later";
+		}
 	}
 
 	renderCaptureControls(state) {
@@ -192,34 +208,38 @@ export class SessionRenderer {
 		const repsInput = this.root.querySelector("#completion-reps-input");
 		const durationInput = this.root.querySelector("#completion-duration-input");
 		const noteInput = this.root.querySelector("#completion-note-input");
-		const hasActualReps = Number.isInteger(completion.burpeeCountActual);
-		const countProvenance = completion.burpeeCountProvenance ??
-			(hasActualReps ? "manual" : "unresolved");
-		const scheduledRepsDone = completion.scheduledRepsDone ?? 0;
-		const countSource = this.root.querySelector("#session-count-source");
-		if (actualReps) {
-			actualReps.textContent = hasActualReps
-				? String(completion.burpeeCountActual)
-				: "—";
-		}
+		const lowEnergyInput = this.root.querySelector(
+			"#completion-context-low-energy",
+		);
+		const highEnergyInput = this.root.querySelector(
+			"#completion-context-high-energy",
+		);
+		const heatAffectedInput = this.root.querySelector(
+			"#completion-context-heat-affected",
+		);
+		const limiterInput = this.root.querySelector("#completion-primary-limiter");
+		const preferenceInput = this.root.querySelector(
+			"#completion-preference-feedback",
+		);
+		if (actualReps)
+			actualReps.textContent = String(completion.burpeeCountActual);
 		if (plannedReps)
 			plannedReps.textContent = String(completion.burpeeCountPlanned);
 		if (duration)
 			duration.textContent = this.formatTime(completion.durationSecActual);
-		if (repsInput)
-			repsInput.value = hasActualReps ? String(completion.burpeeCountActual) : "";
-		if (countSource) {
-			countSource.textContent =
-				countProvenance === "camera_confirmed"
-					? "Camera-confirmed reps"
-					: countProvenance === "manual"
-						? "Manually entered reps"
-						: `Pace progress: ${scheduledRepsDone} of ${completion.burpeeCountPlanned}. Enter actual reps below.`;
-			countSource.hidden = false;
-		}
+		if (repsInput) repsInput.value = String(completion.burpeeCountActual);
 		if (durationInput)
 			durationInput.value = String(completion.durationSecActual);
 		if (noteInput) noteInput.value = completion.notePost || "";
+		if (lowEnergyInput)
+			lowEnergyInput.checked = completion.contextLowEnergy ?? false;
+		if (highEnergyInput)
+			highEnergyInput.checked = completion.contextHighEnergy ?? false;
+		if (heatAffectedInput)
+			heatAffectedInput.checked = completion.contextHeatAffected ?? false;
+		if (limiterInput) limiterInput.value = completion.primaryLimiter || "";
+		if (preferenceInput)
+			preferenceInput.value = completion.preferenceFeedback || "";
 
 		for (const button of this.root.querySelectorAll("[data-mood]")) {
 			button.setAttribute(
@@ -240,6 +260,23 @@ export class SessionRenderer {
 			["#completion-reps-error", "#completion-reps-input"],
 			["#completion-duration-error", "#completion-duration-input"],
 			["#completion-note-error", "#completion-note-input"],
+			[
+				"#completion-context-low-energy-error",
+				"#completion-context-low-energy",
+			],
+			[
+				"#completion-context-high-energy-error",
+				"#completion-context-high-energy",
+			],
+			[
+				"#completion-context-heat-affected-error",
+				"#completion-context-heat-affected",
+			],
+			["#completion-primary-limiter-error", "#completion-primary-limiter"],
+			[
+				"#completion-preference-feedback-error",
+				"#completion-preference-feedback",
+			],
 		];
 		for (const [errorSelector, inputSelector] of fields) {
 			const error = this.root.querySelector(errorSelector);
@@ -268,6 +305,26 @@ export class SessionRenderer {
 				"#completion-duration-input",
 			],
 			note_post: ["#completion-note-error", "#completion-note-input"],
+			context_low_energy: [
+				"#completion-context-low-energy-error",
+				"#completion-context-low-energy",
+			],
+			context_high_energy: [
+				"#completion-context-high-energy-error",
+				"#completion-context-high-energy",
+			],
+			context_heat_affected: [
+				"#completion-context-heat-affected-error",
+				"#completion-context-heat-affected",
+			],
+			primary_limiter: [
+				"#completion-primary-limiter-error",
+				"#completion-primary-limiter",
+			],
+			preference_feedback: [
+				"#completion-preference-feedback-error",
+				"#completion-preference-feedback",
+			],
 		};
 
 		for (const [field, messages] of Object.entries(reply.field_errors || {})) {
@@ -671,7 +728,7 @@ export class SessionRenderer {
 		const target = this.root.querySelector("#total-plan")?.textContent;
 		const accessibleTotal = this.root.querySelector("#total-reps-accessible");
 		if (accessibleTotal && done !== "" && target !== "") {
-			accessibleTotal.textContent = `Pace progress: ${done} of ${target} reps`;
+			accessibleTotal.textContent = `${done} of ${target} total reps`;
 		}
 	}
 

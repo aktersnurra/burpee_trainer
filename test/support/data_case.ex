@@ -28,8 +28,8 @@ defmodule BurpeeTrainer.DataCase do
   end
 
   setup tags do
-    BurpeeTrainer.DataCase.setup_sandbox(tags)
-    :ok
+    owner = BurpeeTrainer.DataCase.setup_sandbox(tags)
+    {:ok, sandbox_owner: owner}
   end
 
   @doc """
@@ -37,7 +37,14 @@ defmodule BurpeeTrainer.DataCase do
   """
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(BurpeeTrainer.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        Ecto.Adapters.SQL.Sandbox.stop_owner(pid)
+      end
+    end)
+
+    pid
   end
 
   @doc """

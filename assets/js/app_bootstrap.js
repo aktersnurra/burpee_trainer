@@ -4,7 +4,6 @@ import { LiveSocket } from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
 import SessionHook from "./hooks/session_hook";
-import SessionRecoveryHook from "./hooks/session_recovery_hook";
 import VideoHook from "./hooks/video_hook";
 import PoseDebug from "./hooks/pose_debug";
 import PoseTraceButton from "./hooks/pose_trace_button";
@@ -82,7 +81,6 @@ export function startApp(PoseTracker) {
 		hooks: {
 			ChartHook,
 			SessionHook,
-			SessionRecoveryHook,
 			VideoHook,
 			PoseTracker,
 			PoseDebug,
@@ -109,7 +107,9 @@ export function startApp(PoseTracker) {
 	window.addEventListener("burpee:trace-upload-ready", drainPoseTraces);
 
 	topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
-	window.addEventListener("phx:page-loading-start", (_info) => topbar.show(300));
+	window.addEventListener("phx:page-loading-start", (_info) =>
+		topbar.show(300),
+	);
 	window.addEventListener("phx:page-loading-stop", (_info) => {
 		topbar.hide();
 		drainPoseTraces();

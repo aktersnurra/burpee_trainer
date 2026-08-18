@@ -59,6 +59,7 @@ defmodule BurpeeTrainer.MixProject do
        compile: false,
        depth: 1},
       {:swoosh, "~> 1.16"},
+      # Req is the sole HTTP boundary for LLM provider calls.
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
@@ -67,6 +68,7 @@ defmodule BurpeeTrainer.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:bcrypt_elixir, "~> 3.0"},
+      {:tzdata, "~> 1.1"},
       {:contex, "~> 0.5"},
       {:remote_ip, "~> 1.2"}
     ]

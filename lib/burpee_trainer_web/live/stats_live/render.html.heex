@@ -1,5 +1,11 @@
-<Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
+<Layouts.app
+  flash={@flash}
+  current_user={@current_user}
+  current_scope={assigns[:current_scope]}
+  current_page={:stats}
+>
   <div
+    id="history-stats-page"
     data-stats-page
     class="session-surface mx-auto max-w-lg space-y-8 pb-24 text-[var(--session-ink)]"
   >

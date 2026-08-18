@@ -1,4 +1,6 @@
 defmodule BurpeeTrainer.Fixtures do
+  import Ecto.Query
+
   @moduledoc """
   Builders for test data. Each builder accepts an attribute override map
   so tests can override just the fields they care about. All builders
@@ -30,41 +32,75 @@ defmodule BurpeeTrainer.Fixtures do
     user
   end
 
-  @doc """
-  Build a source-backed plan. Legacy block overrides are still accepted so older
-  editor tests can describe a persisted editor shape, but executable truth comes
-  from explicit `source_json` or the fixture's source defaults.
-  """
+  @doc "Build a valid published workout through the state-specific lifecycle APIs."
   def plan_fixture(user, attrs \\ %{}) do
     attrs = stringify_keys(attrs)
+    definition = fixture_workout_definition(attrs)
 
-    defaults = %{
-      "name" => "Test plan",
-      "burpee_type" => "six_count",
-      "blocks" => default_plan_blocks(),
-      "source_json" => default_source_json(attrs)
-    }
+    {:ok, draft} =
+      Workouts.create_user_draft(user, %{
+        "definition" => definition,
+        "request_text" => Map.get(attrs, "request_text")
+      })
 
-    {:ok, plan} = Workouts.create_plan(user, Map.merge(defaults, attrs))
+    {:ok, plan} = Workouts.publish_draft(user, draft.id)
     plan
   end
 
-  @doc """
-  Build a completed session tied to a plan.
-  """
+  @doc "Build a valid user-owned draft through the state-specific lifecycle API."
+  def workout_plan_draft_fixture(user, attrs \\ %{}) do
+    attrs = stringify_keys(attrs)
+
+    {:ok, draft} =
+      Workouts.create_user_draft(user, %{
+        "definition" => fixture_workout_definition(attrs),
+        "request_text" => Map.get(attrs, "request_text")
+      })
+
+    draft
+  end
+
+  @doc "Build a completed session tied to a plan."
   def session_from_plan_fixture(user, plan, attrs \\ %{}) do
     defaults = %{
-      "burpee_type" => to_string(plan.burpee_type),
-      "burpee_count_planned" => 30,
-      "duration_sec_planned" => 120,
       "burpee_count_actual" => 30,
       "duration_sec_actual" => 118
     }
 
-    {:ok, session} =
-      Workouts.create_session_from_plan(user, plan, Map.merge(defaults, stringify_keys(attrs)))
+    attrs = Map.merge(defaults, stringify_keys(attrs))
+    inserted_at = Map.get(attrs, "inserted_at")
+    client_session_id = Map.get(attrs, "client_session_id", Ecto.UUID.generate())
 
-    session
+    completion_attrs =
+      Map.take(attrs, [
+        "burpee_count_actual",
+        "duration_sec_actual",
+        "note_pre",
+        "note_post",
+        "mood",
+        "tags",
+        "context_low_energy",
+        "context_high_energy",
+        "context_heat_affected",
+        "primary_limiter",
+        "preference_feedback"
+      ])
+
+    {:ok, started} = Workouts.start_plan(user, plan.id, client_session_id)
+    {:ok, session} = Workouts.complete_session(user, started.id, completion_attrs, :timed)
+
+    if match?(%DateTime{}, inserted_at) do
+      BurpeeTrainer.Repo.update_all(
+        from(candidate in BurpeeTrainer.Workouts.WorkoutSession,
+          where: candidate.id == ^session.id
+        ),
+        set: [inserted_at: inserted_at, completed_at: DateTime.truncate(inserted_at, :second)]
+      )
+
+      BurpeeTrainer.Repo.reload(session)
+    else
+      session
+    end
   end
 
   @doc """
@@ -74,7 +110,8 @@ defmodule BurpeeTrainer.Fixtures do
     defaults = %{
       "burpee_type" => "six_count",
       "burpee_count_actual" => 25,
-      "duration_sec_actual" => 100
+      "duration_sec_actual" => 100,
+      "completed_at" => DateTime.add(DateTime.utc_now(:second), -1, :second)
     }
 
     {:ok, session} =
@@ -115,148 +152,79 @@ defmodule BurpeeTrainer.Fixtures do
       filename: "video_#{n}.mp4",
       burpee_type: :six_count,
       duration_sec: 1200,
-      burpee_count: nil
+      burpee_count: nil,
+      available: true,
+      format: :follow_along
     }
 
     {:ok, video} = BurpeeTrainer.Videos.create_video(Map.merge(defaults, attrs))
     video
   end
 
-  defp default_plan_blocks do
-    [
-      %{
-        "position" => 1,
-        "repeat_count" => 1,
-        "sets" => [
-          %{
-            "position" => 1,
-            "burpee_count" => 10,
-            "sec_per_rep" => 6.0,
-            "sec_per_burpee" => 3.0,
-            "end_of_set_rest" => 30
-          },
-          %{
-            "position" => 2,
-            "burpee_count" => 10,
-            "sec_per_rep" => 6.0,
-            "sec_per_burpee" => 3.0,
-            "end_of_set_rest" => 30
-          },
-          %{
-            "position" => 3,
-            "burpee_count" => 10,
-            "sec_per_rep" => 6.0,
-            "sec_per_burpee" => 3.0,
-            "end_of_set_rest" => 0
-          }
-        ]
-      }
-    ]
-  end
+  defp fixture_workout_definition(attrs) do
+    case Map.get(attrs, "definition") || Map.get(attrs, "definition_json") do
+      definition when is_map(definition) ->
+        definition
 
-  defp default_source_json(%{"source_json" => source}) when is_map(source), do: source
+      _missing ->
+        source = Map.get(attrs, "source_json", %{})
+        suffix = System.unique_integer([:positive, :monotonic])
+        target_reps = fixture_target_reps(attrs, source)
+        target_duration_sec = fixture_target_duration_sec(attrs, source)
 
-  defp default_source_json(attrs) do
-    blocks = Map.get(attrs, "blocks", default_plan_blocks())
-    burpee_type = Map.get(attrs, "burpee_type", "six_count")
-    pacing_style = Map.get(attrs, "pacing_style", "even")
-    block_pattern = source_pattern(attrs, blocks, burpee_type, pacing_style)
-    target_reps = Map.get(attrs, "burpee_count_target") || source_total_reps(blocks) || 30
-
-    source = %{
-      "burpee_type" => burpee_type,
-      "target_reps" => target_reps,
-      "target_duration_sec" => fixture_target_duration_sec(attrs),
-      "pacing_style" => pacing_style,
-      "block_pattern" => block_pattern,
-      "explicit_rests" => Map.get(attrs, "explicit_rests", [])
-    }
-
-    maybe_put_unbroken_max(source, attrs, block_pattern)
-  end
-
-  defp fixture_target_duration_sec(%{"target_duration_sec" => seconds}) when is_integer(seconds),
-    do: seconds
-
-  defp fixture_target_duration_sec(%{"target_duration_min" => minutes}) when is_integer(minutes),
-    do: minutes * 60
-
-  defp fixture_target_duration_sec(_attrs), do: 1_200
-
-  defp source_pattern(attrs, _blocks, _burpee_type, _pacing_style)
-       when is_map_key(attrs, "block_pattern") do
-    Map.fetch!(attrs, "block_pattern")
-  end
-
-  defp source_pattern(attrs, blocks, burpee_type, "unbroken") do
-    max_reps = source_max_unbroken_reps(attrs, blocks, burpee_type)
-    [min(max_reps, default_unbroken_source_set_size(burpee_type))]
-  end
-
-  defp source_pattern(_attrs, blocks, _burpee_type, _pacing_style),
-    do: source_block_pattern(blocks)
-
-  defp source_block_pattern(blocks) when is_list(blocks) do
-    blocks
-    |> Enum.sort_by(&(Map.get(&1, "position") || 0))
-    |> Enum.flat_map(fn block ->
-      block
-      |> Map.get("sets", [])
-      |> Enum.sort_by(&(Map.get(&1, "position") || 0))
-      |> Enum.map(&Map.get(&1, "burpee_count"))
-      |> Enum.reject(&is_nil/1)
-    end)
-    |> case do
-      [] -> [10]
-      pattern -> pattern
+        %{
+          "version" => 1,
+          "name" => Map.get(attrs, "name", "Test plan #{suffix}"),
+          "burpee_type" =>
+            Map.get(attrs, "burpee_type", Map.get(source, "burpee_type", "six_count")),
+          "target_reps" => target_reps,
+          "target_duration_sec" => target_duration_sec,
+          "pacing_style" => Map.get(attrs, "pacing_style", Map.get(source, "kind", "even")),
+          "events" => fixture_definition_events(target_reps, target_duration_sec),
+          "rationale" => Map.get(attrs, "rationale", "Lifecycle fixture #{suffix}.")
+        }
     end
   end
 
-  defp source_block_pattern(_blocks), do: [10]
-
-  defp source_total_reps(blocks) when is_list(blocks) do
-    blocks
-    |> Enum.map(fn block ->
-      reps =
-        block
-        |> Map.get("sets", [])
-        |> Enum.map(&(Map.get(&1, "burpee_count") || 0))
-        |> Enum.sum()
-
-      reps * max(Map.get(block, "repeat_count", 1), 1)
-    end)
-    |> Enum.sum()
-    |> case do
-      0 -> nil
-      total -> total
-    end
+  defp fixture_target_reps(attrs, source) do
+    Map.get(attrs, "target_reps") || Map.get(attrs, "burpee_count_target") ||
+      Map.get(source, "target_reps") || 30
   end
 
-  defp source_total_reps(_blocks), do: nil
-
-  defp maybe_put_unbroken_max(source, %{"pacing_style" => "unbroken"} = attrs, _block_pattern) do
-    Map.put(
-      source,
-      "max_unbroken_reps",
-      source_max_unbroken_reps(
-        attrs,
-        Map.get(attrs, "blocks", default_plan_blocks()),
-        source["burpee_type"]
-      )
-    )
+  defp fixture_target_duration_sec(attrs, source) do
+    Map.get(attrs, "target_duration_sec") || Map.get(attrs, "duration_sec") ||
+      duration_from_minutes(Map.get(attrs, "target_duration_min")) ||
+      Map.get(source, "duration_sec") || 1_200
   end
 
-  defp maybe_put_unbroken_max(source, _attrs, _block_pattern), do: source
+  defp duration_from_minutes(minutes) when is_integer(minutes) and minutes > 0, do: minutes * 60
+  defp duration_from_minutes(_minutes), do: nil
 
-  defp source_max_unbroken_reps(attrs, blocks, burpee_type) do
-    Map.get(attrs, "max_unbroken_reps") ||
-      blocks
-      |> source_block_pattern()
-      |> Enum.max(fn -> default_unbroken_source_set_size(burpee_type) end)
+  defp fixture_definition_events(target_reps, target_duration_sec) do
+    total_us = target_duration_sec * 1_000_000
+    base_us = div(total_us, target_reps)
+    longer_reps = rem(total_us, target_reps)
+
+    []
+    |> maybe_add_definition_work(longer_reps, base_us + 1)
+    |> maybe_add_definition_work(target_reps - longer_reps, base_us)
   end
 
-  defp default_unbroken_source_set_size("navy_seal"), do: 5
-  defp default_unbroken_source_set_size(_burpee_type), do: 8
+  defp maybe_add_definition_work(events, reps, sec_per_rep_us) when reps > 0 do
+    sec_per_rep = sec_per_rep_us / 1_000_000
+
+    events ++
+      [
+        %{
+          "kind" => "work",
+          "reps" => reps,
+          "sec_per_rep" => sec_per_rep,
+          "sec_per_burpee" => sec_per_rep
+        }
+      ]
+  end
+
+  defp maybe_add_definition_work(events, _reps, _sec_per_rep_us), do: events
 
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn

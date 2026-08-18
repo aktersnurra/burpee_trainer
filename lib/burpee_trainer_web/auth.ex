@@ -110,12 +110,26 @@ defmodule BurpeeTrainerWeb.Auth do
         {:halt, socket}
 
       _ ->
+        user = provision_browser_timezone(user, socket)
         level = user |> Workouts.list_sessions() |> Levels.current_level()
 
         {:cont,
          socket
          |> Phoenix.Component.assign(:current_user, user)
          |> Phoenix.Component.assign(:current_level, level)}
+    end
+  end
+
+  defp provision_browser_timezone(user, socket) do
+    case Phoenix.LiveView.get_connect_params(socket) do
+      %{"timezone" => timezone} when is_binary(timezone) ->
+        case Accounts.update_timezone(user, timezone) do
+          {:ok, updated_user} -> updated_user
+          {:error, _changeset} -> user
+        end
+
+      _connect_params ->
+        user
     end
   end
 end

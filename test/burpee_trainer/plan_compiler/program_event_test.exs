@@ -29,7 +29,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramEventTest do
 
   test "rest events reject identity and provenance fields" do
     assert_raise ArgumentError, ~r/unknown rest event fields: \[:id, :source\]/, fn ->
-      ProgramEvent.rest!(%{duration_sec: 30, id: "rest-001", source: :explicit_rest})
+      ProgramEvent.rest!(%{duration_sec: 30, id: "rest-001", source: :automatic_recovery})
     end
   end
 end

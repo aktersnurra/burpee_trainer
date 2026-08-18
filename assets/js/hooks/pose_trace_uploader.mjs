@@ -19,12 +19,9 @@ export function createPoseTraceUploader({
 
 	async function drainUpload(upload) {
 		while (true) {
-			const chunks = await store.listTraceChunks(upload.client_session_id);
+			const chunks = await store.listTraceChunks(upload.session_id);
 
-			if (chunks.length === 0) {
-				await store.completeTraceUpload(upload.client_session_id);
-				return;
-			}
+			if (chunks.length === 0) return;
 
 			const batch = [];
 
@@ -32,9 +29,14 @@ export function createPoseTraceUploader({
 				if (batch.length === batchSize) break;
 
 				const candidate = [...batch, stripStoreFields(chunk)];
-				const candidateRequest = traceRequest(upload, candidate, candidate.length === chunks.length);
+				const candidateRequest = traceRequest(
+					upload,
+					candidate,
+					candidate.length === chunks.length,
+				);
 
-				if (serializedJsonBytes(candidateRequest) > MAX_TRACE_REQUEST_BYTES) break;
+				if (serializedJsonBytes(candidateRequest) > MAX_TRACE_REQUEST_BYTES)
+					break;
 
 				batch.push(stripStoreFields(chunk));
 			}
@@ -42,14 +44,13 @@ export function createPoseTraceUploader({
 			if (batch.length === 0) return;
 
 			const finalBatch = batch.length === chunks.length;
-			const body = JSON.stringify(traceRequest(upload, batch, finalBatch));
 			const response = await fetch(endpoint, {
 				method: "POST",
 				headers: {
 					"content-type": "application/json",
 					"x-csrf-token": csrfToken,
 				},
-				body,
+				body: JSON.stringify(traceRequest(upload, batch, finalBatch)),
 			});
 
 			if (!response.ok) return;
@@ -68,16 +69,30 @@ export function createPoseTraceUploader({
 
 			if (acceptedIndexes.length === 0) return;
 
-			await store.deleteTraceChunks(upload.client_session_id, acceptedIndexes);
+			if (
+				finalBatch &&
+				acceptedIndexes.length === batch.length &&
+				result.complete !== true
+			) {
+				return;
+			}
 
-			if (acceptedIndexes.length !== batch.length) return;
+			if (acceptedIndexes.length !== batch.length) {
+				await store.deleteTraceChunks(upload.session_id, acceptedIndexes);
+				return;
+			}
 
 			if (finalBatch) {
 				if (result.complete === true) {
-					await store.completeTraceUpload(upload.client_session_id);
+					await store.settleAcknowledgedFinalUpload(
+						upload.session_id,
+						acceptedIndexes,
+					);
 				}
 				return;
 			}
+
+			await store.deleteTraceChunks(upload.session_id, acceptedIndexes);
 		}
 	}
 
@@ -106,6 +121,7 @@ export function createPoseTraceUploader({
 
 function traceRequest(upload, chunks, complete) {
 	return {
+		session_id: upload.session_id,
 		client_session_id: upload.client_session_id,
 		chunks,
 		complete,
@@ -113,6 +129,10 @@ function traceRequest(upload, chunks, complete) {
 }
 
 function stripStoreFields(chunk) {
-	const { client_session_id: _clientSessionId, ...requestChunk } = chunk;
+	const {
+		session_id: _sessionId,
+		client_session_id: _clientSessionId,
+		...requestChunk
+	} = chunk;
 	return requestChunk;
 }

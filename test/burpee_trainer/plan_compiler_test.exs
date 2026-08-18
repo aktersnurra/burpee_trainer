@@ -2,99 +2,93 @@ defmodule BurpeeTrainer.PlanCompilerTest do
   use ExUnit.Case, async: true
 
   alias BurpeeTrainer.PlanCompiler
-  alias BurpeeTrainer.PlanCompiler.{CompileError, PlanSource, Program, ProgramEvent}
+  alias BurpeeTrainer.PlanCompiler.{Program, ProgramEvent, ProgramHash, WorkoutDefinition}
 
-  test "compiles even rest source into uniform-cadence canonical program events" do
-    source = %{
-      name: "100 in 20",
-      burpee_type: :six_count,
-      target_reps: 100,
-      target_duration_sec: 1_200,
-      pacing_style: :even,
-      block_pattern: [10],
-      explicit_rests: [%{target_elapsed_sec: 600, duration_sec: 60, tolerance_sec: 90}]
-    }
+  test "compiles a canonical definition into schema three solver one events" do
+    definition =
+      definition!(%{
+        "target_reps" => 2,
+        "target_duration_sec" => 20,
+        "events" => [
+          %{
+            "kind" => "work",
+            "reps" => 2,
+            "sec_per_rep" => 15.0,
+            "sec_per_burpee" => 5.0
+          }
+        ]
+      })
 
-    assert {:ok, %Program{} = program} = PlanCompiler.compile(source)
+    assert {:ok, %Program{} = program} = PlanCompiler.compile(definition)
     assert program.schema_version == 3
-    assert Program.total_reps(program) == 100
-    assert_in_delta Program.duration_sec(program), 1_200.0, 1.0e-6
+    assert program.solver_version == 1
+    assert Program.total_reps(program) == 2
+    assert Program.duration_sec(program) == 20.0
 
-    work_events = Enum.filter(program.events, &match?(%ProgramEvent.Work{}, &1))
-    rest_events = Enum.filter(program.events, &match?(%ProgramEvent.Rest{}, &1))
+    assert [%ProgramEvent.Work{duration_sec: 20.0}] = program.events
 
-    assert length(work_events) == 10
-    assert length(rest_events) == 1
-    assert Enum.map(work_events, & &1.reps) == List.duplicate(10, 10)
-    cadence_sec = (1_200 - 60 - List.last(work_events).sec_per_burpee) / 99
-    assert Enum.all?(work_events, &(abs(&1.sec_per_rep - cadence_sec) <= 1.0e-6))
-
-    assert Enum.all?(
-             Enum.drop(work_events, -1),
-             &(abs(&1.duration_sec - 10 * cadence_sec) <= 1.0e-6)
-           )
-
-    final_work = List.last(work_events)
-    assert_in_delta final_work.duration_sec, 9 * cadence_sec + final_work.sec_per_burpee, 1.0e-6
-
-    assert_in_delta Enum.take(work_events, 5) |> Enum.sum_by(& &1.duration_sec),
-                    50 * cadence_sec,
-                    1.0e-6
-
-    assert Enum.all?(work_events, &(&1.sec_per_burpee > 0))
-    assert Enum.all?(work_events, &(&1.sec_per_burpee <= &1.sec_per_rep))
-    assert Enum.any?(work_events, &(&1.sec_per_burpee < &1.sec_per_rep))
+    assert ProgramHash.canonical_map(program)["semantics"]["definition_hash"] ==
+             WorkoutDefinition.hash(definition)
   end
 
-  test "compile errors are structured" do
-    assert {:error, error} = PlanCompiler.compile(%{burpee_type: :six_count})
-    assert error.code == :invalid_source
-    assert is_binary(error.message)
-    assert is_map(error.context)
+  test "preserves rest boundaries and ends with terminal active work" do
+    definition =
+      definition!(%{
+        "target_reps" => 4,
+        "target_duration_sec" => 40,
+        "events" => [
+          %{
+            "kind" => "work",
+            "reps" => 2,
+            "sec_per_rep" => 8.0,
+            "sec_per_burpee" => 5.0
+          },
+          %{"kind" => "rest", "duration_sec" => 10},
+          %{
+            "kind" => "work",
+            "reps" => 2,
+            "sec_per_rep" => 9.0,
+            "sec_per_burpee" => 5.0
+          }
+        ]
+      })
+
+    assert {:ok, program} = PlanCompiler.compile(definition)
+
+    assert [
+             %ProgramEvent.Work{duration_sec: 16.0},
+             %ProgramEvent.Rest{duration_sec: 10.0},
+             %ProgramEvent.Work{duration_sec: 14.0}
+           ] = program.events
+
+    assert Program.duration_sec(program) == 40.0
+    assert match?(%ProgramEvent.Work{}, List.last(program.events))
   end
 
-  test "malformed source numeric strings return structured errors" do
-    assert {:error, %CompileError{code: :invalid_source, context: %{field: :target_reps}}} =
-             PlanCompiler.compile(valid_source(%{target_reps: "not-a-number"}))
+  defp definition!(overrides) do
+    attrs =
+      Map.merge(
+        %{
+          "version" => 1,
+          "name" => "Terminal active",
+          "burpee_type" => "six_count",
+          "target_reps" => 2,
+          "target_duration_sec" => 20,
+          "pacing_style" => "even",
+          "rationale" => "Canonical compiler test.",
+          "events" => [
+            %{
+              "kind" => "work",
+              "reps" => 2,
+              "sec_per_rep" => 15.0,
+              "sec_per_burpee" => 5.0
+            }
+          ]
+        },
+        overrides
+      )
 
-    assert {:error, %CompileError{code: :invalid_source, context: %{field: :target_duration_sec}}} =
-             PlanSource.new(valid_source(%{target_duration_sec: "twenty-minutes"}))
-  end
-
-  test "malformed block pattern returns a structured error" do
-    assert {:error, %CompileError{code: :invalid_source, context: %{field: :block_pattern}}} =
-             PlanCompiler.compile(valid_source(%{block_pattern: [10, "bad"]}))
-
-    assert {:error, %CompileError{code: :invalid_source, context: %{field: :block_pattern}}} =
-             PlanCompiler.compile(valid_source(%{block_pattern: "10,10"}))
-  end
-
-  test "malformed explicit rests return structured errors" do
-    assert {:error, %CompileError{code: :invalid_source, context: %{field: :explicit_rests}}} =
-             PlanCompiler.compile(valid_source(%{explicit_rests: ["not-a-map"]}))
-
-    assert {:error, %CompileError{code: :invalid_source, context: %{field: :explicit_rests}}} =
-             PlanCompiler.compile(
-               valid_source(%{
-                 explicit_rests: [
-                   %{target_elapsed_sec: 600, duration_sec: "bad", tolerance_sec: 90}
-                 ]
-               })
-             )
-  end
-
-  defp valid_source(overrides) do
-    Map.merge(
-      %{
-        name: "10 in 2",
-        burpee_type: :six_count,
-        target_reps: 10,
-        target_duration_sec: 120,
-        pacing_style: :even,
-        block_pattern: [10],
-        explicit_rests: []
-      },
-      overrides
-    )
+    {:ok, definition} = WorkoutDefinition.new(attrs)
+    definition
   end
 end

@@ -349,15 +349,6 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               >
                 Finish early
               </button>
-              <button
-                id="session-abort-btn"
-                type="button"
-                disabled
-                data-confirm="Abort this session without saving?"
-                class="px-6 py-3 text-base text-[var(--session-active-ink)]"
-              >
-                Abort
-              </button>
             </div>
           </div>
         </div>
@@ -408,26 +399,6 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <div
-          id="session-report-pending-status"
-          role="status"
-          aria-live="polite"
-          hidden
-          inert="inert"
-          class="mt-8 rounded-2xl border border-red-300/50 px-4 py-3 text-sm text-red-700"
-        >
-          We could not prepare this workout for saving. Your workout details are still here.
-        </div>
-        <button
-          id="session-report-pending-retry"
-          type="button"
-          hidden
-          inert="inert"
-          class="mt-3 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-        >
-          Try again
-        </button>
-
         <div id="session-completion-mood" class="mt-10 flex border-y border-[var(--session-border)]">
           <%= for {label, value} <- @mood_options do %>
             <button
@@ -476,8 +447,77 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           />
           <p id="completion-note-error" hidden></p>
 
+          <fieldset
+            id="session-typed-feedback"
+            class="mt-8 space-y-6 border-t border-[var(--session-border)] pt-7"
+          >
+            <legend class="text-base font-semibold text-[var(--session-ink)]">
+              Workout feedback
+            </legend>
+
+            <div class="space-y-3">
+              <p class="text-sm font-medium text-[var(--session-muted)]">Session context</p>
+              <div class="grid gap-3">
+                <.input
+                  field={@form[:context_low_energy]}
+                  id="completion-context-low-energy"
+                  type="checkbox"
+                  label="Low energy"
+                  aria-describedby="completion-context-low-energy-error"
+                />
+                <p id="completion-context-low-energy-error" hidden></p>
+                <.input
+                  field={@form[:context_high_energy]}
+                  id="completion-context-high-energy"
+                  type="checkbox"
+                  label="High energy"
+                  aria-describedby="completion-context-high-energy-error"
+                />
+                <p id="completion-context-high-energy-error" hidden></p>
+                <.input
+                  field={@form[:context_heat_affected]}
+                  id="completion-context-heat-affected"
+                  type="checkbox"
+                  label="Heat affected performance"
+                  aria-describedby="completion-context-heat-affected-error"
+                />
+                <p id="completion-context-heat-affected-error" hidden></p>
+              </div>
+            </div>
+
+            <.input
+              field={@form[:primary_limiter]}
+              id="completion-primary-limiter"
+              type="select"
+              label="Primary limiter"
+              prompt="No primary limiter"
+              aria-describedby="completion-primary-limiter-error"
+              options={[
+                {"Breathing limited my pace", "breathing"},
+                {"Whole-body fatigue limited my recovery", "whole_body"},
+                {"Upper-body fatigue limited my reps", "upper_body"},
+                {"Leg fatigue limited my reps", "legs"}
+              ]}
+            />
+            <p id="completion-primary-limiter-error" hidden></p>
+
+            <.input
+              field={@form[:preference_feedback]}
+              id="completion-preference-feedback"
+              type="select"
+              label="Workout preference"
+              prompt="No preference"
+              aria-describedby="completion-preference-feedback-error"
+              options={[
+                {"Would choose this workout again", "choose_again"},
+                {"Would avoid this workout", "avoid"}
+              ]}
+            />
+            <p id="completion-preference-feedback-error" hidden></p>
+          </fieldset>
+
           <div id="session-completion-tags" class="border-t border-[var(--session-border)] py-6">
-            <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Tags</p>
+            <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Legacy tags</p>
             <div class="flex flex-wrap gap-2">
               <%= for tag <- @tag_options do %>
                 <button
@@ -506,14 +546,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           >
             Save session
           </button>
-          <button
-            id="session-discard-btn"
-            type="button"
-            data-confirm="Discard this session?"
-            class="mx-auto mt-2 block min-h-11 px-6 py-3 text-sm text-[var(--session-muted)]"
+          <.link
+            id="session-leave-btn"
+            navigate={~p"/"}
+            class="mx-auto mt-2 block min-h-11 px-6 py-3 text-center text-sm text-[var(--session-muted)]"
           >
-            Discard
-          </button>
+            Leave and resume later
+          </.link>
         </.form>
       </div>
     </.panel>

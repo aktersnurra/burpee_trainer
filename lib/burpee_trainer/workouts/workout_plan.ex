@@ -3,67 +3,93 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Workouts.ExecutionProgram
 
   @burpee_types [:six_count, :navy_seal]
-  @pacing_styles [:even, :unbroken]
+  @origins [:user, :coach, :built_in]
+  @states [:draft, :published, :archived]
 
   @type t :: %__MODULE__{}
 
   schema "workout_plans" do
     field(:name, :string)
+    field(:origin, Ecto.Enum, values: @origins)
+    field(:state, Ecto.Enum, values: @states)
+    field(:request_text, :string)
+    field(:definition_json, :map)
+    field(:program_json, :map)
+    field(:content_hash, :string)
     field(:burpee_type, Ecto.Enum, values: @burpee_types)
-    field(:target_duration_min, :integer)
-    field(:burpee_count_target, :integer)
-    field(:sec_per_burpee, :float)
-    field(:pacing_style, Ecto.Enum, values: @pacing_styles)
-    field(:style_name, :string)
-    field(:fatigue_factor, :float, default: 0.0)
-    field(:coach_suggestion_kind, :string)
-    field(:coach_target_reps, :integer)
-    field(:source_json, :map)
-
-    # Transient editor projections derived from source/programs. These are not
-    # persisted and must not be used as runtime execution truth.
-    field(:blocks, :any, virtual: true, default: [])
-    field(:steps, :any, virtual: true, default: [])
-    field(:additional_rests, :string, virtual: true, default: "[]")
-    field(:plan_solver_metadata, :map, virtual: true)
+    field(:target_reps, :integer)
+    field(:target_duration_sec, :integer)
+    field(:published_at, :utc_datetime)
+    field(:archived_at, :utc_datetime)
 
     belongs_to(:user, User)
-    belongs_to(:current_execution_program, ExecutionProgram)
 
-    timestamps(type: :utc_datetime)
+    timestamps(type: :utc_datetime_usec)
   end
 
   @spec burpee_types() :: [:six_count | :navy_seal]
   def burpee_types, do: @burpee_types
 
-  @spec changeset(t(), map()) :: Ecto.Changeset.t()
-  def changeset(plan, attrs) do
+  @draft_content_fields [
+    :name,
+    :request_text,
+    :definition_json,
+    :program_json,
+    :content_hash,
+    :burpee_type,
+    :target_reps,
+    :target_duration_sec
+  ]
+
+  @doc false
+  @spec new_draft_changeset(t(), map()) :: Ecto.Changeset.t()
+  def new_draft_changeset(%__MODULE__{state: :draft} = plan, attrs) do
+    draft_content_changeset(plan, attrs)
+  end
+
+  @doc false
+  @spec replace_draft_changeset(t(), map()) :: Ecto.Changeset.t()
+  def replace_draft_changeset(%__MODULE__{state: :draft} = plan, attrs) do
     plan
-    |> cast(attrs, [
+    |> draft_content_changeset(attrs)
+    |> force_change(:updated_at, next_updated_at(plan.updated_at))
+  end
+
+  @doc false
+  @spec publish_changeset(t(), DateTime.t()) :: Ecto.Changeset.t()
+  def publish_changeset(%__MODULE__{state: :draft} = plan, %DateTime{} = published_at) do
+    change(plan, state: :published, published_at: published_at)
+  end
+
+  @doc false
+  @spec archive_changeset(t(), DateTime.t()) :: Ecto.Changeset.t()
+  def archive_changeset(%__MODULE__{state: :published} = plan, %DateTime{} = archived_at) do
+    change(plan, state: :archived, archived_at: archived_at)
+  end
+
+  defp next_updated_at(%DateTime{} = previous) do
+    minimum = DateTime.add(previous, 1, :microsecond)
+    now = DateTime.utc_now()
+
+    if DateTime.compare(now, minimum) == :lt, do: minimum, else: now
+  end
+
+  defp draft_content_changeset(plan, attrs) do
+    plan
+    |> cast(attrs, @draft_content_fields)
+    |> validate_required([
       :name,
+      :definition_json,
+      :program_json,
+      :content_hash,
       :burpee_type,
-      :target_duration_min,
-      :burpee_count_target,
-      :sec_per_burpee,
-      :pacing_style,
-      :style_name,
-      :fatigue_factor,
-      :coach_suggestion_kind,
-      :coach_target_reps,
-      :source_json,
-      :current_execution_program_id
+      :target_reps,
+      :target_duration_sec
     ])
-    |> validate_required([:name, :source_json])
     |> validate_length(:name, min: 1, max: 80)
-    |> validate_number(:target_duration_min, greater_than: 0)
-    |> validate_number(:burpee_count_target, greater_than: 0)
-    |> validate_number(:sec_per_burpee, greater_than: 0)
-    |> validate_number(:fatigue_factor,
-      greater_than_or_equal_to: 0.0,
-      less_than_or_equal_to: 1.0
-    )
+    |> validate_number(:target_reps, greater_than: 0)
+    |> validate_number(:target_duration_sec, greater_than: 0)
   end
 end

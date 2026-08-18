@@ -39,6 +39,7 @@ function element() {
 		children,
 		classList: classList(),
 		className: "",
+		dataset: {},
 		hidden: false,
 		style: styleDeclaration(),
 		ownerDocument: {
@@ -83,8 +84,8 @@ function element() {
 			attributes.set(name, String(value));
 		},
 		toggleAttribute(name, force) {
-			if (force) this.setAttribute(name, "");
-			else this.removeAttribute(name);
+			if (force) attributes.set(name, "");
+			else attributes.delete(name);
 		},
 		removeAttribute(name) {
 			attributes.delete(name);
@@ -120,42 +121,35 @@ function harness() {
 		"#total-plan": element(),
 		"#pause-icon": element(),
 		"#session-live-status": element(),
-		"#session-begin-conflict": element(),
-		"#session-begin-conflict-message": element(),
-		"#session-begin-conflict-resolve": element(),
 		"#session-completion-review [data-session-heading]": element(),
 		"#session-save-errors": element(),
-		"#session-report-pending-status": element(),
-		"#session-report-pending-retry": element(),
 		"#completion-reps-error": element(),
 		"#completion-duration-error": element(),
 		"#completion-note-error": element(),
+		"#completion-context-low-energy-error": element(),
+		"#completion-context-high-energy-error": element(),
+		"#completion-context-heat-affected-error": element(),
+		"#completion-primary-limiter-error": element(),
+		"#completion-preference-feedback-error": element(),
 		"#completion-reps-input": element(),
 		"#completion-duration-input": element(),
 		"#completion-note-input": element(),
+		"#completion-context-low-energy": element(),
+		"#completion-context-high-energy": element(),
+		"#completion-context-heat-affected": element(),
+		"#completion-primary-limiter": element(),
+		"#completion-preference-feedback": element(),
 	};
 	elements["#session-progress"].hidden = true;
-	elements["#session-begin-conflict"].hidden = true;
-	elements["#session-begin-conflict"].setAttribute("inert", "");
 	elements["#total-reps"].hidden = true;
 	elements["#total-separator"].hidden = true;
 	elements["#total-plan"].hidden = true;
-	const panels = [
-		"session-capture-choice",
-		"session-camera-status",
-		"session-camera-setup",
-		"session-warmup-choice",
-		"session-workout-ready",
-		"session-runner-client",
-		"session-completion-review",
-	].map((id) => ({ ...element(), id }));
 	const root = {
 		classList: classList(),
 		querySelector: (selector) => elements[selector] || null,
-		querySelectorAll: (selector) =>
-			selector === "[data-session-panel]" ? panels : [],
+		querySelectorAll: () => [],
 	};
-	return { renderer: new SessionRenderer(root), elements, panels };
+	return { renderer: new SessionRenderer(root), elements };
 }
 
 function model(state, overrides = {}) {
@@ -204,50 +198,9 @@ test("camera, count-in, pause, completion, save, and errors are announced", () =
 	assert.equal(status.textContentAssignments, assignments);
 });
 
-test("begin conflicts are visible and link to the server-provided resolution route", () => {
-	const { renderer, elements } = harness();
-	const conflict = elements["#session-begin-conflict"];
-	const message = elements["#session-begin-conflict-message"];
-	const resolve = elements["#session-begin-conflict-resolve"];
-
-	renderer.renderBeginConflict({
-		message: "Finish or discard your current workout before starting another one.",
-		resolve_to: "/sessions/42/resolve",
-	});
-
-	assert.equal(conflict.hidden, false);
-	assert.equal(conflict.hasAttribute("inert"), false);
-	assert.equal(message.textContent, "Finish or discard your current workout before starting another one.");
-	assert.equal(resolve.getAttribute("href"), "/sessions/42/resolve");
-	assert.equal(elements["#session-live-status"].textContent, message.textContent);
-
-	renderer.clearBeginConflict();
-	assert.equal(conflict.hidden, true);
-	assert.equal(conflict.hasAttribute("inert"), true);
-});
-
-test("pending report states keep the completion panel visible and expose retry only after failure", () => {
-	const { renderer, elements, panels } = harness();
-	const completionPanel = panels.find(
-		(panel) => panel.id === "session-completion-review",
-	);
-
-	renderer.renderFlowState({ mode: "reporting_completion" });
-	assert.equal(completionPanel.hidden, false);
-	assert.equal(elements["#session-report-pending-status"].hidden, true);
-	assert.equal(elements["#session-report-pending-retry"].hidden, true);
-
-	renderer.renderFlowState({ mode: "completion_pending_failed" });
-	assert.equal(completionPanel.hidden, false);
-	assert.equal(elements["#session-report-pending-status"].hidden, false);
-	assert.equal(elements["#session-report-pending-retry"].hidden, false);
-	assert.equal(elements["#session-live-status"].textContent, "Could not prepare workout report. Try again.");
-});
-
 test("panel heading focus prevents scroll", () => {
 	const { renderer, elements } = harness();
-	const heading =
-		elements["#session-completion-review [data-session-heading]"];
+	const heading = elements["#session-completion-review [data-session-heading]"];
 
 	renderer.focusPanelHeading("session-completion-review");
 
@@ -589,7 +542,7 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 	assert.equal(elements["#count"].textContent, "18");
 	assert.equal(
 		elements["#total-reps-accessible"].textContent,
-		"Pace progress: 8 of 20 reps",
+		"8 of 20 total reps",
 	);
 	assert.equal(
 		elements["#session-time-accessible"].textContent,
@@ -613,7 +566,7 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 	);
 	assert.equal(
 		elements["#total-reps-accessible"].textContent,
-		"Pace progress: 9 of 21 reps",
+		"9 of 21 total reps",
 	);
 	assert.equal(
 		elements["#session-time-accessible"].textContent,
@@ -635,11 +588,49 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 
 test("structured Save errors reuse stable field and global targets", () => {
 	const { renderer, elements } = harness();
+	const typedFields = [
+		[
+			"context_low_energy",
+			"#completion-context-low-energy-error",
+			"#completion-context-low-energy",
+		],
+		[
+			"context_high_energy",
+			"#completion-context-high-energy-error",
+			"#completion-context-high-energy",
+		],
+		[
+			"context_heat_affected",
+			"#completion-context-heat-affected-error",
+			"#completion-context-heat-affected",
+		],
+		[
+			"primary_limiter",
+			"#completion-primary-limiter-error",
+			"#completion-primary-limiter",
+		],
+		[
+			"preference_feedback",
+			"#completion-preference-feedback-error",
+			"#completion-preference-feedback",
+		],
+	];
+
+	elements["#completion-context-low-energy"].checked = true;
+	elements["#completion-context-high-energy"].checked = true;
+	elements["#completion-context-heat-affected"].checked = true;
+	elements["#completion-primary-limiter"].value = "legs";
+	elements["#completion-preference-feedback"].value = "avoid";
 
 	renderer.renderSaveErrors({
 		field_errors: {
 			burpee_count_actual: ["must be at least 0"],
 			duration_sec_actual: ["is invalid"],
+			context_low_energy: ["is invalid"],
+			context_high_energy: ["cannot be true when low energy is also true"],
+			context_heat_affected: ["is invalid"],
+			primary_limiter: ["is invalid"],
+			preference_feedback: ["is invalid"],
 		},
 		global_errors: ["Could not save. Try again."],
 	});
@@ -655,6 +646,26 @@ test("structured Save errors reuse stable field and global targets", () => {
 	);
 	assert.equal(elements["#completion-duration-error"].hidden, false);
 	assert.equal(elements["#completion-note-error"].hidden, true);
+
+	for (const [field, errorSelector, inputSelector] of typedFields) {
+		const expected =
+			field === "context_high_energy"
+				? "cannot be true when low energy is also true"
+				: "is invalid";
+		assert.equal(elements[errorSelector].textContent, expected);
+		assert.equal(elements[errorSelector].hidden, false);
+		assert.equal(elements[inputSelector].getAttribute("aria-invalid"), "true");
+	}
+
+	assert.equal(elements["#completion-context-low-energy"].checked, true);
+	assert.equal(elements["#completion-context-high-energy"].checked, true);
+	assert.equal(elements["#completion-context-heat-affected"].checked, true);
+	assert.equal(elements["#completion-primary-limiter"].value, "legs");
+	assert.equal(elements["#completion-preference-feedback"].value, "avoid");
+	assert.equal(
+		elements["#session-live-status"].textContent,
+		"Could not save. Try again.",
+	);
 	assert.equal(
 		elements["#session-save-errors"].textContent,
 		"Could not save. Try again.",
@@ -670,13 +681,46 @@ test("structured Save errors reuse stable field and global targets", () => {
 		"#completion-reps-error",
 		"#completion-duration-error",
 		"#completion-note-error",
+		...typedFields.map(([_field, errorSelector]) => errorSelector),
 		"#session-save-errors",
 	]) {
 		assert.equal(elements[selector].textContent, "");
 		assert.equal(elements[selector].hidden, true);
 	}
+	for (const inputSelector of [
+		"#completion-reps-input",
+		...typedFields.map(
+			([_field, _errorSelector, inputSelector]) => inputSelector,
+		),
+	]) {
+		assert.equal(elements[inputSelector].hasAttribute("aria-invalid"), false);
+	}
+});
+
+test("contradictory energy feedback is announced without clearing the draft controls", () => {
+	const { renderer, elements } = harness();
+	const contradiction = "cannot be true when low energy is also true";
+	elements["#completion-context-low-energy"].checked = true;
+	elements["#completion-context-high-energy"].checked = true;
+	elements["#completion-primary-limiter"].value = "legs";
+	elements["#completion-preference-feedback"].value = "avoid";
+
+	renderer.renderSaveErrors({
+		field_errors: { context_high_energy: [contradiction] },
+		global_errors: [],
+	});
+
 	assert.equal(
-		elements["#completion-reps-input"].hasAttribute("aria-invalid"),
-		false,
+		elements["#completion-context-high-energy-error"].textContent,
+		contradiction,
 	);
+	assert.equal(
+		elements["#completion-context-high-energy"].getAttribute("aria-invalid"),
+		"true",
+	);
+	assert.equal(elements["#session-live-status"].textContent, contradiction);
+	assert.equal(elements["#completion-context-low-energy"].checked, true);
+	assert.equal(elements["#completion-context-high-energy"].checked, true);
+	assert.equal(elements["#completion-primary-limiter"].value, "legs");
+	assert.equal(elements["#completion-preference-feedback"].value, "avoid");
 });

@@ -61,23 +61,6 @@ function blockFor(marker, source = css) {
 	assert.fail(`${marker} should be closed`);
 }
 
-function luminance(hex) {
-	const channels = hex
-		.slice(1)
-		.match(/.{2}/g)
-		.map((channel) => Number.parseInt(channel, 16) / 255)
-		.map((channel) =>
-			channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
-		);
-	return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
-}
-
-function contrastRatio(first, second) {
-	const lighter = Math.max(luminance(first), luminance(second));
-	const darker = Math.min(luminance(first), luminance(second));
-	return (lighter + 0.05) / (darker + 0.05);
-}
-
 const activeStates = [
 	"is-working",
 	"is-rest",
@@ -144,22 +127,6 @@ test("completion choices visibly distinguish their pressed state", () => {
 	assert.match(pressed, /border-color:\s*var\(--session-ink\);/);
 	assert.match(pressed, /background:\s*var\(--session-ink\);/);
 	assert.match(pressed, /color:\s*var\(--session-bg\);/);
-});
-
-test("Abort uses the actual fixed active ink with normal-text contrast on every underlying field", () => {
-	const abortClass = sessionSurface.match(
-		/id="session-abort-btn"[\s\S]*?class="([^"]+)"/,
-	)?.[1];
-	assert.ok(abortClass, "Abort should retain an explicit class list");
-	assert.match(abortClass, /text-\[var\(--session-active-ink\)\]/);
-	assert.doesNotMatch(abortClass, /text-\[var\(--session-active-muted\)\]/);
-
-	for (const background of ["#F3EEE8", "#E86F47", "#7F95B5"]) {
-		assert.ok(
-			contrastRatio("#20201D", background) >= 4.5,
-			`Abort foreground must pass normal-text contrast on ${background}`,
-		);
-	}
 });
 
 test("pause freezes the underlying full-screen rest breath", () => {

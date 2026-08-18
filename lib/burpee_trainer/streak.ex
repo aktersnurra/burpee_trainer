@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Streak do
   Computes streak state from session history. Reads from DB, updates
   user_stats with previous_best, returns a %State{} struct.
 
-  Week boundary: Monday 00:00 – Sunday 23:59:59 UTC (ISO 8601).
+  Week boundary: Monday 00:00 – Sunday 23:59:59 in the user's timezone (ISO 8601).
   A week counts toward the streak iff total session minutes >= 80.
   The current open week never breaks or extends the streak count.
   """
@@ -11,7 +11,7 @@ defmodule BurpeeTrainer.Streak do
   import Ecto.Query
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Repo
+  alias BurpeeTrainer.{Repo, UserTime}
 
   @goal_min 80
 
@@ -38,9 +38,9 @@ defmodule BurpeeTrainer.Streak do
   end
 
   @spec compute(User.t(), Date.t()) :: State.t()
-  def compute(%User{id: user_id}, today) do
+  def compute(%User{id: user_id} = user, today) do
     week_start = Date.beginning_of_week(today, :monday)
-    sessions = fetch_sessions(user_id)
+    sessions = fetch_sessions(user)
 
     by_week =
       Enum.group_by(sessions, fn %{date: d} ->
@@ -138,17 +138,20 @@ defmodule BurpeeTrainer.Streak do
     end
   end
 
-  defp fetch_sessions(user_id) do
+  defp fetch_sessions(%User{id: user_id, timezone: timezone}) do
     Repo.all(
       from s in BurpeeTrainer.Workouts.WorkoutSession,
-        where: s.user_id == ^user_id and s.status == :reported,
+        where: s.user_id == ^user_id and s.state == :completed,
         select: %{
-          date: fragment("date(?)", s.inserted_at),
+          completed_at: s.completed_at,
           duration_min: s.duration_sec_actual / 60.0
         }
     )
-    |> Enum.map(fn %{date: d, duration_min: m} ->
-      %{date: Date.from_iso8601!(d), duration_min: m}
+    |> Enum.flat_map(fn %{completed_at: completed_at, duration_min: duration_min} ->
+      case UserTime.local_date(completed_at, timezone) do
+        {:ok, date} -> [%{date: date, duration_min: duration_min}]
+        {:error, _reason} -> []
+      end
     end)
   end
 
