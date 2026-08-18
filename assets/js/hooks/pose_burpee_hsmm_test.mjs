@@ -6,10 +6,36 @@ import { featureFrameFromPose } from "./pose_features.mjs";
 
 const video = { videoWidth: 400, videoHeight: 400 };
 const LANDMARK_NAMES = [
-	"nose", "left_eye_inner", "left_eye", "left_eye_outer", "right_eye", "right_ear", "mouth_left", "mouth_right",
-	"left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_pinky", "right_pinky",
-	"left_index", "right_index", "left_thumb", "right_thumb", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle",
-	"right_ankle", "left_heel", "right_heel", "left_foot_index", "right_foot_index",
+	"nose",
+	"left_eye_inner",
+	"left_eye",
+	"left_eye_outer",
+	"right_eye",
+	"right_ear",
+	"mouth_left",
+	"mouth_right",
+	"left_shoulder",
+	"right_shoulder",
+	"left_elbow",
+	"right_elbow",
+	"left_wrist",
+	"right_wrist",
+	"left_pinky",
+	"right_pinky",
+	"left_index",
+	"right_index",
+	"left_thumb",
+	"right_thumb",
+	"left_hip",
+	"right_hip",
+	"left_knee",
+	"right_knee",
+	"left_ankle",
+	"right_ankle",
+	"left_heel",
+	"right_heel",
+	"left_foot_index",
+	"right_foot_index",
 ];
 
 function frame(tMs, features) {
@@ -135,14 +161,20 @@ function poseFor(phase, lowConfidenceNames = []) {
 	const points = new Map(
 		LANDMARK_NAMES.map((name) => [
 			name,
-			{ name, x: 200, y: 200, score: lowConfidenceNames.includes(name) ? 0.1 : 0.9 },
+			{
+				name,
+				x: 200,
+				y: 200,
+				score: lowConfidenceNames.includes(name) ? 0.1 : 0.9,
+			},
 		]),
 	);
 	const set = (names, leftX, rightX, y) => {
 		setPoint(names[0], leftX, y);
 		setPoint(names[1], rightX, y);
 	};
-	const setPoint = (name, x, y) => points.set(name, { ...points.get(name), x, y });
+	const setPoint = (name, x, y) =>
+		points.set(name, { ...points.get(name), x, y });
 
 	set(["left_shoulder", "right_shoulder"], 150, 250, 100);
 	set(["left_hip", "right_hip"], 150, 250, 200);
@@ -178,7 +210,14 @@ function poseFor(phase, lowConfidenceNames = []) {
 function featureFrames(phases) {
 	const frames = [];
 	for (const [tMs, phase, lowConfidenceNames] of phases) {
-		frames.push(featureFrameFromPose(poseFor(phase, lowConfidenceNames), tMs, video, frames.at(-1) || null));
+		frames.push(
+			featureFrameFromPose(
+				poseFor(phase, lowConfidenceNames),
+				tMs,
+				video,
+				frames.at(-1) || null,
+			),
+		);
 	}
 	return frames;
 }
@@ -222,38 +261,48 @@ test("low-confidence required macro landmarks leave the partial path untouched",
 		state = stepBurpeeHsmm(state, nextFrame).state;
 	}
 
-	const result = stepBurpeeHsmm(state, frame(300, {
-		...floorWork(300),
-		macroLandmarkConfidence: 0.1,
-	}));
+	const result = stepBurpeeHsmm(
+		state,
+		frame(300, {
+			...floorWork(300),
+			macroLandmarkConfidence: 0.1,
+		}),
+	);
 
 	assert.equal(result.rep, false);
 	assert.deepEqual(result.state, state);
 });
 
 test("featureFrameFromPose output drives one complete macro cycle", () => {
-	const { reps } = run(featureFrames([
-		[0, "upright"],
-		[150, "lowering"],
-		[300, "floor"],
-		[450, "returning"],
-		[600, "upright"],
-	]));
+	const { reps } = run(
+		featureFrames([
+			[0, "upright"],
+			[150, "lowering"],
+			[300, "floor"],
+			[450, "returning"],
+			[600, "upright"],
+		]),
+	);
 
 	assert.deepEqual(reps, [600]);
 });
 
 test("low-confidence wrists and ankles in extracted features cannot advance a macro cycle", () => {
 	const lowConfidenceExtremities = [
-		"left_wrist", "right_wrist", "left_ankle", "right_ankle",
+		"left_wrist",
+		"right_wrist",
+		"left_ankle",
+		"right_ankle",
 	];
-	const { reps } = run(featureFrames([
-		[0, "upright"],
-		[150, "lowering", lowConfidenceExtremities],
-		[300, "floor"],
-		[450, "returning"],
-		[600, "upright"],
-	]));
+	const { reps } = run(
+		featureFrames([
+			[0, "upright"],
+			[150, "lowering", lowConfidenceExtremities],
+			[300, "floor"],
+			[450, "returning"],
+			[600, "upright"],
+		]),
+	);
 
 	assert.deepEqual(reps, []);
 });
