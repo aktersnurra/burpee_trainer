@@ -4,7 +4,6 @@ export function initialFlowState() {
     captureMode: "no_camera",
     camera: { status: "idle", readiness: "not_ready", reason: null },
     trackingTrust: "disabled",
-    trackingReason: null,
     armedStep: null,
     workoutTimeline: [],
     warmupResult: { burpeeCountDone: 0, durationSec: 0 },
@@ -52,19 +51,22 @@ function plannedDurationSec(timeline) {
 }
 
 function completionFor(state, result) {
-  const trackingDegraded = state.trackingTrust === "degraded";
+  const trackingFinished =
+    state.captureMode === "camera" && state.trackingTrust === "finished";
 
   return {
-    burpeeCountActual: result.burpeeCountDone || 0,
+    burpeeCountActual: trackingFinished
+      ? (result.detectedReps ?? 0)
+      : result.burpeeCountDone || 0,
     burpeeCountPlanned: plannedBurpees(state.workoutTimeline),
-    durationSecActual: result.durationSec || 0,
+    durationSecActual: trackingFinished
+      ? (result.detectedDurationSec ?? 0)
+      : result.durationSec || 0,
     durationSecPlanned: plannedDurationSec(state.workoutTimeline),
-    detectedReps: trackingDegraded ? null : (result.detectedReps ?? null),
-    detectedDurationSec: trackingDegraded
-      ? null
-      : (result.detectedDurationSec ?? null),
+    detectedReps: result.detectedReps ?? null,
+    detectedDurationSec: result.detectedDurationSec ?? null,
     trackingTrust: state.trackingTrust,
-    cadenceMs: trackingDegraded ? [] : result.cadenceMs || [],
+    cadenceMs: result.cadenceMs || [],
     mood: 0,
     tags: [],
     notePost: "",
@@ -157,8 +159,7 @@ function beginAcknowledged(state) {
     pendingRuntime: null,
     trackingTrust:
       pendingRuntime.mode === "workout_running" &&
-      state.captureMode === "camera" &&
-      state.trackingTrust !== "degraded"
+      state.captureMode === "camera"
         ? "observing"
         : state.trackingTrust,
   };
@@ -208,7 +209,6 @@ export function flowTransition(state, event) {
             reason: null,
           },
           trackingTrust: "arming",
-          trackingReason: null,
         },
         [{ type: "startCamera" }, { type: "renderFlow" }],
       );
@@ -225,7 +225,6 @@ export function flowTransition(state, event) {
             reason: null,
           },
           trackingTrust: "arming",
-          trackingReason: null,
         },
         [
           { type: "stopCamera" },
@@ -259,8 +258,7 @@ export function flowTransition(state, event) {
           readiness: "not_ready",
           reason: event.reason || null,
         },
-        trackingTrust: "degraded",
-        trackingReason: event.reason || null,
+        trackingTrust: "disabled",
       });
 
     case "CHOOSE_NO_CAMERA":
@@ -275,7 +273,6 @@ export function flowTransition(state, event) {
             reason: null,
           },
           trackingTrust: "disabled",
-          trackingReason: null,
         },
         [{ type: "stopCamera" }],
       );
@@ -310,7 +307,6 @@ export function flowTransition(state, event) {
           reason: null,
         },
         trackingTrust: "disabled",
-        trackingReason: null,
         armedStep: null,
       };
 
@@ -477,25 +473,20 @@ export function flowTransition(state, event) {
       }
       return startWorkout(state);
 
-    case "TRACKING_DEGRADED":
-      if (state.captureMode !== "camera") return unchanged(state);
-      return moved(state, {
-        trackingTrust: "degraded",
-        trackingReason: event.reason || null,
-      });
+    case "TRACKING_FINISHED":
+      if (
+        state.mode !== "workout_running" ||
+        state.captureMode !== "camera"
+      ) {
+        return unchanged(state);
+      }
+      return moved(state, { trackingTrust: "finished" });
 
-		case "TRACKING_FINISHED":
-			if (
-				state.mode !== "workout_running" ||
-				state.captureMode !== "camera" ||
-				state.trackingTrust === "degraded"
-			) {
-				return unchanged(state);
-			}
-			return moved(state, {
-				trackingTrust: "finished",
-				trackingReason: null,
-			});
+    case "SEGMENT_FINISHED":
+      if (state.mode !== "workout_running" || state.captureMode !== "camera") {
+        return unchanged(state);
+      }
+      return finishWorkout({ ...state, trackingTrust: "finished" }, event.result);
 
     case "SESSION_DONE":
       if (state.mode !== "workout_running") return unchanged(state);
@@ -517,7 +508,6 @@ export function flowTransition(state, event) {
             : "completion_review",
           captureMode: event.captureMode || "no_camera",
           trackingTrust: event.completion.trackingTrust || "disabled",
-          trackingReason: event.trackingReason || null,
           workoutResult: {
             burpeeCountDone: event.completion.burpeeCountActual || 0,
             durationSec: event.completion.durationSecActual || 0,

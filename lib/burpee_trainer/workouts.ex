@@ -1052,6 +1052,9 @@ defmodule BurpeeTrainer.Workouts do
 
       :timed ->
         apply_timed_session_mode(changeset)
+
+      :invalid_tracking ->
+        Ecto.Changeset.add_error(changeset, :tracking, "must be a finished camera result")
     end
   end
 
@@ -1074,29 +1077,32 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp report_tracking_mode(changeset, tracking_attrs) do
-    with true <- tracking_value(tracking_attrs, :enabled) == true,
-         "finished" <- tracking_value(tracking_attrs, :trust),
-         {:ok, detected_reps} <-
-           parse_non_negative_integer(tracking_value(tracking_attrs, :detected_reps)),
-         {:ok, detected_duration} <-
-           parse_non_negative_number(tracking_value(tracking_attrs, :detected_duration_sec)),
-         {:ok, actual_reps} <-
-           parse_non_negative_integer(Ecto.Changeset.get_field(changeset, :burpee_count_actual)),
-         {:ok, actual_duration} <-
-           parse_non_negative_number(Ecto.Changeset.get_field(changeset, :duration_sec_actual)) do
-      cadence =
-        case tracking_value(tracking_attrs, :cadence_ms) do
-          value when is_list(value) -> value
-          _ -> []
-        end
+    if tracking_value(tracking_attrs, :enabled) == true do
+      with "finished" <- tracking_value(tracking_attrs, :trust),
+           {:ok, detected_reps} <-
+             parse_non_negative_integer(tracking_value(tracking_attrs, :detected_reps)),
+           {:ok, detected_duration} <-
+             parse_non_negative_number(tracking_value(tracking_attrs, :detected_duration_sec)),
+           {:ok, actual_reps} <-
+             parse_non_negative_integer(Ecto.Changeset.get_field(changeset, :burpee_count_actual)),
+           {:ok, actual_duration} <-
+             parse_non_negative_number(Ecto.Changeset.get_field(changeset, :duration_sec_actual)) do
+        cadence =
+          case tracking_value(tracking_attrs, :cadence_ms) do
+            value when is_list(value) -> value
+            _ -> []
+          end
 
-      if actual_reps == detected_reps and actual_duration == detected_duration do
-        {:trusted, cadence}
+        if actual_reps == detected_reps and actual_duration == detected_duration do
+          {:trusted, cadence}
+        else
+          :manual_correction
+        end
       else
-        :manual_correction
+        _ -> :invalid_tracking
       end
     else
-      _ -> :timed
+      :timed
     end
   end
 

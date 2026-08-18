@@ -20,7 +20,6 @@ import {
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 import { openSessionStore } from "./session_store.mjs";
 import {
-	finishTrackingObserver,
 	initialTrackingObserver,
 	observeTrackingRep,
 	startTrackingObserver,
@@ -61,7 +60,6 @@ const SessionHook = {
 		this.hiddenAt = null;
 		this.tracking = initialTrackingObserver();
 		this.trackerReadiness = "not_ready";
-		this.trackingCompletion = null;
 		this.armedPoseStep = null;
 		this.armedPoseHoldFramesRequired = 0;
 		this.warmupTimeoutRemainingMs = 0;
@@ -352,7 +350,6 @@ const SessionHook = {
 			tracking: {
 				enabled: this.flow.captureMode === "camera",
 				trust: completion.trackingTrust,
-				reason: this.flow.trackingReason ?? null,
 				detected_reps: completion.detectedReps,
 				detected_duration_sec: completion.detectedDurationSec,
 				cadence_ms: [...(completion.cadenceMs || [])],
@@ -498,7 +495,6 @@ const SessionHook = {
 			tracking: {
 				enabled: this.flow.captureMode === "camera",
 				trust: completion.trackingTrust,
-				reason: this.flow.trackingReason ?? null,
 				detected_reps: completion.detectedReps,
 				detected_duration_sec: completion.detectedDurationSec,
 				cadence_ms: [...(completion.cadenceMs || [])],
@@ -623,7 +619,6 @@ const SessionHook = {
 		this.dispatchFlow({
 			type: "RESTORE_COMPLETION_DRAFT",
 			captureMode: tracking.enabled ? "camera" : "no_camera",
-			trackingReason: tracking.reason ?? null,
 			completion,
 			pendingAcknowledgement: command?.kind === "mark_report_pending",
 		});
@@ -1016,8 +1011,13 @@ const SessionHook = {
 					this.activeSegment === "workout"
 						? this.workoutCompletionResult(command.result)
 						: command.result;
+				const cameraFinished =
+					this.activeSegment === "workout" &&
+					this.flow.captureMode === "camera" &&
+					Number.isInteger(result.detectedReps) &&
+					Number.isFinite(result.detectedDurationSec);
 				this.dispatchFlow({
-					type: "SEGMENT_DONE",
+					type: cameraFinished ? "SEGMENT_FINISHED" : "SEGMENT_DONE",
 					segment: this.activeSegment,
 					result,
 				});
@@ -1385,43 +1385,32 @@ const SessionHook = {
 		});
 	},
 
-	updatePoseStatus({ state, reason }) {
+	updatePoseStatus({ state }) {
 		this.tracking = updateTrackingStatus(this.tracking, state);
-		if (state === "lost" && this.flow.captureMode === "camera") {
-			this.dispatchFlow({
-				type: "TRACKING_DEGRADED",
-				reason: reason || "tracking_lost",
-			});
-		}
 	},
 
 	workoutCompletionResult(timerResult) {
 		if (this.flow.captureMode !== "camera") return timerResult;
 		const durationMs = Math.round((timerResult.durationSec || 0) * 1_000);
-		const finished = finishTrackingObserver(this.tracking, durationMs);
-		this.tracking = finished.state;
-		this.trackingCompletion = finished.result;
 		this.trackerFinished = null;
 		this.dispatchTrackerCommand("pose-tracker:finish", {
 			durationMs,
-			cadenceMs: finished.result.trusted ? finished.result.cadenceMs : [],
+			cadenceMs: [...this.tracking.cadenceMs],
 		});
 		const trackerFinished = this.trackerFinished;
 		this.dispatchTrackerCommand("pose-tracker:stop");
 
 		if (
-			!finished.result.trusted ||
-			this.flow.trackingTrust === "degraded" ||
-			!trackerFinished
+			!trackerFinished ||
+			!Number.isInteger(trackerFinished.reps) ||
+			trackerFinished.reps < 0 ||
+			!Number.isFinite(trackerFinished.duration_ms) ||
+			trackerFinished.duration_ms < 0 ||
+			!Array.isArray(trackerFinished.cadence_ms)
 		) {
-			if (this.flow.trackingTrust !== "degraded") {
-				this.dispatchFlow({
-					type: "TRACKING_DEGRADED",
-					reason: "tracking_incomplete",
-				});
-			}
 			return { ...timerResult, cadenceMs: [] };
 		}
+
 		this.dispatchFlow({ type: "TRACKING_FINISHED" });
 		return {
 			...timerResult,

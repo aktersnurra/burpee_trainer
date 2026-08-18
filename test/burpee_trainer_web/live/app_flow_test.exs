@@ -230,8 +230,11 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert saved.pace_consistency == nil
   end
 
-  test "degraded camera Save uses ordinary timer persistence", %{conn: conn, user: user} do
-    plan = plan_fixture(user, %{"name" => "Degraded Tracking Flow"})
+  test "non-finished camera Save remains unresolved instead of becoming timed", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user, %{"name" => "Unfinished Tracking Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")
     client_session_id = begin_session(session, user)
 
@@ -244,7 +247,6 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
         %{
           "enabled" => true,
           "trust" => "degraded",
-          "reason" => "detector_error",
           "detected_reps" => 99,
           "detected_duration_sec" => 5,
           "cadence_ms" => [1_000]
@@ -252,11 +254,8 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
       )
     )
 
-    [saved] = Workouts.list_sessions(user)
-    assert saved.capture_mode == :timed
-    assert saved.burpee_count_actual == 12
-    assert saved.duration_sec_actual == 75
-    assert saved.cadence_ms == nil
+    assert %{client_session_id: ^client_session_id, status: :running} =
+             Workouts.get_unresolved_session(user)
   end
 
   test "invalid Save leaves the lifecycle session unreported for client correction", %{

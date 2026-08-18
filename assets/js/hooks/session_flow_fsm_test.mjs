@@ -13,6 +13,15 @@ function readyCameraState() {
   return step(state, { type: "CAMERA_READINESS", readiness: "ready" }).state;
 }
 
+function cameraRunningState() {
+  return {
+    ...initialFlowState(),
+    mode: "workout_running",
+    captureMode: "camera",
+    trackingTrust: "observing",
+  };
+}
+
 test("camera choice starts locally and startup failure has explicit recovery", () => {
   let result = step(initialFlowState(), {
     type: "SESSION_READY",
@@ -176,20 +185,26 @@ test("warmup timeout pauses on readiness loss and ignores stale expiry", () => {
   assert.deepEqual(stale.commands, []);
 });
 
-test("camera failure during workout degrades tracking without leaving workout", () => {
-  const state = {
-    ...initialFlowState(),
-    mode: "workout_running",
-    captureMode: "camera",
-    trackingTrust: "observing",
-  };
-  const result = step(state, {
-    type: "TRACKING_DEGRADED",
-    reason: "detector_error",
+test("camera completion pre-fills detected count after absent frames", () => {
+  const result = step(cameraRunningState(), {
+    type: "SEGMENT_FINISHED",
+    result: {
+      burpeeCountDone: 99,
+      detectedReps: 4,
+      detectedDurationSec: 42,
+      cadenceMs: [8_000, 18_000, 29_000, 42_000],
+    },
   });
-  assert.equal(result.state.mode, "workout_running");
-  assert.equal(result.state.trackingTrust, "degraded");
-  assert.equal(result.state.trackingReason, "detector_error");
+
+  assert.equal(result.state.completion.burpeeCountActual, 4);
+  assert.equal(result.state.completion.durationSecActual, 42);
+  assert.equal(result.state.completion.trackingTrust, "finished");
+  assert.deepEqual(result.state.completion.cadenceMs, [
+    8_000,
+    18_000,
+    29_000,
+    42_000,
+  ]);
 });
 
 test("session result waits for report-pending acknowledgement before completion review", () => {
@@ -237,36 +252,6 @@ test("failed pending report retries without changing the completion draft", () =
   ]);
 });
 
-test("degraded camera completion keeps timer actuals and sanitizes detection analytics", () => {
-  let state = {
-    ...initialFlowState(),
-    mode: "workout_running",
-    captureMode: "camera",
-    trackingTrust: "observing",
-  };
-  state = step(state, {
-    type: "TRACKING_DEGRADED",
-    reason: "detector_error",
-  }).state;
-
-  const result = step(state, {
-    type: "SESSION_DONE",
-    result: {
-      burpeeCountDone: 14,
-      durationSec: 91,
-      detectedReps: 13,
-      detectedDurationSec: 84,
-      cadenceMs: [6000, 6200],
-    },
-  });
-
-  assert.equal(result.state.completion.burpeeCountActual, 14);
-  assert.equal(result.state.completion.durationSecActual, 91);
-  assert.equal(result.state.completion.detectedReps, null);
-  assert.equal(result.state.completion.detectedDurationSec, null);
-  assert.deepEqual(result.state.completion.cadenceMs, []);
-});
-
 test("restored completion draft enters review without replaying workout", () => {
   const restored = step(
     step(initialFlowState(), {
@@ -276,7 +261,6 @@ test("restored completion draft enters review without replaying workout", () => 
     {
       type: "RESTORE_COMPLETION_DRAFT",
       captureMode: "camera",
-      trackingReason: "restored",
       completion: {
         burpeeCountActual: 9,
         burpeeCountPlanned: 10,

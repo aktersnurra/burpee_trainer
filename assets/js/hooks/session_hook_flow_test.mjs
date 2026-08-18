@@ -536,7 +536,7 @@ test("explicit rest and pause candidate reps are ignored", () => {
 	assert.deepEqual(paused.tracking.cadenceMs, []);
 });
 
-test("tracking loss keeps workout state but forces timer fallback", () => {
+test("ordinary tracking loss leaves camera completion provenance unchanged", () => {
 	const ctx = trackedContext([
 		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
 	]);
@@ -546,11 +546,8 @@ test("tracking loss keeps workout state but forces timer fallback", () => {
 
 	assert.equal(ctx.segment.mode, "running");
 	assert.equal(ctx.timeline, timelineBefore);
-	assert.deepEqual(
-		ctx.workoutCompletionResult({ burpeeCountDone: 2, durationSec: 10 }),
-		{ burpeeCountDone: 2, durationSec: 10, cadenceMs: [] },
-	);
-	assert.equal(ctx.trackingCompletion.reason, "tracking_lost");
+	assert.equal(ctx.flow.trackingTrust, "disabled");
+	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
 });
 
 test("count-in hidden and done candidate reps are ignored", () => {
@@ -1240,7 +1237,6 @@ function completionDraft(overrides = {}) {
 		tracking: {
 			enabled: true,
 			trust: "finished",
-			reason: null,
 			detected_reps: 4,
 			detected_duration_sec: 9,
 			cadence_ms: [2_000, 4_000, 6_000, 8_000],
@@ -1399,7 +1395,6 @@ test("completion display and every stable edit queue the full draft", async () =
 			tracking: {
 				enabled: true,
 				trust: "observing",
-				reason: null,
 				detected_reps: 4,
 				detected_duration_sec: 9,
 				cadence_ms: [2_000, 4_000, 6_000, 8_000],
@@ -1477,7 +1472,7 @@ test("exact plan and program draft restores its original client UUID", async () 
 	ctx.destroyed();
 });
 
-test("degraded tracking reason survives completion draft round-trip exactly", async () => {
+test("completion drafts omit absent-observation provenance", async () => {
 	const saved = [];
 	const first = mountedFlowHarness({
 		poseTrackerReady: true,
@@ -1491,40 +1486,28 @@ test("degraded tracking reason survives completion draft round-trip exactly", as
 	await first.draftRestore;
 	first.flow = {
 		...first.flow,
-		mode: "workout_running",
+		mode: "completion_review",
 		captureMode: "camera",
-		trackingTrust: "degraded",
-		trackingReason: "confidence_lost/core-pose",
-		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
+		completion: {
+			burpeeCountActual: 4,
+			burpeeCountPlanned: 5,
+			durationSecActual: 9,
+			durationSecPlanned: 10,
+			detectedReps: 4,
+			detectedDurationSec: 9,
+			trackingTrust: "finished",
+			cadenceMs: [2_000, 4_000, 9_000],
+			mood: 0,
+			tags: [],
+			notePost: "",
+		},
 	};
-	first.dispatchFlow({
-		type: "SESSION_DONE",
-		result: { burpeeCountDone: 4, durationSec: 9 },
-	});
+	first.queueCompletionDraft();
 	await first.draftWrite;
 
 	assert.equal(saved.length, 1);
-	assert.equal(saved[0].tracking.reason, "confidence_lost/core-pose");
+	assert.equal(Object.hasOwn(saved[0].tracking, "reason"), false);
 	first.destroyed();
-
-	const restoredWrites = [];
-	const restored = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => ({
-			loadDraft: async () => saved[0],
-			async saveDraft(draft) {
-				restoredWrites.push(structuredClone(draft));
-			},
-		}),
-	});
-	await restored.draftRestore;
-	await restored.draftWrite;
-
-	assert.equal(restored.flow.mode, "completion_review");
-	assert.equal(restored.flow.trackingReason, "confidence_lost/core-pose");
-	assert.deepEqual(restoredWrites, []);
-	assert.deepEqual(restored.events, []);
-	restored.destroyed();
 });
 
 test("draft load settlement after destroy cannot restore, render, or save", async () => {
@@ -1898,7 +1881,7 @@ test("completed workout stays quiescent across hidden and visible lifecycle", as
 	}
 });
 
-test("camera failure during workout keeps timer result authoritative", () => {
+test("absent camera observations do not change the running flow", () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	click(ctx, "camera-choice-yes");
 	trackerEvent(ctx, "pose-tracker:started");
@@ -1908,15 +1891,11 @@ test("camera failure during workout keeps timer result authoritative", () => {
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "workout_start" });
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
-	trackerEvent(ctx, "pose-tracker:status", {
-		state: "lost",
-		reason: "detector_error",
-	});
-	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	trackerEvent(ctx, "pose-tracker:status", { state: "lost" });
 
-	assert.equal(ctx.flow.trackingTrust, "degraded");
-	assert.equal(ctx.flow.completion.burpeeCountActual, 5);
-	assert.deepEqual(ctx.flow.completion.cadenceMs, []);
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.flow.trackingTrust, "observing");
+	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
@@ -1983,16 +1962,16 @@ test("warmup timeout pauses while not ready and resumes monotonically", () => {
 	ctx.destroyed();
 });
 
-test("confidence loss during warmup pauses timeout and stale expiry cannot skip warmup", async () => {
+test("absent camera observations leave the warmup timeout active", async () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: false });
 	const readyFrames = Array.from({ length: 8 }, (_, index) =>
 		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
-	const confidenceLostFrame = trackerFrame(
+	const absentFrame = trackerFrame(
 		trackerSample({ tMs: 800, confidence: 0.1 }),
 	);
 	const harness = poseTrackerHarness({
-		frames: [...readyFrames, confidenceLostFrame],
+		frames: [...readyFrames, absentFrame],
 		trackerElement: ctx.el.querySelector("#pose-tracker"),
 	});
 
@@ -2009,10 +1988,8 @@ test("confidence loss during warmup pauses timeout and stale expiry cannot skip 
 
 		await harness.runUntilConsumed(9);
 
-		assert.equal(ctx.trackerReadiness, "not_ready");
-		assert.equal(ctx.warmupTimeoutDeadline, null);
-		ctx.finishWarmupTimeout();
-		assert.equal(ctx.flow.mode, "warmup_choice");
+		assert.equal(ctx.trackerReadiness, "ready");
+		assert.notEqual(ctx.warmupTimeoutDeadline, null);
 	} finally {
 		harness.poseTracker.destroyed();
 		ctx.destroyed();
@@ -2479,7 +2456,7 @@ test("readiness transitions update the dataset and stay local", async () => {
 	harness.poseTracker.destroyed();
 });
 
-test("accepted rep emits only a bubbling local candidate", async () => {
+test("ordinary absent samples emit no tracking state or server event", async () => {
 	const harness = buildPoseTrackerHarness(
 		[0.2, 0.5, 0.25, 0.2].map((closeness, index) =>
 			trackerFrame(
@@ -2492,19 +2469,20 @@ test("accepted rep emits only a bubbling local candidate", async () => {
 	await harness.runUntilConsumed(4);
 
 	assert.deepEqual(
+		harness.localEvents.filter(({ type }) => type === "pose-tracker:rep"),
+		[],
+	);
+	assert.deepEqual(
 		harness.localEvents
-			.filter(({ type }) => type === "pose-tracker:rep")
+			.filter(({ type }) => type === "pose-tracker:status")
 			.map(({ bubbles, detail }) => ({ bubbles, detail })),
-		[{ bubbles: true, detail: { index: 1, confidence: 0.9 } }],
+		[{ bubbles: true, detail: { state: "live" } }],
 	);
-	assert.equal(
-		harness.pushes.some(({ name }) => name === "rep"),
-		false,
-	);
+	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
 });
 
-test("tracker reset clears detector phase but keeps candidate indexes increasing", async () => {
+test("tracker reset does not turn absent samples into tracking loss", async () => {
 	const samples = [
 		[0, 0.2],
 		[500, 0.5],
@@ -2526,15 +2504,15 @@ test("tracker reset clears detector phase but keeps candidate indexes increasing
 
 	assert.deepEqual(
 		harness.localEvents
-			.filter(({ type }) => type === "pose-tracker:rep")
-			.map(({ detail }) => detail.index),
-		[1, 2],
+			.filter(({ type }) => type === "pose-tracker:status")
+			.map(({ bubbles, detail }) => ({ bubbles, detail })),
+		[{ bubbles: true, detail: { state: "live" } }],
 	);
 	harness.poseTracker.destroyed();
 	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 0);
 });
 
-test("tracker status emits deduplicated local transitions without server pushes", async () => {
+test("confidence loss samples do not emit a tracking-loss transition", async () => {
 	const harness = buildPoseTrackerHarness(
 		[0.9, 0.9, 0.1, 0.1, 0.9].map((confidence, index) =>
 			trackerFrame(trackerSample({ tMs: index * 100, confidence })),
@@ -2548,20 +2526,13 @@ test("tracker status emits deduplicated local transitions without server pushes"
 		harness.localEvents
 			.filter(({ type }) => type === "pose-tracker:status")
 			.map(({ bubbles, detail }) => ({ bubbles, detail })),
-		[
-			{ bubbles: true, detail: { state: "live" } },
-			{
-				bubbles: true,
-				detail: { state: "lost", reason: "confidence_lost" },
-			},
-			{ bubbles: true, detail: { state: "live" } },
-		],
+		[{ bubbles: true, detail: { state: "live" } }],
 	);
 	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
 });
 
-test("invalid tracker finish retains the lost fallback", async () => {
+test("invalid tracker finish does not emit a tracking-loss fallback", async () => {
 	const harness = buildPoseTrackerHarness([], { holdDetector: true });
 	await harness.mount();
 
@@ -2572,11 +2543,8 @@ test("invalid tracker finish retains the lost fallback", async () => {
 	);
 
 	assert.deepEqual(
-		harness.events.filter(({ type }) => type === "pose-tracker:status").at(-1),
-		{
-			type: "pose-tracker:status",
-			detail: { state: "lost", reason: "invalid_finish" },
-		},
+		harness.events.filter(({ type }) => type === "pose-tracker:status"),
+		[],
 	);
 	assert.deepEqual(harness.pushes, []);
 	harness.poseTracker.destroyed();
@@ -2779,7 +2747,7 @@ test("trusted completion consumes synchronous tracker output before stop", () =>
 	ctx.destroyed();
 });
 
-test("missing tracker finish degrades completion to timer authority", () => {
+test("missing tracker finish does not classify the camera session as degraded", () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	prepareTrustedCompletion(ctx);
 
@@ -2793,8 +2761,8 @@ test("missing tracker finish degrades completion to timer authority", () => {
 		durationSec: 10,
 		cadenceMs: [],
 	});
-	assert.equal(ctx.flow.trackingTrust, "degraded");
-	assert.equal(ctx.flow.trackingReason, "tracking_incomplete");
+	assert.equal(ctx.flow.trackingTrust, "observing");
+	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
 	ctx.destroyed();
 });
 
@@ -2862,7 +2830,6 @@ function prepareSaveReview(ctx, overrides = {}) {
 		...ctx.flow,
 		mode: "completion_review",
 		captureMode: "camera",
-		trackingReason: null,
 		completion: {
 			burpeeCountActual: 4,
 			burpeeCountPlanned: 5,
@@ -2933,7 +2900,6 @@ test("final Save is the only server event and keeps invalid drafts editable", as
 				tracking: {
 					enabled: true,
 					trust: "finished",
-					reason: null,
 					detected_reps: 4,
 					detected_duration_sec: 9,
 					cadence_ms: [2_000, 4_000, 6_000, 8_000],

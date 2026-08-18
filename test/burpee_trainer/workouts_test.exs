@@ -955,7 +955,24 @@ defmodule BurpeeTrainer.WorkoutsTest do
       assert pending_reported.id == pending.id
     end
 
-    test "report_session/4 preserves camera provenance for plan lifecycle rows" do
+    test "a finished camera report is tracked and only an explicit edit is reviewed" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+      client_session_id = Ecto.UUID.generate()
+      assert {:ok, _session} = Workouts.begin_plan_session(user, plan, client_session_id)
+
+      assert {:ok, tracked, :reported} =
+               Workouts.report_session(
+                 user,
+                 client_session_id,
+                 camera_attrs(4, 42),
+                 finished_tracking(4, 42)
+               )
+
+      assert tracked.capture_mode == :tracked
+    end
+
+    test "report_session/4 preserves only finished camera provenance for plan lifecycle rows" do
       user = user_fixture()
       plan = plan_fixture(user)
 
@@ -1007,7 +1024,7 @@ defmodule BurpeeTrainer.WorkoutsTest do
       degraded_id = Ecto.UUID.generate()
       assert {:ok, _} = Workouts.begin_plan_session(user, plan, degraded_id)
 
-      assert {:ok, degraded, :reported} =
+      assert {:error, degraded_changeset} =
                Workouts.report_session(
                  user,
                  degraded_id,
@@ -1021,10 +1038,8 @@ defmodule BurpeeTrainer.WorkoutsTest do
                  }
                )
 
-      assert degraded.capture_mode == :timed
-      assert degraded.cadence_ms == nil
-      assert degraded.target_pace_sec == nil
-      assert degraded.pace_consistency == nil
+      assert %{tracking: ["must be a finished camera result"]} = errors_on(degraded_changeset)
+      assert {:ok, _} = Workouts.abort_session(user, degraded_id)
 
       no_camera_id = Ecto.UUID.generate()
       assert {:ok, _} = Workouts.begin_plan_session(user, plan, no_camera_id)
@@ -1051,7 +1066,7 @@ defmodule BurpeeTrainer.WorkoutsTest do
       malformed_id = Ecto.UUID.generate()
       assert {:ok, _} = Workouts.begin_plan_session(user, plan, malformed_id)
 
-      assert {:ok, malformed, :reported} =
+      assert {:error, malformed_changeset} =
                Workouts.report_session(
                  user,
                  malformed_id,
@@ -1065,10 +1080,7 @@ defmodule BurpeeTrainer.WorkoutsTest do
                  }
                )
 
-      assert malformed.capture_mode == :timed
-      assert malformed.cadence_ms == nil
-      assert malformed.target_pace_sec == nil
-      assert malformed.pace_consistency == nil
+      assert %{tracking: ["must be a finished camera result"]} = errors_on(malformed_changeset)
     end
 
     test "immediate facts exclude running lifecycle rows" do
@@ -1821,6 +1833,23 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert Workouts.last_run_plan(user).id == reported_plan.id
     end
+  end
+
+  defp camera_attrs(reps, duration_sec) do
+    %{
+      "burpee_count_actual" => reps,
+      "duration_sec_actual" => duration_sec
+    }
+  end
+
+  defp finished_tracking(reps, duration_sec) do
+    %{
+      "enabled" => true,
+      "trust" => "finished",
+      "detected_reps" => reps,
+      "detected_duration_sec" => duration_sec,
+      "cadence_ms" => Enum.map(1..reps, &(&1 * 1_000))
+    }
   end
 
   defp metadata_value(metadata, key) do
