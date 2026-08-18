@@ -29,23 +29,6 @@ export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
 }
 
-export function runControlledPoseFixture(frames) {
-	let state = initialBurpeeHsmmState();
-	let count = 0;
-
-	for (const frame of frames) {
-		const result = stepBurpeeHsmm(state, frame);
-		state = result.state;
-		if (result.rep) count += 1;
-	}
-
-	return {
-		count: () => count,
-		hasText: () => false,
-		saveDisabled: () => false,
-	};
-}
-
 function configurePreviewVideo(video) {
 	video.muted = true;
 	video.playsInline = true;
