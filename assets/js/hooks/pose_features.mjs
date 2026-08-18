@@ -83,6 +83,9 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		points.get("right_elbow"),
 	);
 	const heelMid = midpoint(points.get("left_heel"), points.get("right_heel"));
+	const kneeMid = midpoint(points.get("left_knee"), points.get("right_knee"));
+	const ankleMid = midpoint(points.get("left_ankle"), points.get("right_ankle"));
+	const wristMid = midpoint(points.get("left_wrist"), points.get("right_wrist"));
 	const torsoLengthPx = distance(shoulderMid, hipMid);
 	const scalar = scalarSignals(points, width, height);
 	const scale = Math.max(
@@ -116,30 +119,19 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		shoulderMidY: yOf(shoulderMid, height),
 		hipMidX: xOf(hipMid, width),
 		hipMidY: yOf(hipMid, height),
-		kneeMidX: xOf(
-			midpoint(points.get("left_knee"), points.get("right_knee")),
-			width,
+		kneeMidX: xOf(kneeMid, width),
+		kneeMidY: yOf(kneeMid, height),
+		ankleMidX: xOf(ankleMid, width),
+		ankleMidY: yOf(ankleMid, height),
+		wristMidX: xOf(wristMid, width),
+		wristMidY: yOf(wristMid, height),
+		wristToAnkle: norm(distance(wristMid, ankleMid), scale),
+		shoulderToAnkle: norm(distance(shoulderMid, ankleMid), scale),
+		torsoUprightness: ratio(
+			Math.abs((shoulderMid?.y ?? NaN) - (hipMid?.y ?? NaN)),
+			torsoLengthPx,
 		),
-		kneeMidY: yOf(
-			midpoint(points.get("left_knee"), points.get("right_knee")),
-			height,
-		),
-		ankleMidX: xOf(
-			midpoint(points.get("left_ankle"), points.get("right_ankle")),
-			width,
-		),
-		ankleMidY: yOf(
-			midpoint(points.get("left_ankle"), points.get("right_ankle")),
-			height,
-		),
-		wristMidX: xOf(
-			midpoint(points.get("left_wrist"), points.get("right_wrist")),
-			width,
-		),
-		wristMidY: yOf(
-			midpoint(points.get("left_wrist"), points.get("right_wrist")),
-			height,
-		),
+		hipToKnee: norm(distance(hipMid, kneeMid), scale),
 		elbowMidX: xOf(elbowMid, width),
 		elbowMidY: yOf(elbowMid, height),
 		footMidX: xOf(
@@ -231,6 +223,8 @@ function addVelocities(frame, prevFrame) {
 			dCloseness: null,
 			dBboxArea: null,
 			dBodyScale: null,
+			dWristToAnkle: null,
+			dShoulderToAnkle: null,
 		};
 	}
 	const dtSeconds = (frame.tMs - prevFrame.tMs) / 1000;
@@ -245,6 +239,16 @@ function addVelocities(frame, prevFrame) {
 		dCloseness: velocity(frame.closeness, prevFrame.closeness, dtSeconds),
 		dBboxArea: velocity(frame.bboxArea, prevFrame.bboxArea, dtSeconds),
 		dBodyScale: velocity(frame.bodyScale, prevFrame.bodyScale, dtSeconds),
+		dWristToAnkle: velocity(
+			frame.wristToAnkle,
+			prevFrame.wristToAnkle,
+			dtSeconds,
+		),
+		dShoulderToAnkle: velocity(
+			frame.shoulderToAnkle,
+			prevFrame.shoulderToAnkle,
+			dtSeconds,
+		),
 	};
 }
 
@@ -351,6 +355,12 @@ function yOf(point, height) {
 
 function norm(value, divisor) {
 	return Number.isFinite(value) ? round4(value / divisor) : null;
+}
+
+function ratio(value, divisor) {
+	return Number.isFinite(value) && Number.isFinite(divisor) && divisor > 0
+		? round4(value / divisor)
+		: null;
 }
 
 function clamp01(value) {
