@@ -1,8 +1,5 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
-import {
-	initialBurpeeHsmmState,
-	stepBurpeeHsmm,
-} from "./pose_burpee_hsmm.mjs";
+import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
 import {
 	initialStartGesture,
@@ -88,8 +85,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	const poseSample = runtime.sampleFromPose || sampleFromPose;
 	const waitForFrame = runtime.waitForVideoFrame || waitForVideoFrame;
 	const hasWebgl = runtime.webglAvailable || webglAvailable;
-	const controlledPoseFixture =
-		runtime.controlledPoseFixture || globalThis.__burpeePoseFixture || null;
+	const controlledPoseFixture = runtime.controlledPoseFixture || null;
 	const controlledFrames = Array.isArray(controlledPoseFixture)
 		? controlledPoseFixture
 		: controlledPoseFixture?.frames || null;
@@ -308,12 +304,7 @@ export function createPoseTracker(hook, runtime = {}) {
 			}
 			if (!mounted || !running || generation !== startGeneration) return;
 
-			sample = poseSample(
-				poses[0],
-				sampledAt - startedAt,
-				video,
-				lastFeature,
-			);
+			sample = poseSample(poses[0], sampledAt - startedAt, video, lastFeature);
 		}
 		if (!controlledFrames) drawPoseOverlay(canvas, poses[0], video);
 		lastFeature = sample.features;

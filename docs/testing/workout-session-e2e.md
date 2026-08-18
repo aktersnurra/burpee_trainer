@@ -134,12 +134,25 @@ Use a fresh setup identity or clean the prior run first.
 
 ## Conditional scenario: controlled pose fixture continuity
 
-Run this when the browser controller can inject a page-init script. Before the
-session page loads, initialize `window.__burpeePoseFixture = {frames: []}`.
-The tracker consumes these client-only feature frames instead of requesting a
-physical camera. Each ready frame needs one visible pose, feature confidence
-at least `0.5`, and visible shoulders, hips, and a knee; provide eight such
-frames to finish camera setup.
+Run this only when the browser controller can both inject a page-init script
+and intercept the normal app-asset response. Build the test-only fixture entry:
+
+```bash
+mix assets.fixture
+```
+
+Before loading the session page, configure the controller to fulfill the
+normal `/assets/js/app.js` request from `tmp/e2e-assets/app_fixture.js` with a
+JavaScript content type. Do not serve, upload, or deploy that file: it is a
+local E2E-only replacement entrypoint. The normal production app asset does
+not contain the fixture runtime. In the same page-init script, initialize
+`window.__burpeePoseFixture = {frames: []}` before the fixture entry runs.
+
+The fixture entry passes those client-only feature frames through the injected
+`controlledPoseFixture` tracker runtime seam instead of requesting a physical
+camera. Each ready frame needs one visible pose, feature confidence at least
+`0.5`, and visible shoulders, hips, and a knee; provide eight such frames to
+finish camera setup.
 
 1. Choose **Yes, use camera**, feed the ready frames, then use the ordinary
    camera setup, warmup, and workout controls.

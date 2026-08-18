@@ -64,7 +64,9 @@ class FixtureElement {
 	removeEventListener(type, listener) {
 		this.listeners.set(
 			type,
-			(this.listeners.get(type) || []).filter((candidate) => candidate !== listener),
+			(this.listeners.get(type) || []).filter(
+				(candidate) => candidate !== listener,
+			),
 		);
 	}
 
@@ -349,7 +351,9 @@ async function runControlledSessionFixture(frames) {
 		{ el: tracker },
 		{
 			controlledPoseFixture: [...readinessFrames, ...frames],
-			mediaDevices: { getUserMedia: async () => assert.fail("fixture used camera") },
+			mediaDevices: {
+				getUserMedia: async () => assert.fail("fixture used camera"),
+			},
 			createBlazePoseDetector: async () =>
 				assert.fail("fixture loaded detector"),
 			now: () => nowMs,
@@ -370,7 +374,10 @@ async function runControlledSessionFixture(frames) {
 		for (let index = 0; index < count; index += 1) {
 			nowMs += 100;
 			const callback = scheduledFrames.shift();
-			assert.ok(callback, "controlled tracker scheduled the next feature frame");
+			assert.ok(
+				callback,
+				"controlled tracker scheduled the next feature frame",
+			);
 			await callback();
 			await flush();
 		}
@@ -402,14 +409,22 @@ async function runControlledSessionFixture(frames) {
 			}),
 		);
 		session.dispatchFlow({ type: "WARMUP_TIMEOUT", step: "warmup" });
-		assert.equal(session.flow.mode, "workout_ready", JSON.stringify(session.flow));
+		assert.equal(
+			session.flow.mode,
+			"workout_ready",
+			JSON.stringify(session.flow),
+		);
 		tracker.dispatchEvent(
 			new CustomEvent("pose-tracker:gesture-confirm", {
 				bubbles: true,
 				detail: { step: "workout_start" },
 			}),
 		);
-		assert.equal(session.flow.mode, "workout_running", JSON.stringify(session.flow));
+		assert.equal(
+			session.flow.mode,
+			"workout_running",
+			JSON.stringify(session.flow),
+		);
 		session.beginSegment();
 		await runFrames(frames.length);
 		session.dispatchSegment({ type: "TICK", elapsedSec: 10 });
@@ -432,6 +447,27 @@ test("the app bundle has no calibration or template matcher dependency", async (
 	);
 });
 
+test("the production tracker cannot activate a browser fixture from mutable global state", async () => {
+	const tracker = await readFile(
+		new URL("./pose_tracker_impl.mjs", import.meta.url),
+		"utf8",
+	);
+	const app = await readFile(new URL("../app.js", import.meta.url), "utf8");
+	const fixtureEntry = await readFile(
+		new URL("../app_fixture.js", import.meta.url),
+		"utf8",
+	);
+	const fixtureTracker = await readFile(
+		new URL("./pose_tracker_fixture.js", import.meta.url),
+		"utf8",
+	);
+
+	assert.doesNotMatch(tracker, /__burpeePoseFixture/);
+	assert.doesNotMatch(app, /pose_tracker_fixture/);
+	assert.match(fixtureEntry, /pose_tracker_fixture/);
+	assert.match(fixtureTracker, /__burpeePoseFixture/);
+});
+
 test("fixture absence between macro-cycles leaves the rendered session warning-free and Save enabled", async () => {
 	const root = await runControlledSessionFixture([
 		...completeCycle(0),
@@ -448,6 +484,12 @@ test("fixture absence between macro-cycles leaves the rendered session warning-f
 		root.querySelector("#session-live-status").textContent,
 		/tracking degraded|out of frame/i,
 	);
-	assert.equal(root.querySelector("#session-live-status").textContent, "Workout complete");
-	assert.equal(root.querySelector("#session-save-btn").hasAttribute("disabled"), false);
+	assert.equal(
+		root.querySelector("#session-live-status").textContent,
+		"Workout complete",
+	);
+	assert.equal(
+		root.querySelector("#session-save-btn").hasAttribute("disabled"),
+		false,
+	);
 });

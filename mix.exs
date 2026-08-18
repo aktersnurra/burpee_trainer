@@ -94,6 +94,7 @@ defmodule BurpeeTrainer.MixProject do
         "cmd --cd assets sh -c 'mkdir -p ../priv/static/assets/css/files && cp node_modules/@fontsource/geist/files/* ../priv/static/assets/css/files/'"
       ],
       "assets.pose": ["cmd scripts/prepare_pose_assets.sh"],
+      "assets.fixture": ["esbuild burpee_trainer_fixture"],
       "assets.build": [
         "compile",
         "tailwind burpee_trainer",

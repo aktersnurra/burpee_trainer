@@ -39,6 +39,12 @@ config :esbuild,
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
+  ],
+  burpee_trainer_fixture: [
+    args:
+      ~w(js/app_fixture.js --bundle --target=es2022 --outfile=../tmp/e2e-assets/app_fixture.js --external:/fonts/* --external:/images/* --alias:@=.),
+    cd: Path.expand("../assets", __DIR__),
+    env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
 
 # Configure tailwind (the version is required)
