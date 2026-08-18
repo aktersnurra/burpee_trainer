@@ -44,8 +44,9 @@ npm-debug.log
 
 /deploy/env*
 
-# Claude Code working files
+# Agent and harness working files
 /.claude/
+/.pi*
 PLAN.md
 REFACTOR_PLANNING.md
 SESSION_REFACTOR.md
