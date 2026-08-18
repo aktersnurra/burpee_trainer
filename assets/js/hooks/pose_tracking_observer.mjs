@@ -20,11 +20,7 @@ export function updateTrackingStatus(state, status) {
 
 export function updateTrackingReadiness(state, readiness) {
 	if (!["not_ready", "ready", "optimal"].includes(readiness)) return state;
-	const next = { ...state, readiness };
-	if (state.mode === "observing" && readiness === "not_ready") {
-		return degrade(next, "pose_not_ready");
-	}
-	return next;
+	return { ...state, readiness };
 }
 
 export function startTrackingObserver(state, readiness) {
@@ -38,9 +34,6 @@ export function startTrackingObserver(state, readiness) {
 		readiness,
 	};
 	if (state.trackerStatus !== "live") return degrade(next, "tracker_not_live");
-	if (readiness !== "ready" && readiness !== "optimal") {
-		return degrade(next, "pose_not_ready");
-	}
 	return { ...next, mode: "observing" };
 }
 

@@ -1,5 +1,8 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
-import { initialCounterState, countRep } from "./pose_rep_counter.mjs";
+import {
+	initialBurpeeHsmmState,
+	stepBurpeeHsmm,
+} from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
 import {
 	initialStartGesture,
@@ -19,6 +22,8 @@ import {
 export { drawPoseOverlay, resizePoseCanvas };
 
 const CAMERA_SETUP_AUTO_CONFIRM_MS = 1500;
+const MIN_HSMM_CONFIDENCE = 0.5;
+const MIN_HSMM_VISIBLE_FRACTION = 0.35;
 
 export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
@@ -88,7 +93,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	let video = null;
 	let canvas = null;
 	let raf = null;
-	let state = initialCounterState();
+	let state = initialBurpeeHsmmState();
 	let candidateIndex = 0;
 	let readiness = initialPoseReadiness();
 	let lastReadinessStatus = readiness.status;
@@ -115,7 +120,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	};
 
 	const reset = () => {
-		state = initialCounterState();
+		state = initialBurpeeHsmmState();
 		lastFeature = null;
 	};
 
@@ -310,7 +315,7 @@ export function createPoseTracker(hook, runtime = {}) {
 			if (startGesture.satisfied && !wasSatisfied) confirmArmedStep(step);
 		}
 
-		if (captureSegment) {
+		if (captureSegment && usableBurpeeHsmmFrame(sample.features)) {
 			const recorded = recordPoseSample(captureRecorder, sample, {
 				segment: captureSegment,
 				nowMs: sample.tMs,
@@ -319,16 +324,12 @@ export function createPoseTracker(hook, runtime = {}) {
 			recorded.chunks.forEach(dispatchCaptureChunk);
 		}
 
-		if (sample.confidence < 0.5 && trackingState !== "lost") {
-			markLost("confidence_lost");
-		}
-
 		if (sample.confidence >= 0.5 && trackingState !== "live") {
 			trackingState = "live";
 			dispatchLocal("pose-tracker:status", { state: "live" });
 		}
 
-		const result = countRep(state, sample);
+		const result = stepBurpeeHsmm(state, sample.features);
 		state = result.state;
 		if (result.rep) {
 			candidateIndex += 1;
@@ -356,7 +357,7 @@ export function createPoseTracker(hook, runtime = {}) {
 				trackingFinishPayload(event.detail || {}),
 			);
 		} catch (_error) {
-			markLost("invalid_finish");
+			// Invalid local finish input does not represent a camera failure.
 		}
 	}
 
@@ -400,4 +401,23 @@ export function createPoseTracker(hook, runtime = {}) {
 	}
 
 	return { mounted: mountedHook, start, stop, destroyed };
+}
+
+function usableBurpeeHsmmFrame(frame) {
+	return (
+		Number.isFinite(frame?.tMs) &&
+		finiteOr(frame.poseConfidence, frame.confidence) >= MIN_HSMM_CONFIDENCE &&
+		finiteOr(frame.macroLandmarkConfidence, 0) >= MIN_HSMM_CONFIDENCE &&
+		finiteOr(frame.visibleFraction, 0) >= MIN_HSMM_VISIBLE_FRACTION &&
+		[
+			frame.wristToAnkle,
+			frame.shoulderToAnkle,
+			frame.torsoUprightness,
+			frame.hipToKnee,
+		].every(Number.isFinite)
+	);
+}
+
+function finiteOr(value, fallback) {
+	return Number.isFinite(value) ? value : fallback;
 }
