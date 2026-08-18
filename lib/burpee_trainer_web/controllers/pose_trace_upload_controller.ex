@@ -6,12 +6,17 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadController do
 
   def create(
         conn,
-        %{"client_session_id" => client_session_id, "chunks" => chunks} = params
+        %{
+          "session_id" => session_id,
+          "client_session_id" => client_session_id,
+          "chunks" => chunks
+        } = params
       ) do
     complete? = params["complete"] == true
 
     case Workouts.ingest_pose_trace_batch(
            conn.assigns.current_user,
+           parse_session_id(session_id),
            client_session_id,
            chunks,
            complete?
@@ -45,6 +50,17 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadController do
   end
 
   def create(conn, _params), do: invalid_batch(conn)
+
+  defp parse_session_id(value) when is_integer(value), do: value
+
+  defp parse_session_id(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {id, ""} -> id
+      _invalid -> nil
+    end
+  end
+
+  defp parse_session_id(_value), do: nil
 
   defp invalid_batch(conn) do
     conn

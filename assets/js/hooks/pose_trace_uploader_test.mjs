@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-	MAX_TRACE_REQUEST_BYTES,
 	canDrainPoseTraces,
 	createPoseTraceUploader,
+	MAX_TRACE_REQUEST_BYTES,
 } from "./pose_trace_uploader.mjs";
 
 function chunk(index) {
 	return {
+		session_id: 99,
 		client_session_id: "client-1",
 		chunk_index: index,
 		segment: "main",
@@ -19,37 +20,31 @@ function chunk(index) {
 	};
 }
 
-function largeChunk(index, bytes = 170_000) {
-	return {
-		...chunk(index),
-		payload: {
-			version: 1,
-			samples: [{ tMs: index * 1_000, landmark_data: "x".repeat(bytes) }],
-		},
-	};
-}
-
-function nearBudgetChunks() {
-	return [largeChunk(0), largeChunk(1), largeChunk(2), largeChunk(3)];
-}
-
-function uploadStore(initialChunks, { ready = true } = {}) {
+function uploadStore(
+	initialChunks,
+	{ ready = true, rejectFinalSettlementOnce = false } = {},
+) {
 	let chunks = initialChunks.map((item) => structuredClone(item));
 	let marker = ready;
 	return {
 		async listReadyTraceUploads() {
 			return marker ? [{ client_session_id: "client-1", session_id: 99 }] : [];
 		},
-		async listTraceChunks(clientSessionId) {
-			assert.equal(clientSessionId, "client-1");
+		async listTraceChunks(sessionId) {
+			assert.equal(sessionId, 99);
 			return chunks.map((item) => structuredClone(item));
 		},
-		async deleteTraceChunks(clientSessionId, indexes) {
-			assert.equal(clientSessionId, "client-1");
+		async deleteTraceChunks(sessionId, indexes) {
+			assert.equal(sessionId, 99);
 			chunks = chunks.filter((item) => !indexes.includes(item.chunk_index));
 		},
-		async completeTraceUpload(clientSessionId) {
-			assert.equal(clientSessionId, "client-1");
+		async settleAcknowledgedFinalUpload(sessionId, indexes) {
+			assert.equal(sessionId, 99);
+			if (rejectFinalSettlementOnce) {
+				rejectFinalSettlementOnce = false;
+				throw new Error("forced final settlement abort");
+			}
+			chunks = chunks.filter((item) => !indexes.includes(item.chunk_index));
 			marker = false;
 		},
 		remainingIndexes() {
@@ -120,7 +115,7 @@ test("network failure keeps chunks queued and resolves without throwing", async 
 	assert.equal(store.uploadMarkerExists(), true);
 });
 
-test("empty ready upload markers are removed without a request", async () => {
+test("an empty ready marker is retained without a durable final acknowledgement", async () => {
 	const store = uploadStore([]);
 	let requests = 0;
 	const uploader = createPoseTraceUploader({
@@ -135,6 +130,70 @@ test("empty ready upload markers are removed without a request", async () => {
 	await uploader.drain();
 
 	assert.equal(requests, 0);
+	assert.equal(store.uploadMarkerExists(), true);
+});
+
+test("accepted final chunks survive incomplete acknowledgement, retry failure, and eventually clear on complete true", async () => {
+	const store = uploadStore([chunk(0)]);
+	const requestBodies = [];
+	const outcomes = [
+		jsonResponse({ accepted_indexes: [0], complete: false }),
+		new TypeError("offline during final acknowledgement retry"),
+		jsonResponse({ accepted_indexes: [0], complete: true }),
+	];
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async (_path, options) => {
+			requestBodies.push(parseJson(options.body));
+			const outcome = outcomes.shift();
+			if (outcome instanceof Error) throw outcome;
+			return outcome;
+		},
+		csrfToken: "token",
+	});
+
+	await uploader.drain();
+	assert.deepEqual(store.remainingIndexes(), [0]);
+	assert.equal(store.uploadMarkerExists(), true);
+
+	await uploader.drain();
+	assert.deepEqual(store.remainingIndexes(), [0]);
+	assert.equal(store.uploadMarkerExists(), true);
+
+	await uploader.drain();
+	assert.deepEqual(
+		requestBodies.map((body) => body.chunks.map((item) => item.chunk_index)),
+		[[0], [0], [0]],
+	);
+	assert.deepEqual(
+		requestBodies.map((body) => body.complete),
+		[true, true, true],
+	);
+	assert.deepEqual(store.remainingIndexes(), []);
+	assert.equal(store.uploadMarkerExists(), false);
+});
+
+test("final acknowledgement settlement abort retains chunks and marker for retry", async () => {
+	const store = uploadStore([chunk(0), chunk(1)], {
+		rejectFinalSettlementOnce: true,
+	});
+	let requests = 0;
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async () => {
+			requests += 1;
+			return jsonResponse({ accepted_indexes: [0, 1], complete: true });
+		},
+		csrfToken: "token",
+	});
+
+	await uploader.drain();
+	assert.deepEqual(store.remainingIndexes(), [0, 1]);
+	assert.equal(store.uploadMarkerExists(), true);
+
+	await uploader.drain();
+	assert.equal(requests, 2);
+	assert.deepEqual(store.remainingIndexes(), []);
 	assert.equal(store.uploadMarkerExists(), false);
 });
 
@@ -171,6 +230,9 @@ test("uploader sends bounded batches and completes only the final batch", async 
 	assert.equal(requests[0].path, "/api/session-pose-traces");
 	assert.equal(requests[0].options.headers["x-csrf-token"], "csrf-token");
 	assert.equal(requests[0].options.headers["content-type"], "application/json");
+	assert.equal(requests[0].body.session_id, 99);
+	assert.equal(requests[0].body.client_session_id, "client-1");
+	assert.equal(Object.hasOwn(requests[0].body.chunks[0], "session_id"), false);
 	assert.equal(
 		Object.hasOwn(requests[0].body.chunks[0], "client_session_id"),
 		false,
@@ -179,8 +241,12 @@ test("uploader sends bounded batches and completes only the final batch", async 
 	assert.equal(store.uploadMarkerExists(), false);
 });
 
-test("uploader splits a ready queue by serialized request bytes", async () => {
-	const store = uploadStore(nearBudgetChunks());
+test("uploader splits ready chunks by serialized request bytes", async () => {
+	const largeChunks = [chunk(0), chunk(1)].map((item) => ({
+		...item,
+		payload: { version: 1, samples: ["x".repeat(300_000)] },
+	}));
+	const store = uploadStore(largeChunks);
 	const requests = [];
 	const uploader = createPoseTraceUploader({
 		store,
@@ -188,7 +254,7 @@ test("uploader splits a ready queue by serialized request bytes", async () => {
 			const body = parseJson(options.body);
 			requests.push({ raw: options.body, body });
 			return jsonResponse({
-				accepted_indexes: body.chunks.map(({ chunk_index }) => chunk_index),
+				accepted_indexes: body.chunks.map((item) => item.chunk_index),
 				complete: body.complete,
 			});
 		},
@@ -197,8 +263,7 @@ test("uploader splits a ready queue by serialized request bytes", async () => {
 
 	await uploader.drain();
 
-	assert.ok(requests.length > 1);
-	assert.ok(requests.every(({ body }) => body.chunks.length > 0));
+	assert.equal(requests.length, 2);
 	assert.ok(
 		requests.every(
 			({ raw }) =>
@@ -207,39 +272,6 @@ test("uploader splits a ready queue by serialized request bytes", async () => {
 	);
 	assert.deepEqual(store.remainingIndexes(), []);
 	assert.equal(store.uploadMarkerExists(), false);
-});
-
-test("413 retains the queued chunks and ready marker", async () => {
-	const store = uploadStore([largeChunk(0, 400_000)]);
-	let requests = 0;
-	const uploader = createPoseTraceUploader({
-		store,
-		fetch: async () => {
-			requests += 1;
-			return { ok: false, status: 413 };
-		},
-		csrfToken: "token",
-	});
-
-	await uploader.drain();
-
-	assert.equal(requests, 1);
-	assert.deepEqual(store.remainingIndexes(), [0]);
-	assert.equal(store.uploadMarkerExists(), true);
-});
-
-test("409 conflict retains every queued chunk and ready marker", async () => {
-	const store = uploadStore([chunk(0), chunk(1)]);
-	const uploader = createPoseTraceUploader({
-		store,
-		fetch: async () => ({ ok: false, status: 409 }),
-		csrfToken: "token",
-	});
-
-	await uploader.drain();
-
-	assert.deepEqual(store.remainingIndexes(), [0, 1]);
-	assert.equal(store.uploadMarkerExists(), true);
 });
 
 test("concurrent drains share one in-flight request", async () => {

@@ -47,6 +47,7 @@ npm-debug.log
 # Agent and harness working files
 /.claude/
 /.pi*
+/.expert/
 PLAN.md
 REFACTOR_PLANNING.md
 SESSION_REFACTOR.md

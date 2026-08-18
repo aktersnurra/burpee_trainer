@@ -1,8 +1,7 @@
 defmodule BurpeeTrainerWeb.LogFormComponent do
   use BurpeeTrainerWeb, :live_component
 
-  alias BurpeeTrainer.BurpeeType
-  alias BurpeeTrainer.Workouts
+  alias BurpeeTrainer.{BurpeeType, UserTime, Workouts}
   alias BurpeeTrainer.Workouts.{SessionLog, WorkoutSession}
 
   @mood_options [
@@ -19,11 +18,31 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
 
   @impl true
   def update(assigns, socket) do
-    {:ok, assign(socket, assigns)}
+    socket = assign(socket, assigns)
+
+    socket =
+      if assigns[:current_user] && !socket.assigns.user_date_initialized? do
+        today = local_today(socket.assigns.current_user)
+
+        assign(socket,
+          log_date: Date.to_iso8601(today),
+          max_log_date: Date.to_iso8601(today),
+          user_date_initialized?: true
+        )
+      else
+        socket
+      end
+
+    {:ok, socket}
   end
 
   defp build_form(socket) do
-    today = Date.utc_today()
+    today =
+      case socket.assigns[:current_user] do
+        nil -> Date.utc_today()
+        user -> local_today(user)
+      end
+
     changeset = Workouts.change_free_form_session(%WorkoutSession{})
 
     assign(socket,
@@ -31,14 +50,24 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
       mood: 0,
       log_tags: [],
       burpee_type: :six_count,
-      log_date: today,
+      log_date: Date.to_iso8601(today),
+      max_log_date: Date.to_iso8601(today),
+      log_date_error: nil,
+      user_date_initialized?: socket.assigns[:current_user] != nil,
       mood_options: @mood_options,
       tag_options: @tag_options
     )
   end
 
+  defp local_today(user) do
+    case UserTime.context(user, DateTime.utc_now(:second)) do
+      {:ok, context} -> context.date
+      {:error, :invalid_timezone} -> Date.utc_today()
+    end
+  end
+
   @impl true
-  def handle_event("set_type", %{"type" => type_str}, socket) do
+  def handle_event("set_type", %{"type" => type_str}, socket) when is_binary(type_str) do
     burpee_type =
       case BurpeeType.parse(type_str) do
         {:ok, burpee_type} -> burpee_type
@@ -48,7 +77,9 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
     {:noreply, assign(socket, :burpee_type, burpee_type)}
   end
 
-  def handle_event("set_mood", %{"mood" => mood_str}, socket) do
+  def handle_event("set_type", _params, socket), do: {:noreply, socket}
+
+  def handle_event("set_mood", %{"mood" => mood_str}, socket) when is_binary(mood_str) do
     mood =
       case Integer.parse(mood_str) do
         {m, ""} when m in [-1, 0, 1] -> m
@@ -58,46 +89,103 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
     {:noreply, assign(socket, :mood, mood)}
   end
 
-  def handle_event("toggle_tag", %{"tag" => tag}, socket) do
+  def handle_event("set_mood", _params, socket), do: {:noreply, socket}
+
+  def handle_event("toggle_tag", %{"tag" => tag}, socket)
+      when is_binary(tag) and tag in @tag_options do
     tags = socket.assigns.log_tags
     new_tags = if tag in tags, do: List.delete(tags, tag), else: [tag | tags]
     {:noreply, assign(socket, :log_tags, new_tags)}
   end
 
-  def handle_event("validate", %{"workout_session" => params}, socket) do
-    log_date = SessionLog.parse_log_date(params, socket.assigns.log_date)
+  def handle_event("toggle_tag", _params, socket), do: {:noreply, socket}
 
-    changeset =
-      %WorkoutSession{}
-      |> Workouts.change_free_form_session(params)
-      |> Map.put(:action, :validate)
-
-    {:noreply, socket |> assign(:form, to_form(changeset)) |> assign(:log_date, log_date)}
+  def handle_event("validate", %{"workout_session" => params}, socket) when is_map(params) do
+    {:noreply, assign_log_form(socket, params)}
   end
 
-  def handle_event("save", %{"workout_session" => params}, socket) do
+  def handle_event("validate", _params, socket), do: {:noreply, socket}
+
+  def handle_event("save", %{"workout_session" => params}, socket) when is_map(params) do
     user = socket.assigns.current_user
-    log_date = SessionLog.parse_log_date(params, socket.assigns.log_date)
 
-    full_params =
-      SessionLog.to_attrs(
-        params,
-        socket.assigns.burpee_type,
-        socket.assigns.mood,
-        socket.assigns.log_tags,
-        log_date
-      )
+    case normalized_attrs(socket, params) do
+      {:ok, full_params} ->
+        case Workouts.create_free_form_session(user, full_params) do
+          {:ok, session} ->
+            events = Workouts.session_milestones(user, session)
+            send(self(), {socket.assigns.on_save, events})
+            {:noreply, build_form(socket)}
 
-    case Workouts.create_free_form_session(user, full_params) do
-      {:ok, session} ->
-        events = Workouts.session_milestones(user, session)
-        send(self(), {socket.assigns.on_save, events})
-        {:noreply, build_form(socket)}
+          {:error, changeset} ->
+            {:noreply,
+             assign(socket,
+               form: to_form(changeset),
+               log_date: log_date_value(params),
+               log_date_error: nil
+             )}
+        end
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset))}
+      {:error, reason} ->
+        {:noreply, assign_log_form(socket, params, reason)}
     end
   end
+
+  def handle_event("save", _params, socket), do: {:noreply, socket}
+
+  defp assign_log_form(socket, params) do
+    case normalized_attrs(socket, params) do
+      {:ok, attrs} -> assign_log_form(socket, params, attrs, nil)
+      {:error, reason} -> assign_log_form(socket, params, reason)
+    end
+  end
+
+  defp assign_log_form(socket, params, reason) when is_atom(reason) do
+    changeset =
+      Workouts.change_free_form_session(
+        %WorkoutSession{},
+        SessionLog.normalize_form_params(params)
+      )
+
+    assign_log_form(socket, params, changeset, log_date_error(reason))
+  end
+
+  defp assign_log_form(socket, params, attrs, nil) when is_map(attrs) do
+    changeset = Workouts.change_free_form_session(%WorkoutSession{}, attrs)
+    assign_log_form(socket, params, changeset, nil)
+  end
+
+  defp assign_log_form(socket, params, changeset, date_error) do
+    changeset = Map.put(changeset, :action, :validate)
+
+    assign(socket,
+      form: to_form(changeset),
+      log_date: log_date_value(params),
+      log_date_error: date_error
+    )
+  end
+
+  defp log_date_value(params) do
+    case params["log_date"] do
+      value when is_binary(value) -> value
+      _forged_or_missing -> ""
+    end
+  end
+
+  defp normalized_attrs(socket, params) do
+    SessionLog.to_attrs(
+      params,
+      socket.assigns.burpee_type,
+      socket.assigns.mood,
+      socket.assigns.log_tags,
+      socket.assigns.current_user,
+      DateTime.utc_now(:second)
+    )
+  end
+
+  defp log_date_error(:future_log_date), do: "Date cannot be in the future."
+  defp log_date_error(:invalid_timezone), do: "Date could not be resolved for your timezone."
+  defp log_date_error(:invalid_log_date), do: "Enter a valid date."
 
   @impl true
   def render(assigns) do
@@ -182,10 +270,18 @@ defmodule BurpeeTrainerWeb.LogFormComponent do
             <input
               type="date"
               name="workout_session[log_date]"
-              value={Date.to_iso8601(@log_date)}
-              max={Date.to_iso8601(Date.utc_today())}
+              value={@log_date}
+              max={@max_log_date}
               class="w-full bg-transparent text-base tabular-nums text-[var(--session-ink)] focus:outline-none"
             />
+            <p
+              :if={@log_date_error}
+              id="log-date-error"
+              class="text-xs font-medium text-red-600"
+              role="alert"
+            >
+              {@log_date_error}
+            </p>
           </div>
         </div>
 

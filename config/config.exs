@@ -7,9 +7,16 @@
 # General application configuration
 import Config
 
+config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
+
 config :burpee_trainer,
   ecto_repos: [BurpeeTrainer.Repo],
   generators: [timestamp_type: :utc_datetime]
+
+config :burpee_trainer, :coach_reconciler,
+  enabled: true,
+  max_concurrency: 2,
+  scan_interval_ms: :timer.minutes(5)
 
 # Configure the endpoint
 config :burpee_trainer, BurpeeTrainerWeb.Endpoint,

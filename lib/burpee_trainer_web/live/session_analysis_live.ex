@@ -7,23 +7,41 @@ defmodule BurpeeTrainerWeb.SessionAnalysisLive do
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     user = socket.assigns.current_user
-    session = Workouts.get_session!(user, String.to_integer(id))
 
-    if session.status == :reported and tracked?(session) do
+    with {session_id, ""} when session_id > 0 <- Integer.parse(id),
+         %{state: :completed} = session <- Workouts.get_session(user, session_id),
+         true <- tracked?(session) do
       {:ok,
        socket
        |> assign(:session, session)
        |> assign(:analytics, analytics(session))}
     else
-      {:ok, push_navigate(socket, to: ~p"/stats")}
+      _unavailable -> {:ok, push_navigate(socket, to: ~p"/stats")}
     end
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} current_page={:stats}>
-      <div class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]">
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_scope={assigns[:current_scope]}
+      current_page={:stats}
+    >
+      <div
+        id="session-analysis-page"
+        data-session-id={@session.id}
+        data-display-name={@session.display_name_snapshot}
+        data-completed-at={@session.completed_at}
+        data-prescribed-sets-completed={@session.prescribed_sets_completed}
+        data-reps-delta={@session.reps_delta}
+        data-shortened={@session.shortened}
+        data-recovery-delta-sec={@session.recovery_delta_sec}
+        data-pace-delta-sec={@session.pace_delta_sec}
+        data-cadence-decline={@session.cadence_decline}
+        class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]"
+      >
         <div class="flex items-center justify-between gap-4">
           <.link
             navigate={~p"/stats"}
@@ -37,21 +55,27 @@ defmodule BurpeeTrainerWeb.SessionAnalysisLive do
         <.qs_surface class="space-y-4 bg-[var(--session-surface)]/60 p-5">
           <div class="space-y-1">
             <p class="text-sm font-medium text-[var(--session-muted)]">Session analysis</p>
+            <h1 id="session-analysis-name" class="text-xl font-semibold text-[var(--session-ink)]">
+              {@session.display_name_snapshot || "Workout"}
+            </h1>
             <div class="flex items-end justify-between gap-4">
               <div>
-                <p class="qs-tabular text-4xl font-semibold tracking-[-0.05em] tabular-nums text-[var(--session-ink)]">
+                <p
+                  id="session-analysis-actual-reps"
+                  class="qs-tabular text-4xl font-semibold tracking-[-0.05em] tabular-nums text-[var(--session-ink)]"
+                >
                   {@session.burpee_count_actual}
                 </p>
                 <p class="text-sm text-[var(--session-muted)]">
-                  {Fmt.burpee_type(@session.burpee_type)}
+                  {Fmt.burpee_type(@session.workout_type_snapshot || @session.burpee_type)}
                 </p>
               </div>
               <div class="text-right">
                 <p class="text-lg font-semibold tabular-nums text-[var(--session-ink)]">
                   {Fmt.duration_sec(@session.duration_sec_actual)}
                 </p>
-                <p class="text-xs text-[var(--session-muted)]">
-                  {Calendar.strftime(DateTime.to_date(@session.inserted_at), "%d %b %Y")}
+                <p id="session-analysis-date" class="text-xs text-[var(--session-muted)]">
+                  {Calendar.strftime(DateTime.to_date(@session.completed_at), "%-d %b %Y")}
                 </p>
               </div>
             </div>

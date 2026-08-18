@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
   import Ecto.Changeset
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Workouts.{PoseTraceChunk, WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{PoseTraceChunk, WorkoutSession}
 
   @statuses [:active, :completed, :aborted]
 
@@ -18,7 +18,6 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
     field(:abort_reason, :string)
 
     belongs_to(:user, User)
-    belongs_to(:plan, WorkoutPlan)
     belongs_to(:workout_session, WorkoutSession)
     has_many(:pose_trace_chunks, PoseTraceChunk)
 
@@ -32,7 +31,13 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
   def start_changeset(run, attrs) do
     run
     |> cast(attrs, [:capture_version, :started_at])
-    |> validate_required([:user_id, :plan_id, :status, :capture_version, :started_at])
+    |> validate_required([
+      :user_id,
+      :workout_session_id,
+      :status,
+      :capture_version,
+      :started_at
+    ])
     |> validate_number(:capture_version, greater_than: 0)
     |> unique_constraint(:workout_session_id,
       name: :pose_capture_runs_workout_session_id_unique_index
@@ -42,7 +47,7 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
   @spec complete_changeset(t(), map()) :: Ecto.Changeset.t()
   def complete_changeset(run, attrs) do
     run
-    |> cast(attrs, [:workout_session_id, :completed_at])
+    |> cast(attrs, [:completed_at])
     |> change(status: :completed)
     |> validate_required([:workout_session_id, :completed_at])
   end

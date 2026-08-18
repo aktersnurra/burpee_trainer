@@ -4,6 +4,8 @@
 > Generate a plan and wait for my approval before writing any code.
 
 > Intelligence-layer note: the old PlanWizard/MILP/ScheduleSolver direction in this file is superseded by `INTELLIGENCE_LAYER.md`, which documents the current implementation.
+>
+> Current-contract note: **DELETION-FIRST WORKOUT LIBRARY AND COACH — CURRENT CONTRACT** below supersedes older data-model, planning, Home, recommendation, and completion passages wherever they conflict.
 
 ---
 
@@ -41,6 +43,7 @@ Field names follow the conventions above: units suffixed (`_sec`, `_count`), qua
 (`_planned`, `_actual`, `_target`, `_baseline`).
 
 ### User
+
 ```
 id
 username
@@ -48,6 +51,7 @@ password_hash
 ```
 
 ### WorkoutPlan
+
 ```
 id
 user_id
@@ -69,6 +73,7 @@ has_many blocks (ordered by position)
 > Shave-off is NOT a user-facing concept. The solver handles rest distribution internally.
 
 ### Block
+
 ```
 id
 plan_id
@@ -81,6 +86,7 @@ has_many sets (ordered by position)
 > before the next block. This is not a coincidence — it is the design. Document in code comments.
 
 ### Set
+
 ```
 id
 block_id
@@ -91,6 +97,7 @@ rest_sec_after_set            -- int, default 0
 ```
 
 ### WorkoutSession
+
 ```
 id
 user_id
@@ -125,6 +132,7 @@ inserted_at                   -- full timestamp, time preserved
 > never recompute at read time.
 
 ### Goal
+
 ```
 id
 user_id
@@ -140,6 +148,7 @@ inserted_at
 ```
 
 ### StylePerformance
+
 ```
 id
 user_id
@@ -158,6 +167,7 @@ rate_sum                      -- float
 > Upserted after each session save.
 
 ### WorkoutVideo
+
 ```
 id
 name                          -- e.g. "Day 1 - Level 1A 6-count"
@@ -174,6 +184,7 @@ inserted_at
 Pure Elixir module `BurpeeTrainer.Levels`. No Ecto dependency.
 
 ### Landmark table (hardcoded)
+
 ```elixir
 @landmarks [
   %{level: :graduated, six_count: 325, navy_seal: 150},
@@ -191,6 +202,7 @@ Qualifies when: `duration_sec_actual <= 1200` AND `burpee_count_actual >= thresh
 Level is derived from sessions, never stored.
 
 ### Public API
+
 ```elixir
 BurpeeTrainer.Levels.current_level/1
 # [%WorkoutSession{}] -> level_atom  (lower of the two per-type levels)
@@ -209,6 +221,7 @@ BurpeeTrainer.Levels.landmark_history/1
 ```
 
 ### Tests (ExUnit)
+
 Cover: landmark qualification, overall level = min of two types, next_landmark threshold,
 graduated state, zero sessions.
 
@@ -232,6 +245,7 @@ Enforced at input time — not on save. The pace input shows the floor value and
 progression if violated.
 
 ### Physical floor constants
+
 ```elixir
 @sec_per_burpee_floor %{
   six_count:  Float.ceil(1200 / 325, 2),   # 3.70
@@ -240,6 +254,7 @@ progression if violated.
 ```
 
 ### Input struct
+
 ```elixir
 %PlanInput{
   name,
@@ -289,6 +304,7 @@ Step 4: Return {:ok, %WorkoutPlan{}} with all blocks and sets populated.
 ```
 
 ### Public API
+
 ```elixir
 BurpeeTrainer.PlanWizard.generate/1
 # %PlanInput{} -> {:ok, %WorkoutPlan{}} | {:error, reason}
@@ -298,7 +314,9 @@ BurpeeTrainer.PlanWizard.validate_pace/2
 ```
 
 ### Tests (ExUnit)
+
 Cover:
+
 - even pacing: total reps match exactly, duration within ±5s of target
 - unbroken: one block, one set, correct rep count
 - pace at exactly the floor: accepted
@@ -315,6 +333,7 @@ Cover:
 Pure Elixir module `BurpeeTrainer.Planner`. No Ecto dependency.
 
 ### Event struct
+
 ```elixir
 %Event{
   type:           :warmup_burpee | :warmup_rest | :work_burpee | :work_rest | :rest_block,
@@ -331,6 +350,7 @@ Pure Elixir module `BurpeeTrainer.Planner`. No Ecto dependency.
 ### Timeline logic
 
 `to_timeline/1` expands the plan into a flat list of events (warmup NOT included):
+
 1. **Main**: expand each block by `repeat_count`, emit sets as work+rest pairs.
 2. `:rest_block` events are emitted for zero-rep blocks (injected additional rests).
 
@@ -339,6 +359,7 @@ Warmup is handled separately via `warmup_timeline/1` — prepended at session st
 ### Warmup generation — `warmup_timeline/1`
 
 Fixed algorithm, no user configuration:
+
 ```
 Round 1: min(burpee_count_per_set_in_block_1, reps_in_1_min_at_pace) reps
 Rest:    120s (hardcoded)
@@ -348,6 +369,7 @@ Rest:    180s (hardcoded)
 ```
 
 ### Public API
+
 ```elixir
 BurpeeTrainer.Planner.to_timeline/1
 # %WorkoutPlan{} -> [%Event{}]   (main workout only, no warmup)
@@ -362,6 +384,7 @@ BurpeeTrainer.Planner.summary/1
 Helpers: `build_timeline/1`, `build_timeline_block/2`.
 
 ### Tests (ExUnit)
+
 Cover: plan expansion, warmup generation, rest_block events, zero-rest edge cases,
 repeat_count > 1, empty block list.
 
@@ -372,6 +395,7 @@ repeat_count > 1, empty block list.
 Pure Elixir module `BurpeeTrainer.Progression`. No Ecto dependency.
 
 ### Periodization (3 weeks build + 1 deload)
+
 ```elixir
 phase = case rem(weeks_elapsed, 4) do
   1 -> :build_1   # 0.90
@@ -383,18 +407,21 @@ burpee_count_suggested = round(burpee_count_target_linear * phase_multiplier)
 ```
 
 ### Trend status
+
 - `:ahead` | `:on_track` — projected on target
 - `:behind` — projected < target by > 10%; boost multiplier +0.05
 - `:low_consistency` — fewer than 2 sessions in last 14 days
 - `:plateau` — last 4 `rate_delta` within ±3%
 
 ### Public API
+
 ```elixir
 BurpeeTrainer.Progression.recommend/2   # %Goal{} | :implicit, [%WorkoutSession{}] -> %Recommendation{}
 BurpeeTrainer.Progression.project_trend/1  # [%WorkoutSession{}] -> [{date, burpee_count_projected}]
 ```
 
 ### Tests (ExUnit)
+
 Cover: on-track, behind, deload, plateau, < 4 sessions, zero sessions, implicit goal.
 
 ---
@@ -407,12 +434,14 @@ Cover: on-track, behind, deload, plateau, < 4 sessions, zero sessions, implicit 
 Navy seal: `even_spaced` (any), `front_loaded` (1B+), `descending` (1C+), `minute_on` (1D+)
 
 ### BurpeeTrainer.StyleGenerator
+
 ```elixir
 BurpeeTrainer.StyleGenerator.generate/2
 # style_name, %Recommendation{} -> %WorkoutPlan{}
 ```
 
 ### BurpeeTrainer.StyleRecommender
+
 ```elixir
 BurpeeTrainer.StyleRecommender.recommend/1
 # %{burpee_type, mood, level, time_of_day_bucket, sessions, performances, progression_rec}
@@ -420,6 +449,7 @@ BurpeeTrainer.StyleRecommender.recommend/1
 ```
 
 ### Bayesian scoring
+
 ```elixir
 @prior_weight 3
 @prior_mean   0.85
@@ -430,12 +460,14 @@ score = (@prior_weight * @prior_mean + session_count * avg_completion) /
 ### Modifiers (hardcoded starting priors — overridden by data within ~5 sessions)
 
 Mood:
+
 ```
 -1: burst +0.10, even +0.05, long_sets -0.10, descending -0.10
 +1: long_sets +0.10, pyramid +0.05, descending +0.05, burst -0.05
 ```
 
 Time of day:
+
 ```
 evening: burst +0.05, long_sets -0.05, descending -0.05
 night:   burst +0.10, long_sets -0.10, descending -0.10, even +0.05
@@ -444,15 +476,18 @@ night:   burst +0.10, long_sets -0.10, descending -0.10, even +0.05
 Plateau override: unused styles (last 3 sessions) get +0.15.
 
 ### StyleSuggestion struct
+
 ```elixir
 %StyleSuggestion{style_name, score, session_count, plan, rationale}
 ```
 
 ### Upgrade path
+
 Contextual bandit documented as comment in `style_recommender.ex`.
 Context = `(mood, level, time_of_day_bucket)`, arms = archetypes, reward = completion_ratio.
 
 ### Tests (ExUnit)
+
 Cover: score convergence, prior at zero sessions, level filter, plateau override,
 mood/time modifiers, top 3 returned.
 
@@ -474,6 +509,7 @@ Server: receives completion, shows save modal
 ```
 
 ### SessionLive — on mount
+
 ```elixir
 def mount(%{"plan_id" => plan_id}, session, socket) do
   plan     = Workouts.get_plan(plan_id)
@@ -486,6 +522,7 @@ end
 ```
 
 ### SessionLive — handles from client
+
 ```elixir
 def handle_event("warmup_requested", _, socket) do
   warmup = Planner.warmup_timeline(socket.assigns.plan)
@@ -498,6 +535,7 @@ end
 ```
 
 ### What is NOT in SessionLive
+
 - No `:timer.send_interval`
 - No `handle_info(:tick)`
 - No `phase_elapsed_sec` assign
@@ -506,6 +544,7 @@ end
 - No `push_event("start_metronome")` / `"stop_metronome"` / `"pause_metronome"`
 
 ### State machine (client-side phases)
+
 ```
 idle → warmup_burpee → warmup_rest → work_burpee → work_rest → rest_block → done
 ```
@@ -522,12 +561,14 @@ tab throttling.
 **State machine:** walks the flat timeline array using elapsed time.
 
 **Beeps (Web Audio API):**
+
 - Rep beep: 880hz, 80ms, square. Fires at each rep boundary within a work phase.
 - Rest-ending beep: 440hz, 400ms, sine. Fires when 5s remain in any rest phase.
 
 **Pause/resume:** shifts `startTime` forward by pause duration so elapsed stays correct.
 
 **Warmup flow:**
+
 1. Show warmup prompt on tap-to-start screen.
 2. If Yes: `pushEvent("warmup_requested")` → server responds with `warmup_ready` → prepend to timeline.
 3. If Skip: start immediately with main timeline.
@@ -538,10 +579,12 @@ tab throttling.
 to avoid unnecessary LiveView diffs.
 
 ### Mood input
+
 Tap-to-start overlay: 😮‍💨 Tired (-1) / 😐 OK (0) / 💪 Hyped (+1).
 Initializes AudioContext on tap (browser requirement).
 
 ### Completion modal
+
 Pre-filled, all editable: `burpee_count_actual`, `duration_sec_actual`, `mood`,
 `tags` (multi-select), `note_pre`, `note_post`.
 On save: `Workouts.save_session/2` computes all derived fields, upserts `StylePerformance`.
@@ -583,6 +626,7 @@ One page, three stacked sections (no separate wizard step flow):
 ### Layer 1 — Basics
 
 Fields:
+
 ```
 name              text input
 style             two tap targets: [6-Count] [Navy Seal]
@@ -616,12 +660,14 @@ If solver returns `{:error, {:rest_unplaceable, target_min}}`:
 
 Pre-filled from solver output. User can tweak any field.
 Live derived duration shown at top of this section:
+
 ```
 Derived duration: 19m 45s  (target: 20m ±5s)
 Total burpees:    120       (required: 120)
 ```
 
 Color coding:
+
 - Green: both constraints satisfied
 - Amber: duration within ±5s, reps exact
 - Red: constraint violated (show which one)
@@ -653,6 +699,7 @@ New root route. Landing page after login.
 Weekly goal: 80 min/week.
 
 Assigns:
+
 ```elixir
 weekly_minutes:  [%{week_start, minutes, met_goal}]   # last 12 weeks, newest first
 streak:          integer                               # consecutive met-goal weeks
@@ -693,6 +740,7 @@ Single centered card when no sessions exist, with "Log a session" CTA.
 ## GOALS PAGE — `/goals`
 
 Level display:
+
 ```
 Current Level: 1C
 6-counts   1C unlocked  next: 150 for 1D
@@ -703,6 +751,7 @@ Goal card: target summary, three-point progress bar, phase + trend badges.
 Implicit goal from next landmark if no explicit goal set.
 
 Recommendation panel:
+
 - "Get style recommendation" -> mood picker -> time auto-detected -> top 3 cards
   -> "Use this" (editor) or "Run directly" (session).
 - "Build plan manually" -> wizard pre-filled with suggestion.
@@ -784,6 +833,7 @@ VideoHook = {
 - Nav: `BurpeeTrainer` (wordmark, links to `/`) · `Plans` · `Log` · `History` · `Goals`
 
 ### Phase colors (session runner)
+
 ```
 work:    #4A9EFF blue   (replaces green)
 warmup:  #F59E0B amber
@@ -847,25 +897,10 @@ mix burpee_trainer.add_video NAME FILENAME BURPEE_TYPE
 
 ## DEPLOYMENT
 
-- nginx: `burpee.gustafrydholm.xyz` -> `localhost:4000`
-- TLS: certbot
-- Process: systemd
-- Release: `mix release`
-- SQLite: `/var/lib/burpee_trainer/db.sqlite3` via `DATABASE_PATH` env var
-- Videos: `/var/lib/burpee_trainer/videos/`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-APP=burpee_trainer
-HOST=burpee.gustafrydholm.xyz
-DEPLOY_PATH=/opt/$APP
-MIX_ENV=prod mix deps.get --only prod
-MIX_ENV=prod mix assets.deploy
-MIX_ENV=prod mix release --overwrite
-rsync -avz --delete _build/prod/rel/$APP/ $HOST:$DEPLOY_PATH/
-ssh $HOST "systemctl restart $APP"
-```
+This historical deployment section is non-operative. Deployment, rollback, host configuration,
+release transfer, migrations, service management, TLS, logs, and persistent storage are owned by the
+separate private infrastructure repository. Follow the authoritative instructions in `README.md`;
+this repository intentionally contains no executable production deployment procedure.
 
 ---
 
@@ -892,3 +927,199 @@ ssh $HOST "systemctl restart $APP"
 - No VS Code config files.
 - TigerStyle naming: units and qualifiers trail, no abbreviations,
   helpers prefixed with calling function name.
+
+---
+
+## DELETION-FIRST WORKOUT LIBRARY AND COACH — CURRENT CONTRACT
+
+This section is the current product and architecture contract. `workout_plans` is the canonical
+structured-workout library, `coach_recommendations` is a small pointer projection, supervised OTP
+reconciliation is transient, and `workout_sessions` owns immutable execution. Historical migration
+SQL may contain predecessor names; those names do not describe current runtime behavior.
+
+### Canonical workout library
+
+A workout plan has one lifecycle state:
+
+```text
+draft --publish--> published --archive--> archived
+```
+
+- A `draft` is private, valid, deterministically compiled, visible in Library, refinable only through
+  natural language, unstartable, and hard-deletable.
+- A `published` plan is immutable, reusable, visible in Library, and startable. It may be copied to a
+  new draft or archived, but not hard-deleted or edited.
+- An `archived` plan remains immutable and hidden from normal selection. It cannot Start, but it may
+  be copied to a new draft. Existing completed sessions retain their independent snapshots.
+- Shared built-ins are system-owned published plans. User APIs cannot create or publish a built-in.
+
+There is no generic plan update operation and no manual block/set editor. New definitions use the
+canonical schema-3/solver-1 workout format. Deterministic validation, compilation, and content hashing
+bind the definition, Work/Rest program, workout type, planned targets, and lifecycle transition.
+
+### Natural-language authoring
+
+Create and refine accept trimmed, nonblank input of at most 500 graphemes and 4,000 bytes. Each
+operation performs at most one `Req.post/2`; retries and redirects are disabled, `max_tokens` is
+16,384 so the provider can emit the full 16 KiB canonical definition, and response bodies are capped
+at 262,144 bytes.
+
+- Valid create output is parsed, validated, compiled, hashed, and persisted as a draft only.
+- Invalid create output or provider failure persists nothing.
+- Valid refine output atomically replaces only the current owned draft after a complete stale-revision
+  check.
+- Invalid or stale refine leaves the prior draft byte-for-byte unchanged.
+- Published and archived plans must be copied to a new draft before refinement.
+- No provider response publishes a workout automatically.
+
+Provider configuration is enabled only when both `LLM_PROVIDER_URL` and `LLM_PROVIDER_API_KEY` are
+present outside test. A disabled provider performs zero HTTP requests and returns a bounded domain
+error while the deterministic built-in fallback remains usable.
+
+### Recommendation pointer and candidate decision
+
+`coach_recommendations` stores one user/slot identity, one exclusive selected published plan or
+available video, an optional pending draft, a concise rationale, and timestamps. It stores product
+state only: no delivery/job state or execution permission.
+
+The coach receives bounded completed-session evidence, deterministic constraints, feedback, and the
+published library. It may select an eligible existing item or propose one new workout. A proposed
+workout is validated and persisted as the recommendation's pending draft.
+
+Candidate actions are atomic:
+
+- **Use this workout** verifies that the candidate is still the current owned draft, republishes only
+  after deterministic validation, selects it, and clears `pending_draft_id` in one transaction.
+- **Current workout is better** verifies the same current candidate, clears the pointer, hard-deletes
+  that draft, and leaves the existing selection unchanged.
+
+Stale selections fail closed and do not leave orphan drafts. If a selected plan is archived/missing
+or a video becomes unavailable, availability convergence switches the selection to the published
+built-in fallback without changing the pending draft.
+
+### Deterministic policy and Home
+
+The policy is authoritative and uses the user's timezone for local-day, week, Monday, and DST
+boundaries.
+
+- Weekly credited target: exactly 4,800 seconds.
+- Home priority: `week_complete -> done_today -> workout_needed`.
+- Monday starts a clean week; incomplete work never becomes debt.
+- Weekend catch-up is eligible with at least 2,400 seconds remaining, covers the full remainder, and
+  is never exploration.
+- The rolling PB is the highest confirmed reps from same-type prescribed 20-minute workouts in the
+  trailing six weeks.
+- PB ceilings are `floor(0.75 × PB × 2)` at 40 minutes, `floor(0.60 × PB × 3)` at 60 minutes, and
+  `floor(0.50 × PB × 4)` at 80 minutes.
+- Exploration changes at most one meaningful dimension and occurs at most once in three completed
+  workouts.
+- Confirmed video duration/reps and typed session feedback are evidence; video sessions do not become
+  prescribed-plan PBs.
+- A started session is pinned and is never replaced by policy or reconciliation.
+
+Home reads persisted facts and renders exactly one top-level state. During `workout_needed`, it shows
+the current selection, Retry when provider work failed, and pending-candidate actions when present.
+It does not compile or invoke the provider merely because Home mounted or reloaded.
+
+### Transient supervised reconciliation
+
+`CoachReconciler` scans persisted product facts on startup, periodically, and after lightweight
+completion/date wake-ups. Provider tasks run under supervision with bounded concurrency. Task crashes
+are isolated; process or application restart derives missing desired state from the database and
+scans again.
+
+Database uniqueness, expected-selection compare-and-set, and in-transaction policy revalidation make
+result attachment idempotent and stale-safe. Provider failure or invalid output persists no AI draft
+and leaves the published fallback selected. There are no durable jobs, outboxes, attempts, retries,
+leases, claims, ownership tokens, checkpoints, watermarks, preparation rows, or authorization/use
+records in the current architecture.
+
+### Immutable started and completed sessions
+
+Start accepts only an owned/shared published plan or an available video. The server inserts the exact
+`workout_session` in `started` state before navigation and returns that session ID. The row contains:
+
+- exclusive plan/video source identity when available;
+- stable client session UUID;
+- display name, workout type, and planned target snapshots;
+- immutable plan Work/Rest program snapshot or exact video execution snapshot;
+- content hash, source kind, and start timestamp.
+
+The session row is the sole execution authority. Resume requires exact ownership and session ID and
+loads only the stored snapshot; it never recompiles or follows a changed recommendation. Browser
+execution remains deterministic and can continue offline after the page and assets load.
+
+Completion updates that same row exactly once to `completed`, stores actual duration/reps, capture
+facts, typed feedback, and completion time, then wakes reconciliation only after commit. Every
+duplicate completion attempt is rejected with `:session_already_completed`; completion is not an
+idempotent-success operation. Completion never calls the provider.
+
+Plan and video snapshots are mutually exclusive. Video snapshots retain the exact catalog facts used
+at Start, including name, workout type, format, duration, reps including `nil`, and media identity.
+Plan archival or later video changes cannot rewrite a started or completed session.
+
+### Feedback, pose evidence, History, and Stats
+
+Confirmed feedback uses these typed fields:
+
+```text
+context_low_energy: boolean
+context_high_energy: boolean
+context_heat_affected: boolean
+primary_limiter: breathing | whole_body | upper_body | legs | nil
+preference_feedback: choose_again | avoid | nil
+```
+
+Pre/post notes are valid UTF-8 and at most 500 bytes each. Completed pose evidence belongs to one exact
+owned completed session. Pose chunks are exact-content idempotent: a retransmission must match every
+persisted immutable field and digest; a conflicting replay or a new chunk after completion fails
+transactionally.
+
+History and Stats read completed session snapshots, not mutable library rows. Archived plans,
+history-only tombstones, and later catalog changes preserve display name, workout type, planned and
+actual targets, notes, feedback, capture data, program/video facts, and pose associations. History
+pagination orders by the compound descending cursor `{completed_at, id}`.
+
+### Migration and operational rollback
+
+The destructive redesign preserves users, videos, completed sessions, visible History/Stats facts,
+completed pose runs/chunks, analytics, IDs, and SQLite sequences required by preserved rows. It
+deletes old configurable workouts, abandoned incomplete sessions, structured-editor persistence, and
+obsolete orchestration tables. Historical migration files remain immutable.
+
+The forward rebuild runs atomically on one pinned SQLite connection after a verified backup. It
+accepts only the complete predecessor or complete target shape, verifies foreign keys, removes helper
+artifacts, and is operationally one-way. Rollback means restoring the verified pre-migration backup,
+not reconstructing a writable predecessor schema.
+
+The canonical rehearsal uses only `BurpeeTrainer.TestSupport.IsolatedMigrationRepo`, fixed marked
+paths under `/tmp`, pool size 1 for immutable historical migrations, then a fresh pool size 5 for
+representative seed, `VACUUM INTO`, redesign, verification, and restore. It never starts or
+reconfigures the application Repo.
+
+### UI and route contract
+
+Primary authenticated destinations are Home, Library (`/workouts`), History, and Stats. Library has
+separate Published and Draft sections. Published entries offer Start, Copy, and Archive; drafts offer
+Refine, Publish, and Delete. Home offers Start/Resume for the selected item, **Use this workout** and
+**Current workout is better** for a pending candidate, and bounded Retry around provider failure.
+
+Plan and video Start routes create a session first and navigate to `/session/:session_id`. Session
+analysis redirects safely when a row is missing or not owned. Video delivery keeps the existing
+X-Accel and request-size protections.
+
+### Explicit exclusions
+
+The current architecture must not reintroduce equivalent concepts under new names:
+
+- durable provider jobs, delivery events, attempts, claims, retries, leases, checkpoints, or
+  watermarks;
+- preparation or separate ready/preview lifecycle tables;
+- execution permission, authorization, use, lane, or fingerprint entities;
+- candidate ancestry graphs or rejected-candidate history;
+- automatic multi-call repair;
+- generic mutable plan APIs or a manual block/set editor;
+- compatibility facades for deleted configured workouts.
+
+The system remains understandable as a durable workout library, a small recommendation pointer,
+supervised reconciliation, and immutable workout sessions.

@@ -16,13 +16,13 @@ defmodule BurpeeTrainer.Stats.Series do
   end
 
   @type progress_session :: %{
-          inserted_at: DateTime.t(),
+          completed_at: DateTime.t(),
           burpee_count_actual: pos_integer(),
           duration_sec_actual: pos_integer()
         }
 
   @type progress_point :: %{
-          inserted_at: DateTime.t(),
+          completed_at: DateTime.t(),
           burpee_count: non_neg_integer(),
           sec_per_burpee: float()
         }
@@ -38,19 +38,19 @@ defmodule BurpeeTrainer.Stats.Series do
   def progress(sessions) do
     points =
       sessions
-      |> Enum.sort_by(& &1.inserted_at, DateTime)
+      |> Enum.sort_by(& &1.completed_at, DateTime)
       |> Enum.map(fn session ->
         count = session.burpee_count_actual || 0
         duration = session.duration_sec_actual || 0
         pace = if count > 0, do: duration / count, else: 0.0
 
         {_year, iso_week} =
-          :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.inserted_at)))
+          :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.completed_at)))
 
         normalized_reps = if duration > 0, do: round(count / duration * 1200.0), else: 0
 
         %{
-          inserted_at: session.inserted_at,
+          completed_at: session.completed_at,
           burpee_count: count,
           sec_per_burpee: pace,
           normalized_reps: normalized_reps,

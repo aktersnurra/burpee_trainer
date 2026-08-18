@@ -31,6 +31,16 @@ defmodule BurpeeTrainer.Levels do
   @spec all_levels() :: [atom]
   def all_levels, do: Enum.map(@landmarks, & &1.level)
 
+  @spec threshold(atom(), :six_count | :navy_seal) :: pos_integer()
+  def threshold(level, burpee_type) when burpee_type in [:six_count, :navy_seal] do
+    @landmarks
+    |> Enum.find(&(&1.level == level))
+    |> case do
+      nil -> raise ArgumentError, "unknown level: #{inspect(level)}"
+      landmark -> Map.fetch!(landmark, burpee_type)
+    end
+  end
+
   # A level must be *maintained*: the most recent co-week pair demonstrating
   # it has to fall within this many days of `today`, otherwise it decays.
   # Graduated is given a longer grace period than the climbing levels.
@@ -244,13 +254,13 @@ defmodule BurpeeTrainer.Levels do
     |> Enum.filter(&(&1.burpee_count_actual >= threshold))
     |> Enum.group_by(&week_key/1)
     |> Map.new(fn {week, week_sessions} ->
-      last = Enum.max_by(week_sessions, & &1.inserted_at, DateTime)
-      {week, {DateTime.to_date(last.inserted_at), last.inserted_at, last.id}}
+      last = Enum.max_by(week_sessions, & &1.completed_at, DateTime)
+      {week, {DateTime.to_date(last.completed_at), last.completed_at, last.id}}
     end)
   end
 
   defp week_key(session) do
-    :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.inserted_at)))
+    :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.completed_at)))
   end
 
   defp qualifies?(%{duration_sec_actual: d, burpee_count_actual: n})

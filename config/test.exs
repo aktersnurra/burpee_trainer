@@ -20,6 +20,17 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
 # In test we don't send emails
 config :burpee_trainer, BurpeeTrainer.Mailer, adapter: Swoosh.Adapters.Test
 
+# Tests opt into supervised coach network work explicitly.
+config :burpee_trainer, :coach_reconciler, enabled: false
+
+# Draft-authoring tests opt into an in-memory Req plug explicitly.
+config :burpee_trainer, :llm_provider,
+  enabled: false,
+  url: nil,
+  api_key: nil,
+  model: "openai/gpt-5-mini",
+  timeout_ms: 20_000
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

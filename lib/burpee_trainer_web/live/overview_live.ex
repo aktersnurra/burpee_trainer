@@ -1,474 +1,165 @@
 defmodule BurpeeTrainerWeb.OverviewLive do
-  @moduledoc """
-  Home screen. Action-first: status strip + suggested workout card + log link.
-  """
+  @moduledoc "Present-tense home surface for the current deterministic recommendation."
+
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{
-    CatchUpPlanner,
-    CoachTargetPlanner,
-    Levels,
-    Goals,
-    PerformanceModel,
-    PlanSolver,
-    WeeklyTrainingContract,
-    Workouts
-  }
-
-  alias BurpeeTrainer.CatchUpPlanner.{Plan, SelectedSession}
-  alias BurpeeTrainer.CatchUpPlanner.Input, as: CatchUpInput
-  alias BurpeeTrainer.CoachTargetPlanner.Input, as: CoachTargetInput
-  alias BurpeeTrainer.PlanSolver.ExplicitRest
-  alias BurpeeTrainerWeb.{Layouts, LogFormComponent}
-
-  @goal_min 80.0
+  alias BurpeeTrainer.{CoachReconciler, Workouts}
+  alias BurpeeTrainer.Coach.Policy
+  alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutSession}
+  alias BurpeeTrainerWeb.HomeCoachComponents
 
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign_overview()
-     |> assign(:log_modal_open, false)
-     |> assign_auto_catch_up_plan()}
+     |> assign(:start_client_session_id, Ecto.UUID.generate())
+     |> assign_home()}
   end
 
   @impl true
-  def handle_event("open_log_modal", _, socket) do
-    {:noreply, assign(socket, :log_modal_open, true)}
-  end
+  def handle_event("start_recommendation", params, socket) do
+    user = socket.assigns.current_user
 
-  def handle_event("close_log_modal", _, socket) do
-    {:noreply, assign(socket, :log_modal_open, false)}
-  end
-
-  def handle_event("use_coach_target", %{"type" => type} = params, socket) do
-    role = Map.get(params, "role", "hard")
-
-    suggestion =
-      with {:ok, burpee_type} <- parse_burpee_type(type),
-           split when not is_nil(split) <-
-             Enum.find(socket.assigns.weekly_split_suggestions, &(&1.burpee_type == burpee_type)) do
-        if role == "easy", do: split.easy, else: split.hard
+    result =
+      with client_session_id when is_binary(client_session_id) <- params["client-session-id"],
+           true <- client_session_id == socket.assigns.start_client_session_id do
+        case rendered_selection(params) do
+          {:plan, plan_id} -> Workouts.start_plan(user, plan_id, client_session_id)
+          {:video, video_id} -> Workouts.start_video(user, video_id, client_session_id)
+          :invalid -> {:error, :invalid_selection}
+        end
       else
-        _ -> nil
+        _invalid -> {:error, :invalid_start_token}
       end
 
-    case create_coach_plan(socket.assigns.current_user, socket.assigns.training_state, suggestion) do
-      {:ok, plan} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Coach plan created.")
-         |> push_navigate(to: ~p"/workouts/#{plan.id}/edit")}
+    case result do
+      {:ok, %WorkoutSession{} = session} ->
+        {:noreply, push_navigate(socket, to: session_path(session))}
 
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Could not create coach plan.")}
+      _error ->
+        {:noreply, put_flash(socket, :error, "That workout is no longer available.")}
     end
   end
 
-  def handle_event("use_catch_up_plan", _, socket) do
-    case create_catch_up_plans(socket.assigns.current_user, socket.assigns.catch_up_plan) do
-      {:ok, [plan | _]} ->
+  def handle_event("resume_recommendation", %{"session-id" => session_id}, socket) do
+    with {session_id, ""} <- Integer.parse(session_id),
+         {:ok, session} <- Workouts.resume_session(socket.assigns.current_user, session_id) do
+      {:noreply, push_navigate(socket, to: session_path(session))}
+    else
+      _error ->
         {:noreply,
-         socket
-         |> put_flash(:info, "Catch-up plan created.")
-         |> push_navigate(to: ~p"/workouts/#{plan.id}/edit")}
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Could not create catch-up plan.")}
+         socket |> put_flash(:error, "That session cannot be resumed.") |> assign_home()}
     end
   end
 
-  @impl true
-  def handle_info(:session_saved, socket) do
-    {:noreply,
-     socket |> assign_overview() |> assign(:log_modal_open, false) |> assign_auto_catch_up_plan()}
+  def handle_event("use_candidate", params, socket) do
+    with %CoachRecommendation{id: recommendation_id, pending_draft_id: draft_id}
+         when is_integer(draft_id) <- socket.assigns.recommendation,
+         {candidate_id, ""} <- Integer.parse(params["draft-id"] || ""),
+         true <- candidate_id == draft_id,
+         expected when expected != :invalid <- rendered_selection(params),
+         {:ok, _recommendation} <-
+           Workouts.accept_candidate(
+             socket.assigns.current_user,
+             recommendation_id,
+             draft_id,
+             expected
+           ) do
+      {:noreply, socket |> put_flash(:info, "Workout added to your library.") |> assign_home()}
+    else
+      _error ->
+        {:noreply,
+         socket |> put_flash(:error, "That option is no longer current.") |> assign_home()}
+    end
   end
 
-  def handle_info({:session_saved, events}, socket) do
-    {:noreply,
-     socket
-     |> assign_overview()
-     |> assign(:log_modal_open, false)
-     |> assign_auto_catch_up_plan()
-     |> put_milestone_flashes(events)}
+  def handle_event("keep_current", params, socket) do
+    with %CoachRecommendation{id: recommendation_id, pending_draft_id: draft_id}
+         when is_integer(draft_id) <- socket.assigns.recommendation,
+         {candidate_id, ""} <- Integer.parse(params["draft-id"] || ""),
+         true <- candidate_id == draft_id,
+         expected when expected != :invalid <- rendered_selection(params),
+         :ok <-
+           Workouts.reject_candidate(
+             socket.assigns.current_user,
+             recommendation_id,
+             draft_id,
+             expected
+           ) do
+      {:noreply, socket |> put_flash(:info, "Current workout kept.") |> assign_home()}
+    else
+      _error ->
+        {:noreply,
+         socket |> put_flash(:error, "That option is no longer current.") |> assign_home()}
+    end
   end
 
-  defp assign_overview(socket) do
+  def handle_event("retry_recommendation", _params, socket) do
+    :ok = CoachReconciler.wake(socket.assigns.current_user.id, :retry)
+    {:noreply, put_flash(socket, :info, "Looking for another option.")}
+  end
+
+  defp assign_home(socket) do
     user = socket.assigns.current_user
-    today = today()
-    current_week_start = Date.beginning_of_week(today, :monday)
 
-    sessions = Workouts.list_sessions(user)
-
-    this_week =
-      Workouts.weekly_minutes(user)
-      |> Enum.find(%{minutes: 0.0, met_goal: false}, &(&1.week_start == current_week_start))
-
-    weekly_status = WeeklyTrainingContract.status(sessions, current_week_start)
-    remaining_slots = WeeklyTrainingContract.remaining_slots(sessions, current_week_start)
-    training_state = PerformanceModel.build_training_state(sessions)
-
-    primary_plan = Workouts.last_run_plan(user) || List.first(Workouts.list_plans(user))
+    slot =
+      case Policy.required_slot(user, DateTime.utc_now(:second)) do
+        {:ok, slot} -> slot
+        {:error, _reason} -> %{home_state: :workout_needed}
+      end
 
     socket
-    |> assign(:this_week, this_week)
-    |> assign(:trained_days, Workouts.this_week_trained_days(user))
-    |> assign(:last_plan, primary_plan)
-    |> assign(:goal_min, @goal_min)
-    |> assign(:today, today)
-    |> assign(:week_start, current_week_start)
-    |> assign(
-      :weekly_split_suggestions,
-      weekly_split_suggestions(user, sessions, training_state, weekly_status, today)
-    )
-    |> assign(:level_status, Levels.level_status(sessions, today))
-    |> assign(:sessions, sessions)
-    |> assign(:weekly_status, weekly_status)
-    |> assign(:remaining_slots, remaining_slots)
-    |> assign(:training_state, training_state)
-    |> assign(:week_pushups, Workouts.current_week_pushups(user, today))
+    |> assign(:slot, slot)
+    |> assign(:recommendation, Workouts.current_coach_recommendation(user))
+    |> assign(:started_session, Workouts.current_started_session(user))
   end
 
-  defp weekly_split_suggestions(
-         _user,
-         _sessions,
-         _training_state,
-         %{remaining_min: remaining},
-         _today
-       )
-       when remaining <= 0,
-       do: []
-
-  defp weekly_split_suggestions(user, sessions, training_state, weekly_status, today) do
-    user
-    |> Goals.list_active_goals()
-    |> Enum.flat_map(fn goal ->
-      performance_goal = Goals.to_performance_goal(goal)
-
-      input = %CoachTargetInput{
-        goal: performance_goal,
-        history: sessions,
-        training_state: training_state,
-        weekly_status: weekly_status,
-        burpee_type: performance_goal.burpee_type,
-        target_duration_min: 20,
-        today: today
-      }
-
-      case CoachTargetPlanner.suggest_targets(input) do
-        {:ok, suggestions} ->
-          List.wrap(home_weekly_split_suggestion(suggestions))
-
-        {:error, _reason} ->
-          []
-      end
-    end)
-  end
-
-  defp home_weekly_split_suggestion(suggestions) do
-    hard =
-      Enum.find(suggestions, &(&1.kind == :recommended)) ||
-        Enum.find(suggestions, &(&1.kind == :on_track)) ||
-        List.first(suggestions)
-
-    easy =
-      Enum.find(suggestions, &(&1.kind == :safe_progress)) ||
-        Enum.find(suggestions, &(&1.kind == :maintenance)) ||
-        hard
-
-    if hard, do: %{burpee_type: hard.burpee_type, hard: hard, easy: easy}
-  end
-
-  defp today, do: Application.get_env(:burpee_trainer, :today_override) || Date.utc_today()
-
-  defp parse_burpee_type("six_count"), do: {:ok, :six_count}
-  defp parse_burpee_type("navy_seal"), do: {:ok, :navy_seal}
-  defp parse_burpee_type(_), do: :error
-
-  defp put_milestone_flashes(socket, events) do
-    Enum.reduce(events, socket, fn
-      %{type: :goal_reached, value: %{burpee_type: type}}, acc ->
-        put_flash(acc, :info, "#{goal_type_label(type)} goal reached!")
-
-      _event, acc ->
-        acc
-    end)
-  end
-
-  defp goal_type_label(:six_count), do: "6-Count"
-  defp goal_type_label(:navy_seal), do: "Navy SEAL"
-
-  defp assign_auto_catch_up_plan(socket) do
-    assign(socket, :catch_up_plan, build_auto_catch_up_plan(socket.assigns))
-  end
-
-  defp build_auto_catch_up_plan(%{weekly_status: %{remaining_min: remaining_min}})
-       when remaining_min <= 0,
-       do: nil
-
-  defp build_auto_catch_up_plan(%{today: today} = assigns) do
-    if WeeklyTrainingContract.catch_up_available?(today) do
-      build_available_catch_up_plan(assigns)
+  defp rendered_selection(%{"plan-id" => id}) when is_binary(id) do
+    case Integer.parse(id) do
+      {id, ""} when id > 0 -> {:plan, id}
+      _invalid -> :invalid
     end
   end
 
-  defp build_available_catch_up_plan(assigns) do
-    eligible_types = eligible_catch_up_types(assigns.training_state)
-    duration_min = max(round(assigns.weekly_status.remaining_min), 20)
-
-    with true <- eligible_types != [],
-         allocations <- catch_up_allocations(eligible_types, duration_min),
-         selected_sessions <- build_catch_up_sessions(assigns, allocations),
-         true <- selected_sessions != [] do
-      %Plan{
-        selected_burpee_type: nil,
-        total_duration_min: Enum.sum(Enum.map(selected_sessions, & &1.duration_min)),
-        selected_sessions: selected_sessions,
-        expected_progress_value: length(selected_sessions) * 1.0,
-        fatigue_cost: length(selected_sessions) * 1.0,
-        risk: if(length(selected_sessions) > 1, do: :normal, else: :low),
-        canonical?: false,
-        weekly_split_effect: :counts_but_non_standard,
-        rationale: catch_up_rationale(selected_sessions)
-      }
-    else
-      _ -> nil
+  defp rendered_selection(%{"video-id" => id}) when is_binary(id) do
+    case Integer.parse(id) do
+      {id, ""} when id > 0 -> {:video, id}
+      _invalid -> :invalid
     end
   end
 
-  defp eligible_catch_up_types(training_state) do
-    [:six_count, :navy_seal]
-    |> Enum.filter(fn burpee_type ->
-      capacity = training_state.current_capacity_by_type[burpee_type]
-      capacity && capacity.estimated_reps > 0
-    end)
+  defp rendered_selection(_params), do: :invalid
+
+  defp selection_params(%CoachRecommendation{selected_workout_plan_id: id})
+       when is_integer(id),
+       do: [plan_id: id]
+
+  defp selection_params(%CoachRecommendation{selected_workout_video_id: id})
+       when is_integer(id),
+       do: [video_id: id]
+
+  defp selection_params(_recommendation), do: []
+
+  defp selection_title(%CoachRecommendation{selected_workout_plan: %{name: name}}), do: name
+  defp selection_title(%CoachRecommendation{selected_workout_video: %{name: name}}), do: name
+  defp selection_title(_recommendation), do: "Ready workout"
+
+  defp selection_detail(%CoachRecommendation{selected_workout_plan: plan})
+       when not is_nil(plan) do
+    "#{plan.target_reps} reps · #{div(plan.target_duration_sec, 60)} min"
   end
 
-  defp catch_up_allocations([burpee_type], duration_min), do: [{burpee_type, duration_min}]
-
-  defp catch_up_allocations(eligible_types, duration_min) do
-    session_count = min(length(eligible_types), max(div(duration_min, 20), 1))
-    selected_types = Enum.take(eligible_types, session_count)
-    base = div(duration_min, session_count)
-    remainder = rem(duration_min, session_count)
-
-    selected_types
-    |> Enum.with_index()
-    |> Enum.map(fn {burpee_type, index} ->
-      extra = if index < remainder, do: 1, else: 0
-      {burpee_type, base + extra}
-    end)
+  defp selection_detail(%CoachRecommendation{selected_workout_video: video})
+       when not is_nil(video) do
+    "#{div(video.duration_sec, 60)} min video"
   end
 
-  defp build_catch_up_sessions(assigns, allocations) do
-    allocations
-    |> Enum.with_index(1)
-    |> Enum.flat_map(fn {{burpee_type, duration_min}, slot_index} ->
-      input = %CatchUpInput{
-        weekly_status: assigns.weekly_status,
-        remaining_slots: assigns.remaining_slots,
-        selected_burpee_type: burpee_type,
-        performance_goal: Goals.get_active_performance_goal(assigns.current_user, burpee_type),
-        training_state: assigns.training_state,
-        history: assigns.sessions,
-        duration_min: duration_min,
-        today: assigns.today
-      }
+  defp selection_detail(_recommendation), do: "Ready when you are"
 
-      case CatchUpPlanner.plan(input) do
-        {:ok, %Plan{selected_sessions: [%SelectedSession{} = session | _]}} ->
-          [%{session | plan_input: %{session.plan_input | name: "Catch-up #{slot_index}"}}]
+  defp session_path(%WorkoutSession{source_kind: :video, workout_video_id: video_id, id: id}),
+    do: ~p"/videos/#{video_id}/session/#{id}"
 
-        _ ->
-          []
-      end
-    end)
-  end
-
-  defp catch_up_rationale([session]) do
-    [
-      "Creates 1 × #{session.duration_min} min #{catch_up_type_label(session.burpee_type)} session: #{session.target_reps} reps.",
-      "Uses your logged #{catch_up_type_label(session.burpee_type)} capacity; no active goal is required."
-    ]
-  end
-
-  defp catch_up_rationale(selected_sessions) do
-    total_min = Enum.sum(Enum.map(selected_sessions, & &1.duration_min))
-
-    ["Creates #{length(selected_sessions)} catch-up sessions totaling #{total_min} min."] ++
-      Enum.map(selected_sessions, fn session ->
-        "#{session.duration_min} min #{catch_up_type_label(session.burpee_type)} · #{session.target_reps} reps"
-      end) ++
-      ["Uses logged capacity by type; no active goal is required."]
-  end
-
-  defp create_coach_plan(_user, _training_state, nil), do: {:error, :no_coach_suggestion}
-
-  defp create_coach_plan(user, training_state, suggestion) do
-    level = Map.fetch!(training_state.level_by_type, suggestion.burpee_type)
-
-    plan_input = %PlanSolver.Input{
-      name: "Coach #{catch_up_type_label(suggestion.burpee_type)}",
-      burpee_type: suggestion.burpee_type,
-      target_duration_sec: suggestion.target_duration_min * 60,
-      burpee_count_target: suggestion.burpee_count_target,
-      pacing_style: suggestion.plan_input_defaults.pacing_style,
-      explicit_rests: explicit_rests_from_plan_defaults(suggestion.plan_input_defaults),
-      level: level
-    }
-
-    with {:ok, solution} <- PlanSolver.generate_plan(plan_input),
-         attrs =
-           generated_plan_attrs(solution.plan,
-             coach_suggestion_kind: Atom.to_string(suggestion.kind),
-             coach_target_reps: suggestion.burpee_count_target
-           ),
-         {:ok, plan} <- Workouts.create_plan(user, attrs) do
-      {:ok, plan}
-    end
-  end
-
-  defp create_catch_up_plans(_user, nil), do: {:error, :no_catch_up_plan}
-
-  defp create_catch_up_plans(user, catch_up_plan) do
-    catch_up_plan.selected_sessions
-    |> Enum.with_index(1)
-    |> Enum.reduce_while({:ok, []}, fn {session, index}, {:ok, plans} ->
-      with {:ok, solution} <-
-             PlanSolver.generate_plan(named_plan_input(session.plan_input, index)),
-           attrs =
-             generated_plan_attrs(solution.plan,
-               coach_suggestion_kind: Atom.to_string(session.suggestion_kind),
-               coach_target_reps: session.target_reps
-             ),
-           {:ok, plan} <- Workouts.create_plan(user, attrs) do
-        {:cont, {:ok, [plan | plans]}}
-      else
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, plans} -> {:ok, Enum.reverse(plans)}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp named_plan_input(plan_input, index) do
-    type_label = catch_up_type_label(plan_input.burpee_type)
-    %{plan_input | name: "Catch-up #{type_label} #{index}"}
-  end
-
-  defp explicit_rests_from_plan_defaults(%{additional_rests: rests}) when is_list(rests) do
-    Enum.map(rests, fn rest ->
-      %ExplicitRest{
-        target_elapsed_sec: round(rest.target_min * 60),
-        duration_sec: round(rest.rest_sec),
-        tolerance_sec: 60
-      }
-    end)
-  end
-
-  defp explicit_rests_from_plan_defaults(_defaults), do: []
-
-  defp generated_plan_attrs(plan, opts) do
-    plan
-    |> workout_plan_attrs()
-    |> Map.merge(%{
-      "source_json" => generated_source_json(plan),
-      "coach_suggestion_kind" => Keyword.fetch!(opts, :coach_suggestion_kind),
-      "coach_target_reps" => Keyword.fetch!(opts, :coach_target_reps)
-    })
-  end
-
-  defp generated_source_json(plan) do
-    pattern = generated_block_pattern(plan.blocks)
-
-    source = %{
-      "burpee_type" => Atom.to_string(plan.burpee_type),
-      "target_reps" => plan.burpee_count_target,
-      "target_duration_sec" => plan.target_duration_min * 60,
-      "pacing_style" => Atom.to_string(plan.pacing_style),
-      "block_pattern" => pattern,
-      "explicit_rests" => generated_explicit_rests(plan.additional_rests)
-    }
-
-    if plan.pacing_style == :unbroken do
-      Map.put(source, "max_unbroken_reps", Enum.max(pattern, fn -> 1 end))
-    else
-      source
-    end
-  end
-
-  defp generated_block_pattern(blocks) when is_list(blocks) do
-    blocks
-    |> Enum.sort_by(&(&1.position || 0))
-    |> Enum.flat_map(fn block ->
-      motif =
-        block.sets
-        |> Enum.sort_by(&(&1.position || 0))
-        |> Enum.map(& &1.burpee_count)
-
-      List.duplicate(motif, max(block.repeat_count || 1, 1))
-    end)
-    |> List.flatten()
-    |> case do
-      [] -> [1]
-      pattern -> pattern
-    end
-  end
-
-  defp generated_block_pattern(_blocks), do: [1]
-
-  defp generated_explicit_rests(rests_json) do
-    case Jason.decode(rests_json || "[]") do
-      {:ok, rests} when is_list(rests) ->
-        Enum.flat_map(rests, fn
-          %{"rest_sec" => rest_sec, "target_min" => target_min} ->
-            [
-              %{
-                "target_elapsed_sec" => round(target_min * 60),
-                "duration_sec" => round(rest_sec),
-                "tolerance_sec" => 60
-              }
-            ]
-
-          _rest ->
-            []
-        end)
-
-      _other ->
-        []
-    end
-  end
-
-  defp workout_plan_attrs(plan) do
-    %{
-      "name" => plan.name,
-      "burpee_type" => Atom.to_string(plan.burpee_type),
-      "target_duration_min" => plan.target_duration_min,
-      "burpee_count_target" => plan.burpee_count_target,
-      "sec_per_burpee" => plan.sec_per_burpee,
-      "pacing_style" => Atom.to_string(plan.pacing_style),
-      "fatigue_factor" => plan.fatigue_factor
-    }
-  end
-
-  defp trained_day_count(%MapSet{} = trained_days), do: MapSet.size(trained_days)
-  defp trained_day_count(trained_days) when is_list(trained_days), do: length(trained_days)
-
-  defp week_complete?(this_week, goal_min), do: this_week.minutes >= goal_min
-
-  defp week_progress_pct(this_week, goal_min) when goal_min > 0 do
-    this_week.minutes
-    |> Kernel./(goal_min)
-    |> Kernel.*(100)
-    |> min(100)
-    |> max(0)
-  end
-
-  defp week_progress_pct(_this_week, _goal_min), do: 0
-
-  defp minutes_left(this_week, goal_min), do: max(round(goal_min - this_week.minutes), 0)
+  defp session_path(%WorkoutSession{id: id}), do: ~p"/session/#{id}"
 
   @impl true
   def render(assigns) do
@@ -477,297 +168,133 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       flash={@flash}
       current_user={@current_user}
       current_level={@current_level}
+      current_scope={assigns[:current_scope]}
       current_page={:home}
     >
-      <div
-        id="home-page"
-        class="session-surface mx-auto max-w-lg space-y-7 pb-24 text-[var(--session-ink)]"
-      >
-        <.qs_info_note
-          :if={@level_status.at_risk?}
-          title={"Level #{level_label(@level_status.level)} expires in #{@level_status.days_left}d"}
-          icon="hero-exclamation-triangle"
-          class="bg-[var(--session-track)]/40"
-        >
-          Train both burpee types this week to keep it.
-        </.qs_info_note>
-
-        <% week_complete? = week_complete?(@this_week, @goal_min) %>
-        <% progress_pct = week_progress_pct(@this_week, @goal_min) %>
-
-        <.qs_surface
-          id="home-status-strip"
-          class="space-y-6 px-5 py-5 text-sm text-[var(--session-muted)]"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <p class="qs-tabular text-xl font-medium tracking-[-0.03em] text-[var(--session-ink)]">
-              {round(@this_week.minutes)}
-              <span class="text-[var(--session-muted)]">/ {round(@goal_min)} min this week</span>
-            </p>
-            <p class="shrink-0 text-right text-base tabular-nums">
-              {if week_complete?,
-                do: "Complete",
-                else: "#{minutes_left(@this_week, @goal_min)} min left"}
-            </p>
-          </div>
-          <div
-            id="home-week-progress"
-            class="h-1.5 overflow-hidden rounded-full bg-[var(--session-border)]"
-            role="progressbar"
-            aria-valuemin="0"
-            aria-valuemax={round(@goal_min)}
-            aria-valuenow={min(round(@this_week.minutes), round(@goal_min))}
-            aria-label="Weekly training minutes"
-          >
-            <div
-              class="h-full rounded-full bg-[var(--session-progress)]"
-              style={"width: #{progress_pct}%"}
-            />
-          </div>
-          <div class="flex items-center justify-between gap-4">
-            <p class="text-base">{trained_day_count(@trained_days)} trained days</p>
-            <p class="qs-meta text-sm tracking-[0.14em] text-[var(--session-muted)]">
-              Level {level_label(@level_status.level)}
-            </p>
-          </div>
-          <div class="grid grid-cols-7 gap-2 pt-1 text-center text-sm">
-            <div :for={day <- ~w(M T W T F S S)} class="space-y-2">
-              <p>{day}</p>
-              <span class="mx-auto block size-2 rounded-full bg-[var(--session-border)]" />
-            </div>
-          </div>
-        </.qs_surface>
-
-        <%= if week_complete? do %>
-          <.qs_surface
-            id="home-week-complete"
-            class="space-y-4 bg-[var(--session-surface)]/60 px-5 py-6"
-          >
-            <div class="space-y-2">
-              <h1 class="qs-heading-tight text-4xl font-semibold leading-none text-[var(--session-ink)]">
-                Week complete
-              </h1>
-              <p id="home-coach-guidance" class="text-sm leading-6 text-[var(--session-muted)]">
-                Coach says: You’re done for the week. Come back Monday.
+      <main id="home-page" class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16">
+        <%= cond do %>
+          <% @slot.home_state == :week_complete -> %>
+            <section
+              id="home-week-complete"
+              class="rounded-3xl border border-emerald-200 bg-emerald-50 p-8"
+            >
+              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                This week
               </p>
-            </div>
-            <button
-              id="home-log-session"
-              type="button"
-              phx-click="open_log_modal"
-              class="text-sm font-medium text-[var(--session-ink)] hover:text-[var(--session-muted)]"
+              <h1 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                Training target complete
+              </h1>
+              <p class="mt-3 text-base leading-7 text-slate-600">
+                Your next week starts fresh on Monday.
+              </p>
+            </section>
+          <% @slot.home_state == :done_today -> %>
+            <section
+              id="home-done-today"
+              class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm"
             >
-              Log past session
-            </button>
-          </.qs_surface>
-        <% else %>
-          <section id="home-primary-workout" class="space-y-6">
-            <%= if @last_plan do %>
-              <% action = primary_home_action(@last_plan, round(@this_week.minutes), round(@goal_min)) %>
-              <.qs_surface id="home-prescription" class="bg-[var(--session-surface)]/60">
-                <div class="space-y-6 px-5 py-6">
-                  <div class="space-y-3">
-                    <p class="text-lg text-[var(--session-muted)]">Today’s prescription</p>
-                    <div class="space-y-1.5">
-                      <h2 class="qs-heading-tight text-5xl font-semibold leading-none text-[var(--session-ink)] md:text-6xl">
-                        {action.title}
-                      </h2>
-                      <p class="text-base tabular-nums text-[var(--session-muted)]">
-                        {action.detail}
-                      </p>
-                    </div>
-                  </div>
-
-                  <.qs_info_note id="home-coach-guidance" title="Coach note">
-                    {action.reason}
-                  </.qs_info_note>
-                </div>
-
-                <.qs_action_row
-                  id="home-start-workout"
-                  navigate={action.path}
-                  icon="hero-play-solid"
-                  label={action.label}
-                  class="border-t border-[var(--session-border)]"
-                />
-              </.qs_surface>
-            <% end %>
-
-            <.qs_surface
-              :if={!@last_plan}
-              id="home-prescription"
-              class="bg-[var(--session-surface)]/60"
+              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Today</p>
+              <h1 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Workout saved</h1>
+              <p class="mt-3 text-base leading-7 text-slate-600">Recovery is the useful next step.</p>
+            </section>
+          <% not is_nil(@started_session) -> %>
+            <section
+              id="home-ready-recommendation"
+              class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm"
             >
-              <div class="space-y-6 px-5 py-6">
-                <div class="space-y-3">
-                  <p class="text-lg text-[var(--session-muted)]">Today’s prescription</p>
-                  <h2 class="qs-heading-tight text-5xl font-semibold leading-none text-[var(--session-ink)]">
-                    No workout yet
-                  </h2>
-                </div>
-
-                <.qs_info_note id="home-coach-guidance" title="Coach note">
-                  Choose a workout to get moving.
-                </.qs_info_note>
-              </div>
-
-              <.qs_action_row
-                id="home-start-workout"
-                navigate={~p"/workouts"}
-                icon="hero-play-solid"
-                label="Choose workout"
-                class="border-t border-[var(--session-border)]"
-              />
-            </.qs_surface>
-
-            <.qs_surface
-              id="home-secondary-actions"
-              class="overflow-hidden divide-y divide-[var(--session-border)] bg-[var(--session-surface)]/45"
-            >
-              <.qs_action_row
-                id="home-change-workout"
-                navigate={~p"/workouts"}
-                icon="hero-arrows-right-left"
-                label="Change workout"
-                description="Choose a different session"
-              />
-              <.qs_action_row
-                id="home-log-session"
-                icon="hero-document-text"
-                label="Log past session"
-                description="Add a session you already completed"
-                phx-click="open_log_modal"
-              />
-            </.qs_surface>
-
-            <.qs_surface
-              id="home-appearance-card"
-              class="flex items-center justify-between gap-4 bg-[var(--session-surface)]/35 px-5 py-4"
-            >
-              <div class="space-y-1">
-                <p class="text-sm font-medium text-[var(--session-ink)]">Appearance</p>
-                <p class="text-sm text-[var(--session-muted)]">Light or dark mode</p>
-              </div>
-              <Layouts.theme_button
-                id="home-theme-toggle"
-                label={false}
-                session_nav?={true}
-                class="shrink-0"
-              />
-            </.qs_surface>
-
-            <.qs_surface
-              :if={@catch_up_plan}
-              id="home-catch-up-panel"
-              class="space-y-5 bg-[var(--session-surface)]/35 px-5 py-5"
-            >
-              <div class="space-y-2">
-                <p class="qs-meta text-xs tracking-[0.16em] text-[var(--session-muted)]">
-                  Finish the week
-                </p>
-                <h2 class="qs-heading-tight text-2xl font-semibold text-[var(--session-ink)]">
-                  Catch-up sessions
-                </h2>
-                <p class="text-sm leading-6 text-[var(--session-muted)]">
-                  Coach-built sessions from your logged capacity, ready to edit before starting.
-                </p>
-              </div>
-
-              <div
-                id="home-catch-up-preview"
-                class="space-y-4 rounded-2xl border border-[var(--session-border)] bg-[var(--session-track)]/25 p-4"
+              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                In progress
+              </p>
+              <h1 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                Continue your workout
+              </h1>
+              <button
+                id="resume-recommended-workout"
+                phx-click="resume_recommendation"
+                phx-value-session-id={@started_session.id}
+                class="mt-8 inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-7 text-base font-semibold text-white transition hover:bg-slate-800"
               >
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-sm text-[var(--session-muted)]">Catch-up preview</p>
-                    <p class="qs-tabular text-xl font-medium text-[var(--session-ink)]">
-                      {length(@catch_up_plan.selected_sessions)} sessions · {@catch_up_plan.total_duration_min} min
-                    </p>
-                  </div>
-                  <p class="qs-meta text-xs tracking-[0.14em] text-[var(--session-muted)]">
-                    {String.replace(Atom.to_string(@catch_up_plan.risk), "_", " ")}
-                  </p>
-                </div>
+                Resume
+              </button>
+            </section>
+          <% not is_nil(@recommendation) -> %>
+            <section
+              id="home-ready-recommendation"
+              class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm"
+            >
+              <HomeCoachComponents.recommendation_heading
+                eyebrow="Ready now"
+                title={selection_title(@recommendation)}
+                detail={selection_detail(@recommendation)}
+              />
+              <button
+                id="start-recommended-workout"
+                phx-click="start_recommendation"
+                phx-value-plan-id={selection_params(@recommendation)[:plan_id]}
+                phx-value-video-id={selection_params(@recommendation)[:video_id]}
+                phx-value-client-session-id={@start_client_session_id}
+                class="mt-8 inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-7 text-base font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                phx-disable-with="Starting…"
+              >
+                Start workout
+              </button>
+            </section>
+          <% true -> %>
+            <section
+              id="home-ready-recommendation"
+              class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm"
+            >
+              <h1 class="text-3xl font-semibold tracking-tight text-slate-950">
+                Your workout is being prepared
+              </h1>
+              <button
+                id="retry-recommendation-button"
+                phx-click="retry_recommendation"
+                class="mt-8 rounded-full border border-slate-300 px-6 py-3 font-semibold text-slate-800 transition hover:border-slate-500"
+              >
+                Retry
+              </button>
+            </section>
+        <% end %>
 
-                <ul class="space-y-2 text-sm leading-6 text-[var(--session-muted)]">
-                  <li :for={reason <- @catch_up_plan.rationale}>{reason}</li>
-                </ul>
-
-                <button
-                  id="home-create-catch-up"
-                  type="button"
-                  phx-click="use_catch_up_plan"
-                  class="w-full rounded-xl bg-[var(--session-ink)] px-4 py-3 text-sm font-medium text-[var(--session-bg)] transition hover:opacity-90"
-                >
-                  Create catch-up plan
-                </button>
-              </div>
-            </.qs_surface>
+        <%= if @slot.home_state == :workout_needed && @recommendation &&
+              @recommendation.pending_draft do %>
+          <section
+            id="home-pending-candidate"
+            class="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-6"
+          >
+            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-800">
+              Another option
+            </p>
+            <h2 class="mt-2 text-xl font-semibold text-slate-950">
+              {@recommendation.pending_draft.name}
+            </h2>
+            <div class="mt-5 flex flex-wrap gap-3">
+              <button
+                id="use-candidate-button"
+                phx-click="use_candidate"
+                phx-value-draft-id={@recommendation.pending_draft_id}
+                phx-value-plan-id={selection_params(@recommendation)[:plan_id]}
+                phx-value-video-id={selection_params(@recommendation)[:video_id]}
+                class="rounded-full bg-slate-950 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-800"
+              >
+                Use this workout
+              </button>
+              <button
+                id="keep-current-workout-button"
+                phx-click="keep_current"
+                phx-value-draft-id={@recommendation.pending_draft_id}
+                phx-value-plan-id={selection_params(@recommendation)[:plan_id]}
+                phx-value-video-id={selection_params(@recommendation)[:video_id]}
+                class="rounded-full border border-amber-300 px-5 py-2.5 font-semibold text-slate-800 transition hover:border-amber-500"
+              >
+                Current workout is better
+              </button>
+            </div>
           </section>
         <% end %>
-      </div>
-
-      <%= if @log_modal_open do %>
-        <div
-          id="home-log-modal"
-          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6"
-        >
-          <button
-            id="home-log-modal-backdrop"
-            type="button"
-            phx-click="close_log_modal"
-            class="absolute inset-0 bg-black/60"
-            aria-label="Close log session"
-          />
-          <div
-            id="home-log-modal-sheet"
-            class="session-surface relative z-10 w-full sm:max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto bg-[var(--session-surface)] text-[var(--session-ink)] border border-[var(--session-border)] rounded-xl rounded-t-xl sm:rounded-xl p-5 sm:p-6"
-          >
-            <.live_component
-              module={LogFormComponent}
-              id="home-log-form"
-              current_user={@current_user}
-              on_save={:session_saved}
-            />
-          </div>
-        </div>
-      <% end %>
+      </main>
     </Layouts.app>
     """
   end
-
-  defp catch_up_type_label(:six_count), do: "Six-count"
-  defp catch_up_type_label(:navy_seal), do: "Navy SEAL"
-
-  defp primary_home_action(plan, min_done, goal) when min_done >= goal do
-    type_label = if plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
-
-    %{
-      title: "#{plan.target_duration_min} min · #{type_label}",
-      detail: "#{plan.burpee_count_target} reps",
-      reason:
-        "#{plan.name} is ready, but the weekly target is already complete. No extra work is needed — only log a missed session if your history is incomplete.",
-      label: "Start session",
-      path: ~p"/session/#{plan.id}"
-    }
-  end
-
-  defp primary_home_action(plan, min_done, goal) do
-    type_label = if plan.burpee_type == :six_count, do: "6-Count", else: "Navy SEAL"
-    minutes_left = max(goal - min_done, 0)
-
-    %{
-      title: "#{plan.target_duration_min} min · #{type_label}",
-      detail: "#{plan.burpee_count_target} reps",
-      reason:
-        "#{plan.name} is the next planned session. Start with this #{plan.target_duration_min}-minute #{type_label} workout to move the week forward; you still have #{minutes_left} min left right now.",
-      label: "Start session",
-      path: ~p"/session/#{plan.id}"
-    }
-  end
-
-  defp level_label(:graduated), do: "Grad"
-
-  defp level_label(l),
-    do: l |> Atom.to_string() |> String.replace("level_", "") |> String.upcase()
 end

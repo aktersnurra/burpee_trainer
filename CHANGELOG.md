@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-31 — Deletion-first workout library and immutable sessions
+
+- Rebuilt `workout_plans` as the canonical durable library with enforced `draft → published → archived` lifecycle semantics, immutable published content, copy-to-draft, and no manual block/set editor.
+- Added bounded one-request natural-language Create and Refine through `Req`; validated output persists as a draft only, invalid output persists nothing, and publishing always requires explicit acceptance.
+- Replaced lifecycle/outbox/authorization machinery with small recommendation pointers, a supervised transient reconciler, deterministic fallback/policy, and atomic candidate Use/Current-workout-better decisions.
+- Made `workout_sessions` the sole execution authority: Start creates the exact `started` row with immutable plan or video snapshots, Resume stays pinned, and completion updates the same row once.
+- Moved History and Stats to completed-session snapshots so plan archival and later catalog changes cannot rewrite completed workouts; retained confirmed feedback, pose evidence, video facts, and nil-count video semantics.
+- Added an atomic destructive migration with verified-backup restoration rehearsal, normalized disposable `/tmp` E2E fixtures, authenticated Firefox runbook, and deletion/reference/LOC gates.
+- Removed obsolete configured-workout, structured-editor, persisted execution-program, preparation, provider-delivery, execution-permission, and compatibility architecture while preserving all historical migrations.
+
 ## 2026-06-08 — Deterministic intelligence layer
 
 - Removed the MILP/HiGHS infrastructure and old `PlanSolver.Lp`; `PlanSolver` now uses deterministic candidate/rest placement with rich solution metadata, PaceModel-backed pace bounds, manual pace overrides, and human-shaped non-uniform set patterns.

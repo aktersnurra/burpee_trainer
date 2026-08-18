@@ -14,6 +14,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   attr(:flash, :map, required: true)
   attr(:current_user, :any, default: nil)
   attr(:current_level, :atom, default: nil)
+  attr(:current_scope, :any, default: nil)
   attr(:current_page, :atom, default: nil)
   attr(:navigation?, :boolean, default: true)
   attr(:flash?, :boolean, default: true)
@@ -33,6 +34,7 @@ defmodule BurpeeTrainerWeb.Layouts do
         !@session_surface_page? && "border-base-border bg-base-nav text-base-content"
       ]}>
         <.nav_icon
+          id="desktop-home-nav"
           navigate={~p"/"}
           title="Home"
           active={@current_page == :home}
@@ -43,24 +45,43 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.nav_icon>
 
         <.nav_icon
+          id="desktop-library-nav"
           navigate={~p"/workouts"}
-          title="Workouts"
-          active={@current_page == :workouts}
+          title="Library"
+          active={@current_page == :library}
           session_nav?={@session_surface_page?}
         >
           <.icon
-            name="hero-rectangle-stack-solid"
-            class={if @current_page == :workouts, do: "", else: "hidden"}
+            name="hero-book-open-solid"
+            class={if @current_page == :library, do: "", else: "hidden"}
           />
           <.icon
-            name="hero-rectangle-stack"
-            class={if @current_page == :workouts, do: "hidden", else: ""}
+            name="hero-book-open"
+            class={if @current_page == :library, do: "hidden", else: ""}
           />
         </.nav_icon>
 
         <.nav_icon
+          id="desktop-videos-nav"
+          navigate={~p"/videos"}
+          title="Videos"
+          active={@current_page == :videos}
+          session_nav?={@session_surface_page?}
+        >
+          <.icon
+            name="hero-play-circle-solid"
+            class={if @current_page == :videos, do: "", else: "hidden"}
+          />
+          <.icon
+            name="hero-play-circle"
+            class={if @current_page == :videos, do: "hidden", else: ""}
+          />
+        </.nav_icon>
+
+        <.nav_icon
+          id="desktop-history-nav"
           navigate={~p"/stats"}
-          title="Stats"
+          title="History"
           active={@current_page == :stats}
           session_nav?={@session_surface_page?}
         >
@@ -80,6 +101,7 @@ defmodule BurpeeTrainerWeb.Layouts do
         !@session_surface_page? && "h-16 border-base-border bg-base-nav/95"
       ]}>
         <.bottom_tab
+          id="mobile-home-nav"
           navigate={~p"/"}
           active={@current_page == :home}
           label="Home"
@@ -90,25 +112,44 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.bottom_tab>
 
         <.bottom_tab
+          id="mobile-library-nav"
           navigate={~p"/workouts"}
-          active={@current_page == :workouts}
-          label="Workouts"
+          active={@current_page == :library}
+          label="Library"
           session_nav?={@session_surface_page?}
         >
           <.icon
-            name="hero-rectangle-stack-solid"
-            class={if @current_page == :workouts, do: "", else: "hidden"}
+            name="hero-book-open-solid"
+            class={if @current_page == :library, do: "", else: "hidden"}
           />
           <.icon
-            name="hero-rectangle-stack"
-            class={if @current_page == :workouts, do: "hidden", else: ""}
+            name="hero-book-open"
+            class={if @current_page == :library, do: "hidden", else: ""}
           />
         </.bottom_tab>
 
         <.bottom_tab
+          id="mobile-videos-nav"
+          navigate={~p"/videos"}
+          active={@current_page == :videos}
+          label="Videos"
+          session_nav?={@session_surface_page?}
+        >
+          <.icon
+            name="hero-play-circle-solid"
+            class={if @current_page == :videos, do: "", else: "hidden"}
+          />
+          <.icon
+            name="hero-play-circle"
+            class={if @current_page == :videos, do: "hidden", else: ""}
+          />
+        </.bottom_tab>
+
+        <.bottom_tab
+          id="mobile-history-nav"
           navigate={~p"/stats"}
           active={@current_page == :stats}
-          label="Stats"
+          label="History"
           session_nav?={@session_surface_page?}
         >
           <.icon
@@ -143,9 +184,9 @@ defmodule BurpeeTrainerWeb.Layouts do
   end
 
   defp session_surface_page?(:home), do: true
-  defp session_surface_page?(:workouts), do: true
+  defp session_surface_page?(:library), do: true
+  defp session_surface_page?(:videos), do: true
   defp session_surface_page?(:stats), do: true
-  defp session_surface_page?(:plans), do: true
   defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false
 
@@ -179,6 +220,7 @@ defmodule BurpeeTrainerWeb.Layouts do
     """
   end
 
+  attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
   attr(:title, :string, required: true)
   attr(:active, :boolean, required: true)
@@ -188,6 +230,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp nav_icon(assigns) do
     ~H"""
     <.link
+      id={@id}
       navigate={@navigate}
       title={@title}
       class={[
@@ -210,6 +253,7 @@ defmodule BurpeeTrainerWeb.Layouts do
     """
   end
 
+  attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
   attr(:active, :boolean, required: true)
   attr(:label, :string, required: true)
@@ -219,6 +263,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp bottom_tab(assigns) do
     ~H"""
     <.link
+      id={@id}
       navigate={@navigate}
       class={[
         "relative inline-flex flex-col items-center transition-colors",
