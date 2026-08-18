@@ -226,25 +226,25 @@ jj --config signing.behavior=drop new
 ### Task 4: Remove session calibration UI and prove the product contract
 
 **Files:**
-- Modify: `lib/burpee_trainer_web/components/session_components.ex`
-- Modify: `assets/js/hooks/session_renderer.mjs`
-- Modify: `assets/js/hooks/session_hook_flow_test.mjs`
-- Modify: `assets/js/hooks/session_renderer_test.mjs`
-- Modify: `assets/js/hooks/pose_calibrated_counter_test.mjs` or delete it if it tests only removed session calibration behavior
+- Modify: `assets/js/app.js`
+- Modify: `assets/js/hooks/pose_debug.js`
+- Delete: `assets/js/hooks/pose_calibration_button.js`
+- Delete: `assets/js/hooks/pose_template_calibration.mjs`
+- Delete: `assets/js/hooks/pose_template_matcher.mjs`
+- Modify: `lib/burpee_trainer_web/live/tracking_test_live.ex`
 - Create: `assets/js/hooks/pose_burpee_hsmm_fixture_test.mjs`
 - Modify: `docs/testing/workout-session-e2e.md`
 
 **Interfaces:**
 - Consumes: camera selection and existing pose-tracker start events.
-- Produces: a direct camera-start path without reference-rep controls and a controlled browser fixture for an absent-observation scenario.
+- Produces: the existing camera-setup gesture path without a reference-rep/template workflow, no calibration/template dependency in the shipped JS bundle, and a controlled browser fixture for an absent-observation scenario.
 
-- [ ] **Step 1: Write failing UI and fixture tests**
+- [ ] **Step 1: Write failing bundle-boundary and fixture tests**
 
 ```js
-test('camera selection proceeds directly to warmup without calibration controls', () => {
-  const result = step(initialFlowState(), { type: 'CAMERA_SELECTED' });
-  assert.equal(result.state.mode, 'camera_setup');
-  assert.equal(result.commands.some((command) => command.type === 'startCalibration'), false);
+test('the app bundle has no calibration or template matcher dependency', async () => {
+  const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(app, /pose_(?:calibration_button|template_calibration|template_matcher)/);
 });
 
 test('fixture absence between macro-cycles emits no warning and keeps Save enabled', async () => {
@@ -255,15 +255,17 @@ test('fixture absence between macro-cycles emits no warning and keeps Save enabl
 });
 ```
 
+Also add a focused LiveView render assertion that `tracking_test_live` has no `PoseCalibrationButton` or calibration/template control ID.
+
 - [ ] **Step 2: Run the test to verify failure**
 
-Run: `cd assets && node --test js/hooks/session_hook_flow_test.mjs js/hooks/session_renderer_test.mjs js/hooks/pose_burpee_hsmm_fixture_test.mjs`
+Run: `cd assets && node --test js/hooks/pose_burpee_hsmm_fixture_test.mjs && cd .. && mix test test/burpee_trainer_web/live`
 
-Expected: FAIL because calibration/degradation controls still render and no controlled HSMM fixture exists.
+Expected: FAIL because `assets/js/app.js` imports calibration and template debug support, `tracking_test_live` renders its calibration control, and no controlled HSMM fixture exists.
 
-- [ ] **Step 3: Remove only runner calibration/degradation UI**
+- [ ] **Step 3: Remove all calibration/template dependencies and add the fixture**
 
-Delete session-runner calibration controls, copy, and renderer branches. Do not remove standalone pose-debug calibration tooling unless it is imported by the workout session. Add a deterministic fixture seam to the tracker so E2E can feed a fixed sequence of feature frames without a physical camera. Update the runbook to verify count continuity and the absence of warning/report changes, not a camera-health status.
+Delete `pose_calibration_button.js`, `pose_template_calibration.mjs`, and `pose_template_matcher.mjs`. Remove their app registration and all corresponding state, imports, controls, copy, events, and DTW rendering from `PoseDebug` and `tracking_test_live`; retain unrelated pose overlay, decoder diagnostics, and trace tools. Add a deterministic fixture seam to the tracker so E2E can feed a fixed sequence of feature frames without a physical camera. Update the runbook to verify count continuity and the absence of warning/report changes, not a camera-health status.
 
 - [ ] **Step 4: Run product-focused tests and browser verification**
 
@@ -286,6 +288,6 @@ jj --config signing.behavior=drop new
 
 ## Plan Self-Review
 
-- **Spec coverage:** Task 1 implements zero setup, general macro-cycle inference, bounded duration behavior, and no invented unseen reps. Task 2 makes ordinary absent observations silent runtime inputs. Task 3 removes degradation/manual fallback and preserves explicit correction provenance. Task 4 removes runner calibration UI and adds deterministic fixture/browser coverage.
+- **Spec coverage:** Task 1 implements zero setup, general macro-cycle inference, bounded duration behavior, and no invented unseen reps. Task 2 makes ordinary absent observations silent runtime inputs. Task 3 removes degradation/manual fallback and preserves explicit correction provenance. Task 4 removes all calibration/template dependencies and adds deterministic fixture/browser coverage.
 - **Placeholder scan:** No task delegates unspecified error handling or test design. Fatal camera startup/detector errors remain existing camera-availability errors; they are distinct from ordinary absent observations.
 - **Type consistency:** The HSMM exposes `stepBurpeeHsmm/2`; the tracker publishes existing `pose-tracker:rep`; session payload remains `trust: 'finished'` with `detected_reps`, `detected_duration_sec`, and `cadence_ms`.
