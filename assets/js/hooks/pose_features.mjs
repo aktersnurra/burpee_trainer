@@ -35,6 +35,18 @@ const LANDMARK_NAMES = Object.freeze([
 ]);
 
 const VISIBLE_SCORE = 0.5;
+const REQUIRED_MACRO_LANDMARKS = Object.freeze([
+	"left_shoulder",
+	"right_shoulder",
+	"left_wrist",
+	"right_wrist",
+	"left_hip",
+	"right_hip",
+	"left_knee",
+	"right_knee",
+	"left_ankle",
+	"right_ankle",
+]);
 const SIGNAL_KEYPOINTS = Object.freeze([
 	"nose",
 	"left_eye",
@@ -84,8 +96,14 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 	);
 	const heelMid = midpoint(points.get("left_heel"), points.get("right_heel"));
 	const kneeMid = midpoint(points.get("left_knee"), points.get("right_knee"));
-	const ankleMid = midpoint(points.get("left_ankle"), points.get("right_ankle"));
-	const wristMid = midpoint(points.get("left_wrist"), points.get("right_wrist"));
+	const ankleMid = midpoint(
+		points.get("left_ankle"),
+		points.get("right_ankle"),
+	);
+	const wristMid = midpoint(
+		points.get("left_wrist"),
+		points.get("right_wrist"),
+	);
 	const torsoLengthPx = distance(shoulderMid, hipMid);
 	const scalar = scalarSignals(points, width, height);
 	const scale = Math.max(
@@ -102,6 +120,9 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		confidence: round4(poseConfidence),
 		visibleFraction: round4(visibleFraction),
 		isOccluded: visibleFraction < 0.35,
+		macroLandmarkConfidence: round4(
+			minimumScore(points, REQUIRED_MACRO_LANDMARKS),
+		),
 		signal: scalar.signal,
 		closeness: scalar.closeness,
 		bboxWidth: norm(bboxWidthPx, width),
@@ -332,6 +353,10 @@ function namesScore(points, names) {
 		.map((name) => points.get(name))
 		.filter(Boolean)
 		.map((point) => score(point));
+}
+
+function minimumScore(points, names) {
+	return Math.min(...names.map((name) => score(points.get(name))));
 }
 
 function score(point) {

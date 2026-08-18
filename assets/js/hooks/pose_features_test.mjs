@@ -38,6 +38,7 @@ test("adds body-relative macro geometry and velocities while retaining landmarks
 	assert.equal(features.shoulderToAnkle, 2.4);
 	assert.equal(features.torsoUprightness, 1);
 	assert.equal(features.hipToKnee, 0.7);
+	assert.equal(features.macroLandmarkConfidence, 0.9);
 	assert.equal(features.dWristToAnkle, -2);
 	assert.equal(features.dShoulderToAnkle, 0);
 });

@@ -21,6 +21,7 @@ const MAX_PHASE_MS = Object.freeze({
 
 const REFRACTORY_MS = 900;
 const MIN_CONFIDENCE = 0.5;
+const MIN_MACRO_LANDMARK_CONFIDENCE = 0.5;
 const MIN_VISIBLE_FRACTION = 0.35;
 const FORWARD_EMISSION = 3;
 
@@ -61,6 +62,8 @@ function usable(frame) {
 	return (
 		Number.isFinite(frame?.tMs) &&
 		finiteOr(frame.poseConfidence, frame.confidence) >= MIN_CONFIDENCE &&
+		finiteOr(frame.macroLandmarkConfidence, 0) >=
+			MIN_MACRO_LANDMARK_CONFIDENCE &&
 		finiteOr(frame.visibleFraction, 0) >= MIN_VISIBLE_FRACTION &&
 		[
 			frame.wristToAnkle,
