@@ -29,7 +29,6 @@ import SessionRecoveryHook from "./hooks/session_recovery_hook";
 import VideoHook from "./hooks/video_hook";
 import PoseTracker from "./hooks/pose_tracker";
 import PoseDebug from "./hooks/pose_debug";
-import PoseCalibrationButton from "./hooks/pose_calibration_button";
 import PoseTraceButton from "./hooks/pose_trace_button";
 import {
 	canDrainPoseTraces,
@@ -108,7 +107,6 @@ const liveSocket = new LiveSocket("/live", Socket, {
 		VideoHook,
 		PoseTracker,
 		PoseDebug,
-		PoseCalibrationButton,
 		PoseTraceButton,
 	},
 });

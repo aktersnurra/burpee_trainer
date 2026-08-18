@@ -136,7 +136,10 @@ function absentFrames(startMs) {
 	return [absent(startMs), absent(startMs + 100)];
 }
 
-function mountedTrackerWithSamples(samples, { captureSegment = null } = {}) {
+function mountedTrackerWithSamples(
+	samples,
+	{ captureSegment = null, controlledPoseFixture = null } = {},
+) {
 	const tracker = new FakeElement();
 	const video = {
 		id: "pose-tracker-preview",
@@ -171,16 +174,25 @@ function mountedTrackerWithSamples(samples, { captureSegment = null } = {}) {
 	const impl = createPoseTracker(
 		{ el: tracker },
 		{
-			createBlazePoseDetector: async () => ({
-				estimatePoses() {
-					current = samples[index];
-					index += 1;
-					return Promise.resolve([{}]);
-				},
-			}),
+			createBlazePoseDetector: controlledPoseFixture
+				? async () => {
+						throw new Error("controlled fixture must not load a detector");
+					}
+				: async () => ({
+						estimatePoses() {
+							current = samples[index];
+							index += 1;
+							return Promise.resolve([{}]);
+						},
+					}),
 			mediaDevices: {
-				getUserMedia: async () => ({ getTracks: () => [] }),
+				getUserMedia: controlledPoseFixture
+					? async () => {
+							throw new Error("controlled fixture must not request a camera");
+						}
+					: async () => ({ getTracks: () => [] }),
 			},
+			controlledPoseFixture,
 			now: () => nowMs,
 			requestAnimationFrame(callback) {
 				animationFrames.push(callback);
@@ -204,12 +216,20 @@ function mountedTrackerWithSamples(samples, { captureSegment = null } = {}) {
 				);
 			}
 			await impl.start();
-			while (index < samples.length) {
+			let remainingControlledFrames = controlledPoseFixture
+				? samples.length - 1
+				: null;
+			while (
+				controlledPoseFixture
+					? remainingControlledFrames > 0
+					: index < samples.length
+			) {
 				nowMs += 100;
 				const callback = animationFrames.shift();
 				assert.ok(callback, "expected a scheduled animation frame");
 				await callback();
 				await Promise.resolve();
+				if (controlledPoseFixture) remainingControlledFrames -= 1;
 			}
 			tracker.dispatchEvent(
 				new CustomEvent("pose-tracker:finish", {
@@ -243,6 +263,18 @@ test("keeps the same HSMM state through absent frames and counts the next full c
 	await tracker.run();
 
 	assert.deepEqual(tracker.repIndexes(), [1, 2]);
+	assert.deepEqual(tracker.statusEvents(), ["live"]);
+});
+
+test("runs controlled feature frames without a camera or detector", async () => {
+	const samples = completeCycle(0);
+	const tracker = mountedTrackerWithSamples(samples, {
+		controlledPoseFixture: samples.map((sample) => sample.features),
+	});
+
+	await tracker.run();
+
+	assert.deepEqual(tracker.repIndexes(), [1]);
 	assert.deepEqual(tracker.statusEvents(), ["live"]);
 });
 

@@ -37,6 +37,14 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert has_element?(home, "#home-start-workout[href='/session/#{created.id}']")
   end
 
+  test "tracking diagnostics omit calibration and template controls", %{conn: conn} do
+    {:ok, tracking, _html} = live(conn, ~p"/tracking-test")
+
+    refute has_element?(tracking, "[phx-hook='PoseCalibrationButton']")
+    refute has_element?(tracking, "#pose-debug-template-start")
+    refute has_element?(tracking, "#pose-debug-dtw-status")
+  end
+
   test "session renders the stable client-owned runner contract", %{conn: conn, user: user} do
     plan = plan_fixture(user, %{"name" => "Accessible Flow"})
     {:ok, session, _html} = live(conn, ~p"/session/#{plan.id}")

@@ -29,6 +29,23 @@ export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
 }
 
+export function runControlledPoseFixture(frames) {
+	let state = initialBurpeeHsmmState();
+	let count = 0;
+
+	for (const frame of frames) {
+		const result = stepBurpeeHsmm(state, frame);
+		state = result.state;
+		if (result.rep) count += 1;
+	}
+
+	return {
+		count: () => count,
+		hasText: () => false,
+		saveDisabled: () => false,
+	};
+}
+
 function configurePreviewVideo(video) {
 	video.muted = true;
 	video.playsInline = true;
@@ -88,6 +105,12 @@ export function createPoseTracker(hook, runtime = {}) {
 	const poseSample = runtime.sampleFromPose || sampleFromPose;
 	const waitForFrame = runtime.waitForVideoFrame || waitForVideoFrame;
 	const hasWebgl = runtime.webglAvailable || webglAvailable;
+	const controlledPoseFixture =
+		runtime.controlledPoseFixture || globalThis.__burpeePoseFixture || null;
+	const controlledFrames = Array.isArray(controlledPoseFixture)
+		? controlledPoseFixture
+		: controlledPoseFixture?.frames || null;
+	let controlledFrameIndex = 0;
 	let stream = null;
 	let detector = null;
 	let video = null;
@@ -195,6 +218,18 @@ export function createPoseTracker(hook, runtime = {}) {
 		const generation = ++startGeneration;
 
 		try {
+			if (controlledFrames) {
+				video = resolvePreviewVideo(hook);
+				canvas = hook.el.querySelector("#pose-tracker-canvas");
+				if (!canvas) throw new Error("Pose tracker canvas is unavailable");
+				resizePoseCanvas(canvas);
+				detector = {};
+				startedAt = now();
+				dispatchLocal("pose-tracker:started", {});
+				loop(generation);
+				return;
+			}
+
 			if (!hasWebgl()) {
 				throw new Error(
 					"WebGL is unavailable; BlazePose cannot start in this browser/context",
@@ -263,24 +298,41 @@ export function createPoseTracker(hook, runtime = {}) {
 		lastPoseMs = sampledAt;
 
 		let poses;
-		try {
-			poses = await detector.estimatePoses(video);
-		} catch (_error) {
+		let sample;
+		if (controlledFrames) {
+			const frame = controlledFrames[controlledFrameIndex];
+			if (!frame) {
+				scheduleNextFrame();
+				return;
+			}
+			controlledFrameIndex += 1;
+			poses = [null];
+			sample = {
+				tMs: frame.tMs,
+				confidence: finiteOr(frame.poseConfidence, frame.confidence),
+				features: frame,
+				keypoints: frame.keypoints,
+			};
+		} else {
+			try {
+				poses = await detector.estimatePoses(video);
+			} catch (_error) {
+				if (!mounted || !running || generation !== startGeneration) return;
+				running = false;
+				markLost("detector_error");
+				releaseResources();
+				return;
+			}
 			if (!mounted || !running || generation !== startGeneration) return;
-			running = false;
-			markLost("detector_error");
-			releaseResources();
-			return;
-		}
-		if (!mounted || !running || generation !== startGeneration) return;
 
-		drawPoseOverlay(canvas, poses[0], video);
-		const sample = poseSample(
-			poses[0],
-			sampledAt - startedAt,
-			video,
-			lastFeature,
-		);
+			sample = poseSample(
+				poses[0],
+				sampledAt - startedAt,
+				video,
+				lastFeature,
+			);
+		}
+		if (!controlledFrames) drawPoseOverlay(canvas, poses[0], video);
 		lastFeature = sample.features;
 
 		const nextReadiness = stepPoseReadiness(readiness, {

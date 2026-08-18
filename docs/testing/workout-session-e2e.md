@@ -132,25 +132,30 @@ Use a fresh setup identity or clean the prior run first.
 7. Confirm the draft restores with the same values and original client ID.
 8. Save, navigate, and run `scripts/e2e/verify.exs`. The count must be one.
 
-## Conditional scenario: camera degradation and deferred traces
+## Conditional scenario: controlled pose fixture continuity
 
-Run this when the environment provides camera permission or a controlled camera
-fixture.
+Run this when the browser controller can inject a page-init script. Before the
+session page loads, initialize `window.__burpeePoseFixture = {frames: []}`.
+The tracker consumes these client-only feature frames instead of requesting a
+physical camera. Each ready frame needs one visible pose, feature confidence
+at least `0.5`, and visible shoulders, hips, and a knee; provide eight such
+frames to finish camera setup.
 
-1. Choose **Yes, use camera** and verify camera setup can continue locally.
-2. Start the tracked workout hands-free.
-3. Force detector/readiness loss during work.
-4. Confirm timing continues without pause, restart, navigation, or visible
-   interruption.
-5. Confirm completion uses timer-derived values and has no cadence analytics.
-6. Before Save, confirm trace chunks exist only in IndexedDB and no trace upload
-   request occurred.
-7. Save and navigate immediately.
-8. Reconnect or trigger the uploader, then confirm one pose run and unique chunk
-   indexes for the saved session.
+1. Choose **Yes, use camera**, feed the ready frames, then use the ordinary
+   camera setup, warmup, and workout controls.
+2. After the workout runner begins, append one complete macro-cycle to
+   `window.__burpeePoseFixture.frames`.
+3. Append low-confidence absent frames covering at least two seconds, followed
+   by a second complete macro-cycle.
+4. Confirm the displayed count is two; no `tracking degraded` or `out of
+   frame` text appears; and Save remains enabled.
+5. Save and run `scripts/e2e/verify.exs` for the captured client UUID. Confirm
+   exactly one reported row with the saved tracked result.
 
-If real camera control is unavailable, mark this scenario blocked and cite the
-focused automated tracker/flow tests separately. Do not call it browser-passed.
+Do not use a camera-health status as acceptance evidence. If the controlled
+fixture cannot run in the browser, mark this scenario blocked and cite the
+focused automated fixture and tracker tests separately. Do not call it
+browser-passed.
 
 ## Visual and accessibility checks
 

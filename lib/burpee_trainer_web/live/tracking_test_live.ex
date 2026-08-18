@@ -19,24 +19,14 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
           </p>
         </div>
 
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            id="pose-debug-template-start"
-            type="button"
-            phx-hook="PoseCalibrationButton"
-            class="relative z-20 w-full touch-manipulation select-none rounded-xl border border-[var(--session-ink)] bg-[var(--session-ink)] px-4 py-4 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
-          >
-            Start 3s countdown
-          </button>
-          <button
-            id="pose-debug-trace-start"
-            type="button"
-            phx-hook="PoseTraceButton"
-            class="relative z-20 w-full touch-manipulation select-none rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-4 py-4 text-base font-semibold text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70 active:scale-[0.99]"
-          >
-            Record 10s trace
-          </button>
-        </div>
+        <button
+          id="pose-debug-trace-start"
+          type="button"
+          phx-hook="PoseTraceButton"
+          class="relative z-20 w-full touch-manipulation select-none rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] px-4 py-4 text-base font-semibold text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/70 active:scale-[0.99]"
+        >
+          Record 10s trace
+        </button>
 
         <section class="rounded-xl border border-[var(--session-border)] bg-[var(--session-surface)] p-3 space-y-3">
           <div
@@ -63,24 +53,6 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <.debug_stat label="Signal" value_id="pose-debug-signal" value="—" />
               <.debug_stat label="Phase" value_id="pose-debug-phase" value="—" />
               <.debug_stat label="Reps" value_id="pose-debug-reps" value="0" />
-            </div>
-
-            <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">
-              <div>
-                <p class="text-sm font-medium text-[var(--session-muted)]">
-                  DTW calibration
-                </p>
-                <p class="mt-1 text-xs text-[var(--session-muted)]">
-                  Tap once, put the phone down, wait for the countdown, and do one clean full rep. The template saves automatically after 5 seconds.
-                </p>
-              </div>
-              <div class="grid grid-cols-2 gap-2 text-sm">
-                <.debug_stat label="DTW" value_id="pose-debug-dtw-status" value="No template" />
-                <.debug_stat label="DTW reps" value_id="pose-debug-dtw-reps" value="0" />
-              </div>
-              <p id="pose-debug-dtw-detail" class="text-xs text-[var(--session-muted)] break-words">
-                []
-              </p>
             </div>
 
             <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">
