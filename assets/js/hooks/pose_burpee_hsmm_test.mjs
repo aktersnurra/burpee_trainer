@@ -5,144 +5,15 @@ import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { featureFrameFromPose } from "./pose_features.mjs";
 
 const video = { videoWidth: 400, videoHeight: 400 };
-const LANDMARK_NAMES = [
-	"nose",
-	"left_eye_inner",
-	"left_eye",
-	"left_eye_outer",
-	"right_eye",
-	"right_ear",
-	"mouth_left",
-	"mouth_right",
-	"left_shoulder",
-	"right_shoulder",
-	"left_elbow",
-	"right_elbow",
-	"left_wrist",
-	"right_wrist",
-	"left_pinky",
-	"right_pinky",
-	"left_index",
-	"right_index",
-	"left_thumb",
-	"right_thumb",
-	"left_hip",
-	"right_hip",
-	"left_knee",
-	"right_knee",
-	"left_ankle",
-	"right_ankle",
-	"left_heel",
-	"right_heel",
-	"left_foot_index",
-	"right_foot_index",
-];
 
-function frame(tMs, features) {
-	return {
-		tMs,
-		poseConfidence: 0.9,
-		visibleFraction: 0.9,
-		macroLandmarkConfidence: 0.9,
-		...features,
-	};
-}
-
-function upright(tMs) {
-	return frame(tMs, {
-		wristToAnkle: 1.25,
-		shoulderToAnkle: 2.1,
-		torsoUprightness: 0.9,
-		hipToKnee: 0.9,
-		dWristToAnkle: 0,
-		dShoulderToAnkle: 0,
-	});
-}
-
-function loweringToFloor(tMs) {
-	return frame(tMs, {
-		wristToAnkle: 0.55,
-		shoulderToAnkle: 1.2,
-		torsoUprightness: 0.55,
-		hipToKnee: 0.6,
-		dWristToAnkle: -1.4,
-		dShoulderToAnkle: -1.1,
-	});
-}
-
-function floorWork(tMs, oscillation = 0) {
-	return frame(tMs, {
-		wristToAnkle: 0.16,
-		shoulderToAnkle: 0.38 + oscillation,
-		torsoUprightness: 0.12,
-		hipToKnee: 0.52,
-		dWristToAnkle: 0,
-		dShoulderToAnkle: oscillation * 10,
-	});
-}
-
-function returningFromFloor(tMs) {
-	return frame(tMs, {
-		wristToAnkle: 0.48,
-		shoulderToAnkle: 0.72,
-		torsoUprightness: 0.45,
-		hipToKnee: 0.3,
-		dWristToAnkle: 1.2,
-		dShoulderToAnkle: 1.4,
-	});
-}
-
-function onePushupCycle(startMs = 0) {
-	return [
-		upright(startMs),
-		loweringToFloor(startMs + 150),
-		floorWork(startMs + 300),
-		floorWork(startMs + 450, 0.12),
-		floorWork(startMs + 600),
-		returningFromFloor(startMs + 750),
-		upright(startMs + 900),
-	];
-}
-
-function threePushupCycle(startMs = 2_500) {
-	return [
-		upright(startMs),
-		loweringToFloor(startMs + 150),
-		floorWork(startMs + 300),
-		floorWork(startMs + 450, 0.12),
-		floorWork(startMs + 600),
-		floorWork(startMs + 750, 0.12),
-		floorWork(startMs + 900),
-		floorWork(startMs + 1_050, 0.12),
-		floorWork(startMs + 1_200),
-		returningFromFloor(startMs + 1_350),
-		upright(startMs + 1_500),
-	];
-}
-
-function squatOnlyFrames() {
-	return [
-		upright(0),
-		frame(150, {
-			wristToAnkle: 1.1,
-			shoulderToAnkle: 1.15,
-			torsoUprightness: 0.86,
-			hipToKnee: 0.25,
-			dWristToAnkle: -0.2,
-			dShoulderToAnkle: -0.7,
-		}),
-		upright(300),
-	];
-}
-
-function interruptedFloorFrames() {
-	return [
-		upright(1_000),
-		loweringToFloor(1_150),
-		floorWork(1_300),
-		upright(1_450),
-	];
-}
+const WORLD_PHASES = Object.freeze({
+	upright: { body: 3.2, hip: 2.35, torso: 0.85, wrist: 1.5 },
+	lowering: { body: 2.1, hip: 1.65, torso: 0.45, wrist: 0.7 },
+	floor: { body: 1.05, hip: 0.7, torso: 0.35, wrist: 0.45 },
+	floor_pushup: { body: 1.05, hip: 0.7, torso: 0.35, wrist: 0.45 },
+	returning: { body: 1.65, hip: 1.1, torso: 0.55, wrist: 0.8 },
+	squat: { body: 3, hip: 2.1, torso: 0.9, wrist: 1.4 },
+});
 
 function run(frames) {
 	let state = initialBurpeeHsmmState();
@@ -157,62 +28,12 @@ function run(frames) {
 	return { state, reps };
 }
 
-function poseFor(phase, lowConfidenceNames = []) {
-	const points = new Map(
-		LANDMARK_NAMES.map((name) => [
-			name,
-			{
-				name,
-				x: 200,
-				y: 200,
-				score: lowConfidenceNames.includes(name) ? 0.1 : 0.9,
-			},
-		]),
-	);
-	const set = (names, leftX, rightX, y) => {
-		setPoint(names[0], leftX, y);
-		setPoint(names[1], rightX, y);
-	};
-	const setPoint = (name, x, y) =>
-		points.set(name, { ...points.get(name), x, y });
-
-	set(["left_shoulder", "right_shoulder"], 150, 250, 100);
-	set(["left_hip", "right_hip"], 150, 250, 200);
-	set(["left_knee", "right_knee"], 150, 250, 280);
-	set(["left_ankle", "right_ankle"], 150, 250, 350);
-	set(["left_wrist", "right_wrist"], 150, 250, 225);
-
-	if (phase === "lowering") {
-		set(["left_shoulder", "right_shoulder"], 150, 250, 150);
-		set(["left_hip", "right_hip"], 200, 400, 190);
-		set(["left_knee", "right_knee"], 200, 400, 220);
-		set(["left_ankle", "right_ankle"], 150, 250, 270);
-		set(["left_wrist", "right_wrist"], 150, 250, 230);
-	}
-	if (phase === "floor") {
-		set(["left_shoulder", "right_shoulder"], 150, 250, 150);
-		set(["left_hip", "right_hip"], 200, 400, 150);
-		set(["left_knee", "right_knee"], 200, 400, 170);
-		set(["left_ankle", "right_ankle"], 100, 300, 190);
-		set(["left_wrist", "right_wrist"], 100, 300, 180);
-	}
-	if (phase === "returning") {
-		set(["left_shoulder", "right_shoulder"], 150, 250, 150);
-		set(["left_hip", "right_hip"], 210, 330, 200);
-		set(["left_knee", "right_knee"], 210, 330, 210);
-		set(["left_ankle", "right_ankle"], 150, 250, 220);
-		set(["left_wrist", "right_wrist"], 230, 310, 210);
-	}
-
-	return { keypoints: Array.from(points.values()) };
-}
-
-function featureFrames(phases) {
+function lowFrontFeatureFrames(phases, options = {}) {
 	const frames = [];
-	for (const [tMs, phase, lowConfidenceNames] of phases) {
+	for (const [phase, tMs, poseOptions] of phases) {
 		frames.push(
 			featureFrameFromPose(
-				poseFor(phase, lowConfidenceNames),
+				lowFrontPose(phase, { ...options, ...poseOptions }),
 				tMs,
 				video,
 				frames.at(-1) || null,
@@ -222,25 +43,156 @@ function featureFrames(phases) {
 	return frames;
 }
 
-test("counts one observed outer cycle regardless of internal pushup count", () => {
-	const frames = onePushupCycle().concat(threePushupCycle());
-	const { reps } = run(frames);
-
-	assert.deepEqual(reps, [
-		onePushupCycle().at(-1).tMs,
-		threePushupCycle().at(-1).tMs,
+function lowFrontFrame(phase, tMs, overrides = {}) {
+	const frames = lowFrontFeatureFrames([
+		["upright", tMs - 150],
+		[phase, tMs],
 	]);
+	return { ...frames.at(-1), ...overrides };
+}
+
+function lowFrontCycle(startMs = 0) {
+	return [
+		["upright", startMs],
+		["lowering", startMs + 150],
+		["floor", startMs + 300],
+		["floor_pushup", startMs + 450],
+		["returning", startMs + 750],
+		["upright", startMs + 900],
+	];
+}
+
+function lowFrontPose(phase, options = {}) {
+	const geometry = WORLD_PHASES[phase];
+	if (!geometry) throw new Error(`unknown low-front phase: ${phase}`);
+
+	const imageScale = options.foreshortenImage ? 0.08 : 1;
+	const imageY = (y) => 80 + (y - 80) * imageScale;
+	const score = (name) =>
+		options.lowConfidenceNames?.includes(name) ? 0.1 : 0.9;
+	const point = (name, x, y, world) => ({
+		name,
+		x,
+		y,
+		score: score(name),
+		world,
+	});
+	const shoulderY = 0;
+	const shoulderCenterX = Math.sqrt(1 - geometry.torso ** 2);
+	const hipY = -geometry.torso;
+	const ankleY = -geometry.body;
+	const wristY = ankleY + geometry.wrist;
+	const image = {
+		shoulder: imageY(90),
+		hip: imageY(170),
+		knee: imageY(250),
+		ankle: imageY(340),
+		wrist: imageY(220),
+	};
+
+	return {
+		keypoints: [
+			point("nose", 200, imageY(50), { x: 0, y: 0.3, z: 0 }),
+			point("left_shoulder", 150, image.shoulder, {
+				x: shoulderCenterX - 0.5,
+				y: shoulderY,
+				z: 0,
+			}),
+			point("right_shoulder", 250, image.shoulder, {
+				x: shoulderCenterX + 0.5,
+				y: shoulderY,
+				z: 0,
+			}),
+			point("left_elbow", 135, imageY(155), {
+				x: shoulderCenterX - 0.65,
+				y: (shoulderY + wristY) / 2,
+				z: 0,
+			}),
+			point("right_elbow", 265, imageY(155), {
+				x: shoulderCenterX + 0.65,
+				y: (shoulderY + wristY) / 2,
+				z: 0,
+			}),
+			point("left_wrist", 125, image.wrist, { x: -0.7, y: wristY, z: 0 }),
+			point("right_wrist", 275, image.wrist, { x: 0.7, y: wristY, z: 0 }),
+			point("left_hip", 160, image.hip, { x: -0.4, y: hipY, z: 0 }),
+			point("right_hip", 240, image.hip, { x: 0.4, y: hipY, z: 0 }),
+			point("left_knee", 165, image.knee, {
+				x: -0.4,
+				y: (hipY + ankleY) / 2,
+				z: 0,
+			}),
+			point("right_knee", 235, image.knee, {
+				x: 0.4,
+				y: (hipY + ankleY) / 2,
+				z: 0,
+			}),
+			point("left_ankle", 170, image.ankle, { x: -0.4, y: ankleY, z: 0 }),
+			point("right_ankle", 230, image.ankle, { x: 0.4, y: ankleY, z: 0 }),
+		],
+	};
+}
+
+test("counts one low-front observed cycle with one or three floor pushups", () => {
+	const frames = lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+		["floor", 300],
+		["floor_pushup", 450],
+		["returning", 750],
+		["upright", 900],
+		["upright", 2500],
+		["lowering", 2650],
+		["floor", 2800],
+		["floor_pushup", 2950],
+		["floor", 3100],
+		["floor_pushup", 3250],
+		["floor", 3400],
+		["returning", 3550],
+		["upright", 3700],
+	]);
+
+	assert.deepEqual(run(frames).reps, [900, 3700]);
+});
+
+test("foreshortened image coordinates do not change world-based phase results", () => {
+	assert.deepEqual(
+		run(lowFrontFeatureFrames(lowFrontCycle(), { foreshortenImage: true }))
+			.reps,
+		[900],
+	);
+});
+
+test("advances only when weighted low-front evidence clears the forward threshold", () => {
+	const result = stepBurpeeHsmm(
+		{ ...initialBurpeeHsmmState(), phase: "upright", phaseStartedAtMs: 0 },
+		lowFrontFrame("lowering", 150, { worldWristVerticalSpan: 1.8 }),
+	);
+
+	assert.equal(result.state.phase, "lowering_to_floor");
 });
 
 test("does not count a squat-only or interrupted floor sequence", () => {
-	const { reps } = run(squatOnlyFrames().concat(interruptedFloorFrames()));
+	const frames = lowFrontFeatureFrames([
+		["upright", 0],
+		["squat", 150],
+		["upright", 300],
+		["upright", 1000],
+		["lowering", 1150],
+		["floor", 1300],
+		["upright", 1450],
+	]);
 
-	assert.deepEqual(reps, []);
+	assert.deepEqual(run(frames).reps, []);
 });
 
 test("unusable frames leave the partial path untouched and never emit a rep", () => {
 	let state = initialBurpeeHsmmState();
-	for (const nextFrame of [upright(0), loweringToFloor(150), floorWork(300)]) {
+	for (const nextFrame of lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+		["floor", 300],
+	])) {
 		state = stepBurpeeHsmm(state, nextFrame).state;
 	}
 
@@ -257,63 +209,66 @@ test("unusable frames leave the partial path untouched and never emit a rep", ()
 
 test("low-confidence required macro landmarks leave the partial path untouched", () => {
 	let state = initialBurpeeHsmmState();
-	for (const nextFrame of [upright(0), loweringToFloor(150)]) {
+	for (const nextFrame of lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+	])) {
 		state = stepBurpeeHsmm(state, nextFrame).state;
 	}
 
-	const result = stepBurpeeHsmm(
-		state,
-		frame(300, {
-			...floorWork(300),
-			macroLandmarkConfidence: 0.1,
-		}),
-	);
+	const [lowConfidenceFloor] = lowFrontFeatureFrames([
+		[
+			"floor",
+			300,
+			{
+				lowConfidenceNames: [
+					"left_wrist",
+					"right_wrist",
+					"left_ankle",
+					"right_ankle",
+				],
+			},
+		],
+	]);
+	const result = stepBurpeeHsmm(state, lowConfidenceFloor);
 
 	assert.equal(result.rep, false);
 	assert.deepEqual(result.state, state);
 });
 
-test("featureFrameFromPose output drives one complete macro cycle", () => {
-	const { reps } = run(
-		featureFrames([
-			[0, "upright"],
-			[150, "lowering"],
-			[300, "floor"],
-			[450, "returning"],
-			[600, "upright"],
-		]),
-	);
-
-	assert.deepEqual(reps, [600]);
+test("raw low-front feature output drives one complete macro cycle", () => {
+	assert.deepEqual(run(lowFrontFeatureFrames(lowFrontCycle())).reps, [900]);
 });
 
-test("low-confidence wrists and ankles in extracted features cannot advance a macro cycle", () => {
+test("low-confidence wrists and ankles in raw low-front features cannot advance a macro cycle", () => {
 	const lowConfidenceExtremities = [
 		"left_wrist",
 		"right_wrist",
 		"left_ankle",
 		"right_ankle",
 	];
-	const { reps } = run(
-		featureFrames([
-			[0, "upright"],
-			[150, "lowering", lowConfidenceExtremities],
-			[300, "floor"],
-			[450, "returning"],
-			[600, "upright"],
-		]),
-	);
+	const frames = lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150, { lowConfidenceNames: lowConfidenceExtremities }],
+		["floor", 300],
+		["returning", 450],
+		["upright", 600],
+	]);
 
-	assert.deepEqual(reps, []);
+	assert.deepEqual(run(frames).reps, []);
 });
 
 test("an overlong partial path expires without emitting a rep", () => {
 	let state = initialBurpeeHsmmState();
-	for (const nextFrame of [upright(0), loweringToFloor(150), floorWork(300)]) {
+	for (const nextFrame of lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+		["floor", 300],
+	])) {
 		state = stepBurpeeHsmm(state, nextFrame).state;
 	}
 
-	const result = stepBurpeeHsmm(state, upright(20_000));
+	const result = stepBurpeeHsmm(state, lowFrontFrame("upright", 20_000));
 	assert.equal(result.rep, false);
 	assert.equal(result.state.phase, "upright");
 });
