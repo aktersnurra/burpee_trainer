@@ -124,6 +124,14 @@ test('counts one low-front observed cycle with one or three floor pushups', () =
 test('foreshortened image coordinates do not change world-based phase results', () => {
   assert.deepEqual(run(lowFrontFeatureFrames(lowFrontCycle(), {foreshortenImage: true})).reps, [900]);
 });
+
+test('advances only when weighted low-front evidence clears the forward threshold', () => {
+  const result = stepBurpeeHsmm(
+    { ...initialBurpeeHsmmState(), phase: 'upright', phaseStartedAtMs: 0 },
+    lowFrontFrame('lowering', 150, { worldWristVerticalSpan: 1.8 }),
+  );
+  assert.equal(result.state.phase, 'lowering_to_floor');
+});
 ```
 
 Keep regressions for squat-only motion, interrupted floor paths, absent frames, required-landmark confidence, and duration expiry. Their frames must now carry valid Task 1 world features instead of `wristToAnkle` or `shoulderToAnkle` phase values.
@@ -134,35 +142,64 @@ Run: `cd assets && node --test js/hooks/pose_burpee_hsmm_test.mjs`
 
 Expected: FAIL because `usable/1` and `scoreMacroEmissions/1` still use image-plane fields.
 
-- [ ] **Step 3: Replace phase scoring with bounded world emissions**
+- [ ] **Step 3: Replace phase scoring with bounded weighted world emissions**
 
-Delete the old `wristToAnkle`, `shoulderToAnkle`, `torsoUprightness`, `hipToKnee`, and related velocity checks from `usable/1` and `scoreMacroEmissions/1`. Use only world geometry:
+Delete the old `wristToAnkle`, `shoulderToAnkle`, `torsoUprightness`, `hipToKnee`, and related velocity checks from `usable/1` and `scoreMacroEmissions/1`. Set `FORWARD_EMISSION` to `0.72`. Use only world geometry and return each phase's weighted score in `[0, 1]`:
 
 ```js
-const lowering =
-  frame.worldBodyVerticalSpan <= 3.1 &&
-  frame.worldTorsoElevation <= 0.8 &&
-  frame.worldWristVerticalSpan <= 1.6 &&
-  frame.dWorldBodyVerticalSpan <= -0.4;
-const floorWork =
-  frame.worldBodyVerticalSpan <= 1.1 &&
-  frame.worldHipVerticalSpan <= 0.7 &&
-  frame.worldTorsoElevation <= 0.35 &&
-  frame.worldWristVerticalSpan <= 0.45;
-const returning =
-  frame.worldBodyVerticalSpan >= 1.1 &&
-  frame.worldBodyVerticalSpan <= 3.1 &&
-  frame.worldTorsoElevation >= 0.3 &&
-  frame.worldTorsoElevation <= 0.85 &&
-  frame.dWorldBodyVerticalSpan >= 0.4;
-const upright =
-  frame.worldBodyVerticalSpan >= 3.2 &&
-  frame.worldHipVerticalSpan >= 2 &&
-  frame.worldTorsoElevation >= 0.85 &&
-  frame.worldWristVerticalSpan >= 1.5;
+function scoreMacroEmissions(frame) {
+  return {
+    upright: weightedScore([
+      [rises(frame.worldBodyVerticalSpan, 2.8, 3.2), 0.35],
+      [rises(frame.worldHipVerticalSpan, 1.6, 2.0), 0.2],
+      [rises(frame.worldTorsoElevation, 0.75, 0.85), 0.25],
+      [rises(frame.worldWristVerticalSpan, 1.2, 1.5), 0.2],
+    ]),
+    lowering_to_floor: weightedScore([
+      [band(frame.worldBodyVerticalSpan, 1.1, 2.1, 3.2), 0.35],
+      [falls(frame.worldTorsoElevation, 0.8, 0.45), 0.2],
+      [falls(frame.worldWristVerticalSpan, 1.6, 0.7), 0.15],
+      [falls(frame.dWorldBodyVerticalSpan, -0.25, -0.8), 0.3],
+    ]),
+    floor_work: weightedScore([
+      [falls(frame.worldBodyVerticalSpan, 1.5, 1.1), 0.3],
+      [falls(frame.worldHipVerticalSpan, 1.0, 0.7), 0.2],
+      [falls(frame.worldTorsoElevation, 0.5, 0.35), 0.3],
+      [falls(frame.worldWristVerticalSpan, 0.8, 0.45), 0.2],
+    ]),
+    returning_from_floor: weightedScore([
+      [band(frame.worldBodyVerticalSpan, 1.1, 2.1, 3.2), 0.25],
+      [band(frame.worldTorsoElevation, 0.3, 0.55, 0.85), 0.2],
+      [rises(frame.worldHipVerticalSpan, 0.7, 1.1), 0.15],
+      [rises(frame.dWorldBodyVerticalSpan, 0.25, 0.8), 0.4],
+    ]),
+  };
+}
 ```
 
-Return the same bounded emission shape (`4` for a satisfied phase, `0` otherwise) and retain `NEXT`, duration expiry, and refractory behavior. Do not add a view-mode selector or a 2-D fallback.
+Define clamped pure helpers beside `scoreMacroEmissions/1`:
+
+```js
+function rises(value, zeroAt, fullAt) {
+  return clamp01((value - zeroAt) / (fullAt - zeroAt));
+}
+
+function falls(value, zeroAt, fullAt) {
+  return clamp01((zeroAt - value) / (zeroAt - fullAt));
+}
+
+function band(value, low, center, high) {
+  return value <= center
+    ? rises(value, low, center)
+    : falls(value, high, center);
+}
+
+function weightedScore(entries) {
+  return entries.reduce((total, [score, weight]) => total + score * weight, 0);
+}
+```
+
+The Step 1 weak-wrist regression proves a single weak feature can still permit a forward phase only when the remaining weighted evidence reaches `0.72`. Retain `NEXT`, duration expiry, and refractory behavior. Do not add a view-mode selector or a 2-D fallback.
 
 - [ ] **Step 4: Run focused HSMM tests**
 
