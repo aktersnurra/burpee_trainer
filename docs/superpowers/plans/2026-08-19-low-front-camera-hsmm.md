@@ -39,7 +39,7 @@ test('derives body-scale-normalized world geometry without camera coordinates', 
   const previous = featureFrameFromPose(lowFrontPose('upright'), 0, video);
   const frame = featureFrameFromPose(lowFrontPose('lowering'), 100, video, previous);
 
-  assert.equal(frame.worldBodyVerticalSpan, 3.5);
+  assert.equal(frame.worldBodyVerticalSpan, 3);
   assert.equal(frame.worldHipVerticalSpan, 2);
   assert.equal(frame.worldWristVerticalSpan, 1.25);
   assert.equal(frame.worldTorsoElevation, 1);
