@@ -150,9 +150,17 @@ not contain the fixture runtime. In the same page-init script, initialize
 
 The fixture entry passes those client-only feature frames through the injected
 `controlledPoseFixture` tracker runtime seam instead of requesting a physical
-camera. Each ready frame needs one visible pose, feature confidence at least
-`0.5`, and visible shoulders, hips, and a knee; provide eight such frames to
-finish camera setup.
+camera.
+
+Place the fixed phone on or near the floor, facing the athlete, far enough away
+to keep the head, wrists, hips, knees, ankles, and feet in frame while standing
+and on the floor. The controlled fixture must carry BlazePose-shaped world
+landmarks. A cropped or low-confidence frame is an absent observation; it must
+not generate a warning or a report fallback.
+
+Each ready frame must meet that full-body contract, contain one visible pose,
+and have feature confidence at least `0.5`; provide eight such frames to finish
+camera setup.
 
 1. Choose **Yes, use camera**, feed the ready frames, then use the ordinary
    camera setup, warmup, and workout controls.
