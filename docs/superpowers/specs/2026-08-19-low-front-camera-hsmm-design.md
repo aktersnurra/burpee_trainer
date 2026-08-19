@@ -1,6 +1,6 @@
 # Low Front-Camera HSMM Counting Design
 
-**Status:** Approved for specification review
+**Status:** Approved for implementation planning
 
 **Supersedes:** the camera-placement and emission-feature portions of `2026-08-18-zero-setup-hsmm-camera-counting-design.md`. The durable lifecycle, trace-upload, explicit-correction, and general macro-cycle decisions remain unchanged.
 
