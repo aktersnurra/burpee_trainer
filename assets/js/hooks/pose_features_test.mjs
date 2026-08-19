@@ -133,6 +133,16 @@ test("omits world macro features when a required landmark has no world point", (
 	assert.equal(frame.worldBodyVerticalSpan, 0.25);
 });
 
+test("omits all world macro features when a pose has no world points", () => {
+	const frame = featureFrameFromPose(pose(), 0, video);
+
+	assert.equal(frame.worldBodyVerticalSpan, null);
+	assert.equal(frame.worldHipVerticalSpan, null);
+	assert.equal(frame.worldWristVerticalSpan, null);
+	assert.equal(frame.worldTorsoElevation, null);
+	assert.equal(frame.worldBodyScale, null);
+});
+
 test("adds body-relative macro geometry and velocities while retaining landmarks", () => {
 	const previous = featureFrameFromPose(pose(), 0, video);
 	const features = featureFrameFromPose(pose(10), 100, video, previous);

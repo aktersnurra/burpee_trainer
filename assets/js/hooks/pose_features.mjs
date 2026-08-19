@@ -130,12 +130,13 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		points.get("left_hip")?.world,
 		points.get("right_hip")?.world,
 	);
-	const worldBodyScale = finiteMaximum(
+	const worldGeometryScale = finiteMaximum(
 		worldTorsoLength,
 		worldShoulderWidth,
 		worldHipWidth,
-		0.01,
 	);
+	const worldBodyScale =
+		worldGeometryScale == null ? null : Math.max(worldGeometryScale, 0.01);
 	const scalar = scalarSignals(points, width, height);
 	const scale = Math.max(
 		torsoLengthPx || 0,
@@ -186,7 +187,9 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 			worldHipMid,
 			worldTorsoLength,
 		),
-		worldBodyScale: round4(worldBodyScale),
+		worldBodyScale: Number.isFinite(worldBodyScale)
+			? round4(worldBodyScale)
+			: null,
 		noseY: yOf(points.get("nose"), height),
 		shoulderMidX: xOf(shoulderMid, width),
 		shoulderMidY: yOf(shoulderMid, height),
@@ -394,7 +397,8 @@ function finiteWorldPoint(point) {
 }
 
 function finiteMaximum(...values) {
-	return Math.max(...values.filter(Number.isFinite));
+	const finiteValues = values.filter(Number.isFinite);
+	return finiteValues.length === 0 ? null : Math.max(...finiteValues);
 }
 
 function midpoint(a, b) {
