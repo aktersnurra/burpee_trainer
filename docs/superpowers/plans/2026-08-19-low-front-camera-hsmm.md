@@ -371,7 +371,7 @@ cd .. && mix precommit
 mix assets.deploy
 ```
 
-Expected: all Node tests and `mix precommit` pass; deploy bundle contains no fixture markers.
+Expected: all Node tests and `mix precommit` pass; deploy bundle contains none of `__burpeePoseFixture`, `pose_tracker_fixture`, or `app_fixture`. The injected `controlledPoseFixture` dependency-injection parameter may remain in the shared tracker module; it does not read a browser global and the normal hook never supplies it.
 
 - [ ] **Step 2: Execute the conditional low-front browser scenario when controller capability exists**
 
