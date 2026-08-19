@@ -143,48 +143,76 @@ function feature(tMs, values, confidence = 0.9) {
 	};
 }
 
-function completeCycle(startMs) {
+const LOW_FRONT_FEATURES = Object.freeze({
+	upright: {
+		wristToAnkle: 1.25,
+		shoulderToAnkle: 2.1,
+		torsoUprightness: 0.9,
+		hipToKnee: 0.9,
+		dWristToAnkle: 0,
+		dShoulderToAnkle: 0,
+		worldBodyVerticalSpan: 3.2,
+		worldHipVerticalSpan: 2.35,
+		worldWristVerticalSpan: 1.5,
+		worldTorsoElevation: 0.85,
+		dWorldBodyVerticalSpan: 0,
+		dWorldWristVerticalSpan: 0,
+	},
+	lowering: {
+		wristToAnkle: 0.55,
+		shoulderToAnkle: 1.2,
+		torsoUprightness: 0.55,
+		hipToKnee: 0.6,
+		dWristToAnkle: -1.4,
+		dShoulderToAnkle: -1.1,
+		worldBodyVerticalSpan: 2.1,
+		worldHipVerticalSpan: 1.65,
+		worldWristVerticalSpan: 0.7,
+		worldTorsoElevation: 0.45,
+		dWorldBodyVerticalSpan: -1,
+		dWorldWristVerticalSpan: -1,
+	},
+	floor: {
+		wristToAnkle: 0.16,
+		shoulderToAnkle: 0.38,
+		torsoUprightness: 0.12,
+		hipToKnee: 0.52,
+		dWristToAnkle: 0,
+		dShoulderToAnkle: 0,
+		worldBodyVerticalSpan: 1.05,
+		worldHipVerticalSpan: 0.7,
+		worldWristVerticalSpan: 0.45,
+		worldTorsoElevation: 0.35,
+		dWorldBodyVerticalSpan: 0,
+		dWorldWristVerticalSpan: 0,
+	},
+	returning: {
+		wristToAnkle: 0.48,
+		shoulderToAnkle: 0.72,
+		torsoUprightness: 0.45,
+		hipToKnee: 0.3,
+		dWristToAnkle: 1.2,
+		dShoulderToAnkle: 1.4,
+		worldBodyVerticalSpan: 1.65,
+		worldHipVerticalSpan: 1.1,
+		worldWristVerticalSpan: 0.8,
+		worldTorsoElevation: 0.55,
+		dWorldBodyVerticalSpan: 1,
+		dWorldWristVerticalSpan: 1,
+	},
+});
+
+function lowFrontFrame(phase, tMs) {
+	return feature(tMs, LOW_FRONT_FEATURES[phase]);
+}
+
+function lowFrontCycle(startMs) {
 	return [
-		feature(startMs, {
-			wristToAnkle: 1.25,
-			shoulderToAnkle: 2.1,
-			torsoUprightness: 0.9,
-			hipToKnee: 0.9,
-			dWristToAnkle: 0,
-			dShoulderToAnkle: 0,
-		}),
-		feature(startMs + 100, {
-			wristToAnkle: 0.55,
-			shoulderToAnkle: 1.2,
-			torsoUprightness: 0.55,
-			hipToKnee: 0.6,
-			dWristToAnkle: -1.4,
-			dShoulderToAnkle: -1.1,
-		}),
-		feature(startMs + 200, {
-			wristToAnkle: 0.16,
-			shoulderToAnkle: 0.38,
-			torsoUprightness: 0.12,
-			hipToKnee: 0.52,
-			dWristToAnkle: 0,
-			dShoulderToAnkle: 0,
-		}),
-		feature(startMs + 300, {
-			wristToAnkle: 0.48,
-			shoulderToAnkle: 0.72,
-			torsoUprightness: 0.45,
-			hipToKnee: 0.3,
-			dWristToAnkle: 1.2,
-			dShoulderToAnkle: 1.4,
-		}),
-		feature(startMs + 400, {
-			wristToAnkle: 1.25,
-			shoulderToAnkle: 2.1,
-			torsoUprightness: 0.9,
-			hipToKnee: 0.9,
-			dWristToAnkle: 0,
-			dShoulderToAnkle: 0,
-		}),
+		lowFrontFrame("upright", startMs),
+		lowFrontFrame("lowering", startMs + 100),
+		lowFrontFrame("floor", startMs + 200),
+		lowFrontFrame("returning", startMs + 300),
+		lowFrontFrame("upright", startMs + 400),
 	];
 }
 
@@ -336,14 +364,7 @@ async function runControlledSessionFixture(frames) {
 		},
 	};
 	const readinessFrames = Array.from({ length: 8 }, (_, index) =>
-		feature(-800 + index * 100, {
-			wristToAnkle: 1.25,
-			shoulderToAnkle: 2.1,
-			torsoUprightness: 0.9,
-			hipToKnee: 0.9,
-			dWristToAnkle: 0,
-			dShoulderToAnkle: 0,
-		}),
+		lowFrontFrame("upright", -800 + index * 100),
 	);
 	const scheduledFrames = [];
 	let nowMs = 0;
@@ -470,9 +491,9 @@ test("the production tracker cannot activate a browser fixture from mutable glob
 
 test("fixture absence between macro-cycles leaves the rendered session warning-free and Save enabled", async () => {
 	const root = await runControlledSessionFixture([
-		...completeCycle(0),
+		...lowFrontCycle(0),
 		...absentFrames(500, 2000),
-		...completeCycle(3500),
+		...lowFrontCycle(3500),
 	]);
 
 	assert.equal(

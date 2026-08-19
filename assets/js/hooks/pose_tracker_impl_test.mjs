@@ -74,66 +74,117 @@ function feature(tMs, values, confidence = 0.9) {
 	};
 }
 
-function upright(tMs) {
-	return feature(tMs, {
+const LOW_FRONT_FEATURES = Object.freeze({
+	upright: {
 		wristToAnkle: 1.25,
 		shoulderToAnkle: 2.1,
 		torsoUprightness: 0.9,
 		hipToKnee: 0.9,
 		dWristToAnkle: 0,
 		dShoulderToAnkle: 0,
-	});
-}
-
-function lowering(tMs) {
-	return feature(tMs, {
+		worldBodyVerticalSpan: 3.2,
+		worldHipVerticalSpan: 2.35,
+		worldWristVerticalSpan: 1.5,
+		worldTorsoElevation: 0.85,
+		dWorldBodyVerticalSpan: 0,
+		dWorldWristVerticalSpan: 0,
+	},
+	lowering: {
 		wristToAnkle: 0.55,
 		shoulderToAnkle: 1.2,
 		torsoUprightness: 0.55,
 		hipToKnee: 0.6,
 		dWristToAnkle: -1.4,
 		dShoulderToAnkle: -1.1,
-	});
-}
-
-function floorWork(tMs) {
-	return feature(tMs, {
+		worldBodyVerticalSpan: 2.1,
+		worldHipVerticalSpan: 1.65,
+		worldWristVerticalSpan: 0.7,
+		worldTorsoElevation: 0.45,
+		dWorldBodyVerticalSpan: -1,
+		dWorldWristVerticalSpan: -1,
+	},
+	floor: {
 		wristToAnkle: 0.16,
 		shoulderToAnkle: 0.38,
 		torsoUprightness: 0.12,
 		hipToKnee: 0.52,
 		dWristToAnkle: 0,
 		dShoulderToAnkle: 0,
-	});
-}
-
-function returning(tMs) {
-	return feature(tMs, {
+		worldBodyVerticalSpan: 1.05,
+		worldHipVerticalSpan: 0.7,
+		worldWristVerticalSpan: 0.45,
+		worldTorsoElevation: 0.35,
+		dWorldBodyVerticalSpan: 0,
+		dWorldWristVerticalSpan: 0,
+	},
+	returning: {
 		wristToAnkle: 0.48,
 		shoulderToAnkle: 0.72,
 		torsoUprightness: 0.45,
 		hipToKnee: 0.3,
 		dWristToAnkle: 1.2,
 		dShoulderToAnkle: 1.4,
+		worldBodyVerticalSpan: 1.65,
+		worldHipVerticalSpan: 1.1,
+		worldWristVerticalSpan: 0.8,
+		worldTorsoElevation: 0.55,
+		dWorldBodyVerticalSpan: 1,
+		dWorldWristVerticalSpan: 1,
+	},
+});
+
+function lowFrontFrame(phase, tMs, { missingWorld = [] } = {}) {
+	const values = LOW_FRONT_FEATURES[phase];
+	if (!values) throw new Error(`unknown low-front phase: ${phase}`);
+
+	const missingWristWorld = missingWorld.includes("left_wrist");
+	return feature(tMs, {
+		...values,
+		...(missingWristWorld && {
+			worldWristVerticalSpan: null,
+			dWorldWristVerticalSpan: null,
+		}),
 	});
 }
 
-function completeCycle(startMs) {
+function upright(tMs) {
+	return lowFrontFrame("upright", tMs);
+}
+
+function lowering(tMs) {
+	return lowFrontFrame("lowering", tMs);
+}
+
+function floorWork(tMs) {
+	return lowFrontFrame("floor", tMs);
+}
+
+function returning(tMs) {
+	return lowFrontFrame("returning", tMs);
+}
+
+function lowFrontCycle(startMs) {
 	return [
 		upright(startMs),
-		lowering(startMs + 100),
-		floorWork(startMs + 200),
-		returning(startMs + 300),
-		upright(startMs + 400),
+		lowering(startMs + 150),
+		floorWork(startMs + 300),
+		returning(startMs + 750),
+		upright(startMs + 900),
 	];
+}
+
+function completeCycle(startMs) {
+	return lowFrontCycle(startMs);
 }
 
 function absent(tMs) {
 	return feature(tMs, {}, 0.1);
 }
 
-function absentFrames(startMs) {
-	return [absent(startMs), absent(startMs + 100)];
+function absentFrames(startMs, durationMs = 200) {
+	return Array.from({ length: durationMs / 100 }, (_, index) =>
+		absent(startMs + index * 100),
+	);
 }
 
 function mountedTrackerWithSamples(
@@ -239,6 +290,14 @@ function mountedTrackerWithSamples(
 		},
 		traceChunks: () =>
 			events.filter((event) => event.type === "pose-tracker:trace-chunk"),
+		traceChunkCount: () =>
+			events.filter((event) => event.type === "pose-tracker:trace-chunk").length,
+		traceSampleTimes: () =>
+			events
+				.filter((event) => event.type === "pose-tracker:trace-chunk")
+				.flatMap((event) =>
+					event.detail.chunk.payload.samples.map((sample) => sample.tMs),
+				),
 		finish(detail) {
 			tracker.dispatchEvent(new CustomEvent("pose-tracker:finish", { detail }));
 		},
@@ -253,11 +312,39 @@ function mountedTrackerWithSamples(
 	};
 }
 
-test("keeps the same HSMM state through absent frames and counts the next full cycle", async () => {
+test("does not emit a candidate or persist an isolated frame without required world landmarks", async () => {
+	const tracker = mountedTrackerWithSamples(
+		[lowFrontFrame("lowering", 150, { missingWorld: ["left_wrist"] })],
+		{ captureSegment: "workout" },
+	);
+
+	await tracker.run();
+
+	assert.deepEqual(tracker.repIndexes(), []);
+	assert.equal(tracker.traceChunkCount(), 0);
+	assert.equal(tracker.statusEvents().includes("lost"), false);
+});
+
+test("persists only usable world frames from a mixed low-front sequence", async () => {
+	const tracker = mountedTrackerWithSamples(
+		[
+			lowFrontFrame("upright", 0),
+			lowFrontFrame("lowering", 150, { missingWorld: ["left_wrist"] }),
+			lowFrontFrame("floor", 300),
+		],
+		{ captureSegment: "workout" },
+	);
+
+	await tracker.run();
+
+	assert.deepEqual(tracker.traceSampleTimes(), [0, 300]);
+});
+
+test("keeps counting after absent low-front frames without image-plane fallback", async () => {
 	const tracker = mountedTrackerWithSamples([
-		...completeCycle(0),
-		...absentFrames(2600),
-		...completeCycle(4000),
+		...lowFrontCycle(0),
+		...absentFrames(1000, 2000),
+		...lowFrontCycle(3500),
 	]);
 
 	await tracker.run();

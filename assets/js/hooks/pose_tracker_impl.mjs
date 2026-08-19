@@ -431,17 +431,27 @@ export function createPoseTracker(hook, runtime = {}) {
 }
 
 function usableBurpeeHsmmFrame(frame) {
+	const worldFeatures = [
+		frame?.worldBodyVerticalSpan,
+		frame?.worldHipVerticalSpan,
+		frame?.worldWristVerticalSpan,
+		frame?.worldTorsoElevation,
+		frame?.dWorldBodyVerticalSpan,
+		frame?.dWorldWristVerticalSpan,
+	];
+
 	return (
 		Number.isFinite(frame?.tMs) &&
-		finiteOr(frame.poseConfidence, frame.confidence) >= MIN_HSMM_CONFIDENCE &&
-		finiteOr(frame.macroLandmarkConfidence, 0) >= MIN_HSMM_CONFIDENCE &&
-		finiteOr(frame.visibleFraction, 0) >= MIN_HSMM_VISIBLE_FRACTION &&
-		[
-			frame.wristToAnkle,
-			frame.shoulderToAnkle,
-			frame.torsoUprightness,
-			frame.hipToKnee,
-		].every(Number.isFinite)
+		worldFeatures.every(Number.isFinite) &&
+		confidenceAndVisibilityAreUsable(frame)
+	);
+}
+
+function confidenceAndVisibilityAreUsable(frame) {
+	return (
+		finiteOr(frame?.poseConfidence, frame?.confidence) >= MIN_HSMM_CONFIDENCE &&
+		finiteOr(frame?.macroLandmarkConfidence, 0) >= MIN_HSMM_CONFIDENCE &&
+		finiteOr(frame?.visibleFraction, 0) >= MIN_HSMM_VISIBLE_FRACTION
 	);
 }
 
