@@ -105,6 +105,37 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		points.get("right_wrist"),
 	);
 	const torsoLengthPx = distance(shoulderMid, hipMid);
+	const worldShoulderMid = worldMidpoint(
+		points.get("left_shoulder"),
+		points.get("right_shoulder"),
+	);
+	const worldHipMid = worldMidpoint(
+		points.get("left_hip"),
+		points.get("right_hip"),
+	);
+	const worldAnkleMid = worldMidpoint(
+		points.get("left_ankle"),
+		points.get("right_ankle"),
+	);
+	const worldWristMid = worldMidpoint(
+		points.get("left_wrist"),
+		points.get("right_wrist"),
+	);
+	const worldTorsoLength = worldDistance(worldShoulderMid, worldHipMid);
+	const worldShoulderWidth = worldDistance(
+		points.get("left_shoulder")?.world,
+		points.get("right_shoulder")?.world,
+	);
+	const worldHipWidth = worldDistance(
+		points.get("left_hip")?.world,
+		points.get("right_hip")?.world,
+	);
+	const worldBodyScale = finiteMaximum(
+		worldTorsoLength,
+		worldShoulderWidth,
+		worldHipWidth,
+		0.01,
+	);
 	const scalar = scalarSignals(points, width, height);
 	const scale = Math.max(
 		torsoLengthPx || 0,
@@ -135,6 +166,27 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 			Math.max(bboxWidthPx || 0, bboxHeightPx || 0),
 			Math.max(width, height),
 		),
+		worldBodyVerticalSpan: worldVerticalDistance(
+			worldShoulderMid,
+			worldAnkleMid,
+			worldBodyScale,
+		),
+		worldHipVerticalSpan: worldVerticalDistance(
+			worldHipMid,
+			worldAnkleMid,
+			worldBodyScale,
+		),
+		worldWristVerticalSpan: worldVerticalDistance(
+			worldWristMid,
+			worldAnkleMid,
+			worldBodyScale,
+		),
+		worldTorsoElevation: worldVerticalDistance(
+			worldShoulderMid,
+			worldHipMid,
+			worldTorsoLength,
+		),
+		worldBodyScale: round4(worldBodyScale),
 		noseY: yOf(points.get("nose"), height),
 		shoulderMidX: xOf(shoulderMid, width),
 		shoulderMidY: yOf(shoulderMid, height),
@@ -246,6 +298,8 @@ function addVelocities(frame, prevFrame) {
 			dBodyScale: null,
 			dWristToAnkle: null,
 			dShoulderToAnkle: null,
+			dWorldBodyVerticalSpan: null,
+			dWorldWristVerticalSpan: null,
 		};
 	}
 	const dtSeconds = (frame.tMs - prevFrame.tMs) / 1000;
@@ -270,6 +324,16 @@ function addVelocities(frame, prevFrame) {
 			prevFrame.shoulderToAnkle,
 			dtSeconds,
 		),
+		dWorldBodyVerticalSpan: velocity(
+			frame.worldBodyVerticalSpan,
+			prevFrame.worldBodyVerticalSpan,
+			dtSeconds,
+		),
+		dWorldWristVerticalSpan: velocity(
+			frame.worldWristVerticalSpan,
+			prevFrame.worldWristVerticalSpan,
+			dtSeconds,
+		),
 	};
 }
 
@@ -291,6 +355,46 @@ function normalizedLandmarks(points, root, scale) {
 			return [name, landmark];
 		}),
 	);
+}
+
+function worldMidpoint(a, b) {
+	const worldA = a?.world;
+	const worldB = b?.world;
+	if (!finiteWorldPoint(worldA) || !finiteWorldPoint(worldB)) return null;
+
+	return {
+		x: (worldA.x + worldB.x) / 2,
+		y: (worldA.y + worldB.y) / 2,
+		z: (worldA.z + worldB.z) / 2,
+	};
+}
+
+function worldDistance(a, b) {
+	if (!finiteWorldPoint(a) || !finiteWorldPoint(b)) return null;
+	return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+function worldVerticalDistance(a, b, scale) {
+	if (
+		!finiteWorldPoint(a) ||
+		!finiteWorldPoint(b) ||
+		!Number.isFinite(scale) ||
+		scale <= 0
+	)
+		return null;
+	return round4(Math.abs(a.y - b.y) / scale);
+}
+
+function finiteWorldPoint(point) {
+	return (
+		Number.isFinite(point?.x) &&
+		Number.isFinite(point?.y) &&
+		Number.isFinite(point?.z)
+	);
+}
+
+function finiteMaximum(...values) {
+	return Math.max(...values.filter(Number.isFinite));
 }
 
 function midpoint(a, b) {
