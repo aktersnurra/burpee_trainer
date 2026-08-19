@@ -292,6 +292,16 @@ test("low-confidence wrists and ankles in raw low-front features cannot advance 
 	assert.deepEqual(run(frames).reps, []);
 });
 
+test("low-confidence nose or feet in raw low-front features cannot complete a macro cycle", () => {
+	for (const name of ["nose", "right_foot_index"]) {
+		const frames = lowFrontFeatureFrames(lowFrontCycle(), {
+			lowConfidenceNames: [name],
+		});
+
+		assert.deepEqual(run(frames).reps, [], `${name} must make every frame absent`);
+	}
+});
+
 test("an overlong partial path expires without emitting a rep", () => {
 	let state = initialBurpeeHsmmState();
 	for (const nextFrame of lowFrontFeatureFrames([

@@ -198,12 +198,15 @@ function absentFrames(startMs, durationMs = 200) {
 	);
 }
 
-function rawLowFrontFrame(tMs, { missingWorld = [] } = {}) {
+function rawLowFrontFrame(
+	tMs,
+	{ missingWorld = [], lowConfidence = [] } = {},
+) {
 	const point = (name, x, y, world) => ({
 		name,
 		x,
 		y,
-		score: 0.9,
+		score: lowConfidence.includes(name) ? 0.1 : 0.9,
 		...(missingWorld.includes(name) ? {} : { world }),
 	});
 
@@ -373,6 +376,26 @@ test("does not emit a candidate or persist an isolated frame without required wo
 test("raw missing knee or foot world frames are silent and unpersisted", async () => {
 	for (const missingWorld of ["left_knee", "right_foot_index"]) {
 		const frames = [rawLowFrontFrame(0, { missingWorld: [missingWorld] })];
+		const tracker = mountedTrackerWithSamples(frames, {
+			captureSegment: "workout",
+			controlledPoseFixture: frames,
+			sampleFromPose,
+		});
+
+		await tracker.run();
+
+		assert.deepEqual(tracker.repIndexes(), []);
+		assert.equal(tracker.traceChunkCount(), 0);
+		assert.equal(tracker.statusEvents().includes("lost"), false);
+	}
+});
+
+test("raw low-confidence nose or foot frames are silent and unpersisted", async () => {
+	for (const lowConfidence of ["nose", "right_foot_index"]) {
+		const frames = [
+			rawLowFrontFrame(0, { lowConfidence: [lowConfidence] }),
+			rawLowFrontFrame(100, { lowConfidence: [lowConfidence] }),
+		];
 		const tracker = mountedTrackerWithSamples(frames, {
 			captureSegment: "workout",
 			controlledPoseFixture: frames,

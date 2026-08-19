@@ -171,7 +171,7 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 			minimumScore(points, REQUIRED_MACRO_LANDMARKS),
 		),
 		hasFullWorldLandmarkCoverage: REQUIRED_LOW_FRONT_WORLD_LANDMARKS.every(
-			(name) => finiteWorldPoint(points.get(name)?.world),
+			(name) => usableLowFrontLandmark(points.get(name)),
 		),
 		signal: scalar.signal,
 		closeness: scalar.closeness,
@@ -404,6 +404,18 @@ function worldVerticalDistance(a, b, scale) {
 	)
 		return null;
 	return round4(Math.abs(a.y - b.y) / scale);
+}
+
+function usableLowFrontLandmark(point) {
+	const landmarkScore = score(point);
+
+	return (
+		Number.isFinite(point?.x) &&
+		Number.isFinite(point?.y) &&
+		Number.isFinite(landmarkScore) &&
+		landmarkScore >= VISIBLE_SCORE &&
+		finiteWorldPoint(point?.world)
+	);
 }
 
 function finiteWorldPoint(point) {

@@ -141,7 +141,7 @@ test("omits world macro features when a required landmark has no world point", (
 	assert.equal(frame.worldBodyVerticalSpan, 0.25);
 });
 
-test("requires finite low-front world points for every full-body landmark", () => {
+test("requires usable image and world points for every full-body landmark", () => {
 	assert.equal(
 		featureFrameFromPose(lowFrontPose("upright"), 0, video)
 			.hasFullWorldLandmarkCoverage,
@@ -154,6 +154,17 @@ test("requires finite low-front world points for every full-body landmark", () =
 				.hasFullWorldLandmarkCoverage,
 			false,
 			`${missing} world point makes the low-front frame absent`,
+		);
+	}
+
+	for (const name of ["nose", "right_foot_index"]) {
+		const pose = lowFrontPose("upright");
+		pose.keypoints.find((point) => point.name === name).score = 0.1;
+
+		assert.equal(
+			featureFrameFromPose(pose, 0, video).hasFullWorldLandmarkCoverage,
+			false,
+			`${name} confidence makes the low-front frame absent`,
 		);
 	}
 });
