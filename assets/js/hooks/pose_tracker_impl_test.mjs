@@ -21,12 +21,15 @@ class FakeElement {
 	removeEventListener(type, listener) {
 		this.listeners.set(
 			type,
-			(this.listeners.get(type) || []).filter((candidate) => candidate !== listener),
+			(this.listeners.get(type) || []).filter(
+				(candidate) => candidate !== listener,
+			),
 		);
 	}
 
 	dispatchEvent(event) {
-		for (const listener of this.listeners.get(event.type) || []) listener(event);
+		for (const listener of this.listeners.get(event.type) || [])
+			listener(event);
 		return true;
 	}
 
@@ -47,16 +50,22 @@ const documentListeners = new Map();
 globalThis.document = {
 	documentElement: {},
 	addEventListener(type, listener) {
-		documentListeners.set(type, [...(documentListeners.get(type) || []), listener]);
+		documentListeners.set(type, [
+			...(documentListeners.get(type) || []),
+			listener,
+		]);
 	},
 	removeEventListener(type, listener) {
 		documentListeners.set(
 			type,
-			(documentListeners.get(type) || []).filter((candidate) => candidate !== listener),
+			(documentListeners.get(type) || []).filter(
+				(candidate) => candidate !== listener,
+			),
 		);
 	},
 	dispatchEvent(event) {
-		for (const listener of documentListeners.get(event.type) || []) listener(event);
+		for (const listener of documentListeners.get(event.type) || [])
+			listener(event);
 	},
 };
 
@@ -291,7 +300,8 @@ function mountedTrackerWithSamples(
 		traceChunks: () =>
 			events.filter((event) => event.type === "pose-tracker:trace-chunk"),
 		traceChunkCount: () =>
-			events.filter((event) => event.type === "pose-tracker:trace-chunk").length,
+			events.filter((event) => event.type === "pose-tracker:trace-chunk")
+				.length,
 		traceSampleTimes: () =>
 			events
 				.filter((event) => event.type === "pose-tracker:trace-chunk")
@@ -366,7 +376,11 @@ test("runs controlled feature frames without a camera or detector", async () => 
 });
 
 test("does not emit a lost status for a low-confidence frame", async () => {
-	const tracker = mountedTrackerWithSamples([upright(0), absent(100), upright(200)]);
+	const tracker = mountedTrackerWithSamples([
+		upright(0),
+		absent(100),
+		upright(200),
+	]);
 
 	await tracker.run();
 

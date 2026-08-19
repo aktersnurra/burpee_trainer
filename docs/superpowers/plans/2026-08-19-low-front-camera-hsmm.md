@@ -228,16 +228,24 @@ jj --config signing.behavior=drop new
 - [ ] **Step 1: Write failing tracker admission tests**
 
 ```js
-test('does not emit a candidate or persist a frame without required world landmarks', async () => {
+test('does not emit a candidate or persist an isolated frame without required world landmarks', async () => {
+  const tracker = mountedTrackerWithLowFrontFrames([
+    lowFrontFrame('lowering', 150, {missingWorld: ['left_wrist']}),
+  ]);
+  await tracker.run();
+  assert.deepEqual(tracker.repIndexes(), []);
+  assert.equal(tracker.traceChunkCount(), 0);
+  assert.equal(tracker.statusEvents().includes('lost'), false);
+});
+
+test('persists only usable world frames from a mixed low-front sequence', async () => {
   const tracker = mountedTrackerWithLowFrontFrames([
     lowFrontFrame('upright', 0),
     lowFrontFrame('lowering', 150, {missingWorld: ['left_wrist']}),
     lowFrontFrame('floor', 300),
   ]);
   await tracker.run();
-  assert.deepEqual(tracker.repIndexes(), []);
-  assert.equal(tracker.traceChunkCount(), 0);
-  assert.equal(tracker.statusEvents().includes('lost'), false);
+  assert.deepEqual(tracker.traceTimestamps(), [0, 300]);
 });
 
 test('keeps counting after absent low-front frames without image-plane fallback', async () => {
