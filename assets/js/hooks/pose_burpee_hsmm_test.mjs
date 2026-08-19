@@ -75,7 +75,7 @@ function lowFrontPose(phase, options = {}) {
 		x,
 		y,
 		score: score(name),
-		world,
+		...(options.missingWorldNames?.includes(name) ? {} : { world }),
 	});
 	const shoulderY = 0;
 	const shoulderCenterX = Math.sqrt(1 - geometry.torso ** 2);
@@ -129,6 +129,16 @@ function lowFrontPose(phase, options = {}) {
 			}),
 			point("left_ankle", 170, image.ankle, { x: -0.4, y: ankleY, z: 0 }),
 			point("right_ankle", 230, image.ankle, { x: 0.4, y: ankleY, z: 0 }),
+			point("left_foot_index", 165, imageY(350), {
+				x: -0.45,
+				y: ankleY,
+				z: 0.15,
+			}),
+			point("right_foot_index", 235, imageY(350), {
+				x: 0.45,
+				y: ankleY,
+				z: 0.15,
+			}),
 		],
 	};
 }
@@ -205,6 +215,30 @@ test("unusable frames leave the partial path untouched and never emit a rep", ()
 	assert.equal(result.rep, false);
 	assert.equal(result.repAtMs, null);
 	assert.deepEqual(result.state, state);
+});
+
+test("missing knee or foot world landmarks leave the partial path untouched", () => {
+	for (const missingWorldName of ["left_knee", "right_foot_index"]) {
+		let state = initialBurpeeHsmmState();
+		for (const nextFrame of lowFrontFeatureFrames([
+			["upright", 0],
+			["lowering", 150],
+		])) {
+			state = stepBurpeeHsmm(state, nextFrame).state;
+		}
+
+		const [floor] = lowFrontFeatureFrames([
+			["floor", 300, { missingWorldNames: [missingWorldName] }],
+		]);
+		const result = stepBurpeeHsmm(state, floor);
+
+		assert.equal(result.rep, false);
+		assert.deepEqual(
+			result.state,
+			state,
+			`${missingWorldName} world point must not advance the HSMM`,
+		);
+	}
 });
 
 test("low-confidence required macro landmarks leave the partial path untouched", () => {

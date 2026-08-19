@@ -120,90 +120,72 @@ class FixtureElement {
 	}
 }
 
-function readyKeypoints() {
-	return {
-		left_shoulder: { score: 0.9, x: 0.4, y: 0.2 },
-		right_shoulder: { score: 0.9, x: 0.6, y: 0.2 },
-		left_hip: { score: 0.9, x: 0.43, y: 0.5 },
-		right_hip: { score: 0.9, x: 0.57, y: 0.5 },
-		left_knee: { score: 0.9, x: 0.45, y: 0.7 },
-		right_knee: { score: 0.9, x: 0.55, y: 0.7 },
-		left_ankle: { score: 0.9, x: 0.45, y: 0.9 },
-	};
-}
-
-function feature(tMs, values, confidence = 0.9) {
-	return {
-		tMs,
-		poseConfidence: confidence,
-		visibleFraction: confidence,
-		macroLandmarkConfidence: confidence,
-		keypoints: readyKeypoints(),
-		...values,
-	};
-}
-
-const LOW_FRONT_FEATURES = Object.freeze({
-	upright: {
-		wristToAnkle: 1.25,
-		shoulderToAnkle: 2.1,
-		torsoUprightness: 0.9,
-		hipToKnee: 0.9,
-		dWristToAnkle: 0,
-		dShoulderToAnkle: 0,
-		worldBodyVerticalSpan: 3.2,
-		worldHipVerticalSpan: 2.35,
-		worldWristVerticalSpan: 1.5,
-		worldTorsoElevation: 0.85,
-		dWorldBodyVerticalSpan: 0,
-		dWorldWristVerticalSpan: 0,
-	},
-	lowering: {
-		wristToAnkle: 0.55,
-		shoulderToAnkle: 1.2,
-		torsoUprightness: 0.55,
-		hipToKnee: 0.6,
-		dWristToAnkle: -1.4,
-		dShoulderToAnkle: -1.1,
-		worldBodyVerticalSpan: 2.1,
-		worldHipVerticalSpan: 1.65,
-		worldWristVerticalSpan: 0.7,
-		worldTorsoElevation: 0.45,
-		dWorldBodyVerticalSpan: -1,
-		dWorldWristVerticalSpan: -1,
-	},
-	floor: {
-		wristToAnkle: 0.16,
-		shoulderToAnkle: 0.38,
-		torsoUprightness: 0.12,
-		hipToKnee: 0.52,
-		dWristToAnkle: 0,
-		dShoulderToAnkle: 0,
-		worldBodyVerticalSpan: 1.05,
-		worldHipVerticalSpan: 0.7,
-		worldWristVerticalSpan: 0.45,
-		worldTorsoElevation: 0.35,
-		dWorldBodyVerticalSpan: 0,
-		dWorldWristVerticalSpan: 0,
-	},
-	returning: {
-		wristToAnkle: 0.48,
-		shoulderToAnkle: 0.72,
-		torsoUprightness: 0.45,
-		hipToKnee: 0.3,
-		dWristToAnkle: 1.2,
-		dShoulderToAnkle: 1.4,
-		worldBodyVerticalSpan: 1.65,
-		worldHipVerticalSpan: 1.1,
-		worldWristVerticalSpan: 0.8,
-		worldTorsoElevation: 0.55,
-		dWorldBodyVerticalSpan: 1,
-		dWorldWristVerticalSpan: 1,
-	},
+const LOW_FRONT_GEOMETRY = Object.freeze({
+	upright: { body: 3.2, hip: 2.35, torso: 0.85, wrist: 1.5 },
+	lowering: { body: 2.1, hip: 1.65, torso: 0.45, wrist: 0.7 },
+	floor: { body: 1.05, hip: 0.7, torso: 0.35, wrist: 0.45 },
+	returning: { body: 1.65, hip: 1.1, torso: 0.55, wrist: 0.8 },
 });
 
-function lowFrontFrame(phase, tMs) {
-	return feature(tMs, LOW_FRONT_FEATURES[phase]);
+function lowFrontFrame(phase, tMs, { missingWorld = [] } = {}) {
+	const geometry = LOW_FRONT_GEOMETRY[phase];
+	if (!geometry) throw new Error(`unknown low-front phase: ${phase}`);
+
+	const shoulderCenterX = Math.sqrt(1 - geometry.torso ** 2);
+	const shoulderY = 0;
+	const hipY = -geometry.torso;
+	const ankleY = -geometry.body;
+	const wristY = ankleY + geometry.wrist;
+	const point = (name, x, y, world) => ({
+		name,
+		x,
+		y,
+		score: 0.9,
+		...(missingWorld.includes(name) ? {} : { world }),
+	});
+
+	return {
+		tMs,
+		keypoints: [
+			point("nose", 200, 50, { x: 0, y: 0.3, z: 0 }),
+			point("left_shoulder", 150, 90, {
+				x: shoulderCenterX - 0.5,
+				y: shoulderY,
+				z: 0,
+			}),
+			point("right_shoulder", 250, 90, {
+				x: shoulderCenterX + 0.5,
+				y: shoulderY,
+				z: 0,
+			}),
+			point("left_wrist", 125, 220, { x: -0.7, y: wristY, z: 0 }),
+			point("right_wrist", 275, 220, { x: 0.7, y: wristY, z: 0 }),
+			point("left_hip", 160, 170, { x: -0.4, y: hipY, z: 0 }),
+			point("right_hip", 240, 170, { x: 0.4, y: hipY, z: 0 }),
+			point("left_knee", 165, 250, {
+				x: -0.4,
+				y: (hipY + ankleY) / 2,
+				z: 0,
+			}),
+			point("right_knee", 235, 250, {
+				x: 0.4,
+				y: (hipY + ankleY) / 2,
+				z: 0,
+			}),
+			point("left_ankle", 170, 340, { x: -0.4, y: ankleY, z: 0 }),
+			point("right_ankle", 230, 340, { x: 0.4, y: ankleY, z: 0 }),
+			point("left_foot_index", 165, 350, {
+				x: -0.45,
+				y: ankleY,
+				z: 0.15,
+			}),
+			point("right_foot_index", 235, 350, {
+				x: 0.45,
+				y: ankleY,
+				z: 0.15,
+			}),
+		],
+	};
 }
 
 function lowFrontCycle(startMs) {
@@ -217,9 +199,10 @@ function lowFrontCycle(startMs) {
 }
 
 function absentFrames(startMs, durationMs) {
-	return Array.from({ length: durationMs / 100 }, (_, index) =>
-		feature(startMs + index * 100, {}, 0.1),
-	);
+	return Array.from({ length: durationMs / 100 }, (_, index) => ({
+		tMs: startMs + index * 100,
+		keypoints: [],
+	}));
 }
 
 function fixtureRoot() {

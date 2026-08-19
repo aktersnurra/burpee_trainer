@@ -285,13 +285,8 @@ export function createPoseTracker(hook, runtime = {}) {
 				return;
 			}
 			controlledFrameIndex += 1;
-			poses = [null];
-			sample = {
-				tMs: frame.tMs,
-				confidence: finiteOr(frame.poseConfidence, frame.confidence),
-				features: frame,
-				keypoints: frame.keypoints,
-			};
+			poses = [{ keypoints: frame.keypoints || [] }];
+			sample = poseSample(poses[0], frame.tMs, video, lastFeature);
 		} else {
 			try {
 				poses = await detector.estimatePoses(video);
@@ -442,6 +437,7 @@ function usableBurpeeHsmmFrame(frame) {
 
 	return (
 		Number.isFinite(frame?.tMs) &&
+		frame?.hasFullWorldLandmarkCoverage === true &&
 		worldFeatures.every(Number.isFinite) &&
 		confidenceAndVisibilityAreUsable(frame)
 	);

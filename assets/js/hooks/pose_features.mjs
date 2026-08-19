@@ -47,6 +47,21 @@ const REQUIRED_MACRO_LANDMARKS = Object.freeze([
 	"left_ankle",
 	"right_ankle",
 ]);
+const REQUIRED_LOW_FRONT_WORLD_LANDMARKS = Object.freeze([
+	"nose",
+	"left_shoulder",
+	"right_shoulder",
+	"left_wrist",
+	"right_wrist",
+	"left_hip",
+	"right_hip",
+	"left_knee",
+	"right_knee",
+	"left_ankle",
+	"right_ankle",
+	"left_foot_index",
+	"right_foot_index",
+]);
 const SIGNAL_KEYPOINTS = Object.freeze([
 	"nose",
 	"left_eye",
@@ -154,6 +169,9 @@ export function featureFrameFromPose(pose, tMs, video, prevFrame = null) {
 		isOccluded: visibleFraction < 0.35,
 		macroLandmarkConfidence: round4(
 			minimumScore(points, REQUIRED_MACRO_LANDMARKS),
+		),
+		hasFullWorldLandmarkCoverage: REQUIRED_LOW_FRONT_WORLD_LANDMARKS.every(
+			(name) => finiteWorldPoint(points.get(name)?.world),
 		),
 		signal: scalar.signal,
 		closeness: scalar.closeness,

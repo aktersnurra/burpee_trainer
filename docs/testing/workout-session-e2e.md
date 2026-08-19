@@ -148,9 +148,10 @@ local E2E-only replacement entrypoint. The normal production app asset does
 not contain the fixture runtime. In the same page-init script, initialize
 `window.__burpeePoseFixture = {frames: []}` before the fixture entry runs.
 
-The fixture entry passes those client-only feature frames through the injected
-`controlledPoseFixture` tracker runtime seam instead of requesting a physical
-camera.
+The fixture entry passes raw client-only `{tMs, keypoints}` BlazePose payloads
+through the injected `controlledPoseFixture` tracker runtime seam instead of
+requesting a physical camera. The tracker processes each payload with the same
+`sampleFromPose` feature path and prior feature state used by detector frames.
 
 Place the fixed phone on or near the floor, facing the athlete, far enough away
 to keep the head, wrists, hips, knees, ankles, and feet in frame while standing
@@ -158,9 +159,11 @@ and on the floor. The controlled fixture must carry BlazePose-shaped world
 landmarks. A cropped or low-confidence frame is an absent observation; it must
 not generate a warning or a report fallback.
 
-Each ready frame must meet that full-body contract, contain one visible pose,
-and have feature confidence at least `0.5`; provide eight such frames to finish
-camera setup.
+Each ready frame must contain one visible BlazePose-shaped pose with finite
+world `{x, y, z}` coordinates for the nose, both shoulders, wrists, hips,
+knees, ankles, and foot-index landmarks, and image-landmark confidence at least
+`0.5`; provide eight such frames to finish camera setup. Missing any required
+world point is an absent observation, not a partial feature frame.
 
 1. Choose **Yes, use camera**, feed the ready frames, then use the ordinary
    camera setup, warmup, and workout controls.

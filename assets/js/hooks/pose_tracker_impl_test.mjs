@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createPoseTracker } from "./pose_tracker_impl.mjs";
+import { sampleFromPose } from "./pose_signal.mjs";
 
 class FakeElement {
 	constructor() {
@@ -78,6 +79,7 @@ function feature(tMs, values, confidence = 0.9) {
 			poseConfidence: confidence,
 			visibleFraction: confidence,
 			macroLandmarkConfidence: confidence,
+			hasFullWorldLandmarkCoverage: true,
 			...values,
 		},
 	};
@@ -196,9 +198,42 @@ function absentFrames(startMs, durationMs = 200) {
 	);
 }
 
+function rawLowFrontFrame(tMs, { missingWorld = [] } = {}) {
+	const point = (name, x, y, world) => ({
+		name,
+		x,
+		y,
+		score: 0.9,
+		...(missingWorld.includes(name) ? {} : { world }),
+	});
+
+	return {
+		tMs,
+		keypoints: [
+			point("nose", 320, 80, { x: 0, y: 0.3, z: 0 }),
+			point("left_shoulder", 240, 120, { x: -0.5, y: 0, z: 0 }),
+			point("right_shoulder", 400, 120, { x: 0.5, y: 0, z: 0 }),
+			point("left_wrist", 220, 270, { x: -0.7, y: -1.7, z: 0 }),
+			point("right_wrist", 420, 270, { x: 0.7, y: -1.7, z: 0 }),
+			point("left_hip", 260, 240, { x: -0.4, y: -1, z: 0 }),
+			point("right_hip", 380, 240, { x: 0.4, y: -1, z: 0 }),
+			point("left_knee", 270, 340, { x: -0.4, y: -2, z: 0 }),
+			point("right_knee", 370, 340, { x: 0.4, y: -2, z: 0 }),
+			point("left_ankle", 280, 440, { x: -0.4, y: -3, z: 0 }),
+			point("right_ankle", 360, 440, { x: 0.4, y: -3, z: 0 }),
+			point("left_foot_index", 270, 455, { x: -0.45, y: -3, z: 0.15 }),
+			point("right_foot_index", 370, 455, { x: 0.45, y: -3, z: 0.15 }),
+		],
+	};
+}
+
 function mountedTrackerWithSamples(
 	samples,
-	{ captureSegment = null, controlledPoseFixture = null } = {},
+	{
+		captureSegment = null,
+		controlledPoseFixture = null,
+		sampleFromPose: sampleFromPoseOverride = null,
+	} = {},
 ) {
 	const tracker = new FakeElement();
 	const video = {
@@ -259,7 +294,7 @@ function mountedTrackerWithSamples(
 				return animationFrames.length;
 			},
 			cancelAnimationFrame() {},
-			sampleFromPose: () => current,
+			sampleFromPose: sampleFromPoseOverride || (() => current),
 			waitForVideoFrame: async () => video,
 			webglAvailable: () => true,
 		},
@@ -335,6 +370,23 @@ test("does not emit a candidate or persist an isolated frame without required wo
 	assert.equal(tracker.statusEvents().includes("lost"), false);
 });
 
+test("raw missing knee or foot world frames are silent and unpersisted", async () => {
+	for (const missingWorld of ["left_knee", "right_foot_index"]) {
+		const frames = [rawLowFrontFrame(0, { missingWorld: [missingWorld] })];
+		const tracker = mountedTrackerWithSamples(frames, {
+			captureSegment: "workout",
+			controlledPoseFixture: frames,
+			sampleFromPose,
+		});
+
+		await tracker.run();
+
+		assert.deepEqual(tracker.repIndexes(), []);
+		assert.equal(tracker.traceChunkCount(), 0);
+		assert.equal(tracker.statusEvents().includes("lost"), false);
+	}
+});
+
 test("persists only usable world frames from a mixed low-front sequence", async () => {
 	const tracker = mountedTrackerWithSamples(
 		[
@@ -363,16 +415,28 @@ test("keeps counting after absent low-front frames without image-plane fallback"
 	assert.deepEqual(tracker.statusEvents(), ["live"]);
 });
 
-test("runs controlled feature frames without a camera or detector", async () => {
+test("runs raw controlled frames through sampleFromPose with the prior feature", async () => {
 	const samples = completeCycle(0);
-	const tracker = mountedTrackerWithSamples(samples, {
-		controlledPoseFixture: samples.map((sample) => sample.features),
+	const rawFrames = samples.map((sample, index) => ({
+		tMs: sample.tMs,
+		keypoints: { phase: index },
+	}));
+	const calls = [];
+	const tracker = mountedTrackerWithSamples(rawFrames, {
+		controlledPoseFixture: rawFrames,
+		sampleFromPose(pose, tMs, _video, lastFeature) {
+			calls.push({ pose, tMs, lastFeature });
+			return samples[calls.length - 1];
+		},
 	});
 
 	await tracker.run();
 
+	assert.equal(calls.length, rawFrames.length);
+	assert.equal(calls[0].pose.keypoints, rawFrames[0].keypoints);
+	assert.equal(calls[0].lastFeature, null);
+	assert.equal(calls[1].lastFeature, samples[0].features);
 	assert.deepEqual(tracker.repIndexes(), [1]);
-	assert.deepEqual(tracker.statusEvents(), ["live"]);
 });
 
 test("does not emit a lost status for a low-confidence frame", async () => {

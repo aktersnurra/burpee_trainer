@@ -24,6 +24,8 @@ function lowFrontPose(position, missing = []) {
 			right_knee: [0.4, -2.25, 0],
 			left_ankle: [-0.4, -3.5, 0],
 			right_ankle: [0.4, -3.5, 0],
+			left_foot_index: [-0.45, -3.5, 0.15],
+			right_foot_index: [0.45, -3.5, 0.15],
 		},
 		lowering: {
 			left_shoulder: [-0.5, 0, 0],
@@ -38,6 +40,8 @@ function lowFrontPose(position, missing = []) {
 			right_knee: [0.4, -2, 0],
 			left_ankle: [-0.4, -3, 0],
 			right_ankle: [0.4, -3, 0],
+			left_foot_index: [-0.45, -3, 0.15],
+			right_foot_index: [0.45, -3, 0.15],
 		},
 		floor: {
 			left_shoulder: [-0.5, 0, 0],
@@ -52,6 +56,8 @@ function lowFrontPose(position, missing = []) {
 			right_knee: [0.4, -0.2, 0],
 			left_ankle: [-0.4, -0.25, 0],
 			right_ankle: [0.4, -0.25, 0],
+			left_foot_index: [-0.45, -0.25, 0.15],
+			right_foot_index: [0.45, -0.25, 0.15],
 		},
 	}[position];
 	const imagePoints = {
@@ -67,6 +73,8 @@ function lowFrontPose(position, missing = []) {
 		right_knee: [109, 145],
 		left_ankle: [92, 174],
 		right_ankle: [108, 174],
+		left_foot_index: [89, 178],
+		right_foot_index: [111, 178],
 	};
 
 	return {
@@ -131,6 +139,23 @@ test("omits world macro features when a required landmark has no world point", (
 
 	assert.equal(frame.worldWristVerticalSpan, null);
 	assert.equal(frame.worldBodyVerticalSpan, 0.25);
+});
+
+test("requires finite low-front world points for every full-body landmark", () => {
+	assert.equal(
+		featureFrameFromPose(lowFrontPose("upright"), 0, video)
+			.hasFullWorldLandmarkCoverage,
+		true,
+	);
+
+	for (const missing of ["left_knee", "right_foot_index"]) {
+		assert.equal(
+			featureFrameFromPose(lowFrontPose("upright", [missing]), 0, video)
+				.hasFullWorldLandmarkCoverage,
+			false,
+			`${missing} world point makes the low-front frame absent`,
+		);
+	}
 });
 
 test("omits all world macro features when a pose has no world points", () => {

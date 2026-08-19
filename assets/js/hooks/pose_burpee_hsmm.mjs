@@ -61,6 +61,7 @@ export function stepBurpeeHsmm(state, frame) {
 function usable(frame) {
 	return (
 		Number.isFinite(frame?.tMs) &&
+		frame?.hasFullWorldLandmarkCoverage === true &&
 		finiteOr(frame.poseConfidence, frame.confidence) >= MIN_CONFIDENCE &&
 		finiteOr(frame.macroLandmarkConfidence, 0) >=
 			MIN_MACRO_LANDMARK_CONFIDENCE &&
