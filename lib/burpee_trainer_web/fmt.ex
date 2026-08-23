@@ -26,6 +26,13 @@ defmodule BurpeeTrainerWeb.Fmt do
     end
   end
 
+  @spec session_started_at(DateTime.t() | nil) :: String.t()
+  def session_started_at(nil), do: "Unknown"
+
+  def session_started_at(%DateTime{} = value) do
+    Calendar.strftime(value, "%b %-d, %Y at %-I:%M %p UTC")
+  end
+
   @doc """
   Human-readable label for a burpee_type enum.
   """

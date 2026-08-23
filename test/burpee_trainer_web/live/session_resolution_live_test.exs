@@ -17,7 +17,12 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     user: user
   } do
     plan = plan_fixture(user, %{"name" => "Recovery plan"})
-    session = lifecycle_session(user, plan)
+
+    session =
+      user
+      |> lifecycle_session(plan)
+      |> Ecto.Changeset.change(inserted_at: ~U[2026-08-23 14:30:00Z])
+      |> Repo.update!()
 
     {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
 
@@ -26,12 +31,26 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
              "#session-resolution[phx-hook='SessionRecoveryHook'][data-client-session-id='#{session.client_session_id}'][data-session-status='running']"
            )
 
-    assert has_element?(view, "#session-resolution-status", "must be logged or discarded")
+    assert has_element?(view, "#session-resolution-info")
+
+    assert has_element?(
+             view,
+             "#session-resolution-started",
+             "Started Aug 23, 2026 at 2:30 PM UTC"
+           )
+
+    assert has_element?(view, "#session-resolution-source", "Recovery plan")
+    assert has_element?(view, "#session-resolution-workout-details")
+    assert has_element?(view, "#session-resolution-recorded-details")
+    assert has_element?(view, "#session-resolution-count[value='30']")
+    assert has_element?(view, "#session-resolution-count-source", "Estimated")
+    assert has_element?(view, "#session-resolution-duration[value='1200']")
+    assert has_element?(view, "#session-resolution-duration-source", "Estimated")
+    refute has_element?(view, "#session-resolution-duration[disabled]")
+    assert has_element?(view, "#session-resolution-tags[type='hidden']")
+    assert has_element?(view, "#session-resolution-tag-tired[aria-pressed='false']")
     assert has_element?(view, "#session-resolution-form")
     assert has_element?(view, "#session-resolution-abort[phx-click='abort']")
-    assert has_element?(view, "#session-resolution-source", "Recovery plan")
-    assert has_element?(view, "#session-resolution-planned-count", "30")
-    assert has_element?(view, "#session-resolution-planned-duration", "20:00")
   end
 
   test "reconciles only the mounted running session UUID", %{conn: conn, user: user} do
