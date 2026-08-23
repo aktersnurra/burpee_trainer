@@ -259,7 +259,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
                     type="button"
                     data-resolution-tag={tag}
                     aria-pressed="false"
-                    class="rounded-full border border-[var(--session-border)] px-3 py-1.5 text-xs font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)] hover:text-[var(--session-ink)]"
+                    class="session-choice-toggle rounded-full border border-[var(--session-border)] px-3 py-1.5 text-xs font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)] hover:text-[var(--session-ink)]"
                   >
                     {String.replace(tag, "_", " ")}
                   </button>

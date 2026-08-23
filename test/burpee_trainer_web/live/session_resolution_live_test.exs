@@ -51,7 +51,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
 
     assert has_element?(
              view,
-             "#session-resolution-tag-tired[data-resolution-tag='tired'][aria-pressed='false']"
+             "#session-resolution-tag-tired.session-choice-toggle[data-resolution-tag='tired'][aria-pressed='false']"
            )
 
     assert has_element?(view, "#session-resolution-form")
