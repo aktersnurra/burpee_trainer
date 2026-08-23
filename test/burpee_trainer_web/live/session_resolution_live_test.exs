@@ -53,6 +53,28 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     assert has_element?(view, "#session-resolution-abort[phx-click='abort']")
   end
 
+  test "owner sees persisted actuals as recorded instead of plan estimates", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user)
+
+    session =
+      user
+      |> lifecycle_session(plan)
+      |> Ecto.Changeset.change(burpee_count_actual: 17, duration_sec_actual: 95)
+      |> Repo.update!()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
+
+    assert has_element?(view, "#session-resolution-count[value='17']")
+    assert has_element?(view, "#session-resolution-count-source", "Recorded")
+    refute has_element?(view, "#session-resolution-count[data-estimated]")
+    assert has_element?(view, "#session-resolution-duration[value='95']")
+    assert has_element?(view, "#session-resolution-duration-source", "Recorded")
+    refute has_element?(view, "#session-resolution-duration[data-estimated]")
+  end
+
   test "reconciles only the mounted running session UUID", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     session = lifecycle_session(user, plan)

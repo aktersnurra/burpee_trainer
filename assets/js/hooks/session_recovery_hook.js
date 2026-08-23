@@ -114,7 +114,17 @@ const SessionRecoveryHook = {
       const input = this.el.querySelector(selector);
       if (!this.canPrefill(input)) continue;
 
+      const replacedEstimate = input.dataset.estimated === "true";
       input.value = String(value);
+
+      if (replacedEstimate) {
+        delete input.dataset.estimated;
+        const source = this.el.querySelector(`${selector}-source`);
+        if (source) {
+          source.textContent = "Recorded from this session.";
+        }
+      }
+
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     }
@@ -124,7 +134,7 @@ const SessionRecoveryHook = {
     return (
       input &&
       !input.disabled &&
-      input.value === "" &&
+      (input.value === "" || input.dataset.estimated === "true") &&
       !this.touchedInputs.has(input)
     );
   },

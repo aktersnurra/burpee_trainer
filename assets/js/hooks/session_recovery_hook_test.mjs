@@ -57,6 +57,7 @@ function mountedHook({
     redirect_to: "/stats",
   },
   openSessionStore,
+  estimatedValues = null,
 } = {}) {
   const fieldNames = [
     "burpee_count_actual",
@@ -76,6 +77,20 @@ function mountedHook({
     input.name = `workout_session[${fieldNames[index]}]`;
     return input;
   });
+  if (estimatedValues) {
+    inputs[0].value = String(estimatedValues[0]);
+    inputs[0].dataset.estimated = "true";
+    inputs[1].value = String(estimatedValues[1]);
+    inputs[1].dataset.estimated = "true";
+  }
+
+  const sources = {
+    count: new FakeElement("session-resolution-count-source"),
+    duration: new FakeElement("session-resolution-duration-source"),
+  };
+  sources.count.textContent = "Estimated";
+  sources.duration.textContent = "Estimated";
+
   const form = new FakeElement("session-resolution-form");
   form.elements = inputs;
   const root = new FakeElement("session-resolution");
@@ -83,6 +98,8 @@ function mountedHook({
   root.dataset.sessionStatus = status;
   root.querySelector = (selector) => {
     if (selector === "#session-resolution-form") return form;
+    if (selector === "#session-resolution-count-source") return sources.count;
+    if (selector === "#session-resolution-duration-source") return sources.duration;
     return inputs.find((input) => `#${input.id}` === selector) || null;
   };
 
@@ -113,7 +130,7 @@ function mountedHook({
   };
   hook.mounted();
 
-  return { hook, inputs, pushes, calls, navigations, store };
+  return { hook, inputs, sources, pushes, calls, navigations, store };
 }
 
 function withTraceReadyWindow(t, calls) {
@@ -179,11 +196,28 @@ test("successful running reconciliation prefills the exact local draft", async (
   );
 });
 
+test("recovery replaces untouched estimated count and duration and marks them recorded", async () => {
+  const { hook, inputs, sources } = mountedHook({
+    localDraft: draft(),
+    estimatedValues: [30, 1200],
+  });
+
+  await hook.recovery;
+
+  assert.equal(inputs[0].value, "12");
+  assert.equal(inputs[1].value, "88");
+  assert.equal(inputs[0].dataset.estimated, undefined);
+  assert.equal(inputs[1].dataset.estimated, undefined);
+  assert.match(sources.count.textContent, /Recorded from this session/);
+  assert.match(sources.duration.textContent, /Recorded from this session/);
+});
+
 test("delayed recovery does not overwrite a field manually typed before storage resolves", async () => {
   const opened = deferred();
   const { hook, inputs } = mountedHook({
     localDraft: draft(),
     openSessionStore: () => opened.promise,
+    estimatedValues: [30, 1200],
   });
 
   inputs[0].value = "31";
