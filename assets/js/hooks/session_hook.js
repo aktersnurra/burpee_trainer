@@ -402,8 +402,7 @@ const SessionHook = {
 				}
 			})
 			.catch(() => {
-				if (this.lifecycleActive(generation))
-					this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) this.traceRetentionAvailable = false;
 			});
 		return this.lifecycleWrite;
 	},
@@ -419,35 +418,23 @@ const SessionHook = {
 	requestBeginSession() {
 		const generation = this.lifecycleGeneration;
 		this.renderer.clearBeginConflict();
-		void this.queueLifecycleCommand(
-			this.lifecycleCommand("begin_session"),
-		).then(() => {
-			if (
-				!this.lifecycleActive(generation) ||
-				this.flow.mode !== "starting_session"
-			)
-				return;
+		void this.queueLifecycleCommand(this.lifecycleCommand("begin_session")).then(() => {
+			if (!this.lifecycleActive(generation) || this.flow.mode !== "starting_session") return;
 			try {
-				this.pushEvent(
-					"begin_session",
-					{ client_session_id: this.clientSessionId },
-					(reply) => {
-						if (!this.lifecycleActive(generation)) return;
-						if (reply?.status === "ok") {
-							void this.deleteAcknowledgedLifecycleCommand(generation).then(
-								() => this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" }),
-							);
-						} else {
-							this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
-							this.handleLifecycleFailure(reply);
-						}
-					},
-				);
+				this.pushEvent("begin_session", { client_session_id: this.clientSessionId }, (reply) => {
+					if (!this.lifecycleActive(generation)) return;
+					if (reply?.status === "ok") {
+						void this.deleteAcknowledgedLifecycleCommand(generation).then(() =>
+							this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" }),
+						);
+					} else {
+						this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
+						this.handleLifecycleFailure(reply);
+					}
+				});
 			} catch (_error) {
 				this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
-				this.handleLifecycleFailure({
-					message: "Could not start workout. Try again.",
-				});
+				this.handleLifecycleFailure({ message: "Could not start workout. Try again." });
 			}
 		});
 	},
@@ -455,39 +442,30 @@ const SessionHook = {
 	requestReportPending() {
 		const generation = this.lifecycleGeneration;
 		try {
-			this.pushEvent(
-				"mark_report_pending",
-				{ client_session_id: this.clientSessionId },
-				(reply) => {
-					if (!this.lifecycleActive(generation)) return;
-					if (reply?.status === "ok") {
-						this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
-					} else {
-						this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
-						this.handleLifecycleFailure(reply);
-					}
-				},
-			);
+			this.pushEvent("mark_report_pending", { client_session_id: this.clientSessionId }, (reply) => {
+				if (!this.lifecycleActive(generation)) return;
+				if (reply?.status === "ok") {
+					this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
+				} else {
+					this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
+					this.handleLifecycleFailure(reply);
+				}
+			});
 		} catch (_error) {
 			this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
-			this.handleLifecycleFailure({
-				message: "Could not finish workout. Try again.",
-			});
+			this.handleLifecycleFailure({ message: "Could not finish workout. Try again." });
 		}
 	},
 
 	deleteAcknowledgedLifecycleCommand(generation = this.lifecycleGeneration) {
 		return this.storeReady
 			.then((store) =>
-				store &&
-				store.deleteLifecycleCommand &&
-				this.lifecycleActive(generation)
+				store && store.deleteLifecycleCommand && this.lifecycleActive(generation)
 					? store.deleteLifecycleCommand(this.clientSessionId)
 					: undefined,
 			)
 			.catch(() => {
-				if (this.lifecycleActive(generation))
-					this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) this.traceRetentionAvailable = false;
 			});
 	},
 
@@ -499,9 +477,7 @@ const SessionHook = {
 
 		this.renderer.renderSaveErrors({
 			field_errors: {},
-			global_errors: [
-				reply.message || "Could not update workout lifecycle. Try again.",
-			],
+			global_errors: [reply.message || "Could not update workout lifecycle. Try again."],
 		});
 	},
 
@@ -580,11 +556,7 @@ const SessionHook = {
 			SAVE_NAVIGATION_DEADLINE_MS,
 		);
 
-		this.saveCleanup = Promise.all([
-			this.traceWrite,
-			this.draftWrite,
-			this.lifecycleWrite,
-		])
+		this.saveCleanup = Promise.all([this.traceWrite, this.draftWrite, this.lifecycleWrite])
 			.then(async () => {
 				const store = await this.storeReady;
 				if (store && (await store.hasTraceChunks(this.clientSessionId))) {
@@ -687,24 +659,18 @@ const SessionHook = {
 		const generation = this.lifecycleGeneration;
 
 		try {
-			this.pushEvent(
-				"abort_session",
-				{ client_session_id: this.clientSessionId },
-				(reply) => {
-					if (!this.lifecycleActive(generation)) return;
-					if (reply?.status !== "ok") {
-						this.discarding = false;
-						this.handleLifecycleFailure(reply);
-						return;
-					}
-					this.finishLocalDiscard(generation);
-				},
-			);
+			this.pushEvent("abort_session", { client_session_id: this.clientSessionId }, (reply) => {
+				if (!this.lifecycleActive(generation)) return;
+				if (reply?.status !== "ok") {
+					this.discarding = false;
+					this.handleLifecycleFailure(reply);
+					return;
+				}
+				this.finishLocalDiscard(generation);
+			});
 		} catch (_error) {
 			this.discarding = false;
-			this.handleLifecycleFailure({
-				message: "Could not discard workout. Try again.",
-			});
+			this.handleLifecycleFailure({ message: "Could not discard workout. Try again." });
 		}
 	},
 
@@ -716,22 +682,16 @@ const SessionHook = {
 		this.inMemoryCompletionDraft = null;
 		this.dispatchFlow({ type: "DISCARD_LOCAL" });
 
-		this.discardWrite = Promise.all([
-			this.traceWrite,
-			this.draftWrite,
-			this.lifecycleWrite,
-		])
+		this.discardWrite = Promise.all([this.traceWrite, this.draftWrite, this.lifecycleWrite])
 			.then(async () => {
 				const store = await this.storeReady;
 				if (store) await store.discardSession(clientSessionId);
 			})
 			.catch(() => {
-				if (this.lifecycleActive(generation))
-					this.traceRetentionAvailable = false;
+				if (this.lifecycleActive(generation)) this.traceRetentionAvailable = false;
 			})
 			.then(() => {
-				if (this.lifecycleActive(generation))
-					window.location.assign("/workouts");
+				if (this.lifecycleActive(generation)) window.location.assign("/workouts");
 			});
 	},
 
@@ -854,9 +814,7 @@ const SessionHook = {
 				this.queueCompletionDraft();
 				void Promise.all([
 					this.draftWrite,
-					this.queueLifecycleCommand(
-						this.lifecycleCommand("mark_report_pending"),
-					),
+					this.queueLifecycleCommand(this.lifecycleCommand("mark_report_pending")),
 				]).then(() => this.requestReportPending());
 				break;
 			case "requestPending":
