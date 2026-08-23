@@ -209,6 +209,7 @@ const SessionHook = {
 			const retryReportPending = e.target.closest(
 				"#session-report-pending-retry",
 			);
+			const abort = e.target.closest("#session-abort-btn");
 			const discard = e.target.closest("#session-discard-btn");
 			const mood = e.target.dataset?.mood;
 			const tag = e.target.dataset?.tag;
@@ -229,6 +230,12 @@ const SessionHook = {
 			}
 			if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
 			if (tag !== undefined) this.toggleCompletionTag(tag);
+			if (
+				abort &&
+				window.confirm(abort.dataset.confirm || "Abort this session?")
+			) {
+				this.discardSessionLocally();
+			}
 			if (
 				discard &&
 				window.confirm(discard.dataset.confirm || "Discard this session?")
@@ -647,7 +654,7 @@ const SessionHook = {
 	},
 
 	discardSessionLocally() {
-		if (this.flow.mode !== "completion_review" || this.discarding) return;
+		if (this.discarding) return;
 		this.discarding = true;
 		const generation = this.lifecycleGeneration;
 

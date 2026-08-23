@@ -1640,6 +1640,55 @@ test("confirmed discard clears local session data and emits zero server events",
 	}
 });
 
+test("paused Abort requests lifecycle abort and clears local recovery data", async () => {
+	const local = { draft: true, chunks: [0, 1], upload: true };
+	const pushes = [];
+	const navigations = [];
+	const originalWindow = globalThis.window;
+	globalThis.window = {
+		confirm: () => true,
+		location: { assign: (path) => navigations.push(path) },
+	};
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraftByClientSessionId: async () => null,
+			async discardSession(clientSessionId) {
+				assert.equal(clientSessionId, "client-1");
+				local.draft = false;
+				local.chunks = [];
+				local.upload = false;
+			},
+		}),
+	});
+	ctx.flow = { ...ctx.flow, mode: "workout_running" };
+	ctx.activeSegment = "workout";
+	ctx.startTime = 1;
+	ctx.paused = true;
+	ctx.pushEvent = (name, payload, callback) => {
+		pushes.push({ name, payload });
+		callback({ status: "ok", lifecycle_status: "aborted" });
+	};
+
+	try {
+		await ctx.draftRestore;
+		click(ctx, "session-abort-btn");
+
+		assert.deepEqual(pushes, [
+			{
+				name: "abort_session",
+				payload: { client_session_id: "client-1" },
+			},
+		]);
+		await ctx.discardWrite;
+		assert.deepEqual(local, { draft: false, chunks: [], upload: false });
+		assert.deepEqual(navigations, ["/workouts"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
 test("discard retains recovery data until the abort acknowledgement and local cleanup complete", async () => {
 	let resolveOpen;
 	const opened = new Promise((resolve) => {
