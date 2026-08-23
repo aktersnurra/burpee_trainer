@@ -1,5 +1,14 @@
 import { openSessionStore } from "./session_store.mjs";
 
+const RESOLUTION_TAGS = [
+  "tired",
+  "great_energy",
+  "bad_sleep",
+  "sick",
+  "travel",
+  "hot",
+];
+
 const SessionRecoveryHook = {
   mounted() {
     this.clientSessionId = this.el.dataset.clientSessionId;
@@ -7,7 +16,18 @@ const SessionRecoveryHook = {
     this.store = null;
     this.touchedInputs = new WeakSet();
     this.reportForm = this.el.querySelector("#session-resolution-form");
+    this.setTags(this.tagsInput()?.value);
     this.trackManualReportChanges();
+    this.handleTagClick = (event) => {
+      const pill =
+        event.target?.closest?.("[data-resolution-tag]") || event.target;
+      const tag = pill?.dataset?.resolutionTag;
+      if (!tag) return;
+
+      event.preventDefault();
+      this.toggleTag(tag);
+    };
+    this.el.addEventListener("click", this.handleTagClick);
     this.storeReady = this.initializeStore();
     this.recovery = this.recover();
 
@@ -16,6 +36,63 @@ const SessionRecoveryHook = {
       event.stopPropagation();
       void this.submitReport();
     });
+  },
+
+  destroyed() {
+    this.el.removeEventListener("click", this.handleTagClick);
+  },
+
+  tagsInput() {
+    return this.el.querySelector("#session-resolution-tags");
+  },
+
+  tagPills() {
+    return this.el.querySelectorAll("[data-resolution-tag]");
+  },
+
+  selectedTags() {
+    return RESOLUTION_TAGS.filter((tag) =>
+      [...this.tagPills()].some(
+        (pill) =>
+          pill.dataset.resolutionTag === tag &&
+          pill.getAttribute("aria-pressed") === "true",
+      ),
+    );
+  },
+
+  toggleTag(tag) {
+    const tags = this.selectedTags();
+    this.setTags(
+      tags.includes(tag)
+        ? tags.filter((selected) => selected !== tag)
+        : [...tags, tag],
+    );
+  },
+
+  setTags(tags) {
+    const requested = Array.isArray(tags)
+      ? tags
+      : typeof tags === "string"
+        ? tags.split(",")
+        : [];
+    const selected = new Set(requested);
+    const normalized = RESOLUTION_TAGS.filter((tag) => selected.has(tag));
+    const input = this.tagsInput();
+
+    if (input) {
+      input.value = normalized.join(",");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    for (const pill of this.tagPills()) {
+      pill.setAttribute(
+        "aria-pressed",
+        normalized.includes(pill.dataset.resolutionTag) ? "true" : "false",
+      );
+    }
+
+    return normalized;
   },
 
   async initializeStore() {
@@ -102,12 +179,17 @@ const SessionRecoveryHook = {
       ["#session-resolution-count", draft.burpee_count_actual],
       ["#session-resolution-duration", draft.duration_sec_actual],
       ["#session-resolution-mood", draft.mood],
-      [
-        "#session-resolution-tags",
-        Array.isArray(draft.tags) ? draft.tags.join(",") : draft.tags,
-      ],
       ["#session-resolution-notes", draft.note_post],
     ];
+
+    const tagsInput = this.tagsInput();
+    if (
+      draft.tags !== undefined &&
+      draft.tags !== null &&
+      this.canPrefill(tagsInput)
+    ) {
+      this.setTags(draft.tags);
+    }
 
     for (const [selector, value] of fields) {
       if (value === undefined || value === null) continue;

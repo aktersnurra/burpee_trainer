@@ -11,6 +11,15 @@ class FakeElement {
     this.dataset = {};
     this.disabled = false;
     this.listeners = new Map();
+    this.attributes = new Map();
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) || null;
   }
 
   addEventListener(type, listener) {
@@ -91,6 +100,17 @@ function mountedHook({
   sources.count.textContent = "Estimated";
   sources.duration.textContent = "Estimated";
 
+  const tags = Object.fromEntries(
+    ["tired", "great_energy", "bad_sleep", "sick", "travel", "hot"].map(
+      (tag) => {
+        const button = new FakeElement(`session-resolution-tag-${tag}`);
+        button.dataset.resolutionTag = tag;
+        button.setAttribute("aria-pressed", "false");
+        return [tag, button];
+      },
+    ),
+  );
+
   const form = new FakeElement("session-resolution-form");
   form.elements = inputs;
   const root = new FakeElement("session-resolution");
@@ -99,9 +119,12 @@ function mountedHook({
   root.querySelector = (selector) => {
     if (selector === "#session-resolution-form") return form;
     if (selector === "#session-resolution-count-source") return sources.count;
-    if (selector === "#session-resolution-duration-source") return sources.duration;
+    if (selector === "#session-resolution-duration-source")
+      return sources.duration;
     return inputs.find((input) => `#${input.id}` === selector) || null;
   };
+  root.querySelectorAll = (selector) =>
+    selector === "[data-resolution-tag]" ? Object.values(tags) : [];
 
   const calls = [];
   const pushes = [];
@@ -130,7 +153,7 @@ function mountedHook({
   };
   hook.mounted();
 
-  return { hook, inputs, sources, pushes, calls, navigations, store };
+  return { hook, tags, inputs, sources, pushes, calls, navigations, store };
 }
 
 function withTraceReadyWindow(t, calls) {
@@ -192,7 +215,7 @@ test("successful running reconciliation prefills the exact local draft", async (
 
   assert.deepEqual(
     inputs.map(({ value }) => value),
-    ["12", "88", "1", "great_energy,tired", "Recovered locally"],
+    ["12", "88", "1", "tired,great_energy", "Recovered locally"],
   );
 });
 
@@ -231,8 +254,29 @@ test("delayed recovery does not overwrite a field manually typed before storage 
 
   assert.deepEqual(
     inputs.map(({ value }) => value),
-    ["31", "88", "1", "great_energy,tired", "Recovered locally"],
+    ["31", "88", "1", "tired,great_energy", "Recovered locally"],
   );
+});
+
+test("tag pills serialize selected tags and update pressed state", () => {
+  const { hook, tags, inputs } = mountedHook();
+  hook.toggleTag("tired");
+  hook.toggleTag("great_energy");
+
+  assert.equal(inputs[3].value, "tired,great_energy");
+  assert.equal(tags.tired.getAttribute("aria-pressed"), "true");
+  assert.equal(tags.great_energy.getAttribute("aria-pressed"), "true");
+});
+
+test("recovery selects only supported tag pills", async () => {
+  const { hook, tags, inputs } = mountedHook({
+    localDraft: { ...draft(), tags: ["sick", "unknown", "travel"] },
+  });
+  await hook.recovery;
+
+  assert.equal(inputs[3].value, "sick,travel");
+  assert.equal(tags.sick.getAttribute("aria-pressed"), "true");
+  assert.equal(tags.travel.getAttribute("aria-pressed"), "true");
 });
 
 test("report reply waits for storage before trace readiness, cleanup, and navigation", async (t) => {

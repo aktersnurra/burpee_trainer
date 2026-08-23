@@ -48,7 +48,12 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     assert has_element?(view, "#session-resolution-duration-source", "Estimated")
     refute has_element?(view, "#session-resolution-duration[disabled]")
     assert has_element?(view, "#session-resolution-tags[type='hidden']")
-    assert has_element?(view, "#session-resolution-tag-tired[aria-pressed='false']")
+
+    assert has_element?(
+             view,
+             "#session-resolution-tag-tired[data-resolution-tag='tired'][aria-pressed='false']"
+           )
+
     assert has_element?(view, "#session-resolution-form")
     assert has_element?(view, "#session-resolution-abort[phx-click='abort']")
   end

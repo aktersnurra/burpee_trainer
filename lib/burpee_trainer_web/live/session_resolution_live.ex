@@ -257,7 +257,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
                   <button
                     id={"session-resolution-tag-#{tag}"}
                     type="button"
-                    data-tag={tag}
+                    data-resolution-tag={tag}
                     aria-pressed="false"
                     class="rounded-full border border-[var(--session-border)] px-3 py-1.5 text-xs font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)] hover:text-[var(--session-ink)]"
                   >
