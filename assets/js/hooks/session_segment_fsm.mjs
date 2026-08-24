@@ -522,7 +522,10 @@ export function segmentTransition(state, event) {
 			return finalizeSegment(
 				{
 					...state,
-					reps: accountReps(state.reps.previousFrame, null, state.reps),
+					reps:
+						state.reps.currentEventKey === null
+							? state.reps
+							: accountReps(state.reps.previousFrame, null, state.reps),
 				},
 				event.elapsedSec,
 			);
