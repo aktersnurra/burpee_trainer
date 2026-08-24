@@ -351,6 +351,7 @@ const SessionHook = {
 			plan_id: this.planId,
 			program_hash: this.programHash,
 			burpee_count_actual: completion.burpeeCountActual,
+			scheduled_reps_done: completion.scheduledRepsDone ?? 0,
 			burpee_count_planned: completion.burpeeCountPlanned,
 			duration_sec_actual: completion.durationSecActual,
 			duration_sec_planned: completion.durationSecPlanned,
@@ -609,7 +610,8 @@ const SessionHook = {
 
 		const tracking = draft.tracking || {};
 		const completion = {
-			burpeeCountActual: draft.burpee_count_actual ?? 0,
+			scheduledRepsDone: draft.scheduled_reps_done ?? 0,
+			burpeeCountActual: draft.burpee_count_actual ?? null,
 			burpeeCountPlanned: draft.burpee_count_planned ?? 0,
 			durationSecActual: draft.duration_sec_actual ?? 0,
 			durationSecPlanned: draft.duration_sec_planned ?? 0,

@@ -53,11 +53,12 @@ function plannedDurationSec(timeline) {
 function completionFor(state, result) {
   const trackingFinished =
     state.captureMode === "camera" && state.trackingTrust === "finished";
+  const scheduledRepsDone =
+    result.scheduledRepsDone ?? result.burpeeCountDone ?? 0;
 
   return {
-    burpeeCountActual: trackingFinished
-      ? (result.detectedReps ?? 0)
-      : result.burpeeCountDone || 0,
+    scheduledRepsDone,
+    burpeeCountActual: trackingFinished ? (result.detectedReps ?? 0) : null,
     burpeeCountPlanned: plannedBurpees(state.workoutTimeline),
     durationSecActual: trackingFinished
       ? (result.detectedDurationSec ?? 0)

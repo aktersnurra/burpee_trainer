@@ -192,13 +192,26 @@ export class SessionRenderer {
 		const repsInput = this.root.querySelector("#completion-reps-input");
 		const durationInput = this.root.querySelector("#completion-duration-input");
 		const noteInput = this.root.querySelector("#completion-note-input");
-		if (actualReps)
-			actualReps.textContent = String(completion.burpeeCountActual);
+		const hasActualReps = Number.isInteger(completion.burpeeCountActual);
+		const scheduledRepsDone = completion.scheduledRepsDone ?? 0;
+		const countSource = this.root.querySelector("#session-count-source");
+		if (actualReps) {
+			actualReps.textContent = hasActualReps
+				? String(completion.burpeeCountActual)
+				: "—";
+		}
 		if (plannedReps)
 			plannedReps.textContent = String(completion.burpeeCountPlanned);
 		if (duration)
 			duration.textContent = this.formatTime(completion.durationSecActual);
-		if (repsInput) repsInput.value = String(completion.burpeeCountActual);
+		if (repsInput)
+			repsInput.value = hasActualReps ? String(completion.burpeeCountActual) : "";
+		if (countSource) {
+			countSource.textContent = hasActualReps
+				? "Camera-confirmed reps"
+				: `Pace progress: ${scheduledRepsDone} of ${completion.burpeeCountPlanned}. Enter actual reps below.`;
+			countSource.hidden = false;
+		}
 		if (durationInput)
 			durationInput.value = String(completion.durationSecActual);
 		if (noteInput) noteInput.value = completion.notePost || "";

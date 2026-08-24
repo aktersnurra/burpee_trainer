@@ -283,7 +283,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <div id="session-status-line" class="qs-tabular flex items-start">
               <div id="total-reps" class="flex items-baseline" hidden>
                 <span id="total-reps-accessible" class="sr-only">
-                  0 of {@summary.burpee_count_total} total reps
+                  Pace progress: 0 of {@summary.burpee_count_total} reps
                 </span>
                 <span id="total-done" data-total-plan={@summary.burpee_count_total} aria-hidden="true">
                   0

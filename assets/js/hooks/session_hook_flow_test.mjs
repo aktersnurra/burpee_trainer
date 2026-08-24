@@ -1237,12 +1237,40 @@ test("mount bootstraps the local flow synchronously from the root dataset", () =
 
 const flushHookPromises = () => new Promise((resolve) => setImmediate(resolve));
 
+test("no-camera completion renders scheduled pace progress and asks for actual reps", () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	const completion = {
+		scheduledRepsDone: 2,
+		burpeeCountActual: null,
+		burpeeCountPlanned: 3,
+		durationSecActual: 25,
+		mood: 0,
+		tags: [],
+		notePost: "",
+	};
+
+	try {
+		ctx.renderer.renderCompletion(completion);
+
+		assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
+		assert.equal(ctx.el.querySelector("#completion-reps-input").value, "");
+		assert.equal(ctx.el.querySelector("#session-count-source").hidden, false);
+		assert.equal(
+			ctx.el.querySelector("#session-count-source").textContent,
+			"Pace progress: 2 of 3. Enter actual reps below.",
+		);
+	} finally {
+		ctx.destroyed();
+	}
+});
+
 function completionDraft(overrides = {}) {
 	return {
 		client_session_id: "original-client",
 		plan_id: "plan-1",
 		program_hash: "hash-1",
 		burpee_count_actual: 4,
+		scheduled_reps_done: 4,
 		burpee_count_planned: 5,
 		duration_sec_actual: 9,
 		duration_sec_planned: 10,
@@ -1330,7 +1358,8 @@ test("storage rejection leaves the local workout and completion operational", as
 
 	assert.equal(ctx.traceRetentionAvailable, false);
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(ctx.flow.completion.burpeeCountActual, 5);
+	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
+	assert.equal(ctx.flow.completion.burpeeCountActual, null);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
@@ -1404,6 +1433,7 @@ test("completion display and every stable edit queue the full draft", async () =
 		saved[0],
 		completionDraft({
 			client_session_id: "client-1",
+			burpee_count_actual: null,
 			tracking: {
 				enabled: true,
 				trust: "observing",
@@ -1476,6 +1506,7 @@ test("completion draft restores only for the server-minted client UUID", async (
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.clientSessionId, "client-1");
+	assert.equal(ctx.flow.completion.scheduledRepsDone, 4);
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
 	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
 	assert.equal(
@@ -2003,7 +2034,8 @@ test("manual no-camera journey reaches local completion review", async () => {
 		ctx.el.querySelector("#session-completion-review").hidden,
 		false,
 	);
-	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
+	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
 	assert.equal(
 		ctx.el.querySelector("#session-actual-duration").textContent,
 		"0:10",

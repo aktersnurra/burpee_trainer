@@ -190,12 +190,14 @@ test("camera completion pre-fills detected count after absent frames", () => {
     type: "SEGMENT_FINISHED",
     result: {
       burpeeCountDone: 99,
+      scheduledRepsDone: 5,
       detectedReps: 4,
       detectedDurationSec: 42,
       cadenceMs: [8_000, 18_000, 29_000, 42_000],
     },
   });
 
+  assert.equal(result.state.completion.scheduledRepsDone, 5);
   assert.equal(result.state.completion.burpeeCountActual, 4);
   assert.equal(result.state.completion.durationSecActual, 42);
   assert.equal(result.state.completion.trackingTrust, "finished");
@@ -215,10 +217,16 @@ test("session result waits for report-pending acknowledgement before completion 
   };
   const result = step(state, {
     type: "SESSION_DONE",
-    result: { burpeeCountDone: 12, durationSec: 75 },
+    result: {
+      burpeeCountDone: 12,
+      scheduledRepsDone: 12,
+      durationSec: 75,
+    },
   });
   assert.equal(result.state.mode, "reporting_completion");
-  assert.equal(result.state.completion.burpeeCountActual, 12);
+  assert.equal(result.state.completion.scheduledRepsDone, 12);
+  assert.equal(result.state.completion.burpeeCountActual, null);
+  assert.equal(result.state.completion.durationSecActual, 75);
   assert.deepEqual(result.commands, [
     { type: "persistCompletionAndRequestPending" },
     { type: "renderFlow" },
@@ -326,6 +334,7 @@ test("completion edits only change approved draft fields", () => {
   });
 
   assert.deepEqual(result.state.completion, {
+    scheduledRepsDone: 9,
     burpeeCountActual: 10,
     burpeeCountPlanned: 10,
     durationSecActual: 55,
