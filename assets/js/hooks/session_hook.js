@@ -50,7 +50,7 @@ function restoredCountProvenance(draft, tracking) {
 	}
 	if (draft.burpee_count_provenance === "unresolved") return "unresolved";
 	if (!Number.isInteger(actualReps)) return "unresolved";
-	return cameraConfirmed ? "camera_confirmed" : "manual";
+	return "manual";
 }
 
 const SessionHook = {
@@ -634,10 +634,14 @@ const SessionHook = {
 		}
 
 		const tracking = draft.tracking || {};
+		const burpeeCountProvenance = restoredCountProvenance(draft, tracking);
 		const completion = {
 			scheduledRepsDone: draft.scheduled_reps_done ?? 0,
-			burpeeCountActual: draft.burpee_count_actual ?? null,
-			burpeeCountProvenance: restoredCountProvenance(draft, tracking),
+			burpeeCountActual:
+				burpeeCountProvenance === "unresolved"
+					? null
+					: draft.burpee_count_actual,
+			burpeeCountProvenance,
 			burpeeCountPlanned: draft.burpee_count_planned ?? 0,
 			durationSecActual: draft.duration_sec_actual ?? 0,
 			durationSecPlanned: draft.duration_sec_planned ?? 0,

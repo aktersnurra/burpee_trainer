@@ -1556,6 +1556,47 @@ test("legacy completion drafts recover a non-camera count as manual", async () =
 	ctx.destroyed();
 });
 
+test("legacy finished-camera completion drafts recover an integer count as manual", async () => {
+	const { burpee_count_provenance: _provenance, ...legacyDraft } = completionDraft({
+		client_session_id: "client-1",
+	});
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraftByClientSessionId: async () => legacyDraft,
+		}),
+	});
+	await ctx.draftRestore;
+
+	assert.equal(ctx.flow.completion.burpeeCountActual, 4);
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
+	assert.equal(
+		ctx.el.querySelector("#session-count-source").textContent,
+		"Manually entered reps",
+	);
+	ctx.destroyed();
+});
+
+test("unresolved completion drafts discard inconsistent integer actuals", async () => {
+	const draft = completionDraft({
+		client_session_id: "client-1",
+		burpee_count_provenance: "unresolved",
+	});
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraftByClientSessionId: async () => draft,
+		}),
+	});
+	await ctx.draftRestore;
+
+	assert.equal(ctx.flow.completion.burpeeCountActual, null);
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "unresolved");
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
+	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "");
+	ctx.destroyed();
+});
+
 test("completion drafts omit absent-observation provenance", async () => {
 	const saved = [];
 	const first = mountedFlowHarness({
