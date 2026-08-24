@@ -12,18 +12,12 @@ const NEXT = Object.freeze({
 	returning_from_floor: ["returning_from_floor", "upright"],
 });
 
-const MAX_PHASE_MS = Object.freeze({
-	upright: Infinity,
-	lowering_to_floor: 6_000,
-	floor_work: 15_000,
-	returning_from_floor: 6_000,
-});
-
 const REFRACTORY_MS = 900;
 const MIN_CONFIDENCE = 0.5;
 const MIN_MACRO_LANDMARK_CONFIDENCE = 0.5;
 const MIN_VISIBLE_FRACTION = 0.35;
 const FORWARD_EMISSION = 0.72;
+const RETURN_TO_UPRIGHT_EMISSION = 0.48;
 
 export function initialBurpeeHsmmState() {
 	return {
@@ -35,16 +29,16 @@ export function initialBurpeeHsmmState() {
 }
 
 export function stepBurpeeHsmm(state, frame) {
-	if (!usable(frame)) return { state, rep: false, repAtMs: null };
-	if (expired(state, frame.tMs)) {
-		return {
-			state: { ...state, phase: "upright", phaseStartedAtMs: frame.tMs },
-			rep: false,
-			repAtMs: null,
-		};
+	if (!usable(frame)) {
+		return { state: resetCandidate(state), rep: false, repAtMs: null };
 	}
 
-	const phase = nextPhase(state, scoreMacroEmissions(frame));
+	const emissions = scoreMacroEmissions(frame);
+	if (strongOutOfOrderEmission(state, emissions)) {
+		return { state: resetCandidate(state), rep: false, repAtMs: null };
+	}
+
+	const phase = nextPhase(state, emissions);
 	const next = transition(state, phase, frame.tMs);
 	const rep =
 		state.phase === "returning_from_floor" &&
@@ -74,15 +68,6 @@ function usable(frame) {
 			frame.dWorldBodyVerticalSpan,
 			frame.dWorldWristVerticalSpan,
 		].every(Number.isFinite)
-	);
-}
-
-function expired(state, tMs) {
-	const maximum = MAX_PHASE_MS[state.phase];
-	return (
-		state.phaseStartedAtMs != null &&
-		Number.isFinite(maximum) &&
-		tMs - state.phaseStartedAtMs > maximum
 	);
 }
 
@@ -139,9 +124,29 @@ function clamp01(value) {
 	return value;
 }
 
+function strongOutOfOrderEmission(state, emissions) {
+	const [current, following] = NEXT[state.phase] || NEXT.upright;
+
+	return PHASES.some(
+		(phase) =>
+			phase !== current &&
+			phase !== following &&
+			emissions[phase] >= FORWARD_EMISSION,
+	);
+}
+
 function nextPhase(state, emissions) {
 	const [current, following] = NEXT[state.phase] || NEXT.upright;
-	return emissions[following] >= FORWARD_EMISSION ? following : current;
+	const threshold =
+		state.phase === "returning_from_floor" && following === "upright"
+			? RETURN_TO_UPRIGHT_EMISSION
+			: FORWARD_EMISSION;
+
+	return emissions[following] >= threshold ? following : current;
+}
+
+function resetCandidate(state) {
+	return { ...state, phase: "upright", phaseStartedAtMs: null };
 }
 
 function transition(state, phase, tMs) {

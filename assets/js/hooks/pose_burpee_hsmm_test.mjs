@@ -196,28 +196,70 @@ test("does not count a squat-only or interrupted floor sequence", () => {
 	assert.deepEqual(run(frames).reps, []);
 });
 
-test("unusable frames leave the partial path untouched and never emit a rep", () => {
-	let state = initialBurpeeHsmmState();
-	for (const nextFrame of lowFrontFeatureFrames([
+test("a slow valid return completes only when upright evidence reaches the return threshold", () => {
+	const prefix = lowFrontFeatureFrames([
 		["upright", 0],
 		["lowering", 150],
 		["floor", 300],
-	])) {
-		state = stepBurpeeHsmm(state, nextFrame).state;
-	}
-
-	const result = stepBurpeeHsmm(state, {
-		tMs: 450,
-		poseConfidence: 0.1,
-		visibleFraction: 0.1,
+		["returning", 450],
+	]);
+	const slowUpright = lowFrontFrame("upright", 7_232, {
+		worldBodyVerticalSpan: 2.6805,
+		worldHipVerticalSpan: 1.6902,
+		worldTorsoElevation: 0.9902,
+		worldWristVerticalSpan: 1.7297,
 	});
 
-	assert.equal(result.rep, false);
-	assert.equal(result.repAtMs, null);
-	assert.deepEqual(result.state, state);
+	assert.deepEqual(run(prefix.concat(slowUpright)).reps, [7_232]);
 });
 
-test("missing knee or foot world landmarks leave the partial path untouched", () => {
+test("a slow return below the return-to-upright threshold does not count", () => {
+	const prefix = lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+		["floor", 300],
+		["returning", 450],
+	]);
+	const weakUpright = lowFrontFrame("upright", 7_232, {
+		worldBodyVerticalSpan: 2.55,
+		worldHipVerticalSpan: 1.6,
+		worldTorsoElevation: 0.99,
+		worldWristVerticalSpan: 1.72,
+	});
+
+	assert.deepEqual(run(prefix.concat(weakUpright)).reps, []);
+});
+
+test("an unusable frame abandons a partial path before a fresh cycle", () => {
+	const frames = lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+		["floor", 300],
+		["floor_pushup", 450],
+		["returning", 600],
+		["upright", 750],
+		...lowFrontCycle(1_000),
+	]);
+	frames[3] = { ...frames[3], poseConfidence: 0.1, visibleFraction: 0.1 };
+
+	assert.deepEqual(run(frames).reps, [1_900]);
+});
+
+test("a strong out-of-order observation abandons a partial path before a fresh cycle", () => {
+	const frames = lowFrontFeatureFrames([
+		["upright", 0],
+		["lowering", 150],
+		["upright", 300],
+		["floor", 450],
+		["returning", 600],
+		["upright", 750],
+		...lowFrontCycle(1_000),
+	]);
+
+	assert.deepEqual(run(frames).reps, [1_900]);
+});
+
+test("missing knee or foot world landmarks reset the partial path", () => {
 	for (const missingWorldName of ["left_knee", "right_foot_index"]) {
 		let state = initialBurpeeHsmmState();
 		for (const nextFrame of lowFrontFeatureFrames([
@@ -235,13 +277,13 @@ test("missing knee or foot world landmarks leave the partial path untouched", ()
 		assert.equal(result.rep, false);
 		assert.deepEqual(
 			result.state,
-			state,
-			`${missingWorldName} world point must not advance the HSMM`,
+			{ ...state, phase: "upright", phaseStartedAtMs: null },
+			`${missingWorldName} world point must reset the HSMM candidate`,
 		);
 	}
 });
 
-test("low-confidence required macro landmarks leave the partial path untouched", () => {
+test("low-confidence required macro landmarks reset the partial path", () => {
 	let state = initialBurpeeHsmmState();
 	for (const nextFrame of lowFrontFeatureFrames([
 		["upright", 0],
@@ -267,7 +309,11 @@ test("low-confidence required macro landmarks leave the partial path untouched",
 	const result = stepBurpeeHsmm(state, lowConfidenceFloor);
 
 	assert.equal(result.rep, false);
-	assert.deepEqual(result.state, state);
+	assert.deepEqual(result.state, {
+		...state,
+		phase: "upright",
+		phaseStartedAtMs: null,
+	});
 });
 
 test("raw low-front feature output drives one complete macro cycle", () => {
@@ -302,17 +348,4 @@ test("low-confidence nose or feet in raw low-front features cannot complete a ma
 	}
 });
 
-test("an overlong partial path expires without emitting a rep", () => {
-	let state = initialBurpeeHsmmState();
-	for (const nextFrame of lowFrontFeatureFrames([
-		["upright", 0],
-		["lowering", 150],
-		["floor", 300],
-	])) {
-		state = stepBurpeeHsmm(state, nextFrame).state;
-	}
 
-	const result = stepBurpeeHsmm(state, lowFrontFrame("upright", 20_000));
-	assert.equal(result.rep, false);
-	assert.equal(result.state.phase, "upright");
-});
