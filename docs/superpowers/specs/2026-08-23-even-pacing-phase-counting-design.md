@@ -10,6 +10,8 @@ During an even-paced workout, the runner must show a rep as complete when that r
 
 Camera-confirmed reps are a separate fact. Missing, cropped, or low-confidence camera observations remain silent no-ops. The timer must never fabricate an actual rep.
 
+> **Authoritative camera semantics — supersedes the silent-no-op wording above:** Follow the [Continuous HSMM Sequence Design](2026-08-24-continuous-hsmm-sequence-design.md). An unusable frame resets only an incomplete HSMM candidate and emits no rep; a strict ordered valid continuous sequence is required; there is no phase-duration cap; and the return-only `0.48` threshold applies only to `returning_from_floor → upright` after the strict prior phases. No camera path fabricates a rep.
+
 The investigated unfinished session used logged/no-camera mode. It therefore has no capture run or pose trace to diagnose framing, and its displayed zero camera count cannot establish whether the person was in frame.
 
 ## User-visible behavior

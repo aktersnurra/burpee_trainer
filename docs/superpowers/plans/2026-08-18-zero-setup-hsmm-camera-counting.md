@@ -1,5 +1,7 @@
 # Zero-Setup HSMM Camera Counting Implementation Plan
 
+> **Historical / superseded plan — do not execute its signing commands.** `jj --config signing.behavior=drop` is **prohibited**; preserve GPG signing for every Jujutsu mutation. The old no-reset-on-unusable-frame and duration-expiry claims below are historical only. The authoritative current contract is [Continuous HSMM Sequence Design](../specs/2026-08-24-continuous-hsmm-sequence-design.md): there are no phase or repetition-duration caps; an unusable frame or strong out-of-order observation resets only an incomplete candidate and emits no rep; a rep requires the strict ordered valid continuous sequence and is never fabricated.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace calibration and confidence-loss degradation with a local, zero-setup HSMM that counts one observed body-to-floor-to-standing macro-cycle.
