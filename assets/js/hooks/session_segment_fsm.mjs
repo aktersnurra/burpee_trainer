@@ -101,9 +101,20 @@ function completedRepsForElapsed(event, phaseElapsedSec) {
 		eventDurationSec(event),
 	);
 
-	if (cadenceSec <= 0 || eventElapsedSec < activeSec) return 0;
+	const activeBoundaryToleranceSec =
+		Number.EPSILON *
+		4 *
+		Math.max(1, eventElapsedSec, activeSec, cadenceSec);
+
+	if (cadenceSec <= 0 || eventElapsedSec + activeBoundaryToleranceSec < activeSec) {
+		return 0;
+	}
+
 	return Math.min(
-		Math.floor((eventElapsedSec - activeSec) / cadenceSec) + 1,
+		Math.floor(
+			(eventElapsedSec - activeSec + activeBoundaryToleranceSec) /
+				cadenceSec,
+		) + 1,
 		target,
 	);
 }

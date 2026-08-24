@@ -252,6 +252,41 @@ test("explicit work duration credits reps at active ends and finishes at termina
 	]);
 });
 
+test("natural completion credits every fractional scheduled active interval", () => {
+	const timeline = [
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 9.9,
+			sec_per_burpee: 5.3,
+			duration_sec: 19.8,
+		},
+		{ kind: "rest", duration_sec: 5 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 9.9,
+			sec_per_burpee: 5.3,
+			duration_sec: 15.2,
+		},
+	];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 4,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	const completed = segmentTransition(state, { type: "TICK", elapsedSec: 40 });
+	const done = completed.commands.find((command) => command.type === "segmentDone");
+
+	assert.deepEqual(done.result, {
+		burpeeCountDone: 4,
+		scheduledRepsDone: 4,
+		durationSec: 40,
+	});
+});
+
 test("delayed ticks and early finish credit only completed active portions", () => {
 	const timeline = [
 		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
