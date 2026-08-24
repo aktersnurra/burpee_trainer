@@ -1377,8 +1377,10 @@ Degraded path:
 - [ ] **Step 8: Confirm final workspace state**
 
 ```bash
-jj --config signing.behavior=drop status
+jj status
 jj diff --stat @-
 ```
+
+Dropping signing is prohibited; preserve GPG signing for every Jujutsu mutation.
 
 Expected: clean working copy after the final commit and only intended tracking/setup/summary files in the implementation commits. Do not push unless explicitly requested.
