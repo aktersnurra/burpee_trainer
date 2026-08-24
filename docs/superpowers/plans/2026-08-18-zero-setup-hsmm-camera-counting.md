@@ -16,7 +16,7 @@
 - Do not show, persist, or trace ordinary absent/low-confidence frames as tracking loss, degradation, or out-of-frame state.
 - Do not infer a burpee completed wholly without usable pose observations.
 - Do not alter durable lifecycle UUID/state transitions or deferred trace upload digest/retry behavior.
-- Use `jj --config signing.behavior=drop` for every Jujutsu mutation.
+- Preserve configured GPG signing for every Jujutsu mutation; do not override signing behavior.
 
 ---
 
@@ -102,8 +102,8 @@ Expected: PASS; normal one-pushup and three-pushup cycles each count once, missi
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'feat(tracking): add general burpee HSMM'
-jj --config signing.behavior=drop new
+jj describe -m 'feat(tracking): add general burpee HSMM'
+jj new
 ```
 
 ### Task 2: Publish HSMM counts without confidence-loss degradation
@@ -159,8 +159,8 @@ Expected: PASS; absent samples neither reset nor poison the runtime, and detecto
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'feat(tracking): tolerate absent pose observations'
-jj --config signing.behavior=drop new
+jj describe -m 'feat(tracking): tolerate absent pose observations'
+jj new
 ```
 
 ### Task 3: Remove degradation semantics from the session runner and reporting contract
@@ -221,8 +221,8 @@ Expected: PASS; a normal temporary absence never blanks Save, changes capture mo
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'fix(session): remove camera degradation fallback'
-jj --config signing.behavior=drop new
+jj describe -m 'fix(session): remove camera degradation fallback'
+jj new
 ```
 
 ### Task 4: Remove session calibration UI and prove the product contract
@@ -284,8 +284,8 @@ Then follow `docs/testing/workout-session-e2e.md` with the controlled pose fixtu
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'test(tracking): verify zero-setup HSMM counting'
-jj --config signing.behavior=drop new
+jj describe -m 'test(tracking): verify zero-setup HSMM counting'
+jj new
 ```
 
 ## Plan Self-Review
