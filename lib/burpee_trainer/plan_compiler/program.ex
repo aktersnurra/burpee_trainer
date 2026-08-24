@@ -58,6 +58,9 @@ defmodule BurpeeTrainer.PlanCompiler.Program do
   @spec duration_sec(t()) :: float()
   def duration_sec(%__MODULE__{events: events}) do
     Enum.reduce(events, 0.0, fn
+      %ProgramEvent.Work{duration_sec: duration_sec}, total when is_number(duration_sec) ->
+        total + duration_sec
+
       %ProgramEvent.Work{reps: reps, sec_per_rep: sec_per_rep}, total ->
         total + reps * sec_per_rep
 

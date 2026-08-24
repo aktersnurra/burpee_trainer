@@ -55,7 +55,7 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolverTest do
     assert Enum.all?(prescription.blocks, &(length(&1.motif) <= 2))
   end
 
-  test "even pacing funds explicit rests from work before the rest anchor" do
+  test "even pacing uses uniform cadence and places explicit rests at actual boundaries" do
     input = %Input{
       burpee_type: :six_count,
       target_duration_sec: 1_200,
@@ -73,16 +73,17 @@ defmodule BurpeeTrainer.PlanSolver.EvenSolverTest do
 
     assert {:ok, prescription} = EvenSolver.solve(input, PacePolicy.for(:six_count))
     assert [%{kind: :explicit, total_sec: 60, after_set: 5}] = prescription.recoveries
-    assert_in_delta prescription.cadence_sec, 12.0, 1.0e-6
-    assert Enum.take(prescription.set_cadences, 5) == List.duplicate(10.8, 5)
-    assert Enum.drop(prescription.set_cadences, 5) == List.duplicate(12.0, 5)
+
+    cadence_sec = (1_200 - 60 - prescription.sec_per_rep) / 99
+    assert_in_delta prescription.cadence_sec, cadence_sec, 1.0e-6
+    assert prescription.set_cadences == List.duplicate(cadence_sec, 10)
 
     execution = Execution.build(prescription)
     rest = Enum.find(execution, &match?(%Execution.RestEvent{}, &1))
-    assert_in_delta rest.starts_at_sec, 540.0, 1.0e-6
+    assert_in_delta rest.starts_at_sec, 50 * cadence_sec, 1.0e-6
 
     first_after_rest = Enum.find(execution, &match?(%Execution.SetEvent{index: 6}, &1))
-    assert_in_delta first_after_rest.starts_at_sec, 600.0, 1.0e-6
+    assert_in_delta first_after_rest.starts_at_sec, 50 * cadence_sec + 60, 1.0e-6
     assert_in_delta Execution.duration_sec(execution), 1_200, 1.0e-6
   end
 

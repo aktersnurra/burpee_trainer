@@ -12,8 +12,8 @@ defmodule BurpeeTrainer.PlanCompiler do
   alias BurpeeTrainer.PlanSolver
   alias BurpeeTrainer.PlanSolver.{Execution, ExplicitRest, Input}
 
-  @solver_version 4
-  @schema_version 2
+  @solver_version 5
+  @schema_version 3
 
   @spec schema_version() :: pos_integer()
   def schema_version, do: @schema_version
@@ -121,7 +121,8 @@ defmodule BurpeeTrainer.PlanCompiler do
     ProgramEvent.work!(%{
       reps: event.burpee_count,
       sec_per_rep: event.sec_per_rep,
-      sec_per_burpee: event.sec_per_burpee
+      sec_per_burpee: event.sec_per_burpee,
+      duration_sec: event.duration_sec
     })
   end
 

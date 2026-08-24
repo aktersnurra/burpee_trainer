@@ -43,14 +43,17 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, solution} = BurpeeTrainer.PlanSolver.generate_plan(input)
 
-    [block] = solution.plan.blocks
-    assert block.repeat_count == 10
-    assert Enum.map(block.sets, & &1.burpee_count) == [12]
+    [work_block, final_block] = solution.plan.blocks
+    assert work_block.repeat_count == 9
+    assert final_block.repeat_count == 1
+    assert Enum.map(work_block.sets, & &1.burpee_count) == [12]
+    assert Enum.map(final_block.sets, & &1.burpee_count) == [12]
     assert BurpeeTrainer.Planner.summary(solution.plan).burpee_count_total == 120
 
-    [block_summary] = BurpeeTrainer.Planner.summary(solution.plan).blocks
-    assert block_summary.burpee_count_total == 120
-    assert round(block_summary.duration_sec_work) == 1200
+    [work_summary, final_summary] = BurpeeTrainer.Planner.summary(solution.plan).blocks
+    assert work_summary.burpee_count_total == 108
+    assert final_summary.burpee_count_total == 12
+    assert round(work_summary.duration_sec_work + final_summary.duration_sec_work) == 1200
     assert solution.metadata.strategy == :even
   end
 
@@ -74,13 +77,15 @@ defmodule BurpeeTrainer.PlanSolver.ApplyTest do
 
     {:ok, sol} = BurpeeTrainer.PlanSolver.generate_plan(input)
 
-    assert [first_run, rest_step, second_run] = sol.plan.steps
+    assert [first_run, rest_step, second_run, final_run] = sol.plan.steps
     assert first_run.kind == :block_run
     assert first_run.repeat_count == 6
     assert rest_step.kind == :rest
     assert rest_step.rest_sec == 20
     assert second_run.kind == :block_run
-    assert second_run.repeat_count == 4
+    assert second_run.repeat_count == 3
+    assert final_run.kind == :block_run
+    assert final_run.repeat_count == 1
     assert BurpeeTrainer.Planner.summary(sol.plan).burpee_count_total == 70
     assert round(BurpeeTrainer.Planner.summary(sol.plan).duration_sec_total) == 1200
     assert sol.metadata.strategy == :even

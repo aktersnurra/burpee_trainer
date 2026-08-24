@@ -36,6 +36,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
       sec_per_rep_us: sec_to_us(event.sec_per_rep),
       sec_per_burpee_us: sec_to_us(event.sec_per_burpee)
     }
+    |> maybe_put_duration(event.duration_sec)
   end
 
   defp canonical_event(%ProgramEvent.Rest{} = event) do
@@ -52,6 +53,11 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
     |> Enum.sort_by(fn {key, _value} -> key end)
     |> Map.new()
   end
+
+  defp maybe_put_duration(event, duration_sec) when is_number(duration_sec),
+    do: Map.put(event, :duration_sec, duration_sec)
+
+  defp maybe_put_duration(event, _duration_sec), do: event
 
   defp sec_to_ms(value), do: round(value * 1000)
   defp sec_to_us(value), do: round(value * 1_000_000)

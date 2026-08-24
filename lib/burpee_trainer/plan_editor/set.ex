@@ -9,6 +9,7 @@ defmodule BurpeeTrainer.PlanEditor.Set do
     :position,
     :burpee_count,
     :sec_per_rep,
+    :duration_sec,
     sec_per_burpee: 3.0,
     end_of_set_rest: 0,
     duration_min: nil,

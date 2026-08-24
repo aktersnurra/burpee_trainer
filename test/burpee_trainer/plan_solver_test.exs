@@ -125,7 +125,7 @@ defmodule BurpeeTrainer.PlanSolverTest do
     assert_solution_matches_execution(inp, sol)
   end
 
-  test "even additional rest preserves post-rest base cadence by saving time before rest" do
+  test "even additional rest preserves a uniform cadence at actual rest boundaries" do
     inp =
       input(%{
         pacing_style: :even,
@@ -139,13 +139,14 @@ defmodule BurpeeTrainer.PlanSolverTest do
 
     set_events = Enum.filter(sol.execution, &match?(%Execution.SetEvent{}, &1))
     assert Enum.map(set_events, & &1.burpee_count) == List.duplicate(10, 10)
-    assert Enum.all?(Enum.take(set_events, 5), &(abs(&1.sec_per_rep - 10.8) < 1.0e-6))
-    assert Enum.all?(Enum.drop(set_events, 5), &(abs(&1.sec_per_rep - 12.0) < 1.0e-6))
+    cadence_sec = (1_200 - 60 - sol.prescription.sec_per_rep) / 99
+    assert Enum.all?(set_events, &(abs(&1.sec_per_rep - cadence_sec) < 1.0e-6))
 
     assert [
              %{kind: :block_run, repeat_count: 5},
              %{kind: :rest, rest_sec: 60},
-             %{kind: :block_run, repeat_count: 5}
+             %{kind: :block_run, repeat_count: 4},
+             %{kind: :block_run, repeat_count: 1}
            ] =
              sol.plan.steps
 

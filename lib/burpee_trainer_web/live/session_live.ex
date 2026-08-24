@@ -293,6 +293,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           sec_per_rep: sec_per_rep_us / 1_000_000,
           sec_per_burpee: sec_per_burpee_us / 1_000_000
         }
+        |> maybe_put_work_duration(map_get(event, :duration_sec))
 
       "rest" ->
         %{
@@ -301,6 +302,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
         }
     end
   end
+
+  defp maybe_put_work_duration(work, duration_sec) when is_number(duration_sec),
+    do: Map.put(work, :duration_sec, duration_sec)
+
+  defp maybe_put_work_duration(work, _duration_sec), do: work
 
   defp program_target_pace_sec(%ExecutionProgram{} = program) do
     {reps_total, sec_total} =
@@ -311,7 +317,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
           "work" ->
             reps = map_get(event, :reps)
             sec_per_rep = map_get(event, :sec_per_rep_us) / 1_000_000
-            {reps_total + reps, sec_total + reps * sec_per_rep}
+            duration_sec = map_get(event, :duration_sec, reps * sec_per_rep)
+            {reps_total + reps, sec_total + duration_sec}
 
           _other ->
             {reps_total, sec_total}

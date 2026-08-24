@@ -86,6 +86,25 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
            )
 
     assert is_list(decoded_program["events"])
+
+    assert Enum.all?(decoded_program["events"], fn
+             %{"kind" => "work", "duration_sec" => duration_sec} when is_number(duration_sec) ->
+               true
+
+             %{"kind" => "rest"} ->
+               true
+
+             _event ->
+               false
+           end)
+
+    runner_duration_sec =
+      Enum.reduce(decoded_program["events"], 0.0, fn
+        %{"kind" => "work", "duration_sec" => duration_sec}, total -> total + duration_sec
+        %{"kind" => "rest", "duration_sec" => duration_sec}, total -> total + duration_sec
+      end)
+
+    assert_in_delta runner_duration_sec, decoded_program["target_duration_sec"], 1.0e-6
     assert is_map(decoded_program["display"])
     assert Ecto.UUID.cast(client_session_id) == {:ok, client_session_id}
 

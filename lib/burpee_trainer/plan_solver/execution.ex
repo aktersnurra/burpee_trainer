@@ -103,7 +103,12 @@ defmodule BurpeeTrainer.PlanSolver.Execution do
       |> Enum.zip(set_cadences)
       |> Enum.with_index(1)
       |> Enum.reduce({0.0, []}, fn {{reps, set_cadence_sec}, set_index}, {elapsed, events} ->
-        duration_sec = reps * set_cadence_sec
+        duration_sec =
+          if set_index == length(set_pattern) do
+            (reps - 1) * set_cadence_sec + prescription.sec_per_rep
+          else
+            reps * set_cadence_sec
+          end
 
         event = %SetEvent{
           kind: :set,

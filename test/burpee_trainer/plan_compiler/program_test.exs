@@ -38,7 +38,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
              kind: :work,
              reps: 10,
              sec_per_rep: 12.0,
-             sec_per_burpee: 5.0
+             sec_per_burpee: 5.0,
+             duration_sec: nil
            }
   end
 

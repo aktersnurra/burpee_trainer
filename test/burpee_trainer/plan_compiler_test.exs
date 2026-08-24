@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.PlanCompilerTest do
   alias BurpeeTrainer.PlanCompiler
   alias BurpeeTrainer.PlanCompiler.{CompileError, PlanSource, Program, ProgramEvent}
 
-  test "compiles saved-up even rest source into canonical program events" do
+  test "compiles even rest source into uniform-cadence canonical program events" do
     source = %{
       name: "100 in 20",
       burpee_type: :six_count,
@@ -16,7 +16,7 @@ defmodule BurpeeTrainer.PlanCompilerTest do
     }
 
     assert {:ok, %Program{} = program} = PlanCompiler.compile(source)
-    assert program.schema_version == 2
+    assert program.schema_version == 3
     assert Program.total_reps(program) == 100
     assert_in_delta Program.duration_sec(program), 1_200.0, 1.0e-6
 
@@ -26,8 +26,21 @@ defmodule BurpeeTrainer.PlanCompilerTest do
     assert length(work_events) == 10
     assert length(rest_events) == 1
     assert Enum.map(work_events, & &1.reps) == List.duplicate(10, 10)
-    assert Enum.map(Enum.take(work_events, 5), & &1.sec_per_rep) == List.duplicate(10.8, 5)
-    assert Enum.map(Enum.drop(work_events, 5), & &1.sec_per_rep) == List.duplicate(12.0, 5)
+    cadence_sec = (1_200 - 60 - List.last(work_events).sec_per_burpee) / 99
+    assert Enum.all?(work_events, &(abs(&1.sec_per_rep - cadence_sec) <= 1.0e-6))
+
+    assert Enum.all?(
+             Enum.drop(work_events, -1),
+             &(abs(&1.duration_sec - 10 * cadence_sec) <= 1.0e-6)
+           )
+
+    final_work = List.last(work_events)
+    assert_in_delta final_work.duration_sec, 9 * cadence_sec + final_work.sec_per_burpee, 1.0e-6
+
+    assert_in_delta Enum.take(work_events, 5) |> Enum.sum_by(& &1.duration_sec),
+                    50 * cadence_sec,
+                    1.0e-6
+
     assert Enum.all?(work_events, &(&1.sec_per_burpee > 0))
     assert Enum.all?(work_events, &(&1.sec_per_burpee <= &1.sec_per_rep))
     assert Enum.any?(work_events, &(&1.sec_per_burpee < &1.sec_per_rep))

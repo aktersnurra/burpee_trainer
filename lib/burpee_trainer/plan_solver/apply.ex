@@ -171,13 +171,15 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
   defp pattern_match?(_candidate, _pattern), do: false
 
   defp unit_key({:set, set}),
-    do: {:set, set.burpee_count, set.sec_per_rep, set.sec_per_burpee, set.end_of_set_rest}
+    do:
+      {:set, set.burpee_count, set.sec_per_rep, set.sec_per_burpee, set.duration_sec,
+       set.end_of_set_rest}
 
   defp unit_key({:set_group, group}) do
     {:set_group,
      Enum.map(
        group.sets,
-       &{&1.burpee_count, &1.sec_per_rep, &1.sec_per_burpee, &1.end_of_set_rest}
+       &{&1.burpee_count, &1.sec_per_rep, &1.sec_per_burpee, &1.duration_sec, &1.end_of_set_rest}
      )}
   end
 
@@ -193,6 +195,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
           burpee_count: set.burpee_count,
           sec_per_rep: set.sec_per_rep,
           sec_per_burpee: set.sec_per_burpee,
+          duration_sec: set.duration_sec,
           end_of_set_rest: set.end_of_set_rest
         }
       end)
@@ -212,6 +215,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       burpee_count: set.burpee_count,
       sec_per_rep: set.sec_per_rep,
       sec_per_burpee: set.sec_per_burpee,
+      duration_sec: set.duration_sec,
       end_of_set_rest: 0
     }
 
@@ -225,6 +229,7 @@ defmodule BurpeeTrainer.PlanSolver.Apply do
       burpee_count: set.burpee_count,
       sec_per_rep: set.sec_per_rep,
       sec_per_burpee: set.sec_per_burpee,
+      duration_sec: set.duration_sec,
       end_of_set_rest: 0
     }
 

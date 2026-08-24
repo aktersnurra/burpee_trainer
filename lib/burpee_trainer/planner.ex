@@ -245,7 +245,7 @@ defmodule BurpeeTrainer.Planner do
     block.sets
     |> sort_by_position()
     |> Enum.reduce(0.0, fn set, total ->
-      total + set.burpee_count * set.sec_per_rep + set.end_of_set_rest
+      total + set_work_duration(set) + set.end_of_set_rest
     end)
   end
 
@@ -257,8 +257,7 @@ defmodule BurpeeTrainer.Planner do
       Enum.reduce(sets, 0, fn set, acc -> acc + set.burpee_count end) * repeat_count
 
     duration_sec_work =
-      Enum.reduce(sets, 0.0, fn set, acc -> acc + set.burpee_count * set.sec_per_rep end) *
-        repeat_count
+      Enum.reduce(sets, 0.0, fn set, acc -> acc + set_work_duration(set) end) * repeat_count
 
     duration_sec_rest =
       Enum.reduce(sets, 0, fn set, acc -> acc + set.end_of_set_rest end) * repeat_count
@@ -297,7 +296,7 @@ defmodule BurpeeTrainer.Planner do
   defp build_timeline_set(%Block{} = block, round, %Set{} = set, set_index, last_set_index) do
     work_event = %Event{
       type: :work_burpee,
-      duration_sec: set.burpee_count * set.sec_per_rep,
+      duration_sec: set_work_duration(set),
       burpee_count: set.burpee_count,
       sec_per_burpee: set.sec_per_rep,
       label: build_set_label(block, round, set_index)
@@ -320,6 +319,11 @@ defmodule BurpeeTrainer.Planner do
       [work_event]
     end
   end
+
+  defp set_work_duration(%Set{duration_sec: duration_sec}) when is_number(duration_sec),
+    do: duration_sec
+
+  defp set_work_duration(%Set{} = set), do: set.burpee_count * set.sec_per_rep
 
   defp build_set_label(%Block{position: block_pos}, _round, _set_index) do
     "Block #{block_pos}"

@@ -1141,7 +1141,8 @@ defmodule BurpeeTrainer.Workouts do
               "work" ->
                 reps = tracking_value(event, :reps)
                 sec_per_rep = tracking_value(event, :sec_per_rep_us) / 1_000_000
-                {reps_total + reps, sec_total + reps * sec_per_rep}
+                duration_sec = tracking_value(event, :duration_sec) || reps * sec_per_rep
+                {reps_total + reps, sec_total + duration_sec}
 
               _other ->
                 {reps_total, sec_total}

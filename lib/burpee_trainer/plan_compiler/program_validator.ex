@@ -9,6 +9,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
   def validate(%Program{} = program) do
     with :ok <- validate_events(program.events),
          :ok <- validate_terminal_work(program.events),
+         :ok <- validate_schema_three_work_durations(program),
          :ok <- validate_reps(program),
          :ok <- validate_duration(program) do
       :ok
@@ -23,10 +24,12 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
       %ProgramEvent.Work{
         reps: reps,
         sec_per_rep: cadence,
-        sec_per_burpee: active_duration
+        sec_per_burpee: active_duration,
+        duration_sec: duration_sec
       },
       :ok
-      when reps > 0 and cadence > 0 and active_duration > 0 and active_duration <= cadence ->
+      when reps > 0 and cadence > 0 and active_duration > 0 and active_duration <= cadence and
+             (is_nil(duration_sec) or (is_number(duration_sec) and duration_sec > 0)) ->
         {:cont, :ok}
 
       %ProgramEvent.Rest{duration_sec: duration}, :ok
@@ -48,6 +51,51 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
       %ProgramEvent.Rest{} ->
         {:error, CompileError.new(:terminal_rest, "Program must end with a work event")}
     end
+  end
+
+  defp validate_schema_three_work_durations(%Program{schema_version: schema_version})
+       when schema_version < 3,
+       do: :ok
+
+  defp validate_schema_three_work_durations(%Program{} = program) do
+    terminal_index = length(program.events) - 1
+
+    program.events
+    |> Enum.with_index()
+    |> Enum.reduce_while(:ok, fn
+      {%ProgramEvent.Work{} = work, ^terminal_index}, :ok ->
+        validate_work_duration(work, (work.reps - 1) * work.sec_per_rep + work.sec_per_burpee)
+
+      {%ProgramEvent.Work{} = work, _index}, :ok ->
+        validate_work_duration(work, work.reps * work.sec_per_rep)
+
+      {_event, _index}, :ok ->
+        {:cont, :ok}
+    end)
+  end
+
+  defp validate_work_duration(%ProgramEvent.Work{duration_sec: duration_sec}, expected)
+       when is_number(duration_sec) do
+    if abs(duration_sec - expected) <= @epsilon do
+      {:cont, :ok}
+    else
+      {:halt,
+       {:error,
+        CompileError.new(
+          :invalid_work_duration,
+          "Work duration does not match canonical timing",
+          %{
+            expected_duration_sec: expected,
+            actual_duration_sec: duration_sec
+          }
+        )}}
+    end
+  end
+
+  defp validate_work_duration(_work, _expected) do
+    {:halt,
+     {:error,
+      CompileError.new(:invalid_work_duration, "Schema-3 work events require duration", %{})}}
   end
 
   defp validate_reps(%Program{} = program) do
