@@ -2805,7 +2805,8 @@ test("running frames cue authoritative remaining reps during work recovery", () 
 
 	assert.equal(ctx.renderedModels[0].visual.state, "work_recovery");
 	assert.equal(ctx.renderedModels[0].primaryCount, "6");
-	assert.deepEqual(ctx.downCueValues, [5, 4]);
+	// Active work ends at 3s, so recovery begins with one scheduled rep complete.
+	assert.deepEqual(ctx.downCueValues, [4, 4]);
 });
 
 test("running frames derive rest set progress from the hook timeline", () => {

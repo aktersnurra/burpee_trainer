@@ -43,6 +43,9 @@ function plannedBurpees(timeline) {
 function plannedDurationSec(timeline) {
   return timeline.reduce((total, segment) => {
     if (segment.kind === "work") {
+      if (Number.isFinite(segment.duration_sec)) {
+        return total + segment.duration_sec;
+      }
       return total + (segment.reps || 0) * (segment.sec_per_rep || 0);
     }
     if (segment.kind === "rest") return total + (segment.duration_sec || 0);

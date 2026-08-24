@@ -264,6 +264,26 @@ test("exactly three seconds enters rest_count_in with plain centered numerals", 
 	}
 });
 
+test("terminal explicit work duration leaves no trailing recovery frame", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
+	];
+	const lastFrame = currentFrame(timeline, 37.999);
+	const lastModel = runningDisplayModel({
+		timeline,
+		frame: lastFrame,
+		timeLeftSec: 0.001,
+		totalDone: 3,
+		totalTarget: 4,
+		doneInEvent: 1,
+	});
+
+	assert.equal(lastModel.visual.state, "work_active");
+	assert.equal(currentFrame(timeline, 38), null);
+});
+
 test("the exact rest boundary enters work at zero per-rep progress", () => {
 	const boundarySec = 54;
 	const finalRestFrame = currentFrame(threeSetTimeline, boundarySec - 0.001);

@@ -238,6 +238,64 @@ test("session result waits for report-pending acknowledgement before completion 
   assert.equal(acknowledged.state.mode, "completion_review");
 });
 
+test("explicit work durations plan 38 seconds while actual counts remain camera-only", () => {
+  const explicitTimeline = [
+    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
+    { kind: "rest", duration_sec: 5 },
+    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
+  ];
+  const legacyTimeline = [
+    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+    { kind: "rest", duration_sec: 5 },
+    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+  ];
+
+  const noCamera = step(
+    {
+      ...initialFlowState(),
+      mode: "workout_running",
+      captureMode: "no_camera",
+      workoutTimeline: explicitTimeline,
+    },
+    {
+      type: "SESSION_DONE",
+      result: { burpeeCountDone: 4, scheduledRepsDone: 4, durationSec: 38 },
+    },
+  );
+  assert.equal(noCamera.state.completion.durationSecPlanned, 38);
+  assert.equal(noCamera.state.completion.scheduledRepsDone, 4);
+  assert.equal(noCamera.state.completion.burpeeCountActual, null);
+
+  const camera = step(
+    {
+      ...cameraRunningState(),
+      workoutTimeline: explicitTimeline,
+    },
+    {
+      type: "SEGMENT_FINISHED",
+      result: {
+        burpeeCountDone: 4,
+        scheduledRepsDone: 4,
+        detectedReps: 0,
+        detectedDurationSec: 38,
+      },
+    },
+  );
+  assert.equal(camera.state.completion.scheduledRepsDone, 4);
+  assert.equal(camera.state.completion.burpeeCountActual, 0);
+  assert.equal(camera.state.completion.burpeeCountProvenance, "camera_confirmed");
+
+  const legacy = step(
+    {
+      ...initialFlowState(),
+      mode: "workout_running",
+      workoutTimeline: legacyTimeline,
+    },
+    { type: "SESSION_DONE", result: { scheduledRepsDone: 4, durationSec: 45 } },
+  );
+  assert.equal(legacy.state.completion.durationSecPlanned, 45);
+});
+
 test("failed pending report retries without changing the completion draft", () => {
   const completion = {
     burpeeCountActual: 12,

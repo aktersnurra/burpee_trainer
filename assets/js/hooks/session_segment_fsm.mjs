@@ -55,8 +55,10 @@ export function currentFrame(timeline, elapsedSec) {
 }
 
 export function eventDurationSec(event) {
-	if (event?.kind === "work")
+	if (event?.kind === "work") {
+		if (Number.isFinite(event.duration_sec)) return event.duration_sec;
 		return (event.reps || 0) * (event.sec_per_rep || 0);
+	}
 	if (event?.kind === "rest") return event.duration_sec || 0;
 	return 0;
 }
@@ -78,17 +80,42 @@ function isBurpeeEvent(event) {
 	return eventKind(event) === "work";
 }
 
-function completedRepsInFrame(frame) {
-	if (!frame || !frame.event || !isBurpeeEvent(frame.event)) return 0;
+function activeDurationSec(event) {
+	const cadenceSec = Number(event?.sec_per_rep) || 0;
+	if (cadenceSec <= 0) return 0;
 
-	const event = frame.event;
+	const configuredActiveSec = Number(event?.sec_per_burpee);
+	return configuredActiveSec > 0
+		? Math.min(configuredActiveSec, cadenceSec)
+		: cadenceSec;
+}
+
+function completedRepsForElapsed(event, phaseElapsedSec) {
+	if (!isBurpeeEvent(event)) return 0;
+
 	const target = event.reps || 0;
-	const secondsPerRep = event.sec_per_rep;
+	const cadenceSec = Number(event.sec_per_rep) || 0;
+	const activeSec = activeDurationSec(event);
+	const elapsedSec = Number(phaseElapsedSec) || 0;
 
-	return Math.min(
-		Math.floor((frame.phase_elapsed || 0) / secondsPerRep),
-		target,
-	);
+	if (cadenceSec <= 0 || elapsedSec < activeSec) return 0;
+	return Math.min(Math.floor((elapsedSec - activeSec) / cadenceSec) + 1, target);
+}
+
+function completedRepsInFrame(frame) {
+	if (!frame || !frame.event) return 0;
+	return completedRepsForElapsed(frame.event, frame.phase_elapsed);
+}
+
+function scheduledRepsAtElapsed(timeline, elapsedSec) {
+	let cursor = 0;
+
+	return timeline.reduce((completed, event) => {
+		const nextCompleted =
+			completed + completedRepsForElapsed(event, elapsedSec - cursor);
+		cursor += eventDurationSec(event);
+		return nextCompleted;
+	}, 0);
 }
 
 export function accountReps(previousFrame, nextFrame, reps) {
@@ -129,11 +156,13 @@ export function accountReps(previousFrame, nextFrame, reps) {
 		reps.currentEventKey === previousKey ? reps.doneInEvent : 0;
 	const missing = Math.max(target - doneInEvent, 0);
 
+	const completed = completedRepsInFrame(nextFrame);
+
 	return {
 		...reps,
 		currentEventKey: nextKey,
-		doneInEvent: completedRepsInFrame(nextFrame),
-		burpeeCountDone: reps.burpeeCountDone + missing,
+		doneInEvent: completed,
+		burpeeCountDone: reps.burpeeCountDone + missing + completed,
 	};
 }
 
@@ -518,18 +547,31 @@ export function segmentTransition(state, event) {
 			};
 		}
 
-		case "FINISH_EARLY":
+		case "FINISH_EARLY": {
+			const accountedReps = accountReps(
+				state.reps.previousFrame,
+				currentFrame(state.timeline, event.elapsedSec),
+				state.reps,
+			);
+			const completedReps = scheduledRepsAtElapsed(
+				state.timeline,
+				event.elapsedSec,
+			);
+
 			return finalizeSegment(
 				{
 					...state,
-					reps: accountReps(
-						state.reps.previousFrame,
-						currentFrame(state.timeline, event.elapsedSec),
-						state.reps,
-					),
+					reps: {
+						...accountedReps,
+						burpeeCountDone: Math.max(
+							accountedReps.burpeeCountDone,
+							completedReps,
+						),
+					},
 				},
 				event.elapsedSec,
 			);
+		}
 
 		case "PAUSE":
 			return {

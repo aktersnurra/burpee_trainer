@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+	currentFrame,
 	initialSegmentState,
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
@@ -204,6 +205,98 @@ test("finishing early during rest credits completed work but not rest", () => {
 
 	assert.equal(finished.state.reps.burpeeCountDone, 3);
 	assert.equal(done.result.scheduledRepsDone, 3);
+});
+
+test("explicit work duration credits reps at active ends and finishes at terminal active end", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
+	];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 4,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	for (const [elapsedSec, expected] of [
+		[2.999, 0],
+		[3, 1],
+		[10, 1],
+		[13, 2],
+		[20, 2],
+		[24.999, 2],
+		[25, 2],
+		[27.999, 2],
+		[28, 3],
+		[37.999, 3],
+	]) {
+		state = segmentTransition(state, { type: "TICK", elapsedSec }).state;
+		assert.equal(state.reps.burpeeCountDone, expected, `at ${elapsedSec}s`);
+	}
+
+	const lastInWorkFrame = currentFrame(timeline, 37.999);
+	assert.equal(lastInWorkFrame.event, timeline[2]);
+	assert.ok(Math.abs(lastInWorkFrame.phase_elapsed - 12.999) < 1e-9);
+	assert.equal(currentFrame(timeline, 38), null);
+
+	const complete = segmentTransition(state, { type: "TICK", elapsedSec: 38 });
+	const done = complete.commands.filter((command) => command.type === "segmentDone");
+	assert.equal(complete.state.reps.burpeeCountDone, 4);
+	assert.deepEqual(done, [
+		{
+			type: "segmentDone",
+			result: { burpeeCountDone: 4, scheduledRepsDone: 4, durationSec: 38 },
+		},
+	]);
+});
+
+test("delayed ticks and early finish credit only completed active portions", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
+	];
+	const runningState = () => {
+		const state = segmentTransition(initialSegmentState(), {
+			type: "SEGMENT_READY",
+			timeline,
+			burpeeCountTarget: 4,
+		}).state;
+		return segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+	};
+
+	let delayed = segmentTransition(runningState(), { type: "TICK", elapsedSec: 28.1 });
+	delayed = segmentTransition(delayed.state, {
+		type: "ACCOUNT_REPS",
+		frame: currentFrame(timeline, 28.1),
+	});
+	assert.equal(delayed.state.reps.burpeeCountDone, 3);
+	delayed = segmentTransition(delayed.state, { type: "TICK", elapsedSec: 38.1 });
+	assert.deepEqual(
+		delayed.commands.filter((command) => command.type === "segmentDone"),
+		[
+			{
+				type: "segmentDone",
+				result: { burpeeCountDone: 4, scheduledRepsDone: 4, durationSec: 38 },
+			},
+		],
+	);
+
+	for (const [elapsedSec, expected] of [
+		[2.999, 0],
+		[5, 1],
+		[37, 3],
+		[38, 4],
+	]) {
+		const finished = segmentTransition(runningState(), {
+			type: "FINISH_EARLY",
+			elapsedSec,
+		});
+		const done = finished.commands.find((command) => command.type === "segmentDone");
+		assert.equal(done.result.scheduledRepsDone, expected, `finish at ${elapsedSec}s`);
+	}
 });
 
 test("pause-only and visibility-only recovery retain their clock shifts", () => {
