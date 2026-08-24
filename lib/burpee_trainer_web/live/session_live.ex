@@ -317,8 +317,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           "work" ->
             reps = map_get(event, :reps)
             sec_per_rep = map_get(event, :sec_per_rep_us) / 1_000_000
-            duration_sec = map_get(event, :duration_sec, reps * sec_per_rep)
-            {reps_total + reps, sec_total + duration_sec}
+            {reps_total + reps, sec_total + reps * sec_per_rep}
 
           _other ->
             {reps_total, sec_total}

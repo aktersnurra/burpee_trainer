@@ -4,22 +4,38 @@
 
 **Goal:** Replace the current image-plane burpee phase gates with a no-calibration, low front-camera world-landmark model for full-body workout framing.
 
-**Architecture:** `featureFrameFromPose/4` will derive body-scale-normalized relative BlazePose-world signals while retaining existing image-plane/debug fields. `pose_burpee_hsmm.mjs` will consume only those world signals for bounded macro-phase emissions. Tracker, reporting, and absence behavior remain unchanged: incomplete, cropped, or low-confidence observations are silent no-ops.
+**Architecture:** Historical implementation proposal. `featureFrameFromPose/4` derives body-scale-normalized relative BlazePose-world signals while retaining existing image-plane/debug fields. `pose_burpee_hsmm.mjs` consumes only those world signals.
 
 **Tech Stack:** Vanilla ES modules, MediaPipe BlazePose world landmarks, Node test runner, Phoenix LiveView, existing test-only fixture asset entrypoint.
 
-## Global Constraints
+## Authoritative Phase-Count Supersession
+
+This correction supersedes every conflicting expiry, no-reset, threshold, and commit instruction in the historical task details below.
+
+- There are no phase-duration or repetition-duration caps.
+- An unusable camera frame resets only an incomplete candidate to `upright` and emits no rep.
+- A strong out-of-order emission (score `>= 0.72` for neither the current phase nor its direct next phase) resets to `upright` and emits no rep.
+- Only `returning_from_floor → upright` may emit a rep: it requires score `>= 0.48` and the strict prior path `upright → lowering_to_floor → floor_work → returning_from_floor`.
+- Preserve configured GPG signing for Jujutsu mutations; never override signing behavior to drop signatures.
+
+The task-by-task details that follow are historical implementation records. They remain for provenance only and must not be used where they conflict with this supersession.
+
+## Historical Global Constraints
 
 - Support only a fixed phone on or near the floor, facing the athlete, with full-body framing.
 - Do not add calibration, ground-plane fitting, camera-extrinsic estimation, trained models, model downloads, or server inference.
 - Use world-landmark *differences* normalized by same-frame body scale; never use absolute camera coordinates, person height, or camera distance.
 - Image landmarks may gate visibility and confidence only; they must not be phase evidence.
-- An absent/cropped/low-confidence frame is a silent no-op: no reset, warning, trace annotation, fallback, provenance field, or invented rep.
+- Historical and superseded: an absent/cropped/low-confidence frame was described as a silent no-op with no reset. The authoritative reset contract above applies instead; warning, trace, fallback, provenance, and invented-rep prohibitions remain.
 - Preserve the general macro-cycle `upright → lowering_to_floor → floor_work → returning_from_floor → upright`; internal pushups do not add reps.
 - Preserve lifecycle UUID authority, explicit-only correction provenance, bounded trace uploads, and production-bundle exclusion of the browser fixture.
-- Use `jj --config signing.behavior=drop` for every Jujutsu mutation.
+- Preserve configured GPG signing for every Jujutsu mutation; do not override signing behavior.
 
 ---
+
+## Historical Implementation Tasks
+
+The following tasks are retained as historical implementation detail. The authoritative phase-count supersession above controls any conflict.
 
 ### Task 1: Derive normalized low-front world-landmark features
 
@@ -93,8 +109,8 @@ Expected: PASS. Task 2 owns migration of the old 2-D macro fixtures and scorer.
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'feat(tracking): derive low-front world pose features'
-jj --config signing.behavior=drop new
+jj describe -m 'feat(tracking): derive low-front world pose features'
+jj new
 ```
 
 ### Task 2: Score the macro-cycle from world geometry
@@ -210,8 +226,8 @@ Expected: PASS; one and three pushups count once each, image foreshortening cann
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'feat(tracking): score burpees from world landmarks'
-jj --config signing.behavior=drop new
+jj describe -m 'feat(tracking): score burpees from world landmarks'
+jj new
 ```
 
 ### Task 3: Admit and record only usable low-front world frames
@@ -290,8 +306,8 @@ Expected: PASS; capture recording and phase inference agree on which low-front f
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'fix(tracking): gate low-front world observations'
-jj --config signing.behavior=drop new
+jj describe -m 'fix(tracking): gate low-front world observations'
+jj new
 ```
 
 ### Task 4: Update the controlled fixture and browser runbook for low-front capture
@@ -350,8 +366,8 @@ Expected: PASS. Verify the normal built `priv/static/assets/js/app.js` contains 
 - [ ] **Step 5: Commit**
 
 ```bash
-jj --config signing.behavior=drop describe -m 'test(tracking): cover low-front camera counting'
-jj --config signing.behavior=drop new
+jj describe -m 'test(tracking): cover low-front camera counting'
+jj new
 ```
 
 ### Task 5: Run full regression verification and record browser-E2E status

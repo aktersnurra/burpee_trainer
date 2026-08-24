@@ -128,6 +128,36 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute has_element?(view, "#flash-group")
   end
 
+  test "uses schema-three cadence rather than the terminal work duration for camera setup", %{
+    conn: conn,
+    user: user
+  } do
+    plan =
+      plan_fixture(user, %{
+        "source_json" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 2,
+          "target_duration_sec" => 120,
+          "pacing_style" => "even",
+          "block_pattern" => [1],
+          "explicit_rests" => []
+        }
+      })
+
+    {:ok, execution_program} = Workouts.compile_plan(plan)
+    {:ok, view, _html} = live(conn, ~p"/session/#{plan.id}")
+    document = view |> render() |> LazyHTML.from_fragment()
+
+    session = LazyHTML.query(document, "#burpee-session")
+    [serialized_program] = LazyHTML.attribute(session, "data-session-program")
+    decoded_program = Jason.decode!(serialized_program)
+    [_, terminal_work] = decoded_program["events"]
+
+    assert execution_program.schema_version == 3
+    assert terminal_work["duration_sec"] < terminal_work["sec_per_rep"]
+    assert has_element?(view, "#pose-tracker[data-target-pace-sec='114.7']")
+  end
+
   test "renders inactive panels hidden and inert with the static completion form", %{
     conn: conn,
     user: user

@@ -1,8 +1,10 @@
 # Low Front-Camera HSMM Counting Design
 
-**Status:** Approved for implementation planning
+**Status:** Historical design with the authoritative phase-count correction below.
 
 **Supersedes:** the camera-placement and emission-feature portions of `2026-08-18-zero-setup-hsmm-camera-counting-design.md`. The durable lifecycle, trace-upload, explicit-correction, and general macro-cycle decisions remain unchanged.
+
+> **Authoritative correction:** This document's former expiry and no-reset details are historical. The phase-count contract below supersedes them.
 
 ## Goal
 
@@ -39,11 +41,13 @@ The feature vector contains:
 
 Image-plane landmarks are used only for the visibility gate. They must not be phase evidence: low floor placement makes 2-D apparent size, foreshortening, and pixel distances unreliable.
 
-### Emissions and Durations
+### Emissions and State Reset Contract
 
-Each usable frame gets a bounded emission score for the current macro phases. Scores are hand-authored combinations of the world-landmark features; they are not trained weights. A transition requires sufficiently strong forward evidence and may remain in its current phase while evidence is weak. Each active phase has a broad maximum duration. On expiry, the model returns to `upright` without emitting a rep.
+Each usable frame gets a bounded, hand-authored emission score for the macro phases; scores are not trained weights. There are **no phase-duration or repetition-duration caps**. A transition ordinarily requires sufficiently strong forward evidence and may remain in its current phase while evidence is weak.
 
-The model retains only the current phase, phase start time, prior feature values for motion, last committed rep time, and cadence. It has no gap state. An absent frame neither resets nor advances this state. A later usable frame can continue an unambiguous partial path; otherwise duration expiry discards it without a count.
+An unusable camera frame (including cropped, occluded, or low-confidence observations) resets an **incomplete candidate only** to `upright` and emits no rep. A strong out-of-order emission—score `>= 0.72` for neither the current phase nor its direct next phase—also resets to `upright` and emits no rep. The only completion transition is `returning_from_floor → upright`, which requires score `>= 0.48` after the strict preceding path `upright → lowering_to_floor → floor_work → returning_from_floor` has been observed. No other transition emits a rep.
+
+The model retains the current phase, prior feature values for motion, last committed rep time, and cadence. It has no gap state or duration-expiry recovery behavior.
 
 ## Product and Reporting Contract
 
@@ -61,11 +65,13 @@ Tests must use raw BlazePose-shaped low-front fixtures, not only precomputed fea
 1. a low-front full-body one-pushup macro-cycle produces one rep;
 2. a three-pushup floor-work phase still produces one rep;
 3. two cycles separated by absent/cropped frames produce exactly two reps;
-4. a cropped or low-confidence required landmark frame neither advances nor resets the model;
-5. a squat-only motion and an interrupted floor path produce no rep;
-6. an overlong partial path expires without a rep;
-7. the production app bundle and deployment bundle cannot activate the browser fixture;
-8. the test-only fixture bundle can drive a low-front camera session through two cycles, no warning, enabled Save, and exactly one UUID-backed report when a browser controller is available.
+4. a cropped or low-confidence required landmark frame resets an incomplete candidate to upright and produces no rep;
+5. a strong out-of-order emission (score `>= 0.72` for neither current nor direct-next phase) resets and produces no rep;
+6. only `returning_from_floor → upright` at score `>= 0.48`, after the strict prior phases, emits a rep;
+7. no phase or repetition duration cap expires an incomplete path;
+8. a squat-only motion and an interrupted floor path produce no rep;
+9. the production app bundle and deployment bundle cannot activate the browser fixture;
+10. the test-only fixture bundle can drive a low-front camera session through two cycles, no warning, enabled Save, and exactly one UUID-backed report when a browser controller is available.
 
 ## Non-Goals
 
