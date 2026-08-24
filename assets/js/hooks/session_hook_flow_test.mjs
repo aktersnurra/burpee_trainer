@@ -1980,6 +1980,8 @@ test("camera through completion review requires no server event", async () => {
 		ctx.el.querySelector("#session-completion-review").hidden,
 		false,
 	);
+	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "0");
 	assert.equal(
 		ctx.el.querySelector("#session-actual-duration").textContent,

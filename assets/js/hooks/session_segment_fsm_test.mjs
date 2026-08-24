@@ -145,6 +145,67 @@ test("finishing before the first active tick does not count scheduled work", () 
 	assert.equal(done.result.scheduledRepsDone, 0);
 });
 
+test("finishing early at five seconds does not credit a partial active interval", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20 }];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 3,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	const finished = segmentTransition(state, {
+		type: "FINISH_EARLY",
+		elapsedSec: 5,
+	});
+	const done = finished.commands.find((command) => command.type === "segmentDone");
+
+	assert.equal(finished.state.reps.burpeeCountDone, 0);
+	assert.equal(done.result.scheduledRepsDone, 0);
+});
+
+test("finishing early at 25 seconds credits one completed active interval", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20 }];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 3,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	const finished = segmentTransition(state, {
+		type: "FINISH_EARLY",
+		elapsedSec: 25,
+	});
+	const done = finished.commands.find((command) => command.type === "segmentDone");
+
+	assert.equal(finished.state.reps.burpeeCountDone, 1);
+	assert.equal(done.result.scheduledRepsDone, 1);
+});
+
+test("finishing early during rest credits completed work but not rest", () => {
+	const timeline = [
+		{ kind: "work", reps: 3, sec_per_rep: 20 },
+		{ kind: "rest", duration_sec: 20 },
+		{ kind: "work", reps: 1, sec_per_rep: 20 },
+	];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 4,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	const finished = segmentTransition(state, {
+		type: "FINISH_EARLY",
+		elapsedSec: 65,
+	});
+	const done = finished.commands.find((command) => command.type === "segmentDone");
+
+	assert.equal(finished.state.reps.burpeeCountDone, 3);
+	assert.equal(done.result.scheduledRepsDone, 3);
+});
+
 test("pause-only and visibility-only recovery retain their clock shifts", () => {
 	const running = {
 		...initialSegmentState(),
