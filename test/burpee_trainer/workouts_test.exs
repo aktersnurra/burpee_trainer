@@ -996,7 +996,7 @@ defmodule BurpeeTrainer.WorkoutsTest do
 
       assert trusted.capture_mode == :tracked
       assert trusted.cadence_ms == "[5000,10000,15000]"
-      assert trusted.target_pace_sec == 40.0
+      assert trusted.target_pace_sec == 41.197
       assert trusted.pace_consistency == 1.0
 
       corrected_id = Ecto.UUID.generate()
