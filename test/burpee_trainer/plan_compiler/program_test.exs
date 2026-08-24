@@ -80,4 +80,22 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
     assert {:error, %CompileError{code: :target_duration_mismatch}} =
              ProgramValidator.validate(program)
   end
+
+  test "validator rejects a program ending in rest" do
+    assert {:ok, program} =
+             Program.new(%{
+               schema_version: 2,
+               solver_version: 4,
+               burpee_type: :six_count,
+               target_reps: 1,
+               target_duration_sec: 15,
+               events: [
+                 ProgramEvent.work!(%{reps: 1, sec_per_rep: 10.0, sec_per_burpee: 5.0}),
+                 ProgramEvent.rest!(%{duration_sec: 5})
+               ],
+               metadata: %{pacing_style: :even}
+             })
+
+    assert {:error, %CompileError{code: :terminal_rest}} = ProgramValidator.validate(program)
+  end
 end

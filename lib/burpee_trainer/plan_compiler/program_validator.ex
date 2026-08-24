@@ -8,6 +8,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
   @spec validate(Program.t()) :: :ok | {:error, CompileError.t()}
   def validate(%Program{} = program) do
     with :ok <- validate_events(program.events),
+         :ok <- validate_terminal_work(program.events),
          :ok <- validate_reps(program),
          :ok <- validate_duration(program) do
       :ok
@@ -37,6 +38,16 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
          {:error,
           CompileError.new(:invalid_event, "Program contains an invalid event", %{event: event})}}
     end)
+  end
+
+  defp validate_terminal_work(events) do
+    case List.last(events) do
+      %ProgramEvent.Work{} ->
+        :ok
+
+      %ProgramEvent.Rest{} ->
+        {:error, CompileError.new(:terminal_rest, "Program must end with a work event")}
+    end
   end
 
   defp validate_reps(%Program{} = program) do
