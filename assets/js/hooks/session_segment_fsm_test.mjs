@@ -90,7 +90,39 @@ test("natural completion clamps a delayed animation tick to timeline duration", 
 
 	assert.equal(completed.state.clock.elapsedSec, 60);
 	assert.equal(rendered.elapsedSec, 60);
-	assert.deepEqual(done.result, { burpeeCountDone: 3, durationSec: 60 });
+	assert.deepEqual(done.result, {
+		burpeeCountDone: 3,
+		scheduledRepsDone: 3,
+		durationSec: 60,
+	});
+});
+
+test("active completion advances pace progress before rest and final active ends the segment", () => {
+	const timeline = [
+		{ kind: "work", reps: 1, sec_per_rep: 10 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 1, sec_per_rep: 10 },
+	];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 2,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 10 }).state;
+	assert.equal(state.reps.burpeeCountDone, 1);
+
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 14.9 }).state;
+	assert.equal(state.reps.burpeeCountDone, 1);
+
+	const complete = segmentTransition(state, { type: "TICK", elapsedSec: 25 });
+	const done = complete.commands.find((command) => command.type === "segmentDone");
+	assert.deepEqual(done.result, {
+		burpeeCountDone: 2,
+		scheduledRepsDone: 2,
+		durationSec: 25,
+	});
 });
 
 test("pause-only and visibility-only recovery retain their clock shifts", () => {

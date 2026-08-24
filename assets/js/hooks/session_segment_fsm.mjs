@@ -261,6 +261,14 @@ function displayCommandsForFrame(display, event) {
 	return { display: nextDisplay, commands };
 }
 
+function segmentResult(reps, elapsedSec) {
+	return {
+		burpeeCountDone: reps.burpeeCountDone,
+		scheduledRepsDone: reps.burpeeCountDone,
+		durationSec: Math.round(elapsedSec),
+	};
+}
+
 function finalizeSegment(state, elapsedSec) {
 	return {
 		state: {
@@ -273,10 +281,7 @@ function finalizeSegment(state, elapsedSec) {
 			{ type: "cancelAnimationFrame" },
 			{
 				type: "segmentDone",
-				result: {
-					burpeeCountDone: state.reps.burpeeCountDone,
-					durationSec: Math.round(elapsedSec),
-				},
+				result: segmentResult(state.reps, elapsedSec),
 			},
 		],
 	};
@@ -337,10 +342,7 @@ function tickSegment(state, event) {
 			{ type: "renderRunningFrame", elapsedSec: completionElapsedSec },
 			{
 				type: "segmentDone",
-				result: {
-					burpeeCountDone: nextReps.burpeeCountDone,
-					durationSec: Math.round(completionElapsedSec),
-				},
+				result: segmentResult(nextReps, completionElapsedSec),
 			},
 		],
 	};
@@ -464,6 +466,10 @@ export function segmentTransition(state, event) {
 						...state.clock,
 						startTime: event.now || null,
 						totalDurationSec: totalDurationSec(state.timeline),
+					},
+					reps: {
+						...state.reps,
+						previousFrame: currentFrame(state.timeline, 0),
 					},
 				},
 				commands: [{ type: "startAnimationFrame" }],
