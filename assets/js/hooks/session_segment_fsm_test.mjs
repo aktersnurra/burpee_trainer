@@ -299,6 +299,65 @@ test("delayed ticks and early finish credit only completed active portions", () 
 	}
 });
 
+test("delayed ticks derive scheduled progress from all elapsed work while preserving the current frame", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+	];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 6,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+
+	const delayed = segmentTransition(state, { type: "TICK", elapsedSec: 53 });
+	const frame = currentFrame(timeline, 53);
+	const display = segmentTransition(delayed.state, {
+		type: "DISPLAY_FRAME",
+		frame,
+		elapsedSec: 53,
+	});
+
+	assert.equal(delayed.state.reps.burpeeCountDone, 5);
+	assert.equal(frame.index, 4);
+	assert.equal(frame.phase_elapsed, 3);
+	assert.deepEqual(
+		display.commands.find((command) => command.type === "renderWorkRepProgress"),
+		{ type: "renderWorkRepProgress", progress: 0.3 },
+	);
+});
+
+test("short explicit work durations never fabricate scheduled reps on departure or finish", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 12 },
+	];
+	const runningState = () => {
+		const ready = segmentTransition(initialSegmentState(), {
+			type: "SEGMENT_READY",
+			timeline,
+			burpeeCountTarget: 2,
+		}).state;
+		return segmentTransition(ready, { type: "COUNTDOWN_DONE", now: 0 }).state;
+	};
+
+	const completed = segmentTransition(runningState(), { type: "TICK", elapsedSec: 12 });
+	const naturallyDone = completed.commands.find(
+		(command) => command.type === "segmentDone",
+	);
+	assert.equal(naturallyDone.result.scheduledRepsDone, 1);
+
+	const finished = segmentTransition(runningState(), {
+		type: "FINISH_EARLY",
+		elapsedSec: 12,
+	});
+	const earlyDone = finished.commands.find((command) => command.type === "segmentDone");
+	assert.equal(earlyDone.result.scheduledRepsDone, 1);
+});
+
 test("pause-only and visibility-only recovery retain their clock shifts", () => {
 	const running = {
 		...initialSegmentState(),

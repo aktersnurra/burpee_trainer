@@ -96,10 +96,16 @@ function completedRepsForElapsed(event, phaseElapsedSec) {
 	const target = event.reps || 0;
 	const cadenceSec = Number(event.sec_per_rep) || 0;
 	const activeSec = activeDurationSec(event);
-	const elapsedSec = Number(phaseElapsedSec) || 0;
+	const eventElapsedSec = Math.min(
+		Math.max(Number(phaseElapsedSec) || 0, 0),
+		eventDurationSec(event),
+	);
 
-	if (cadenceSec <= 0 || elapsedSec < activeSec) return 0;
-	return Math.min(Math.floor((elapsedSec - activeSec) / cadenceSec) + 1, target);
+	if (cadenceSec <= 0 || eventElapsedSec < activeSec) return 0;
+	return Math.min(
+		Math.floor((eventElapsedSec - activeSec) / cadenceSec) + 1,
+		target,
+	);
 }
 
 function completedRepsInFrame(frame) {
@@ -109,10 +115,11 @@ function completedRepsInFrame(frame) {
 
 function scheduledRepsAtElapsed(timeline, elapsedSec) {
 	let cursor = 0;
+	const timelineElapsedSec = Math.max(Number(elapsedSec) || 0, 0);
 
 	return timeline.reduce((completed, event) => {
 		const nextCompleted =
-			completed + completedRepsForElapsed(event, elapsedSec - cursor);
+			completed + completedRepsForElapsed(event, timelineElapsedSec - cursor);
 		cursor += eventDurationSec(event);
 		return nextCompleted;
 	}, 0);
@@ -319,9 +326,9 @@ function finalizeSegment(state, elapsedSec) {
 function completeTimelineReps(state, reps) {
 	return {
 		...reps,
-		burpeeCountDone: Math.max(
-			reps.burpeeCountDone,
-			totalBurpeeCount(state.timeline),
+		burpeeCountDone: scheduledRepsAtElapsed(
+			state.timeline,
+			state.clock.totalDurationSec,
 		),
 		previousFrame: null,
 	};
@@ -334,6 +341,10 @@ function tickSegment(state, event) {
 		const nextReps = frame
 			? {
 					...accountReps(state.reps.previousFrame, frame, state.reps),
+					burpeeCountDone: scheduledRepsAtElapsed(
+						state.timeline,
+						event.elapsedSec,
+					),
 					previousFrame: frame,
 				}
 			: state.reps;
@@ -563,10 +574,7 @@ export function segmentTransition(state, event) {
 					...state,
 					reps: {
 						...accountedReps,
-						burpeeCountDone: Math.max(
-							accountedReps.burpeeCountDone,
-							completedReps,
-						),
+						burpeeCountDone: completedReps,
 					},
 				},
 				event.elapsedSec,
