@@ -1270,6 +1270,7 @@ function completionDraft(overrides = {}) {
 		plan_id: "plan-1",
 		program_hash: "hash-1",
 		burpee_count_actual: 4,
+		burpee_count_provenance: "camera_confirmed",
 		scheduled_reps_done: 4,
 		burpee_count_planned: 5,
 		duration_sec_actual: 9,
@@ -1434,6 +1435,7 @@ test("completion display and every stable edit queue the full draft", async () =
 		completionDraft({
 			client_session_id: "client-1",
 			burpee_count_actual: null,
+			burpee_count_provenance: "unresolved",
 			tracking: {
 				enabled: true,
 				trust: "observing",
@@ -1452,7 +1454,12 @@ test("completion display and every stable edit queue the full draft", async () =
 	ctx.el.dispatchEvent({ type: "input", target: reps });
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).burpee_count_actual, 5);
+	assert.equal(saved.at(-1).burpee_count_provenance, "manual");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
+	assert.equal(
+		ctx.el.querySelector("#session-count-source").textContent,
+		"Manually entered reps",
+	);
 
 	const duration = ctx.el.querySelector("#completion-duration-input");
 	duration.value = "11";
@@ -1507,6 +1514,10 @@ test("completion draft restores only for the server-minted client UUID", async (
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.clientSessionId, "client-1");
 	assert.equal(ctx.flow.completion.scheduledRepsDone, 4);
+	assert.equal(
+		ctx.flow.completion.burpeeCountProvenance,
+		"camera_confirmed",
+	);
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
 	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
 	assert.equal(
@@ -1521,6 +1532,27 @@ test("completion draft restores only for the server-minted client UUID", async (
 		"true",
 	);
 	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("legacy completion drafts recover a non-camera count as manual", async () => {
+	const { burpee_count_provenance: _provenance, ...legacyDraft } = completionDraft({
+		client_session_id: "client-1",
+		tracking: { enabled: false, trust: "disabled" },
+	});
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraftByClientSessionId: async () => legacyDraft,
+		}),
+	});
+	await ctx.draftRestore;
+
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
+	assert.equal(
+		ctx.el.querySelector("#session-count-source").textContent,
+		"Manually entered reps",
+	);
 	ctx.destroyed();
 });
 
@@ -2974,6 +3006,7 @@ function prepareSaveReview(ctx, overrides = {}) {
 		captureMode: "camera",
 		completion: {
 			burpeeCountActual: 4,
+			burpeeCountProvenance: "manual",
 			burpeeCountPlanned: 5,
 			durationSecActual: 9,
 			durationSecPlanned: 10,

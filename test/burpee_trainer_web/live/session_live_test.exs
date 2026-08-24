@@ -78,6 +78,13 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert decoded_program["program_hash"] == program_hash
     assert decoded_program["target_reps"] == program.target_reps
     assert decoded_program["target_duration_sec"] == program.target_duration_sec
+
+    assert has_element?(
+             view,
+             "#total-reps-accessible",
+             "Pace progress: 0 of #{program.target_reps} reps"
+           )
+
     assert is_list(decoded_program["events"])
     assert is_map(decoded_program["display"])
     assert Ecto.UUID.cast(client_session_id) == {:ok, client_session_id}

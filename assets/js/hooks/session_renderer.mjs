@@ -193,6 +193,8 @@ export class SessionRenderer {
 		const durationInput = this.root.querySelector("#completion-duration-input");
 		const noteInput = this.root.querySelector("#completion-note-input");
 		const hasActualReps = Number.isInteger(completion.burpeeCountActual);
+		const countProvenance = completion.burpeeCountProvenance ??
+			(hasActualReps ? "manual" : "unresolved");
 		const scheduledRepsDone = completion.scheduledRepsDone ?? 0;
 		const countSource = this.root.querySelector("#session-count-source");
 		if (actualReps) {
@@ -207,9 +209,12 @@ export class SessionRenderer {
 		if (repsInput)
 			repsInput.value = hasActualReps ? String(completion.burpeeCountActual) : "";
 		if (countSource) {
-			countSource.textContent = hasActualReps
-				? "Camera-confirmed reps"
-				: `Pace progress: ${scheduledRepsDone} of ${completion.burpeeCountPlanned}. Enter actual reps below.`;
+			countSource.textContent =
+				countProvenance === "camera_confirmed"
+					? "Camera-confirmed reps"
+					: countProvenance === "manual"
+						? "Manually entered reps"
+						: `Pace progress: ${scheduledRepsDone} of ${completion.burpeeCountPlanned}. Enter actual reps below.`;
 			countSource.hidden = false;
 		}
 		if (durationInput)
@@ -666,7 +671,7 @@ export class SessionRenderer {
 		const target = this.root.querySelector("#total-plan")?.textContent;
 		const accessibleTotal = this.root.querySelector("#total-reps-accessible");
 		if (accessibleTotal && done !== "" && target !== "") {
-			accessibleTotal.textContent = `${done} of ${target} total reps`;
+			accessibleTotal.textContent = `Pace progress: ${done} of ${target} reps`;
 		}
 	}
 

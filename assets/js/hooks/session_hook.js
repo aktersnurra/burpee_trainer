@@ -29,6 +29,30 @@ import {
 
 const SAVE_NAVIGATION_DEADLINE_MS = 100;
 
+function restoredCountProvenance(draft, tracking) {
+	const actualReps = draft.burpee_count_actual;
+	const cameraConfirmed =
+		tracking.enabled &&
+		tracking.trust === "finished" &&
+		Number.isInteger(actualReps);
+
+	if (
+		draft.burpee_count_provenance === "camera_confirmed" &&
+		cameraConfirmed
+	) {
+		return "camera_confirmed";
+	}
+	if (
+		draft.burpee_count_provenance === "manual" &&
+		Number.isInteger(actualReps)
+	) {
+		return "manual";
+	}
+	if (draft.burpee_count_provenance === "unresolved") return "unresolved";
+	if (!Number.isInteger(actualReps)) return "unresolved";
+	return cameraConfirmed ? "camera_confirmed" : "manual";
+}
+
 const SessionHook = {
 	mounted() {
 		this.lifecycleGeneration = (this.lifecycleGeneration || 0) + 1;
@@ -351,6 +375,7 @@ const SessionHook = {
 			plan_id: this.planId,
 			program_hash: this.programHash,
 			burpee_count_actual: completion.burpeeCountActual,
+			burpee_count_provenance: completion.burpeeCountProvenance,
 			scheduled_reps_done: completion.scheduledRepsDone ?? 0,
 			burpee_count_planned: completion.burpeeCountPlanned,
 			duration_sec_actual: completion.durationSecActual,
@@ -612,6 +637,7 @@ const SessionHook = {
 		const completion = {
 			scheduledRepsDone: draft.scheduled_reps_done ?? 0,
 			burpeeCountActual: draft.burpee_count_actual ?? null,
+			burpeeCountProvenance: restoredCountProvenance(draft, tracking),
 			burpeeCountPlanned: draft.burpee_count_planned ?? 0,
 			durationSecActual: draft.duration_sec_actual ?? 0,
 			durationSecPlanned: draft.duration_sec_planned ?? 0,

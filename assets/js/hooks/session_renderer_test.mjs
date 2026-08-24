@@ -589,7 +589,7 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 	assert.equal(elements["#count"].textContent, "18");
 	assert.equal(
 		elements["#total-reps-accessible"].textContent,
-		"8 of 20 total reps",
+		"Pace progress: 8 of 20 reps",
 	);
 	assert.equal(
 		elements["#session-time-accessible"].textContent,
@@ -613,7 +613,7 @@ test("renderer keeps normal-rest live status stable while non-live time changes"
 	);
 	assert.equal(
 		elements["#total-reps-accessible"].textContent,
-		"9 of 21 total reps",
+		"Pace progress: 9 of 21 reps",
 	);
 	assert.equal(
 		elements["#session-time-accessible"].textContent,

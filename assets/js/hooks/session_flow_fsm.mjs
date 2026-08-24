@@ -59,6 +59,9 @@ function completionFor(state, result) {
   return {
     scheduledRepsDone,
     burpeeCountActual: trackingFinished ? (result.detectedReps ?? 0) : null,
+    burpeeCountProvenance: trackingFinished
+      ? "camera_confirmed"
+      : "unresolved",
     burpeeCountPlanned: plannedBurpees(state.workoutTimeline),
     durationSecActual: trackingFinished
       ? (result.detectedDurationSec ?? 0)
@@ -548,6 +551,9 @@ export function flowTransition(state, event) {
         "notePost",
       ]) {
         if (Object.hasOwn(changes, field)) completion[field] = changes[field];
+      }
+      if (Object.hasOwn(changes, "burpeeCountActual")) {
+        completion.burpeeCountProvenance = "manual";
       }
       if (Object.hasOwn(changes, "tags")) {
         completion.tags = [...changes.tags];

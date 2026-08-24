@@ -199,6 +199,7 @@ test("camera completion pre-fills detected count after absent frames", () => {
 
   assert.equal(result.state.completion.scheduledRepsDone, 5);
   assert.equal(result.state.completion.burpeeCountActual, 4);
+  assert.equal(result.state.completion.burpeeCountProvenance, "camera_confirmed");
   assert.equal(result.state.completion.durationSecActual, 42);
   assert.equal(result.state.completion.trackingTrust, "finished");
   assert.deepEqual(result.state.completion.cadenceMs, [
@@ -226,6 +227,7 @@ test("session result waits for report-pending acknowledgement before completion 
   assert.equal(result.state.mode, "reporting_completion");
   assert.equal(result.state.completion.scheduledRepsDone, 12);
   assert.equal(result.state.completion.burpeeCountActual, null);
+  assert.equal(result.state.completion.burpeeCountProvenance, "unresolved");
   assert.equal(result.state.completion.durationSecActual, 75);
   assert.deepEqual(result.commands, [
     { type: "persistCompletionAndRequestPending" },
@@ -336,6 +338,7 @@ test("completion edits only change approved draft fields", () => {
   assert.deepEqual(result.state.completion, {
     scheduledRepsDone: 9,
     burpeeCountActual: 10,
+    burpeeCountProvenance: "manual",
     burpeeCountPlanned: 10,
     durationSecActual: 55,
     durationSecPlanned: 50,
