@@ -239,6 +239,26 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     assert Repo.get!(WorkoutSession, session.id).status == :running
   end
 
+  test "validation errors preserve the selected mood", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    session = lifecycle_session(user, plan)
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
+
+    render_hook(view, "report", %{
+      "workout_session" => %{
+        "burpee_count_actual" => "",
+        "duration_sec_actual" => "",
+        "mood" => "1"
+      }
+    })
+
+    assert_reply(view, %{status: "error"})
+    assert has_element?(view, "#session-resolution-errors[role='alert']", "can't be blank")
+    assert has_element?(view, "#session-resolution-mood-hyped[aria-pressed='true']")
+    assert has_element?(view, "#session-resolution-mood-tired[aria-pressed='false']")
+    assert has_element?(view, "#session-resolution-mood-ok[aria-pressed='false']")
+  end
+
   defp lifecycle_session(user, plan, opts \\ []) do
     assert {:ok, session} = Workouts.begin_plan_session(user, plan, Ecto.UUID.generate())
 

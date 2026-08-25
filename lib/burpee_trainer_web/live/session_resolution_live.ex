@@ -257,7 +257,12 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
                 id={"session-resolution-mood-#{String.downcase(label)}"}
                 type="button"
                 data-resolution-mood={value}
-                aria-pressed="false"
+                aria-pressed={
+                  if(@form[:mood].value in [value, Integer.to_string(value)],
+                    do: "true",
+                    else: "false"
+                  )
+                }
                 class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
               >
                 {label}
