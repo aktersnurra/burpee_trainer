@@ -125,18 +125,19 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
         phx-hook="SessionRecoveryHook"
         data-client-session-id={@session.client_session_id}
         data-session-status={@session.status}
-        class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]"
+        data-completion-style="true"
+        class="session-surface mx-auto max-w-[430px] min-h-dvh overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))] text-[var(--session-ink)]"
       >
-        <section id="session-resolution-info" class="space-y-3">
+        <section id="session-resolution-info" class="text-center">
           <p class="text-sm font-medium text-[var(--session-muted)]">Unfinished workout</p>
-          <h1 class="qs-heading-tight text-3xl font-medium">Finish your workout record</h1>
+          <h1 class="qs-heading-tight mt-3 text-3xl font-medium">Finish your workout record</h1>
           <p
             id="session-resolution-status"
-            class="text-sm leading-relaxed text-[var(--session-muted)]"
+            class="mt-3 text-sm leading-relaxed text-[var(--session-muted)]"
           >
             This workout was left unfinished. Log what you completed or discard it before starting another.
           </p>
-          <dl class="space-y-1 text-sm text-[var(--session-muted)]">
+          <dl class="mt-6 space-y-1 text-sm text-[var(--session-muted)]">
             <div class="flex justify-between gap-4">
               <dt>Started</dt>
               <dd
@@ -160,7 +161,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
 
         <section
           id="session-resolution-workout-details"
-          class="space-y-3 border-t border-[var(--session-border)] pt-6"
+          class="mt-10 border-y border-[var(--session-border)] py-6"
         >
           <h2 class="text-lg font-semibold">Workout details</h2>
           <dl class="grid grid-cols-3 gap-3 text-sm">
@@ -185,10 +186,10 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
           </dl>
         </section>
 
-        <.form for={@form} id="session-resolution-form" class="space-y-6">
+        <.form for={@form} id="session-resolution-form" class="mt-10">
           <section
             id="session-resolution-recorded-details"
-            class="space-y-4 border-t border-[var(--session-border)] pt-6"
+            class="space-y-4"
           >
             <div>
               <h2 class="text-lg font-semibold">Recorded details</h2>
@@ -214,8 +215,12 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
                   min="0"
                   inputmode="numeric"
                   data-estimated={if(@count_estimated?, do: "true")}
+                  class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
                 />
-                <p id="session-resolution-count-source" class="text-xs text-[var(--session-muted)]">
+                <p
+                  id="session-resolution-count-source"
+                  class="mt-1 text-xs text-[var(--session-muted)]"
+                >
                   {if(@count_estimated?, do: "Estimated", else: "Recorded")}
                 </p>
               </div>
@@ -228,29 +233,49 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
                   min="0"
                   inputmode="numeric"
                   data-estimated={if(@duration_estimated?, do: "true")}
+                  class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
                 />
-                <p id="session-resolution-duration-source" class="text-xs text-[var(--session-muted)]">
+                <p
+                  id="session-resolution-duration-source"
+                  class="mt-1 text-xs text-[var(--session-muted)]"
+                >
                   {if(@duration_estimated?, do: "Estimated", else: "Recorded")}
                 </p>
               </div>
             </div>
           </section>
 
-          <section
-            class="space-y-4 border-t border-[var(--session-border)] pt-6"
-            aria-label="Reflection"
-          >
-            <h2 class="text-lg font-semibold">Reflection</h2>
-            <.input
-              field={@form[:mood]}
-              id="session-resolution-mood"
-              type="select"
-              label="Mood"
-              prompt="Choose a mood (optional)"
-              options={@mood_options}
-            />
-            <div>
-              <p class="label mb-1">Tags</p>
+          <section class="mt-10" aria-label="Reflection">
+            <h2 class="sr-only">Reflection</h2>
+            <.input field={@form[:mood]} id="session-resolution-mood" type="hidden" />
+            <div
+              id="session-resolution-mood-options"
+              class="flex border-y border-[var(--session-border)]"
+            >
+              <button
+                :for={{label, value} <- @mood_options}
+                id={"session-resolution-mood-#{String.downcase(label)}"}
+                type="button"
+                data-resolution-mood={value}
+                aria-pressed="false"
+                class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
+              >
+                {label}
+              </button>
+            </div>
+            <div class="mt-10">
+              <.input
+                field={@form[:note_post]}
+                id="session-resolution-notes"
+                type="textarea"
+                label="Notes"
+                rows="3"
+                placeholder="How did it go?"
+                class="w-full resize-none rounded-xl border border-[var(--session-border)] bg-transparent px-4 py-3 text-sm text-[var(--session-ink)]"
+              />
+            </div>
+            <div class="border-t border-[var(--session-border)] py-6">
+              <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Tags</p>
               <.input field={@form[:tags]} id="session-resolution-tags" type="hidden" />
               <div class="flex flex-wrap gap-2" aria-label="Tags">
                 <%= for tag <- @tag_options do %>
@@ -259,27 +284,19 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
                     type="button"
                     data-resolution-tag={tag}
                     aria-pressed="false"
-                    class="session-choice-toggle rounded-full border border-[var(--session-border)] px-3 py-1.5 text-xs font-medium text-[var(--session-muted)] transition hover:bg-[var(--session-track)] hover:text-[var(--session-ink)]"
+                    class="session-choice-toggle min-h-11 rounded-full border border-[var(--session-border)] px-4 py-2 text-xs text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
                   >
                     {String.replace(tag, "_", " ")}
                   </button>
                 <% end %>
               </div>
             </div>
-            <.input
-              field={@form[:note_post]}
-              id="session-resolution-notes"
-              type="textarea"
-              label="Notes"
-              rows="3"
-              placeholder="How did it go?"
-            />
           </section>
 
           <button
             id="session-resolution-report"
             type="submit"
-            class="min-h-12 w-full rounded-xl bg-[var(--session-ink)] px-5 py-3 font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
+            class="mt-8 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
           >
             Log workout
           </button>
@@ -290,7 +307,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
           type="button"
           phx-click="abort"
           data-confirm="Discard this unfinished workout?"
-          class="min-h-11 w-full px-5 py-3 text-sm font-medium text-[var(--session-muted)] underline underline-offset-4 transition hover:text-[var(--session-ink)]"
+          class="mx-auto mt-2 block min-h-11 px-6 py-3 text-sm text-[var(--session-muted)]"
         >
           Discard workout
         </button>
