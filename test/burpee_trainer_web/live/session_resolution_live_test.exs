@@ -12,6 +12,16 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
+  test "resolution root is a bounded internal scroller", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    session = lifecycle_session(user, plan)
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
+
+    assert has_element?(view, "#session-resolution.h-dvh.overflow-y-auto")
+    refute has_element?(view, "#session-resolution.min-h-dvh")
+  end
+
   test "owner sees the unresolved session form and source-derived metadata", %{
     conn: conn,
     user: user

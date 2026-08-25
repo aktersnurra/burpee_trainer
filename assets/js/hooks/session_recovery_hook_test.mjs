@@ -310,6 +310,36 @@ test("mood buttons serialize one selection and expose pressed state", () => {
   assert.equal(moods.tired.getAttribute("aria-pressed"), "false");
 });
 
+test("delegated click selects a data-resolution-mood button", () => {
+  const { hook, moods, inputs } = mountedHook();
+  let prevented = false;
+
+  hook.el.dispatchEvent({
+    type: "click",
+    target: moods.hyped,
+    preventDefault() {
+      prevented = true;
+    },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(inputs[2].value, "1");
+  assert.equal(moods.hyped.getAttribute("aria-pressed"), "true");
+  assert.equal(moods.tired.getAttribute("aria-pressed"), "false");
+  assert.equal(moods.ok.getAttribute("aria-pressed"), "false");
+});
+
+test("invalid mood clears the hidden input and all mood pressed states", () => {
+  const { hook, moods, inputs } = mountedHook();
+  hook.setMood(1);
+  hook.setMood("unsupported");
+
+  assert.equal(inputs[2].value, "");
+  for (const mood of moods) {
+    assert.equal(mood.getAttribute("aria-pressed"), "false");
+  }
+});
+
 test("recovery prefill updates the matching mood button", async () => {
   const { hook, moods } = mountedHook({ localDraft: draft() });
   await hook.recovery;
