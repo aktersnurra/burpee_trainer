@@ -28,7 +28,7 @@
 - Consumes: hidden `#session-resolution-mood` input and buttons bearing `data-resolution-mood`.
 - Produces: `setMood(value)` that writes the hidden form value, dispatches input/change, and sets exactly one mood button's `aria-pressed` value to `true`.
 
-- [ ] **Step 1: Write failing hook tests**
+- [x] **Step 1: Write failing hook tests**
 
 Add three fake mood buttons to `mountedHook`, expose them from `root.querySelectorAll("[data-resolution-mood]")`, then assert click and recovery behavior:
 
@@ -49,13 +49,13 @@ test("recovery prefill updates the matching mood button", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify RED**
+- [x] **Step 2: Run the focused test to verify RED**
 
 Run: `cd assets && node --test js/hooks/session_recovery_hook_test.mjs`
 
 Expected: FAIL because `setMood` and mood button harness support do not exist.
 
-- [ ] **Step 3: Implement the smallest mood-control extension**
+- [x] **Step 3: Implement the smallest mood-control extension**
 
 Add `moodInput`, `moodButtons`, and `setMood` beside the existing tag helpers. Extend the click handler without changing tag behavior:
 
@@ -69,13 +69,13 @@ if (mood !== undefined) {
 
 `setMood` must accept only the existing numeric mood values (`-1`, `0`, `1`), clear invalid values to an empty hidden input, dispatch `input` and `change`, and set pressed state by string equality. In `prefillReport`, route draft mood through `setMood` rather than assigning the hidden input directly.
 
-- [ ] **Step 4: Run the focused test to verify GREEN**
+- [x] **Step 4: Run the focused test to verify GREEN**
 
 Run: `cd assets && node --test js/hooks/session_recovery_hook_test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the hook slice**
+- [x] **Step 5: Commit the hook slice**
 
 ```bash
 jj describe -m "feat(resolve): add completion-style mood toggles"
@@ -92,7 +92,7 @@ jj commit -m "feat(resolve): add completion-style mood toggles"
 - Consumes: existing `@form`, `@count_estimated?`, `@duration_estimated?`, `@mood_options`, and `@tag_options` assigns.
 - Produces: resolution form markup with `#session-resolution-mood` hidden input and three `data-resolution-mood` buttons, while retaining `#session-resolution-form`, report input names, and abort action.
 
-- [ ] **Step 1: Write the failing LiveView markup test**
+- [x] **Step 1: Write the failing LiveView markup test**
 
 Extend the owner-resolution test with exact structure checks:
 
@@ -105,13 +105,13 @@ assert has_element?(view, "#session-resolution-mood-hyped[data-resolution-mood='
 refute has_element?(view, "select#session-resolution-mood")
 ```
 
-- [ ] **Step 2: Run the focused test to verify RED**
+- [x] **Step 2: Run the focused test to verify RED**
 
 Run: `mix test test/burpee_trainer_web/live/session_resolution_live_test.exs`
 
 Expected: FAIL because the current screen has a `<select>` mood input and no completion-style marker or mood toggle IDs.
 
-- [ ] **Step 3: Replace only the resolution presentation markup**
+- [x] **Step 3: Replace only the resolution presentation markup**
 
 Use the completion review's narrow scroll panel and control classes:
 
@@ -130,7 +130,7 @@ Replace the Mood select with a hidden input plus the completion-review segmented
 
 Use the completion input, tag, save, and discard classes from `SessionComponents.completion_review/1`. Keep the unfinished-session context and recorded/estimated source labels compact and secondary; retain all existing input IDs, report form, and abort event.
 
-- [ ] **Step 4: Run focused tests to verify GREEN**
+- [x] **Step 4: Run focused tests to verify GREEN**
 
 Run:
 
@@ -141,7 +141,7 @@ cd assets && node --test js/hooks/session_recovery_hook_test.mjs
 
 Expected: both commands PASS.
 
-- [ ] **Step 5: Commit the visual slice**
+- [x] **Step 5: Commit the visual slice**
 
 ```bash
 jj describe -m "feat(resolve): match completion review"
@@ -153,7 +153,7 @@ jj commit -m "feat(resolve): match completion review"
 **Files:**
 - Evidence: `.e2e-artifacts/reports/resolution-completion-parity-2026-08-25.md`
 
-- [ ] **Step 1: Run repository verification**
+- [x] **Step 1: Run repository verification**
 
 Run:
 
@@ -164,10 +164,10 @@ mix precommit
 
 Expected: both exit successfully.
 
-- [ ] **Step 2: Run a fresh browser recovery check**
+- [x] **Step 2: Run a fresh browser recovery check**
 
 Create a new E2E identity through `scripts/e2e/setup.exs`, retain an unresolved or report-pending lifecycle row, and open `/sessions/:id/resolve` in an isolated Firefox profile. Verify the narrow completion-style surface, mood pressed-state change, tag selection, compact scrolling, and that Save produces exactly one report row. Capture redacted evidence under `.e2e-artifacts/`.
 
-- [ ] **Step 3: Commit evidence only if it is tracked by project convention**
+- [x] **Step 3: Commit evidence only if it is tracked by project convention**
 
 Do not commit server logs, browser profiles, credentials, raw pose traces, or screenshots with user data.
