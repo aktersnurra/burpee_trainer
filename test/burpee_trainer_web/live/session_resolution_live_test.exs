@@ -18,7 +18,11 @@ defmodule BurpeeTrainerWeb.SessionResolutionLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/sessions/#{session.id}/resolve")
 
-    assert has_element?(view, "#session-resolution.h-dvh.overflow-y-auto")
+    assert has_element?(
+             view,
+             "#session-resolution[class~='h-[calc(100dvh-8rem)]'][class~='sm:h-dvh'].overflow-y-auto"
+           )
+
     refute has_element?(view, "#session-resolution.min-h-dvh")
   end
 

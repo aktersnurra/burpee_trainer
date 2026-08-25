@@ -126,7 +126,7 @@ defmodule BurpeeTrainerWeb.SessionResolutionLive do
         data-client-session-id={@session.client_session_id}
         data-session-status={@session.status}
         data-completion-style="true"
-        class="session-surface mx-auto max-w-[430px] h-dvh overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))] text-[var(--session-ink)]"
+        class="session-surface mx-auto max-w-[430px] h-[calc(100dvh-8rem)] sm:h-dvh overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))] text-[var(--session-ink)]"
       >
         <section id="session-resolution-info" class="text-center">
           <p class="text-sm font-medium text-[var(--session-muted)]">Unfinished workout</p>
