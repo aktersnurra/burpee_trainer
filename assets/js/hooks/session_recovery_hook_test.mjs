@@ -110,6 +110,15 @@ function mountedHook({
       },
     ),
   );
+  const moods = [-1, 0, 1].map((mood) => {
+    const button = new FakeElement(`session-resolution-mood-${mood}`);
+    button.dataset.resolutionMood = String(mood);
+    button.setAttribute("aria-pressed", "false");
+    return button;
+  });
+  moods.tired = moods[0];
+  moods.ok = moods[1];
+  moods.hyped = moods[2];
 
   const form = new FakeElement("session-resolution-form");
   form.elements = inputs;
@@ -123,8 +132,11 @@ function mountedHook({
       return sources.duration;
     return inputs.find((input) => `#${input.id}` === selector) || null;
   };
-  root.querySelectorAll = (selector) =>
-    selector === "[data-resolution-tag]" ? Object.values(tags) : [];
+  root.querySelectorAll = (selector) => {
+    if (selector === "[data-resolution-tag]") return Object.values(tags);
+    if (selector === "[data-resolution-mood]") return moods;
+    return [];
+  };
 
   const calls = [];
   const pushes = [];
@@ -153,7 +165,17 @@ function mountedHook({
   };
   hook.mounted();
 
-  return { hook, tags, inputs, sources, pushes, calls, navigations, store };
+  return {
+    hook,
+    tags,
+    moods,
+    inputs,
+    sources,
+    pushes,
+    calls,
+    navigations,
+    store,
+  };
 }
 
 function withTraceReadyWindow(t, calls) {
@@ -277,6 +299,22 @@ test("recovery selects only supported tag pills", async () => {
   assert.equal(inputs[3].value, "sick,travel");
   assert.equal(tags.sick.getAttribute("aria-pressed"), "true");
   assert.equal(tags.travel.getAttribute("aria-pressed"), "true");
+});
+
+test("mood buttons serialize one selection and expose pressed state", () => {
+  const { hook, moods, inputs } = mountedHook();
+  hook.setMood(0);
+
+  assert.equal(inputs[2].value, "0");
+  assert.equal(moods.ok.getAttribute("aria-pressed"), "true");
+  assert.equal(moods.tired.getAttribute("aria-pressed"), "false");
+});
+
+test("recovery prefill updates the matching mood button", async () => {
+  const { hook, moods } = mountedHook({ localDraft: draft() });
+  await hook.recovery;
+
+  assert.equal(moods.hyped.getAttribute("aria-pressed"), "true");
 });
 
 test("report reply waits for storage before trace readiness, cleanup, and navigation", async (t) => {

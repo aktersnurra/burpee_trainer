@@ -17,10 +17,18 @@ const SessionRecoveryHook = {
     this.touchedInputs = new WeakSet();
     this.reportForm = this.el.querySelector("#session-resolution-form");
     this.setTags(this.tagsInput()?.value);
+    this.setMood(this.moodInput()?.value);
     this.trackManualReportChanges();
     this.handleTagClick = (event) => {
       const pill =
         event.target?.closest?.("[data-resolution-tag]") || event.target;
+      const mood = pill?.dataset?.resolutionMood;
+      if (mood !== undefined) {
+        event.preventDefault();
+        this.setMood(mood);
+        return;
+      }
+
       const tag = pill?.dataset?.resolutionTag;
       if (!tag) return;
 
@@ -44,6 +52,14 @@ const SessionRecoveryHook = {
 
   tagsInput() {
     return this.el.querySelector("#session-resolution-tags");
+  },
+
+  moodInput() {
+    return this.el.querySelector("#session-resolution-mood");
+  },
+
+  moodButtons() {
+    return this.el.querySelectorAll("[data-resolution-mood]");
   },
 
   tagPills() {
@@ -93,6 +109,28 @@ const SessionRecoveryHook = {
     }
 
     return normalized;
+  },
+
+  setMood(value) {
+    const mood = ["-1", "0", "1"].includes(String(value))
+      ? String(value)
+      : "";
+    const input = this.moodInput();
+
+    if (input) {
+      input.value = mood;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    for (const button of this.moodButtons()) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.resolutionMood === mood ? "true" : "false",
+      );
+    }
+
+    return mood;
   },
 
   async initializeStore() {
@@ -178,9 +216,17 @@ const SessionRecoveryHook = {
     const fields = [
       ["#session-resolution-count", draft.burpee_count_actual],
       ["#session-resolution-duration", draft.duration_sec_actual],
-      ["#session-resolution-mood", draft.mood],
       ["#session-resolution-notes", draft.note_post],
     ];
+
+    const moodInput = this.moodInput();
+    if (
+      draft.mood !== undefined &&
+      draft.mood !== null &&
+      this.canPrefill(moodInput)
+    ) {
+      this.setMood(draft.mood);
+    }
 
     const tagsInput = this.tagsInput();
     if (
