@@ -18,6 +18,7 @@ const MIN_MACRO_LANDMARK_CONFIDENCE = 0.5;
 const MIN_VISIBLE_FRACTION = 0.35;
 const FORWARD_EMISSION = 0.72;
 const RETURN_TO_UPRIGHT_EMISSION = 0.48;
+const RETURNING_MIN_BODY_VERTICAL_SPAN = 1.1;
 
 export function initialBurpeeHsmmState() {
 	return {
@@ -38,7 +39,7 @@ export function stepBurpeeHsmm(state, frame) {
 		return { state: resetCandidate(state), rep: false, repAtMs: null };
 	}
 
-	const phase = nextPhase(state, emissions);
+	const phase = nextPhase(state, emissions, frame);
 	const next = transition(state, phase, frame.tMs);
 	const rep =
 		state.phase === "returning_from_floor" &&
@@ -92,7 +93,15 @@ function scoreMacroEmissions(frame) {
 			[falls(frame.worldWristVerticalSpan, 0.8, 0.45), 0.2],
 		]),
 		returning_from_floor: weightedScore([
-			[band(frame.worldBodyVerticalSpan, 1.1, 2.1, 3.2), 0.25],
+			[
+				band(
+					frame.worldBodyVerticalSpan,
+					RETURNING_MIN_BODY_VERTICAL_SPAN,
+					2.1,
+					3.2,
+				),
+				0.25,
+			],
 			[band(frame.worldTorsoElevation, 0.3, 0.55, 0.85), 0.2],
 			[rises(frame.worldHipVerticalSpan, 0.7, 1.1), 0.15],
 			[rises(frame.dWorldBodyVerticalSpan, 0.25, 0.8), 0.4],
@@ -135,14 +144,20 @@ function strongOutOfOrderEmission(state, emissions) {
 	);
 }
 
-function nextPhase(state, emissions) {
+function nextPhase(state, emissions, frame) {
 	const [current, following] = NEXT[state.phase] || NEXT.upright;
 	const threshold =
 		state.phase === "returning_from_floor" && following === "upright"
 			? RETURN_TO_UPRIGHT_EMISSION
 			: FORWARD_EMISSION;
+	const returnFromFloorAllowed =
+		state.phase !== "floor_work" ||
+		following !== "returning_from_floor" ||
+		frame.worldBodyVerticalSpan >= RETURNING_MIN_BODY_VERTICAL_SPAN;
 
-	return emissions[following] >= threshold ? following : current;
+	return emissions[following] >= threshold && returnFromFloorAllowed
+		? following
+		: current;
 }
 
 function resetCandidate(state) {

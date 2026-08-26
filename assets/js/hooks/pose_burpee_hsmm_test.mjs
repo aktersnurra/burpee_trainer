@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { featureFrameFromPose } from "./pose_features.mjs";
+import { userLabeledRepFeatureFrames } from "./pose_burpee_hsmm_user_labeled_fixture.mjs";
 
 const video = { videoWidth: 400, videoHeight: 400 };
 
@@ -165,6 +166,10 @@ test("counts one low-front observed cycle with one or three floor pushups", () =
 	assert.deepEqual(run(frames).reps, [900, 3700]);
 });
 
+test("counts the two user-labeled reps from their derived macro features", () => {
+	assert.deepEqual(run(userLabeledRepFeatureFrames).reps, [7_080, 31_076]);
+});
+
 test("foreshortened image coordinates do not change world-based phase results", () => {
 	assert.deepEqual(
 		run(lowFrontFeatureFrames(lowFrontCycle(), { foreshortenImage: true }))
@@ -180,6 +185,24 @@ test("advances only when weighted low-front evidence clears the forward threshol
 	);
 
 	assert.equal(result.state.phase, "lowering_to_floor");
+});
+
+test("a qualifying velocity spike cannot return from floor below the body-span minimum", () => {
+	const result = stepBurpeeHsmm(
+		{
+			...initialBurpeeHsmmState(),
+			phase: "floor_work",
+			phaseStartedAtMs: 0,
+		},
+		lowFrontFrame("returning", 150, {
+			worldBodyVerticalSpan: 1.05,
+			worldHipVerticalSpan: 1.1,
+			worldTorsoElevation: 0.55,
+			dWorldBodyVerticalSpan: 0.8,
+		}),
+	);
+
+	assert.equal(result.state.phase, "floor_work");
 });
 
 test("does not count a squat-only or interrupted floor sequence", () => {
@@ -344,8 +367,10 @@ test("low-confidence nose or feet in raw low-front features cannot complete a ma
 			lowConfidenceNames: [name],
 		});
 
-		assert.deepEqual(run(frames).reps, [], `${name} must make every frame absent`);
+		assert.deepEqual(
+			run(frames).reps,
+			[],
+			`${name} must make every frame absent`,
+		);
 	}
 });
-
-

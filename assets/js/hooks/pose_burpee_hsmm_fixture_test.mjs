@@ -3,6 +3,8 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 import SessionHook from "./session_hook.js";
+import { sampleFromPose } from "./pose_signal.mjs";
+import { userLabeledRepFeatureFrames } from "./pose_burpee_hsmm_user_labeled_fixture.mjs";
 import { createPoseTracker } from "./pose_tracker_impl.mjs";
 
 class FixtureElement {
@@ -269,6 +271,15 @@ function fixtureRoot() {
 	return root;
 }
 
+function sampleFromDerivedFeatureFrame(features) {
+	return {
+		tMs: features.tMs,
+		confidence: features.poseConfidence,
+		keypoints: {},
+		features,
+	};
+}
+
 function trackerElement(root) {
 	const tracker = new FixtureElement();
 	tracker.id = "pose-tracker";
@@ -288,6 +299,11 @@ function trackerElement(root) {
 }
 
 async function runControlledSessionFixture(frames) {
+	const derivedFeatureFrames = new Map(
+		frames
+			.filter((frame) => frame.hasFullWorldLandmarkCoverage === true)
+			.map((frame) => [frame.tMs, frame]),
+	);
 	const original = {
 		CustomEvent: globalThis.CustomEvent,
 		document: globalThis.document,
@@ -355,6 +371,12 @@ async function runControlledSessionFixture(frames) {
 		{ el: tracker },
 		{
 			controlledPoseFixture: [...readinessFrames, ...frames],
+			sampleFromPose(pose, tMs, video, previousFeature) {
+				const features = derivedFeatureFrames.get(tMs);
+				return features
+					? sampleFromDerivedFeatureFrame(features)
+					: sampleFromPose(pose, tMs, video, previousFeature);
+			},
 			mediaDevices: {
 				getUserMedia: async () => assert.fail("fixture used camera"),
 			},
@@ -470,6 +492,16 @@ test("the production tracker cannot activate a browser fixture from mutable glob
 	assert.doesNotMatch(app, /pose_tracker_fixture/);
 	assert.match(fixtureEntry, /pose_tracker_fixture/);
 	assert.match(fixtureTracker, /__burpeePoseFixture/);
+});
+
+test("the user-labeled derived feature fixture renders two actual reps", async () => {
+	const root = await runControlledSessionFixture(userLabeledRepFeatureFrames);
+
+	assert.equal(
+		root.querySelector("#session-actual-reps").textContent,
+		"2",
+		"the controlled tracker must hand off both labeled reps to the rendered session",
+	);
 });
 
 test("fixture absence between macro-cycles leaves the rendered session warning-free and Save enabled", async () => {
