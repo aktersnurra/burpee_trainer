@@ -1,15 +1,15 @@
 const PHASES = Object.freeze([
-	"upright",
-	"lowering_to_floor",
-	"floor_work",
-	"returning_from_floor",
+	"standing",
+	"lowering",
+	"pushup",
+	"rising",
 ]);
 
 const NEXT = Object.freeze({
-	upright: ["upright", "lowering_to_floor"],
-	lowering_to_floor: ["lowering_to_floor", "floor_work"],
-	floor_work: ["floor_work", "returning_from_floor"],
-	returning_from_floor: ["returning_from_floor", "upright"],
+	standing: ["standing", "lowering"],
+	lowering: ["lowering", "pushup"],
+	pushup: ["pushup", "rising"],
+	rising: ["rising", "standing"],
 });
 
 const REFRACTORY_MS = 900;
@@ -17,12 +17,12 @@ const MIN_CONFIDENCE = 0.5;
 const MIN_MACRO_LANDMARK_CONFIDENCE = 0.5;
 const MIN_VISIBLE_FRACTION = 0.35;
 const FORWARD_EMISSION = 0.72;
-const RETURN_TO_UPRIGHT_EMISSION = 0.48;
-const RETURNING_MIN_BODY_VERTICAL_SPAN = 1.1;
+const RETURN_TO_STANDING_EMISSION = 0.47;
+const RISING_MIN_BODY_VERTICAL_SPAN = 1.1;
 
 export function initialBurpeeHsmmState() {
 	return {
-		phase: "upright",
+		phase: "standing",
 		phaseStartedAtMs: null,
 		lastRepAtMs: null,
 		cadenceMs: [],
@@ -31,7 +31,7 @@ export function initialBurpeeHsmmState() {
 
 export function stepBurpeeHsmm(state, frame) {
 	if (!usable(frame)) {
-		return { state: resetCandidate(state), rep: false, repAtMs: null };
+		return { state: preservePushupCandidate(state), rep: false, repAtMs: null };
 	}
 
 	const emissions = scoreMacroEmissions(frame);
@@ -42,8 +42,8 @@ export function stepBurpeeHsmm(state, frame) {
 	const phase = nextPhase(state, emissions, frame);
 	const next = transition(state, phase, frame.tMs);
 	const rep =
-		state.phase === "returning_from_floor" &&
-		phase === "upright" &&
+		state.phase === "rising" &&
+		phase === "standing" &&
 		outsideRefractory(state, frame.tMs);
 
 	return {
@@ -74,29 +74,29 @@ function usable(frame) {
 
 function scoreMacroEmissions(frame) {
 	return {
-		upright: weightedScore([
+		standing: weightedScore([
 			[rises(frame.worldBodyVerticalSpan, 2.8, 3.2), 0.35],
 			[rises(frame.worldHipVerticalSpan, 1.6, 2.0), 0.2],
 			[rises(frame.worldTorsoElevation, 0.75, 0.85), 0.25],
 			[rises(frame.worldWristVerticalSpan, 1.2, 1.5), 0.2],
 		]),
-		lowering_to_floor: weightedScore([
+		lowering: weightedScore([
 			[band(frame.worldBodyVerticalSpan, 1.1, 2.1, 3.2), 0.35],
 			[falls(frame.worldTorsoElevation, 0.8, 0.45), 0.2],
 			[falls(frame.worldWristVerticalSpan, 1.6, 0.7), 0.15],
 			[falls(frame.dWorldBodyVerticalSpan, -0.25, -0.8), 0.3],
 		]),
-		floor_work: weightedScore([
+		pushup: weightedScore([
 			[falls(frame.worldBodyVerticalSpan, 1.5, 1.1), 0.3],
 			[falls(frame.worldHipVerticalSpan, 1.0, 0.7), 0.2],
 			[falls(frame.worldTorsoElevation, 0.5, 0.35), 0.3],
 			[falls(frame.worldWristVerticalSpan, 0.8, 0.45), 0.2],
 		]),
-		returning_from_floor: weightedScore([
+		rising: weightedScore([
 			[
 				band(
 					frame.worldBodyVerticalSpan,
-					RETURNING_MIN_BODY_VERTICAL_SPAN,
+					RISING_MIN_BODY_VERTICAL_SPAN,
 					2.1,
 					3.2,
 				),
@@ -134,7 +134,7 @@ function clamp01(value) {
 }
 
 function strongOutOfOrderEmission(state, emissions) {
-	const [current, following] = NEXT[state.phase] || NEXT.upright;
+	const [current, following] = NEXT[state.phase] || NEXT.standing;
 
 	return PHASES.some(
 		(phase) =>
@@ -145,23 +145,25 @@ function strongOutOfOrderEmission(state, emissions) {
 }
 
 function nextPhase(state, emissions, frame) {
-	const [current, following] = NEXT[state.phase] || NEXT.upright;
+	const [current, following] = NEXT[state.phase] || NEXT.standing;
 	const threshold =
-		state.phase === "returning_from_floor" && following === "upright"
-			? RETURN_TO_UPRIGHT_EMISSION
+		state.phase === "rising" && following === "standing"
+			? RETURN_TO_STANDING_EMISSION
 			: FORWARD_EMISSION;
-	const returnFromFloorAllowed =
-		state.phase !== "floor_work" ||
-		following !== "returning_from_floor" ||
-		frame.worldBodyVerticalSpan >= RETURNING_MIN_BODY_VERTICAL_SPAN;
+	const risingAllowed =
+		state.phase !== "pushup" ||
+		following !== "rising" ||
+		frame.worldBodyVerticalSpan >= RISING_MIN_BODY_VERTICAL_SPAN;
 
-	return emissions[following] >= threshold && returnFromFloorAllowed
-		? following
-		: current;
+	return emissions[following] >= threshold && risingAllowed ? following : current;
+}
+
+function preservePushupCandidate(state) {
+	return state.phase === "pushup" ? state : resetCandidate(state);
 }
 
 function resetCandidate(state) {
-	return { ...state, phase: "upright", phaseStartedAtMs: null };
+	return { ...state, phase: "standing", phaseStartedAtMs: null };
 }
 
 function transition(state, phase, tMs) {

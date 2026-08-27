@@ -16,6 +16,33 @@ const WORLD_PHASES = Object.freeze({
 	squat: { body: 3, hip: 2.1, torso: 0.9, wrist: 1.4 },
 });
 
+const DERIVED_MACRO_PHASES = Object.freeze({
+	standing: { body: 3.2, hip: 2.35, torso: 0.85, wrist: 1.5, dBody: 0 },
+	lowering: { body: 2.1, hip: 1.65, torso: 0.45, wrist: 0.7, dBody: -0.8 },
+	pushup: { body: 1.05, hip: 0.7, torso: 0.35, wrist: 0.45, dBody: 0 },
+	rising: { body: 1.65, hip: 1.1, torso: 0.55, wrist: 0.8, dBody: 0.8 },
+});
+
+function macroFrame(phase, tMs, overrides = {}) {
+	const geometry = DERIVED_MACRO_PHASES[phase];
+	if (!geometry) throw new Error(`unknown macro phase: ${phase}`);
+
+	return {
+		tMs,
+		hasFullWorldLandmarkCoverage: true,
+		poseConfidence: 0.9,
+		macroLandmarkConfidence: 0.9,
+		visibleFraction: 0.9,
+		worldBodyVerticalSpan: geometry.body,
+		worldHipVerticalSpan: geometry.hip,
+		worldTorsoElevation: geometry.torso,
+		worldWristVerticalSpan: geometry.wrist,
+		dWorldBodyVerticalSpan: geometry.dBody,
+		dWorldWristVerticalSpan: 0,
+		...overrides,
+	};
+}
+
 function run(frames) {
 	let state = initialBurpeeHsmmState();
 	const reps = [];
@@ -180,18 +207,18 @@ test("foreshortened image coordinates do not change world-based phase results", 
 
 test("advances only when weighted low-front evidence clears the forward threshold", () => {
 	const result = stepBurpeeHsmm(
-		{ ...initialBurpeeHsmmState(), phase: "upright", phaseStartedAtMs: 0 },
+		{ ...initialBurpeeHsmmState(), phase: "standing", phaseStartedAtMs: 0 },
 		lowFrontFrame("lowering", 150, { worldWristVerticalSpan: 1.8 }),
 	);
 
-	assert.equal(result.state.phase, "lowering_to_floor");
+	assert.equal(result.state.phase, "lowering");
 });
 
-test("a qualifying velocity spike cannot return from floor below the body-span minimum", () => {
+test("a qualifying velocity spike cannot rise from pushup below the body-span minimum", () => {
 	const result = stepBurpeeHsmm(
 		{
 			...initialBurpeeHsmmState(),
-			phase: "floor_work",
+			phase: "pushup",
 			phaseStartedAtMs: 0,
 		},
 		lowFrontFrame("returning", 150, {
@@ -202,7 +229,7 @@ test("a qualifying velocity spike cannot return from floor below the body-span m
 		}),
 	);
 
-	assert.equal(result.state.phase, "floor_work");
+	assert.equal(result.state.phase, "pushup");
 });
 
 test("does not count a squat-only or interrupted floor sequence", () => {
@@ -253,7 +280,7 @@ test("a slow return below the return-to-upright threshold does not count", () =>
 	assert.deepEqual(run(prefix.concat(weakUpright)).reps, []);
 });
 
-test("an unusable frame abandons a partial path before a fresh cycle", () => {
+test("an unusable observation during pushup preserves the partial path", () => {
 	const frames = lowFrontFeatureFrames([
 		["upright", 0],
 		["lowering", 150],
@@ -265,7 +292,7 @@ test("an unusable frame abandons a partial path before a fresh cycle", () => {
 	]);
 	frames[3] = { ...frames[3], poseConfidence: 0.1, visibleFraction: 0.1 };
 
-	assert.deepEqual(run(frames).reps, [1_900]);
+	assert.deepEqual(run(frames).reps, [750, 1_900]);
 });
 
 test("a strong out-of-order observation abandons a partial path before a fresh cycle", () => {
@@ -300,7 +327,7 @@ test("missing knee or foot world landmarks reset the partial path", () => {
 		assert.equal(result.rep, false);
 		assert.deepEqual(
 			result.state,
-			{ ...state, phase: "upright", phaseStartedAtMs: null },
+			{ ...state, phase: "standing", phaseStartedAtMs: null },
 			`${missingWorldName} world point must reset the HSMM candidate`,
 		);
 	}
@@ -334,9 +361,103 @@ test("low-confidence required macro landmarks reset the partial path", () => {
 	assert.equal(result.rep, false);
 	assert.deepEqual(result.state, {
 		...state,
-		phase: "upright",
+		phase: "standing",
 		phaseStartedAtMs: null,
 	});
+});
+
+test("preserves an established pushup through unlimited unusable observations", () => {
+	const prefix = [
+		macroFrame("standing", 0),
+		macroFrame("lowering", 150),
+		macroFrame("pushup", 300),
+	];
+	let state = initialBurpeeHsmmState();
+	for (const frame of prefix) state = stepBurpeeHsmm(state, frame).state;
+
+	assert.equal(state.phase, "pushup");
+
+	const occluded = stepBurpeeHsmm(state, { tMs: 12_000 });
+	assert.equal(occluded.rep, false);
+	state = occluded.state;
+	assert.equal(state.phase, "pushup");
+
+	const recovery = [
+		macroFrame("pushup", 12_100),
+		macroFrame("rising", 12_250),
+		macroFrame("standing", 12_400),
+	];
+	const result = recovery.reduce(
+		({ state, reps }, frame) => {
+			const next = stepBurpeeHsmm(state, frame);
+			return {
+				state: next.state,
+				reps: next.rep ? reps.concat(next.repAtMs) : reps,
+			};
+		},
+		{ state, reps: [] },
+	);
+
+	assert.deepEqual(result.reps, [12_400]);
+});
+
+test("resets an incomplete candidate when observation loss occurs before pushup", () => {
+	const prefix = [macroFrame("standing", 0), macroFrame("lowering", 150)];
+	const state = prefix.reduce(
+		(candidate, frame) => stepBurpeeHsmm(candidate, frame).state,
+		initialBurpeeHsmmState(),
+	);
+
+	assert.equal(state.phase, "lowering");
+
+	const result = stepBurpeeHsmm(state, { tMs: 300 });
+
+	assert.equal(result.state.phase, "standing");
+	assert.equal(result.state.phaseStartedAtMs, null);
+});
+
+test("a visible strong out-of-order observation resets a preserved pushup", () => {
+	const prefix = [
+		macroFrame("standing", 0),
+		macroFrame("lowering", 150),
+		macroFrame("pushup", 300),
+	];
+	let state = prefix.reduce(
+		(candidate, frame) => stepBurpeeHsmm(candidate, frame).state,
+		initialBurpeeHsmmState(),
+	);
+	state = stepBurpeeHsmm(state, { tMs: 450 }).state;
+
+	assert.equal(state.phase, "pushup");
+
+	const standing = macroFrame("standing", 600);
+	const result = stepBurpeeHsmm(state, standing);
+
+	assert.equal(result.state.phase, "standing");
+	assert.equal(result.state.phaseStartedAtMs, null);
+});
+
+test("counts only when final standing evidence reaches 0.47", () => {
+	const rising = {
+		...initialBurpeeHsmmState(),
+		phase: "rising",
+		phaseStartedAtMs: 0,
+	};
+	const atThreshold = macroFrame("standing", 600, {
+		worldBodyVerticalSpan: 2.55,
+		worldHipVerticalSpan: 1.7,
+		worldTorsoElevation: 0.85,
+		worldWristVerticalSpan: 1.455,
+	});
+	const belowThreshold = macroFrame("standing", 600, {
+		worldBodyVerticalSpan: 2.55,
+		worldHipVerticalSpan: 1.7,
+		worldTorsoElevation: 0.85,
+		worldWristVerticalSpan: 1.4535,
+	});
+
+	assert.equal(stepBurpeeHsmm(rising, atThreshold).rep, true);
+	assert.equal(stepBurpeeHsmm(rising, belowThreshold).rep, false);
 });
 
 test("raw low-front feature output drives one complete macro cycle", () => {
