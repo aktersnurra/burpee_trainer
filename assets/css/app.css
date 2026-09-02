@@ -311,6 +311,11 @@ body {
   font-size: clamp(9rem, min(34vw, 34dvh), 14rem);
 }
 
+#session-runner-client.is-working #count.is-down-cue,
+#session-runner-client.is-rest #count.is-down-cue {
+  font-size: min(var(--down-cue-max), 40vw, 26dvh);
+}
+
 #session-runner-client.is-rest #count {
   color: var(--session-active-ink);
   font-size: clamp(9.375rem, min(37vw, 31dvh), 14.375rem);
@@ -484,6 +489,11 @@ body {
     font-size: clamp(5rem, 30dvh, 7rem);
   }
 
+  #session-runner-client.is-working #count.is-down-cue,
+  #session-runner-client.is-rest #count.is-down-cue {
+    font-size: min(var(--down-cue-max), 40vw, 26dvh);
+  }
+
   #session-runner-client.is-rest #count {
     font-size: clamp(6rem, 34dvh, 8rem);
   }
@@ -508,13 +518,18 @@ body {
 }
 
 #count.is-down-cue {
-  font-size: 132px;
+  /* "DOWN" is ~2.2em wide at this tracking, so cap the size to the
+     available width (and height) instead of using a fixed pixel size. */
+  --down-cue-max: 132px;
+  font-size: min(var(--down-cue-max), 40vw, 26dvh);
   letter-spacing: -0.085em;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 @media (min-width: 640px) {
   #count.is-down-cue {
-    font-size: 144px;
+    --down-cue-max: 144px;
   }
 }
 
