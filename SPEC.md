@@ -6,6 +6,8 @@
 > Intelligence-layer note: the old PlanWizard/MILP/ScheduleSolver direction in this file is superseded by `INTELLIGENCE_LAYER.md`, which documents the current implementation.
 >
 > Current-contract note: **DELETION-FIRST WORKOUT LIBRARY AND COACH — CURRENT CONTRACT** below supersedes older data-model, planning, Home, recommendation, and completion passages wherever they conflict.
+>
+> Approved design target (2026-09-09): [Adaptive Home: pre-workout design](docs/superpowers/specs/2026-09-09-adaptive-home-pre-workout-design.md) supersedes conflicting Home presentation and draft-interaction descriptions. It is an approved design, not a statement of implemented behavior; compilation, ownership, published immutability, and session-snapshot guarantees still apply.
 
 ---
 
