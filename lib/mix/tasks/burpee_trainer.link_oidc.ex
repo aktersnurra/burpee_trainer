@@ -26,11 +26,6 @@ defmodule Mix.Tasks.BurpeeTrainer.LinkOidc do
   alias BurpeeTrainer.Accounts
   alias BurpeeTrainer.Repo
 
-  @scoped_tables ~w(
-    workout_plans goals workout_sessions style_performances
-    user_stats planning_drafts execution_plans pose_capture_runs
-  )
-
   @impl Mix.Task
   def run(args) do
     {opts, positional, _} =
@@ -96,7 +91,7 @@ defmodule Mix.Tasks.BurpeeTrainer.LinkOidc do
     Mix.shell().info("")
     Mix.shell().info("Data owned by this account:")
 
-    for table <- @scoped_tables do
+    for table <- scoped_tables() do
       count = count_for(table, user.id)
       Mix.shell().info("  #{String.pad_trailing(table, 20)} #{count}")
     end
@@ -104,13 +99,27 @@ defmodule Mix.Tasks.BurpeeTrainer.LinkOidc do
     warn_username_mismatch(user, provider_username)
   end
 
+  # Discovered from the live schema rather than hardcoded: tables scoped by
+  # user_id change over time, and a stale list would under-report what this
+  # account owns — the opposite of what an operator needs before confirming.
+  defp scoped_tables do
+    %{rows: rows} =
+      Repo.query!("""
+      SELECT m.name
+      FROM sqlite_master AS m
+      JOIN pragma_table_info(m.name) AS c
+      WHERE m.type = 'table' AND c.name = 'user_id'
+      ORDER BY m.name
+      """)
+
+    Enum.map(rows, fn [name] -> name end)
+  end
+
   defp count_for(table, user_id) do
     %{rows: [[count]]} =
-      Repo.query!("SELECT COUNT(*) FROM #{table} WHERE user_id = ?", [user_id])
+      Repo.query!("SELECT COUNT(*) FROM \"#{table}\" WHERE user_id = ?", [user_id])
 
     count
-  rescue
-    _ -> "(table missing)"
   end
 
   defp warn_username_mismatch(_user, nil), do: :ok
