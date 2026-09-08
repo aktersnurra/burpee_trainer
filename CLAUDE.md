@@ -51,10 +51,13 @@ Personal bests are persisted by `Workouts.session_milestones/3` at session-save 
 `rest_sec_warmup_between`, `rest_sec_warmup_before_main`, `shave_off_sec`, `shave_off_block_count`.
 These were removed in migration `20260426000000`. Warmup is now computed dynamically in `Planner.warmup_timeline/1`.
 
-**Auth is OIDC-only.** `users.oidc_sub` is linked offline with
-`mix burpee_trainer.link_oidc`; the callback never creates a user. See
-`docs/oidc-setup.md`. Removed: `password_hash`, `bcrypt_elixir`,
-`mix burpee_trainer.create_user`.
+**Auth is OIDC-only.** Identity resolution lives in
+`Accounts.resolve_oidc_identity/2`: an existing `oidc_sub` wins; otherwise a
+matching `username` with no sub is adopted (preserving that account's
+history); a username already bound to a *different* sub is refused; an
+unknown username is created. `mix burpee_trainer.link_oidc` remains as a
+manual override for when the names differ. See `docs/oidc-setup.md`.
+Removed: `password_hash`, `bcrypt_elixir`, `mix burpee_trainer.create_user`.
 
 ## Planner event types
 
