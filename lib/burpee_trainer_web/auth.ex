@@ -1,7 +1,8 @@
 defmodule BurpeeTrainerWeb.Auth do
   @moduledoc """
-  Hand-rolled session auth. Single user, bcrypt password hashing, the
-  session stores a `:user_id` after login.
+  Session plumbing for authentication. The session stores a `:user_id`
+  after login; `BurpeeTrainerWeb.OidcController` is what establishes it,
+  via Pocket ID.
 
   Exposes both plug helpers for the regular pipeline and a LiveView
   `on_mount/4` hook that enforces authentication on `live_session`
