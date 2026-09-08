@@ -41,8 +41,13 @@ defmodule BurpeeTrainer.Application do
   # The provider-configuration worker performs OIDC discovery against the
   # issuer shortly after boot. Skipped when OIDC is unconfigured (a
   # half-configured dev machine still boots) and in test, where the issuer
-  # is unreachable and the worker's default `stop` backoff would terminate
-  # the supervision tree.
+  # is unreachable.
+  #
+  # `backoff_type` defaults to `:stop`, which means a single failed fetch —
+  # the identity provider being briefly unreachable while both services
+  # restart — kills the worker for good and every later login fails with
+  # `:provider_not_ready` until someone restarts the app. Retry instead,
+  # with jitter so the two services don't settle into lockstep.
   defp oidc_children do
     start? = Application.get_env(:burpee_trainer, :oidc_start_worker, true)
 
@@ -51,7 +56,13 @@ defmodule BurpeeTrainer.Application do
 
       [
         {Oidcc.ProviderConfiguration.Worker,
-         %{issuer: cfg[:issuer], name: BurpeeTrainer.Auth.Oidc.provider_name()}}
+         %{
+           issuer: cfg[:issuer],
+           name: BurpeeTrainer.Auth.Oidc.provider_name(),
+           backoff_type: :random_exponential,
+           backoff_min: 1_000,
+           backoff_max: 60_000
+         }}
       ]
     else
       []
