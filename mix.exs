@@ -68,7 +68,8 @@ defmodule BurpeeTrainer.MixProject do
       {:bandit, "~> 1.5"},
       {:bcrypt_elixir, "~> 3.0"},
       {:contex, "~> 0.5"},
-      {:remote_ip, "~> 1.2"}
+      {:remote_ip, "~> 1.2"},
+      {:oidcc, "~> 3.9"}
     ]
   end
 
