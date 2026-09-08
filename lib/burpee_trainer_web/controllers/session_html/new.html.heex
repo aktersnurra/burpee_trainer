@@ -5,33 +5,11 @@
       <p class="text-sm text-base-content/70">Sign in to continue</p>
     </div>
 
-    <.form :let={f} for={%{}} as={:user} action={~p"/login"} id="login-form" class="space-y-4">
-      <.input
-        field={f[:username]}
-        type="text"
-        label="Username"
-        value={@username}
-        autocomplete="username"
-        required
-      />
-      <.input
-        field={f[:password]}
-        type="password"
-        label="Password"
-        autocomplete="current-password"
-        required
-      />
-
-      <%= if @error_message do %>
-        <p class="text-sm text-error">{@error_message}</p>
-      <% end %>
-
-      <button
-        type="submit"
-        class="w-full rounded-md bg-primary px-4 py-2 font-medium text-primary-content hover:bg-primary/90 transition"
-      >
-        Sign in
-      </button>
-    </.form>
+    <a
+      href={~p"/auth/oidc"}
+      class="block w-full rounded-md bg-primary px-4 py-2 text-center font-medium text-primary-content hover:bg-primary/90 transition"
+    >
+      Sign in with Pocket ID
+    </a>
   </div>
 </Layouts.app>
