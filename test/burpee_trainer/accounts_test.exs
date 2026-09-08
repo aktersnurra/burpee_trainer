@@ -49,8 +49,10 @@ defmodule BurpeeTrainer.AccountsTest do
   end
 
   describe "any_user?/0" do
-    test "false when empty, true once a user exists" do
-      refute Accounts.any_user?()
+    # No `refute` on an empty table here: this case is `async: true`, so
+    # concurrently-running tests create users in the same database and a
+    # global "table is empty" assertion is not stable.
+    test "true once a user exists" do
       _user = user_fixture(%{"username" => "alice"})
       assert Accounts.any_user?()
     end
