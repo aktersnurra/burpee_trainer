@@ -128,10 +128,15 @@ defmodule Mix.Tasks.BurpeeTrainer.LinkOidc do
     end
   end
 
+  # `Mix.shell().yes?/1` treats a bare Enter (or empty piped stdin) as yes,
+  # which is the wrong default for a one-time write to the account that owns
+  # all workout history. Require the operator to type "yes" explicitly.
   defp confirm! do
     Mix.shell().info("")
 
-    unless Mix.shell().yes?("Link this account?") do
+    answer = Mix.shell().prompt("Link this account? Type 'yes' to confirm:")
+
+    unless is_binary(answer) and String.trim(answer) == "yes" do
       Mix.raise("Aborted.")
     end
   end
