@@ -35,7 +35,8 @@ defmodule BurpeeTrainerWeb.Router do
     pipe_through([:browser, :redirect_if_authed])
 
     get("/login", SessionController, :new)
-    post("/login", SessionController, :create)
+    get("/auth/oidc", OidcController, :request)
+    get("/auth/oidc/callback", OidcController, :callback)
   end
 
   scope "/", BurpeeTrainerWeb do
