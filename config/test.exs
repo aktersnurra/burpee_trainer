@@ -36,3 +36,17 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Dummy OIDC values. Tests never reach the network: the callback tests
+# swap in a stub via :oidc_module.
+config :burpee_trainer, :oidc,
+  issuer: "https://pocket-id.test",
+  client_id: "test-client-id",
+  client_secret: "test-client-secret",
+  redirect_uri: "http://localhost:4002/auth/oidc/callback"
+
+# Never start the discovery worker in test. `oidcc`'s worker loads its
+# configuration in a `handle_continue` after init, and its default
+# `backoff_type` is `stop` — so against an unreachable issuer it would
+# terminate and take the supervision tree with it.
+config :burpee_trainer, :oidc_start_worker, false

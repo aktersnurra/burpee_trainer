@@ -7,18 +7,17 @@ defmodule BurpeeTrainer.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      BurpeeTrainerWeb.Telemetry,
-      BurpeeTrainer.Repo,
-      {Ecto.Migrator,
-       repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
-      {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
-      # Start a worker by calling: BurpeeTrainer.Worker.start_link(arg)
-      # {BurpeeTrainer.Worker, arg},
-      # Start to serve requests, typically the last entry
-      BurpeeTrainerWeb.Endpoint
-    ]
+    children =
+      [
+        BurpeeTrainerWeb.Telemetry,
+        BurpeeTrainer.Repo,
+        {Ecto.Migrator,
+         repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
+        {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: BurpeeTrainer.PubSub}
+      ] ++
+        oidc_children() ++
+        [BurpeeTrainerWeb.Endpoint]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -37,5 +36,25 @@ defmodule BurpeeTrainer.Application do
   defp skip_migrations?() do
     # By default, sqlite migrations are run when using a release
     System.get_env("RELEASE_NAME") == nil
+  end
+
+  # The provider-configuration worker performs OIDC discovery against the
+  # issuer shortly after boot. Skipped when OIDC is unconfigured (a
+  # half-configured dev machine still boots) and in test, where the issuer
+  # is unreachable and the worker's default `stop` backoff would terminate
+  # the supervision tree.
+  defp oidc_children do
+    start? = Application.get_env(:burpee_trainer, :oidc_start_worker, true)
+
+    if start? and BurpeeTrainer.Auth.Oidc.configured?() do
+      cfg = Application.fetch_env!(:burpee_trainer, :oidc)
+
+      [
+        {Oidcc.ProviderConfiguration.Worker,
+         %{issuer: cfg[:issuer], name: BurpeeTrainer.Auth.Oidc.provider_name()}}
+      ]
+    else
+      []
+    end
   end
 end

@@ -87,3 +87,13 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# OIDC login against the self-hosted Pocket ID instance. The client is
+# registered there with both the localhost and production callback URLs,
+# so dev exercises the same code path as prod. Secrets come from the
+# environment (see .envrc).
+config :burpee_trainer, :oidc,
+  issuer: System.get_env("OIDC_ISSUER") || "https://pocket-id.example.com",
+  client_id: System.get_env("OIDC_CLIENT_ID"),
+  client_secret: System.get_env("OIDC_CLIENT_SECRET"),
+  redirect_uri: "http://localhost:4000/auth/oidc/callback"

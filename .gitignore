@@ -75,3 +75,6 @@ edit_mock.png
 
 # Symlink to nuc-setup deploy script
 /deploy
+
+# Local OIDC credentials
+/.envrc

@@ -51,6 +51,31 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  oidc_issuer =
+    System.get_env("OIDC_ISSUER") ||
+      raise """
+      environment variable OIDC_ISSUER is missing.
+      For example: https://pocket-id.example.com
+      """
+
+  oidc_client_id =
+    System.get_env("OIDC_CLIENT_ID") ||
+      raise "environment variable OIDC_CLIENT_ID is missing."
+
+  oidc_client_secret =
+    System.get_env("OIDC_CLIENT_SECRET") ||
+      raise "environment variable OIDC_CLIENT_SECRET is missing."
+
+  oidc_redirect_uri =
+    System.get_env("OIDC_REDIRECT_URI") ||
+      "https://#{System.get_env("PHX_HOST") || "example.com"}/auth/oidc/callback"
+
+  config :burpee_trainer, :oidc,
+    issuer: oidc_issuer,
+    client_id: oidc_client_id,
+    client_secret: oidc_client_secret,
+    redirect_uri: oidc_redirect_uri
+
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :burpee_trainer, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
