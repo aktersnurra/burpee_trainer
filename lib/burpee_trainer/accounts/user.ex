@@ -6,39 +6,34 @@ defmodule BurpeeTrainer.Accounts.User do
 
   schema "users" do
     field :username, :string
-    field :password, :string, virtual: true, redact: true
-    field :password_hash, :string, redact: true
+    field :oidc_sub, :string
 
     timestamps(type: :utc_datetime)
   end
 
   @doc """
-  Changeset for registering a user from username + plaintext password.
-  The plaintext is hashed into `password_hash` and then stripped from
-  the changeset so it never lands in the struct.
+  Changeset for creating a user from a username alone. Users are
+  provisioned in Pocket ID; this exists for seeding and tests.
   """
   def registration_changeset(user, attrs) do
     user
-    |> cast(attrs, [:username, :password])
-    |> validate_required([:username, :password])
+    |> cast(attrs, [:username, :oidc_sub])
+    |> validate_required([:username])
     |> validate_length(:username, min: 3, max: 32)
     |> validate_format(:username, ~r/^[a-zA-Z0-9_.-]+$/,
       message: "may only contain letters, numbers, and _ . -"
     )
-    |> validate_length(:password, min: 8, max: 72)
     |> unique_constraint(:username)
-    |> put_password_hash()
+    |> unique_constraint(:oidc_sub)
   end
 
-  defp put_password_hash(changeset) do
-    case get_change(changeset, :password) do
-      nil ->
-        changeset
-
-      password ->
-        changeset
-        |> put_change(:password_hash, Bcrypt.hash_pwd_salt(password))
-        |> delete_change(:password)
-    end
+  @doc """
+  Changeset that links an OIDC subject identifier to an existing user.
+  """
+  def oidc_link_changeset(user, oidc_sub) when is_binary(oidc_sub) do
+    user
+    |> cast(%{oidc_sub: oidc_sub}, [:oidc_sub])
+    |> validate_required([:oidc_sub])
+    |> unique_constraint(:oidc_sub)
   end
 end

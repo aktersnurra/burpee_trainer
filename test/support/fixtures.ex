@@ -22,10 +22,9 @@ defmodule BurpeeTrainer.Fixtures do
     {:ok, user} =
       attrs
       |> Enum.into(%{
-        "username" => "user_#{suffix}",
-        "password" => "correct-horse-battery-staple"
+        "username" => "user_#{suffix}"
       })
-      |> Accounts.register_user()
+      |> Accounts.create_user()
 
     user
   end

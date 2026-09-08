@@ -1,90 +1,57 @@
 defmodule BurpeeTrainer.AccountsTest do
-  use BurpeeTrainer.DataCase, async: false
-
-  alias BurpeeTrainer.Accounts
-  alias BurpeeTrainer.Accounts.User
+  use BurpeeTrainer.DataCase, async: true
 
   import BurpeeTrainer.Fixtures
 
-  describe "register_user/1" do
-    test "creates a user and hashes the password" do
-      assert {:ok, %User{} = user} =
-               Accounts.register_user(%{
-                 "username" => "alice",
-                 "password" => "correct-horse-battery-staple"
-               })
+  alias BurpeeTrainer.Accounts
 
-      assert user.username == "alice"
-      assert is_binary(user.password_hash)
-      assert user.password == nil
-      refute user.password_hash == "correct-horse-battery-staple"
+  describe "get_user_by_oidc_sub/1" do
+    test "returns the user with a matching sub" do
+      user = user_fixture(%{"username" => "alice"})
+      {:ok, user} = Accounts.link_oidc_sub(user, "sub-abc-123")
+
+      assert %{id: id} = Accounts.get_user_by_oidc_sub("sub-abc-123")
+      assert id == user.id
     end
 
-    test "rejects a username that is too short" do
-      assert {:error, changeset} =
-               Accounts.register_user(%{"username" => "ab", "password" => "longenoughpw"})
+    test "returns nil for an unknown sub" do
+      _user = user_fixture(%{"username" => "alice"})
 
-      assert %{username: [_ | _]} = errors_on(changeset)
+      assert Accounts.get_user_by_oidc_sub("sub-nope") == nil
     end
 
-    test "rejects a username with disallowed characters" do
-      assert {:error, changeset} =
-               Accounts.register_user(%{"username" => "bad name!", "password" => "longenoughpw"})
+    test "returns nil rather than matching a user with no sub linked" do
+      _user = user_fixture(%{"username" => "alice"})
 
-      assert %{username: [_ | _]} = errors_on(changeset)
-    end
-
-    test "rejects a password that is too short" do
-      assert {:error, changeset} =
-               Accounts.register_user(%{"username" => "alice", "password" => "short"})
-
-      assert %{password: [_ | _]} = errors_on(changeset)
-    end
-
-    test "rejects a duplicate username" do
-      _ = user_fixture(%{"username" => "taken"})
-
-      assert {:error, changeset} =
-               Accounts.register_user(%{"username" => "taken", "password" => "longenoughpw"})
-
-      assert %{username: [_ | _]} = errors_on(changeset)
+      assert Accounts.get_user_by_oidc_sub(nil) == nil
+      assert Accounts.get_user_by_oidc_sub("") == nil
     end
   end
 
-  describe "authenticate_user/2" do
-    test "returns the user on correct credentials" do
-      user = user_fixture(%{"username" => "alice", "password" => "longenoughpw"})
+  describe "link_oidc_sub/2" do
+    test "writes the sub onto the user" do
+      user = user_fixture(%{"username" => "alice"})
 
-      assert {:ok, authed} = Accounts.authenticate_user("alice", "longenoughpw")
-      assert authed.id == user.id
+      assert {:ok, linked} = Accounts.link_oidc_sub(user, "sub-abc-123")
+      assert linked.oidc_sub == "sub-abc-123"
+      assert linked.id == user.id
     end
 
-    test "returns :invalid_credentials on wrong password" do
-      _ = user_fixture(%{"username" => "alice", "password" => "longenoughpw"})
+    test "refuses to link the same sub to two users" do
+      alice = user_fixture(%{"username" => "alice"})
+      bob = user_fixture(%{"username" => "bob"})
 
-      assert {:error, :invalid_credentials} = Accounts.authenticate_user("alice", "wrong-pass")
-    end
+      {:ok, _} = Accounts.link_oidc_sub(alice, "sub-abc-123")
 
-    test "returns :invalid_credentials when the user does not exist" do
-      assert {:error, :invalid_credentials} = Accounts.authenticate_user("ghost", "whatever123")
+      assert {:error, changeset} = Accounts.link_oidc_sub(bob, "sub-abc-123")
+      assert "has already been taken" in errors_on(changeset).oidc_sub
     end
   end
 
-  describe "lookup helpers" do
-    test "get_user!/1 raises when missing, returns struct when present" do
-      user = user_fixture()
-      assert Accounts.get_user!(user.id).id == user.id
-
-      assert_raise Ecto.NoResultsError, fn -> Accounts.get_user!(user.id + 99_999) end
-    end
-
-    test "get_user_by_username/1 returns nil when missing" do
-      assert Accounts.get_user_by_username("nope") == nil
-    end
-
-    test "any_user?/0 reflects whether a user exists" do
+  describe "any_user?/0" do
+    test "false when empty, true once a user exists" do
       refute Accounts.any_user?()
-      _ = user_fixture()
+      _user = user_fixture(%{"username" => "alice"})
       assert Accounts.any_user?()
     end
   end

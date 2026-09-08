@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Accounts do
   @moduledoc """
-  Single-user authentication context. All data elsewhere is scoped by
+  OIDC-backed authentication context. All data elsewhere is scoped by
   `user_id`; the app is multi-user-capable even though only one user
   actually exists.
   """
@@ -31,47 +31,36 @@ defmodule BurpeeTrainer.Accounts do
   end
 
   @doc """
-  Authenticate a user by username + plaintext password. Always spends
-  bcrypt time even when the user doesn't exist, to prevent enumeration
-  via timing.
+  Fetch the user linked to an OIDC subject identifier. Returns nil when
+  the sub is blank or unknown. Never creates a user.
   """
-  @spec authenticate_user(String.t(), String.t()) ::
-          {:ok, User.t()} | {:error, :invalid_credentials}
-  def authenticate_user(username, password) when is_binary(username) and is_binary(password) do
-    user = get_user_by_username(username)
+  @spec get_user_by_oidc_sub(String.t() | nil) :: User.t() | nil
+  def get_user_by_oidc_sub(sub) when is_binary(sub) and sub != "" do
+    Repo.one(from u in User, where: u.oidc_sub == ^sub)
+  end
 
-    cond do
-      user && Bcrypt.verify_pass(password, user.password_hash) ->
-        {:ok, user}
+  def get_user_by_oidc_sub(_sub), do: nil
 
-      user ->
-        {:error, :invalid_credentials}
-
-      true ->
-        # No user with that username — spend the same time hashing so
-        # response time doesn't leak whether the user exists.
-        Bcrypt.no_user_verify()
-        {:error, :invalid_credentials}
-    end
+  @doc """
+  Link an OIDC subject identifier to an existing user. Used by the
+  `mix burpee_trainer.link_oidc` task, never during a login request.
+  """
+  @spec link_oidc_sub(User.t(), String.t()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
+  def link_oidc_sub(%User{} = user, sub) when is_binary(sub) do
+    user
+    |> User.oidc_link_changeset(sub)
+    |> Repo.update()
   end
 
   @doc """
-  Create a user. Used by the `mix burpee_trainer.create_user` task.
+  Create a user. Users are normally provisioned in Pocket ID; this is for
+  seeding and tests.
   """
-  @spec register_user(map) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
-  def register_user(attrs) do
+  @spec create_user(map) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
+  def create_user(attrs) do
     %User{}
     |> User.registration_changeset(attrs)
     |> Repo.insert()
-  end
-
-  @doc """
-  Return a blank registration changeset, useful for login/registration
-  forms.
-  """
-  @spec change_user_registration(User.t(), map) :: Ecto.Changeset.t()
-  def change_user_registration(%User{} = user, attrs \\ %{}) do
-    User.registration_changeset(user, attrs)
   end
 
   @doc """
