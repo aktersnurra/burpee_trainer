@@ -53,6 +53,57 @@ defmodule BurpeeTrainer.Accounts do
   end
 
   @doc """
+  Resolve an OIDC identity to a local user, linking or creating as needed.
+
+  Order matters:
+
+    1. A user already linked to this `sub` — the steady state after first login.
+    2. A user with this username and no `sub` yet — adopted, so an existing
+       account keeps its history instead of being shadowed by a new one.
+    3. A user with this username already linked to a *different* `sub` —
+       refused. Two identities claiming one account is a conflict to surface,
+       never to resolve by guessing.
+    4. Nobody with this username — created and linked.
+
+  Runs in a transaction so a concurrent callback cannot create the same
+  username twice; the unique indexes on `username` and `oidc_sub` are the
+  backstop.
+  """
+  @spec resolve_oidc_identity(String.t(), String.t()) ::
+          {:ok, User.t()} | {:error, :username_missing | :sub_conflict | Ecto.Changeset.t()}
+  def resolve_oidc_identity(sub, username)
+
+  def resolve_oidc_identity(sub, username)
+      when is_binary(sub) and sub != "" and is_binary(username) and username != "" do
+    Repo.transaction(fn ->
+      case get_user_by_oidc_sub(sub) do
+        %User{} = user ->
+          user
+
+        nil ->
+          case get_user_by_username(username) do
+            nil ->
+              case create_user(%{"username" => username, "oidc_sub" => sub}) do
+                {:ok, user} -> user
+                {:error, changeset} -> Repo.rollback(changeset)
+              end
+
+            %User{oidc_sub: nil} = user ->
+              case link_oidc_sub(user, sub) do
+                {:ok, linked} -> linked
+                {:error, changeset} -> Repo.rollback(changeset)
+              end
+
+            %User{} ->
+              Repo.rollback(:sub_conflict)
+          end
+      end
+    end)
+  end
+
+  def resolve_oidc_identity(_sub, _username), do: {:error, :username_missing}
+
+  @doc """
   Create a user. Users are normally provisioned in Pocket ID; this is for
   seeding and tests.
   """

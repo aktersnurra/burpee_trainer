@@ -72,23 +72,34 @@ defmodule BurpeeTrainerWeb.OidcController do
 
   defp resolve(conn, claims) do
     sub = Map.get(claims, "sub")
+    username = Map.get(claims, "preferred_username")
 
-    case Accounts.get_user_by_oidc_sub(sub) do
-      nil ->
-        Logger.warning("OIDC login for unlinked sub #{inspect(sub)}")
-
-        deny(
-          conn,
-          "This identity is not linked to an account. " <>
-            "Run mix burpee_trainer.link_oidc to link it."
-        )
-
-      user ->
+    case Accounts.resolve_oidc_identity(sub, username) do
+      {:ok, user} ->
         conn
         |> clear_oidc_session()
         |> Auth.log_in_user(user)
         |> put_flash(:info, "Welcome back, #{user.username}.")
         |> redirect(to: ~p"/")
+
+      {:error, :sub_conflict} ->
+        Logger.warning(
+          "OIDC sub #{inspect(sub)} claims username #{inspect(username)}, " <>
+            "which is already linked to a different identity"
+        )
+
+        deny(
+          conn,
+          "That username is already linked to a different login identity."
+        )
+
+      {:error, :username_missing} ->
+        Logger.error("OIDC token had no usable sub/preferred_username claim")
+        deny(conn, "The login provider did not supply a username.")
+
+      {:error, reason} ->
+        Logger.error("OIDC identity resolution failed: #{inspect(reason)}")
+        deny(conn, "Could not complete login. Please try again.")
     end
   end
 

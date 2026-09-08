@@ -15,9 +15,23 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
     end
 
     @impl true
-    def fetch_claims("good-code", _verifier), do: {:ok, %{"sub" => "sub-abc-123"}}
-    def fetch_claims("unknown-code", _verifier), do: {:ok, %{"sub" => "sub-nobody"}}
-    def fetch_claims("other-code", _verifier), do: {:ok, %{"sub" => "sub-other"}}
+    def fetch_claims("good-code", _verifier),
+      do: {:ok, %{"sub" => "sub-abc-123", "preferred_username" => "alice"}}
+
+    def fetch_claims("newcomer-code", _verifier),
+      do: {:ok, %{"sub" => "sub-newcomer", "preferred_username" => "newcomer"}}
+
+    def fetch_claims("adopt-code", _verifier),
+      do: {:ok, %{"sub" => "sub-fresh", "preferred_username" => "alice"}}
+
+    def fetch_claims("conflict-code", _verifier),
+      do: {:ok, %{"sub" => "sub-impostor", "preferred_username" => "alice"}}
+
+    def fetch_claims("no-username-code", _verifier), do: {:ok, %{"sub" => "sub-anon"}}
+
+    def fetch_claims("other-code", _verifier),
+      do: {:ok, %{"sub" => "sub-other", "preferred_username" => "bob"}}
+
     def fetch_claims(_code, _verifier), do: {:error, :invalid_grant}
   end
 
@@ -51,14 +65,62 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
       assert get_session(conn, :user_id) == user.id
     end
 
-    test "rejects an unknown sub and creates no user", %{conn: conn} do
-      _user = user_fixture(%{"username" => "alice"})
+    test "adopts an existing unlinked account with the same username", %{conn: conn} do
+      user = user_fixture(%{"username" => "alice"})
       before_count = Repo.aggregate(Accounts.User, :count)
 
       conn =
         conn
         |> init_test_session(%{oidc_state: "st", oidc_pkce_verifier: "vf"})
-        |> get(~p"/auth/oidc/callback", %{"code" => "unknown-code", "state" => "st"})
+        |> get(~p"/auth/oidc/callback", %{"code" => "adopt-code", "state" => "st"})
+
+      assert redirected_to(conn) == ~p"/"
+      assert get_session(conn, :user_id) == user.id
+      assert Accounts.get_user!(user.id).oidc_sub == "sub-fresh"
+      # Adopted, not duplicated — this is what keeps existing history reachable.
+      assert Repo.aggregate(Accounts.User, :count) == before_count
+    end
+
+    test "creates and links an account for an unknown username", %{conn: conn} do
+      before_count = Repo.aggregate(Accounts.User, :count)
+
+      conn =
+        conn
+        |> init_test_session(%{oidc_state: "st", oidc_pkce_verifier: "vf"})
+        |> get(~p"/auth/oidc/callback", %{"code" => "newcomer-code", "state" => "st"})
+
+      assert redirected_to(conn) == ~p"/"
+      assert Repo.aggregate(Accounts.User, :count) == before_count + 1
+
+      user = Accounts.get_user_by_username("newcomer")
+      assert user.oidc_sub == "sub-newcomer"
+      assert get_session(conn, :user_id) == user.id
+    end
+
+    test "refuses when the username is linked to a different identity", %{conn: conn} do
+      user = user_fixture(%{"username" => "alice"})
+      {:ok, _} = Accounts.link_oidc_sub(user, "sub-abc-123")
+      before_count = Repo.aggregate(Accounts.User, :count)
+
+      conn =
+        conn
+        |> init_test_session(%{oidc_state: "st", oidc_pkce_verifier: "vf"})
+        |> get(~p"/auth/oidc/callback", %{"code" => "conflict-code", "state" => "st"})
+
+      assert redirected_to(conn) == ~p"/login"
+      refute get_session(conn, :user_id)
+      # The impostor sub must not overwrite the established link.
+      assert Accounts.get_user!(user.id).oidc_sub == "sub-abc-123"
+      assert Repo.aggregate(Accounts.User, :count) == before_count
+    end
+
+    test "rejects a token with no preferred_username claim", %{conn: conn} do
+      before_count = Repo.aggregate(Accounts.User, :count)
+
+      conn =
+        conn
+        |> init_test_session(%{oidc_state: "st", oidc_pkce_verifier: "vf"})
+        |> get(~p"/auth/oidc/callback", %{"code" => "no-username-code", "state" => "st"})
 
       assert redirected_to(conn) == ~p"/login"
       refute get_session(conn, :user_id)
