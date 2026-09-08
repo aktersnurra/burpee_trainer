@@ -66,7 +66,6 @@ defmodule BurpeeTrainer.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:bcrypt_elixir, "~> 3.0"},
       {:contex, "~> 0.5"},
       {:remote_ip, "~> 1.2"},
       {:oidcc, "~> 3.9"}
