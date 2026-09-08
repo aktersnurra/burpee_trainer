@@ -29,7 +29,8 @@ See `INTELLIGENCE_LAYER.md` for the current fixed weekly contract, coach target 
 | `BurpeeTrainer.Levels` | Level unlock + **decay** rules (co-week, landmark_history, level_status) |
 | `BurpeeTrainer.StyleGenerator` | Generates style variants for a plan |
 | `BurpeeTrainer.StyleRecommender` | Picks a style variant to suggest |
-| `BurpeeTrainer.Accounts` | User auth (bcrypt, sessions) |
+| `BurpeeTrainer.Accounts` | User records + OIDC subject lookup (no passwords) |
+| `BurpeeTrainer.Auth.Oidc` | `oidcc` wrapper (behaviour) for the Pocket ID auth-code+PKCE flow |
 
 ## Data model — critical distinctions
 
@@ -49,6 +50,11 @@ Personal bests are persisted by `Workouts.session_milestones/3` at session-save 
 **Removed fields (do not reintroduce):** `warmup_enabled`, `warmup_reps`, `warmup_rounds`,
 `rest_sec_warmup_between`, `rest_sec_warmup_before_main`, `shave_off_sec`, `shave_off_block_count`.
 These were removed in migration `20260426000000`. Warmup is now computed dynamically in `Planner.warmup_timeline/1`.
+
+**Auth is OIDC-only.** `users.oidc_sub` is linked offline with
+`mix burpee_trainer.link_oidc`; the callback never creates a user. See
+`docs/oidc-setup.md`. Removed: `password_hash`, `bcrypt_elixir`,
+`mix burpee_trainer.create_user`.
 
 ## Planner event types
 
