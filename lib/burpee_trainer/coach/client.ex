@@ -52,6 +52,7 @@ defmodule BurpeeTrainer.Coach.Client do
          :ok <- validate_url(url),
          {:ok, api_key} <- required(config, :api_key),
          {:ok, model} <- required(config, :model),
+         {:ok, encoded} <- encode_request(messages, model, schema_name, schema),
          {:ok, response} <-
            Req.post(req(opts),
              url: url,
@@ -62,20 +63,8 @@ defmodule BurpeeTrainer.Coach.Client do
              http_errors: :return,
              receive_timeout: timeout_ms(config),
              into: bounded_body(@max_response_bytes),
-             json: %{
-               model: model,
-               max_tokens: @max_output_tokens,
-               temperature: 0,
-               response_format: %{
-                 type: "json_schema",
-                 json_schema: %{
-                   name: schema_name,
-                   strict: true,
-                   schema: schema
-                 }
-               },
-               messages: messages
-             }
+             body: encoded,
+             headers: [{"content-type", "application/json"}]
            ),
          body when is_binary(body) <- response.body,
          :ok <- enforce_body_limit(body, @max_response_bytes),
@@ -100,6 +89,9 @@ defmodule BurpeeTrainer.Coach.Client do
       when reason in [:invalid_provider_response, :response_too_large] ->
         invalid_provider_response()
 
+      {:error, %Error{} = error} ->
+        {:error, error}
+
       {:error, _safe_provider_error} ->
         provider_unavailable()
 
@@ -109,6 +101,25 @@ defmodule BurpeeTrainer.Coach.Client do
       _invalid ->
         invalid_provider_response()
     end
+  end
+
+  defp encode_request(messages, model, name, schema) do
+    body = %{
+      model: model,
+      max_tokens: @max_output_tokens,
+      temperature: 0,
+      response_format: %{
+        type: "json_schema",
+        json_schema: %{name: name, strict: true, schema: schema}
+      },
+      messages: messages
+    }
+
+    encoded = Jason.encode!(body)
+
+    if byte_size(encoded) <= 262_144,
+      do: {:ok, encoded},
+      else: {:error, Error.new(:authoring_context_too_large)}
   end
 
   defp response_schema(:workout_definition),

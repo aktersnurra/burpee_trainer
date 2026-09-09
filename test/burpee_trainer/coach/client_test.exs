@@ -6,6 +6,45 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   alias BurpeeTrainer.Coach.Client
   alias BurpeeTrainer.Workouts.Error
 
+  test "oversized serialized request fails before HTTP" do
+    parent = self()
+
+    req =
+      Req.new(
+        adapter: fn request ->
+          send(parent, :unexpected_http)
+          {request, %Req.Response{status: 500, body: ""}}
+        end
+      )
+
+    assert {:error, %Error{code: :authoring_context_too_large}} =
+             Client.complete(
+               [%{role: "user", content: String.duplicate("x", 262_145)}],
+               req: req,
+               config: [
+                 enabled: true,
+                 url: "https://provider.test/v1",
+                 api_key: "test",
+                 model: "test"
+               ]
+             )
+
+    refute_received :unexpected_http
+  end
+
+  test "schema envelope pushes otherwise bounded messages over the request cap", %{
+    counter: counter
+  } do
+    messages = [%{role: "user", content: String.duplicate("x", 262_000)}]
+    assert byte_size(Jason.encode!(messages)) < 262_144
+    req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
+
+    assert {:error, %Error{code: :authoring_context_too_large}} =
+             Client.complete(messages, opts(req))
+
+    assert requests(counter) == []
+  end
+
   @max_response_bytes 262_144
 
   setup do

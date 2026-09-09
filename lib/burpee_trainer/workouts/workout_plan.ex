@@ -14,6 +14,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     field(:name, :string)
     field(:origin, Ecto.Enum, values: @origins)
     field(:state, Ecto.Enum, values: @states)
+    field(:design_session_id, :integer)
     field(:request_text, :string)
     field(:definition_json, :map)
     field(:program_json, :map)

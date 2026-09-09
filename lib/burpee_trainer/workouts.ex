@@ -773,6 +773,7 @@ defmodule BurpeeTrainer.Workouts do
     do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
 
   @draft_revision_fields [
+    :design_session_id,
     :id,
     :user_id,
     :name,
