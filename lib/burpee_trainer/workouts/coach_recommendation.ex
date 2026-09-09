@@ -12,6 +12,7 @@ defmodule BurpeeTrainer.Workouts.CoachRecommendation do
     field(:slot_key, :string)
     field(:slot_date, :date)
     field(:rationale, :string)
+    field(:ranked_plan_ids, :map, default: %{})
     field(:home_revision, :integer, default: 0)
     belongs_to(:home_workout_plan, WorkoutPlan)
 

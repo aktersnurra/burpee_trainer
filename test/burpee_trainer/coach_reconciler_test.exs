@@ -91,6 +91,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
       Req.new(
         adapter: fn request ->
           body = request.body |> IO.iodata_to_binary() |> Jason.decode!()
+          assert body["response_format"]["json_schema"]["name"] == "coach_recommendation"
           send(parent, {:provider_context, body["messages"]})
           {request, %Req.Response{status: 503, body: "review context only"}}
         end

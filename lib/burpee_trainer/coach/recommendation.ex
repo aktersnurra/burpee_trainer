@@ -50,7 +50,7 @@ defmodule BurpeeTrainer.Coach.Recommendation do
       when is_integer(recommendation_id) and recommendation_id > 0 and is_map(response) do
     with {:ok, proposal} <- parse_proposal(response),
          :ok <- verify_slot_policy(user, recommendation_id, proposal) do
-      apply_verified_proposal(user, recommendation_id, proposal, expected_selection)
+      apply_with_order(user, recommendation_id, proposal, expected_selection, response)
     end
   end
 
@@ -63,6 +63,64 @@ defmodule BurpeeTrainer.Coach.Recommendation do
 
   def apply_proposal(%User{}, _recommendation_id, _response, _expected_selection),
     do: invalid_provider_response()
+
+  defp apply_with_order(user, id, proposal, expected, response) do
+    Repo.immediate_transaction(fn ->
+      case apply_verified_proposal(user, id, proposal, expected) do
+        {:ok, recommendation} ->
+          ids =
+            case response["ranked_workout_plan_ids"] do
+              ids when is_list(ids) and length(ids) <= 256 -> ids
+              _ -> []
+            end
+
+          eligible =
+            Workouts.list_library(user)
+            |> Enum.filter(&(Workouts.verify_plan_content(&1) == :ok))
+            |> MapSet.new(& &1.id)
+
+          ids =
+            ids
+            |> Enum.filter(&(is_integer(&1) and MapSet.member?(eligible, &1)))
+            |> Enum.uniq()
+
+          case recommendation
+               |> Ecto.Changeset.change(ranked_plan_ids: %{"ids" => ids})
+               |> Repo.update() do
+            {:ok, saved} -> saved
+            {:error, _} -> Repo.rollback(Error.new(:invalid_recommendation_selection))
+          end
+
+        {:error, error} ->
+          Repo.rollback(error)
+      end
+    end)
+  end
+
+  def json_schema do
+    %{
+      "type" => "object",
+      "additionalProperties" => false,
+      "required" => [
+        "action",
+        "workout_plan_id",
+        "definition",
+        "rationale",
+        "ranked_workout_plan_ids"
+      ],
+      "properties" => %{
+        "action" => %{"type" => "string", "enum" => ["select_existing", "create"]},
+        "workout_plan_id" => %{"type" => ["integer", "null"]},
+        "definition" => %{"anyOf" => [WorkoutDefinition.json_schema(), %{"type" => "null"}]},
+        "rationale" => %{"type" => "string"},
+        "ranked_workout_plan_ids" => %{
+          "type" => ["array", "null"],
+          "maxItems" => 256,
+          "items" => %{"type" => "integer", "minimum" => 1}
+        }
+      }
+    }
+  end
 
   defp verify_slot_policy(%User{id: user_id} = user, recommendation_id, proposal) do
     with %CoachRecommendation{slot_date: %Date{} = slot_date} <-

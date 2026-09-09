@@ -45,7 +45,9 @@ defmodule BurpeeTrainer.Coach.Client do
   end
 
   defp complete_with_config(messages, opts, config) do
-    with :ok <- require_enabled(config),
+    with {:ok, {schema_name, schema}} <-
+           response_schema(Keyword.get(opts, :response_kind, :workout_definition)),
+         :ok <- require_enabled(config),
          {:ok, url} <- required(config, :url),
          :ok <- validate_url(url),
          {:ok, api_key} <- required(config, :api_key),
@@ -67,9 +69,9 @@ defmodule BurpeeTrainer.Coach.Client do
                response_format: %{
                  type: "json_schema",
                  json_schema: %{
-                   name: "workout_definition",
+                   name: schema_name,
                    strict: true,
-                   schema: WorkoutDefinition.json_schema()
+                   schema: schema
                  }
                },
                messages: messages
@@ -108,6 +110,14 @@ defmodule BurpeeTrainer.Coach.Client do
         invalid_provider_response()
     end
   end
+
+  defp response_schema(:workout_definition),
+    do: {:ok, {"workout_definition", WorkoutDefinition.json_schema()}}
+
+  defp response_schema(:coach_recommendation),
+    do: {:ok, {"coach_recommendation", BurpeeTrainer.Coach.Recommendation.json_schema()}}
+
+  defp response_schema(_), do: {:error, :invalid_configuration}
 
   defp require_enabled(config) do
     if Keyword.get(config, :enabled, false) === true,

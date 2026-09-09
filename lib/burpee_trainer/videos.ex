@@ -23,6 +23,14 @@ defmodule BurpeeTrainer.Videos do
     )
   end
 
+  def list_home_videos do
+    Repo.all(
+      from v in WorkoutVideo,
+        where: v.available == true and v.format == :follow_along,
+        order_by: [asc: v.name, asc: v.id]
+    )
+  end
+
   @coach_evidence_video_limit 24
 
   @spec list_available_follow_along_videos() :: [WorkoutVideo.t()]

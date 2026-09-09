@@ -304,7 +304,11 @@ defmodule BurpeeTrainer.CoachReconciler do
     if fallback_selected?(user, recommendation) do
       expected_selection = {:plan, recommendation.selected_workout_plan_id}
 
-      with {:ok, response} <- Client.complete(provider_messages(user, slot), provider_options) do
+      with {:ok, response} <-
+             Client.complete(
+               provider_messages(user, slot),
+               Keyword.put(provider_options, :response_kind, :coach_recommendation)
+             ) do
         Recommendation.apply_proposal(
           user,
           recommendation.id,
@@ -349,7 +353,7 @@ defmodule BurpeeTrainer.CoachReconciler do
       %{
         role: "system",
         content:
-          "Return one JSON coach proposal: either select_existing with workout_plan_id and rationale, or create with definition and rationale."
+          "Return one coach proposal: select_existing with workout_plan_id or create with definition, plus rationale. Optionally rank eligible published library IDs in ranked_workout_plan_ids; null means no ranking. Never select a video."
       },
       %{role: "user", content: Jason.encode!(context)}
     ]

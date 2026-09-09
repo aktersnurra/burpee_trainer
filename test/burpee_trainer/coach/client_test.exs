@@ -13,6 +13,31 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     %{counter: counter}
   end
 
+  test "coach response kind selects the proposal schema", %{counter: counter} do
+    req =
+      request(counter, fn conn -> json_response(conn, 200, %{"action" => "select_existing"}) end)
+
+    assert {:ok, _} =
+             Client.complete([], Keyword.put(opts(req), :response_kind, :coach_recommendation))
+
+    [recorded] = requests(counter)
+    schema = recorded.body["response_format"]["json_schema"]
+    assert schema["name"] == "coach_recommendation"
+    assert schema["schema"] == BurpeeTrainer.Coach.Recommendation.json_schema()
+    assert schema["schema"]["properties"]["ranked_workout_plan_ids"]["maxItems"] == 256
+  end
+
+  test "unknown response kinds fail closed without HTTP", %{counter: counter} do
+    req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
+
+    for kind <- [:unknown, "coach_recommendation", nil] do
+      assert {:error, %Error{code: :provider_unavailable}} =
+               Client.complete([], Keyword.put(opts(req), :response_kind, kind))
+    end
+
+    assert request_count(counter) == 0
+  end
+
   test "one request uses the fixed security and resource options", %{counter: counter} do
     parent = self()
     definition = definition("One call")

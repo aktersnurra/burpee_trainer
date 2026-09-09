@@ -7,6 +7,108 @@ defmodule BurpeeTrainer.Coach.RecommendationTest do
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutSession}
 
+  test "Home video query is uncapped and excludes unavailable and non-follow-along videos" do
+    videos = for _ <- 1..25, do: video_fixture()
+    unavailable = video_fixture(%{available: false})
+    results = BurpeeTrainer.Videos.list_home_videos()
+    assert Enum.all?(videos, fn video -> Enum.any?(results, &(&1.id == video.id)) end)
+    refute Enum.any?(results, &(&1.id == unavailable.id))
+    assert Enum.all?(results, &(&1.format == :follow_along))
+    assert length(BurpeeTrainer.Videos.list_available_follow_along_videos()) == 24
+  end
+
+  test "absent, null, malformed and oversized order remain backward compatible" do
+    user = user_fixture()
+    plan = plan_fixture(user)
+    {:ok, before} = ensure(user)
+
+    response = %{
+      "action" => "select_existing",
+      "workout_plan_id" => plan.id,
+      "rationale" => "Reuse"
+    }
+
+    for order <- [nil, "invalid", List.duplicate(plan.id, 257)] do
+      assert {:ok, saved} =
+               Recommendation.apply_proposal(
+                 user,
+                 before.id,
+                 Map.put(response, "ranked_workout_plan_ids", order)
+               )
+
+      assert saved.ranked_plan_ids == %{"ids" => []}
+    end
+
+    assert {:ok, saved} = Recommendation.apply_proposal(user, before.id, response)
+    assert saved.ranked_plan_ids == %{"ids" => []}
+  end
+
+  test "optional ranking discards foreign and duplicate IDs without changing Home state" do
+    user = user_fixture()
+    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+
+    {:ok, before} =
+      Workouts.ensure_recommendation(
+        user,
+        %{slot_key: "catalog-order-test", slot_date: ~D[2025-09-01]}
+      )
+
+    {:ok, _home} =
+      Workouts.ensure_home_selection(user, %{
+        slot_key: before.slot_key,
+        slot_date: before.slot_date
+      })
+
+    before = Repo.reload(before)
+    assert before.home_revision > 0
+    assert before.home_workout_plan_id
+
+    plan = plan_fixture(user)
+    foreign = plan_fixture(user_fixture())
+    archived = plan_fixture(user)
+    {:ok, _} = Workouts.archive_plan(user, archived.id)
+    draft = workout_plan_draft_fixture(user)
+
+    response = %{
+      "action" => "select_existing",
+      "workout_plan_id" => plan.id,
+      "rationale" => "Eligible structured workout",
+      "ranked_workout_plan_ids" => [
+        plan.id,
+        foreign.id,
+        plan.id,
+        999_999,
+        archived.id,
+        draft.id,
+        "1",
+        nil
+      ]
+    }
+
+    assert {:ok, applied} =
+             Recommendation.apply_proposal(
+               user,
+               before.id,
+               response,
+               {:plan, before.selected_workout_plan_id}
+             )
+
+    assert applied.ranked_plan_ids == %{"ids" => [plan.id]}
+    assert applied.home_revision == before.home_revision
+    assert applied.home_workout_plan_id == before.home_workout_plan_id
+    assert Repo.reload(applied).ranked_plan_ids == applied.ranked_plan_ids
+
+    assert {:error, _} =
+             Recommendation.apply_proposal(
+               user,
+               before.id,
+               Map.put(response, "ranked_workout_plan_ids", []),
+               {:plan, before.selected_workout_plan_id}
+             )
+
+    assert Repo.reload(applied).ranked_plan_ids == applied.ranked_plan_ids
+  end
+
   test "parses exactly select_existing and create provider actions" do
     assert {:ok, {:select_existing, 42, "Use the proven workout"}} =
              Recommendation.parse_proposal(%{
