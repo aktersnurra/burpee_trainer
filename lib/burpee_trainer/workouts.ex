@@ -506,6 +506,19 @@ defmodule BurpeeTrainer.Workouts do
   def publish_draft(%User{}, draft_id),
     do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
 
+  @doc "Explicitly publishes the reviewed revision and starts its immutable session atomically."
+  @spec publish_and_start_draft(User.t(), WorkoutPlan.t(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def publish_and_start_draft(%User{} = user, %WorkoutPlan{} = expected, client_session_id) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, draft} <- get_draft(user, expected.id),
+           :ok <- compare_expected_draft_revision(draft, %{expected_revision: expected}),
+           {:ok, published} <- publish_draft(user, draft.id) do
+        start_plan(user, published.id, client_session_id)
+      end
+    end)
+  end
+
   @spec copy_to_draft(User.t(), pos_integer()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
   def copy_to_draft(%User{id: user_id} = user, plan_id)

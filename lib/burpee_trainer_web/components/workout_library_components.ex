@@ -69,7 +69,6 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryComponents do
 
   attr(:id, :string, required: true)
   attr(:plan, WorkoutPlan, required: true)
-  attr(:form, :any, required: true)
 
   def draft_workout(assigns) do
     ~H"""
@@ -91,30 +90,9 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryComponents do
         </div>
       </div>
 
-      <.form
-        for={@form}
-        id={"refine-workout-#{@plan.id}"}
-        phx-submit="refine"
-        phx-value-id={@plan.id}
-        class="mt-5 space-y-3"
-      >
-        <.input
-          field={@form[:request]}
-          id={"refine-workout-request-#{@plan.id}"}
-          type="textarea"
-          label="Describe what should change"
-          maxlength="500"
-          rows="2"
-          placeholder="Make the rests shorter and keep the same duration"
-        />
-        <button
-          type="submit"
-          phx-disable-with="Refining…"
-          class="min-h-11 rounded-xl border border-[var(--session-border)] px-4 py-2 text-sm font-medium text-[var(--session-ink)] transition hover:bg-[var(--session-track)]/60"
-        >
-          Refine
-        </button>
-      </.form>
+      <.link id={"review-workout-#{@plan.id}"} navigate={~p"/workouts/drafts/#{@plan.id}"} class="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-medium">
+        Review <.icon name="hero-arrow-right" class="size-4" />
+      </.link>
 
       <div class="mt-4 flex flex-wrap gap-2 border-t border-[var(--session-border)] pt-4">
         <button

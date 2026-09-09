@@ -3,7 +3,7 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
 
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Coach, Workouts}
+  alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
   alias BurpeeTrainerWeb.WorkoutLibraryComponents
 
@@ -15,60 +15,17 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
 
     {:ok,
      socket
-     |> assign(:create_form, request_form(:workout))
-     |> assign(:refine_forms, refine_forms(drafts))
      |> assign(:start_client_session_id, Ecto.UUID.generate())
      |> stream(:published, published, dom_id: &"published-workout-#{&1.id}")
      |> stream(:drafts, drafts, dom_id: &"draft-workout-#{&1.id}")}
   end
 
   @impl true
-  def handle_event("create", %{"workout" => %{"request" => request} = params}, socket) do
-    case Coach.create_draft(socket.assigns.current_user, request) do
-      {:ok, draft} ->
-        {:noreply,
-         socket
-         |> assign(:create_form, request_form(:workout))
-         |> put_refine_form(draft)
-         |> stream_insert(:drafts, draft, at: 0)
-         |> put_flash(:info, "Draft created. Review it before publishing.")}
-
-      {:error, _reason} ->
-        {:noreply,
-         socket
-         |> assign(:create_form, to_form(params, as: :workout))
-         |> put_flash(:error, "Could not create a draft. Nothing was saved.")}
-    end
-  end
-
-  def handle_event("create", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Describe the workout you want.")}
-  end
-
-  def handle_event(
-        "refine",
-        %{"id" => id, "refinement" => %{"request" => request}},
-        socket
-      ) do
-    with {:ok, draft_id} <- parse_id(id),
-         {:ok, draft} <- Coach.refine_draft(socket.assigns.current_user, draft_id, request) do
-      {:noreply,
-       socket
-       |> put_refine_form(draft)
-       |> stream_insert(:drafts, draft)
-       |> put_flash(:info, "Draft refined.")}
-    else
-      _error ->
-        {:noreply, put_flash(socket, :error, "Could not refine that draft. Nothing changed.")}
-    end
-  end
-
   def handle_event("copy", %{"id" => id}, socket) do
     with {:ok, plan_id} <- parse_id(id),
          {:ok, draft} <- Workouts.copy_to_draft(socket.assigns.current_user, plan_id) do
       {:noreply,
        socket
-       |> put_refine_form(draft)
        |> stream_insert(:drafts, draft, at: 0)
        |> put_flash(:info, "Copy saved as a draft.")}
     else
@@ -83,7 +40,6 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
        socket
        |> stream_delete(:drafts, published)
        |> stream_insert(:published, published, at: 0)
-       |> drop_refine_form(published.id)
        |> put_flash(:info, "Workout published.")}
     else
       _error -> {:noreply, put_flash(socket, :error, "Could not publish that workout.")}
@@ -109,7 +65,6 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
       {:noreply,
        socket
        |> stream_delete(:drafts, draft)
-       |> drop_refine_form(draft.id)
        |> put_flash(:info, "Draft deleted.")}
     else
       _error -> {:noreply, put_flash(socket, :error, "Could not delete that draft.")}
@@ -155,32 +110,9 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
           </p>
         </header>
 
-        <section class="rounded-3xl border border-[var(--session-border)] bg-[var(--session-surface)]/55 p-6 sm:p-8">
-          <div class="mb-5 space-y-1">
-            <h2 class="text-xl font-semibold text-[var(--session-ink)]">Create a workout</h2>
-            <p class="text-sm text-[var(--session-muted)]">
-              Describe the result. No setup builder required.
-            </p>
-          </div>
-          <.form for={@create_form} id="workout-create-form" phx-submit="create" class="space-y-4">
-            <.input
-              field={@create_form[:request]}
-              id="workout-create-request"
-              type="textarea"
-              label="What kind of workout do you want?"
-              maxlength="500"
-              rows="4"
-              placeholder="A steady 20-minute six-count workout with short rests"
-            />
-            <button
-              type="submit"
-              phx-disable-with="Creating draft…"
-              class="min-h-12 rounded-2xl bg-[var(--session-ink)] px-6 py-3 text-sm font-semibold text-[var(--session-bg)] transition hover:opacity-90"
-            >
-              Create draft
-            </button>
-          </.form>
-        </section>
+        <.link id="workout-create-link" navigate={~p"/workouts/new"} class="inline-flex min-h-12 items-center gap-3 text-lg font-medium">
+          Create a workout <.icon name="hero-arrow-right" class="size-5" />
+        </.link>
 
         <section class="space-y-4" aria-labelledby="published-heading">
           <div class="flex items-end justify-between gap-4 px-1">
@@ -230,31 +162,12 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
               :for={{dom_id, draft} <- @streams.drafts}
               id={dom_id}
               plan={draft}
-              form={Map.fetch!(@refine_forms, draft.id)}
             />
           </div>
         </section>
       </div>
     </Layouts.app>
     """
-  end
-
-  defp request_form(name), do: to_form(%{"request" => ""}, as: name)
-
-  defp refine_forms(drafts) do
-    Map.new(drafts, &{&1.id, request_form(:refinement)})
-  end
-
-  defp put_refine_form(socket, draft) do
-    assign(
-      socket,
-      :refine_forms,
-      Map.put(socket.assigns.refine_forms, draft.id, request_form(:refinement))
-    )
-  end
-
-  defp drop_refine_form(socket, draft_id) do
-    assign(socket, :refine_forms, Map.delete(socket.assigns.refine_forms, draft_id))
   end
 
   defp parse_id(value) when is_binary(value) do
