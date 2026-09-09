@@ -11,23 +11,25 @@ defmodule BurpeeTrainer.Videos do
 
   @spec list_videos() :: [WorkoutVideo.t()]
   def list_videos do
-    Repo.all(from v in WorkoutVideo, order_by: [asc: v.inserted_at])
+    Repo.all(from(v in WorkoutVideo, order_by: [asc: v.inserted_at]))
   end
 
   @spec list_videos(atom) :: [WorkoutVideo.t()]
   def list_videos(burpee_type) when is_atom(burpee_type) do
     Repo.all(
-      from v in WorkoutVideo,
+      from(v in WorkoutVideo,
         where: v.burpee_type == ^burpee_type,
         order_by: [asc: v.inserted_at]
+      )
     )
   end
 
   def list_home_videos do
     Repo.all(
-      from v in WorkoutVideo,
+      from(v in WorkoutVideo,
         where: v.available == true and v.format == :follow_along,
         order_by: [asc: v.name, asc: v.id]
+      )
     )
   end
 
@@ -36,21 +38,23 @@ defmodule BurpeeTrainer.Videos do
   @spec list_available_follow_along_videos() :: [WorkoutVideo.t()]
   def list_available_follow_along_videos do
     Repo.all(
-      from v in WorkoutVideo,
+      from(v in WorkoutVideo,
         where: v.available == true and v.format == :follow_along,
         order_by: [asc: v.name, asc: v.id],
         limit: ^@coach_evidence_video_limit
+      )
     )
   end
 
   @spec list_available_follow_along_videos(atom) :: [WorkoutVideo.t()]
   def list_available_follow_along_videos(burpee_type) when is_atom(burpee_type) do
     Repo.all(
-      from v in WorkoutVideo,
+      from(v in WorkoutVideo,
         where:
           v.available == true and v.format == :follow_along and v.burpee_type == ^burpee_type,
         order_by: [asc: v.name, asc: v.id],
         limit: ^@coach_evidence_video_limit
+      )
     )
   end
 
