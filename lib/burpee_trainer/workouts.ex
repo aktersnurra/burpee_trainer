@@ -25,6 +25,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Workouts.{
     CoachRecommendation,
     Error,
+    HomeSelection,
     PoseCaptureRun,
     PoseTraceChunk,
     WorkoutPlan,
@@ -75,6 +76,113 @@ defmodule BurpeeTrainer.Workouts do
         order_by: [desc: plan.updated_at, desc: plan.id]
       )
     )
+  end
+
+  @doc "Pins the first available Home workout without replacing a valid existing pin."
+  @spec ensure_home_selection(User.t(), Policy.slot()) ::
+          {:ok, HomeSelection.t()} | {:error, Error.t()}
+  def ensure_home_selection(%User{} = user, slot) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, r} <- ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
+           {:ok, r} <- ensure_recommendation_selection_available(user, r.id) do
+        case home_plan(user, r.home_workout_plan_id) do
+          {:ok, plan} ->
+            {:ok, HomeSelection.new(r, plan)}
+
+          {:error, _} ->
+            with {:ok, plan} <- initial_home_plan(user, r),
+                 {:ok, pinned} <- write_home_pointer(r, plan.id) do
+              {:ok, HomeSelection.new(pinned, plan)}
+            end
+        end
+      end
+    end)
+  end
+
+  @doc "Changes the Home pointer only if the reviewed selection is still current."
+  @spec select_home_workout(User.t(), HomeSelection.t(), pos_integer()) ::
+          {:ok, HomeSelection.t()} | {:error, Error.t()}
+  def select_home_workout(%User{} = user, %HomeSelection{} = expected, id) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, r} <- home_recommendation(user, expected),
+           {:ok, plan} <- selectable_home_plan(user, r, id),
+           :ok <- verify_stored_draft(plan),
+           {:ok, changed} <- write_home_pointer(r, plan.id) do
+        {:ok, HomeSelection.new(changed, plan)}
+      end
+    end)
+  end
+
+  @doc "Returns the exact current Home plan, rejecting stale identity or draft content."
+  @spec verify_home_selection(User.t(), HomeSelection.t()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def verify_home_selection(%User{} = user, %HomeSelection{} = expected) do
+    with {:ok, _r} <- home_recommendation(user, expected),
+         {:ok, plan} <- home_plan(user, expected.plan.id),
+         :ok <- compare_expected_draft_revision(plan, %{expected_revision: expected.plan}),
+         :ok <- verify_stored_draft(plan) do
+      {:ok, plan}
+    end
+  end
+
+  def verify_plan_content(%WorkoutPlan{} = plan), do: verify_stored_draft(plan)
+
+  def design_source(%User{} = user, id), do: home_plan(user, id)
+
+  defp home_recommendation(user, expected) do
+    with %CoachRecommendation{} = r <-
+           Repo.get_by(CoachRecommendation, id: expected.recommendation_id, user_id: user.id),
+         {:ok, slot} <- Policy.required_slot(user, DateTime.utc_now(:second)),
+         true <- r.slot_key == slot.slot_key and slot.home_state == :workout_needed,
+         true <-
+           r.home_workout_plan_id == expected.plan.id and
+             r.home_revision == expected.home_revision do
+      {:ok, r}
+    else
+      _ -> {:error, Error.new(:home_selection_changed)}
+    end
+  end
+
+  defp home_plan(user, id) when is_integer(id) and id > 0 do
+    case get_draft(user, id) do
+      {:ok, plan} -> {:ok, plan}
+      {:error, _} -> get_library_plan(user, id)
+    end
+  end
+
+  defp home_plan(_user, _id), do: {:error, Error.new(:source_unavailable)}
+
+  defp initial_home_plan(user, %{home_revision: 0} = r) do
+    case home_plan(user, r.pending_draft_id) do
+      {:ok, %{state: :draft} = draft} ->
+        {:ok, draft}
+
+      _ ->
+        case get_library_plan(user, r.selected_workout_plan_id) do
+          {:ok, plan} -> {:ok, plan}
+          _ -> built_in_fallback()
+        end
+    end
+  end
+
+  # A removed/invalid prior pin must not promote a late unrelated candidate.
+  defp initial_home_plan(_user, _r), do: built_in_fallback()
+
+  defp selectable_home_plan(user, %{pending_draft_id: id}, id)
+       when is_integer(id), do: get_draft(user, id)
+
+  defp selectable_home_plan(user, _r, id), do: get_library_plan(user, id)
+
+  defp write_home_pointer(r, id) do
+    case r
+         |> Ecto.Changeset.change(
+           home_workout_plan_id: id,
+           home_revision: r.home_revision + 1
+         )
+         |> Repo.update() do
+      {:ok, changed} -> {:ok, changed}
+      {:error, _} -> {:error, Error.new(:home_selection_changed)}
+    end
   end
 
   @type recommendation_selection :: {:plan, pos_integer()} | {:video, pos_integer()}
@@ -922,8 +1030,8 @@ defmodule BurpeeTrainer.Workouts do
       {:plan, plan_id} ->
         match?({:ok, %WorkoutPlan{}}, get_library_plan(user, plan_id))
 
-      {:video, video_id} ->
-        match?(%WorkoutVideo{available: true}, Repo.get(WorkoutVideo, video_id))
+      {:video, _video_id} ->
+        false
 
       :invalid ->
         false
