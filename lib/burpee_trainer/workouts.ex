@@ -143,15 +143,7 @@ defmodule BurpeeTrainer.Workouts do
       with :ok <- valid_start_token(token),
            {:ok, _r} <- home_recommendation(user, expected),
            {:ok, video} <- get_available_video_for_start(video_id),
-           {:ok, _snapshot, hash} <-
-             ProgramHash.video_snapshot(%{
-               "name" => video.name,
-               "filename" => video.filename,
-               "type" => Atom.to_string(video.burpee_type),
-               "duration" => video.duration_sec,
-               "count" => video.burpee_count,
-               "format" => Atom.to_string(video.format)
-             }),
+           {:ok, _snapshot, hash} <- canonical_video_snapshot(video),
            :new <- existing_start(user.id, token, :video, video.id, hash),
            :ok <- no_other_started_session(user) do
         start_video(user, video.id, token)
@@ -1629,15 +1621,7 @@ defmodule BurpeeTrainer.Workouts do
       when is_integer(video_id) and video_id > 0 and is_binary(client_session_id) do
     start_session(user_id, client_session_id, fn ->
       with {:ok, video} <- get_available_video_for_start(video_id),
-           {:ok, snapshot, content_hash} <-
-             ProgramHash.video_snapshot(%{
-               "name" => video.name,
-               "filename" => video.filename,
-               "type" => Atom.to_string(video.burpee_type),
-               "duration" => video.duration_sec,
-               "count" => video.burpee_count,
-               "format" => Atom.to_string(video.format)
-             }) do
+           {:ok, snapshot, content_hash} <- canonical_video_snapshot(video) do
         {:ok,
          %WorkoutSession{
            user_id: user_id,
@@ -1666,6 +1650,17 @@ defmodule BurpeeTrainer.Workouts do
 
   def start_video(%User{}, video_id, _client_session_id),
     do: {:error, Error.new(:source_unavailable, %{video_id: video_id})}
+
+  defp canonical_video_snapshot(video) do
+    ProgramHash.video_snapshot(%{
+      "name" => video.name,
+      "filename" => video.filename,
+      "type" => Atom.to_string(video.burpee_type),
+      "duration" => video.duration_sec,
+      "count" => video.burpee_count,
+      "format" => Atom.to_string(video.format)
+    })
+  end
 
   defp start_session(user_id, client_session_id, source) when is_function(source, 0) do
     Repo.immediate_transaction(fn ->
