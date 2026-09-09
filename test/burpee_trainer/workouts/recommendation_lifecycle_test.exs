@@ -407,4 +407,44 @@ defmodule BurpeeTrainer.Workouts.RecommendationLifecycleTest do
       }
     }
   end
+
+  defp attached_home_fixture(user, name) do
+    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, r} = Workouts.ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date]))
+    draft = workout_plan_draft_fixture(user, %{name: name})
+    r = r |> Ecto.Changeset.change(pending_draft_id: draft.id) |> Repo.update!()
+    {user, r, slot}
+  end
+
+  test "attached Home finalization is atomic on invalid token and corrupt content" do
+    {user, r, slot} = attached_home_fixture(user_fixture(), "Atomic candidate")
+    {:ok, shown} = Workouts.ensure_home_selection(user, slot)
+    assert shown.plan.id == r.pending_draft_id
+    assert {:error, _} = Workouts.start_home_workout(user, shown, "bad-token")
+
+    Repo.update_all(from(p in WorkoutPlan, where: p.id == ^shown.plan.id),
+      set: [content_hash: "corrupt"]
+    )
+
+    assert {:error, _} = Workouts.start_home_workout(user, shown, Ecto.UUID.generate())
+    assert Repo.get!(WorkoutPlan, shown.plan.id).state == :draft
+    assert Repo.get!(CoachRecommendation, r.id).pending_draft_id == shown.plan.id
+    assert Workouts.current_started_session(user) == nil
+  end
+
+  test "candidate publication, pointer, and exact snapshot commit together" do
+    {user, r, slot} = attached_home_fixture(user_fixture(), "Start me")
+    {:ok, shown} = Workouts.ensure_home_selection(user, slot)
+    token = Ecto.UUID.generate()
+    {:ok, session} = Workouts.start_home_workout(user, shown, token)
+    assert {:ok, duplicate} = Workouts.start_home_workout(user, shown, token)
+    assert duplicate.id == session.id
+    assert Repo.get!(WorkoutPlan, shown.plan.id).state == :published
+    persisted = Repo.get!(CoachRecommendation, r.id)
+    assert persisted.pending_draft_id == nil
+    assert persisted.selected_workout_plan_id == shown.plan.id
+    assert session.program_snapshot == shown.plan.program_json
+    assert session.content_hash == shown.plan.content_hash
+  end
 end

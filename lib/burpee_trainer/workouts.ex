@@ -113,6 +113,101 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
+  @doc "Atomically finalizes and starts the reviewed Home selection."
+  @spec start_home_workout(User.t(), HomeSelection.t(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def start_home_workout(user, %HomeSelection{} = expected, token) do
+    immediate_lifecycle_transaction(fn ->
+      with :ok <- valid_start_token(token),
+           {:ok, _r} <- home_recommendation(user, expected),
+           :new <-
+             existing_start(user.id, token, :plan, expected.plan.id, expected.plan.content_hash),
+           :ok <- no_other_started_session(user),
+           {:ok, plan} <- verify_home_selection(user, expected),
+           {:ok, published} <- finalize_home_plan(user, expected, plan),
+           {:ok, session} <- start_plan(user, published.id, token) do
+        finalized = if plan.state == :draft, do: published, else: nil
+        {:ok, {session, finalized}}
+      else
+        {:existing, session} -> {:ok, {session, nil}}
+        {:error, %Error{} = error} -> {:error, error}
+      end
+    end)
+    |> BurpeeTrainer.Workouts.Finalization.deliver()
+  end
+
+  @spec start_home_video(User.t(), HomeSelection.t(), pos_integer(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def start_home_video(user, %HomeSelection{} = expected, video_id, token) do
+    immediate_lifecycle_transaction(fn ->
+      with :ok <- valid_start_token(token),
+           {:ok, _r} <- home_recommendation(user, expected),
+           {:ok, video} <- get_available_video_for_start(video_id),
+           {:ok, _snapshot, hash} <-
+             ProgramHash.video_snapshot(%{
+               "name" => video.name,
+               "filename" => video.filename,
+               "type" => Atom.to_string(video.burpee_type),
+               "duration" => video.duration_sec,
+               "count" => video.burpee_count,
+               "format" => Atom.to_string(video.format)
+             }),
+           :new <- existing_start(user.id, token, :video, video.id, hash),
+           :ok <- no_other_started_session(user) do
+        start_video(user, video.id, token)
+      else
+        {:existing, session} -> {:ok, session}
+        {:error, %Error{} = error} -> {:error, error}
+      end
+    end)
+  end
+
+  defp finalize_home_plan(_user, _expected, %{state: :published} = plan), do: {:ok, plan}
+
+  defp finalize_home_plan(user, expected, %{state: :draft} = plan) do
+    if expected.pending_draft_id == plan.id do
+      with {:ok, _} <-
+             accept_candidate(
+               user,
+               expected.recommendation_id,
+               plan.id,
+               expected.recommendation_selection
+             ) do
+        get_library_plan(user, plan.id)
+      end
+    else
+      publish_unattached_draft(user, plan.id)
+    end
+  end
+
+  defp valid_start_token(token) do
+    case Ecto.UUID.cast(token) do
+      {:ok, ^token} -> :ok
+      _ -> {:error, Error.new(:invalid_start_token)}
+    end
+  end
+
+  defp no_other_started_session(user) do
+    if current_started_session(user), do: {:error, Error.new(:session_in_progress)}, else: :ok
+  end
+
+  defp existing_start(user_id, token, kind, id, hash) do
+    case Repo.get_by(WorkoutSession, user_id: user_id, client_session_id: token) do
+      nil ->
+        :new
+
+      session ->
+        source_id =
+          if session.source_kind == :plan,
+            do: session.plan_id,
+            else: session.workout_video_id
+
+        if session.source_kind == kind and source_id == id and session.content_hash == hash,
+          do: {:existing, session},
+          else: {:error, Error.new(:start_token_source_mismatch)}
+    end
+  end
+
   @doc "Returns the exact current Home plan, rejecting stale identity or draft content."
   @spec verify_home_selection(User.t(), HomeSelection.t()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
@@ -619,12 +714,20 @@ defmodule BurpeeTrainer.Workouts do
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
   def publish_and_start_draft(%User{} = user, %WorkoutPlan{} = expected, client_session_id) do
     immediate_lifecycle_transaction(fn ->
-      with {:ok, draft} <- get_draft(user, expected.id),
+      with :ok <- valid_start_token(client_session_id),
+           :new <-
+             existing_start(user.id, client_session_id, :plan, expected.id, expected.content_hash),
+           {:ok, draft} <- get_draft(user, expected.id),
            :ok <- compare_expected_draft_revision(draft, %{expected_revision: expected}),
-           {:ok, published} <- publish_draft(user, draft.id) do
-        start_plan(user, published.id, client_session_id)
+           {:ok, published} <- publish_unattached_draft(user, draft.id),
+           {:ok, session} <- start_plan(user, published.id, client_session_id) do
+        {:ok, {session, published}}
+      else
+        {:existing, session} -> {:ok, {session, nil}}
+        {:error, %Error{} = error} -> {:error, error}
       end
     end)
+    |> BurpeeTrainer.Workouts.Finalization.deliver()
   end
 
   @spec copy_to_draft(User.t(), pos_integer()) ::
@@ -1566,22 +1669,34 @@ defmodule BurpeeTrainer.Workouts do
 
   defp start_session(user_id, client_session_id, source) when is_function(source, 0) do
     Repo.immediate_transaction(fn ->
-      case Repo.get_by(WorkoutSession,
-             user_id: user_id,
-             client_session_id: client_session_id
-           ) do
-        %WorkoutSession{} = session ->
-          session
+      with :ok <- valid_start_token(client_session_id),
+           {:ok, proposed} <- source.() do
+        id =
+          if proposed.source_kind == :plan,
+            do: proposed.plan_id,
+            else: proposed.workout_video_id
 
-        nil ->
-          with {:ok, session} <- source.() do
-            case session |> WorkoutSession.start_changeset() |> Repo.insert() do
+        case existing_start(
+               user_id,
+               client_session_id,
+               proposed.source_kind,
+               id,
+               proposed.content_hash
+             ) do
+          {:existing, session} ->
+            session
+
+          :new ->
+            case proposed |> WorkoutSession.start_changeset() |> Repo.insert() do
               {:ok, inserted} -> inserted
-              {:error, %Ecto.Changeset{} = changeset} -> Repo.rollback(changeset)
+              {:error, changeset} -> Repo.rollback(changeset)
             end
-          else
-            {:error, %Error{} = error} -> Repo.rollback(error)
-          end
+
+          {:error, error} ->
+            Repo.rollback(error)
+        end
+      else
+        {:error, error} -> Repo.rollback(error)
       end
     end)
     |> case do

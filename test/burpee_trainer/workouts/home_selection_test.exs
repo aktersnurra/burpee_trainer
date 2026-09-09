@@ -124,4 +124,57 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
     assert selected.plan.id == draft.id
     assert {:ok, ^draft} = Workouts.verify_home_selection(u, selected)
   end
+
+  test "wrong-source token and stale pin cannot start", %{user: u, slot: slot} do
+    {:ok, shown} = Workouts.ensure_home_selection(u, slot)
+    other = plan_fixture(u)
+    token = Ecto.UUID.generate()
+    {:ok, existing} = Workouts.start_plan(u, other.id, token)
+
+    assert {:error, %Error{code: :start_token_source_mismatch}} =
+             Workouts.start_home_workout(u, shown, token)
+
+    assert Workouts.current_started_session(u).id == existing.id
+    {:ok, changed} = Workouts.select_home_workout(u, shown, other.id)
+    assert changed.home_revision > shown.home_revision
+
+    assert {:error, %Error{code: :home_selection_changed}} =
+             Workouts.start_home_workout(u, shown, Ecto.UUID.generate())
+  end
+
+  test "exact duplicate Start reuses one snapshot", %{user: u, slot: slot} do
+    {:ok, shown} = Workouts.ensure_home_selection(u, slot)
+    token = Ecto.UUID.generate()
+    {:ok, first} = Workouts.start_home_workout(u, shown, token)
+    assert {:ok, again} = Workouts.start_home_workout(u, shown, token)
+    assert again.id == first.id
+    assert first.program_snapshot == shown.plan.program_json
+  end
+
+  test "video selection starts directly and does not change the pin", %{user: u, slot: slot} do
+    {:ok, shown} = Workouts.ensure_home_selection(u, slot)
+    video = video_fixture(%{burpee_count: 100})
+    token = Ecto.UUID.generate()
+    {:ok, session} = Workouts.start_home_video(u, shown, video.id, token)
+    assert {:ok, duplicate} = Workouts.start_home_video(u, shown, video.id, token)
+    assert duplicate.id == session.id
+
+    assert {:error, %Error{code: :session_in_progress}} =
+             Workouts.start_home_workout(u, shown, Ecto.UUID.generate())
+
+    assert {:error, %Error{code: :session_in_progress}} =
+             Workouts.start_home_video(u, shown, video.id, Ecto.UUID.generate())
+
+    video |> Ecto.Changeset.change(name: "Changed video") |> Repo.update!()
+
+    assert {:error, %Error{code: :start_token_source_mismatch}} =
+             Workouts.start_home_video(u, shown, video.id, token)
+
+    assert session.source_kind == :video
+    assert session.workout_video_id == video.id
+    assert session.plan_id == nil
+    assert {:ok, same} = Workouts.ensure_home_selection(u, slot)
+    assert same.plan.id == shown.plan.id
+    assert same.home_revision == shown.home_revision
+  end
 end

@@ -50,7 +50,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       assert Repo.aggregate(WorkoutSession, :count) == 0
     end
 
-    test "idempotency is exact user and client ID and precedes source lookup" do
+    test "idempotency binds user, client ID, source identity and content" do
       user = user_fixture()
       other_user = user_fixture()
       plan = plan_fixture(user)
@@ -59,9 +59,20 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
 
       assert {:ok, first} = Workouts.start_plan(user, plan.id, client_id)
 
-      assert {:ok, same} = Workouts.start_video(user, 2_147_483_647, client_id)
+      assert {:ok, same} = Workouts.start_plan(user, plan.id, client_id)
       assert same.id == first.id
-      assert same.source_kind == :plan
+      video = video_fixture()
+      another_plan = plan_fixture(user)
+
+      assert {:error, %Error{code: :start_token_source_mismatch}} =
+               Workouts.start_video(user, video.id, client_id)
+
+      assert {:error, %Error{code: :start_token_source_mismatch}} =
+               Workouts.start_plan(user, another_plan.id, client_id)
+
+      assert {:error, %Error{code: :source_unavailable}} =
+               Workouts.start_video(user, 2_147_483_647, client_id)
+
       assert Repo.aggregate(WorkoutSession, :count) == 1
 
       assert {:ok, other_session} = Workouts.start_plan(other_user, other_plan.id, client_id)
@@ -74,6 +85,28 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
                from(session in WorkoutSession, where: session.user_id == ^user.id),
                :count
              ) == 2
+    end
+
+    test "creator finalization retries reuse only the reviewed source" do
+      user = user_fixture()
+      draft = workout_plan_draft_fixture(user)
+      token = Ecto.UUID.generate()
+
+      assert {:error, %Error{code: :invalid_start_token}} =
+               Workouts.publish_and_start_draft(user, draft, "invalid")
+
+      assert {:ok, _} = Workouts.get_draft(user, draft.id)
+      assert {:ok, first} = Workouts.publish_and_start_draft(user, draft, token)
+      assert {:ok, again} = Workouts.publish_and_start_draft(user, draft, token)
+      assert again.id == first.id
+      assert first.program_snapshot == draft.program_json
+      other = workout_plan_draft_fixture(user)
+
+      assert {:error, %Error{code: :start_token_source_mismatch}} =
+               Workouts.publish_and_start_draft(user, other, token)
+
+      assert {:ok, _} = Workouts.get_draft(user, other.id)
+      assert Repo.aggregate(WorkoutSession, :count) == 1
     end
 
     test "published plan Start immediately persists the exact immutable execution snapshot" do

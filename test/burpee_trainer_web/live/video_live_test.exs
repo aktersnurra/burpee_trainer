@@ -77,7 +77,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     end
   end
 
-  test "index Start routes duplicate and replayed client IDs from the returned source identity",
+  test "index Start routes exact duplicates but rejects replayed client IDs for another source",
        %{
          conn: conn,
          user: user
@@ -100,17 +100,18 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
 
     assert {:ok, replay_view, _html} = live(conn, ~p"/videos")
 
-    assert {:error, {:live_redirect, %{to: replay_to}}} =
-             render_click(replay_view, "start_video", %{
-               "video_id" => Integer.to_string(second_video.id),
-               "client_session_id" => client_id
-             })
+    render_click(replay_view, "start_video", %{
+      "video_id" => Integer.to_string(second_video.id),
+      "client_session_id" => client_id
+    })
 
-    assert replay_to == "/videos/#{first_video.id}/session/#{first_session.id}"
+    assert has_element?(replay_view, "#videos-page")
+    assert has_element?(replay_view, "#flash-error", "Video is unavailable.")
+    assert Workouts.current_started_session(user).id == first_session.id
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
-  test "detail Start routes a cross-source idempotency result to the plan session", %{
+  test "detail Start rejects a plan token without navigating or inserting", %{
     conn: conn,
     user: user
   } do
@@ -120,13 +121,14 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert {:ok, plan_session} = Workouts.start_plan(user, plan.id, client_id)
     assert {:ok, detail, _html} = live(conn, ~p"/videos/#{video.id}")
 
-    assert {:error, {:live_redirect, %{to: to}}} =
-             render_click(detail, "start_video", %{
-               "video_id" => Integer.to_string(video.id),
-               "client_session_id" => client_id
-             })
+    render_click(detail, "start_video", %{
+      "video_id" => Integer.to_string(video.id),
+      "client_session_id" => client_id
+    })
 
-    assert to == "/session/#{plan_session.id}"
+    assert has_element?(detail, "#video-start")
+    assert has_element?(detail, "#flash-error", "Video is unavailable.")
+    assert Workouts.current_started_session(user).id == plan_session.id
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
