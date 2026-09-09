@@ -12,7 +12,7 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "renders published and draft lifecycle actions with natural-language forms", %{
+  test "renders published and draft lifecycle actions and navigates to workout creation", %{
     conn: conn,
     user: user
   } do
@@ -24,10 +24,8 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLiveTest do
     {:ok, view, _html} = live(conn, ~p"/workouts")
 
     assert has_element?(view, "#workout-library-page")
-    assert has_element?(view, "#workout-create-form")
-    assert has_element?(view, "textarea#workout-create-request")
-    refute has_element?(view, "#workout-create-form select")
-    refute has_element?(view, "#workout-create-form input[type='number']")
+    assert has_element?(view, "#workout-create-link[href='/workouts/new']")
+    refute has_element?(view, "#workout-create-form")
     refute has_element?(view, "[data-workout-builder]")
 
     assert has_element?(view, "#published-workouts[phx-update='stream']")
@@ -38,12 +36,25 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLiveTest do
 
     assert has_element?(view, "#draft-workouts[phx-update='stream']")
     assert has_element?(view, "#draft-workout-#{draft.id}")
-    assert has_element?(view, "#refine-workout-#{draft.id}")
+
+    assert has_element?(
+             view,
+             "#review-workout-#{draft.id}[href='/workouts/drafts/#{draft.id}']"
+           )
+
     assert has_element?(view, "#publish-workout-#{draft.id}")
     assert has_element?(view, "#delete-draft-#{draft.id}")
 
     refute has_element?(view, "#published-workout-#{archived.id}")
     refute has_element?(view, "#draft-workout-#{archived.id}")
+
+    {:ok, creation_view, _html} =
+      view
+      |> element("#workout-create-link")
+      |> render_click()
+      |> follow_redirect(conn, ~p"/workouts/new")
+
+    assert has_element?(creation_view, "#creation-form")
   end
 
   test "authenticated navigation exposes Home, Library, Videos, and History", %{conn: conn} do
