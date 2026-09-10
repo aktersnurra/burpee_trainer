@@ -1,7 +1,7 @@
 defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   use BurpeeTrainerWeb, :html
   alias BurpeeTrainerWeb.CreationParameters
-  attr :state, :map, required: true
+  attr(:state, :map, required: true)
 
   def workspace(assigns) do
     ~H"""
@@ -165,8 +165,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  attr :rows, :list, required: true
-  attr :expanded, :any, required: true
+  attr(:rows, :list, required: true)
+  attr(:expanded, :any, required: true)
 
   def inspection(assigns) do
     ~H"""
