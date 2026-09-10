@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.Workouts.WorkoutSessionTest do
-  use BurpeeTrainer.DataCase, async: true
+  use ExUnit.Case, async: true
 
   import BurpeeTrainer.DataCase, only: [errors_on: 1]
 

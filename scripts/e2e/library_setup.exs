@@ -22,11 +22,12 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     published-plan
     pending-candidate
     available-video
+    available-known-count-video
     started-plan-session
     completed-history
     provider-failure
   ]
-  @mode_usage "published-plan|pending-candidate|available-video|started-plan-session|completed-history|provider-failure"
+  @mode_usage "published-plan|pending-candidate|available-video|available-known-count-video|started-plan-session|completed-history|provider-failure"
 
   @spec run(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def run(mode, options \\ [])
@@ -45,7 +46,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
         try do
           maybe_induce_failure!(options, :after_registration)
 
-          case create_mode_fixture(user, mode, run_id) do
+          case create_mode_fixture(user, mode, run_id, options) do
             {:ok, evidence} ->
               maybe_induce_failure!(options, :after_fixture_creation)
 
@@ -108,7 +109,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp create_mode_fixture(user, "published-plan", run_id) do
+  defp create_mode_fixture(user, "published-plan", run_id, _options) do
     with {:ok, plan} <- published_plan(user, "Published library #{run_id}") do
       persisted = Repo.get_by!(WorkoutPlan, id: plan.id, user_id: user.id)
 
@@ -127,23 +128,32 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp create_mode_fixture(user, "pending-candidate", run_id) do
-    slot_date = next_monday(Date.utc_today())
+  defp create_mode_fixture(user, "pending-candidate", run_id, options) do
+    now = Keyword.get_lazy(options, :now, fn -> DateTime.utc_now(:second) end)
 
-    with {:ok, slot} <- Policy.required_slot_for_date(user, slot_date),
+    with {:ok, initial_slot} <- Policy.required_slot(user, now),
+         {:ok, history} <- ensure_weekend_history(user, run_id, initial_slot),
+         {:ok, slot} <- Policy.required_slot(user, now),
          {:ok, recommendation} <-
            Workouts.ensure_recommendation(user, %{
-             slot_key: "e2e-pending-#{run_id}",
-             slot_date: slot_date,
+             slot_key: slot.slot_key,
+             slot_date: slot.slot_date,
              rationale: "Deterministic pending candidate fixture"
            }),
          {:ok, attached} <-
-           ensure_pending_candidate(user, recommendation, run_id, slot.duration_sec) do
+           ensure_pending_candidate(user, recommendation, run_id, slot) do
       persisted = Repo.get_by!(CoachRecommendation, id: attached.id, user_id: user.id)
       draft = Repo.get_by!(WorkoutPlan, id: persisted.pending_draft_id, user_id: user.id)
 
       {:ok,
        %{
+         slot_strategy: slot.strategy,
+         slot_completed_sec: slot.completed_sec,
+         candidate_ceiling_reps: candidate_reps(slot),
+         candidate_verified: Policy.verify_candidate(user, slot.slot_date, draft) == :ok,
+         history_session_id: history && history.id,
+         history_user_id: history && history.user_id,
+         history_completed_at: history && history.completed_at,
          recommendation_id: persisted.id,
          selected_workout_plan_id: persisted.selected_workout_plan_id,
          pending_draft_id: draft.id,
@@ -159,8 +169,11 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp create_mode_fixture(user, "available-video", run_id) do
-    with {:ok, video} <- ensure_available_video(user, run_id),
+  defp create_mode_fixture(user, mode, run_id, _options)
+       when mode in ["available-video", "available-known-count-video"] do
+    count = if mode == "available-known-count-video", do: 10, else: nil
+
+    with {:ok, video} <- ensure_available_video(user, run_id, count),
          {:ok, snapshot, content_hash} <- ProgramHash.video_snapshot(video_snapshot_attrs(video)) do
       persisted = Repo.get!(WorkoutVideo, video.id)
 
@@ -177,7 +190,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp create_mode_fixture(user, "started-plan-session", run_id) do
+  defp create_mode_fixture(user, "started-plan-session", run_id, _options) do
     client_session_id = fixture_client_session_id(run_id, "started-plan-session")
 
     with {:ok, plan} <- published_plan(user, "Started session #{run_id}"),
@@ -205,7 +218,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp create_mode_fixture(user, "completed-history", run_id) do
+  defp create_mode_fixture(user, "completed-history", run_id, _options) do
     client_session_id = fixture_client_session_id(run_id, "completed-history")
 
     with {:ok, plan} <- published_plan(user, "Completed history #{run_id}"),
@@ -254,7 +267,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp create_mode_fixture(user, "provider-failure", run_id) do
+  defp create_mode_fixture(user, "provider-failure", run_id, _options) do
     with {:ok, recommendation} <-
            Workouts.ensure_recommendation(user, %{
              slot_key: "e2e-provider-failure-#{run_id}",
@@ -351,7 +364,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp published_plan(user, name) do
+  defp published_plan(user, name, duration_sec \\ 120) do
     case Repo.get_by(WorkoutPlan, user_id: user.id, name: name, state: :published) do
       %WorkoutPlan{} = plan ->
         {:ok, plan}
@@ -359,7 +372,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
       nil ->
         with {:ok, draft} <-
                Workouts.create_user_draft(user, %{
-                 "definition" => definition(name, 120),
+                 "definition" => definition(name, duration_sec),
                  "request_text" => "Create deterministic E2E library content"
                }),
              {:ok, plan} <- Workouts.publish_draft(user, draft.id) do
@@ -367,6 +380,56 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
         end
     end
   end
+
+  defp candidate_reps(%{strategy: :catch_up, personal_best: %{reps: reps}} = slot) do
+    {:ok, prescription} = BurpeeTrainer.Coach.CatchUpPolicy.prescription(slot.duration_sec, reps, %{})
+    prescription.ceiling_reps
+  end
+
+  defp candidate_reps(slot), do: max(div(slot.duration_sec, 12), 1)
+
+  defp ensure_weekend_history(user, run_id, %{strategy: :catch_up} = slot) do
+    token = fixture_client_session_id(run_id, "prior-week-pb")
+
+    case Repo.get_by(WorkoutSession, user_id: user.id, client_session_id: token) do
+      %WorkoutSession{} = session ->
+        {:ok, session}
+
+      nil ->
+        with {:ok, plan} <- published_plan(user, "Prior-week PB #{run_id}", 1_200),
+             {:ok, completed_at} <-
+               BurpeeTrainer.UserTime.resolve_local(Date.add(slot.week_start, -1), ~T[12:00:00], user.timezone) do
+          # The guarded fixture inserts historical immutable identity once, then uses the
+          # normal schema transition. No production clock or immutability guard is changed.
+          Repo.immediate_transaction(fn ->
+            session =
+              %WorkoutSession{
+                user_id: user.id,
+                state: :started,
+                source_kind: :plan,
+                plan_id: plan.id,
+                client_session_id: token,
+                display_name_snapshot: plan.name,
+                workout_type_snapshot: plan.burpee_type,
+                program_snapshot: plan.program_json,
+                content_hash: plan.content_hash,
+                burpee_type: plan.burpee_type,
+                burpee_count_planned: plan.target_reps,
+                duration_sec_planned: plan.target_duration_sec,
+                started_at: DateTime.add(completed_at, -1_200, :second)
+              }
+              |> WorkoutSession.start_changeset()
+              |> Repo.insert!()
+
+            session
+            |> WorkoutSession.completion_changeset(%{"burpee_count_actual" => plan.target_reps, "duration_sec_actual" => 1_200}, completed_at)
+            |> Repo.update!()
+          end)
+        end
+    end
+  end
+
+  defp ensure_weekend_history(_user, _run_id, _slot), do: {:ok, nil}
 
   defp ensure_fixture_user(username, password) do
     case Accounts.get_user_by_username(username) do
@@ -381,28 +444,28 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp ensure_pending_candidate(user, recommendation, run_id, duration_sec) do
+  defp ensure_pending_candidate(user, recommendation, run_id, slot) do
     case recommendation do
       %CoachRecommendation{pending_draft_id: draft_id} when is_integer(draft_id) ->
         case Repo.get_by(WorkoutPlan, id: draft_id, user_id: user.id, state: :draft) do
           %WorkoutPlan{} -> {:ok, recommendation}
-          nil -> attach_pending_candidate(user, recommendation, run_id, duration_sec)
+          nil -> attach_pending_candidate(user, recommendation, run_id, slot)
         end
 
       %CoachRecommendation{} ->
-        attach_pending_candidate(user, recommendation, run_id, duration_sec)
+        attach_pending_candidate(user, recommendation, run_id, slot)
     end
   end
 
-  defp attach_pending_candidate(user, recommendation, run_id, duration_sec) do
+  defp attach_pending_candidate(user, recommendation, run_id, slot) do
     Workouts.attach_candidate(user, recommendation.id, %{
-      definition: definition("Pending candidate #{run_id}", duration_sec),
+      definition: definition("Pending candidate #{run_id}", slot.duration_sec, candidate_reps(slot)),
       request_text: "Create the deterministic pending candidate",
       rationale: "Candidate awaits explicit acceptance"
     })
   end
 
-  defp ensure_available_video(user, run_id) do
+  defp ensure_available_video(user, run_id, count) do
     filename = fixture_video_filename(user.username)
 
     case Repo.get_by(WorkoutVideo, filename: filename) do
@@ -415,7 +478,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
           filename: filename,
           burpee_type: :six_count,
           duration_sec: 180,
-          burpee_count: nil,
+          burpee_count: count,
           available: true,
           format: :follow_along
         })
@@ -512,8 +575,8 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     "Fixture!#{suffix}"
   end
 
-  defp definition(name, duration_sec) when is_integer(duration_sec) and duration_sec > 0 do
-    reps = max(div(duration_sec, 12), 1)
+  defp definition(name, duration_sec, reps \\ nil) when is_integer(duration_sec) and duration_sec > 0 do
+    reps = reps || max(div(duration_sec, 12), 1)
     cadence = duration_sec / reps
 
     %{

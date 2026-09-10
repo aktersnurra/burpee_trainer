@@ -29,6 +29,26 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert recommendation.selected_workout_plan_id
   end
 
+  test "Home filters survive the browser button's empty value metadata", %{conn: conn, user: user} do
+    recommendation_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-filter-toggle") |> render_click()
+
+    # LiveView's browser client adds button.value after phx-value-* metadata.
+    view |> element("#home-type-six_count") |> render_click(%{"value" => ""})
+    assert has_element?(view, "#home-type-six_count[aria-pressed=false]")
+    assert has_element?(view, "#home-type-navy_seal[aria-pressed=true]")
+
+    view |> element("#home-level-level_1a") |> render_click(%{"value" => ""})
+    assert has_element?(view, "#home-level-level_1a[aria-pressed=false]")
+    assert has_element?(view, "#home-level-level_1b[aria-pressed=true]")
+    view |> element("#home-filter-reset") |> render_click()
+    assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
+    assert has_element?(view, "#home-level-level_1a[aria-pressed=true]")
+    assert Repo.aggregate(WorkoutSession, :count) == 0
+  end
+
   test "Start creates the immutable server session before navigating by session id", %{
     conn: conn,
     user: user

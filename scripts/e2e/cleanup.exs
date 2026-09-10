@@ -90,8 +90,6 @@ case arguments do
                     )
                 }
 
-                Repo.delete_all(videos)
-
                 trigger_name = "workout_plans_draft_only_delete_trigger"
 
                 [[trigger_sql]] =
@@ -110,8 +108,14 @@ case arguments do
                 Repo.query!(trigger_sql)
 
                 case delete_result do
-                  {:ok, _user} -> counts
-                  {:error, changeset} -> Repo.rollback(changeset)
+                  {:ok, _user} ->
+                    # Remove dependent sessions first; deleting media while they still exist
+                    # would try to null an immutable session snapshot's source identity.
+                    Repo.delete_all(videos)
+                    counts
+
+                  {:error, changeset} ->
+                    Repo.rollback(changeset)
                 end
               end)
 

@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.Workouts.InspectionTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.Workouts.Inspection
 

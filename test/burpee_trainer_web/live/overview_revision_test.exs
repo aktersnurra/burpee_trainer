@@ -49,7 +49,7 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
       selector = "#home-level-#{level}[aria-pressed='false']"
 
       if has_element?(view, selector),
-        do: render_click(view, "filter", %{"kind" => "level", "value" => Atom.to_string(level)})
+        do: view |> element(selector) |> render_click(%{"value" => ""})
     end
 
     assert has_element?(view, "#home-alternative-plan-#{shown.plan.id}")
@@ -66,6 +66,7 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
 
     assert_receive {:provider_waiting, worker}
     assert has_element?(view, "#home-update-loading")
+    assert has_element?(view, "#home-workout-area[aria-busy='true']")
 
     for selector <- ["#home-summary", "#home-inspection", "#home-adjustment-form", "#home-action"] do
       refute has_element?(view, selector)
@@ -87,6 +88,7 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
 
     render_async(view)
     assert has_element?(view, "#home-summary")
+    assert has_element?(view, "#home-workout-area[aria-busy='false']")
     assert has_element?(view, "#home-alternative-plan-#{shown.plan.id}")
     assert has_element?(view, "#home-adjustment", "Less rest")
     assert has_element?(view, "#home-action", "Update")

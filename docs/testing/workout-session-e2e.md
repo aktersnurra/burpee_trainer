@@ -64,13 +64,14 @@ database, or production.
 macOS may resolve literal `/tmp` to `/private/tmp`; runtime validation allows only that platform
 resolution. Invalid paths are refused before Repo startup.
 
-The fixture marker forces the provider off and points the Repo only at the marked database. The six
+The fixture marker forces the provider off and points the Repo only at the marked database. The seven
 supported setup modes are:
 
 ```text
 published-plan
 pending-candidate
 available-video
+available-known-count-video
 started-plan-session
 completed-history
 provider-failure
@@ -163,9 +164,13 @@ follow the failure policy, which also requires removing this file and proving it
 | ID | Fixture | Required current-run evidence |
 | --- | --- | --- |
 | `LIB-PUBLISHED` | `published-plan` | Published and Draft sections; exact published row; Start available |
-| `LIB-AUTHOR` | conditional real provider | one Create request, durable draft after reload, one Refine request, explicit Publish before Start |
-| `HOME-CANDIDATE-USE` | `pending-candidate` | Use publishes/selects atomically and clears pending draft |
-| `HOME-CANDIDATE-KEEP` | fresh `pending-candidate` | Current workout is better deletes alternative and retains selection |
+| `LIB-AUTHOR` | conditional real provider | one Create request, durable draft after reload, one Refine request, atomic Publish and Start |
+| `HOME-CANDIDATE-START` | `pending-candidate` | Stored Home draft pin; Start publishes/selects/snapshots atomically and clears pending draft |
+| `HOME-SELECTION` | fresh `pending-candidate` | Explicit alternative selection persists without publication; reload retains pin |
+| `HOME-STALE` | fresh `pending-candidate` | Second tab cannot overwrite a newer selection or partially publish |
+| `HOME-UPDATE-FAILURE` | `published-plan` | Inline revision restores exact source and instruction; one local status; no orphan draft |
+| `HOME-UPDATE-SUCCESS` | conditional real provider | One request; type-changing revision leaves published source immutable and private context scoped |
+| `HOME-VIDEO` | `available-known-count-video` | Known-count filter match starts exact video flow directly without another Start |
 | `HOME-FALLBACK` | `provider-failure` | disabled provider makes zero HTTP requests and published fallback remains usable |
 | `SESSION-PLAN` | `started-plan-session` | exact session ID/client UUID/hash; reload/resume; one completion update |
 | `SESSION-VIDEO` | `available-video` | Start creates exact video session snapshot, including nil-count semantics when applicable |
@@ -203,12 +208,12 @@ Only after those external credentials and that guarded harness are supplied:
 
 1. create the harness-owned fresh database and start its isolated server;
 2. start server-side outbound request counting before interaction;
-3. open `/workouts`, submit `#workout-create-form` once, and require exactly one provider HTTP request;
-4. require the result only under Drafts and refute a published/start control for it;
-5. reload `/workouts` and require the same draft ID, definition, program, and content hash;
-6. submit `#refine-workout-DRAFT_ID` once and require exactly one additional provider request;
+3. open `/workouts/new`, submit `#creation-form` once, and require exactly one provider HTTP request;
+4. require a durable draft, not a published plan;
+5. reload its `/workouts/drafts/DRAFT_ID` review URL and require the same ID, definition, program, and hash;
+6. click `#draft-refine`, submit `#creation-editor-form` once and require exactly one additional provider request;
 7. require successful refine to replace that same draft atomically;
-8. click `#publish-workout-DRAFT_ID`; require it to move to Published before Start becomes available;
+8. click `#draft-start`; require publication and the immutable started session to commit together;
 9. record redacted request timestamps/statuses and persisted state, never headers or credentials;
 10. use the harness's exact cleanup and prove its server is stopped before database removal.
 
@@ -221,26 +226,65 @@ Blocked: LIB-AUTHOR — external provider credentials and separately guarded dis
 Do not add credentials to the marked fixture, weaken any runtime guard, or infer successful
 one-request behavior from the disabled-provider test.
 
-### Pending candidate outcomes
+### Stored Home selection, inline revision, and atomic Start
 
-For `HOME-CANDIDATE-USE`:
+`pending-candidate` uses the current authoritative slot, not a synthetic future slot key.
+On catch-up weekends it creates one fixture-owned prior-week 20-minute plan completion, recomputes
+the actual policy and uses its permitted rep ceiling. The report includes the history identity/time,
+slot strategy/current-week completed seconds and candidate verification. This history is not credited
+to the current week and is removed by normal fixture-user cleanup. No production clock is overridden.
+For `HOME-CANDIDATE-START`, authenticate and open `/`. Record the persisted recommendation's
+`home_workout_plan_id`, `home_revision`, pending draft ID/state/hash and canonical program.
+Require `#home-summary` to match that draft. Click the summary to expand in place, then submit
+`#home-adjustment-form` with blank/whitespace input using `#home-action`. Require the pending draft
+to become published, selected, and cleared from pending in the same commit as the exact session
+snapshot. Capture the hidden client UUID before submission and run the verifier for that UUID.
 
-1. create `pending-candidate`, authenticate, and open `/`;
-2. require `#home-ready-recommendation` and `#home-pending-candidate`;
-3. record `recommendation_id`, selected plan ID, pending draft ID/state/hash;
-4. click `#use-candidate-button`;
-5. require the candidate to be published, selected, and absent from Drafts after reload;
-6. require Home Start to reference the newly selected published plan.
+For `HOME-SELECTION`, use a fresh fixture/profile, expand `#home-summary`, open
+`#home-other-workouts`, and click `#home-alternative-plan-PLAN_ID`. Require inline selection,
+incremented stored revision and unchanged publication/session counts. Reload and require the same
+pin. A late candidate must remain an alternative rather than replacing it.
 
-For `HOME-CANDIDATE-KEEP`, create a completely fresh database and profile:
+For `HOME-STALE`, open two tabs before selecting an alternative in one. Submit the older tab and
+require a local stale error, unchanged current pin, and no partial publication/session insertion.
+Also retain domain tests for corrupt candidates, stale revisions/tokens, and accept/reject APIs;
+Home no longer exposes separate Use/Keep actions.
 
-1. record the original selection and pending draft ID;
-2. click `#keep-current-workout-button`;
-3. reload Home and Library;
-4. require the original selection unchanged and the alternative draft absent.
+For `HOME-UPDATE-FAILURE`, select a published source and enter an instruction directly in
+`#home-adjustment`. Require focus, keyboard editing, height growth, whitespace Start versus nonblank
+Update, and agreement with the submitted operation. During the request only `#home-update-loading`
+may occupy `#home-workout-area`. After failure require exact source/hash and instruction restoration,
+one `#home-adjustment-error` status, no toast and no orphan draft. Reload and retry: the persisted
+failed design context must be reused (the input itself is not promised to survive reload).
 
-A stale tab, missing candidate, unexpected extra plan, orphan draft, or candidate action outside
-`workout_needed` fails the scenario.
+For `HOME-UPDATE-SUCCESS`, use only the separately guarded provider harness described above. Verify
+one outbound request, type-changing replacement, immutable published source, and no other author's
+private log. Until both prerequisites exist report:
+
+```text
+Blocked: HOME-UPDATE-SUCCESS — external provider credentials and separately guarded disposable provider harness unavailable.
+```
+
+### Adaptive Home presentation and alternatives
+
+- Default: actual week/progress, structured name/duration/reps; no navbar, eyebrow, card paragraph
+  or large Start. Collapsed `390x500` fits at ordinary text size.
+- Open and close: record summary position and expansion intermediate heights in both directions,
+  unchanged route, immediate `inert`/`aria-hidden`, and exclusion from keyboard/accessibility navigation.
+- Exact inspection: compare adjacent identical sets, nonuniform repeats and terminal work against
+  persisted canonical events before/after grouping expansion. Trailing recovery is projection-only
+  synthetic coverage: the authoritative compiler disallows terminal rest; do not weaken it for E2E.
+- Alternatives: record current/next-level defaults; independent type filters, shared Workouts/Videos
+  tabs, reset, stable ranking subsequence and local empty state. Filtering must not select or call a
+  provider. Invalid pins converge to fallback; same-day reloads and competing tabs retain freshness.
+- Memory: only committed finalization emits identity; verify scoped persisted facts/reasons.
+  Missing/failing subscriber must not delay or fail Start (supporting domain gate).
+- Responsive: `640x360` and enlarged text scroll naturally without horizontal overflow. Reduced
+  motion must disable transitions and delayed visibility in computed styles.
+- `HOME-VIDEO`: use `available-known-count-video`, expand Home, open alternatives and the Videos tab,
+  and choose `#home-alternative-video-VIDEO_ID`. Require the exact video session route immediately,
+  with no second Start, plan publication or finalization callback. Keep `available-video` as the
+  separate nil-count `/videos` regression. Media playback remains conditional on real available media.
 
 ### Disabled-provider fallback
 
@@ -355,7 +399,7 @@ At portrait `390x500` and short landscape `640x360`, verify:
 - keyboard pause/resume works when the control is focused;
 - reduced motion disables animation without hiding progress;
 - validation and Save errors are announced;
-- Library Published/Draft hierarchy and Home candidate actions remain readable.
+- Library Published/Draft hierarchy and Home inline actions remain readable.
 
 ## Evidence report
 
@@ -367,7 +411,7 @@ Write a report under `.e2e-artifacts/reports/` containing:
 - redacted setup facts and fixture mode, plus proof the mode-600 secret file was deleted after auth;
 - Published/Draft selectors and persisted draft/publish evidence;
 - real-provider Create/Refine request counts or the precise external blocker;
-- fallback zero-request evidence and both candidate outcomes;
+- fallback zero-request evidence, stored selection, atomic candidate Start and stale-tab evidence;
 - exact session ID/client UUID/hash/snapshot before and after reload/completion;
 - exact video snapshot and any media-serving blocker;
 - archived-plan History facts matching the persisted setup/verifier fields;

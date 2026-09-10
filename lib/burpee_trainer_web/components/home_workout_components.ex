@@ -12,7 +12,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           {div(@state.slot.completed_sec, 60)} / {div(@state.slot.weekly_target_sec, 60)} min
         </span>
       </div>
-      <div id="home-workout-area" aria-busy={@state.busy?}>
+      <div id="home-workout-area" aria-busy={to_string(@state.busy?)}>
         <%= if @state.busy? do %>
           <div id="home-update-loading" role="status" aria-label="Updating workout">
             <span class="home-loading-animation" aria-hidden="true"></span>
@@ -101,7 +101,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     type="button"
                     phx-click="filter"
                     phx-value-kind="type"
-                    phx-value-value={type}
+                    phx-value-filter={type}
                     aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
                   >
                     {CreationParameters.type_label(Atom.to_string(type))}
@@ -114,7 +114,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     type="button"
                     phx-click="filter"
                     phx-value-kind="level"
-                    phx-value-value={level}
+                    phx-value-filter={level}
                     aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
                   >
                     {level_label(level)}

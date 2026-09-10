@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.DeletionFirstQueryPathsTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase, async: false
 
   import BurpeeTrainer.Fixtures
 

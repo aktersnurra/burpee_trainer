@@ -42,7 +42,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
      |> refresh_alternatives()}
   end
 
-  def handle_event("filter", %{"kind" => kind, "value" => value}, socket)
+  def handle_event("filter", %{"kind" => kind, "filter" => value}, socket)
       when kind in ["type", "level"] do
     {key, allowed} =
       if kind == "type",

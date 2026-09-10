@@ -19,6 +19,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     published-plan
     pending-candidate
     available-video
+    available-known-count-video
     started-plan-session
     completed-history
     provider-failure
@@ -129,6 +130,12 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     _repo_pid = start_isolated_repo!(database)
     Enum.each(reports, fn {mode, report} -> assert_persisted_report!(mode, report) end)
 
+    assert reports["available-video"]["video_snapshot"]["count"] == nil
+    assert reports["available-known-count-video"]["video_snapshot"]["count"] == 10
+    pending = reports["pending-candidate"]
+    assert pending["slot_date"] == Date.to_iso8601(Date.utc_today())
+    assert String.starts_with?(pending["slot_key"], pending["slot_date"] <> ":")
+
     available = reports["available-video"]
     video_client_session_id = Ecto.UUID.generate()
 
@@ -169,7 +176,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert video_verified["client_session_id"] == video_client_session_id
 
     _repo_pid = start_isolated_repo!(database)
-    IsolatedMigrationRepo.delete!(video_session)
+    # Keep the started video session: real browser cleanup must handle its immutable snapshot.
     pose_run = insert_completed_pose_evidence!(completed)
     stop_supervised(IsolatedMigrationRepo)
 
@@ -219,6 +226,45 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     refute IsolatedMigrationRepo.get(User, started["user_id"])
     assert IsolatedMigrationRepo.get_by!(WorkoutVideo, filename: unrelated_filename)
     stop_supervised(IsolatedMigrationRepo)
+  end
+
+  @tag timeout: :infinity
+  test "weekend candidates use owned prior-week PB without crediting the current week", %{
+    database: database
+  } do
+    env = fixture_env(database) ++ [{"E2E_LIBRARY_SETUP_ONLY", "1"}]
+    assert_mix_ok!(["ecto.create", "--quiet"], env)
+    assert_mix_ok!(["ecto.migrate", "--quiet"], env)
+
+    for {day, now} <- [{"saturday", "2026-09-05 12:00:00Z"}, {"sunday", "2026-09-06 12:00:00Z"}] do
+      script = """
+      Code.require_file(#{inspect(@script)})
+      {:ok, report} = BurpeeTrainer.E2E.LibrarySetup.run("pending-candidate", run_id: "weekend-#{day}", now: ~U[#{now}])
+      {:ok, ^report} = BurpeeTrainer.E2E.LibrarySetup.run("pending-candidate", run_id: "weekend-#{day}", now: ~U[#{now}])
+      IO.puts("WEEKEND=" <> Jason.encode!(report))
+      """
+
+      {output, status} =
+        System.cmd("mix", ["run", "-e", script], env: env, stderr_to_stdout: true)
+
+      assert status == 0, output
+      report = output |> report_line!("WEEKEND=") |> Jason.decode!()
+      assert report["slot_strategy"] == "catch_up"
+      assert report["slot_completed_sec"] == 0
+      assert report["candidate_verified"] == true
+      assert report["history_user_id"] == report["user_id"]
+      assert report["history_session_id"] > 0
+      assert String.starts_with?(report["history_completed_at"], "2026-08-30")
+
+      assert report["pending_draft_definition_json"]["target_reps"] ==
+               report["candidate_ceiling_reps"]
+
+      assert run_cleanup!(report["user_id"], env)["deleted"]["sessions"] == 1
+      assert run_cleanup!(report["user_id"], env)["status"] == "already_absent"
+      start_isolated_repo!(database)
+      refute IsolatedMigrationRepo.get(WorkoutSession, report["history_session_id"])
+      stop_supervised(IsolatedMigrationRepo)
+    end
   end
 
   test "fixture entrypoint refuses an ordinary test database before creating a user" do
@@ -699,7 +745,8 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert draft.content_hash == report["pending_draft_content_hash"]
   end
 
-  defp assert_persisted_report!("available-video", report) do
+  defp assert_persisted_report!(mode, report)
+       when mode in ["available-video", "available-known-count-video"] do
     video = IsolatedMigrationRepo.get!(WorkoutVideo, report["video_id"])
     assert video.name == report["video_name"]
     assert video.filename == report["video_filename"]
