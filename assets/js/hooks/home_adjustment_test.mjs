@@ -32,7 +32,9 @@ test("resets height before measuring so deleted text can shrink", () => {
       assert.equal(this.style.height, "auto");
       return contentHeight;
     },
-    addEventListener: (_name, fn) => { input = fn; },
+    addEventListener: (_name, fn) => {
+      input = fn;
+    },
     removeEventListener: () => {},
   };
   const hook = { el };
