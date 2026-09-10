@@ -562,8 +562,13 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
         Req.Test.transport_error(conn, :timeout)
       end)
 
-    assert {:error, %Error{code: :provider_timeout}} =
-             Coach.revise_home_workout(user, shown, "Try", opts(req))
+    assert capture_log(fn ->
+             assert {:error, %Error{code: :provider_timeout}} =
+                      Coach.revise_home_workout(user, shown, "Try", opts(req))
+           end) =~ "workout_design_failure_outcome_unavailable"
+
+    assert Workouts.list_drafts(user) == []
+    assert Repo.get(BurpeeTrainer.Coach.DesignSession, context.id) == nil
   end
 
   test "accepted Home revision commits content pointer and outcome together", %{counter: counter} do
@@ -639,8 +644,12 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     user = user_fixture()
     req = request(counter, &provider_definition(&1, definition("Unused")))
 
-    assert {:ok, {:error, %Error{code: :authoring_transaction_forbidden}}} =
-             Repo.transaction(fn -> Coach.create_draft(user, "Try", opts(req)) end)
+    assert capture_log(fn ->
+             assert {:ok, {:error, %Error{code: :authoring_transaction_forbidden}}} =
+                      Repo.transaction(fn -> Coach.create_draft(user, "Try", opts(req)) end)
+           end) =~ "workout_draft_create_failed error_code=authoring_transaction_forbidden"
+
+    assert Workouts.list_drafts(user) == []
 
     assert request_count(counter) == 0
   end

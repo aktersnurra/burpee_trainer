@@ -95,6 +95,58 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
     assert {:error, %Error{code: :draft_stale}} = Workouts.verify_home_selection(u, shown)
   end
 
+  for corruption <- [:name, :events] do
+    test "initial pending with corrupt #{corruption} falls back stably", %{user: u, slot: slot} do
+      {:ok, r} = Workouts.ensure_recommendation(u, Map.take(slot, [:slot_key, :slot_date]))
+      plan = workout_plan_draft_fixture(u)
+      r |> Ecto.Changeset.change(pending_draft_id: plan.id) |> Repo.update!()
+      corrupt = corrupt_plan(plan, unquote(corruption))
+
+      assert {:ok, shown} = Workouts.ensure_home_selection(u, slot)
+      assert shown.plan.id != plan.id
+      assert shown.plan.origin == :built_in
+      assert :ok = Workouts.verify_plan_content(shown.plan)
+      assert shown.home_revision == 1
+      assert {:ok, ^shown} = Workouts.ensure_home_selection(u, slot)
+      assert Repo.reload!(corrupt) == corrupt
+    end
+
+    test "pinned pending with corrupt #{corruption} advances revision and rejects stale Start",
+         %{
+           user: u,
+           slot: slot
+         } do
+      {:ok, r} = Workouts.ensure_recommendation(u, Map.take(slot, [:slot_key, :slot_date]))
+      plan = workout_plan_draft_fixture(u)
+      r |> Ecto.Changeset.change(pending_draft_id: plan.id) |> Repo.update!()
+      {:ok, shown} = Workouts.ensure_home_selection(u, slot)
+      assert shown.plan.id == plan.id
+      corrupt = corrupt_plan(plan, unquote(corruption))
+
+      assert {:ok, fallback} = Workouts.ensure_home_selection(u, slot)
+      assert fallback.plan.id != plan.id
+      assert fallback.plan.origin == :built_in
+      assert :ok = Workouts.verify_plan_content(fallback.plan)
+      assert fallback.home_revision == shown.home_revision + 1
+      assert {:ok, ^fallback} = Workouts.ensure_home_selection(u, slot)
+
+      assert {:error, %Error{code: :home_selection_changed}} =
+               Workouts.start_home_workout(u, shown, Ecto.UUID.generate())
+
+      assert Workouts.current_started_session(u) == nil
+      assert Repo.reload!(corrupt) == corrupt
+    end
+  end
+
+  defp corrupt_plan(plan, :name) do
+    plan |> Ecto.Changeset.change(name: "Changed content") |> Repo.update!()
+  end
+
+  defp corrupt_plan(plan, :events) do
+    definition = Map.put(plan.definition_json, "events", ["malformed"])
+    plan |> Ecto.Changeset.change(definition_json: definition) |> Repo.update!()
+  end
+
   test "verification rejects foreign users and an obsolete slot", %{user: u, slot: slot} do
     {:ok, shown} = Workouts.ensure_home_selection(u, slot)
     assert {:ok, plan} = Workouts.verify_home_selection(u, shown)

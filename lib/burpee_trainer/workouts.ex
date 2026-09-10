@@ -86,7 +86,7 @@ defmodule BurpeeTrainer.Workouts do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
            {:ok, r} <- ensure_recommendation_selection_available(user, r.id) do
-        case home_plan(user, r.home_workout_plan_id) do
+        case verified_home_plan(user, r.home_workout_plan_id) do
           {:ok, plan} ->
             {:ok, HomeSelection.new(r, plan)}
 
@@ -240,21 +240,36 @@ defmodule BurpeeTrainer.Workouts do
 
   defp home_plan(_user, _id), do: {:error, Error.new(:source_unavailable)}
 
+  # Presentation validation is separate from Start's revision-first CAS checks.
+  defp verified_home_plan(user, id) do
+    with {:ok, plan} <- home_plan(user, id),
+         :ok <- verify_stored_draft(plan) do
+      {:ok, plan}
+    end
+  end
+
+  defp verified_home_fallback do
+    with {:ok, plan} <- built_in_fallback(),
+         :ok <- verify_stored_draft(plan) do
+      {:ok, plan}
+    end
+  end
+
   defp initial_home_plan(user, %{home_revision: 0} = r) do
-    case home_plan(user, r.pending_draft_id) do
+    case verified_home_plan(user, r.pending_draft_id) do
       {:ok, %{state: :draft} = draft} ->
         {:ok, draft}
 
       _ ->
-        case get_library_plan(user, r.selected_workout_plan_id) do
-          {:ok, plan} -> {:ok, plan}
-          _ -> built_in_fallback()
+        case verified_home_plan(user, r.selected_workout_plan_id) do
+          {:ok, %{state: :published} = plan} -> {:ok, plan}
+          _ -> verified_home_fallback()
         end
     end
   end
 
   # A removed/invalid prior pin must not promote a late unrelated candidate.
-  defp initial_home_plan(_user, _r), do: built_in_fallback()
+  defp initial_home_plan(_user, _r), do: verified_home_fallback()
 
   defp selectable_home_plan(user, %{pending_draft_id: id}, id)
        when is_integer(id), do: get_draft(user, id)
