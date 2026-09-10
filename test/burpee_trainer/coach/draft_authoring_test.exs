@@ -364,8 +364,8 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
         definition("Stale second")
       )
 
-    assert_receive {:first_provider_ready, first_pid, ^barrier}, 1_000
-    assert_receive {:second_provider_ready, second_pid, ^barrier}, 1_000
+    first_pid = await_provider_ready(first, :first_provider_ready, barrier)
+    second_pid = await_provider_ready(second, :second_provider_ready, barrier)
 
     send(first_pid, {:respond, barrier})
     assert {:ok, %WorkoutPlan{name: "First winner"}} = Task.await(first, 10_000)
@@ -643,6 +643,22 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
              Repo.transaction(fn -> Coach.create_draft(user, "Try", opts(req)) end)
 
     assert request_count(counter) == 0
+  end
+
+  # Independent context writes may contend before either request reaches its provider barrier.
+  defp await_provider_ready(%Task{pid: pid, ref: ref}, ready_tag, barrier) do
+    receive do
+      {^ready_tag, ^pid, ^barrier} ->
+        pid
+
+      {^ref, result} ->
+        flunk("refinement returned before provider readiness: #{inspect(result)}")
+
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        flunk("refinement exited before provider readiness: #{inspect(reason)}")
+    after
+      10_000 -> flunk("refinement did not reach provider readiness within 10 seconds")
+    end
   end
 
   defp start_refinement_task(
