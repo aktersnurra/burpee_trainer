@@ -3,6 +3,7 @@ import { Socket } from "phoenix";
 import { LiveSocket } from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
+import HomeAdjustment from "./hooks/home_adjustment.mjs";
 import SessionHook from "./hooks/session_hook";
 import VideoHook from "./hooks/video_hook";
 import PoseDebug from "./hooks/pose_debug";
@@ -80,6 +81,7 @@ export function startApp(PoseTracker) {
 		params: { _csrf_token: csrfToken },
 		hooks: {
 			ChartHook,
+			HomeAdjustment,
 			SessionHook,
 			VideoHook,
 			PoseTracker,

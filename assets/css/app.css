@@ -7,6 +7,7 @@
 @import "@fontsource/geist/500.css";
 @import "@fontsource/geist/600.css";
 @import "tailwindcss" source(none);
+@import "./adaptive_home.css";
 @source "../css";
 @source "../js";
 @source "../../lib/burpee_trainer_web";
