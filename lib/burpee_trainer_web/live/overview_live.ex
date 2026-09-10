@@ -165,7 +165,10 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     else
       _error ->
         {:noreply,
-         socket |> put_flash(:error, "That session cannot be resumed.") |> assign_home()}
+         socket
+         |> put_flash(:error, "That session cannot be resumed.")
+         |> assign_home()
+         |> assign_workspace()}
     end
   end
 

@@ -167,6 +167,32 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
+  test "failed Resume restores a usable workspace when the rendered session disappears", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation = recommendation_fixture(user)
+
+    {:ok, started} =
+      Workouts.start_plan(user, recommendation.selected_workout_plan_id, Ecto.UUID.generate())
+
+    {:ok, view, _} = live(conn, ~p"/")
+    assert has_element?(view, "#resume-recommended-workout")
+    refute has_element?(view, "#home-summary")
+
+    Repo.delete!(started)
+    view |> element("#resume-recommended-workout") |> render_click()
+
+    refute has_element?(view, "#resume-recommended-workout")
+    assert has_element?(view, "#home-summary")
+    view |> element("#home-summary") |> render_click()
+    assert has_element?(view, "#home-expansion[data-open='true']")
+    assert has_element?(view, "#home-adjustment-form")
+    assert has_element?(view, "#home-action", "Start")
+    assert Workouts.current_started_session(user) == nil
+    assert Repo.aggregate(WorkoutSession, :count) == 0
+  end
+
   test "mount ensures a stable current-slot selection", %{conn: conn, user: user} do
     {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#home-summary")
