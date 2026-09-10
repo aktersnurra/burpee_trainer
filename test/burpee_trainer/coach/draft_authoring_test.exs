@@ -6,6 +6,7 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Coach, Repo, Workouts}
+  alias BurpeeTrainer.Coach.{Context, DesignEntry}
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Workouts.{Error, WorkoutPlan}
 
@@ -38,7 +39,7 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     [recorded] = requests(counter)
     assert recorded.body["max_tokens"] == 16_384
 
-    [system_message, user_message] = recorded.body["messages"]
+    [system_message, global_message, user_message] = recorded.body["messages"]
 
     assert system_message["content"] =~
              ~r/sum of reps across\s+every work event must equal target_reps/i
@@ -46,7 +47,10 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     assert system_message["content"] =~
              ~r/when the user requests\s+no rest, events must contain no rest events/i
 
-    assert user_message["content"] == "Build a steady workout"
+    assert Jason.decode!(global_message["content"])["scope"] == "global"
+
+    assert Jason.decode!(user_message["content"])["active_attempt"]["instruction"] ==
+             "Build a steady workout"
   end
 
   test "failed create logs only safe provider diagnostics", %{counter: counter} do
@@ -249,7 +253,7 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
 
     assert %{
              "current_definition" => current_definition,
-             "instruction" => ^instruction
+             "active_attempt" => %{"instruction" => ^instruction}
            } = Jason.decode!(refinement_message["content"])
 
     assert current_definition == draft.definition_json
@@ -452,6 +456,191 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
 
     assert {:error, %Error{code: :draft_not_found}} =
              Coach.refine_draft(owner, 2_147_483_647, "No missing row", opts(req))
+
+    assert request_count(counter) == 0
+  end
+
+  defp shown_workout(user) do
+    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, shown} = Workouts.ensure_home_selection(user, slot)
+    {user, slot, shown}
+  end
+
+  test "failed published revision retains history through reload", %{counter: counter} do
+    {user, slot, initial} = shown_workout(user_fixture())
+    source = plan_fixture(user, %{burpee_type: "navy_seal"})
+    {:ok, shown} = Workouts.select_home_workout(user, initial, source.id)
+    before = raw_row(source.id)
+    req = request(counter, &Plug.Conn.send_resp(&1, 503, "private response"))
+
+    assert {:error, %Error{code: :provider_unavailable}} =
+             Coach.revise_home_workout(user, shown, "Less rest", opts(req))
+
+    assert Workouts.list_drafts(user) == []
+    {:ok, reopened} = Workouts.ensure_home_selection(user, slot)
+    {:ok, session} = Context.ensure_session(user, source, Context.home_key(reopened))
+    {:ok, entries} = Context.entries(user, session.id)
+    assert Enum.any?(entries, &(&1.kind == :instruction and &1.payload["text"] == "Less rest"))
+    assert Enum.any?(entries, &(&1.kind == :outcome and &1.payload["status"] == "failed"))
+
+    req =
+      request(
+        counter,
+        &provider_definition(&1, definition("Six-count revision", "six_count", 100, 1200))
+      )
+
+    assert {:ok, revised} = Coach.revise_home_workout(user, reopened, "Use six-counts", opts(req))
+    assert revised.plan.design_session_id == session.id
+    assert revised.plan.id != source.id
+    assert revised.plan.burpee_type == :six_count
+    assert raw_row(source.id) == before
+    assert request_count(counter) == 2
+  end
+
+  test "message overflow records a failure without HTTP", %{counter: counter} do
+    {user, _slot, shown} = shown_workout(user_fixture())
+    {:ok, context} = Context.ensure_session(user, shown.plan, Context.home_key(shown))
+
+    for _ <- 1..530 do
+      {:ok, _} =
+        Context.append(user, context.id, Ecto.UUID.generate(), :instruction, %{
+          "text" => String.duplicate("x", 500)
+        })
+    end
+
+    req = request(counter, &provider_definition(&1, definition("Unused")))
+
+    assert {:error, %Error{code: :authoring_context_too_large}} =
+             Coach.revise_home_workout(user, shown, "Try once", opts(req))
+
+    assert request_count(counter) == 0
+    {:ok, entries} = Context.entries(user, context.id)
+    assert List.last(entries).payload["code"] == "authoring_context_too_large"
+  end
+
+  test "provider exception is caught and receives a safe outcome", %{counter: counter} do
+    {user, _slot, shown} = shown_workout(user_fixture())
+    req = request(counter, fn _conn -> raise "private exception text" end)
+
+    assert {:error, %Error{code: :provider_unavailable}} =
+             Coach.revise_home_workout(user, shown, "Change it", opts(req))
+
+    {:ok, context} = Context.ensure_session(user, shown.plan, Context.home_key(shown))
+    {:ok, entries} = Context.entries(user, context.id)
+    outcome = List.last(entries)
+    assert outcome.kind == :outcome
+    assert outcome.payload == %{"status" => "failed", "code" => "provider_unavailable"}
+  end
+
+  test "selection changed during HTTP creates no orphan", %{counter: counter} do
+    {user, _slot, shown} = shown_workout(user_fixture())
+    alternative = plan_fixture(user)
+
+    req =
+      request(counter, fn conn ->
+        {:ok, _} = Workouts.select_home_workout(user, shown, alternative.id)
+        provider_definition(conn, definition("Must not persist"))
+      end)
+
+    assert {:error, %Error{code: :home_selection_changed}} =
+             Coach.revise_home_workout(user, shown, "Revise", opts(req))
+
+    assert Workouts.list_drafts(user) == []
+    assert request_count(counter) == 1
+  end
+
+  test "failure-log failure does not replace the provider error", %{counter: counter} do
+    {user, _slot, shown} = shown_workout(user_fixture())
+    {:ok, context} = Context.ensure_session(user, shown.plan, Context.home_key(shown))
+
+    req =
+      request(counter, fn conn ->
+        # Simulates loss of the log store after the instruction was persisted.
+        Repo.delete_all(from e in DesignEntry, where: e.design_session_id == ^context.id)
+        Repo.delete_all(from s in BurpeeTrainer.Coach.DesignSession, where: s.id == ^context.id)
+        Req.Test.transport_error(conn, :timeout)
+      end)
+
+    assert {:error, %Error{code: :provider_timeout}} =
+             Coach.revise_home_workout(user, shown, "Try", opts(req))
+  end
+
+  test "accepted Home revision commits content pointer and outcome together", %{counter: counter} do
+    {user, slot, shown} = shown_workout(user_fixture())
+
+    req =
+      request(counter, fn conn ->
+        refute Repo.in_transaction?()
+        provider_definition(conn, definition("Accepted Home"))
+      end)
+
+    assert {:ok, changed} = Coach.revise_home_workout(user, shown, "Change", opts(req))
+    assert changed.home_revision > shown.home_revision
+    assert {:ok, reopened} = Workouts.ensure_home_selection(user, slot)
+    assert reopened == changed
+    assert {:ok, entries} = Context.entries(user, changed.plan.design_session_id)
+    outcome = List.last(entries)
+
+    assert outcome.payload == %{
+             "status" => "accepted",
+             "workout_plan_id" => changed.plan.id,
+             "content_hash" => changed.plan.content_hash,
+             "updated_at" => DateTime.to_iso8601(changed.plan.updated_at)
+           }
+  end
+
+  test "accepted log failure rolls back draft and Home pointer", %{counter: counter} do
+    {user, slot, shown} = shown_workout(user_fixture())
+
+    Repo.query!("""
+    CREATE TEMP TRIGGER reject_design_accept BEFORE INSERT ON workout_design_entries
+    WHEN NEW.kind = 'outcome' AND json_extract(NEW.payload, '$.status') = 'accepted'
+    BEGIN SELECT RAISE(ABORT, 'test accepted failure'); END
+    """)
+
+    try do
+      req = request(counter, &provider_definition(&1, definition("Rolled back")))
+      assert {:error, %Error{}} = Coach.revise_home_workout(user, shown, "Change", opts(req))
+      assert Workouts.list_drafts(user) == []
+      assert {:ok, ^shown} = Workouts.ensure_home_selection(user, slot)
+      {:ok, context} = Context.ensure_session(user, shown.plan, Context.home_key(shown))
+      {:ok, entries} = Context.entries(user, context.id)
+      assert List.last(entries).payload["status"] == "failed"
+      refute Enum.any?(entries, &(&1.payload["status"] == "accepted"))
+    after
+      Repo.query!("DROP TRIGGER reject_design_accept")
+    end
+  end
+
+  test "Home pointer failure rolls back draft and accepted outcome", %{counter: counter} do
+    {user, slot, shown} = shown_workout(user_fixture())
+
+    Repo.query!("""
+    CREATE TEMP TRIGGER reject_home_pointer BEFORE UPDATE OF home_workout_plan_id ON coach_recommendations
+    BEGIN SELECT RAISE(ABORT, 'test accepted failure'); END
+    """)
+
+    try do
+      req = request(counter, &provider_definition(&1, definition("Rolled back")))
+      assert {:error, %Error{}} = Coach.revise_home_workout(user, shown, "Change", opts(req))
+      assert Workouts.list_drafts(user) == []
+      assert {:ok, ^shown} = Workouts.ensure_home_selection(user, slot)
+      {:ok, context} = Context.ensure_session(user, shown.plan, Context.home_key(shown))
+      {:ok, entries} = Context.entries(user, context.id)
+      assert List.last(entries).payload["status"] == "failed"
+      refute Enum.any?(entries, &(&1.payload["status"] == "accepted"))
+    after
+      Repo.query!("DROP TRIGGER reject_home_pointer")
+    end
+  end
+
+  test "authoring refuses persistence transactions before HTTP", %{counter: counter} do
+    user = user_fixture()
+    req = request(counter, &provider_definition(&1, definition("Unused")))
+
+    assert {:ok, {:error, %Error{code: :authoring_transaction_forbidden}}} =
+             Repo.transaction(fn -> Coach.create_draft(user, "Try", opts(req)) end)
 
     assert request_count(counter) == 0
   end

@@ -106,7 +106,15 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
     assert_receive {:provider_context, messages}, 5_000
     await_idle(reconciler)
 
-    context = messages |> List.last() |> Map.fetch!("content") |> Jason.decode!()
+    assert length(messages) == 3
+    design = messages |> List.last() |> Map.fetch!("content") |> Jason.decode!()
+    instruction = Enum.find(design["entries"], &(&1["kind"] == "instruction"))
+
+    context =
+      instruction["payload"]["request_messages"]
+      |> List.last()
+      |> Map.fetch!("content")
+      |> Jason.decode!()
 
     assert context["deterministic_slot"]["slot_key"] == "2025-09-01:standard"
 
@@ -153,7 +161,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
     assert map_size(:sys.get_state(reconciler).in_flight) == 0
   end
 
-  test "async_nolink provider crash is contained and fallback remains startable" do
+  test "catchable provider exit records failure and fallback remains startable" do
     user = user_fixture()
     parent = self()
 
@@ -179,11 +187,14 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
     task_pid = receive_request_task()
     task_ref = Process.monitor(task_pid)
     send(task_pid, :crash_provider)
-    assert_receive {:DOWN, ^task_ref, :process, ^task_pid, :provider_boom}, 5_000
+    assert_receive {:DOWN, ^task_ref, :process, ^task_pid, :normal}, 5_000
     _ = :sys.get_state(reconciler)
 
     recommendation = Repo.get_by!(CoachRecommendation, user_id: user.id)
     assert is_nil(recommendation.pending_draft_id)
+    context = Repo.get_by!(BurpeeTrainer.Coach.DesignSession, user_id: user.id)
+    assert {:ok, entries} = BurpeeTrainer.Coach.Context.entries(user, context.id)
+    assert List.last(entries).payload == %{"status" => "failed", "code" => "provider_unavailable"}
     assert_fallback_startable(user, recommendation)
   end
 
@@ -299,6 +310,12 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
 
     recommendation = Repo.get_by!(CoachRecommendation, user_id: user.id)
     assert recommendation.pending_draft_id
+    draft = Repo.get!(WorkoutPlan, recommendation.pending_draft_id)
+    assert draft.design_session_id
+    assert {:ok, entries} = BurpeeTrainer.Coach.Context.entries(user, draft.design_session_id)
+    assert Enum.any?(entries, &(&1.kind == :instruction))
+    assert Enum.any?(entries, &(&1.kind == :proposal))
+    assert Enum.any?(entries, &(&1.kind == :outcome and &1.payload["status"] == "accepted"))
 
     assert Repo.aggregate(
              from(plan in WorkoutPlan,

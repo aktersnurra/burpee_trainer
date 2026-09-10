@@ -6,6 +6,7 @@ defmodule BurpeeTrainer.Workouts do
 
   import Ecto.Query
 
+  alias BurpeeTrainer.Coach.Context
   alias Ecto.Multi
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Coach.Policy
@@ -3045,5 +3046,62 @@ defmodule BurpeeTrainer.Workouts do
       hour in 17..20 -> "evening"
       true -> "night"
     end
+  end
+
+  def commit_home_revision(user, expected, definition, text, context_id, attempt) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, r} <- home_recommendation(user, expected),
+           {:ok, source} <- verify_home_selection(user, expected),
+           :ok <- Context.check_home_workspace(user, context_id, expected),
+           {:ok, draft} <-
+             commit_authored_revision(user, source, definition, text, context_id, attempt),
+           {:ok, changed} <- write_home_pointer(r, draft.id) do
+        {:ok, HomeSelection.new(changed, draft)}
+      end
+    end)
+  end
+
+  def commit_authored_revision(user, expected, definition, text, context_id, attempt) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, source} <- current_authoring_source(user, expected),
+           :ok <- Context.check_source(user, context_id, expected),
+           {:ok, content} <-
+             canonical_draft_content(%{definition: definition, request_text: text}),
+           {:ok, draft} <- save_authored_draft(user, source, content, context_id),
+           {:ok, _} <-
+             Context.append(user, context_id, attempt, :outcome, %{
+               "status" => "accepted",
+               "workout_plan_id" => draft.id,
+               "content_hash" => draft.content_hash,
+               "updated_at" => DateTime.to_iso8601(draft.updated_at)
+             }) do
+        {:ok, draft}
+      end
+    end)
+  end
+
+  defp current_authoring_source(_user, nil), do: {:ok, nil}
+
+  defp current_authoring_source(user, expected) do
+    with {:ok, source} <- home_plan(user, expected.id),
+         :ok <- compare_expected_draft_revision(source, %{expected_revision: expected}),
+         :ok <- verify_stored_draft(source) do
+      {:ok, source}
+    end
+  end
+
+  defp save_authored_draft(_user, %{state: :draft} = source, content, context_id) do
+    source
+    |> WorkoutPlan.replace_draft_changeset(content)
+    |> Ecto.Changeset.put_change(:design_session_id, context_id)
+    |> Repo.update()
+    |> normalize_plan_write()
+  end
+
+  defp save_authored_draft(user, _published_or_nil, content, context_id) do
+    %WorkoutPlan{user_id: user.id, origin: :user, state: :draft, design_session_id: context_id}
+    |> WorkoutPlan.new_draft_changeset(content)
+    |> Repo.insert()
+    |> normalize_plan_write()
   end
 end

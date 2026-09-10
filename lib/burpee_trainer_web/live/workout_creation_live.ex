@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.WorkoutCreationLive do
      assign(socket,
        parameters: parameters,
        form: to_form(CreationParameters.changeset(parameters, %{})),
+       design_workspace_key: "creator:#{Ecto.UUID.generate()}",
        draft: nil,
        stage: :configure,
        editor: nil,
@@ -127,6 +128,7 @@ defmodule BurpeeTrainerWeb.WorkoutCreationLive do
     case Ecto.Changeset.apply_action(changeset, :validate) do
       {:ok, parameters} ->
         user = socket.assigns.current_user
+        workspace_key = socket.assigns.design_workspace_key
         request = CreationParameters.request(parameters)
         draft = socket.assigns.draft
 
@@ -136,7 +138,7 @@ defmodule BurpeeTrainerWeb.WorkoutCreationLive do
          |> start_async(:author, fn ->
            if draft,
              do: Coach.refine_draft(user, draft.id, request),
-             else: Coach.create_draft(user, request)
+             else: Coach.create_draft(user, request, workspace_key: workspace_key)
          end)}
 
       {:error, changeset} ->
@@ -229,9 +231,18 @@ defmodule BurpeeTrainerWeb.WorkoutCreationLive do
   defp choices(assigns) do
     ~H"""
     <div class="creation-choices" role="group" aria-label={@label}>
-      <button :for={{value, label} <- @options} id={"choice-#{@field}-#{value}"} type="button"
-        phx-click="choose" phx-value-field={@field} phx-value-value={value}
-        aria-pressed={to_string(@selected == value)} disabled={@busy}>{label}</button>
+      <button
+        :for={{value, label} <- @options}
+        id={"choice-#{@field}-#{value}"}
+        type="button"
+        phx-click="choose"
+        phx-value-field={@field}
+        phx-value-value={value}
+        aria-pressed={to_string(@selected == value)}
+        disabled={@busy}
+      >
+        {label}
+      </button>
     </div>
     """
   end

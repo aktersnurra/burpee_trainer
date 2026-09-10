@@ -10,7 +10,7 @@ defmodule BurpeeTrainer.CoachReconciler do
 
   alias BurpeeTrainer.Accounts
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.Coach.{Client, Policy, Recommendation}
+  alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan}
 
@@ -302,20 +302,12 @@ defmodule BurpeeTrainer.CoachReconciler do
 
   defp maybe_request_candidate(user, recommendation, slot, provider_options) do
     if fallback_selected?(user, recommendation) do
-      expected_selection = {:plan, recommendation.selected_workout_plan_id}
-
-      with {:ok, response} <-
-             Client.complete(
-               provider_messages(user, slot),
-               Keyword.put(provider_options, :response_kind, :coach_recommendation)
-             ) do
-        Recommendation.apply_proposal(
-          user,
-          recommendation.id,
-          response,
-          expected_selection
-        )
-      end
+      BurpeeTrainer.Coach.recommend_workout(
+        user,
+        recommendation,
+        provider_messages(user, slot),
+        provider_options
+      )
     else
       :ok
     end

@@ -54,6 +54,27 @@ defmodule BurpeeTrainerWeb.WorkoutCreationLiveTest do
     assert Workouts.list_drafts(user) == []
   end
 
+  test "failed creator retries retain one design workspace", %{conn: conn, user: user} do
+    {:ok, view, _} = live(conn, ~p"/workouts/new")
+
+    for _ <- 1..2 do
+      view
+      |> form("#creation-form", creation_parameters: %{duration: "20:00", reps: "120"})
+      |> render_submit()
+
+      render_async(view)
+      assert has_element?(view, "#creation-error")
+    end
+
+    sessions = Repo.all(BurpeeTrainer.Coach.DesignSession)
+    assert [session] = Enum.filter(sessions, &(&1.user_id == user.id))
+    assert String.starts_with?(session.workspace_key, "creator:")
+    assert {:ok, entries} = BurpeeTrainer.Coach.Context.entries(user, session.id)
+    assert Enum.count(entries, &(&1.kind == :instruction)) == 2
+    assert Enum.count(entries, &(&1.kind == :outcome and &1.payload["status"] == "failed")) == 2
+    assert Workouts.list_drafts(user) == []
+  end
+
   test "draft summary returns to configuration and Start publishes before exact session navigation",
        %{conn: conn, user: user} do
     draft = workout_plan_draft_fixture(user)
