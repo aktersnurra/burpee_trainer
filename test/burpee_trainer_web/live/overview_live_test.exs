@@ -65,6 +65,16 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-filter-toggle") |> render_click()
 
+    assert has_element?(view, "#home-current-level", "1A is your current level.")
+
+    assert has_element?(
+             view,
+             "[aria-label='Catalog level'][aria-describedby='home-current-level']"
+           )
+
+    assert has_element?(view, ".home-filter-level-heading #home-filter-reset")
+    assert has_element?(view, "#home-week-track[role=progressbar][aria-valuemax='4800']")
+
     # LiveView's browser client adds button.value after phx-value-* metadata.
     view |> element("#home-type-six_count") |> render_click(%{"value" => ""})
     assert has_element?(view, "#home-type-six_count[aria-pressed=false]")

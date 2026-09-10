@@ -1,0 +1,97 @@
+defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
+  use ExUnit.Case, async: true
+  import Phoenix.LiveViewTest
+  alias BurpeeTrainer.Workouts.{Inspection, WorkoutPlan}
+  alias BurpeeTrainerWeb.HomeWorkoutComponents
+
+  test "weekly progress uses actual seconds and ISO week, with bounded visual fill" do
+    for {completed, target, fill, now} <- [
+          {1935, 4800, "40.3125%", "1935"},
+          {6000, 4800, "100%", "4800"},
+          {0, 0, "0%", "0"}
+        ] do
+      html =
+        render_component(&HomeWorkoutComponents.week_progress/1,
+          slot: %{completed_sec: completed, weekly_target_sec: target, week_start: ~D[2026-09-07]}
+        )
+        |> LazyHTML.from_fragment()
+
+      assert LazyHTML.query(html, "[role=progressbar]") |> LazyHTML.attribute("aria-valuenow") ==
+               [now]
+
+      assert LazyHTML.query(html, "[role=progressbar]") |> LazyHTML.attribute("aria-valuemax") ==
+               [to_string(target)]
+
+      assert LazyHTML.query(html, "#home-week-fill") |> LazyHTML.attribute("style") == [
+               "width: #{fill}"
+             ]
+
+      assert LazyHTML.query(html, "#home-week-number") |> text() == "Week 37"
+    end
+  end
+
+  test "four compact columns retain cadence, interval and ordered nonuniform recoveries" do
+    events = [work(2, 5_000_000, 10), rest(10_000), work(3, 6_125_000, 18.375), rest(11_250)]
+    rows = rows(events ++ events ++ [work(2, 5_000_000, 9)])
+    [group, final] = rows
+    assert group.count == 2
+    html = inspection(rows, MapSet.new([group.id]))
+    assert LazyHTML.query(html, "thead th") |> text() == "SetsRepsCadenceRest"
+
+    assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-reps") |> text() ==
+             "23"
+
+    assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-rest") |> text() ==
+             "10s11.25s"
+
+    assert LazyHTML.query(html, "##{group.id}-details .home-prescription-rest") |> text() ==
+             "10s 11.25s 10s 11.25s"
+
+    assert LazyHTML.query(html, "##{final.id} .home-prescription-rest") |> text() == "—"
+    assert LazyHTML.query(html, "##{final.id} .home-interval") |> text() == "Interval 9s"
+    assert LazyHTML.query(html, "caption") |> LazyHTML.text() =~ "prescribed"
+  end
+
+  test "simple adjacent sets and separate final recovery are not fabricated" do
+    rows = rows([work(2, 5_000_000, 10), work(2, 5_000_000, 10), rest(1250)])
+    [group, recovery] = rows
+    html = inspection(rows, MapSet.new([group.id]))
+    assert LazyHTML.query(html, "##{group.id} button") |> LazyHTML.text() =~ "2 sets"
+    assert LazyHTML.query(html, "##{recovery.id} th") |> text() == "Final recovery"
+    assert LazyHTML.query(html, "##{recovery.id} .home-prescription-rest") |> text() == "1.25s"
+  end
+
+  test "ordinary fractional and large duration values never use exponent notation or lose precision" do
+    html = inspection(rows([work(100, 12_000_001, 1200.000001), rest(1), work(1, 1_000_000, 1)]))
+    assert LazyHTML.query(html, ".home-prescription-cadence") |> LazyHTML.text() =~ "12.000001s"
+    assert LazyHTML.query(html, ".home-interval") |> LazyHTML.text() =~ "Interval 1200.000001s"
+    assert LazyHTML.query(html, ".home-prescription-rest") |> LazyHTML.text() =~ "0.001s"
+    refute LazyHTML.text(html) =~ ~r/\d[eE][+-]?\d/
+  end
+
+  defp text(html), do: html |> LazyHTML.text() |> String.replace(~r/\s+/, " ") |> String.trim()
+
+  defp inspection(rows, expanded \\ MapSet.new()),
+    do:
+      render_component(&HomeWorkoutComponents.inspection/1, rows: rows, expanded: expanded)
+      |> LazyHTML.from_fragment()
+
+  defp work(reps, cadence, duration),
+    do: %{
+      "kind" => "work",
+      "reps" => reps,
+      "sec_per_rep_us" => cadence,
+      "duration_sec" => duration
+    }
+
+  defp rest(ms), do: %{"kind" => "rest", "duration_ms" => ms}
+  # Projection-only synthetic events also cover terminal recovery, forbidden by the compiler.
+  defp rows(events),
+    do:
+      Inspection.rows(%WorkoutPlan{
+        id: "test",
+        updated_at: ~U[2026-09-10 00:00:00Z],
+        definition_json: %{"events" => events},
+        program_json: %{"events" => events}
+      })
+end

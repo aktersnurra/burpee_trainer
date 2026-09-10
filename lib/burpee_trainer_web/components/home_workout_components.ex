@@ -6,12 +6,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   def workspace(assigns) do
     ~H"""
     <section id="home-ready-recommendation" class="adaptive-home">
-      <div id="home-week-progress">
-        <span>Week of {@state.slot.week_start}</span>
-        <span>
-          {div(@state.slot.completed_sec, 60)} / {div(@state.slot.weekly_target_sec, 60)} min
-        </span>
-      </div>
+      <.week_progress slot={@state.slot} />
       <div id="home-workout-area" aria-busy={to_string(@state.busy?)}>
         <%= if @state.busy? do %>
           <div id="home-update-loading" role="status" aria-label="Updating workout">
@@ -30,7 +25,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             >
               <span class="home-workout-name">{@state.home_selection.plan.name}</span>
               <span class="home-workout-totals">
-                {CreationParameters.duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
+                {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
               </span>
             </button>
           </h1>
@@ -81,14 +76,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   type="button"
                   phx-click="toggle_other"
                   aria-expanded={to_string(@state.alternatives_open?)}
+                  aria-controls="home-alternatives-panel"
                 >
-                  Other workouts
+                  Other workouts <.icon name="hero-chevron-down" class="home-chevron" />
                 </button>
                 <button
                   id="home-filter-toggle"
                   type="button"
                   phx-click="toggle_filters"
                   aria-expanded={to_string(@state.filters_open?)}
+                  aria-controls="home-filters"
                 >
                   Filter
                 </button>
@@ -107,7 +104,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     {CreationParameters.type_label(Atom.to_string(type))}
                   </button>
                 </div>
-                <div role="group" aria-label="Catalog level">
+                <div class="home-filter-level-heading">
+                  <span>Levels</span>
+                  <button id="home-filter-reset" type="button" phx-click="reset_filters">
+                    Reset
+                  </button>
+                </div>
+                <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
                   <button
                     :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
                     id={"home-level-#{level}"}
@@ -120,7 +123,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     {level_label(level)}
                   </button>
                 </div>
-                <button id="home-filter-reset" type="button" phx-click="reset_filters">Reset</button>
+                <p id="home-current-level">
+                  {level_label(@state.current_level)} is your current level.
+                </p>
               </div>
               <div id="home-alternatives-panel" hidden={!@state.alternatives_open?}>
                 <div role="tablist" aria-label="Other workouts">
@@ -165,6 +170,30 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
+  attr(:slot, :map, required: true)
+
+  def week_progress(assigns) do
+    ~H"""
+    <div id="home-week-progress">
+      <div class="home-progress-labels">
+        <span>{duration_label(@slot.completed_sec)} / {duration_label(@slot.weekly_target_sec)}</span>
+        <span id="home-week-number">Week {iso_week(@slot.week_start)}</span>
+      </div>
+      <div
+        id="home-week-track"
+        role="progressbar"
+        aria-label="Weekly training progress"
+        aria-valuemin="0"
+        aria-valuemax={@slot.weekly_target_sec}
+        aria-valuenow={min(@slot.completed_sec, @slot.weekly_target_sec)}
+        aria-valuetext={"#{@slot.completed_sec} of #{@slot.weekly_target_sec} seconds completed"}
+      >
+        <span id="home-week-fill" style={"width: #{progress_percent(@slot)}%"}></span>
+      </div>
+    </div>
+    """
+  end
+
   attr(:rows, :list, required: true)
   attr(:expanded, :any, required: true)
 
@@ -172,11 +201,17 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     ~H"""
     <div id="home-inspection">
       <table>
-        <caption class="sr-only">Exact workout structure</caption>
+        <caption class="sr-only">
+          Exact workout structure. Cadence is prescribed time per rep, not measured active pace.
+          Rest follows each set, including repeat boundaries; a dash means no recovery.
+          Repeats preserve the ordered sets, not authoring blocks. Exact work interval durations are included with cadence.
+        </caption>
         <thead>
           <tr>
-            <th scope="col">Sets / repeats</th>
-            <th scope="col">Prescription and recovery</th>
+            <th scope="col">Sets</th>
+            <th scope="col">Reps</th>
+            <th scope="col">Cadence</th>
+            <th scope="col">Rest</th>
           </tr>
         </thead>
         <tbody :for={row <- @rows} id={row.id}>
@@ -185,26 +220,34 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               <button
                 :if={row.count > 1}
                 type="button"
+                class="home-group-toggle"
                 phx-click="toggle_group"
                 phx-value-id={row.id}
                 aria-expanded={to_string(MapSet.member?(@expanded, row.id))}
                 aria-controls={"#{row.id}-details"}
               >
-                {row.count} ×
+                {row.count} {if length(row.units) == row.count, do: "sets", else: "repeats"}
+                <.icon name="hero-chevron-down" class="home-chevron" />
               </button>
-              <span :if={row.count == 1}>
-                {if row.trailing?, do: "Final recovery", else: "Interval"}
-              </span>
+              <span :if={row.count == 1}>{row_label(row)}</span>
             </th>
-            <td>{summary(row)}</td>
+            <.prescription units={Enum.take(row.units, div(length(row.units), row.count))} />
           </tr>
-          <tr :if={row.count > 1} id={"#{row.id}-details"} hidden={!MapSet.member?(@expanded, row.id)}>
-            <td colspan="2">
-              <ol>
-                <li :for={unit <- row.units} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
-                  {unit_text(unit)}
-                </li>
-              </ol>
+          <tr
+            :if={row.count > 1}
+            id={"#{row.id}-details"}
+            class="home-group-detail"
+            hidden={!MapSet.member?(@expanded, row.id)}
+          >
+            <td colspan="4">
+              <table aria-label="Ordered constituent sets">
+                <tbody>
+                  <tr :for={unit <- row.units} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
+                    <th scope="row">Set {set_number(@rows, unit)}</th>
+                    <.prescription units={[unit]} />
+                  </tr>
+                </tbody>
+              </table>
             </td>
           </tr>
         </tbody>
@@ -213,23 +256,75 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  defp summary(row),
-    do:
-      row.units
-      |> Enum.take(div(length(row.units), row.count))
-      |> Enum.map_join(" / ", &unit_text/1)
+  attr(:units, :list, required: true)
 
-  defp unit_text(unit),
-    do:
-      Enum.map_join(unit.paired, "; ", fn %{program: e} ->
-        case e["kind"] do
-          "work" ->
-            "#{e["reps"]} reps · prescribed cadence #{e["sec_per_rep_us"] / 1_000_000} s/rep · interval #{e["duration_sec"]} s"
+  defp prescription(assigns) do
+    ~H"""
+    <td class="home-prescription-reps">
+      <span :for={unit <- @units}>{work_value(unit, "reps")}</span>
+    </td>
+    <td class="home-prescription-cadence">
+      <span :for={unit <- @units}>
+        {cadence(unit)}
+        <span :if={work(unit)} class="sr-only home-interval">
+          Interval {number(work(unit)["duration_sec"])}s
+        </span>
+      </span>
+    </td>
+    <td class="home-prescription-rest">
+      <span :for={unit <- @units}>{recovery(unit)}</span>
+    </td>
+    """
+  end
 
-          "rest" ->
-            "Recovery #{e["duration_ms"] / 1_000} s"
-        end
-      end)
+  defp work(unit),
+    do: Enum.find_value(unit.paired, &if(&1.program["kind"] == "work", do: &1.program))
+
+  defp work_value(unit, key), do: if(work(unit), do: work(unit)[key], else: "—")
+
+  defp cadence(unit),
+    do: if(work(unit), do: scaled(work(unit)["sec_per_rep_us"], 1_000_000) <> "s", else: "—")
+
+  defp recovery(unit) do
+    case Enum.filter(unit.paired, &(&1.program["kind"] == "rest")) do
+      [] -> "—"
+      rests -> Enum.map_join(rests, " + ", &(scaled(&1.program["duration_ms"], 1_000) <> "s"))
+    end
+  end
+
+  defp row_label(%{trailing?: true}), do: "Final recovery"
+  defp row_label(%{kind: :recovery}), do: "Recovery"
+  defp row_label(_), do: "1 set"
+
+  defp set_number(rows, unit) do
+    rows
+    |> Enum.flat_map(& &1.units)
+    |> Enum.filter(&work/1)
+    |> Enum.find_index(&(hd(&1.paired).index == hd(unit.paired).index))
+    |> Kernel.+(1)
+  end
+
+  # Normal decimal output avoids exponent notation without rounding canonical timing.
+  defp number(value) when is_integer(value), do: Integer.to_string(value)
+
+  defp number(value),
+    do: value |> Decimal.from_float() |> Decimal.normalize() |> Decimal.to_string(:normal)
+
+  defp scaled(value, divisor),
+    do:
+      value
+      |> Decimal.new()
+      |> Decimal.div(divisor)
+      |> Decimal.normalize()
+      |> Decimal.to_string(:normal)
+
+  defp duration_label(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
+  defp duration_label(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} s"
+  defp iso_week(date), do: date |> Date.to_erl() |> :calendar.iso_week_number() |> elem(1)
+  defp progress_percent(%{weekly_target_sec: 0}), do: "0"
+
+  defp progress_percent(slot),
+    do: number(min(100, max(0, slot.completed_sec * 100 / slot.weekly_target_sec)))
 
   defp level_label(:graduated), do: "Graduated"
 
