@@ -241,6 +241,14 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           >
             <td colspan="4">
               <table aria-label="Ordered constituent sets">
+                <thead class="sr-only">
+                  <tr>
+                    <th scope="col">Sets</th>
+                    <th scope="col">Reps</th>
+                    <th scope="col">Cadence</th>
+                    <th scope="col">Rest</th>
+                  </tr>
+                </thead>
                 <tbody>
                   <tr :for={unit <- row.units} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
                     <th scope="row">Set {set_number(@rows, unit)}</th>
@@ -266,7 +274,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     <td class="home-prescription-cadence">
       <span :for={unit <- @units}>
         {cadence(unit)}
-        <span :if={work(unit)} class="sr-only home-interval">
+        <span
+          :if={work(unit)}
+          class={["home-interval", if(exceptional_interval?(unit), do: "block", else: "sr-only")]}
+        >
           Interval {number(work(unit)["duration_sec"])}s
         </span>
       </span>
@@ -284,6 +295,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp cadence(unit),
     do: if(work(unit), do: scaled(work(unit)["sec_per_rep_us"], 1_000_000) <> "s", else: "—")
+
+  # Terminal work can end before the last rep's prescribed cadence elapses.
+  # Compare decimal canonical values, without float arithmetic or display rounding.
+  defp exceptional_interval?(unit) do
+    event = work(unit)
+    interval = event["duration_sec"] |> number() |> Decimal.new()
+    prescribed = Decimal.div(Decimal.new(event["reps"] * event["sec_per_rep_us"]), 1_000_000)
+    not Decimal.equal?(interval, prescribed)
+  end
 
   defp recovery(unit) do
     case Enum.filter(unit.paired, &(&1.program["kind"] == "rest")) do

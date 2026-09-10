@@ -1,6 +1,8 @@
 defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
   use ExUnit.Case, async: true
   import Phoenix.LiveViewTest
+  alias BurpeeTrainer.PlanCompiler
+  alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutPlan}
   alias BurpeeTrainerWeb.HomeWorkoutComponents
 
@@ -36,7 +38,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     [group, final] = rows
     assert group.count == 2
     html = inspection(rows, MapSet.new([group.id]))
-    assert LazyHTML.query(html, "thead th") |> text() == "SetsRepsCadenceRest"
+
+    assert LazyHTML.query(html, "#home-inspection > table > thead th") |> text() ==
+             "SetsRepsCadenceRest"
 
     assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-reps") |> text() ==
              "23"
@@ -59,6 +63,57 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     assert LazyHTML.query(html, "##{group.id} button") |> LazyHTML.text() =~ "2 sets"
     assert LazyHTML.query(html, "##{recovery.id} th") |> text() == "Final recovery"
     assert LazyHTML.query(html, "##{recovery.id} .home-prescription-rest") |> text() == "1.25s"
+  end
+
+  test "compiler-shortened terminal work exposes its exact interval without expanding a group" do
+    attrs = %{
+      "version" => 1,
+      "name" => "Terminal active",
+      "burpee_type" => "six_count",
+      "target_reps" => 4,
+      "target_duration_sec" => 40,
+      "pacing_style" => "even",
+      "rationale" => "Canonical presentation test.",
+      "events" => [
+        %{"kind" => "work", "reps" => 2, "sec_per_rep" => 8.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "rest", "duration_sec" => 10},
+        %{"kind" => "work", "reps" => 2, "sec_per_rep" => 9.0, "sec_per_burpee" => 5.0}
+      ]
+    }
+
+    assert {:ok, definition} = WorkoutDefinition.new(attrs)
+    assert {:ok, program} = PlanCompiler.compile(definition)
+
+    rows =
+      Inspection.rows(%WorkoutPlan{
+        id: "compiled",
+        updated_at: ~U[2026-09-10 00:00:00Z],
+        definition_json: attrs,
+        program_json: ProgramHash.canonical_map(program)
+      })
+
+    [ordinary, terminal] = rows
+    html = inspection(rows)
+
+    assert LazyHTML.query(html, "##{ordinary.id} .home-interval.sr-only") |> text() ==
+             "Interval 16s"
+
+    assert LazyHTML.query(html, "##{terminal.id} .home-interval:not(.sr-only)") |> text() ==
+             "Interval 14s"
+
+    assert LazyHTML.query(html, "##{terminal.id} .home-prescription-cadence") |> text() ==
+             "9s Interval 14s"
+  end
+
+  test "expanded constituents have their own column headers and visible exceptional intervals" do
+    [group] = rows([work(2, 9_000_000, 14), work(2, 9_000_000, 14)])
+    html = inspection([group], MapSet.new([group.id]))
+    table = LazyHTML.query(html, "##{group.id}-details table")
+    assert LazyHTML.query(table, "thead th[scope=col]") |> text() == "SetsRepsCadenceRest"
+    assert LazyHTML.query(table, "tbody th[scope=row]") |> text() == "Set 1Set 2"
+
+    assert LazyHTML.query(table, ".home-interval:not(.sr-only)") |> text() ==
+             "Interval 14s Interval 14s"
   end
 
   test "ordinary fractional and large duration values never use exponent notation or lose precision" do
