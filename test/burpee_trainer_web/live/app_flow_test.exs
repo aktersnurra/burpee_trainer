@@ -88,13 +88,25 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     {:ok, home, _html} = live(conn, ~p"/")
 
-    assert has_element?(
-             home,
-             "#start-recommended-workout[phx-value-plan-id='#{recommendation.selected_workout_plan_id}']"
-           )
+    assert has_element?(home, "#home-action", "Start")
+    home |> element("#home-summary") |> render_click()
 
-    home |> element("#start-recommended-workout") |> render_click()
+    home
+    |> form("#home-adjustment-form", home_adjustment: %{instruction: " \n "})
+    |> render_submit()
+
     started = Workouts.current_started_session(user)
+    assert started.plan_id == recommendation.selected_workout_plan_id
+    assert {:ok, plan} = Workouts.get_library_plan(user, started.plan_id)
+    assert started.program_snapshot == plan.program_json
+    assert started.content_hash == plan.content_hash
+    assert Repo.aggregate(WorkoutSession, :count) == 1
     assert_redirect(home, ~p"/session/#{started.id}")
+    {:ok, runner, _} = live(conn, ~p"/session/#{started.id}")
+
+    assert has_element?(
+             runner,
+             "#burpee-session[data-session-id='#{started.id}'][data-content-hash='#{plan.content_hash}']"
+           )
   end
 end

@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.Policy
-  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{WorkoutSession}
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -22,7 +22,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     {:ok, view, _html} = live(conn, ~p"/")
 
     assert has_element?(view, "#home-ready-recommendation")
-    assert has_element?(view, "#start-recommended-workout")
+    assert has_element?(view, "#home-action")
     refute has_element?(view, "#resume-recommended-workout")
     refute has_element?(view, "#tell-coach-button")
     refute has_element?(view, "#manual-workout-form")
@@ -36,7 +36,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     _recommendation = recommendation_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/")
 
-    view |> element("#start-recommended-workout") |> render_click()
+    view |> form("#home-adjustment-form", home_adjustment: %{instruction: ""}) |> render_submit()
 
     session = Workouts.current_started_session(user)
     assert session.source_kind == :plan
@@ -54,23 +54,23 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       view
       |> render()
       |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#start-recommended-workout")
-      |> LazyHTML.attribute("phx-value-client-session-id")
+      |> LazyHTML.query("input[name=client_session_id]")
+      |> LazyHTML.attribute("value")
 
     params = %{
-      "plan-id" => Integer.to_string(recommendation.selected_workout_plan_id),
-      "client-session-id" => client_session_id
+      "home_adjustment" => %{"instruction" => ""},
+      "client_session_id" => client_session_id
     }
 
     render_click(
       view,
-      "start_recommendation",
-      Map.put(params, "client-session-id", Ecto.UUID.generate())
+      "submit_home_action",
+      Map.put(params, "client_session_id", Ecto.UUID.generate())
     )
 
     assert Repo.aggregate(WorkoutSession, :count) == 0
 
-    render_click(view, "start_recommendation", params)
+    render_click(view, "submit_home_action", params)
 
     [session] = Repo.all(WorkoutSession)
 
@@ -167,77 +167,77 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
-  test "pending candidate actions carry exact draft and rendered selection and Use publishes it",
-       %{
-         conn: conn,
-         user: user
-       } do
-    recommendation = recommendation_fixture(user)
-    slot = slot!(user)
-
-    assert {:ok, recommendation} =
-             Workouts.attach_candidate(user, recommendation.id, %{
-               definition: definition_for(slot, "Use this measured option"),
-               request_text: "Use this measured option",
-               rationale: "A measured alternative."
-             })
-
-    {:ok, view, _html} = live(conn, ~p"/")
-
-    selector =
-      "#use-candidate-button[phx-value-draft-id='#{recommendation.pending_draft_id}'][phx-value-plan-id='#{recommendation.selected_workout_plan_id}']"
-
-    assert has_element?(view, selector)
-
-    assert has_element?(
-             view,
-             "#keep-current-workout-button[phx-value-draft-id='#{recommendation.pending_draft_id}']"
-           )
-
-    view |> element("#use-candidate-button") |> render_click()
-
-    persisted = Workouts.current_coach_recommendation(user)
-    assert persisted.selected_workout_plan_id == recommendation.pending_draft_id
-    assert is_nil(persisted.pending_draft_id)
-    assert Repo.get!(WorkoutPlan, persisted.selected_workout_plan_id).state == :published
-    refute has_element?(view, "#home-pending-candidate")
+  test "mount ensures a stable current-slot selection", %{conn: conn, user: user} do
+    {:ok, view, _} = live(conn, ~p"/")
+    assert has_element?(view, "#home-summary")
+    {:ok, selected} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, reloaded, _} = live(conn, ~p"/")
+    assert has_element?(reloaded, "#home-workout-area")
+    {:ok, same} = Workouts.ensure_home_selection(user, slot!(user))
+    assert selected == same
   end
 
-  test "Retry remains available while no generated recommendation exists", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#retry-recommendation-button")
-    view |> element("#retry-recommendation-button") |> render_click()
-    assert has_element?(view, "#retry-recommendation-button")
+  test "expansion preserves DOM for both transition directions", %{conn: conn, user: user} do
+    recommendation_fixture(user)
+    {:ok, view, _} = live(conn, ~p"/")
+    assert has_element?(view, "#home-expansion[data-open='false']")
+    assert has_element?(view, "#home-expansion-content[inert][aria-hidden='true']")
+    refute has_element?(view, "#desktop-home-nav")
+    view |> element("#home-summary") |> render_click()
+    assert has_element?(view, "#home-expansion[data-open='true']")
+    refute has_element?(view, "#home-expansion-content[inert]")
+    view |> element("#home-summary") |> render_click()
+    assert has_element?(view, "#home-expansion-content[inert]")
+    assert has_element?(view, "#home-adjustment-form")
   end
 
-  test "pending candidate survives reload and rejecting it deletes only the draft", %{
+  test "submit does not trust the previous Start label", %{conn: conn, user: user} do
+    recommendation_fixture(user)
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+
+    view
+    |> form("#home-adjustment-form", home_adjustment: %{instruction: "Less rest"})
+    |> render_submit()
+
+    render_async(view)
+    assert Workouts.current_started_session(user) == nil
+    assert has_element?(view, "#home-action", "Update")
+    assert has_element?(view, "#home-adjustment-error")
+  end
+
+  test "blank submit starts despite prior Update label and old events cannot mutate", %{
     conn: conn,
     user: user
   } do
-    recommendation = recommendation_fixture(user)
-    slot = slot!(user)
+    recommendation_fixture(user)
+    {:ok, view, _} = live(conn, ~p"/")
 
-    assert {:ok, recommendation} =
-             Workouts.attach_candidate(user, recommendation.id, %{
-               definition: definition_for(slot, "Another measured option"),
-               request_text: "Another measured option",
-               rationale: "A measured alternative."
-             })
+    for event <- ["start_recommendation", "use_candidate", "keep_current"] do
+      render_click(view, event, %{})
+    end
 
-    draft_id = recommendation.pending_draft_id
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-pending-candidate")
+    assert Workouts.current_started_session(user) == nil
 
-    {:ok, reloaded, _html} = live(conn, ~p"/")
-    assert has_element?(reloaded, "#home-pending-candidate")
+    view
+    |> form("#home-adjustment-form", home_adjustment: %{instruction: "Less rest"})
+    |> render_change()
 
-    reloaded |> element("#keep-current-workout-button") |> render_click()
+    assert has_element?(view, "#home-action", "Update")
 
-    refute has_element?(reloaded, "#home-pending-candidate")
-    assert {:error, _reason} = Workouts.get_draft(user, draft_id)
+    view
+    |> form("#home-adjustment-form", home_adjustment: %{instruction: "  "})
+    |> render_submit()
 
-    assert Workouts.current_coach_recommendation(user).selected_workout_plan_id ==
-             recommendation.selected_workout_plan_id
+    session = Workouts.current_started_session(user)
+    assert_redirect(view, ~p"/session/#{session.id}")
+  end
+
+  test "malformed adjustment change is ignored", %{conn: conn, user: user} do
+    recommendation_fixture(user)
+    {:ok, view, _} = live(conn, ~p"/")
+    render_click(view, "change_adjustment", %{"home_adjustment" => %{"instruction" => %{}}})
+    assert has_element?(view, "#home-action", "Start")
   end
 
   defp complete_history(user, completed_at, duration_sec) do
