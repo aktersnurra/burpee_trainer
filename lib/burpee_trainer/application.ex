@@ -14,7 +14,9 @@ defmodule BurpeeTrainer.Application do
         {Ecto.Migrator,
          repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
         {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
-        {Phoenix.PubSub, name: BurpeeTrainer.PubSub}
+        {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
+        {Task.Supervisor, name: BurpeeTrainer.CoachMemoryTaskSupervisor, max_children: 2},
+        BurpeeTrainer.Coach.MemorySubscriber
       ] ++
         coach_children() ++
         oidc_children() ++

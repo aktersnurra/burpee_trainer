@@ -489,14 +489,34 @@ defmodule BurpeeTrainer.Workouts do
           pos_integer(),
           recommendation_selection()
         ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def accept_candidate(
-        %User{id: user_id},
-        recommendation_id,
-        draft_id,
-        expected_selection
-      )
-      when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(draft_id) and
-             draft_id > 0 do
+  def accept_candidate(user, recommendation_id, draft_id, expected_selection) do
+    case accept_candidate_without_notification(
+           user,
+           recommendation_id,
+           draft_id,
+           expected_selection
+         ) do
+      {:ok, recommendation} ->
+        case get_library_plan(user, draft_id) do
+          {:ok, plan} -> BurpeeTrainer.Workouts.Finalization.notify(plan)
+          _ -> :ok
+        end
+
+        {:ok, recommendation}
+
+      error ->
+        error
+    end
+  end
+
+  defp accept_candidate_without_notification(
+         %User{id: user_id},
+         recommendation_id,
+         draft_id,
+         expected_selection
+       )
+       when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(draft_id) and
+              draft_id > 0 do
     immediate_lifecycle_transaction(fn ->
       with {:ok, recommendation} <-
              current_candidate(user_id, recommendation_id, draft_id, expected_selection),
@@ -538,8 +558,13 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  def accept_candidate(%User{}, _recommendation_id, _draft_id, _expected_selection),
-    do: {:error, Error.new(:candidate_no_longer_current)}
+  defp accept_candidate_without_notification(
+         %User{},
+         _recommendation_id,
+         _draft_id,
+         _expected_selection
+       ),
+       do: {:error, Error.new(:candidate_no_longer_current)}
 
   @doc "Atomically rejects and deletes the exact pending draft without changing selection."
   @spec reject_candidate(
@@ -696,7 +721,14 @@ defmodule BurpeeTrainer.Workouts do
   @spec publish_draft(User.t(), pos_integer()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
   def publish_draft(%User{} = user, draft_id) when is_integer(draft_id) and draft_id > 0 do
-    immediate_lifecycle_transaction(fn -> publish_unattached_draft(user, draft_id) end)
+    case immediate_lifecycle_transaction(fn -> publish_unattached_draft(user, draft_id) end) do
+      {:ok, plan} ->
+        BurpeeTrainer.Workouts.Finalization.notify(plan)
+        {:ok, plan}
+
+      error ->
+        error
+    end
   end
 
   def publish_draft(%User{}, draft_id),
