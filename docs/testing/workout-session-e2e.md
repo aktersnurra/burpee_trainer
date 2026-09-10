@@ -272,7 +272,12 @@ Blocked: HOME-UPDATE-SUCCESS — external provider credentials and separately gu
 - Open and close: record summary position and expansion intermediate heights in both directions,
   unchanged route, immediate `inert`/`aria-hidden`, and exclusion from keyboard/accessibility navigation.
 - Exact inspection: compare adjacent identical sets, nonuniform repeats and terminal work against
-  persisted canonical events before/after grouping expansion. Trailing recovery is projection-only
+  persisted canonical events before/after grouping expansion. After clicking each group, await its
+  `aria-expanded="true"` and visible controlled detail row before reading its per-unit list. Compare
+  the full ordered per-unit prescriptions (plus ungrouped intervals), not repeated summary rows,
+  with the persisted program's reps, exact cadence and interval duration; capture the expanded DOM.
+  An immediate post-click text read can precede the LiveView update and is not expansion evidence.
+  Trailing recovery is projection-only
   synthetic coverage: the authoritative compiler disallows terminal rest; do not weaken it for E2E.
 - Alternatives: record current/next-level defaults; independent type filters, shared Workouts/Videos
   tabs, reset, stable ranking subsequence and local empty state. Filtering must not select or call a
@@ -306,8 +311,9 @@ conditional real-provider Create/Refine observations.
    report before interacting.
 3. Reload the exact URL. Require the same ID, client UUID, content hash, plan snapshot, and runner
    state restoration; no new session row may appear.
-4. At a compact `390x500` viewport, use the no-camera path, Skip warmup, Start, Pause, Finish early,
-   and confirm.
+4. At a compact `390x500` viewport, use the no-camera path, Skip warmup, Start, await the active
+   workout (not the count-in), Pause, Finish early, and confirm. The persisted capture mode for this
+   no-camera timed runner is `timed`, not the client flow's `no_camera` value.
 5. On completion review, require `#session-completion-review` to be visible and non-inert. Scroll its
    direct overflow container until Save is in view.
 6. Select feedback and require both accessible pressed state and visible computed-style change.

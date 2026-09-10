@@ -382,7 +382,9 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
   end
 
   defp candidate_reps(%{strategy: :catch_up, personal_best: %{reps: reps}} = slot) do
-    {:ok, prescription} = BurpeeTrainer.Coach.CatchUpPolicy.prescription(slot.duration_sec, reps, %{})
+    {:ok, prescription} =
+      BurpeeTrainer.Coach.CatchUpPolicy.prescription(slot.duration_sec, reps, %{})
+
     prescription.ceiling_reps
   end
 
@@ -398,7 +400,11 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
       nil ->
         with {:ok, plan} <- published_plan(user, "Prior-week PB #{run_id}", 1_200),
              {:ok, completed_at} <-
-               BurpeeTrainer.UserTime.resolve_local(Date.add(slot.week_start, -1), ~T[12:00:00], user.timezone) do
+               BurpeeTrainer.UserTime.resolve_local(
+                 Date.add(slot.week_start, -1),
+                 ~T[12:00:00],
+                 user.timezone
+               ) do
           # The guarded fixture inserts historical immutable identity once, then uses the
           # normal schema transition. No production clock or immutability guard is changed.
           Repo.immediate_transaction(fn ->
@@ -422,7 +428,10 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
               |> Repo.insert!()
 
             session
-            |> WorkoutSession.completion_changeset(%{"burpee_count_actual" => plan.target_reps, "duration_sec_actual" => 1_200}, completed_at)
+            |> WorkoutSession.completion_changeset(
+              %{"burpee_count_actual" => plan.target_reps, "duration_sec_actual" => 1_200},
+              completed_at
+            )
             |> Repo.update!()
           end)
         end
@@ -459,7 +468,8 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
 
   defp attach_pending_candidate(user, recommendation, run_id, slot) do
     Workouts.attach_candidate(user, recommendation.id, %{
-      definition: definition("Pending candidate #{run_id}", slot.duration_sec, candidate_reps(slot)),
+      definition:
+        definition("Pending candidate #{run_id}", slot.duration_sec, candidate_reps(slot)),
       request_text: "Create the deterministic pending candidate",
       rationale: "Candidate awaits explicit acceptance"
     })
@@ -575,7 +585,8 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     "Fixture!#{suffix}"
   end
 
-  defp definition(name, duration_sec, reps \\ nil) when is_integer(duration_sec) and duration_sec > 0 do
+  defp definition(name, duration_sec, reps \\ nil)
+       when is_integer(duration_sec) and duration_sec > 0 do
     reps = reps || max(div(duration_sec, 12), 1)
     cadence = duration_sec / reps
 
