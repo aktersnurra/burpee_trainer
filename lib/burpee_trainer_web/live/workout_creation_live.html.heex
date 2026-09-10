@@ -1,68 +1,247 @@
-<Layouts.app flash={@flash} current_user={@current_user} current_scope={assigns[:current_scope]} current_page={:library} navigation?={false} flash?={false}>
+<Layouts.app
+  flash={@flash}
+  current_user={@current_user}
+  current_scope={assigns[:current_scope]}
+  current_page={:library}
+  navigation?={false}
+  flash?={false}
+>
   <div id="workout-creation-page" class="workout-creation" aria-busy={@busy}>
     <div class="creation-body" inert={@editor != nil}>
-      <.link id="creation-close" navigate={~p"/workouts"} class="creation-close" aria-label="Close workout creation">
+      <.link
+        id="creation-close"
+        navigate={~p"/workouts"}
+        class="creation-close"
+        aria-label="Close workout creation"
+      >
         <.icon name="hero-x-mark" class="size-7" />
       </.link>
       <%= if @stage == :configure do %>
-        <.form for={@form} id="creation-form" phx-change="change" phx-submit="generate" class="creation-composition">
+        <.form
+          for={@form}
+          id="creation-form"
+          phx-change="change"
+          phx-submit="generate"
+          class="creation-composition"
+        >
           <h1 class="sr-only">Create a workout</h1>
-          <.choices field="burpee_type" label="Burpee type" options={[{"six_count", "6-count"}, {"navy_seal", "Navy SEAL"}]} selected={@parameters.burpee_type} busy={@busy} />
+          <.choices
+            field="burpee_type"
+            label="Burpee type"
+            options={[{"six_count", "6-count"}, {"navy_seal", "Navy SEAL"}]}
+            selected={@parameters.burpee_type}
+            busy={@busy}
+          />
           <div class="creation-numbers">
             <div class="creation-number">
-              <button type="button" id="duration-decrease" phx-click="step" phx-value-field="duration" phx-value-direction="decrease" aria-label="Decrease duration by one minute" disabled={@busy}>−</button>
-              <.input field={@form[:duration]} id="creation-duration" type="text" aria-label="Duration in minutes:seconds" class="creation-value" inputmode="decimal" maxlength="7" autocomplete="off" phx-debounce="blur" disabled={@busy} />
-              <button type="button" id="duration-increase" phx-click="step" phx-value-field="duration" phx-value-direction="increase" aria-label="Increase duration by one minute" disabled={@busy}>+</button>
+              <button
+                type="button"
+                id="duration-decrease"
+                phx-click="step"
+                phx-value-field="duration"
+                phx-value-direction="decrease"
+                aria-label="Decrease duration by one minute"
+                disabled={@busy}
+              >
+                −
+              </button>
+              <.input
+                field={@form[:duration]}
+                id="creation-duration"
+                type="text"
+                aria-label="Duration in minutes:seconds"
+                class="creation-value"
+                inputmode="decimal"
+                maxlength="7"
+                autocomplete="off"
+                phx-debounce="blur"
+                disabled={@busy}
+              />
+              <button
+                type="button"
+                id="duration-increase"
+                phx-click="step"
+                phx-value-field="duration"
+                phx-value-direction="increase"
+                aria-label="Increase duration by one minute"
+                disabled={@busy}
+              >
+                +
+              </button>
             </div>
             <div class="creation-number creation-number-reps">
-              <button type="button" id="reps-decrease" phx-click="step" phx-value-field="reps" phx-value-direction="decrease" aria-label="Decrease reps by five" disabled={@busy}>−</button>
+              <button
+                type="button"
+                id="reps-decrease"
+                phx-click="step"
+                phx-value-field="reps"
+                phx-value-direction="decrease"
+                aria-label="Decrease reps by five"
+                disabled={@busy}
+              >
+                −
+              </button>
               <div>
-                <.input field={@form[:reps]} id="creation-reps" type="number" aria-label="Total reps" class="creation-value" min="1" max="100000" inputmode="numeric" phx-debounce="blur" disabled={@busy} />
+                <.input
+                  field={@form[:reps]}
+                  id="creation-reps"
+                  type="number"
+                  aria-label="Total reps"
+                  class="creation-value"
+                  min="1"
+                  max="100000"
+                  inputmode="numeric"
+                  phx-debounce="blur"
+                  disabled={@busy}
+                />
                 <span class="creation-unit" aria-hidden="true">reps</span>
               </div>
-              <button type="button" id="reps-increase" phx-click="step" phx-value-field="reps" phx-value-direction="increase" aria-label="Increase reps by five" disabled={@busy}>+</button>
+              <button
+                type="button"
+                id="reps-increase"
+                phx-click="step"
+                phx-value-field="reps"
+                phx-value-direction="increase"
+                aria-label="Increase reps by five"
+                disabled={@busy}
+              >
+                +
+              </button>
             </div>
           </div>
           <div class="creation-direction">
-            <.choices field="pacing" label="Pacing" options={[{"unbroken", "Unbroken"}, {"even", "Even"}]} selected={@parameters.pacing} busy={@busy} />
-            <.choices field="distribution" label="Distribution" options={[{"balanced", "Balanced"}, {"front_loaded", "Front-loaded"}]} selected={@parameters.distribution} busy={@busy} />
-            <button id="creation-note" type="button" class="creation-note" phx-click={JS.push("open_note") |> JS.push_focus()} disabled={@busy}>
+            <.choices
+              field="pacing"
+              label="Pacing"
+              options={[{"unbroken", "Unbroken"}, {"even", "Even"}]}
+              selected={@parameters.pacing}
+              busy={@busy}
+            />
+            <.choices
+              field="distribution"
+              label="Distribution"
+              options={[{"balanced", "Balanced"}, {"front_loaded", "Front-loaded"}]}
+              selected={@parameters.distribution}
+              busy={@busy}
+            />
+            <button
+              id="creation-note"
+              type="button"
+              class="creation-note"
+              phx-click={JS.push("open_note") |> JS.push_focus()}
+              disabled={@busy}
+            >
               {if @parameters.note in [nil, ""], do: "Add a note", else: @parameters.note}
             </button>
           </div>
           <div class="creation-forward">
             <span :if={@busy} role="status">Generating…</span>
-            <button id="creation-generate" type="submit" class="creation-arrow" aria-label="Generate workout" disabled={@busy}>
+            <button
+              id="creation-generate"
+              type="submit"
+              class="creation-arrow"
+              aria-label="Generate workout"
+              disabled={@busy}
+            >
               <.icon name="hero-arrow-right" class="size-7" />
             </button>
           </div>
         </.form>
       <% else %>
         <div id="generated-draft" class="generated-draft">
-          <button id="draft-summary" type="button" phx-click="configure" class="draft-summary" aria-label="Change workout configuration" disabled={@busy}>
-            <span class="draft-type">{CreationParameters.type_label(Atom.to_string(@draft.burpee_type))}</span>
-            <span class="draft-totals">{CreationParameters.duration_label(@draft.target_duration_sec)} <span>·</span> {@draft.target_reps} <small>reps</small> <.icon name="hero-chevron-right" class="size-4" /></span>
-            <span class="draft-pacing">{CreationParameters.pacing_label(@draft.definition_json["pacing_style"])}</span>
+          <button
+            id="draft-summary"
+            type="button"
+            phx-click="configure"
+            class="draft-summary"
+            aria-label="Change workout configuration"
+            disabled={@busy}
+          >
+            <span class="draft-type">
+              {CreationParameters.type_label(Atom.to_string(@draft.burpee_type))}
+            </span>
+            <span class="draft-totals">
+              {CreationParameters.duration_label(@draft.target_duration_sec)}
+              <span>·</span> {@draft.target_reps} <small>reps</small>
+              <.icon name="hero-chevron-right" class="size-4" />
+            </span>
+            <span class="draft-pacing">
+              {CreationParameters.pacing_label(@draft.definition_json["pacing_style"])}
+            </span>
           </button>
           <WorkoutDraftStructure.structure plan={@draft} />
           <div class="draft-actions">
-            <button id="draft-refine" type="button" class="draft-refine" phx-click={JS.push("open_refine") |> JS.push_focus()} disabled={@busy}>Refine</button>
-            <button id="draft-start" type="button" class="draft-start" phx-click="start" phx-value-client-session-id={@client_session_id} phx-disable-with="Starting…" disabled={@busy}>Start <.icon name="hero-arrow-right" class="size-5" /></button>
+            <button
+              id="draft-refine"
+              type="button"
+              class="draft-refine"
+              phx-click={JS.push("open_refine") |> JS.push_focus()}
+              disabled={@busy}
+            >
+              Refine
+            </button>
+            <button
+              id="draft-start"
+              type="button"
+              class="draft-start"
+              phx-click="start"
+              phx-value-client-session-id={@client_session_id}
+              phx-disable-with="Starting…"
+              disabled={@busy}
+            >
+              Start <.icon name="hero-arrow-right" class="size-5" />
+            </button>
           </div>
         </div>
       <% end %>
     </div>
-    <p :if={@error && !@editor} id="creation-error" role="alert" class="creation-error">{@error}</p>
-    <div :if={@editor} id="creation-editor" class="creation-editor" role="dialog" aria-modal="true" aria-labelledby="creation-editor-heading" phx-remove={JS.pop_focus()} phx-window-keydown="close_editor" phx-key="Escape">
+    <p :if={@error && !@editor} id="creation-error" role="alert" class="creation-error">
+      {@error}
+    </p>
+    <div
+      :if={@editor}
+      id="creation-editor"
+      class="creation-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="creation-editor-heading"
+      phx-remove={JS.pop_focus()}
+      phx-window-keydown="close_editor"
+      phx-key="Escape"
+    >
       <.focus_wrap id="creation-editor-focus" phx-mounted={JS.focus(to: "#creation-editor-text")}>
         <.form for={@editor_form} id="creation-editor-form" phx-submit="save_editor">
-          <button id="creation-editor-close" type="button" class="creation-close" aria-label="Close editor" phx-click="close_editor" disabled={@busy}><.icon name="hero-x-mark" class="size-7" /></button>
-          <h2 id="creation-editor-heading">{if @editor == :note, do: "Note", else: "What should change?"}</h2>
-          <.input field={@editor_form[:text]} id="creation-editor-text" type="textarea" aria-labelledby="creation-editor-heading" maxlength={if @editor == :note, do: 300, else: 500} rows="6" class="creation-editor-text" disabled={@busy} />
-          <p :if={@error} id="creation-editor-error" role="alert" class="creation-error">{@error}</p>
+          <button
+            id="creation-editor-close"
+            type="button"
+            class="creation-close"
+            aria-label="Close editor"
+            phx-click="close_editor"
+            disabled={@busy}
+          >
+            <.icon name="hero-x-mark" class="size-7" />
+          </button>
+          <h2 id="creation-editor-heading">
+            {if @editor == :note, do: "Note", else: "What should change?"}
+          </h2>
+          <.input
+            field={@editor_form[:text]}
+            id="creation-editor-text"
+            type="textarea"
+            aria-labelledby="creation-editor-heading"
+            maxlength={if @editor == :note, do: 300, else: 500}
+            rows="6"
+            class="creation-editor-text"
+            disabled={@busy}
+          />
+          <p :if={@error} id="creation-editor-error" role="alert" class="creation-error">
+            {@error}
+          </p>
           <div class="creation-forward">
             <span :if={@busy} role="status">Refining…</span>
-            <button id="creation-editor-save" type="submit" class="draft-start" disabled={@busy}>{if @editor == :note, do: "Done", else: "Refine"}</button>
+            <button id="creation-editor-save" type="submit" class="draft-start" disabled={@busy}>
+              {if @editor == :note, do: "Done", else: "Refine"}
+            </button>
           </div>
         </.form>
       </.focus_wrap>

@@ -34,15 +34,26 @@ defmodule BurpeeTrainerWeb.WorkoutDraftStructure do
 
     ~H"""
     <section id="draft-structure" class="draft-structure" aria-label="Workout structure">
-      <div id="draft-timeline" class="draft-timeline" role="img" aria-label="Dark blocks are sets; light blocks are recovery. Exact intervals follow.">
-        <span :for={{event, index} <- Enum.with_index(@events)}
+      <div
+        id="draft-timeline"
+        class="draft-timeline"
+        role="img"
+        aria-label="Dark blocks are sets; light blocks are recovery. Exact intervals follow."
+      >
+        <span
+          :for={{event, index} <- Enum.with_index(@events)}
           id={"draft-interval-#{index}"}
-          class={["draft-interval", event["kind"] == "work" && "draft-interval-work", event["kind"] == "rest" && "draft-interval-rest"]}
+          class={[
+            "draft-interval",
+            event["kind"] == "work" && "draft-interval-work",
+            event["kind"] == "rest" && "draft-interval-rest"
+          ]}
           data-kind={event["kind"]}
           data-duration={event["duration_sec"]}
           style={"flex-grow: #{event["duration_sec"]};"}
           aria-hidden="true"
-        ></span>
+        >
+        </span>
       </div>
       <div class="draft-legend" aria-hidden="true">
         <span><i class="draft-key-work"></i> Set</span>

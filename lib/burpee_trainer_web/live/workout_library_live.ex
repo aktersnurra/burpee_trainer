@@ -110,7 +110,11 @@ defmodule BurpeeTrainerWeb.WorkoutLibraryLive do
           </p>
         </header>
 
-        <.link id="workout-create-link" navigate={~p"/workouts/new"} class="inline-flex min-h-12 items-center gap-3 text-lg font-medium">
+        <.link
+          id="workout-create-link"
+          navigate={~p"/workouts/new"}
+          class="inline-flex min-h-12 items-center gap-3 text-lg font-medium"
+        >
           Create a workout <.icon name="hero-arrow-right" class="size-5" />
         </.link>
 
