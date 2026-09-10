@@ -149,17 +149,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   No matching workouts. Try changing the filters.
                 </p>
                 <div id="home-alternatives" phx-update="stream">
-                  <button
-                    :for={{id, item} <- @state.streams.alternatives}
-                    id={id}
-                    type="button"
-                    phx-click="select_alternative"
-                    phx-value-id={item.source_id}
-                    phx-value-kind={item.kind}
-                    class="home-alternative"
-                  >
-                    {item.name}
-                  </button>
+                  <.alternative :for={{id, item} <- @state.streams.alternatives} id={id} item={item} />
                 </div>
               </div>
             </section>
@@ -167,6 +157,29 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <% end %>
       </div>
     </section>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:item, :map, required: true)
+
+  def alternative(assigns) do
+    ~H"""
+    <button
+      id={@id}
+      type="button"
+      phx-click="select_alternative"
+      phx-value-id={@item.source_id}
+      phx-value-kind={@item.kind}
+      class="home-alternative"
+    >
+      <span class="home-alternative-name">{@item.name}</span>
+      <span class="home-alternative-metadata">
+        {duration_label(@item.duration_sec)} · {if is_nil(@item.reps),
+          do: "Reps unknown",
+          else: "#{@item.reps} reps"}
+      </span>
+    </button>
     """
   end
 
@@ -215,7 +228,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </tr>
         </thead>
         <tbody :for={row <- @rows} id={row.id}>
-          <tr>
+          <tr class={row.count > 1 && "home-group-summary"}>
             <th scope="row">
               <button
                 :if={row.count > 1}
@@ -225,13 +238,17 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 phx-value-id={row.id}
                 aria-expanded={to_string(MapSet.member?(@expanded, row.id))}
                 aria-controls={"#{row.id}-details"}
+                aria-describedby={"#{row.id}-prescription"}
               >
                 {row.count} {if length(row.units) == row.count, do: "sets", else: "repeats"}
                 <.icon name="hero-chevron-down" class="home-chevron" />
               </button>
+              <span :if={row.count > 1} id={"#{row.id}-prescription"} class="sr-only">
+                {Enum.map_join(shared_units(row), "; ", &prescription_label/1)}
+              </span>
               <span :if={row.count == 1}>{row_label(row)}</span>
             </th>
-            <.prescription units={Enum.take(row.units, div(length(row.units), row.count))} />
+            <.prescription units={shared_units(row)} />
           </tr>
           <tr
             :if={row.count > 1}
@@ -240,22 +257,33 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             hidden={!MapSet.member?(@expanded, row.id)}
           >
             <td colspan="4">
-              <table aria-label="Ordered constituent sets">
-                <thead class="sr-only">
-                  <tr>
-                    <th scope="col">Sets</th>
-                    <th scope="col">Reps</th>
-                    <th scope="col">Cadence</th>
-                    <th scope="col">Rest</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr :for={unit <- row.units} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
-                    <th scope="row">Set {set_number(@rows, unit)}</th>
-                    <.prescription units={[unit]} />
-                  </tr>
-                </tbody>
-              </table>
+              <div class="home-constituents">
+                <p :if={length(row.units) == row.count} class="home-shared-prescription">
+                  Prescription as above
+                </p>
+                <ol aria-label="Ordered constituent sets">
+                  <li :for={unit <- row.units} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
+                    <span class="home-set-label">Set {set_number(@rows, unit)}</span>
+                    <span :if={length(row.units) == row.count} class="sr-only">
+                      {prescription_label(unit)}
+                    </span>
+                    <span :if={length(row.units) != row.count} class="home-constituent-prescription">
+                      {work_value(unit, "reps")} reps · {cadence(unit)} cadence ·
+                      <span class={["home-interval", !exceptional_interval?(unit) && "sr-only"]}>
+                        Interval {number(work(unit)["duration_sec"])}s ·
+                      </span>
+                      {recovery_label(unit)}
+                    </span>
+                    <span
+                      :if={length(row.units) == row.count && exceptional_interval?(unit)}
+                      class="home-interval"
+                      aria-hidden="true"
+                    >
+                      Interval {number(work(unit)["duration_sec"])}s
+                    </span>
+                  </li>
+                </ol>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -287,6 +315,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     </td>
     """
   end
+
+  defp shared_units(row), do: Enum.take(row.units, div(length(row.units), row.count))
+
+  defp prescription_label(unit),
+    do:
+      "#{work_value(unit, "reps")} reps · #{cadence(unit)} cadence · " <>
+        "Interval #{number(work(unit)["duration_sec"])}s · #{recovery_label(unit)}"
+
+  defp recovery_label(unit),
+    do: if(recovery(unit) == "—", do: "No recovery", else: "#{recovery(unit)} rest")
 
   defp work(unit),
     do: Enum.find_value(unit.paired, &if(&1.program["kind"] == "work", do: &1.program))
@@ -338,6 +376,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       |> Decimal.normalize()
       |> Decimal.to_string(:normal)
 
+  defp duration_label(nil), do: "Duration unknown"
   defp duration_label(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
   defp duration_label(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} s"
   defp iso_week(date), do: date |> Date.to_erl() |> :calendar.iso_week_number() |> elem(1)

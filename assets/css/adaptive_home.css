@@ -97,7 +97,7 @@
     opacity 260ms ease,
     visibility 0s;
 }
-/* Reserve focus outline room without moving the spreadsheet off the 28px inset. */
+/* Reserve focus outline room without moving the structure off the 28px inset. */
 .home-expansion-content {
   min-height: 0;
   overflow: hidden;
@@ -105,7 +105,7 @@
   padding-inline: 5px;
 }
 #home-adjustment-form {
-  margin-top: 26px;
+  margin-top: 22px;
 }
 /* Core input's fieldset carries a small DaisyUI font and padding even with a custom input class. */
 #home-adjustment-form .fieldset {
@@ -163,7 +163,7 @@
   outline-offset: 3px;
 }
 #home-inspection {
-  padding-top: 28px;
+  padding-top: 14px;
 }
 #home-inspection table {
   width: 100%;
@@ -203,6 +203,25 @@
 #home-inspection td > span {
   display: block;
 }
+/* One native button owns the entire summary row, including its prescription cells. */
+.home-group-summary {
+  position: relative;
+}
+.home-group-toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.adaptive-home .home-group-toggle:focus-visible {
+  outline: none;
+}
+.home-group-toggle:focus-visible::after {
+  outline: 2px solid #5e615b;
+  outline-offset: 2px;
+}
+.home-group-summary:hover {
+  background: rgb(115 111 104 / 4%);
+}
 .home-group-toggle {
   display: flex;
   align-items: center;
@@ -218,15 +237,42 @@
   color: #807a6f;
   transition: transform 260ms ease;
 }
+.home-group-toggle .home-chevron {
+  width: 14px;
+  height: 14px;
+  color: #625e56;
+}
 [aria-expanded="true"] > .home-chevron {
   transform: rotate(180deg);
 }
 #home-inspection .home-group-detail > td {
   padding: 0;
-  border: 0;
+  color: var(--home-muted);
 }
-#home-inspection .home-group-detail :is(th, td) {
-  color: #756f64;
+.home-constituents {
+  padding: 12px 0 14px 18px;
+  font-size: 13px;
+}
+.home-shared-prescription {
+  margin-bottom: 6px;
+}
+.home-constituents ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.home-constituents li {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding-block: 3px;
+}
+.home-set-label {
+  flex-shrink: 0;
+}
+.home-constituent-prescription {
+  margin-left: auto;
+  text-align: right;
 }
 .home-other-heading {
   display: flex;
@@ -335,6 +381,18 @@
   text-align: left;
   border-bottom: 1px solid #ddd7cd;
   overflow-wrap: anywhere;
+}
+.home-alternative:hover .home-alternative-name {
+  color: #55534c;
+}
+.home-alternative-name,
+.home-alternative-metadata {
+  display: block;
+}
+.home-alternative-metadata {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--home-muted);
 }
 #home-update-loading {
   display: grid;

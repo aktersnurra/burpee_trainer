@@ -289,13 +289,31 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
           plans
           |> Catalog.filter(a.filters, &Catalog.plan_level/1)
-          |> Enum.map(&%{id: "plan-#{&1.id}", source_id: &1.id, kind: :plan, name: &1.name})
+          |> Enum.map(
+            &%{
+              id: "plan-#{&1.id}",
+              source_id: &1.id,
+              kind: :plan,
+              name: &1.name,
+              duration_sec: &1.target_duration_sec,
+              reps: &1.target_reps
+            }
+          )
 
         :videos ->
           BurpeeTrainer.Videos.list_home_videos()
           |> Catalog.order_videos()
           |> Catalog.filter(a.filters, &Catalog.video_level/1)
-          |> Enum.map(&%{id: "video-#{&1.id}", source_id: &1.id, kind: :video, name: &1.name})
+          |> Enum.map(
+            &%{
+              id: "video-#{&1.id}",
+              source_id: &1.id,
+              kind: :video,
+              name: &1.name,
+              duration_sec: &1.duration_sec,
+              reps: &1.burpee_count
+            }
+          )
       end
 
     socket

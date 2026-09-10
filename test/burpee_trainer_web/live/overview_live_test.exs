@@ -89,6 +89,51 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
+  test "alternative rows carry real plan and video metadata without changing direct selection", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation = recommendation_fixture(user)
+    plan = Repo.get!(BurpeeTrainer.Workouts.WorkoutPlan, recommendation.selected_workout_plan_id)
+    video = video_fixture(%{duration_sec: 1200, burpee_count: 60})
+    unknown = video_fixture()
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-filter-toggle") |> render_click()
+
+    for level <- BurpeeTrainer.Levels.all_levels() do
+      selector = "#home-level-#{level}[aria-pressed=false]"
+      if has_element?(view, selector), do: view |> element(selector) |> render_click()
+    end
+
+    assert has_element?(
+             view,
+             "#home-alternative-plan-#{plan.id} .home-alternative-metadata",
+             "#{plan.target_reps} reps"
+           )
+
+    view |> element("#home-alternative-plan-#{plan.id}") |> render_click()
+    assert has_element?(view, "#home-summary", plan.name)
+    assert has_element?(view, "#home-alternatives-panel[hidden]")
+    assert Repo.aggregate(WorkoutSession, :count) == 0
+    view |> element("#home-other-workouts") |> render_click()
+    view |> element("#home-tab-videos") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-alternative-video-#{video.id} .home-alternative-metadata",
+             "20 min · 60 reps"
+           )
+
+    # Unknown-count videos still have no catalog level; metadata must not alter filter eligibility.
+    refute has_element?(view, "#home-alternative-video-#{unknown.id}")
+    assert has_element?(view, "#home-summary", plan.name)
+    view |> element("#home-alternative-video-#{video.id}") |> render_click()
+    session = Workouts.current_started_session(user)
+    assert session.workout_video_id == video.id
+    assert_redirect(view, ~p"/videos/#{video.id}/session/#{session.id}")
+  end
+
   test "Start creates the immutable server session before navigating by session id", %{
     conn: conn,
     user: user

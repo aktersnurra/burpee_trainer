@@ -48,8 +48,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-rest") |> text() ==
              "10s11.25s"
 
-    assert LazyHTML.query(html, "##{group.id}-details .home-prescription-rest") |> text() ==
-             "10s 11.25s 10s 11.25s"
+    assert LazyHTML.query(html, "##{group.id}-details li .home-constituent-prescription")
+           |> text() ==
+             "2 reps · 5s cadence · Interval 10s · 10s rest " <>
+               "3 reps · 6.125s cadence · Interval 18.375s · 11.25s rest " <>
+               "2 reps · 5s cadence · Interval 10s · 10s rest " <>
+               "3 reps · 6.125s cadence · Interval 18.375s · 11.25s rest"
 
     assert LazyHTML.query(html, "##{final.id} .home-prescription-rest") |> text() == "—"
     assert LazyHTML.query(html, "##{final.id} .home-interval") |> text() == "Interval 9s"
@@ -105,15 +109,72 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
              "9s Interval 14s"
   end
 
-  test "expanded constituents have their own column headers and visible exceptional intervals" do
+  test "ordered constituent outline labels shared prescription and keeps exceptional intervals visible" do
     [group] = rows([work(2, 9_000_000, 14), work(2, 9_000_000, 14)])
     html = inspection([group], MapSet.new([group.id]))
-    table = LazyHTML.query(html, "##{group.id}-details table")
-    assert LazyHTML.query(table, "thead th[scope=col]") |> text() == "SetsRepsCadenceRest"
-    assert LazyHTML.query(table, "tbody th[scope=row]") |> text() == "Set 1Set 2"
+    details = LazyHTML.query(html, "##{group.id}-details")
 
-    assert LazyHTML.query(table, ".home-interval:not(.sr-only)") |> text() ==
+    assert LazyHTML.query(details, "ol[aria-label='Ordered constituent sets'] li .home-set-label")
+           |> text() == "Set 1Set 2"
+
+    assert LazyHTML.query(details, "table") |> Enum.empty?()
+
+    assert LazyHTML.query(details, ".home-shared-prescription") |> text() ==
+             "Prescription as above"
+
+    for item <- LazyHTML.query(details, "li") do
+      assert text(item) =~ "2 reps · 9s cadence · Interval 14s · No recovery"
+    end
+
+    assert LazyHTML.query(details, ".home-interval:not(.sr-only)") |> text() ==
              "Interval 14s Interval 14s"
+  end
+
+  test "group activation retains one native button with row-wide target and disclosure context" do
+    [group] = rows([work(2, 5_000_000, 10), work(2, 5_000_000, 10)])
+    html = inspection([group])
+    button = LazyHTML.query(html, "##{group.id} > tr.home-group-summary button[type=button]")
+    assert LazyHTML.attribute(button, "phx-click") == ["toggle_group"]
+    assert LazyHTML.attribute(button, "aria-controls") == ["#{group.id}-details"]
+    assert LazyHTML.attribute(button, "aria-expanded") == ["false"]
+    assert LazyHTML.attribute(button, "aria-describedby") == ["#{group.id}-prescription"]
+
+    assert LazyHTML.query(html, "##{group.id}-prescription") |> text() ==
+             "2 reps · 5s cadence · Interval 10s · No recovery"
+
+    assert LazyHTML.query(html, "##{group.id}-details[hidden]") |> Enum.count() == 1
+    expanded = inspection([group], MapSet.new([group.id]))
+    assert LazyHTML.query(expanded, "button[aria-expanded=true]") |> Enum.count() == 1
+    assert LazyHTML.query(expanded, "##{group.id}-details[hidden]") |> Enum.empty?()
+  end
+
+  test "alternative metadata uses exact known duration and reps without turning unknown into zero" do
+    for {kind, duration, reps, expected} <- [
+          {:plan, 1200, 120, "20 min · 120 reps"},
+          {:video, 61, 4, "1 min 1 s · 4 reps"},
+          {:video, 60, nil, "1 min · Reps unknown"},
+          {:video, nil, nil, "Duration unknown · Reps unknown"}
+        ] do
+      html =
+        render_component(&HomeWorkoutComponents.alternative/1,
+          id: "home-alternative-#{kind}-1",
+          item: %{
+            source_id: 1,
+            kind: kind,
+            name: "Stored item",
+            duration_sec: duration,
+            reps: reps
+          }
+        )
+        |> LazyHTML.from_fragment()
+
+      assert LazyHTML.query(html, ".home-alternative-metadata") |> text() == expected
+
+      assert LazyHTML.query(html, "button[phx-click=select_alternative]")
+             |> LazyHTML.attribute("phx-value-kind") == [to_string(kind)]
+
+      assert LazyHTML.query(html, ".home-alternative-name") |> text() == "Stored item"
+    end
   end
 
   test "ordinary fractional and large duration values never use exponent notation or lose precision" do
