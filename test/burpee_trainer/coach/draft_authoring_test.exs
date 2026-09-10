@@ -557,8 +557,8 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     req =
       request(counter, fn conn ->
         # Simulates loss of the log store after the instruction was persisted.
-        Repo.delete_all(from e in DesignEntry, where: e.design_session_id == ^context.id)
-        Repo.delete_all(from s in BurpeeTrainer.Coach.DesignSession, where: s.id == ^context.id)
+        Repo.delete_all(from(e in DesignEntry, where: e.design_session_id == ^context.id))
+        Repo.delete_all(from(s in BurpeeTrainer.Coach.DesignSession, where: s.id == ^context.id))
         Req.Test.transport_error(conn, :timeout)
       end)
 
