@@ -85,9 +85,10 @@ defmodule BurpeeTrainer.Coach.Context do
       with {:ok, _} <- owned_session(user, session_id) do
         {:ok,
          Repo.all(
-           from e in DesignEntry,
+           from(e in DesignEntry,
              where: e.design_session_id == ^session_id,
              order_by: [asc: e.id]
+           )
          )}
       end
     end)

@@ -12,9 +12,10 @@ defmodule BurpeeTrainer.Coach.Memory do
 
     memories =
       Repo.all(
-        from m in WorkoutMemory,
+        from(m in WorkoutMemory,
           where: m.user_id == ^user.id,
           order_by: [asc: m.id]
+        )
       )
 
     %{
