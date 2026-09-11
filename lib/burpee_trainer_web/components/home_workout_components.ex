@@ -36,7 +36,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               inert={!@state.expanded?}
               aria-hidden={to_string(!@state.expanded?)}
             >
-              <.inspection rows={@state.inspection_rows} expanded={@state.expanded_groups} />
+              <.inspection
+                rows={@state.inspection_rows}
+                expanded={@state.expanded_groups}
+                pacing_style={@state.home_selection.plan.definition_json["pacing_style"]}
+              />
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
                 <.form
                   for={@state.adjustment_form}
@@ -64,9 +68,24 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   <p id="home-adjustment-error" role="status" class="home-local-message">
                     {@state.local_error}
                   </p>
-                  <button id="home-action" type="submit" class="home-action">
-                    {if String.trim(@state.instruction) == "", do: "Start", else: "Update"}
-                    <.icon name="hero-arrow-right" class="size-4" />
+                  <button
+                    id="home-action"
+                    type="submit"
+                    class="home-action"
+                    aria-label={action_label(@state.instruction)}
+                    title={action_label(@state.instruction)}
+                  >
+                    <span class="sr-only">{action_label(@state.instruction)}</span>
+                    <span aria-hidden="true">
+                      <.icon
+                        name={
+                          if String.trim(@state.instruction) == "",
+                            do: "hero-play",
+                            else: "hero-arrow-path"
+                        }
+                        class="size-5"
+                      />
+                    </span>
                   </button>
                 </.form>
               </div>
@@ -98,12 +117,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   </div>
                   <button
                     id="home-filter-toggle"
+                    aria-label="Filter"
+                    title="Filter"
                     type="button"
                     phx-click="toggle_filters"
                     aria-expanded={to_string(@state.filters_open?)}
                     aria-controls="home-filters"
                   >
-                    Filter
+                    <span aria-hidden="true">
+                      <.icon name="hero-adjustments-horizontal" class="size-5" />
+                    </span>
                   </button>
                 </div>
                 <div :if={@state.filters_open?} id="home-filters">
@@ -212,20 +235,34 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   attr(:rows, :list, required: true)
   attr(:expanded, :any, required: true)
 
+  attr(:pacing_style, :string, default: "even")
+
   def inspection(assigns) do
+    assigns = assign(assigns, :show_cadence?, show_cadence?(assigns.rows, assigns.pacing_style))
+
     ~H"""
-    <div id="home-inspection">
+    <div
+      id="home-inspection"
+      data-cadence={to_string(@show_cadence?)}
+      role="region"
+      tabindex="0"
+      aria-label="Workout structure. Scroll horizontally if needed to read exact timings."
+    >
       <table>
         <caption class="sr-only">
-          Exact workout structure. Cadence is prescribed time per rep, not measured active pace.
-          Rest follows each set, including repeat boundaries; a dash means no recovery.
-          Repeats preserve the ordered sets, not authoring blocks. Exact work interval durations are included with cadence.
+          Exact workout structure. Pace is prescribed active seconds per burpee, not measured performance.
+          Cadence is prescribed seconds from one rep start to the next.
+          Rest is the total pause after the last burpee finishes until the next set starts,
+          including the final cadence gap and any explicit recovery; a dash means no recovery.
+          Repeats preserve the ordered sets, not authoring blocks. Interval is canonical work duration,
+          including its cadence gap; do not add that interval to Rest to calculate total time.
         </caption>
         <thead>
           <tr>
             <th scope="col">Sets</th>
             <th scope="col">Reps</th>
-            <th scope="col">Cadence</th>
+            <th scope="col">Pace</th>
+            <th :if={@show_cadence?} scope="col">Cadence</th>
             <th scope="col">Rest</th>
           </tr>
         </thead>
@@ -250,7 +287,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </span>
               <span :if={row.count == 1}>{row_label(row)}</span>
             </th>
-            <.prescription units={shared_units(row)} />
+            <.prescription units={shared_units(row)} show_cadence?={@show_cadence?} />
           </tr>
           <tr
             :if={row.count > 1}
@@ -258,7 +295,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             class="home-group-detail"
             hidden={!MapSet.member?(@expanded, row.id)}
           >
-            <td colspan="4">
+            <td colspan={if @show_cadence?, do: 5, else: 4}>
               <div class="home-constituents">
                 <p :if={length(row.units) == row.count} class="home-shared-prescription">
                   Prescription as above
@@ -270,7 +307,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                       {prescription_label(unit)}
                     </span>
                     <span :if={length(row.units) != row.count} class="home-constituent-prescription">
-                      {work_value(unit, "reps")} reps · {cadence(unit)} cadence ·
+                      {work_value(unit, "reps")} reps · {pace(unit)} pace ·
+                      <span :if={@show_cadence?}>{cadence(unit)}    cadence · </span>
                       <span class={["home-interval", !exceptional_interval?(unit) && "sr-only"]}>
                         Interval {number(work(unit)["duration_sec"])}s ·
                       </span>
@@ -295,13 +333,25 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   end
 
   attr(:units, :list, required: true)
+  attr(:show_cadence?, :boolean, required: true)
 
   defp prescription(assigns) do
     ~H"""
     <td class="home-prescription-reps">
       <span :for={unit <- @units}>{work_value(unit, "reps")}</span>
     </td>
-    <td class="home-prescription-cadence">
+    <td class="home-prescription-pace">
+      <span :for={unit <- @units}>
+        {pace(unit)}
+        <span
+          :if={!@show_cadence? && work(unit)}
+          class={["home-interval", if(exceptional_interval?(unit), do: "block", else: "sr-only")]}
+        >
+          Interval {number(work(unit)["duration_sec"])}s
+        </span>
+      </span>
+    </td>
+    <td :if={@show_cadence?} class="home-prescription-cadence">
       <span :for={unit <- @units}>
         {cadence(unit)}
         <span
@@ -322,7 +372,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp prescription_label(unit),
     do:
-      "#{work_value(unit, "reps")} reps · #{cadence(unit)} cadence · " <>
+      "#{work_value(unit, "reps")} reps · #{pace(unit)} pace · #{cadence(unit)} cadence · " <>
         "Interval #{number(work(unit)["duration_sec"])}s · #{recovery_label(unit)}"
 
   defp recovery_label(unit),
@@ -346,11 +396,40 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   end
 
   defp recovery(unit) do
-    case Enum.filter(unit.paired, &(&1.program["kind"] == "rest")) do
-      [] -> "—"
-      rests -> Enum.map_join(rests, " + ", &(scaled(&1.program["duration_ms"], 1_000) <> "s"))
-    end
+    explicit_ms =
+      unit.paired
+      |> Enum.filter(&(&1.program["kind"] == "rest"))
+      |> Enum.reduce(0, &(&1.program["duration_ms"] + &2))
+
+    tail_us =
+      if event = work(unit) do
+        active_end_us = (event["reps"] - 1) * event["sec_per_rep_us"] + event["sec_per_burpee_us"]
+        # Compiler work timing is microsecond-exact; its float duration can contain
+        # binary arithmetic noise. Recover that precision before subtracting.
+        round(event["duration_sec"] * 1_000_000) - active_end_us
+      else
+        0
+      end
+
+    total_us = tail_us + explicit_ms * 1_000
+    if total_us == 0, do: "—", else: scaled(total_us, 1_000_000) <> "s"
   end
+
+  defp pace(unit),
+    do: if(work(unit), do: scaled(work(unit)["sec_per_burpee_us"], 1_000_000) <> "s", else: "—")
+
+  # Style is a label, not a validator of timings. Never hide unequal actual values.
+  defp show_cadence?(rows, style) do
+    style != "unbroken" or
+      Enum.any?(rows, fn row ->
+        Enum.any?(row.events, fn event ->
+          event["kind"] == "work" and event["sec_per_rep_us"] != event["sec_per_burpee_us"]
+        end)
+      end)
+  end
+
+  defp action_label(instruction),
+    do: if(String.trim(instruction) == "", do: "Start", else: "Update")
 
   defp row_label(%{trailing?: true}), do: "Final recovery"
   defp row_label(%{kind: :recovery}), do: "Recovery"

@@ -32,7 +32,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     end
   end
 
-  test "four compact columns retain cadence, interval and ordered nonuniform recoveries" do
+  test "pacing columns retain cadence, interval and ordered nonuniform recoveries" do
     events = [work(2, 5_000_000, 10), rest(10_000), work(3, 6_125_000, 18.375), rest(11_250)]
     rows = rows(events ++ events ++ [work(2, 5_000_000, 9)])
     [group, final] = rows
@@ -40,7 +40,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     html = inspection(rows, MapSet.new([group.id]))
 
     assert LazyHTML.query(html, "#home-inspection > table > thead th") |> text() ==
-             "SetsRepsCadenceRest"
+             "SetsRepsPaceCadenceRest"
 
     assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-reps") |> text() ==
              "23"
@@ -50,10 +50,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
 
     assert LazyHTML.query(html, "##{group.id}-details li .home-constituent-prescription")
            |> text() ==
-             "2 reps · 5s cadence · Interval 10s · 10s rest " <>
-               "3 reps · 6.125s cadence · Interval 18.375s · 11.25s rest " <>
-               "2 reps · 5s cadence · Interval 10s · 10s rest " <>
-               "3 reps · 6.125s cadence · Interval 18.375s · 11.25s rest"
+             "2 reps · 5s pace · 5s cadence · Interval 10s · 10s rest " <>
+               "3 reps · 6.125s pace · 6.125s cadence · Interval 18.375s · 11.25s rest " <>
+               "2 reps · 5s pace · 5s cadence · Interval 10s · 10s rest " <>
+               "3 reps · 6.125s pace · 6.125s cadence · Interval 18.375s · 11.25s rest"
 
     assert LazyHTML.query(html, "##{final.id} .home-prescription-rest") |> text() == "—"
     assert LazyHTML.query(html, "##{final.id} .home-interval") |> text() == "Interval 9s"
@@ -123,7 +123,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
              "Prescription as above"
 
     for item <- LazyHTML.query(details, "li") do
-      assert text(item) =~ "2 reps · 9s cadence · Interval 14s · No recovery"
+      assert text(item) =~ "2 reps · 5s pace · 9s cadence · Interval 14s · No recovery"
     end
 
     assert LazyHTML.query(details, ".home-interval:not(.sr-only)") |> text() ==
@@ -140,7 +140,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     assert LazyHTML.attribute(button, "aria-describedby") == ["#{group.id}-prescription"]
 
     assert LazyHTML.query(html, "##{group.id}-prescription") |> text() ==
-             "2 reps · 5s cadence · Interval 10s · No recovery"
+             "2 reps · 5s pace · 5s cadence · Interval 10s · No recovery"
 
     assert LazyHTML.query(html, "##{group.id}-details[hidden]") |> Enum.count() == 1
     expanded = inspection([group], MapSet.new([group.id]))
@@ -185,11 +185,132 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     refute LazyHTML.text(html) =~ ~r/\d[eE][+-]?\d/
   end
 
+  test "validated pacing layouts merge only the real pause between sets" do
+    even = definition_work(20, 8, 5)
+    unbroken = definition_work(20, 8, 8)
+
+    for {style, events, duration, rests, headers} <- [
+          {"even", [even, definition_rest(48), even], 365, ["51s", "—"],
+           "SetsRepsPaceCadenceRest"},
+          {"even", [even, even], 317, ["3s", "—"], "SetsRepsPaceCadenceRest"},
+          {"even", [even, definition_rest(20), definition_rest(28), even], 365, ["51s", "—"],
+           "SetsRepsPaceCadenceRest"},
+          {"unbroken", [unbroken, definition_rest(48), unbroken], 368, ["48s", "—"],
+           "SetsRepsPaceRest"},
+          {"unbroken", [even, definition_rest(48), unbroken], 368, ["51s", "—"],
+           "SetsRepsPaceCadenceRest"},
+          {"unbroken", [even], 157, ["—"], "SetsRepsPaceCadenceRest"},
+          {"unbroken", [unbroken], 160, ["—"], "SetsRepsPaceRest"},
+          {"even", [definition_rest(2), even, even], 319, ["2s", "3s", "—"],
+           "SetsRepsPaceCadenceRest"}
+        ] do
+      plan = compiled_plan(style, events, duration)
+      rows = Inspection.rows(plan)
+      html = inspection(rows, MapSet.new(), style)
+      assert LazyHTML.query(html, "thead th") |> text() == headers
+      assert Enum.map(LazyHTML.query(html, ".home-prescription-rest > span"), &text/1) == rests
+      assert Inspection.flatten(rows) == plan.program_json["events"]
+      assert LazyHTML.query(html, "caption") |> text() =~ "not measured"
+      assert LazyHTML.query(html, "caption") |> text() =~ "last burpee finishes"
+    end
+  end
+
+  test "real compiled microsecond pace and summed recovery stay exact without scientific notation" do
+    plan =
+      compiled_plan(
+        "even",
+        [
+          definition_work(1, 1200.000001, 1199.999999),
+          definition_rest(0.001),
+          definition_rest(0.002),
+          definition_work(1, 1, 0.996999)
+        ],
+        1201
+      )
+
+    html = inspection(Inspection.rows(plan))
+    assert LazyHTML.query(html, ".home-prescription-pace") |> text() =~ "1199.999999s"
+    assert LazyHTML.query(html, ".home-prescription-cadence") |> text() =~ "1200.000001s"
+    assert LazyHTML.query(html, ".home-prescription-rest") |> text() == "0.003002s —"
+    refute text(html) =~ ~r/\d[eE][+-]?\d/
+  end
+
+  test "inspection keeps definitions accessible and exact timing reachable without permanent body copy" do
+    html = inspection(Inspection.rows(compiled_plan("even", [definition_work(20, 8, 5)], 157)))
+
+    assert LazyHTML.query(html, "#home-inspection[role=region][tabindex='0'][aria-label]")
+           |> Enum.count() == 1
+
+    assert LazyHTML.query(html, "#home-pacing-key") |> Enum.empty?()
+
+    assert LazyHTML.query(html, "caption.sr-only") |> text() =~
+             "Pace is prescribed active seconds"
+
+    assert LazyHTML.query(html, ".home-interval:not(.sr-only)") |> text() == "Interval 157s"
+  end
+
+  test "terminal floating-point representation cannot invent a sub-microsecond rest" do
+    plan = compiled_plan("even", [definition_work(4, 0.282, 0.154)], 1)
+    html = inspection(Inspection.rows(plan))
+    assert LazyHTML.query(html, ".home-prescription-rest") |> text() == "—"
+  end
+
+  test "real compiled grouped recovery is per set and unequal recovery never groups" do
+    w = definition_work(20, 8, 5)
+
+    for {second_rest, duration, counts} <- [{48, 573, [2, 1]}, {49, 574, [1, 1, 1]}] do
+      plan =
+        compiled_plan(
+          "even",
+          [w, definition_rest(48), w, definition_rest(second_rest), w],
+          duration
+        )
+
+      rows = Inspection.rows(plan)
+      assert Enum.map(rows, & &1.count) == counts
+      html = inspection(rows, MapSet.new(Enum.map(rows, & &1.id)))
+      assert LazyHTML.query(html, ".home-prescription-rest") |> text() =~ "51s"
+      assert Inspection.flatten(rows) == plan.program_json["events"]
+    end
+  end
+
+  defp definition_work(reps, cadence, active),
+    do: %{"kind" => "work", "reps" => reps, "sec_per_rep" => cadence, "sec_per_burpee" => active}
+
+  defp definition_rest(seconds), do: %{"kind" => "rest", "duration_sec" => seconds}
+
+  defp compiled_plan(style, events, duration) do
+    attrs = %{
+      "version" => 1,
+      "name" => "Pacing regression",
+      "burpee_type" => "six_count",
+      "target_reps" => Enum.sum(Enum.map(events, &Map.get(&1, "reps", 0))),
+      "target_duration_sec" => duration,
+      "pacing_style" => style,
+      "rationale" => "Validated presentation regression",
+      "events" => events
+    }
+
+    assert {:ok, definition} = WorkoutDefinition.new(attrs)
+    assert {:ok, program} = PlanCompiler.compile(definition)
+
+    %WorkoutPlan{
+      id: "pacing",
+      updated_at: ~U[2026-09-10 00:00:00Z],
+      definition_json: WorkoutDefinition.canonical_map(definition),
+      program_json: ProgramHash.canonical_map(program)
+    }
+  end
+
   defp text(html), do: html |> LazyHTML.text() |> String.replace(~r/\s+/, " ") |> String.trim()
 
-  defp inspection(rows, expanded \\ MapSet.new()),
+  defp inspection(rows, expanded \\ MapSet.new(), style \\ "even"),
     do:
-      render_component(&HomeWorkoutComponents.inspection/1, rows: rows, expanded: expanded)
+      render_component(&HomeWorkoutComponents.inspection/1,
+        rows: rows,
+        expanded: expanded,
+        pacing_style: style
+      )
       |> LazyHTML.from_fragment()
 
   defp work(reps, cadence, duration),
@@ -197,6 +318,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
       "kind" => "work",
       "reps" => reps,
       "sec_per_rep_us" => cadence,
+      "sec_per_burpee_us" => min(cadence, round(duration * 1_000_000) - (reps - 1) * cadence),
       "duration_sec" => duration
     }
 

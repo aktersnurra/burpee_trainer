@@ -138,11 +138,12 @@
 .home-action {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 4px;
+  min-width: 44px;
   min-height: 44px;
   margin: 12px 0 0 auto;
-  padding: 8px 2px 8px 20px;
+  padding: 10px;
   font-size: 16px;
   transition: opacity 260ms ease;
 }
@@ -168,6 +169,7 @@
 }
 #home-inspection {
   padding-top: 14px;
+  overflow-x: auto;
 }
 #home-inspection table {
   width: 100%;
@@ -189,23 +191,38 @@
   padding-block: 3px;
 }
 #home-inspection thead th {
+  white-space: nowrap;
   color: var(--home-muted);
 }
 #home-inspection :is(th, td):first-child {
-  width: 29%;
+  width: 28%;
   text-align: left;
 }
 #home-inspection :is(th, td):nth-child(2) {
-  width: 10%;
+  width: 12%;
+  padding-left: 8px;
 }
-#home-inspection :is(th, td):nth-child(3) {
-  width: 34%;
+#home-inspection :is(th, td):nth-child(n + 3) {
+  width: 30%;
+  padding-left: 8px;
 }
-#home-inspection :is(th, td):nth-child(4) {
-  width: 27%;
+#home-inspection[data-cadence="true"] :is(th, td):first-child {
+  width: 24%;
+}
+#home-inspection[data-cadence="true"] :is(th, td):nth-child(n + 3) {
+  width: 22%;
 }
 #home-inspection td > span {
   display: block;
+  white-space: nowrap;
+}
+.home-interval {
+  font-size: 12px;
+  white-space: nowrap;
+}
+#home-inspection:focus-visible {
+  outline: 2px solid #5e615b;
+  outline-offset: 3px;
 }
 /* One native button owns the entire summary row, including its prescription cells. */
 .home-group-summary {
@@ -299,15 +316,16 @@
 }
 #home-filter-toggle {
   min-height: 44px;
-  padding-block: 10px;
-  padding-left: 12px;
-  font-size: 14px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
   color: #817b70;
 }
 #home-filter-toggle[aria-expanded="true"] {
   color: #25231e;
-  text-decoration: underline;
-  text-underline-offset: 5px;
+  box-shadow: inset 0 -1px 0 currentColor;
 }
 #home-filters {
   padding: 20px 0 14px;

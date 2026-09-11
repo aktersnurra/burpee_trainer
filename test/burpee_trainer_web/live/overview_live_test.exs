@@ -403,6 +403,46 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert_redirect(view, ~p"/session/#{session.id}")
   end
 
+  test "icon actions retain accessible server-derived names and whitespace semantics", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation_fixture(user)
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+
+    for {instruction, name, icon} <- [
+          {"", "Start", "play"},
+          {"  \n\t", "Start", "play"},
+          {"Less rest", "Update", "arrow-path"}
+        ] do
+      view
+      |> form("#home-adjustment-form", home_adjustment: %{instruction: instruction})
+      |> render_change()
+
+      assert has_element?(
+               view,
+               "#home-action[type=submit][aria-label='#{name}'][title='#{name}'] [aria-hidden=true] .hero-#{icon}"
+             )
+    end
+
+    view |> element("#home-other-workouts") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-filter-toggle[aria-label=Filter][title=Filter][aria-expanded=false] [aria-hidden=true] .hero-adjustments-horizontal"
+           )
+
+    view |> element("#home-filter-toggle") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-filter-toggle[aria-expanded=true][aria-controls=home-filters]"
+           )
+
+    assert Workouts.current_started_session(user) == nil
+  end
+
   test "malformed adjustment change is ignored", %{conn: conn, user: user} do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
