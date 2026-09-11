@@ -59,10 +59,48 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert Repo.reload!(corrupt) == corrupt
   end
 
+  test "Other workouts toolbar keeps Filter adjacent to tabs and controls above results", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation_fixture(user)
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+    assert has_element?(view, "#home-alternatives-panel[hidden] #home-alternatives-toolbar")
+    refute has_element?(view, ".home-other-heading #home-filter-toggle")
+    view |> element("#home-other-workouts") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-alternatives-panel:not([hidden]) #home-alternatives-toolbar > [role=tablist]"
+           )
+
+    assert has_element?(view, "#home-alternatives-toolbar > [role=tablist] + #home-filter-toggle")
+    refute has_element?(view, "[role=tablist] #home-filter-toggle")
+    assert has_element?(view, "#home-tab-workouts[role=tab][aria-selected=true]")
+    view |> element("#home-filter-toggle") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-filter-toggle[aria-expanded=true][aria-controls=home-filters]"
+           )
+
+    assert has_element?(view, "#home-alternatives-toolbar + #home-filters")
+    assert has_element?(view, "#home-filters ~ #home-alternatives")
+    view |> element("#home-type-six_count") |> render_click()
+    view |> element("#home-tab-videos") |> render_click()
+    assert has_element?(view, "#home-type-six_count[aria-pressed=false]")
+    view |> element("#home-filter-reset") |> render_click()
+    assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
+    view |> element("#home-other-workouts") |> render_click()
+    assert has_element?(view, "#home-alternatives-panel[hidden] #home-filter-toggle")
+  end
+
   test "Home filters survive the browser button's empty value metadata", %{conn: conn, user: user} do
     recommendation_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
+    view |> element("#home-other-workouts") |> render_click()
     view |> element("#home-filter-toggle") |> render_click()
 
     assert has_element?(view, "#home-current-level", "1A is your current level.")
@@ -99,6 +137,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     unknown = video_fixture()
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
+    view |> element("#home-other-workouts") |> render_click()
     view |> element("#home-filter-toggle") |> render_click()
 
     for level <- BurpeeTrainer.Levels.all_levels() do

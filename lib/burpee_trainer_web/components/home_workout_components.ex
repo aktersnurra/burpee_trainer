@@ -80,66 +80,68 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 >
                   Other workouts <.icon name="hero-chevron-down" class="home-chevron" />
                 </button>
-                <button
-                  id="home-filter-toggle"
-                  type="button"
-                  phx-click="toggle_filters"
-                  aria-expanded={to_string(@state.filters_open?)}
-                  aria-controls="home-filters"
-                >
-                  Filter
-                </button>
-              </div>
-              <div :if={@state.filters_open?} id="home-filters">
-                <div role="group" aria-label="Workout type">
-                  <button
-                    :for={type <- [:six_count, :navy_seal]}
-                    id={"home-type-#{type}"}
-                    type="button"
-                    phx-click="filter"
-                    phx-value-kind="type"
-                    phx-value-filter={type}
-                    aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
-                  >
-                    {CreationParameters.type_label(Atom.to_string(type))}
-                  </button>
-                </div>
-                <div class="home-filter-level-heading">
-                  <span>Levels</span>
-                  <button id="home-filter-reset" type="button" phx-click="reset_filters">
-                    Reset
-                  </button>
-                </div>
-                <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
-                  <button
-                    :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
-                    id={"home-level-#{level}"}
-                    type="button"
-                    phx-click="filter"
-                    phx-value-kind="level"
-                    phx-value-filter={level}
-                    aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
-                  >
-                    {level_label(level)}
-                  </button>
-                </div>
-                <p id="home-current-level">
-                  {level_label(@state.current_level)} is your current level.
-                </p>
               </div>
               <div id="home-alternatives-panel" hidden={!@state.alternatives_open?}>
-                <div role="tablist" aria-label="Other workouts">
+                <div id="home-alternatives-toolbar">
+                  <div role="tablist" aria-label="Other workouts">
+                    <button
+                      :for={tab <- [:workouts, :videos]}
+                      id={"home-tab-#{tab}"}
+                      role="tab"
+                      type="button"
+                      phx-click="tab"
+                      phx-value-tab={tab}
+                      aria-selected={to_string(@state.active_tab == tab)}
+                    >
+                      {if tab == :workouts, do: "Workouts", else: "Videos"}
+                    </button>
+                  </div>
                   <button
-                    :for={tab <- [:workouts, :videos]}
-                    id={"home-tab-#{tab}"}
-                    role="tab"
+                    id="home-filter-toggle"
                     type="button"
-                    phx-click="tab"
-                    phx-value-tab={tab}
-                    aria-selected={to_string(@state.active_tab == tab)}
+                    phx-click="toggle_filters"
+                    aria-expanded={to_string(@state.filters_open?)}
+                    aria-controls="home-filters"
                   >
-                    {if tab == :workouts, do: "Workouts", else: "Videos"}
+                    Filter
                   </button>
+                </div>
+                <div :if={@state.filters_open?} id="home-filters">
+                  <div role="group" aria-label="Workout type">
+                    <button
+                      :for={type <- [:six_count, :navy_seal]}
+                      id={"home-type-#{type}"}
+                      type="button"
+                      phx-click="filter"
+                      phx-value-kind="type"
+                      phx-value-filter={type}
+                      aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
+                    >
+                      {CreationParameters.type_label(Atom.to_string(type))}
+                    </button>
+                  </div>
+                  <div class="home-filter-level-heading">
+                    <span>Levels</span>
+                    <button id="home-filter-reset" type="button" phx-click="reset_filters">
+                      Reset
+                    </button>
+                  </div>
+                  <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
+                    <button
+                      :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
+                      id={"home-level-#{level}"}
+                      type="button"
+                      phx-click="filter"
+                      phx-value-kind="level"
+                      phx-value-filter={level}
+                      aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
+                    >
+                      {level_label(level)}
+                    </button>
+                  </div>
+                  <p id="home-current-level">
+                    {level_label(@state.current_level)} is your current level.
+                  </p>
                 </div>
                 <p
                   :if={@state.alternatives_empty?}
