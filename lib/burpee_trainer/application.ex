@@ -15,17 +15,14 @@ defmodule BurpeeTrainer.Application do
          repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
         {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
-        {Task.Supervisor, name: BurpeeTrainer.CoachMemoryTaskSupervisor, max_children: 2},
+        # Uncapped: each task is one user-requested review or a local memory write;
+        # a cap only drops classifications and workout memories under load.
+        {Task.Supervisor, name: BurpeeTrainer.CoachMemoryTaskSupervisor},
         BurpeeTrainer.Coach.MemorySubscriber
       ] ++
         coach_children() ++
         oidc_children() ++
-        [
-          # Start a worker by calling: BurpeeTrainer.Worker.start_link(arg)
-          # {BurpeeTrainer.Worker, arg},
-          # Start to serve requests, typically the last entry
-          BurpeeTrainerWeb.Endpoint
-        ]
+        [BurpeeTrainerWeb.Endpoint]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

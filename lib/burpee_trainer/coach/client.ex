@@ -1,6 +1,7 @@
 defmodule BurpeeTrainer.Coach.Client do
   @moduledoc "One-call Req boundary for structured workout authoring."
 
+  alias BurpeeTrainer.Coach.{PhasedWorkoutDefinition, WorkoutRequest}
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.Error
 
@@ -46,13 +47,16 @@ defmodule BurpeeTrainer.Coach.Client do
 
   defp complete_with_config(messages, opts, config) do
     with {:ok, {schema_name, schema}} <-
-           response_schema(Keyword.get(opts, :response_kind, :workout_definition)),
+           response_schema(
+             Keyword.get(opts, :response_kind, :workout_definition),
+             Keyword.get(opts, :confirmed_request)
+           ),
          :ok <- require_enabled(config),
          {:ok, url} <- required(config, :url),
          :ok <- validate_url(url),
          {:ok, api_key} <- required(config, :api_key),
          {:ok, model} <- required(config, :model),
-         {:ok, encoded} <- encode_request(messages, model, schema_name, schema),
+         {:ok, encoded} <- encode_request(messages, model, schema_name, schema, url),
          {:ok, response} <-
            Req.post(req(opts),
              url: url,
@@ -103,7 +107,7 @@ defmodule BurpeeTrainer.Coach.Client do
     end
   end
 
-  defp encode_request(messages, model, name, schema) do
+  defp encode_request(messages, model, name, schema, url) do
     body = %{
       model: model,
       max_tokens: @max_output_tokens,
@@ -115,6 +119,17 @@ defmodule BurpeeTrainer.Coach.Client do
       messages: messages
     }
 
+    body =
+      if URI.parse(url).host == "openrouter.ai" do
+        # GPT-6 Luna endpoints do not advertise temperature support; requiring it
+        # would exclude the schema-capable endpoints needed for this request.
+        body
+        |> Map.delete(:temperature)
+        |> Map.put(:provider, %{require_parameters: true})
+      else
+        body
+      end
+
     encoded = Jason.encode!(body)
 
     if byte_size(encoded) <= 262_144,
@@ -122,11 +137,38 @@ defmodule BurpeeTrainer.Coach.Client do
       else: {:error, Error.new(:authoring_context_too_large)}
   end
 
+  defp response_schema(:workout_definition, %WorkoutRequest{} = request) do
+    if PhasedWorkoutDefinition.use_phases?(request) do
+      {:ok, {"phased_workout_definition", PhasedWorkoutDefinition.json_schema(request)}}
+    else
+      response_schema(:workout_definition)
+    end
+  end
+
+  defp response_schema(kind, _request), do: response_schema(kind)
+
+  defp response_schema(:workout_request),
+    do: {:ok, {"workout_request", WorkoutRequest.json_schema()}}
+
   defp response_schema(:workout_definition),
     do: {:ok, {"workout_definition", WorkoutDefinition.json_schema()}}
 
   defp response_schema(:coach_recommendation),
     do: {:ok, {"coach_recommendation", BurpeeTrainer.Coach.Recommendation.json_schema()}}
+
+  defp response_schema(:coach_guidance) do
+    {:ok,
+     {"coach_guidance",
+      %{
+        type: "object",
+        additionalProperties: false,
+        properties: %{
+          kind: %{type: "string", enum: ~w[lasting temporary observation]},
+          summary: %{type: "string", maxLength: 280}
+        },
+        required: ~w[kind summary]
+      }}}
+  end
 
   defp response_schema(_), do: {:error, :invalid_configuration}
 

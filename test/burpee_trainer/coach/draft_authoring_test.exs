@@ -17,6 +17,61 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     %{counter: counter}
   end
 
+  test "direct draft creation requires an explicitly confirmed prepared request", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    extracted = %{
+      "burpee_type" => "six_count",
+      "target_reps" => 10,
+      "target_duration_sec" => 120,
+      "pacing_style" => "even",
+      "recovery" => "optional",
+      "timed_rests" => [],
+      "requested_pace_sec" => nil
+    }
+
+    extraction = request(counter, &provider_definition(&1, extracted))
+    assert {:ok, prepared} = Coach.prepare_draft(user, "Build a steady workout", opts(extraction))
+    assert request_count(counter) == 1
+    assert Workouts.list_drafts(user) == []
+
+    plan = request(counter, &provider_definition(&1, definition("Confirmed draft")))
+    assert {:ok, draft} = Coach.confirm_draft(user, prepared, opts(plan))
+    assert draft.name == "Confirmed draft"
+    assert request_count(counter) == 2
+  end
+
+  test "direct draft refinement also waits for explicit confirmation", %{counter: counter} do
+    user = user_fixture()
+    source = workout_plan_draft_fixture(user, %{definition: definition("Original")})
+
+    extracted = %{
+      "burpee_type" => "six_count",
+      "target_reps" => 10,
+      "target_duration_sec" => 120,
+      "pacing_style" => "even",
+      "recovery" => "optional",
+      "timed_rests" => [],
+      "requested_pace_sec" => nil
+    }
+
+    extraction = request(counter, &provider_definition(&1, extracted))
+
+    assert {:ok, prepared} =
+             Coach.prepare_refinement(user, source.id, "Make it better", opts(extraction))
+
+    assert request_count(counter) == 1
+    assert Workouts.get_plan!(user, source.id).name == "Original"
+
+    plan = request(counter, &provider_definition(&1, definition("Confirmed refinement")))
+    assert {:ok, revised} = Coach.confirm_refinement(user, prepared, opts(plan))
+    assert revised.name == "Confirmed refinement"
+    assert request_count(counter) == 2
+    assert Workouts.get_plan!(user, source.id).name == "Confirmed refinement"
+  end
+
   test "valid create performs one request and persists one validated draft", %{counter: counter} do
     user = user_fixture()
     definition = definition("Generated draft")
@@ -51,6 +106,28 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
 
     assert Jason.decode!(user_message["content"])["active_attempt"]["instruction"] ==
              "Build a steady workout"
+  end
+
+  test "draft authoring receives level landmarks and bounded measured history", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    free_form_session_fixture(user, %{
+      "burpee_count_actual" => 12,
+      "duration_sec_actual" => 150,
+      "note_post" => "session-only private context"
+    })
+
+    req = request(counter, &provider_definition(&1, definition("Measured draft")))
+    assert {:ok, _draft} = Coach.create_draft(user, "Build a suitable workout", opts(req))
+
+    [recorded] = requests(counter)
+    [system_message, _, _] = recorded.body["messages"]
+    assert system_message["content"] =~ "level_1b"
+    assert system_message["content"] =~ ~s("actual_reps":12)
+    assert system_message["content"] =~ ~s("actual_duration_sec":150)
+    refute system_message["content"] =~ "session-only private context"
   end
 
   test "failed create logs only safe provider diagnostics", %{counter: counter} do
@@ -94,6 +171,407 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     refute log =~ "Invalid arithmetic"
   end
 
+  test "one invalid timeline gets a logged, precise correction then commits once", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    invalid =
+      definition("Missing ninety seconds")
+      |> put_in(["events", Access.at(0), "sec_per_rep"], 3.0)
+      |> put_in(["events", Access.at(0), "sec_per_burpee"], 3.0)
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, invalid),
+          else: provider_definition(conn, definition("Corrected timeline"))
+      end)
+
+    assert {:ok, draft} = Coach.create_draft(user, "Use manageable sets", opts(req))
+    assert draft.name == "Corrected timeline"
+    assert request_count(counter) == 2
+
+    [_first, correction] = requests(counter)
+    correction_message = List.last(correction.body["messages"])["content"]
+    assert correction_message =~ "Use manageable sets"
+    assert correction_message =~ "30000000"
+    assert correction_message =~ "120000000"
+    assert correction_message =~ "missing_duration_sec=90"
+    assert correction_message =~ "work_reps=10 target_reps=10"
+    assert correction_message =~ "work_sec=30 rest_sec=0"
+    assert correction_message =~ "missing_sec=90"
+    assert correction_message =~ "rest_events=0"
+
+    assert {:ok, entries} = Context.entries(user, draft.design_session_id)
+    assert Enum.count(entries, &(&1.kind == :proposal)) == 2
+    assert Enum.count(entries, &(&1.kind == :instruction)) == 2
+    assert Enum.any?(entries, &(&1.kind == :outcome and &1.payload["status"] == "failed"))
+    assert Enum.any?(entries, &(&1.kind == :outcome and &1.payload["status"] == "accepted"))
+  end
+
+  test "correction sees reps, work time, rest deficit, and the target-rep rest budget together",
+       %{
+         counter: counter
+       } do
+    user = user_fixture()
+
+    invalid =
+      definition("All work")
+      |> Map.put("target_reps", 140)
+      |> Map.put("target_duration_sec", 1_200)
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 5, "sec_per_burpee" => 5},
+        %{"kind" => "work", "reps" => 83, "sec_per_rep" => 5, "sec_per_burpee" => 5}
+      ])
+
+    corrected =
+      invalid
+      |> Map.put("name", "Recovery between sets")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 5, "sec_per_burpee" => 5},
+        %{"kind" => "rest", "duration_sec" => 500},
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 5, "sec_per_burpee" => 5}
+      ])
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, invalid),
+          else: provider_definition(conn, corrected)
+      end)
+
+    assert {:ok, draft} =
+             Coach.create_draft(
+               user,
+               "140 six-counts in 20 minutes with rest between sets",
+               opts(req)
+             )
+
+    assert request_count(counter) == 2
+    assert Enum.any?(draft.definition_json["events"], &(&1["kind"] == "rest"))
+    [_first, correction] = requests(counter)
+    feedback = correction.body["messages"] |> List.last() |> Map.fetch!("content")
+    assert feedback =~ "field=target_reps actual=153 expected=140"
+    assert feedback =~ "work_reps=153 target_reps=140"
+    assert feedback =~ "work_sec=765"
+    assert feedback =~ "rest_sec=0"
+    assert feedback =~ "missing_sec=435"
+    assert feedback =~ "rest_budget_at_target_reps_sec=500"
+    assert feedback =~ "adjacent_work_sets_without_rest=1"
+    assert feedback =~ "allocate remaining time to explicit between-set rest"
+  end
+
+  test "correction budget uses compiler terminal work and fractional rest timing", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    invalid =
+      definition("Fractional gap")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 4.5},
+        %{"kind" => "rest", "duration_sec" => 20},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 4.5}
+      ])
+
+    corrected =
+      invalid
+      |> Map.put("name", "Fractional recovery")
+      |> put_in(["events", Access.at(1), "duration_sec"], 70.5)
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, invalid),
+          else: provider_definition(conn, corrected)
+      end)
+
+    assert {:ok, _draft} = Coach.create_draft(user, "Two sets with rest", opts(req))
+    assert request_count(counter) == 2
+    [_first, correction] = requests(counter)
+    feedback = correction.body["messages"] |> List.last() |> Map.fetch!("content")
+    assert feedback =~ "work_sec=49.5 rest_sec=20"
+    assert feedback =~ "accounted_sec=69.5 missing_sec=50.5"
+    assert feedback =~ "rest_budget_at_target_reps_sec=70.5"
+    assert feedback =~ "rest_events=1"
+    refute feedback =~ "Correct the rep count first"
+  end
+
+  test "excess time asks for less flexible rest rather than more rest", %{counter: counter} do
+    user = user_fixture()
+
+    invalid =
+      definition("Excess recovery")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 5},
+        %{"kind" => "rest", "duration_sec" => 80},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 5}
+      ])
+
+    corrected = put_in(invalid, ["events", Access.at(1), "duration_sec"], 70)
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, invalid),
+          else: provider_definition(conn, corrected)
+      end)
+
+    assert {:ok, _draft} = Coach.create_draft(user, "Two sets with rest", opts(req))
+    assert request_count(counter) == 2
+    [_first, correction] = requests(counter)
+    feedback = correction.body["messages"] |> List.last() |> Map.fetch!("content")
+    assert feedback =~ "excess_sec=10"
+    assert feedback =~ "reduce flexible rest"
+    refute feedback =~ "allocate remaining time"
+  end
+
+  test "no-rest correction does not instruct the model to insert recovery", %{counter: counter} do
+    user = user_fixture()
+
+    invalid =
+      definition("Short continuous work")
+      |> put_in(["events", Access.at(0), "sec_per_rep"], 3)
+      |> put_in(["events", Access.at(0), "sec_per_burpee"], 3)
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, invalid),
+          else: provider_definition(conn, definition("Continuous work"))
+      end)
+
+    assert {:ok, _draft} = Coach.create_draft(user, "One set with no rest", opts(req))
+    assert request_count(counter) == 2
+    [_first, correction] = requests(counter)
+    feedback = correction.body["messages"] |> List.last() |> Map.fetch!("content")
+    validation = Jason.decode!(feedback)["validation"]
+    assert validation =~ "do not add rest events"
+    refute validation =~ "allocate remaining time to explicit between-set rest events"
+  end
+
+  test "a rest-requested unbroken workout cannot commit without rest events", %{counter: counter} do
+    user = user_fixture()
+
+    invalid =
+      definition("False rest")
+      |> Map.put("pacing_style", "unbroken")
+      |> Map.put("rationale", "Rest between the two unbroken sets")
+
+    corrected =
+      invalid
+      |> Map.put("name", "Rest between sets")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "rest", "duration_sec" => 70.0},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0}
+      ])
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, invalid),
+          else: provider_definition(conn, corrected)
+      end)
+
+    assert {:ok, draft} =
+             Coach.create_draft(
+               user,
+               "No rest between reps within a set; rest between the two sets",
+               opts(req)
+             )
+
+    assert request_count(counter) == 2
+    assert Enum.any?(draft.definition_json["events"], &(&1["kind"] == "rest"))
+    [_first, correction] = requests(counter)
+    assert List.last(correction.body["messages"])["content"] =~ "rest events"
+  end
+
+  test "requested recovery separates each unbroken work set", %{counter: counter} do
+    user = user_fixture()
+
+    incomplete =
+      definition("One break for three sets")
+      |> Map.put("pacing_style", "unbroken")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 3, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "rest", "duration_sec" => 70.0},
+        %{"kind" => "work", "reps" => 3, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "work", "reps" => 4, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0}
+      ])
+
+    corrected =
+      Map.put(incomplete, "events", [
+        %{"kind" => "work", "reps" => 3, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "rest", "duration_sec" => 50.0},
+        %{"kind" => "work", "reps" => 3, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "rest", "duration_sec" => 20.0},
+        %{"kind" => "work", "reps" => 4, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0}
+      ])
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, incomplete),
+          else: provider_definition(conn, corrected)
+      end)
+
+    assert {:ok, draft} =
+             Coach.create_draft(user, "Three unbroken sets with recovery between sets", opts(req))
+
+    assert request_count(counter) == 2
+    assert Enum.count(draft.definition_json["events"], &(&1["kind"] == "rest")) == 2
+  end
+
+  test "a no-rest instruction still allows a continuous work event", %{counter: counter} do
+    user = user_fixture()
+    req = request(counter, &provider_definition(&1, definition("Continuous work")))
+
+    assert {:ok, draft} = Coach.create_draft(user, "One unbroken set with no rest", opts(req))
+    assert request_count(counter) == 1
+    refute Enum.any?(draft.definition_json["events"], &(&1["kind"] == "rest"))
+  end
+
+  test "an explicitly requested slower movement pace is honored", %{counter: counter} do
+    user = user_fixture()
+
+    manual =
+      definition("User-paced sets")
+      |> Map.put("pacing_style", "unbroken")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 8.0, "sec_per_burpee" => 8.0},
+        %{"kind" => "rest", "duration_sec" => 40.0},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 8.0, "sec_per_burpee" => 8.0}
+      ])
+
+    req = request(counter, &provider_definition(&1, manual))
+
+    assert {:ok, draft} =
+             Coach.create_draft(user, "Use 8 seconds per rep with rest between sets", opts(req))
+
+    assert request_count(counter) == 1
+    assert Enum.count(draft.definition_json["events"], &(&1["kind"] == "rest")) == 1
+  end
+
+  test "a rest-first plan cannot stretch unrequested movement pace to fill the clock", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    slow = %{
+      "version" => 1,
+      "name" => "Slow movement instead of recovery",
+      "burpee_type" => "six_count",
+      "target_duration_sec" => 1_200,
+      "target_reps" => 140,
+      "pacing_style" => "unbroken",
+      "rationale" => "Two continuous sets with recovery between them",
+      "events" => [
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 8.0, "sec_per_burpee" => 8.0},
+        %{"kind" => "rest", "duration_sec" => 80.0},
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 8.0, "sec_per_burpee" => 8.0}
+      ]
+    }
+
+    rested =
+      slow
+      |> Map.put("name", "Recovery between sets")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0},
+        %{"kind" => "rest", "duration_sec" => 500.0},
+        %{"kind" => "work", "reps" => 70, "sec_per_rep" => 5.0, "sec_per_burpee" => 5.0}
+      ])
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, slow),
+          else: provider_definition(conn, rested)
+      end)
+
+    assert {:ok, draft} =
+             Coach.create_draft(user, "140 six-counts in 20 minutes with recovery", opts(req))
+
+    assert request_count(counter) == 2
+    assert draft.definition_json["events"] |> Enum.any?(&(&1["duration_sec"] == 500.0))
+    [_first, correction] = requests(counter)
+    feedback = List.last(correction.body["messages"])["content"]
+    assert feedback =~ "movement pace"
+    assert feedback =~ "work_sec=1120 rest_sec=80"
+    assert feedback =~ "rest_budget_at_reference_pace_sec=500"
+    refute feedback =~ "rest_budget_at_target_reps_sec=80"
+  end
+
+  test "a roughly eight-second Navy Seal pace does not cause a paid correction", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    plan =
+      definition("Navy Seal recovery")
+      |> Map.put("burpee_type", "navy_seal")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 8.5, "sec_per_burpee" => 8.5},
+        %{"kind" => "rest", "duration_sec" => 35.0},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 8.5, "sec_per_burpee" => 8.5}
+      ])
+
+    req = request(counter, &provider_definition(&1, plan))
+
+    assert {:ok, _draft} = Coach.create_draft(user, "Navy Seal sets with recovery", opts(req))
+    assert request_count(counter) == 1
+  end
+
+  test "a rest-first plan does not use an unrequested faster-than-reference pace", %{
+    counter: counter
+  } do
+    user = user_fixture()
+
+    fast =
+      definition("Too fast for the default reference")
+      |> Map.put("events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 3.0, "sec_per_burpee" => 3.0},
+        %{"kind" => "rest", "duration_sec" => 90.0},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 3.0, "sec_per_burpee" => 3.0}
+      ])
+
+    corrected =
+      Map.put(fast, "events", [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 4.0, "sec_per_burpee" => 4.0},
+        %{"kind" => "rest", "duration_sec" => 80.0},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 4.0, "sec_per_burpee" => 4.0}
+      ])
+
+    req =
+      request(counter, fn conn ->
+        if request_count(counter) == 1,
+          do: provider_definition(conn, fast),
+          else: provider_definition(conn, corrected)
+      end)
+
+    assert {:ok, draft} = Coach.create_draft(user, "Two sets with rest between them", opts(req))
+    assert request_count(counter) == 2
+    assert Enum.any?(draft.definition_json["events"], &(&1["duration_sec"] == 80.0))
+  end
+
+  test "two invalid timelines leave an existing draft unchanged", %{counter: counter} do
+    user = user_fixture()
+    draft = workout_plan_draft_fixture(user, %{definition: definition("Original")})
+    before = raw_row(draft.id)
+    invalid = Map.put(definition("Invalid"), "target_reps", 11)
+    req = request(counter, &provider_definition(&1, invalid))
+
+    assert {:error, %Error{code: :invalid_workout_definition}} =
+             Coach.refine_draft(user, draft.id, "Try more reps", opts(req))
+
+    assert request_count(counter) == 2
+    assert raw_row(draft.id) == before
+    assert {:ok, context} = Context.ensure_session(user, Repo.reload!(draft), "draft:#{draft.id}")
+    assert {:ok, entries} = Context.entries(user, context.id)
+    assert Enum.count(entries, &(&1.kind == :outcome and &1.payload["status"] == "failed")) == 2
+  end
+
   test "create rejects blank and over-limit authoring input before HTTP", %{counter: counter} do
     user = user_fixture()
     req = request(counter, &provider_definition(&1, definition("must not persist")))
@@ -134,7 +612,9 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     assert length(Workouts.list_drafts(user)) == 3
   end
 
-  test "all failed create boundaries persist nothing and never retry", %{counter: counter} do
+  test "failed create boundaries persist nothing and only validation errors retry once", %{
+    counter: counter
+  } do
     user = user_fixture()
 
     scenarios = [
@@ -177,7 +657,7 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
          conn
        end), provider_config(), :invalid_provider_response, 1},
       {:invalid_definition, request(counter, &provider_definition(&1, %{"version" => 1})),
-       provider_config(), :invalid_workout_definition, 1},
+       provider_config(), :invalid_workout_definition, 2},
       {:infeasible_definition,
        request(counter, &provider_definition(&1, definition(String.duplicate("n", 81)))),
        provider_config(), :infeasible_workout_definition, 1}
@@ -271,7 +751,7 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     assert {:error, %Error{code: :invalid_workout_definition, context: %{}}} =
              Coach.refine_draft(user, draft.id, "Break the arithmetic", opts(req))
 
-    assert request_count(counter) == 1
+    assert request_count(counter) == 2
     assert raw_row(draft.id) == before
   end
 
@@ -467,6 +947,113 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     {user, slot, shown}
   end
 
+  test "Home revision waits for confirmed constraints before replacing the selection", %{
+    counter: counter
+  } do
+    {user, slot, shown} = shown_workout(user_fixture())
+    before = shown.plan.id
+
+    extracted = %{
+      "burpee_type" => "six_count",
+      "target_reps" => 10,
+      "target_duration_sec" => 120,
+      "pacing_style" => "even",
+      "recovery" => "optional",
+      "timed_rests" => [],
+      "requested_pace_sec" => nil
+    }
+
+    extraction = request(counter, &provider_definition(&1, extracted))
+
+    assert {:ok, prepared} =
+             Coach.prepare_home_revision(user, shown, "Change this workout", opts(extraction))
+
+    assert request_count(counter) == 1
+    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, slot)
+    assert unchanged.plan.id == before
+
+    plan = request(counter, &provider_definition(&1, definition("Confirmed revision")))
+    assert {:ok, revised} = Coach.confirm_home_revision(user, prepared, opts(plan))
+    assert request_count(counter) == 2
+    assert revised.plan.name == "Confirmed revision"
+    assert revised.plan.id != before
+  end
+
+  test "Home adjustment saves a timed-rest proposal within tolerance without a repair", %{
+    counter: counter
+  } do
+    {user, slot, shown} = shown_workout(user_fixture())
+    original_id = shown.plan.id
+    unrelated = plan_fixture(user)
+
+    extracted = %{
+      "burpee_type" => "six_count",
+      "target_reps" => 140,
+      "target_duration_sec" => 1_200,
+      "pacing_style" => "unbroken",
+      "recovery" => "required",
+      "timed_rests" => [
+        %{"start_sec" => 660, "duration_sec" => 60},
+        %{"start_sec" => 1_080, "duration_sec" => 30}
+      ],
+      "requested_pace_sec" => nil
+    }
+
+    assert {:ok, prepared} =
+             Coach.prepare_home_revision(
+               user,
+               shown,
+               "140 reps in 20 minutes, rest at 11:00 and 18:00",
+               opts(request(counter, &provider_definition(&1, extracted)))
+             )
+
+    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, slot)
+    assert unchanged.plan.id == original_id
+
+    work = fn reps ->
+      %{"kind" => "work", "reps" => reps, "sec_per_rep" => 5, "sec_per_burpee" => 5}
+    end
+
+    rest = fn seconds -> %{"kind" => "rest", "duration_sec" => seconds} end
+
+    proposal = %{
+      "version" => 1,
+      "name" => "Timed rest adjustment",
+      "burpee_type" => "six_count",
+      "target_reps" => 140,
+      "target_duration_sec" => 1_200,
+      "pacing_style" => "unbroken",
+      "rationale" => "The chosen work sets and recovery fit the requested session.",
+      "phase_1" => %{
+        "work_rest_pairs" => [%{"work" => work.(88), "rest_after" => rest.(110.5)}],
+        "last_work" => work.(22)
+      },
+      "rest_1" => rest.(60),
+      "phase_2" => %{
+        "work_rest_pairs" => [%{"work" => work.(10), "rest_after" => rest.(300.5)}],
+        "last_work" => work.(2)
+      },
+      "rest_2" => rest.(30),
+      "phase_3" => %{"work_rest_pairs" => [], "last_work" => work.(18)}
+    }
+
+    assert {:ok, revised} =
+             Coach.confirm_home_revision(
+               user,
+               prepared,
+               opts(request(counter, &provider_definition(&1, proposal)))
+             )
+
+    assert request_count(counter) == 2
+    assert revised.plan.id != original_id
+    assert revised.plan.target_reps == 140
+    assert revised.plan.target_duration_sec == 1_201
+    assert revised.plan.definition_json["target_duration_sec"] == 1_201
+    assert {:ok, reloaded} = Workouts.ensure_home_selection(user, slot)
+    assert reloaded.plan.id == revised.plan.id
+    assert Workouts.get_plan!(user, unrelated.id).id == unrelated.id
+  end
+
   test "failed published revision retains history through reload", %{counter: counter} do
     {user, slot, initial} = shown_workout(user_fixture())
     source = plan_fixture(user, %{burpee_type: "navy_seal"})
@@ -498,7 +1085,9 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
     assert request_count(counter) == 2
   end
 
-  test "message overflow records a failure without HTTP", %{counter: counter} do
+  test "historical overflow stays stored without bloating the next provider request", %{
+    counter: counter
+  } do
     {user, _slot, shown} = shown_workout(user_fixture())
     {:ok, context} = Context.ensure_session(user, shown.plan, Context.home_key(shown))
 
@@ -511,12 +1100,16 @@ defmodule BurpeeTrainer.Coach.DraftAuthoringTest do
 
     req = request(counter, &provider_definition(&1, definition("Unused")))
 
-    assert {:error, %Error{code: :authoring_context_too_large}} =
-             Coach.revise_home_workout(user, shown, "Try once", opts(req))
+    assert {:ok, revised} = Coach.revise_home_workout(user, shown, "Try once", opts(req))
 
-    assert request_count(counter) == 0
+    assert revised.plan.name == "Unused"
+    assert request_count(counter) == 1
+    [recorded] = requests(counter)
+    provider_body = recorded.body["messages"] |> List.last() |> Map.fetch!("content")
+    refute provider_body =~ String.duplicate("x", 500)
     {:ok, entries} = Context.entries(user, context.id)
-    assert List.last(entries).payload["code"] == "authoring_context_too_large"
+    assert length(entries) > 530
+    assert List.last(entries).payload["status"] == "accepted"
   end
 
   test "provider exception is caught and receives a safe outcome", %{counter: counter} do

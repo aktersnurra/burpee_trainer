@@ -80,6 +80,7 @@ defmodule BurpeeTrainer.AccountsTest do
 
       assert {:ok, updated} =
                Accounts.update_timezone_at(user, "America/Los_Angeles", now, wake: wake)
+
       assert updated.timezone == "America/Los_Angeles"
       assert updated.timezone_provisioned
       assert_receive {:timezone_wake, user_id, :timezone_changed, "America/Los_Angeles"}
@@ -88,6 +89,7 @@ defmodule BurpeeTrainer.AccountsTest do
 
       assert {:ok, same} =
                Accounts.update_timezone_at(updated, "America/Los_Angeles", now, wake: wake)
+
       assert same.id == updated.id
       assert same.updated_at == previous_updated_at
       refute_receive {:timezone_wake, _, _, _}
@@ -102,6 +104,7 @@ defmodule BurpeeTrainer.AccountsTest do
                Accounts.update_timezone_at(user, "Mars/Olympus_Mons", ~U[2026-08-25 10:00:00Z],
                  wake: wake
                )
+
       refute_receive {:timezone_wake, _, _}
       stale_user = %{user | id: user.id + 99_999}
 
@@ -110,6 +113,7 @@ defmodule BurpeeTrainer.AccountsTest do
           wake: wake
         )
       end
+
       refute_receive {:timezone_wake, _, _}
     end
 
@@ -121,6 +125,7 @@ defmodule BurpeeTrainer.AccountsTest do
                Accounts.update_timezone_at(user, "Europe/Stockholm", ~U[2026-08-25 10:00:00Z],
                  wake: wake
                )
+
       assert Accounts.get_user!(user.id).timezone == "Europe/Stockholm"
       assert updated.timezone == "Europe/Stockholm"
     end
@@ -138,6 +143,7 @@ defmodule BurpeeTrainer.AccountsTest do
 
   defp insert_users(count) do
     now = DateTime.utc_now(:second)
+
     rows =
       for number <- 1..count do
         %{
@@ -148,6 +154,7 @@ defmodule BurpeeTrainer.AccountsTest do
           updated_at: now
         }
       end
+
     Repo.insert_all(User, rows)
   end
 end

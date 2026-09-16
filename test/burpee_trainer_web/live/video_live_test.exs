@@ -12,194 +12,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "index mount only loads available videos and explicit Start inserts before navigation", %{
-    conn: conn,
-    user: user
-  } do
-    available = video_fixture(%{name: "Available follow-along", available: true})
-    second_available = video_fixture(%{name: "Second follow-along", available: true})
-    unavailable = video_fixture(%{name: "Unavailable follow-along", available: false})
-
-    assert {:ok, view, _html} = live(conn, ~p"/videos")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-    assert has_element?(view, "#video-card-#{available.id}")
-    assert has_element?(view, "#video-card-#{second_available.id}")
-    refute has_element?(view, "#video-card-#{unavailable.id}")
-    assert has_element?(view, "#video-start-#{available.id}[phx-click='start_video']")
-
-    document = view |> render() |> LazyHTML.from_fragment()
-
-    client_ids =
-      for video <- [available, second_available] do
-        document
-        |> LazyHTML.query("#video-start-#{video.id}")
-        |> LazyHTML.attribute("phx-value-client_session_id")
-        |> List.first()
-      end
-
-    assert Enum.all?(client_ids, &is_binary/1)
-    assert client_ids |> Enum.uniq() |> length() == 2
-
-    client_id = Ecto.UUID.generate()
-
-    assert {:error, {:live_redirect, %{to: to}}} =
-             render_click(view, "start_video", %{
-               "video_id" => Integer.to_string(available.id),
-               "client_session_id" => client_id
-             })
-
-    [session] = Repo.all(WorkoutSession)
-    assert session.user_id == user.id
-    assert session.client_session_id == client_id
-    assert to == "/videos/#{available.id}/session/#{session.id}"
-  end
-
-  test "index rejects forged video and client IDs as unavailable without inserting", %{
-    conn: conn
-  } do
-    video = video_fixture()
-    assert {:ok, view, _html} = live(conn, ~p"/videos")
-
-    for params <- [
-          %{"video_id" => 123, "client_session_id" => Ecto.UUID.generate()},
-          %{"video_id" => %{"id" => video.id}, "client_session_id" => Ecto.UUID.generate()},
-          %{
-            "video_id" => [Integer.to_string(video.id)],
-            "client_session_id" => Ecto.UUID.generate()
-          },
-          %{"video_id" => true, "client_session_id" => Ecto.UUID.generate()},
-          %{"video_id" => Integer.to_string(video.id), "client_session_id" => %{}},
-          %{"video_id" => "unknown", "client_session_id" => Ecto.UUID.generate()}
-        ] do
-      render_click(view, "start_video", params)
-      assert has_element?(view, "#videos-page")
-      assert Repo.aggregate(WorkoutSession, :count) == 0
-    end
-  end
-
-  test "index Start routes exact duplicates but rejects replayed client IDs for another source",
-       %{
-         conn: conn,
-         user: user
-       } do
-    first_video = video_fixture(%{name: "First source"})
-    second_video = video_fixture(%{name: "Second source"})
-    client_id = Ecto.UUID.generate()
-    assert {:ok, first_session} = Workouts.start_video(user, first_video.id, client_id)
-
-    assert {:ok, duplicate_view, _html} = live(conn, ~p"/videos")
-
-    assert {:error, {:live_redirect, %{to: duplicate_to}}} =
-             render_click(duplicate_view, "start_video", %{
-               "video_id" => Integer.to_string(first_video.id),
-               "client_session_id" => client_id
-             })
-
-    assert duplicate_to == "/videos/#{first_video.id}/session/#{first_session.id}"
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-
-    assert {:ok, replay_view, _html} = live(conn, ~p"/videos")
-
-    render_click(replay_view, "start_video", %{
-      "video_id" => Integer.to_string(second_video.id),
-      "client_session_id" => client_id
-    })
-
-    assert has_element?(replay_view, "#videos-page")
-    assert has_element?(replay_view, "#flash-error", "Video is unavailable.")
-    assert Workouts.current_started_session(user).id == first_session.id
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-  end
-
-  test "detail Start rejects a plan token without navigating or inserting", %{
-    conn: conn,
-    user: user
-  } do
-    plan = plan_fixture(user)
-    video = video_fixture()
-    client_id = Ecto.UUID.generate()
-    assert {:ok, plan_session} = Workouts.start_plan(user, plan.id, client_id)
-    assert {:ok, detail, _html} = live(conn, ~p"/videos/#{video.id}")
-
-    render_click(detail, "start_video", %{
-      "video_id" => Integer.to_string(video.id),
-      "client_session_id" => client_id
-    })
-
-    assert has_element?(detail, "#video-start")
-    assert has_element?(detail, "#flash-error", "Video is unavailable.")
-    assert Workouts.current_started_session(user).id == plan_session.id
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-  end
-
-  test "detail direct GET and reconnect load only; detail Start navigates after one insert", %{
-    conn: conn
-  } do
-    video = video_fixture(%{burpee_count: 50})
-
-    assert {:ok, detail, _html} = live(conn, ~p"/videos/#{video.id}")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-    assert has_element?(detail, "#video-start-action[phx-click='start_video']")
-
-    assert {:ok, _reconnected, _html} = live(conn, ~p"/videos/#{video.id}")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-
-    client_id = Ecto.UUID.generate()
-
-    assert {:error, {:live_redirect, %{to: to}}} =
-             render_click(detail, "start_video", %{
-               "video_id" => Integer.to_string(video.id),
-               "client_session_id" => client_id
-             })
-
-    [session] = Repo.all(WorkoutSession)
-    assert to == "/videos/#{video.id}/session/#{session.id}"
-    assert session.client_session_id == client_id
-  end
-
-  test "detail rejects forged Start, mood, and tag values without inserting", %{conn: conn} do
-    video = video_fixture()
-    assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}")
-
-    for params <- [
-          %{"video_id" => 123, "client_session_id" => Ecto.UUID.generate()},
-          %{"video_id" => %{}, "client_session_id" => Ecto.UUID.generate()},
-          %{"video_id" => [], "client_session_id" => Ecto.UUID.generate()},
-          %{"video_id" => true, "client_session_id" => Ecto.UUID.generate()},
-          %{"video_id" => Integer.to_string(video.id), "client_session_id" => []},
-          %{"video_id" => "unknown", "client_session_id" => Ecto.UUID.generate()}
-        ] do
-      render_click(view, "start_video", params)
-      assert has_element?(view, "#video-start")
-      assert Repo.aggregate(WorkoutSession, :count) == 0
-    end
-
-    for forged <- [123, %{}, [], true, "unknown"] do
-      render_click(view, "set_mood", %{"mood" => forged})
-      render_click(view, "toggle_tag", %{"tag" => forged})
-      assert has_element?(view, "#video-start")
-    end
-  end
-
-  test "authenticated detail start page ignores forged completion validation", %{conn: conn} do
-    assert_start_page_completion_event_is_inert(conn, "validate")
-  end
-
-  test "authenticated detail start page ignores forged completion save", %{conn: conn} do
-    assert_start_page_completion_event_is_inert(conn, "save")
-  end
-
-  test "completion validation rejects mismatched ownership and source in socket state", %{
-    user: user
-  } do
-    assert_mismatched_completion_event_is_inert(user, "validate")
-  end
-
-  test "completion save rejects mismatched ownership and source in socket state", %{user: user} do
-    assert_mismatched_completion_event_is_inert(user, "save")
-  end
-
-  test "video session route and reconnect load the exact started snapshot without inserting", %{
+  test "session route and reconnect load the immutable video snapshot without inserting", %{
     conn: conn,
     user: user
   } do
@@ -257,7 +70,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     })
     |> render_submit()
 
-    assert_redirect(view, ~p"/stats")
+    assert_redirect(view, ~p"/")
     assert Repo.aggregate(WorkoutSession, :count) == 1
     completed = Repo.get!(WorkoutSession, started.id)
     assert completed.state == :completed
@@ -270,10 +83,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert completed.preference_feedback == :choose_again
   end
 
-  test "video completion forged fields render validation and never complete the session", %{
-    conn: conn,
-    user: user
-  } do
+  test "forged completion fields never complete the session", %{conn: conn, user: user} do
     video = video_fixture(%{burpee_count: 10, duration_sec: 600})
     assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
@@ -303,10 +113,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
           {"preference_feedback", %{}},
           {"primary_limiter", "unknown"}
         ] do
-      render_hook(view, "validate", %{
-        "workout_session" => Map.put(valid, field, forged)
-      })
-
+      render_hook(view, "validate", %{"workout_session" => Map.put(valid, field, forged)})
       assert has_element?(view, "#video-log-form")
       assert Repo.get!(WorkoutSession, started.id).state == :started
     end
@@ -319,19 +126,12 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert Repo.get!(WorkoutSession, started.id).state == :started
   end
 
-  test "goal-achieving video completion updates the session exactly once and atomically attributes the goal",
-       %{
-         conn: conn,
-         user: user
-       } do
+  test "goal-achieving completion updates the session once and attributes the goal", %{
+    conn: conn,
+    user: user
+  } do
     video = video_fixture(%{burpee_count: 10, duration_sec: 1200})
-
-    goal =
-      goal_fixture(user, %{
-        "burpee_count_target" => 10,
-        "burpee_count_baseline" => 5
-      })
-
+    goal = goal_fixture(user, %{"burpee_count_target" => 10, "burpee_count_baseline" => 5})
     assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
     render_click(view, "video_ended")
@@ -349,14 +149,11 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
 
     view
     |> form("#video-log-form", %{
-      "workout_session" => %{
-        "burpee_count_actual" => "10",
-        "duration_min" => "20"
-      }
+      "workout_session" => %{"burpee_count_actual" => "10", "duration_min" => "20"}
     })
     |> render_submit()
 
-    assert_redirect(view, ~p"/stats")
+    assert_redirect(view, ~p"/")
     assert_receive {:workout_session_update, query}
     assert query =~ "UPDATE \"workout_sessions\""
     refute_receive {:workout_session_update, _second_query}
@@ -368,7 +165,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
-  test "missing, foreign, mismatched, and completed video session routes do not insert", %{
+  test "missing, foreign, mismatched, and completed session routes do not insert", %{
     conn: conn,
     user: user
   } do
@@ -395,35 +192,22 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
           ~p"/videos/#{video.id}/session/#{completed.id}",
           ~p"/videos/#{video.id}/session/2147483647"
         ] do
-      assert {:error, {:live_redirect, %{to: "/videos"}}} = live(conn, path)
+      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, path)
     end
 
     assert Repo.aggregate(WorkoutSession, :count) == before_count
   end
 
-  defp assert_start_page_completion_event_is_inert(conn, event) do
-    video = video_fixture()
-    assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}")
-
-    for params <- [valid_completion_params(), []] do
-      render_hook(view, event, %{"workout_session" => params})
-      assert has_element?(view, "#video-start")
-      assert has_element?(view, "#video-start-action[phx-click='start_video']")
-      assert Repo.aggregate(WorkoutSession, :count) == 0
-    end
-  end
-
-  defp assert_mismatched_completion_event_is_inert(user, event) do
+  test "completion rejects ownership and source mismatches in socket state", %{user: user} do
     plan = plan_fixture(user)
     assert {:ok, plan_session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
-
     foreign_user = user_fixture()
     video = video_fixture()
 
     assert {:ok, foreign_video_session} =
              Workouts.start_video(foreign_user, video.id, Ecto.UUID.generate())
 
-    for session <- [plan_session, foreign_video_session] do
+    for session <- [plan_session, foreign_video_session], event <- ["validate", "save"] do
       socket = %Phoenix.LiveView.Socket{
         assigns: %{
           __changed__: %{},
@@ -438,21 +222,13 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
       assert {:noreply, ^socket} =
                BurpeeTrainerWeb.VideoLive.Show.handle_event(
                  event,
-                 %{"workout_session" => valid_completion_params()},
+                 %{"workout_session" => %{"burpee_count_actual" => "10", "duration_min" => "2"}},
                  socket
                )
     end
 
     assert Repo.get!(WorkoutSession, plan_session.id).state == :started
     assert Repo.get!(WorkoutSession, foreign_video_session.id).state == :started
-  end
-
-  defp valid_completion_params do
-    %{
-      "burpee_count_actual" => "10",
-      "duration_min" => "2",
-      "note_post" => "forged"
-    }
   end
 
   def handle_workout_session_update(_event, _measurements, metadata, %{parent: parent}) do

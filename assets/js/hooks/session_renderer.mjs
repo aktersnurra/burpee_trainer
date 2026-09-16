@@ -226,38 +226,41 @@ export class SessionRenderer {
 			?.querySelectorAll?.("input, textarea, select") || []) {
 			input.toggleAttribute("disabled", factsDisabled);
 		}
-		for (const button of [
-			...this.root.querySelectorAll("[data-mood]"),
-			...this.root.querySelectorAll("[data-tag]"),
-		]) {
+		for (const button of this.root.querySelectorAll("[data-mood]")) {
 			button.toggleAttribute("disabled", factsDisabled);
 		}
 
 		const save = this.root.querySelector("#session-save-btn");
 		if (save) {
+			let label = "Save session";
+			if (locked && saving) label = "Finalizing local evidence…";
+			else if (locked) label = "Retry finalization";
+			else if (saving) label = "Saving session…";
 			save.toggleAttribute("disabled", saving);
+			save.setAttribute("aria-label", label);
+			save.setAttribute("title", label);
+			save.setAttribute("aria-busy", String(saving));
 			if (locked) save.dataset.localOnly = "true";
 			else delete save.dataset.localOnly;
-			save.textContent = locked
-				? saving
-					? "Finalizing local evidence…"
-					: "Retry finalization"
-				: saving
-					? "Saving session…"
-					: "Save session";
+			this.root
+				.querySelector("#session-save-icon-ready")
+				?.toggleAttribute("hidden", saving || locked);
+			this.root
+				.querySelector("#session-save-icon-pending")
+				?.toggleAttribute("hidden", !saving && !locked);
 		}
 
 		const leave = this.root.querySelector("#session-leave-btn");
 		if (leave) {
 			const disabled = saving || locked;
+			let label = "Leave and resume later";
+			if (locked) label = "Session saved—finish local finalization";
+			else if (saving) label = "Save in progress—stay on this page";
 			leave.setAttribute("aria-disabled", String(disabled));
+			leave.setAttribute("aria-label", label);
+			leave.setAttribute("title", label);
 			leave.toggleAttribute("tabindex", disabled);
 			if (disabled) leave.setAttribute("tabindex", "-1");
-			leave.textContent = locked
-				? "Session saved—finish local finalization"
-				: saving
-					? "Save in progress—stay on this page"
-					: "Leave and resume later";
 		}
 	}
 
@@ -364,12 +367,7 @@ export class SessionRenderer {
 				String(Number(button.dataset.mood) === completion.mood),
 			);
 		}
-		for (const button of this.root.querySelectorAll("[data-tag]")) {
-			button.setAttribute(
-				"aria-pressed",
-				String((completion.tags || []).includes(button.dataset.tag)),
-			);
-		}
+
 	}
 
 	clearSaveErrors() {
@@ -415,6 +413,9 @@ export class SessionRenderer {
 	renderSaveErrors(reply = {}) {
 		this.clearSaveErrors();
 		const fieldMessages = [];
+		const globalMessages = Array.isArray(reply.global_errors)
+			? reply.global_errors.filter(Boolean)
+			: [];
 		const fields = {
 			burpee_count_actual: ["#completion-reps-error", "#completion-reps-input"],
 			duration_sec_actual: [
@@ -422,47 +423,29 @@ export class SessionRenderer {
 				"#completion-duration-input",
 			],
 			note_post: ["#completion-note-error", "#completion-note-input"],
-			context_low_energy: [
-				"#completion-context-low-energy-error",
-				"#completion-context-low-energy",
-			],
-			context_high_energy: [
-				"#completion-context-high-energy-error",
-				"#completion-context-high-energy",
-			],
-			context_heat_affected: [
-				"#completion-context-heat-affected-error",
-				"#completion-context-heat-affected",
-			],
-			primary_limiter: [
-				"#completion-primary-limiter-error",
-				"#completion-primary-limiter",
-			],
-			preference_feedback: [
-				"#completion-preference-feedback-error",
-				"#completion-preference-feedback",
-			],
 		};
 
 		for (const [field, messages] of Object.entries(reply.field_errors || {})) {
-			const targets = fields[field];
-			if (!targets) continue;
-			const error = this.root.querySelector(targets[0]);
-			const input = this.root.querySelector(targets[1]);
 			const text = (Array.isArray(messages) ? messages : [messages])
 				.filter(Boolean)
 				.join(" ");
-			if (error && text) {
+			if (!text) continue;
+			const targets = fields[field];
+			if (!targets) {
+				globalMessages.push(text);
+				continue;
+			}
+			const error = this.root.querySelector(targets[0]);
+			const input = this.root.querySelector(targets[1]);
+			if (error) {
 				error.textContent = text;
 				error.hidden = false;
+				fieldMessages.push(text);
+			} else {
+				globalMessages.push(text);
 			}
-			if (text) fieldMessages.push(text);
-			if (input && text) input.setAttribute("aria-invalid", "true");
+			if (input) input.setAttribute("aria-invalid", "true");
 		}
-
-		const globalMessages = Array.isArray(reply.global_errors)
-			? reply.global_errors.filter(Boolean)
-			: [];
 		const global = this.root.querySelector("#session-save-errors");
 		if (global && globalMessages.length > 0) {
 			global.textContent = globalMessages.join(" ");

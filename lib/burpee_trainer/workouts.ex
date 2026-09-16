@@ -79,6 +79,78 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
+  @type home_entry_state :: :bootstrap | :existing
+
+  @doc "Classifies whether a workout-needed Home slot has any persisted user evidence."
+  @spec home_entry_state(User.t(), Policy.slot()) ::
+          {:ok, home_entry_state()} | {:error, Error.t()}
+  def home_entry_state(
+        %User{id: user_id},
+        %{slot_key: slot_key, slot_date: %Date{}, home_state: :workout_needed}
+      )
+      when is_binary(slot_key) and slot_key != "" do
+    try do
+      evidence? =
+        Enum.any?([
+          current_recommendation_exists?(user_id, slot_key),
+          historical_recommendation_exists?(user_id),
+          owned_plan_exists?(user_id),
+          session_exists?(user_id)
+        ])
+
+      {:ok, if(evidence?, do: :existing, else: :bootstrap)}
+    rescue
+      _error -> {:error, Error.new(:home_entry_state_unavailable)}
+    end
+  end
+
+  def home_entry_state(%User{}, _slot),
+    do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  # The slot and all evidence are re-read in lifecycle transactions; a presentation-time
+  # bootstrap classification is never sufficient to authorize a first-use write.
+  defp verified_bootstrap_slot(
+         user,
+         %{slot_key: slot_key, slot_date: %Date{} = slot_date, home_state: :workout_needed}
+       )
+       when is_binary(slot_key) and slot_key != "" do
+    with {:ok, current} <- Policy.required_slot(user, DateTime.utc_now(:second)),
+         true <-
+           current.slot_key == slot_key and current.slot_date == slot_date and
+             current.home_state == :workout_needed,
+         {:ok, :bootstrap} <- home_entry_state(user, current) do
+      :ok
+    else
+      {:error, %Error{} = error} -> {:error, error}
+      _ -> {:error, Error.new(:home_selection_changed)}
+    end
+  end
+
+  defp verified_bootstrap_slot(_user, _slot),
+    do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  defp current_recommendation_exists?(user_id, slot_key) do
+    Repo.exists?(
+      from(recommendation in CoachRecommendation,
+        where: recommendation.user_id == ^user_id and recommendation.slot_key == ^slot_key
+      )
+    )
+  end
+
+  defp historical_recommendation_exists?(user_id) do
+    Repo.exists?(
+      from(recommendation in CoachRecommendation, where: recommendation.user_id == ^user_id)
+    )
+  end
+
+  defp owned_plan_exists?(user_id) do
+    Repo.exists?(from(plan in WorkoutPlan, where: plan.user_id == ^user_id))
+  end
+
+  defp session_exists?(user_id) do
+    Repo.exists?(from(session in WorkoutSession, where: session.user_id == ^user_id))
+  end
+
   @doc "Pins the first available Home workout without replacing a valid existing pin."
   @spec ensure_home_selection(User.t(), Policy.slot()) ::
           {:ok, HomeSelection.t()} | {:error, Error.t()}
@@ -99,6 +171,78 @@ defmodule BurpeeTrainer.Workouts do
       end
     end)
   end
+
+  @doc "Lists filtered first-use alternatives without creating a recommendation."
+  @spec bootstrap_alternatives(User.t(), Policy.slot(), map(), :workouts | :videos) :: [map()]
+  def bootstrap_alternatives(%User{} = user, slot, filters, :workouts) do
+    with :ok <- verified_bootstrap_slot(user, slot) do
+      BurpeeTrainer.Coach.Catalog.order_plans(
+        list_library(user),
+        [],
+        slot,
+        BurpeeTrainer.Levels.current_level([])
+      )
+      |> BurpeeTrainer.Coach.Catalog.filter(filters, &BurpeeTrainer.Coach.Catalog.plan_level/1)
+    else
+      _ -> []
+    end
+  end
+
+  def bootstrap_alternatives(%User{} = user, slot, filters, :videos) do
+    with :ok <- verified_bootstrap_slot(user, slot) do
+      BurpeeTrainer.Videos.list_home_videos()
+      |> BurpeeTrainer.Coach.Catalog.order_videos()
+      |> BurpeeTrainer.Coach.Catalog.filter(filters, &BurpeeTrainer.Coach.Catalog.video_level/1)
+    else
+      _ -> []
+    end
+  end
+
+  @doc "Pins a first-use Home plan atomically."
+  @spec select_bootstrap_home_workout(User.t(), Policy.slot(), pos_integer()) ::
+          {:ok, HomeSelection.t()} | {:error, Error.t()}
+  def select_bootstrap_home_workout(%User{} = user, slot, plan_id) do
+    immediate_lifecycle_transaction(fn ->
+      with :ok <- verified_bootstrap_slot(user, slot),
+           :ok <- no_other_started_session(user),
+           {:ok, plan} <- get_library_plan(user, plan_id),
+           :ok <- verify_stored_draft(plan),
+           {:ok, recommendation} <-
+             ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
+           {:ok, changed} <- write_home_pointer(recommendation, plan.id) do
+        {:ok, HomeSelection.new(changed, plan)}
+      end
+    end)
+  end
+
+  @doc "Starts a first-use Home video, preserving exact-token replay semantics."
+  @spec start_bootstrap_home_video(User.t(), Policy.slot(), pos_integer(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def start_bootstrap_home_video(%User{} = user, slot, video_id, token) do
+    with {:ok, video} <- get_available_video_for_start(video_id),
+         {:ok, _snapshot, hash} <- canonical_video_snapshot(video) do
+      immediate_lifecycle_transaction(fn ->
+        with :ok <- valid_start_token(token) do
+          case existing_start(user.id, token, :video, video.id, hash) do
+            {:existing, session} -> {:ok, session}
+            replay -> bootstrap_video_start(user, slot, video, token, replay)
+          end
+        end
+      end)
+    end
+  end
+
+  defp bootstrap_video_start(user, slot, video, token, :new) do
+    with :ok <- verified_bootstrap_slot(user, slot),
+         :ok <- no_other_started_session(user),
+         {:ok, _recommendation} <-
+           ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])) do
+      start_video(user, video.id, token)
+    end
+  end
+
+  defp bootstrap_video_start(_user, _slot, _video, _token, {:error, %Error{} = error}),
+    do: {:error, error}
 
   @doc "Changes the Home pointer only if the reviewed selection is still current."
   @spec select_home_workout(User.t(), HomeSelection.t(), pos_integer()) ::
@@ -2320,23 +2464,6 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  @doc "Inserts a completed manual session at its validated historical completion time."
-  @spec create_free_form_session(User.t(), map) ::
-          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t()}
-  def create_free_form_session(%User{id: user_id} = user, attrs) when is_map(attrs) do
-    Repo.immediate_transaction(fn ->
-      %WorkoutSession{user_id: user_id, state: :completed, source_kind: :manual}
-      |> WorkoutSession.free_form_changeset(attrs)
-      |> Ecto.Changeset.change(capture_mode: :logged)
-      |> with_derived_session_fields(user_id, user.timezone)
-      |> then(&persist_completed_session(user, &1, fn changeset -> Repo.insert(changeset) end))
-    end)
-    |> case do
-      {:ok, %WorkoutSession{} = session} -> {:ok, session}
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
-    end
-  end
-
   @doc """
   Delete a completed session for a user.
 
@@ -2374,14 +2501,6 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   def delete_session(%User{}, %WorkoutSession{}), do: {:error, :not_found}
-
-  @doc """
-  Blank changeset builders for forms.
-  """
-  @spec change_free_form_session(WorkoutSession.t(), map) :: Ecto.Changeset.t()
-  def change_free_form_session(%WorkoutSession{} = session, attrs \\ %{}) do
-    WorkoutSession.free_form_changeset(session, attrs)
-  end
 
   # ---------------------------------------------------------------------------
   # Helpers
@@ -3095,6 +3214,39 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
+  @doc "Commits a generated first-use draft and its Home pointer as one lifecycle write."
+  @spec commit_home_bootstrap(
+          User.t(),
+          Policy.slot(),
+          map(),
+          String.t(),
+          pos_integer(),
+          Ecto.UUID.t()
+        ) ::
+          {:ok, HomeSelection.t()} | {:error, Error.t()}
+  def commit_home_bootstrap(user, slot, definition, text, context_id, attempt) do
+    immediate_lifecycle_transaction(fn ->
+      with :ok <- verified_bootstrap_slot(user, slot),
+           :ok <- no_other_started_session(user),
+           :ok <- Context.check_source(user, context_id, nil),
+           {:ok, recommendation} <-
+             ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
+           {:ok, content} <-
+             canonical_draft_content(%{definition: definition, request_text: text}),
+           {:ok, draft} <- save_authored_draft(user, nil, content, context_id),
+           {:ok, changed} <- write_home_pointer(recommendation, draft.id),
+           {:ok, _} <-
+             Context.append(user, context_id, attempt, :outcome, %{
+               "status" => "accepted",
+               "workout_plan_id" => draft.id,
+               "content_hash" => draft.content_hash,
+               "updated_at" => DateTime.to_iso8601(draft.updated_at)
+             }) do
+        {:ok, HomeSelection.new(changed, draft)}
+      end
+    end)
+  end
+
   def commit_home_revision(user, expected, definition, text, context_id, attempt) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
@@ -3123,6 +3275,16 @@ defmodule BurpeeTrainer.Workouts do
                "updated_at" => DateTime.to_iso8601(draft.updated_at)
              }) do
         {:ok, draft}
+      end
+    end)
+  end
+
+  @doc "Saves an approved review candidate as a new published workout, without selecting it."
+  def commit_approved_workout(user, definition, text, context_id, attempt) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, draft} <-
+             commit_authored_revision(user, nil, definition, text, context_id, attempt) do
+        publish_unattached_draft(user, draft.id)
       end
     end)
   end

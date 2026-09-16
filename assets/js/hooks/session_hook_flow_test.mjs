@@ -326,11 +326,6 @@ function appendStablePanels(root) {
 		button.dataset.mood = String(mood);
 		completion.append(button);
 	}
-	for (const tag of ["tired", "great_energy", "bad_sleep"]) {
-		const button = new FakeElement("button");
-		button.dataset.tag = tag;
-		completion.append(button);
-	}
 }
 
 function buildHarness({
@@ -1560,19 +1555,12 @@ test("completion display and every stable edit queue the full draft", async () =
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).mood, 1);
 
-	const tag = ctx.el
-		.querySelectorAll("[data-tag]")
-		.find((button) => button.dataset.tag === "great_energy");
-	ctx.el.dispatchEvent({ type: "click", target: tag });
-	await ctx.draftWrite;
-	assert.deepEqual(saved.at(-1).tags, ["great_energy"]);
-
 	const note = ctx.el.querySelector("#completion-note-input");
 	note.value = "Strong finish";
 	ctx.el.dispatchEvent({ type: "input", target: note });
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).note_post, "Strong finish");
-	assert.equal(saved.length, 6);
+	assert.equal(saved.length, 5);
 	ctx.destroyed();
 });
 
@@ -2778,21 +2766,27 @@ function submitCompletion(ctx) {
 	return prevented;
 }
 
-test("typed feedback is stored and sent with the fixed completion field names", () => {
+test("Save serializes planned seconds as an integer despite runtime floating-point drift", () => {
+	const ctx = mountedFlowHarness();
+	prepareSaveReview(ctx, { durationSecPlanned: 1200.0000000000002 });
+	assert.equal(ctx.completionPayload().workout_session.duration_sec_planned, 1200);
+	assert.equal(ctx.flow.completion.durationSecPlanned, 1200.0000000000002);
+	ctx.destroyed();
+});
+
+test("Save omits removed feedback even when an old draft has contradictory energy", () => {
 	const ctx = mountedFlowHarness();
 	prepareSaveReview(ctx, {
 		contextLowEnergy: true,
-		contextHighEnergy: false,
+		contextHighEnergy: true,
 		contextHeatAffected: true,
 		primaryLimiter: "legs",
 		preferenceFeedback: "avoid",
 	});
 
 	assert.equal(ctx.inMemoryCompletionDraft.context_low_energy, true);
-	assert.equal(ctx.inMemoryCompletionDraft.context_high_energy, false);
-	assert.equal(ctx.inMemoryCompletionDraft.context_heat_affected, true);
+	assert.equal(ctx.inMemoryCompletionDraft.context_high_energy, true);
 	assert.equal(ctx.inMemoryCompletionDraft.primary_limiter, "legs");
-	assert.equal(ctx.inMemoryCompletionDraft.preference_feedback, "avoid");
 	assert.deepEqual(ctx.completionPayload().workout_session, {
 		burpee_type: "six_count",
 		burpee_count_actual: 4,
@@ -2801,23 +2795,14 @@ test("typed feedback is stored and sent with the fixed completion field names", 
 		duration_sec_planned: 10,
 		client_session_id: "client-save",
 		mood: 1,
-		tags: "great_energy,tired",
-		context_low_energy: true,
-		context_high_energy: false,
-		context_heat_affected: true,
-		primary_limiter: "legs",
-		preference_feedback: "avoid",
 		note_post: "Strong finish",
 	});
 	ctx.destroyed();
 });
 
-test("final Save announces contradictory energy and keeps the invalid draft editable", async () => {
-	const store = {
-		loadDraft: async () => null,
-	};
+test("final Save excludes stale feedback and shows errors for removed fields", async () => {
 	const ctx = mountedFlowHarness({
-		openSessionStore: async () => store,
+		openSessionStore: async () => ({ loadDraft: async () => null }),
 	});
 	prepareSaveReview(ctx, {
 		contextLowEnergy: true,
@@ -2825,10 +2810,6 @@ test("final Save announces contradictory energy and keeps the invalid draft edit
 		primaryLimiter: "legs",
 		preferenceFeedback: "avoid",
 	});
-	ctx.el.querySelector("#completion-context-low-energy").checked = true;
-	ctx.el.querySelector("#completion-context-high-energy").checked = true;
-	ctx.el.querySelector("#completion-primary-limiter").value = "legs";
-	ctx.el.querySelector("#completion-preference-feedback").value = "avoid";
 	const draft = ctx.inMemoryCompletionDraft;
 	const calls = [];
 	const contradiction = "cannot be true when low energy is also true";
@@ -2844,76 +2825,15 @@ test("final Save announces contradictory energy and keeps the invalid draft edit
 	assert.equal(submitCompletion(ctx), true);
 	await flushHookPromises();
 
-	assert.deepEqual(calls, [
-		{
-			name: "save_session",
-			payload: {
-				workout_session: {
-					burpee_type: "six_count",
-					burpee_count_actual: 4,
-					burpee_count_planned: 5,
-					duration_sec_actual: 9,
-					duration_sec_planned: 10,
-					client_session_id: "client-save",
-					mood: 1,
-					tags: "great_energy,tired",
-					context_low_energy: true,
-					context_high_energy: true,
-					context_heat_affected: false,
-					primary_limiter: "legs",
-					preference_feedback: "avoid",
-					note_post: "Strong finish",
-				},
-				tracking: {
-					enabled: true,
-					trust: "finished",
-					reason: null,
-					detected_reps: 4,
-					detected_duration_sec: 9,
-					cadence_ms: [2_000, 4_000, 6_000, 8_000],
-				},
-			},
-		},
-	]);
-	assert.equal(
-		ctx.el.querySelector("#completion-context-high-energy-error").textContent,
-		contradiction,
-	);
-	assert.equal(
-		ctx.el.querySelector("#completion-context-high-energy-error").hidden,
-		false,
-	);
-	assert.equal(
-		ctx.el
-			.querySelector("#completion-context-high-energy")
-			.getAttribute("aria-invalid"),
-		"true",
-	);
-	assert.equal(
-		ctx.el.querySelector("#session-live-status").textContent,
-		contradiction,
-	);
-	assert.equal(
-		ctx.el.querySelector("#completion-context-low-energy").checked,
-		true,
-	);
-	assert.equal(
-		ctx.el.querySelector("#completion-context-high-energy").checked,
-		true,
-	);
-	assert.equal(
-		ctx.el.querySelector("#completion-primary-limiter").value,
-		"legs",
-	);
-	assert.equal(
-		ctx.el.querySelector("#completion-preference-feedback").value,
-		"avoid",
-	);
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0].name, "save_session");
+	assert.deepEqual(calls[0].payload.workout_session, ctx.completionPayload().workout_session);
+	assert.equal(Object.hasOwn(calls[0].payload.workout_session, "context_high_energy"), false);
+	assert.equal(ctx.el.querySelector("#session-save-errors").textContent, contradiction);
+	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+	assert.equal(ctx.el.querySelector("#session-live-status").textContent, contradiction);
 	assert.equal(ctx.inMemoryCompletionDraft, draft);
-	assert.equal(
-		ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"),
-		false,
-	);
+	assert.equal(ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"), false);
 	ctx.destroyed();
 });
 
@@ -2951,7 +2871,7 @@ test("Leave is rejected until the delayed Save acknowledgement and local commit 
 			"true",
 		);
 		assert.match(
-			ctx.el.querySelector("#session-leave-btn").textContent,
+			ctx.el.querySelector("#session-leave-btn").getAttribute("aria-label"),
 			/Save in progress/,
 		);
 
@@ -3016,7 +2936,7 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 		assert.equal(ctx.flow.saveStatus, "failed");
 		assert.deepEqual(ctx.flow.completion, acknowledgedCompletion);
 		assert.equal(
-			ctx.el.querySelector("#session-save-btn").textContent,
+			ctx.el.querySelector("#session-save-btn").getAttribute("aria-label"),
 			"Retry finalization",
 		);
 		assert.equal(
@@ -3040,10 +2960,7 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 				id,
 			);
 		}
-		for (const button of [
-			...ctx.el.querySelectorAll("[data-mood]"),
-			...ctx.el.querySelectorAll("[data-tag]"),
-		]) {
+		for (const button of ctx.el.querySelectorAll("[data-mood]")) {
 			assert.equal(button.hasAttribute("disabled"), true);
 		}
 
@@ -3056,11 +2973,6 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 		ctx.el.dispatchEvent({
 			type: "click",
 			target: ctx.el.querySelectorAll("[data-mood]")[0],
-			preventDefault() {},
-		});
-		ctx.el.dispatchEvent({
-			type: "click",
-			target: ctx.el.querySelectorAll("[data-tag]")[0],
 			preventDefault() {},
 		});
 		await ctx.draftWrite;

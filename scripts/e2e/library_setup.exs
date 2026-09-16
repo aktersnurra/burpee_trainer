@@ -36,12 +36,11 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     require_disposable_database!()
     run_id = Keyword.get_lazy(options, :run_id, &default_run_id/0) |> safe_run_id()
     username = fixture_username(run_id, mode)
-    password = Keyword.get_lazy(options, :password, fn -> fixture_password(run_id, mode) end)
 
     base_url =
       Keyword.get(options, :base_url, System.get_env("E2E_BASE_URL") || "http://127.0.0.1:4000")
 
-    case ensure_fixture_user(username, password) do
+    case ensure_fixture_user(username) do
       {:ok, user, created_user?} ->
         try do
           maybe_induce_failure!(options, :after_registration)
@@ -56,7 +55,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
                  mode: mode,
                  user_id: user.id,
                  username: username,
-                 password: password,
+                 auth_mode: "oidc",
                  base_url: base_url,
                  login_url: "#{base_url}/login"
                })}
@@ -440,13 +439,13 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
 
   defp ensure_weekend_history(_user, _run_id, _slot), do: {:ok, nil}
 
-  defp ensure_fixture_user(username, password) do
+  defp ensure_fixture_user(username) do
     case Accounts.get_user_by_username(username) do
       %User{} = user ->
         {:ok, user, false}
 
       nil ->
-        case Accounts.register_user(%{"username" => username, "password" => password}) do
+        case Accounts.create_user(%{"username" => username}) do
           {:ok, user} -> {:ok, user, true}
           {:error, reason} -> {:error, reason}
         end
@@ -574,15 +573,6 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
       ],
       "-"
     )
-  end
-
-  defp fixture_password(run_id, mode) do
-    suffix =
-      :crypto.hash(:sha256, "#{run_id}:#{mode}:password")
-      |> Base.url_encode64(padding: false)
-      |> String.slice(0, 20)
-
-    "Fixture!#{suffix}"
   end
 
   defp definition(name, duration_sec, reps \\ nil)

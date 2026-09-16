@@ -94,38 +94,43 @@ defmodule BurpeeTrainer.Coach.Context do
     end)
   end
 
-  def messages(user, session_id, source, attempt, prompt) do
+  def messages(user, session_id, source, attempt, prompt, extra_messages \\ []) do
     safe(fn ->
       with :ok <- check_source(user, session_id, source),
+           {:ok, _session} <- owned_session(user, session_id),
            {:ok, entries} <- entries(user, session_id),
            %DesignEntry{} = active <-
              Enum.find(
                entries,
                &(&1.attempt_id == attempt and &1.kind == :instruction)
              ) do
-        messages = [
-          %{role: "system", content: prompt},
-          %{
-            role: "system",
-            content:
-              Jason.encode!(%{
-                scope: "global",
-                context: Memory.global_context(user),
-                rule: "Local workout instructions are not enduring global preferences."
-              })
-          },
-          %{
-            role: "user",
-            content:
-              Jason.encode!(%{
-                scope: "workout_design",
-                active_attempt: %{id: attempt, instruction: active.payload["text"]},
-                rule: "Revise only for active_attempt; other attempts are historical context.",
-                current_definition: source && source.definition_json,
-                entries: Enum.map(entries, &entry_payload/1)
-              })
-          }
-        ]
+        request_entries =
+          Enum.filter(entries, &(&1.kind in [:initial_context, :baseline] or &1.id == active.id))
+
+        messages =
+          [
+            %{role: "system", content: prompt},
+            %{
+              role: "system",
+              content:
+                Jason.encode!(%{
+                  scope: "global",
+                  context: Memory.global_context(user),
+                  rule: "Local workout instructions are not enduring global preferences."
+                })
+            },
+            %{
+              role: "user",
+              content:
+                Jason.encode!(%{
+                  scope: "workout_design",
+                  active_attempt: %{id: attempt, instruction: active.payload["text"]},
+                  rule: "Act only on active_attempt; prior failed proposals are not examples.",
+                  current_definition: source && source.definition_json,
+                  entries: Enum.map(request_entries, &request_entry_payload/1)
+                })
+            }
+          ] ++ extra_messages
 
         if byte_size(Jason.encode!(messages)) <= 262_144,
           do: {:ok, messages},
@@ -222,6 +227,14 @@ defmodule BurpeeTrainer.Coach.Context do
 
   defp entry_payload(e),
     do: %{id: e.id, attempt_id: e.attempt_id, kind: Atom.to_string(e.kind), payload: e.payload}
+
+  defp request_entry_payload(%DesignEntry{kind: :baseline} = entry) do
+    entry
+    |> entry_payload()
+    |> update_in([:payload], &Map.delete(&1, "prior_owned_entries"))
+  end
+
+  defp request_entry_payload(entry), do: entry_payload(entry)
 
   defp insert_or_rollback(user, id, attempt, kind, payload) do
     case append(user, id, attempt, kind, payload) do

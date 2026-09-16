@@ -20,15 +20,46 @@ defmodule BurpeeTrainer.Repo.Migrations.AddVideoExecutionAuthorizationLanes do
   """
 
   def up do
-    rebuild(:up)
-    create_video_execution_authorization_uses()
+    with_foreign_keys_disabled(fn ->
+      rebuild(:up)
+      create_video_execution_authorization_uses()
+    end)
   end
 
   def down do
-    reject_live_video_authorizations!()
-    drop_if_exists(table(:video_execution_authorization_uses))
-    flush()
-    rebuild(:down)
+    with_foreign_keys_disabled(fn ->
+      reject_live_video_authorizations!()
+      drop_if_exists(table(:video_execution_authorization_uses))
+      flush()
+      rebuild(:down)
+    end)
+  end
+
+  defp with_foreign_keys_disabled(fun) do
+    repo().checkout(
+      fn ->
+        try do
+          repo().query!("PRAGMA foreign_keys = OFF")
+          [[0]] = repo().query!("PRAGMA foreign_keys").rows
+
+          {:ok, :ok} =
+            repo().transaction(
+              fn ->
+                fun.()
+                flush()
+                :ok
+              end,
+              mode: :immediate,
+              timeout: :infinity
+            )
+
+          :ok
+        after
+          repo().query!("PRAGMA foreign_keys = ON")
+        end
+      end,
+      timeout: :infinity
+    )
   end
 
   defp reject_live_video_authorizations! do
@@ -106,7 +137,6 @@ defmodule BurpeeTrainer.Repo.Migrations.AddVideoExecutionAuthorizationLanes do
   defp rebuild(direction) do
     prior_sequence = workout_sessions_sequence()
 
-    execute("PRAGMA foreign_keys = OFF")
     execute("DROP TABLE IF EXISTS workout_sessions_video_auth_rebuilt")
     execute(table_sql(direction))
     execute(copy_sql(direction))
@@ -117,7 +147,6 @@ defmodule BurpeeTrainer.Repo.Migrations.AddVideoExecutionAuthorizationLanes do
     create_provenance_triggers(direction)
     flush()
     restore_workout_sessions_sequence(prior_sequence)
-    execute("PRAGMA foreign_keys = ON")
   end
 
   defp workout_sessions_sequence do

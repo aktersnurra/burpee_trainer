@@ -1,6 +1,6 @@
 # Adaptive Home: approved pre-workout design
 
-Status: pre-workout interaction and visual direction approved on 2026-09-09. Minor visual polish is deferred. This is a product/design specification, not a claim that the production app implements it.
+Status: pre-workout interaction and visual direction approved on 2026-09-09. Follow-on scope revised on 2026-09-12: retain the original adaptive state machine and inline interactions, not separate Library/Create page redesigns. See [the inline state-machine plan revision](../plans/2026-09-12-adaptive-home-inline-revision.md) for current scope, gaps and sequencing. This is a product/design specification, not a claim that the production app implements it.
 
 ## Scope and authority
 
@@ -25,7 +25,7 @@ This is a personal, get-things-done tool, not a social app or a chat app. Openin
 Reference: the user's `screenshot_046.png`, refined through the latest prototype.
 
 - Warm off-white surface, dark text, muted secondary information, fine neutral rules.
-- A small weekly progress display at the top, with the actual week/progress from domain data.
+- A small weekly progress display at the top, with the actual week/progress from domain data. The progress bar is always available across Home states as the entry point to inline History: tap or keyboard-activate it to expand History without leaving Home or changing the workout. Preserve accessible progress semantics and return focus to the opener when History closes.
 - A prominent, centered workout name, followed by a compact duration/reps line.
 - Generous surrounding whitespace. No card border, recommendation paragraph, badge, or `Recommended`/`Selected`/`Draft` eyebrow above the title.
 - One font family; a deliberately prominent title and restrained supporting text. Avoid a proliferation of font sizes and decorative typography.
@@ -163,7 +163,7 @@ Filters:
 
 Candidate level metadata and coach ranking must be provided by the domain. The prototype's `1C` user level, per-item classifications, and list order are fixtures, not an approved production classification algorithm. The implementation plan must explicitly map this data contract to real catalog facts; it must not infer levels from arbitrary sample IDs or silently use fabricated rankings.
 
-Unfinished authoring drafts remain recoverable through the workout library rather than displacing the current selection. Creating an unrelated workout does not automatically reserve the next recommendation. The existing separate Create flow remains outside this visual redesign; do not rewrite it merely to resemble the Home prototype.
+Follow-on revision: unfinished authoring drafts must remain recoverable inline without silently displacing the current selection. All creation belongs to the Home draft flow, not a separate Create page. When no usable workout exists, show a text box for an explicit LLM request to bootstrap the first validated draft; retain the prompt on failure. Existing usable workouts and deterministic fallback must not depend on provider success. Other workouts is the browsing/selection surface. Preserve unique Library/Create capabilities and saved drafts until their inline replacements or explicit retirement have been reviewed and verified.
 
 ## Coach context and memory boundary
 
@@ -223,7 +223,7 @@ Verify real implementation with focused ExUnit/LiveView tests, JavaScript tests 
 
 Today’s completed result remains primary even when it completes the weekly target. On subsequent days, show weekly completion until Monday. Completed states have no primary action or push to do another workout.
 
-Clicking the result opens History with `This week | 4 weeks | All time`, separate six-count/Navy Seal line plots, an optional line/bar toggle, and an expandable spreadsheet-style session list. Default comparison metric is reps per 20 minutes: `actual reps × 1,200 / actual duration seconds`. This is training density, not a predicted 20-minute personal best. Tapping a point reveals actual reps and duration.
+Clicking the result expands History inline on Home, with `This week | 4 weeks | All time`, separate six-count/Navy Seal line plots, an optional line/bar toggle, and an expandable spreadsheet-style session list. Default comparison metric is reps per 20 minutes: `actual reps × 1,200 / actual duration seconds`. This is training density, not a predicted 20-minute personal best. Tapping a point reveals actual reps and duration.
 
 Pace means active movement time per rep; cadence includes rest between reps within a set, excluding inter-set rest. Do not present prescribed timing as measured timing. Navy Seal push-up count is three per rep, but multiplying by three does not make overall effort equivalent to six-counts.
 

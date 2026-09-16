@@ -19,7 +19,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     assert slot.local_date == ~D[2025-09-01]
   end
 
-  test "home priority is week complete, then done today, then workout needed" do
+  test "home priority is done today, then week complete, then workout needed" do
     user = user_fixture() |> provision_timezone("Etc/UTC")
     monday = ~U[2025-09-01 12:00:00Z]
 
@@ -32,6 +32,25 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
 
     assert {:ok, %{home_state: :week_complete}} =
              Policy.required_slot(user, ~U[2025-09-03 12:00:00Z])
+  end
+
+  test "today wins at target, next day completes week, Monday has no debt" do
+    user = user_fixture() |> provision_timezone("Etc/UTC")
+    complete(user, ~U[2025-09-01 12:00:00Z], 1_200)
+
+    assert {:ok, %{home_state: :done_today, completed_sec: 1_200}} =
+             Policy.required_slot(user, ~U[2025-09-01 12:00:00Z])
+
+    complete(user, ~U[2025-09-02 12:00:00Z], 3_600)
+
+    assert {:ok, %{home_state: :done_today, completed_sec: 4_800, remaining_sec: 0}} =
+             Policy.required_slot(user, ~U[2025-09-02 12:00:00Z])
+
+    assert {:ok, %{home_state: :week_complete, completed_sec: 4_800}} =
+             Policy.required_slot(user, ~U[2025-09-03 12:00:00Z])
+
+    assert {:ok, %{home_state: :workout_needed, completed_sec: 0, remaining_sec: 4_800}} =
+             Policy.required_slot(user, ~U[2025-09-08 00:00:00Z])
   end
 
   test "weekend catch-up covers the full remainder at 2,400 seconds and is never exploration" do

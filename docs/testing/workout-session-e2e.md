@@ -1,8 +1,18 @@
-# Workout Library and Session Browser E2E
+# Home Workout and Session Browser E2E
 
-This is the canonical authenticated Firefox procedure for the deletion-first workout library,
-recommendation Home, immutable plan/video sessions, History, and optional pose evidence. Automated
-ExUnit and Node suites remain mandatory; they do not replace current-run browser evidence.
+The standalone Workouts, workout creation/draft, and Videos pages have been removed. Their old URLs
+redirect to Home. Select saved plans and videos in Home's chooser; keep the video session/player and
+stream routes for workouts in progress. The catalog-specific scenario steps later in this document
+are historical and must not be used as acceptance for the current UI. Its fixture safety and session
+verification rules still apply. Automated ExUnit and Node suites do not replace current-run browser
+evidence.
+
+Authentication follows upstream OIDC/Pocket ID. The fixture helper provisions a local user,
+reports `auth_mode: "oidc"`, and does not generate a login password. Real sign-in requires an
+OIDC identity linked to that exact fixture user. A server-generated session cookie in a guarded,
+disposable fixture runtime may support controlled browser checks, but does not prove real OIDC
+sign-in. Password-login steps below are historical; do not restore the removed password API,
+borrow a production identity, or print cookies/client secrets to make them work.
 
 ## Required capabilities
 
@@ -548,3 +558,31 @@ Do not modify source while a scenario is active. On failure:
 5. reproduce with a focused automated test when possible;
 6. fix test-first;
 7. restart with a new direct `/tmp` path, Firefox profile, and identity.
+
+## Direct-controller History evidence publication
+
+The direct-controller runner is a no-browser-preflight boundary. After its sanitized
+`SCENARIO_COMPLETE` receipt validates, it collects exactly the eight ordered History
+PNG/JSON pairs from the controller-owned `history-captures` directory through
+no-follow directory descriptors. It validates bounded regular mode-600 files, PNG
+structure, and closed observation metadata in memory before cleanup.
+
+After the real launch gate, the runner reopens the canonical retained approval receipt
+with `O_NOFOLLOW`, verifies its inode, digest, run, port, and frozen-source digest,
+and buffers only its closed fields plus receipt SHA-256 (never its path). A missing or
+empty approval is a publication failure. Cleanup must return the literal closed
+`CLEANED` receipt. Only then may the runner create the exclusive mode-700 report directory below
+`.e2e-artifacts/reports/prompt-first-home/mobile-history-dashboard/<run>` and write
+its buffered captures, sanitized approval receipt and sidecar, run receipt, proof
+summary, cleanup receipt, and final report first. It then writes an exclusive,
+fsynced sorted `hash-inventory.json` covering exactly those 22 evidence files, followed
+by an exclusive, fsynced `hash-inventory-sha256.txt` containing the exact SHA-256 of
+the inventory. The sidecar is deliberately outside the inventory to avoid a self-hash
+cycle; the final directory is therefore a closed set of 24 files. Failed collection
+or cleanup never publishes; cleanup is still attempted after collection failure.
+Published evidence contains no live run paths, final manifest, credential, or
+cleanup-tree children.
+
+`page_overflow: true` records `scrollWidth <= clientWidth`, so it means that the page
+has **no page-level horizontal overflow**. The History KPI strip may scroll horizontally;
+the partially visible next card is explicitly approved and is not page overflow.

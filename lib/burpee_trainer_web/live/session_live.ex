@@ -35,7 +35,17 @@ defmodule BurpeeTrainerWeb.SessionLive do
            Workouts.resume_session(user, id) do
       {:ok, mount_session(socket, workout_session)}
     else
-      _unavailable -> unavailable_session(socket)
+      {:error, %Workouts.Error{code: :session_already_completed}} ->
+        case Workouts.get_session(user, String.to_integer(session_id)) do
+          %WorkoutSession{state: :completed, source_kind: :plan} = completed ->
+            {:ok, assign(socket, :workout_session, completed)}
+
+          _unavailable ->
+            unavailable_session(socket)
+        end
+
+      _unavailable ->
+        unavailable_session(socket)
     end
   end
 
@@ -76,6 +86,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
           attrs,
           persistence_mode(attrs, tracking, socket.assigns.target_pace_sec)
         )
+        |> acknowledge_completed_retry(socket.assigns.workout_session, attrs)
 
       {:reply, save_reply(result), socket}
     else
@@ -107,6 +118,31 @@ defmodule BurpeeTrainerWeb.SessionLive do
   end
 
   @impl true
+  def render(%{workout_session: %WorkoutSession{state: :completed}} = assigns) do
+    ~H"""
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_level={@current_level}
+      current_scope={assigns[:current_scope]}
+      navigation?={false}
+      flash?={false}
+    >
+      <p
+        id="session-already-saved"
+        phx-hook="SessionCompleted"
+        data-session-id={@workout_session.id}
+        data-content-hash={@workout_session.content_hash}
+        data-client-session-id={@workout_session.client_session_id}
+        data-redirect-to={~p"/"}
+        role="status"
+      >
+        Session saved. Returning Home…
+      </p>
+    </Layouts.app>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -128,11 +164,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
         data-client-session-id={@workout_session.client_session_id}
         class="session-surface fixed inset-0 z-[60] min-h-dvh overflow-hidden bg-[var(--session-bg)] text-[var(--session-ink)]"
       >
-        <SessionComponents.capture_choice hidden={false} />
-        <SessionComponents.camera_status />
-        <SessionComponents.camera_setup target_pace_sec={@target_pace_sec} />
-        <SessionComponents.warmup_choice />
-        <SessionComponents.workout_ready />
+        <SessionComponents.capture_choice hidden={false} session={@workout_session} />
+        <SessionComponents.camera_status session={@workout_session} />
+        <SessionComponents.camera_setup session={@workout_session} target_pace_sec={@target_pace_sec} />
+        <SessionComponents.warmup_choice session={@workout_session} />
+        <SessionComponents.workout_ready session={@workout_session} />
         <SessionComponents.runner summary={@summary} />
         <SessionComponents.completion_review form={@completion_form} />
 
@@ -306,8 +342,18 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   defp parse_number(_value), do: :error
 
+  # A retry whose earlier reply was lost: the row is already completed by this client.
+  defp acknowledge_completed_retry(
+         {:error, %Workouts.Error{code: :session_already_completed}},
+         %WorkoutSession{client_session_id: client_session_id} = session,
+         %{"client_session_id" => client_session_id}
+       ),
+       do: {:ok, session}
+
+  defp acknowledge_completed_retry(result, _session, _attrs), do: result
+
   defp save_reply({:ok, session}) do
-    %{status: "ok", session_id: session.id, redirect_to: ~p"/stats"}
+    %{status: "ok", session_id: session.id, redirect_to: ~p"/"}
   end
 
   defp save_reply({:error, %Ecto.Changeset{} = changeset}) do

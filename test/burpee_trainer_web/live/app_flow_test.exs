@@ -12,16 +12,26 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "Library Start creates one exact immutable session before the runner mounts", %{
+  test "Home Start creates one exact immutable session before the runner mounts", %{
     conn: conn,
     user: user
   } do
-    plan = plan_fixture(user, %{"name" => "Cross-screen snapshot"})
-    {:ok, library, _html} = live(conn, ~p"/workouts")
+    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, DateTime.utc_now(:second))
 
-    library |> element("#start-workout-#{plan.id}") |> render_click()
+    assert {:ok, recommendation} =
+             Workouts.ensure_recommendation(user, %{
+               slot_key: slot.slot_key,
+               slot_date: slot.slot_date,
+               rationale: "Ready from Home."
+             })
+
+    {:ok, home, _html} = live(conn, ~p"/")
+
+    home |> element("#home-summary") |> render_click()
+    home |> element("#home-action") |> render_click()
     started = Workouts.current_started_session(user)
-    assert_redirect(library, ~p"/session/#{started.id}")
+    assert started.plan_id == recommendation.selected_workout_plan_id
+    assert_redirect(home, ~p"/session/#{started.id}")
     assert Repo.aggregate(WorkoutSession, :count) == 1
 
     {:ok, runner, _html} = live(conn, ~p"/session/#{started.id}")
@@ -46,22 +56,13 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
-  test "Video index, detail, direct session mount, and reconnect never create extra sessions", %{
+  test "Video session mount and reconnect never create extra sessions", %{
     conn: conn,
     user: user
   } do
     video = video_fixture(%{burpee_count: nil})
 
-    {:ok, index, _html} = live(conn, ~p"/videos")
-    assert has_element?(index, "#video-card-#{video.id}")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-
-    {:ok, detail, _html} = live(conn, ~p"/videos/#{video.id}")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-
-    detail |> element("#video-start-action") |> render_click()
-    started = Workouts.current_started_session(user)
-    assert_redirect(detail, ~p"/videos/#{video.id}/session/#{started.id}")
+    assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
     assert Repo.aggregate(WorkoutSession, :count) == 1
 
     {:ok, first_mount, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
@@ -88,12 +89,10 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     {:ok, home, _html} = live(conn, ~p"/")
 
-    assert has_element?(home, "#home-action", "Start")
+    assert has_element?(home, "#home-action[aria-label='Start workout'] .hero-play")
     home |> element("#home-summary") |> render_click()
 
-    home
-    |> form("#home-adjustment-form", home_adjustment: %{instruction: " \n "})
-    |> render_submit()
+    home |> element("#home-action") |> render_click()
 
     started = Workouts.current_started_session(user)
     assert started.plan_id == recommendation.selected_workout_plan_id

@@ -4,7 +4,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
   import BurpeeTrainer.Fixtures
   import Ecto.Query
 
-  alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.PlanCompiler.ProgramHash
   alias BurpeeTrainer.{Goals, Repo, Workouts}
 
@@ -12,7 +11,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
     CoachRecommendation,
     Error,
     PoseCaptureRun,
-    SessionLog,
     WorkoutSession
   }
 
@@ -343,51 +341,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
   end
 
   describe "manual history and pose evidence" do
-    test "free-form logging inserts completed/manual with the validated historical time" do
-      user = user_fixture()
-      completed_at = ~U[2025-02-03 12:34:56Z]
-
-      assert {:ok, session} =
-               Workouts.create_free_form_session(user, %{
-                 "burpee_type" => "navy_seal",
-                 "burpee_count_actual" => 25,
-                 "duration_sec_actual" => 400,
-                 "completed_at" => DateTime.to_iso8601(completed_at)
-               })
-
-      assert session.state == :completed
-      assert session.source_kind == :manual
-      assert session.started_at == nil
-      assert session.completed_at == completed_at
-      assert session.plan_id == nil
-      assert session.workout_video_id == nil
-      assert session.program_snapshot == nil
-      assert session.video_snapshot == nil
-      assert session.client_session_id == nil
-
-      assert {:error, changeset} =
-               Workouts.create_free_form_session(user, %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_actual" => 10,
-                 "duration_sec_actual" => 100,
-                 "completed_at" =>
-                   DateTime.utc_now() |> DateTime.add(86_400) |> DateTime.to_iso8601()
-               })
-
-      assert "cannot be in the future" in errors_on(changeset).completed_at
-
-      for completed_at <- [nil, "not-a-date-time"] do
-        assert {:error, invalid_changeset} =
-                 Workouts.create_free_form_session(user, %{
-                   "burpee_type" => "six_count",
-                   "burpee_count_actual" => 10,
-                   "duration_sec_actual" => 100,
-                   "completed_at" => completed_at
-                 })
-
-        assert errors_on(invalid_changeset).completed_at != []
-      end
-    end
 
     test "new pose runs are bound to an already-created owned session" do
       user = user_fixture()
@@ -433,172 +386,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       end
     end
 
-    test "free-form date parsing rejects empty, malformed, and future local dates and accepts user today" do
-      user = %User{timezone: "Pacific/Kiritimati"}
-      now = ~U[2025-02-03 23:30:00Z]
-      local_today = "2025-02-04"
-      base = %{"burpee_count_actual" => "10", "duration_sec_actual" => "2"}
-
-      for invalid <- [
-            nil,
-            "",
-            "not-a-date",
-            123,
-            1.5,
-            %{},
-            [],
-            true,
-            {:forged, :date}
-          ] do
-        params = Map.put(base, "log_date", invalid)
-        assert {:error, :invalid_log_date} = SessionLog.parse_log_date(params)
-
-        assert {:error, _reason} =
-                 SessionLog.to_attrs(
-                   params,
-                   :six_count,
-                   0,
-                   [],
-                   user,
-                   now
-                 )
-      end
-
-      assert {:error, :future_log_date} =
-               SessionLog.to_attrs(
-                 Map.put(base, "log_date", "2025-02-05"),
-                 :six_count,
-                 0,
-                 [],
-                 user,
-                 now
-               )
-
-      assert {:ok, attrs} =
-               SessionLog.to_attrs(
-                 Map.put(base, "log_date", local_today),
-                 :six_count,
-                 0,
-                 [],
-                 user,
-                 now
-               )
-
-      assert attrs["completed_at"] == now
-    end
-
-    test "free-form duration normalizes forged values into ordinary changeset errors" do
-      user = user_fixture()
-      now = DateTime.utc_now(:second)
-      date = Date.to_iso8601(Date.utc_today())
-
-      for forged <- [123, %{}, [], true] do
-        assert {:ok, attrs} =
-                 SessionLog.to_attrs(
-                   %{
-                     "burpee_count_actual" => "10",
-                     "duration_sec_actual" => forged,
-                     "log_date" => date
-                   },
-                   :six_count,
-                   0,
-                   [],
-                   user,
-                   now
-                 )
-
-        assert attrs["duration_sec_actual"] == ""
-
-        assert {:error, %Ecto.Changeset{} = changeset} =
-                 Workouts.create_free_form_session(user, attrs)
-
-        assert "can't be blank" in errors_on(changeset).duration_sec_actual
-      end
-
-      assert {:ok, attrs} =
-               SessionLog.to_attrs(
-                 %{
-                   "burpee_count_actual" => "10",
-                   "duration_sec_actual" => "2",
-                   "log_date" => date
-                 },
-                 :six_count,
-                 0,
-                 [],
-                 user,
-                 now
-               )
-
-      assert attrs["duration_sec_actual"] == "120"
-    end
-
-    test "user-local midnight drives derived day, time bucket, and week milestones" do
-      user =
-        user_fixture()
-        |> Ecto.Changeset.change(timezone: "America/Los_Angeles")
-        |> Repo.update!()
-
-      assert {:ok, prior} =
-               Workouts.create_free_form_session(user, %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_actual" => 100,
-                 "duration_sec_actual" => 600,
-                 "completed_at" => "2025-02-10T07:30:00Z"
-               })
-
-      assert prior.time_of_day_bucket == "night"
-
-      assert {:ok, after_midnight} =
-               Workouts.create_free_form_session(user, %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_actual" => 1,
-                 "duration_sec_actual" => 60,
-                 "completed_at" => "2025-02-10T08:30:00Z"
-               })
-
-      assert after_midnight.days_since_last == 1
-      assert after_midnight.time_of_day_bucket == "night"
-      assert Workouts.current_week_pushups(user, ~D[2025-02-10]) == 1
-
-      events = Workouts.session_milestones(user, after_midnight)
-      refute Enum.any?(events, &(&1.type == :week_pushup_pr))
-    end
-
-    test "backdated insertion excludes later sessions from chronology, rolling rates, goals, and milestones" do
-      user = user_fixture()
-
-      assert {:ok, _later} =
-               Workouts.create_free_form_session(user, %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_actual" => 100,
-                 "duration_sec_actual" => 1200,
-                 "completed_at" => "2025-02-10T12:00:00Z"
-               })
-
-      goal =
-        goal_fixture(user, %{
-          "burpee_count_target" => 90,
-          "burpee_count_baseline" => 10,
-          "date_baseline" => "2025-01-01",
-          "date_target" => "2025-03-01"
-        })
-
-      assert {:ok, backdated} =
-               Workouts.create_free_form_session(user, %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_actual" => 10,
-                 "duration_sec_actual" => 1200,
-                 "completed_at" => "2025-02-03T12:00:00Z"
-               })
-
-      assert backdated.days_since_last == nil
-      assert backdated.rate_delta == nil
-      assert backdated.rate_avg_rolling_3 == 0.5
-      assert backdated.goal_id == nil
-      assert Workouts.session_milestones(user, backdated, ~D[2025-02-03]) |> is_list()
-      assert Goals.get_goal!(user, goal.id).status == :active
-      assert Repo.get!(WorkoutSession, backdated.id).goal_id == nil
-    end
   end
 
   describe "database execution constraints" do

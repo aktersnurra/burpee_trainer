@@ -72,32 +72,21 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionTest do
 
   test "typed feedback rejects mutually exclusive energy context" do
     changeset =
-      WorkoutSession.free_form_changeset(%WorkoutSession{}, %{
-        "burpee_type" => "six_count",
-        "burpee_count_actual" => 20,
-        "duration_sec_actual" => 600,
-        "completed_at" => DateTime.add(DateTime.utc_now(), -60, :second),
-        "context_low_energy" => true,
-        "context_high_energy" => true
-      })
+      WorkoutSession.completion_changeset(
+        %WorkoutSession{state: :started, burpee_type: :six_count},
+        %{
+          "burpee_count_actual" => 20,
+          "duration_sec_actual" => 600,
+          "context_low_energy" => true,
+          "context_high_energy" => true
+        },
+        ~U[2026-08-27 10:20:00Z]
+      )
 
     refute changeset.valid?
 
     assert errors_on(changeset).context_high_energy == [
              "cannot be true when low energy is also true"
            ]
-  end
-
-  test "manual history rejects a future completion" do
-    changeset =
-      WorkoutSession.free_form_changeset(%WorkoutSession{}, %{
-        "burpee_type" => "six_count",
-        "burpee_count_actual" => 20,
-        "duration_sec_actual" => 600,
-        "completed_at" => DateTime.add(DateTime.utc_now(), 60, :second)
-      })
-
-    refute changeset.valid?
-    assert errors_on(changeset).completed_at == ["cannot be in the future"]
   end
 end

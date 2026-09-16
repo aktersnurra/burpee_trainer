@@ -28,7 +28,7 @@ config :burpee_trainer, :llm_provider,
   enabled: false,
   url: nil,
   api_key: nil,
-  model: "openai/gpt-5-mini",
+  model: "openai/gpt-6-luna",
   timeout_ms: 20_000
 
 # Disable swoosh api client as it is only required for production adapters

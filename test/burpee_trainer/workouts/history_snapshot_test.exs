@@ -37,30 +37,19 @@ defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
         completed_at: ~U[2025-01-02 03:04:05Z]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/stats?period=all")
-
-    selector =
-      "#history-session-#{session.id}[data-display-name='Legacy ladder snapshot']" <>
-        "[data-planned-reps='40'][data-actual-reps='38']" <>
-        "[data-prescribed-sets-completed='4'][data-reps-delta='-2']" <>
-        "[data-shortened][data-recovery-delta-sec='7']" <>
-        "[data-pace-delta-sec='1.25'][data-cadence-decline='0.15']"
-
-    assert has_element?(view, selector)
+    {:ok, view, _html} = live(conn, ~p"/?history=1")
+    view |> element("#home-history-period-all") |> render_click()
 
     assert has_element?(
              view,
-             "#history-session-#{session.id} .history-session-name",
+             "#home-history-inspect-#{session.id} .home-history-session-name",
              "Legacy ladder snapshot"
            )
 
-    assert has_element?(
-             view,
-             "#history-session-#{session.id} .history-session-date",
-             "2 Jan 2025"
-           )
-
-    refute has_element?(view, "#history-session-#{session.id} [data-live-plan-name]")
+    view |> element("#home-history-inspect-#{session.id}") |> render_click()
+    assert has_element?(view, "#home-history-sheet", "Jan 2, 2025")
+    assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='38']")
+    assert has_element?(view, "#home-history-sheet-details-#{session.id}", "Reps · 40")
 
     [persisted] = Workouts.list_sessions(user)
     assert persisted.completed_at == ~U[2025-01-02 03:04:05Z]
@@ -94,17 +83,18 @@ defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
         completed_at: ~U[2025-02-03 04:05:06Z]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/stats?period=all")
-
-    assert has_element?(view, "#history-session-#{session.id}[data-actual-reps='27']")
-    refute has_element?(view, "#history-session-#{session.id}[data-planned-reps]")
-    assert has_element?(view, "#history-session-#{session.id} .history-session-reps", "27")
+    {:ok, view, _html} = live(conn, ~p"/?history=1")
+    view |> element("#home-history-period-all") |> render_click()
 
     assert has_element?(
              view,
-             "#history-session-#{session.id} .history-session-name",
+             "#home-history-inspect-#{session.id} .home-history-session-name",
              "Uncounted follow-along"
            )
+
+    view |> element("#home-history-inspect-#{session.id}") |> render_click()
+    assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='27']")
+    assert has_element?(view, "#home-history-sheet-details-#{session.id}", "Reps · —")
 
     persisted = Workouts.get_session!(user, session.id)
     assert persisted.video_snapshot["count"] == nil

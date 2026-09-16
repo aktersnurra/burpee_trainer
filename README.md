@@ -7,12 +7,12 @@ Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks
 ## Features
 
 - **Durable workout library** — `workout_plans` is canonical. Valid drafts can be refined in natural language, explicitly published, copied, or deleted; published plans are immutable, reusable, startable, and archivable.
-- **Safe LLM authoring** — create and refine each make one bounded `Req` request. Valid output is persisted only as a draft; invalid output persists nothing. A generated recommendation is published and selected only after **Use this workout**; rejection deletes the alternative draft.
+- **Safe LLM authoring** — bounded `Req` extraction, planning, and repair produce a validated, audited review before a workout is saved. Home approval is provider-free and saves a new immutable workout; selecting it is a separate action. Invalid proposals do not replace the current workout.
 - **Deterministic coaching** — Home projects the weekly target, done-today state, fallback, and recommendation pointer from persisted facts. A supervised transient reconciler recovers missing recommendations without durable jobs, attempts, leases, checkpoints, or outboxes.
 - **Immutable execution** — Start creates the exact `started` session ID and stores a plan Work/Rest or video snapshot. Resume reads that snapshot; completion updates the same row exactly once and remains offline-capable during the runner.
 - **Stable History and Stats** — completed views use session snapshots, so later plan archival or video changes cannot rewrite the workout that was performed.
 - **Live session runner** — terminal-active timing, audio cues, wake lock, pause/resume, breathing, count-in, and optional BlazePose rep tracking with timer fallback.
-- **Single-user authentication** — bcrypt password hashing with all application data scoped to the user.
+- **OIDC authentication** — Pocket ID sign-in with all application data scoped to the local user; identity linking preserves an existing account's history.
 
 ## Stack
 
@@ -21,7 +21,7 @@ Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks
 - Tailwind CSS v4
 - Vanilla JavaScript modules and LiveView hooks
 - Chart.js for charts
-- bcrypt for password hashing
+- OIDC via `oidcc` for Pocket ID authentication
 
 ## Local development
 
@@ -57,17 +57,9 @@ mix ecto.migrate
 
 If Phoenix reports pending migrations, stop the server, run the command above, and restart it.
 
-### Create the user
+### Sign in
 
-BurpeeTrainer currently uses a single-user setup. Create the initial account with:
-
-```bash
-mix burpee_trainer.create_user
-```
-
-The task prompts for a username and password, hashes the password through the normal Accounts boundary, and refuses to create a second user when one already exists.
-
-Create the user before attempting to log in to a fresh database.
+Configure the OIDC provider and sign in through Pocket ID. OIDC resolves a known subject first, adopts an unlinked matching username, or creates a new local user on first sign-in. Conflicting identity links are refused so existing history is not assigned to another account. The old password-based `burpee_trainer.create_user` task has been removed; local fixture provisioning uses `Accounts.create_user/1` without creating a login password.
 
 ### Assets
 
@@ -121,10 +113,16 @@ Production releases read their runtime configuration from environment variables.
 | `PORT` | No | HTTP port; defaults to `4000`. |
 | `POOL_SIZE` | No | SQLite connection pool size; defaults to `5`. |
 | `DNS_CLUSTER_QUERY` | No | Optional DNS-based cluster discovery query. |
-| `LLM_PROVIDER_URL` | For LLM authoring | Provider endpoint for natural-language create/refine and recommendation generation. |
+| `OIDC_ISSUER` | Yes in production | Pocket ID issuer URL. |
+| `OIDC_CLIENT_ID` | Yes in production | OIDC client identifier. |
+| `OIDC_CLIENT_SECRET` | Yes in production | OIDC client secret; keep it outside the repository. |
+| `OIDC_REDIRECT_URI` | No | Callback URI; defaults to `https://PHX_HOST/auth/oidc/callback`. |
+| `LLM_PROVIDER_URL` | For LLM authoring | Provider endpoint for user-initiated workout creation and refinement. |
 | `LLM_PROVIDER_API_KEY` | For LLM authoring | Provider credential. If either provider value is absent, LLM HTTP is disabled and deterministic fallback remains usable. |
-| `LLM_PROVIDER_MODEL` | No | Provider model; defaults to `openai/gpt-5-mini`. |
+| `LLM_PROVIDER_MODEL` | No | Provider model; defaults to OpenRouter's `openai/gpt-6-luna`. |
 | `LLM_PROVIDER_TIMEOUT_MS` | No | Request timeout from 1,000–60,000 ms; defaults to 20,000. |
+
+For OpenRouter authoring, set `LLM_PROVIDER_URL` to `https://openrouter.ai/api/v1/chat/completions` and provision `LLM_PROVIDER_API_KEY` from your secret store. Both values are required to enable LLM HTTP; the default Luna model alone does not send requests. Override `LLM_PROVIDER_MODEL` only to select a different model supported by your configured endpoint. Keep provider credentials out of the repository. The five-minute coach reconciliation scan only maintains local workout availability; it does not request LLM proposals. Provider calls require an explicit user Create or Adjust action.
 
 The SQLite database and uploaded/runtime data must live in persistent paths managed by the target machine, not under the release directory that deployment replaces.
 

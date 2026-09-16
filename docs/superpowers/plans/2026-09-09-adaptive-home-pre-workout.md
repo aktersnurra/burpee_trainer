@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Current scope revision:** Continue with [Adaptive Home: Inline State-Machine Plan Revision](2026-09-12-adaptive-home-inline-revision.md). It preserves this pre-workout implementation as the baseline and supersedes permanent separate Library/Create destinations with inline Home flows. The tasks below are historical implementation detail, not a new execution queue. Preserve their compiler, ownership, privacy and atomic-Start guarantees.
+
 **Goal:** Deliver the approved real-data pre-workout Home: stable selection, exact inspection, inline revision, filtered alternatives, and atomic Start.
 
 **Architecture:** Extend the existing recommendation with one stable Home pointer/revision. Keep compiler validation, immutable library content, and session snapshots authoritative; add an owned append-only design context and identity-only best-effort finalization notifications. Provider work stays outside transactions and outside the LiveView process.
@@ -25,7 +27,7 @@
 - “Do not add Kafka, an outbox, delivery tracking, replay, durable retry jobs, or recovery machinery for this callback.”
 - “Use approximately 240–300 ms restrained transitions; honor reduced-motion preferences.”
 - “Expanded content and accessibility text may scroll. Never shrink text to force a fit.”
-- Preserve existing Create/library work. Do not implement the follow-on History, checkpoint/recovery, weekly-policy, or global-feedback surfaces.
+- For this original pre-workout slice, preserve existing Create/library work and leave History, checkpoint/recovery, weekly-policy, and global-feedback surfaces separate. The linked inline state-machine revision governs follow-on consolidation; it does not authorize deleting baseline functionality without replacement coverage.
 - Use existing authenticated routes, `<Layouts.app>`, `<.input>`, `<.icon>`, semantic tables, and streams. No new dependencies, animation framework, inline scripts, or provider request on Home mount.
 
 ---

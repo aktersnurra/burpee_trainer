@@ -125,32 +125,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     |> apply_execution_constraints()
   end
 
-  @doc """
-  Changeset for a direct completed/manual historical log. Identity and state
-  are assigned by the context; callers provide the historical completion time.
-  """
-  @spec free_form_changeset(t(), map()) :: Ecto.Changeset.t()
-  def free_form_changeset(session, attrs) do
-    session
-    |> cast(attrs, [
-      :burpee_type,
-      :burpee_count_actual,
-      :duration_sec_actual,
-      :completed_at,
-      :note_pre,
-      :note_post,
-      :mood,
-      :tags
-      | @feedback_fields
-    ])
-    |> validate_session_core()
-    |> validate_required([:completed_at])
-    |> validate_historical_completion()
-    |> validate_mood()
-    |> validate_feedback_context()
-    |> apply_execution_constraints()
-  end
-
   defp validate_session_core(changeset) do
     changeset
     |> validate_required([:burpee_type, :burpee_count_actual, :duration_sec_actual])
@@ -166,18 +140,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
         do: [],
         else: [client_session_id: "must be a UUID"]
     end)
-  end
-
-  defp validate_historical_completion(changeset) do
-    case get_field(changeset, :completed_at) do
-      %DateTime{} = completed_at ->
-        if DateTime.compare(completed_at, DateTime.utc_now()) == :gt,
-          do: add_error(changeset, :completed_at, "cannot be in the future"),
-          else: changeset
-
-      _missing_or_invalid ->
-        changeset
-    end
   end
 
   defp validate_mood(changeset) do

@@ -65,6 +65,58 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
     assert Repo.get_by!(CoachRecommendation, user_id: first_user.id)
   end
 
+  test "startup and periodic scans never request a provider by default" do
+    user = user_fixture()
+    parent = self()
+
+    req =
+      Req.new(
+        plug: fn conn ->
+          send(parent, :unexpected_provider_request)
+          Plug.Conn.send_resp(conn, 503, "no automatic requests")
+        end
+      )
+
+    task_supervisor = unique_name(:no_automatic_provider_tasks)
+    name = unique_name(:no_automatic_provider_reconciler)
+
+    start_supervised!(
+      Supervisor.child_spec({Task.Supervisor, name: task_supervisor}, id: task_supervisor)
+    )
+
+    reconciler =
+      start_supervised!(
+        Supervisor.child_spec(
+          {CoachReconciler,
+           name: name,
+           task_supervisor: task_supervisor,
+           now: fn -> @now end,
+           scan_interval_ms: :infinity,
+           user_page_query: paged_users([user]),
+           provider_options: [req: req, config: @enabled_config]},
+          id: name
+        )
+      )
+
+    await_idle(reconciler)
+    assert Repo.get_by!(CoachRecommendation, user_id: user.id)
+    refute_receive :unexpected_provider_request
+
+    send(reconciler, :periodic_scan)
+    await_idle(reconciler)
+    refute_receive :unexpected_provider_request
+
+    assert :ok = CoachReconciler.wake(user.id, :retry)
+    await_idle(reconciler)
+    refute_receive :unexpected_provider_request
+
+    refute Repo.exists?(
+             from(s in BurpeeTrainer.Coach.DesignSession,
+               where: s.user_id == ^user.id and like(s.workspace_key, "recommendation:%")
+             )
+           )
+  end
+
   test "provider request includes bounded recent history, feedback, constraints, and published library" do
     user = user_fixture()
     library_plan = plan_fixture(user, %{"name" => "Reusable strength"})
@@ -216,6 +268,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
            now: fn -> @now end,
            scan_interval_ms: :infinity,
            user_page_query: paged_users([user]),
+           provider_requests_enabled?: true,
            provider_options: [req: req, config: @enabled_config]
          ]}
       )
@@ -260,6 +313,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
            now: fn -> @now end,
            scan_interval_ms: :infinity,
            user_page_query: paged_users([user]),
+           provider_requests_enabled?: true,
            provider_options: [req: req, config: @enabled_config]
          ]}
       )
@@ -819,6 +873,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
       opts
       |> Keyword.put(:task_supervisor, task_supervisor)
       |> Keyword.put(:name, name)
+      |> Keyword.put_new(:provider_requests_enabled?, true)
       |> Keyword.put_new(:now, fn -> @now end)
       |> Keyword.put_new(:scan_interval_ms, :infinity)
 

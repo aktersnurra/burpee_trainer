@@ -8,6 +8,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   alias BurpeeTrainerWeb.Fmt
 
   attr(:hidden, :boolean, default: true)
+  attr(:session, :map, required: true)
 
   def capture_choice(assigns) do
     ~H"""
@@ -16,7 +17,8 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       heading_id="session-capture-choice-heading"
       hidden={@hidden}
     >
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
+      <.preflight_chrome id="session-capture-choice" session={@session} />
+      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
         <h1
           id="session-capture-choice-heading"
           data-session-heading
@@ -28,7 +30,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         <p class="mt-4 max-w-sm text-base leading-relaxed text-[var(--session-muted)]">
           The workout timer runs either way. Camera tracking adds a backup rep count.
         </p>
-        <div class="mt-10 grid w-full gap-3">
+        <div class="mx-auto mt-10 grid w-full max-w-sm gap-3">
           <button
             id="camera-choice-yes"
             type="button"
@@ -50,11 +52,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   end
 
   attr(:hidden, :boolean, default: true)
+  attr(:session, :map, required: true)
 
   def camera_status(assigns) do
     ~H"""
     <.panel id="session-camera-status" heading_id="camera-status-heading" hidden={@hidden}>
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
+      <.preflight_chrome id="session-camera-status" session={@session} />
+      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
         <div id="camera-status-starting">
           <h1
             id="camera-status-heading"
@@ -74,7 +78,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             class="mt-4 break-words text-sm text-[var(--session-muted)]"
           >
           </p>
-          <div class="mt-10 grid w-full gap-3">
+          <div class="mx-auto mt-10 grid w-full max-w-sm gap-3">
             <button
               id="camera-status-retry"
               type="button"
@@ -98,12 +102,14 @@ defmodule BurpeeTrainerWeb.SessionComponents do
 
   attr(:hidden, :boolean, default: true)
   attr(:target_pace_sec, :any, default: nil)
+  attr(:session, :map, required: true)
 
   def camera_setup(assigns) do
     ~H"""
     <.panel id="session-camera-setup" heading_id="camera-setup-heading" hidden={@hidden}>
-      <div class="session-camera-layout absolute inset-0 grid text-center">
-        <div class="row-start-1 w-full max-w-[430px] place-self-center self-center px-5">
+      <.preflight_chrome id="session-camera-setup" session={@session} />
+      <div class="session-camera-layout absolute inset-0 mx-auto grid w-full max-w-[640px] text-center">
+        <div class="row-start-1 w-full max-w-[640px] place-self-center self-center px-5">
           <div id="camera-setup-arming">
             <h1
               id="camera-setup-heading"
@@ -150,7 +156,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         <button
           id="camera-setup-continue"
           type="button"
-          class="row-start-3 mt-20 place-self-center px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
+          class="row-start-3 place-self-center px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
         >
           Continue without camera
         </button>
@@ -160,11 +166,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   end
 
   attr(:hidden, :boolean, default: true)
+  attr(:session, :map, required: true)
 
   def warmup_choice(assigns) do
     ~H"""
     <.panel id="session-warmup-choice" heading_id="session-warmup-heading" hidden={@hidden}>
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
+      <.preflight_chrome id="session-warmup-choice" session={@session} />
+      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
         <h1
           id="session-warmup-heading"
           data-session-heading
@@ -179,7 +187,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         <p id="warmup-skip-countdown" class="qs-tabular mt-3 text-base text-[var(--session-muted)]">
           Skipping in <span id="warmup-skip-seconds">4</span>
         </p>
-        <div id="warmup-manual-controls" class="mt-10 grid w-full gap-3" hidden inert="inert">
+        <div
+          id="warmup-manual-controls"
+          class="mx-auto mt-10 grid w-full max-w-sm gap-3"
+          hidden
+          inert="inert"
+        >
           <button
             id="warmup-yes-btn"
             type="button"
@@ -201,11 +214,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   end
 
   attr(:hidden, :boolean, default: true)
+  attr(:session, :map, required: true)
 
   def workout_ready(assigns) do
     ~H"""
     <.panel id="session-workout-ready" heading_id="session-workout-ready-heading" hidden={@hidden}>
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
+      <.preflight_chrome id="session-workout-ready" session={@session} />
+      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
         <h1
           id="session-workout-ready-heading"
           data-session-heading
@@ -222,7 +237,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           type="button"
           hidden
           inert="inert"
-          class="mt-10 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
+          class="mt-10 min-h-14 w-full max-w-sm rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
         >
           Start workout
         </button>
@@ -235,6 +250,28 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         </button>
       </div>
     </.panel>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:session, :map, required: true)
+
+  defp preflight_chrome(assigns) do
+    ~H"""
+    <div class="session-preflight-chrome">
+      <.link
+        id={"#{@id}-back"}
+        navigate={~p"/"}
+        aria-label="Back to Home"
+        title="Back to Home"
+        class="session-preflight-back"
+      >
+        <.icon name="hero-arrow-left" class="size-5" />
+      </.link>
+      <p class="session-preflight-workout-name">
+        {@session.display_name_snapshot || Fmt.burpee_type(@session.burpee_type)}
+      </p>
+    </div>
     """
   end
 
@@ -368,15 +405,14 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:hidden, :boolean, default: true)
   attr(:form, :any, required: true)
 
-  @mood_options [{"Tired", -1}, {"OK", 0}, {"Hyped", 1}]
-  @tag_options ~w[tired great_energy bad_sleep sick travel hot]
+  @mood_options [{"Rough", -1}, {"OK", 0}, {"Good", 1}]
 
   def completion_review(assigns) do
-    assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
+    assigns = assign(assigns, mood_options: @mood_options)
 
     ~H"""
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
-      <div class="mx-auto h-dvh w-full max-w-[430px] overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))]">
+      <div class="mx-auto h-dvh w-full max-w-[480px] overflow-y-auto px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))]">
         <section id="session-completion-summary" class="text-center">
           <h1
             id="session-completion-heading"
@@ -388,7 +424,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           </h1>
           <p
             id="session-actual-reps"
-            class="qs-tabular mt-8 text-[clamp(5rem,24vw,9rem)] font-semibold leading-none tracking-[-0.08em]"
+            class="qs-tabular mt-7 text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
           >
             0
           </p>
@@ -397,7 +433,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             planned
           </p>
           <p id="session-count-source" class="mt-3 text-xs text-[var(--session-muted)]" hidden></p>
-          <p id="session-actual-duration" class="qs-tabular mt-8 text-3xl font-medium">0:00</p>
+          <p id="session-actual-duration" class="qs-tabular mt-4 text-2xl font-normal">0:00</p>
         </section>
 
         <div
@@ -407,138 +443,58 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <div id="session-completion-mood" class="mt-10 flex border-y border-[var(--session-border)]">
-          <%= for {label, value} <- @mood_options do %>
-            <button
-              type="button"
-              data-mood={value}
-              aria-pressed="false"
-              class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
-            >
-              {label}
-            </button>
-          <% end %>
-        </div>
-
-        <.form for={@form} id="session-completion-form" class="mt-10">
-          <.input
-            field={@form[:burpee_count_actual]}
-            id="completion-reps-input"
-            type="number"
-            label="Reps"
-            min="0"
-            inputmode="numeric"
-            aria-describedby="completion-reps-error"
-            class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
-          />
-          <p id="completion-reps-error" hidden></p>
-          <.input
-            field={@form[:duration_sec_actual]}
-            id="completion-duration-input"
-            type="number"
-            label="Seconds"
-            min="0"
-            inputmode="numeric"
-            aria-describedby="completion-duration-error"
-            class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
-          />
-          <p id="completion-duration-error" hidden></p>
+        <.form for={@form} id="session-completion-form" class="mt-7">
+          <div class="grid grid-cols-2 gap-5">
+            <div>
+              <.input
+                field={@form[:burpee_count_actual]}
+                id="completion-reps-input"
+                type="number"
+                label="Reps"
+                min="0"
+                inputmode="numeric"
+                aria-describedby="completion-reps-error"
+                class="qs-tabular min-h-12 w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 text-xl text-[var(--session-ink)]"
+              />
+              <p id="completion-reps-error" hidden></p>
+            </div>
+            <div>
+              <.input
+                field={@form[:duration_sec_actual]}
+                id="completion-duration-input"
+                type="number"
+                label="Seconds"
+                min="0"
+                inputmode="numeric"
+                aria-describedby="completion-duration-error"
+                class="qs-tabular min-h-12 w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 text-xl text-[var(--session-ink)]"
+              />
+              <p id="completion-duration-error" hidden></p>
+            </div>
+          </div>
+          <div id="session-completion-mood" class="mt-8 flex border-y border-[var(--session-border)]">
+            <%= for {label, value} <- @mood_options do %>
+              <button
+                type="button"
+                data-mood={value}
+                aria-pressed="false"
+                class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
+              >
+                {label}
+              </button>
+            <% end %>
+          </div>
           <.input
             field={@form[:note_post]}
             id="completion-note-input"
             type="textarea"
             label="Note"
-            rows="3"
+            rows="2"
             placeholder="How did it go?"
             aria-describedby="completion-note-error"
-            class="w-full resize-none rounded-xl border border-[var(--session-border)] bg-transparent px-4 py-3 text-sm text-[var(--session-ink)]"
+            class="w-full resize-none border-b border-[var(--session-border)] bg-transparent px-0 py-3 text-sm text-[var(--session-ink)]"
           />
           <p id="completion-note-error" hidden></p>
-
-          <fieldset
-            id="session-typed-feedback"
-            class="mt-8 space-y-6 border-t border-[var(--session-border)] pt-7"
-          >
-            <legend class="text-base font-semibold text-[var(--session-ink)]">
-              Workout feedback
-            </legend>
-
-            <div class="space-y-3">
-              <p class="text-sm font-medium text-[var(--session-muted)]">Session context</p>
-              <div class="grid gap-3">
-                <.input
-                  field={@form[:context_low_energy]}
-                  id="completion-context-low-energy"
-                  type="checkbox"
-                  label="Low energy"
-                  aria-describedby="completion-context-low-energy-error"
-                />
-                <p id="completion-context-low-energy-error" hidden></p>
-                <.input
-                  field={@form[:context_high_energy]}
-                  id="completion-context-high-energy"
-                  type="checkbox"
-                  label="High energy"
-                  aria-describedby="completion-context-high-energy-error"
-                />
-                <p id="completion-context-high-energy-error" hidden></p>
-                <.input
-                  field={@form[:context_heat_affected]}
-                  id="completion-context-heat-affected"
-                  type="checkbox"
-                  label="Heat affected performance"
-                  aria-describedby="completion-context-heat-affected-error"
-                />
-                <p id="completion-context-heat-affected-error" hidden></p>
-              </div>
-            </div>
-
-            <.input
-              field={@form[:primary_limiter]}
-              id="completion-primary-limiter"
-              type="select"
-              label="Primary limiter"
-              prompt="No primary limiter"
-              aria-describedby="completion-primary-limiter-error"
-              options={[
-                {"Breathing limited my pace", "breathing"},
-                {"Whole-body fatigue limited my recovery", "whole_body"},
-                {"Upper-body fatigue limited my reps", "upper_body"},
-                {"Leg fatigue limited my reps", "legs"}
-              ]}
-            />
-            <p id="completion-primary-limiter-error" hidden></p>
-
-            <.input
-              field={@form[:preference_feedback]}
-              id="completion-preference-feedback"
-              type="select"
-              label="Workout preference"
-              prompt="No preference"
-              aria-describedby="completion-preference-feedback-error"
-              options={[
-                {"Would choose this workout again", "choose_again"},
-                {"Would avoid this workout", "avoid"}
-              ]}
-            />
-            <p id="completion-preference-feedback-error" hidden></p>
-          </fieldset>
-
-          <div id="session-completion-tags" class="border-t border-[var(--session-border)] py-6">
-            <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Legacy tags</p>
-            <div class="flex flex-wrap gap-2">
-              <%= for tag <- @tag_options do %>
-                <button
-                  type="button"
-                  data-tag={tag}
-                  aria-pressed="false"
-                  class="session-choice-toggle min-h-11 rounded-full border border-[var(--session-border)] px-4 py-2 text-xs text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
-                >
-                  {String.replace(tag, "_", " ")}
-                </button>
-              <% end %>
-            </div>
-          </div>
 
           <div class="hidden">
             <.input field={@form[:burpee_type]} type="hidden" />
@@ -547,20 +503,31 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <.input field={@form[:client_session_id]} type="hidden" />
           </div>
 
-          <button
-            id="session-save-btn"
-            type="submit"
-            class="mt-8 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-          >
-            Save session
-          </button>
-          <.link
-            id="session-leave-btn"
-            navigate={~p"/"}
-            class="mx-auto mt-2 block min-h-11 px-6 py-3 text-center text-sm text-[var(--session-muted)]"
-          >
-            Leave and resume later
-          </.link>
+          <div class="mt-6 flex items-center justify-end gap-3">
+            <.link
+              id="session-leave-btn"
+              navigate={~p"/"}
+              aria-label="Leave and resume later"
+              title="Leave and resume later"
+              class="inline-flex size-14 items-center justify-center rounded-md text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
+            >
+              <.icon name="hero-arrow-left" class="size-6" />
+            </.link>
+            <button
+              id="session-save-btn"
+              type="submit"
+              aria-label="Save session"
+              title="Save session"
+              class="inline-flex size-14 items-center justify-center rounded-md bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
+            >
+              <span id="session-save-icon-ready" aria-hidden="true">
+                <.icon name="hero-check" class="size-6" />
+              </span>
+              <span id="session-save-icon-pending" aria-hidden="true" hidden>
+                <.icon name="hero-arrow-path" class="size-6" />
+              </span>
+            </button>
+          </div>
         </.form>
       </div>
     </.panel>

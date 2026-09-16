@@ -1,3 +1,58 @@
+# Inline Home state and History acceptance evidence
+
+This is the Task 7 evidence record, not independent whole-slice approval. Tasks 1–6
+were independently accepted. The parent directly approved the corrected current-run
+visual presentation at the second screenshot gate. No checkpoint or clean-tree claim.
+
+## Current evidence boundary
+
+- Guarded disposable **Firefox / MIX_ENV=test** only; original data is not a fixture.
+- Four viewports: 390×844, 320×844, 844×390, 1280×800; enlarged root text (200%) and
+  reduced motion. Natural-scroll full-page captures and explicitly top-framed viewport
+  captures are separately identified, with scroll coordinates retained.
+- Current matrix and screenshots: `.e2e-artifacts/reports/inline-home-state-history/browser-report.json`.
+  Timestamped native-focus/focusin/out, LiveView patch and node-removal/identity evidence:
+  `boundary-trace-report.json` in that directory.
+- Full commands, failures, source hashes and cleanup: `.superpowers/implementation/inline-home-state-history/task-7/verification.md`.
+  Final reproduction and original-server evidence are named there.
+
+## Exercised behavior
+
+Repeated bar/result pointer, Enter and Space activation proves real sticky hidden/inert
+state, heading focus, keyboard exclusion and reveal-before-opener focus on close.
+History preserves instruction, groups, filters, Start token and every scoped persisted
+plan/recommendation/design-context/session value during read-only actions. Empty and
+unavailable states are distinct; no fabricated measurements or first-use prompt claim.
+
+Actual today results take precedence at target; prior-day target completion and
+unfinished-session coexistence retain exact Resume and prevent a second Start.
+Per-type plots expose actual rep/duration values, density range and completion dates.
+The session table preserves whole headers/numbers; oversized text uses a named native
+keyboard-scrollable region rather than clipping, shrinking or global overflow hiding.
+
+Controlled in-memory Req barriers exercise one-request busy success/failure and immutable
+published/session content. A separately recorded explicit candidate Start and reload use
+the canonical UUID verifier, not accidental Start during History inspection.
+
+## Deliberate limitations
+
+The supervisor-approved support script and its refusal/idempotence/cleanup/decoy tests
+are evidence-only, confined to an exact disposable DB/run/user/BEAM/cwd. Persisted
+completion fixtures and existing `home_now`/nil-selection socket seam injection prove
+real browser patch/focus behavior, **not actual wall-clock midnight, onboarding or
+reload checkpoint recovery**. Reconnect observations use actual current domain time.
+The earlier untraced retained-focus failure did not reproduce in the instrumented
+diagnostic; its timing cause is inconclusive. Final synchronized tests await the
+documented native animation frames without reacquiring lost focus.
+
+No live-provider, media playback, camera/tracking, full-duration performance, fresh-dev
+migration, runtime/deployment or bootstrap readiness claim. One fresh marked test-DB
+migration failed at the historical video-authorization rename; the approved single
+canonical retry with PHX_SERVER unset during migration succeeded. That establishes
+only this guarded setup, not the migration's root cause or general migration readiness.
+
+## Earlier acceptance record (historical; not current-run proof)
+
 # Adaptive Home Task 10 smoke evidence
 
 ## Accepted boundary

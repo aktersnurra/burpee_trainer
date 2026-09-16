@@ -66,6 +66,78 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert schema["schema"]["properties"]["ranked_workout_plan_ids"]["maxItems"] == 256
   end
 
+  test "coach guidance review requests bounded classification", %{counter: counter} do
+    answer = %{"kind" => "lasting", "summary" => "Build toward 50 reps"}
+    req = request(counter, fn conn -> json_response(conn, 200, answer) end)
+
+    assert {:ok, ^answer} =
+             Client.complete([], Keyword.put(opts(req), :response_kind, :coach_guidance))
+
+    [recorded] = requests(counter)
+    schema = recorded.body["response_format"]["json_schema"]
+    assert schema["name"] == "coach_guidance"
+    assert schema["schema"]["additionalProperties"] == false
+
+    assert schema["schema"]["properties"]["kind"]["enum"] ==
+             ~w[lasting temporary observation]
+  end
+
+  test "workout request extraction uses the compact confirmed-constraints schema", %{
+    counter: counter
+  } do
+    answer = %{
+      "burpee_type" => "six_count",
+      "target_reps" => 140,
+      "target_duration_sec" => 1_200,
+      "pacing_style" => "unbroken",
+      "recovery" => "required",
+      "timed_rests" => [%{"start_sec" => 660, "duration_sec" => 60}],
+      "requested_pace_sec" => nil
+    }
+
+    req = request(counter, fn conn -> json_response(conn, 200, answer) end)
+
+    assert {:ok, ^answer} =
+             Client.complete([], Keyword.put(opts(req), :response_kind, :workout_request))
+
+    [recorded] = requests(counter)
+    schema = recorded.body["response_format"]["json_schema"]
+    assert schema["name"] == "workout_request"
+
+    assert schema["schema"] ==
+             BurpeeTrainer.Coach.WorkoutRequest.json_schema()
+             |> Jason.encode!()
+             |> Jason.decode!()
+  end
+
+  test "confirmed recovery uses a schema with required rest fields", %{counter: counter} do
+    {:ok, confirmed} =
+      BurpeeTrainer.Coach.WorkoutRequest.new(%{
+        "burpee_type" => "six_count",
+        "target_reps" => 140,
+        "target_duration_sec" => 1_200,
+        "pacing_style" => "unbroken",
+        "recovery" => "required",
+        "timed_rests" => [
+          %{"start_sec" => 660, "duration_sec" => 60},
+          %{"start_sec" => 1_080, "duration_sec" => 30}
+        ],
+        "requested_pace_sec" => nil
+      })
+
+    req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
+    assert {:ok, %{}} = Client.complete([], Keyword.put(opts(req), :confirmed_request, confirmed))
+
+    [recorded] = requests(counter)
+    response = recorded.body["response_format"]["json_schema"]
+    assert response["name"] == "phased_workout_definition"
+
+    assert Enum.all?(
+             ~w[phase_1 rest_1 phase_2 rest_2 phase_3],
+             &(&1 in response["schema"]["required"])
+           )
+  end
+
   test "unknown response kinds fail closed without HTTP", %{counter: counter} do
     req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
 
@@ -75,6 +147,28 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     end
 
     assert request_count(counter) == 0
+  end
+
+  test "OpenRouter requests require a provider supporting every requested parameter", %{
+    counter: counter
+  } do
+    definition = definition("Schema-capable route")
+    req = request(counter, fn conn -> json_response(conn, 200, definition) end)
+
+    options =
+      Keyword.update!(opts(req), :config, fn config ->
+        config
+        |> Keyword.put(:url, "https://openrouter.ai/api/v1/chat/completions")
+        |> Keyword.put(:model, "openai/gpt-6-luna-pro")
+      end)
+
+    assert {:ok, ^definition} = Client.complete([], options)
+
+    [recorded] = requests(counter)
+    assert recorded.body["model"] == "openai/gpt-6-luna-pro"
+    assert recorded.body["provider"] == %{"require_parameters" => true}
+    refute Map.has_key?(recorded.body, "temperature")
+    assert recorded.body["response_format"]["json_schema"]["strict"] == true
   end
 
   test "one request uses the fixed security and resource options", %{counter: counter} do
@@ -116,6 +210,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert recorded.body["model"] == "test/model"
     assert recorded.body["max_tokens"] == 16_384
     assert recorded.body["temperature"] == 0
+    refute Map.has_key?(recorded.body, "provider")
 
     assert %{
              "type" => "json_schema",

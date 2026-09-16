@@ -213,7 +213,6 @@ const SessionHook = {
       const finishEarly = e.target.closest("#finish-early-btn");
       const leave = e.target.closest("#session-leave-btn");
       const mood = e.target.dataset?.mood;
-      const tag = e.target.dataset?.tag;
 
       if (warmupYes) this.onWarmupYes();
       if (warmupSkip) this.onWarmupSkip();
@@ -231,7 +230,6 @@ const SessionHook = {
         this.leaveAndResume(leave.getAttribute("href") || "/");
       }
       if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
-      if (tag !== undefined) this.toggleCompletionTag(tag);
     };
     this.el.addEventListener("click", this.onRootClick);
 
@@ -421,15 +419,9 @@ const SessionHook = {
         burpee_count_actual: completion.burpeeCountActual,
         burpee_count_planned: completion.burpeeCountPlanned,
         duration_sec_actual: completion.durationSecActual,
-        duration_sec_planned: completion.durationSecPlanned,
+        duration_sec_planned: Math.round(completion.durationSecPlanned),
         client_session_id: this.clientSessionId,
         mood: completion.mood ?? 0,
-        tags: [...(completion.tags || [])].sort().join(","),
-        context_low_energy: completion.contextLowEnergy ?? false,
-        context_high_energy: completion.contextHighEnergy ?? false,
-        context_heat_affected: completion.contextHeatAffected ?? false,
-        primary_limiter: completion.primaryLimiter ?? null,
-        preference_feedback: completion.preferenceFeedback ?? null,
         note_post: completion.notePost || "",
       },
       tracking: {
@@ -652,25 +644,6 @@ const SessionHook = {
     this.renderer.renderCompletion(this.flow.completion);
   },
 
-  toggleCompletionTag(tag) {
-    if (
-      this.flow.mode !== "completion_review" ||
-      this.flow.saveStatus === "saving" ||
-      this.flow.completionLocked ||
-      this.serverCompletion
-    ) {
-      if (this.flow.completionLocked) {
-        this.renderer.renderCompletion(this.flow.completion);
-      }
-      return;
-    }
-    const current = this.flow.completion.tags || [];
-    const tags = current.includes(tag)
-      ? current.filter((currentTag) => currentTag !== tag)
-      : [...current, tag];
-    this.editCompletion({ tags });
-  },
-
   leaveAndResume(path) {
     if (this.flow.mode !== "completion_review") return;
     if (this.serverCompletion) {
@@ -791,6 +764,9 @@ const SessionHook = {
     switch (command.type) {
       case "renderFlow":
         this.renderer.renderFlowState(this.flow);
+        this.dispatchTrackerCommand("pose-tracker:preview-visibility", {
+          visible: this.flow.mode === "camera_setup",
+        });
         break;
       case "startCamera":
         this.dispatchTrackerCommand("pose-tracker:start");
@@ -981,7 +957,7 @@ const SessionHook = {
         this.beginSegment();
         break;
       case "renderRunningFrame":
-        this.renderRunningFrame(command.elapsedSec);
+        this.renderRunningFrame(command.elapsedSec, command.frame);
         break;
       case "updateVisibleRepTotal":
         this.renderer.updateTotalCounter(command.burpeeCountDone);
@@ -1124,11 +1100,7 @@ const SessionHook = {
     this.renderCountdownFrame = null;
     this.countdownTimeoutId = null;
     this.countdownStepStarted = null;
-    const countEl = this.el.querySelector("#count");
-    if (countEl) {
-      countEl.style.color = "";
-      countEl.textContent = "—";
-    }
+    this.renderer.clearCountdown();
   },
 
   beginSegment() {
@@ -1174,10 +1146,7 @@ const SessionHook = {
     this.dispatchSegment({ type: "TICK", elapsedSec: elapsed });
   },
 
-  renderRunningFrame(elapsed) {
-    const frame = currentFrame(this.timeline, elapsed);
-
-    this.dispatchSegment({ type: "ACCOUNT_REPS", frame });
+  renderRunningFrame(elapsed, frame) {
     this.syncRepStateFromSegment();
     const remainingReps = Math.max(
       (frame?.event?.reps || 0) - this.doneReps,
@@ -1241,6 +1210,7 @@ const SessionHook = {
   pauseCountdown() {
     this.dispatchSegment({ type: "COUNTDOWN_PAUSE", now: performance.now() });
     this.countdownPaused = true;
+    this.dispatchTrackerCommand("pose-tracker:suspend");
     if (this.countdownTimeoutId) {
       clearTimeout(this.countdownTimeoutId);
       this.countdownTimeoutId = null;
@@ -1259,6 +1229,7 @@ const SessionHook = {
   resumeCountdown() {
     this.dispatchSegment({ type: "COUNTDOWN_RESUME", now: performance.now() });
     this.countdownPaused = false;
+    this.dispatchTrackerCommand("pose-tracker:resume");
     this.renderer.updatePauseButton(false);
     this.updatePauseActionsVisibility();
 
@@ -1279,6 +1250,7 @@ const SessionHook = {
     if (this.paused) return;
     this.dispatchSegment({ type: "PAUSE", now: performance.now() });
     this.paused = true;
+    this.dispatchTrackerCommand("pose-tracker:suspend");
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = null;
     this.audio.stop();
@@ -1292,6 +1264,7 @@ const SessionHook = {
     this.startTime = this.segment.clock.startTime;
     this.paused = false;
     this.hiddenAt = null;
+    this.dispatchTrackerCommand("pose-tracker:resume");
     this.resetPoseTracker();
     if (!this.rafId) this.rafId = requestAnimationFrame(() => this.tick());
     this.renderer.updatePauseButton(false);

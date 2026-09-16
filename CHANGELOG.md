@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-04 — Coach/Home branch review fixes
+
+- Migration `20260829085005_rebuild_workout_library` now accepts the upstream-OIDC source/target schema fingerprints, so databases deployed from upstream (OIDC already applied) can migrate; the gate stays exact-match and fails closed for any other shape.
+- Coach prompt context keeps only the 12 most recent finalized-workout memories, so authoring no longer fails permanently with `authoring_context_too_large` as a user's library grows.
+- Approving a reviewed workout saves it as a new **published** workout (still provider-free, idempotent, and not selected); dismissing the saved notice no longer leaves it as an unreachable draft.
+- A completion retry after a lost save reply is acknowledged when it carries the session's own `client_session_id`; reopening an already-saved session settles retained local evidence (draft → trace upload queue) and returns Home instead of "Session not found".
+- Coach background tasks are no longer capped at two globally, so guidance reviews and workout memories are not silently dropped under load.
+- Saving guidance with unchanged text keeps its classification and spends no provider review.
+- Workout memories for approved reviews now include the user's instruction.
+
 ## 2026-08-31 — Deletion-first workout library and immutable sessions
 
 - Rebuilt `workout_plans` as the canonical durable library with enforced `draft → published → archived` lifecycle semantics, immutable published content, copy-to-draft, and no manual block/set editor.

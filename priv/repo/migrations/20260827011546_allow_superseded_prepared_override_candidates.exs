@@ -83,11 +83,39 @@ defmodule BurpeeTrainer.Repo.Migrations.AllowSupersededPreparedOverrideCandidate
   @next_constraint_marker ~s(CONSTRAINT "prepared_workouts_fallback_facts_json_check")
   @rebuilt_table "prepared_workouts_override_union_rebuilt"
 
-  def up, do: rebuild(@new_selection_union)
+  def up, do: with_foreign_keys_disabled(fn -> rebuild(@new_selection_union) end)
 
   def down do
-    reject_superseded_candidates!()
-    rebuild(@old_selection_union)
+    with_foreign_keys_disabled(fn ->
+      reject_superseded_candidates!()
+      rebuild(@old_selection_union)
+    end)
+  end
+
+  defp with_foreign_keys_disabled(fun) do
+    repo().checkout(
+      fn ->
+        try do
+          repo().query!("PRAGMA foreign_keys = OFF")
+          [[0]] = repo().query!("PRAGMA foreign_keys").rows
+
+          {:ok, :ok} =
+            repo().transaction(
+              fn ->
+                fun.()
+                :ok
+              end,
+              mode: :immediate,
+              timeout: :infinity
+            )
+
+          :ok
+        after
+          repo().query!("PRAGMA foreign_keys = ON")
+        end
+      end,
+      timeout: :infinity
+    )
   end
 
   defp reject_superseded_candidates! do
@@ -121,7 +149,6 @@ defmodule BurpeeTrainer.Repo.Migrations.AllowSupersededPreparedOverrideCandidate
     rebuilt_sql = rebuilt_table_sql(selection_union)
     quoted_columns = Enum.map_join(columns, ", ", &quote_identifier/1)
 
-    repo().query!("PRAGMA foreign_keys = OFF")
     repo().query!("DROP TABLE IF EXISTS #{@rebuilt_table}")
     repo().query!(rebuilt_sql)
 
@@ -134,7 +161,6 @@ defmodule BurpeeTrainer.Repo.Migrations.AllowSupersededPreparedOverrideCandidate
     repo().query!("ALTER TABLE #{@rebuilt_table} RENAME TO prepared_workouts")
     Enum.each(indexes, fn sql -> repo().query!(sql) end)
     restore_prepared_workouts_sequence(prior_sequence)
-    repo().query!("PRAGMA foreign_keys = ON")
     :ok
   end
 

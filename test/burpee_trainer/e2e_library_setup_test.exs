@@ -471,8 +471,8 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     IsolatedMigrationRepo.query!(
       """
       INSERT INTO users
-        (username, password_hash, timezone, timezone_provisioned, inserted_at, updated_at)
-      VALUES ('e2e_workout_not_exact', 'hash', 'Etc/UTC', 1, ?, ?)
+        (username, timezone, timezone_provisioned, inserted_at, updated_at)
+      VALUES ('e2e_workout_not_exact', 'Etc/UTC', 1, ?, ?)
       """,
       [now, now]
     )

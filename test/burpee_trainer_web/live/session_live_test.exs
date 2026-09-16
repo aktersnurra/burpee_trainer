@@ -45,6 +45,40 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
+  test "idle pre-workout panels show the selected workout and an icon-only way home", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user, %{name: "Three steady sets"})
+    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+    assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
+
+    for panel <-
+          ~w[session-capture-choice session-camera-status session-camera-setup session-warmup-choice session-workout-ready] do
+      assert has_element?(view, "##{panel} .session-preflight-workout-name", plan.name)
+
+      assert has_element?(
+               view,
+               "##{panel} .session-preflight-back[aria-label='Back to Home'][href='/'] .hero-arrow-left"
+             )
+    end
+
+    refute has_element?(view, "#session-runner-client .session-preflight-chrome")
+    refute has_element?(view, "#session-completion-review .session-preflight-chrome")
+    assert Repo.aggregate(WorkoutSession, :count) == 1
+  end
+
+  test "back to Home preserves the started session for resume", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+    assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
+
+    view |> element("#session-capture-choice-back") |> render_click()
+    assert_redirect(view, ~p"/")
+    assert Repo.get!(WorkoutSession, session.id).state == :started
+    assert Repo.aggregate(WorkoutSession, :count) == 1
+  end
+
   test "a started snapshot remains executable after its plan is archived", %{
     conn: conn,
     user: user
@@ -114,6 +148,37 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       })
 
     assert Repo.aggregate(WorkoutSession, :count) == 1
+    assert Repo.get!(WorkoutSession, started.id) == completed
+  end
+
+  test "a retry after a lost completion acknowledgement is acknowledged without rewriting", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user)
+    token = Ecto.UUID.generate()
+    assert {:ok, started} = Workouts.start_plan(user, plan.id, token)
+    assert {:ok, view, _html} = live(conn, ~p"/session/#{started.id}")
+    attrs = %{"burpee_count_actual" => 4, "duration_sec_actual" => 20}
+    tracking = %{"enabled" => false, "trust" => "disabled", "cadence_ms" => []}
+
+    assert {:ok, completed} = Workouts.complete_session(user, started.id, attrs, :timed)
+
+    render_hook(view, "save_session", %{
+      "workout_session" => Map.put(attrs, "client_session_id", Ecto.UUID.generate()),
+      "tracking" => tracking
+    })
+
+    assert_reply(view, %{status: "error"})
+
+    render_hook(view, "save_session", %{
+      "workout_session" =>
+        Map.merge(attrs, %{"client_session_id" => token, "burpee_count_actual" => 9}),
+      "tracking" => tracking
+    })
+
+    session_id = started.id
+    assert_reply(view, %{status: "ok", session_id: ^session_id, redirect_to: "/"})
     assert Repo.get!(WorkoutSession, started.id) == completed
   end
 
@@ -235,13 +300,29 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
                :timed
              )
 
-    for session_id <- [foreign.id, completed.id, 2_147_483_647] do
+    for session_id <- [foreign.id, 2_147_483_647] do
       assert {:error, {:live_redirect, %{to: "/"}}} =
                live(conn, ~p"/session/#{session_id}")
     end
+
+    # The owner's own completed session (e.g. a reconnect after a lost save reply)
+    # only settles retained local evidence and returns Home.
+    assert {:ok, view, _html} = live(conn, ~p"/session/#{completed.id}")
+
+    assert has_element?(
+             view,
+             "#session-already-saved[phx-hook=SessionCompleted]" <>
+               "[data-session-id='#{completed.id}']" <>
+               "[data-content-hash='#{completed.content_hash}']" <>
+               "[data-client-session-id='#{completed.client_session_id}']" <>
+               "[data-redirect-to='/']"
+           )
+
+    refute has_element?(view, "#burpee-session")
+    assert Repo.get!(WorkoutSession, completed.id) == completed
   end
 
-  test "renders the client-owned surface and leave/resume action", %{conn: conn, user: user} do
+  test "renders the client-owned surface and minimal completion review", %{conn: conn, user: user} do
     plan = plan_fixture(user)
     assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
     assert {:ok, view, _html} = live(conn, ~p"/session/#{session.id}")
@@ -263,7 +344,35 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       assert has_element?(view, "##{id}")
     end
 
-    assert has_element?(view, "#session-leave-btn", "Leave and resume later")
+    assert has_element?(view, "#session-capture-choice:not([hidden]):not([inert])")
+    assert has_element?(view, "#session-runner-client[hidden][inert]")
+    assert has_element?(view, "#session-capture-choice-heading", "Track burpees with the camera?")
+    assert has_element?(view, "#session-completion-heading", "Workout complete")
+    assert has_element?(view, "#session-completion-form > .grid + #session-completion-mood")
+    assert has_element?(view, "#session-completion-mood [data-mood='-1']", "Rough")
+    assert has_element?(view, "#session-completion-mood [data-mood='0']", "OK")
+    assert has_element?(view, "#session-completion-mood [data-mood='1']", "Good")
+    assert has_element?(view, "#completion-reps-input")
+    assert has_element?(view, "#completion-duration-input")
+    assert has_element?(view, "#completion-note-input.border-b")
+    refute has_element?(view, "#completion-note-input.rounded-xl")
+    refute has_element?(view, "#session-more-feedback")
+    refute has_element?(view, "#session-typed-feedback")
+
+    assert has_element?(
+             view,
+             "#session-save-btn[aria-label='Save session'] #session-save-icon-ready .hero-check"
+           )
+
+    assert has_element?(view, "#session-save-icon-pending[hidden] .hero-arrow-path")
+
+    assert has_element?(
+             view,
+             "#session-leave-btn[aria-label='Leave and resume later'] .hero-arrow-left"
+           )
+
+    refute has_element?(view, "#session-save-btn", "Save session")
+    refute has_element?(view, "#session-leave-btn", "Leave and resume later")
     refute has_element?(view, "#session-report-pending-status")
     refute has_element?(view, "#session-report-pending-retry")
     refute has_element?(view, "#session-abort-btn")

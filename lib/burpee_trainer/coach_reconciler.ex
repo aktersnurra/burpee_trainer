@@ -57,6 +57,7 @@ defmodule BurpeeTrainer.CoachReconciler do
       max_concurrency: max_concurrency,
       now: Keyword.get(opts, :now, &DateTime.utc_now/0),
       provider_options: Keyword.get(opts, :provider_options, []),
+      provider_requests_enabled?: Keyword.get(opts, :provider_requests_enabled?, false) == true,
       queue: :queue.new(),
       queued_user_ids: MapSet.new(),
       scan_interval_ms: scan_interval_ms,
@@ -182,7 +183,7 @@ defmodule BurpeeTrainer.CoachReconciler do
         task =
           Task.Supervisor.async_nolink(state.task_supervisor, fn ->
             stop_when_reconciler_stops(reconciler)
-            reconcile_user(user, now, state.provider_options)
+            reconcile_user(user, now, state.provider_options, state.provider_requests_enabled?)
           end)
 
         state = %{
@@ -277,7 +278,12 @@ defmodule BurpeeTrainer.CoachReconciler do
     end)
   end
 
-  defp reconcile_user(%User{} = user, %DateTime{} = now, provider_options) do
+  defp reconcile_user(
+         %User{} = user,
+         %DateTime{} = now,
+         provider_options,
+         provider_requests_enabled?
+       ) do
     with {:ok, slot} <- Policy.required_slot(user, DateTime.truncate(now, :second)),
          {:ok, recommendation} <-
            Workouts.ensure_recommendation(user, %{
@@ -287,7 +293,9 @@ defmodule BurpeeTrainer.CoachReconciler do
            }),
          {:ok, recommendation} <-
            Workouts.ensure_recommendation_selection_available(user, recommendation.id) do
-      maybe_request_candidate(user, recommendation, slot, provider_options)
+      if provider_requests_enabled?,
+        do: maybe_request_candidate(user, recommendation, slot, provider_options),
+        else: :ok
     end
   end
 

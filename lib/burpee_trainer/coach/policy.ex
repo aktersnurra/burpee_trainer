@@ -61,8 +61,8 @@ defmodule BurpeeTrainer.Coach.Policy do
 
       home_state =
         cond do
-          completed_sec >= @weekly_target_sec -> :week_complete
           completed_today? -> :done_today
+          completed_sec >= @weekly_target_sec -> :week_complete
           true -> :workout_needed
         end
 

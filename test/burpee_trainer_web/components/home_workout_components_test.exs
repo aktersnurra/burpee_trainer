@@ -1,16 +1,125 @@
 defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
   use ExUnit.Case, async: true
   import Phoenix.LiveViewTest
+  alias BurpeeTrainer.Coach.WorkoutRequest
   alias BurpeeTrainer.PlanCompiler
   alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutPlan}
   alias BurpeeTrainerWeb.HomeWorkoutComponents
 
+  test "a reviewed candidate with varying active pace shows its exact verified budget" do
+    params = %BurpeeTrainerWeb.HomeWorkoutRequest{reps: 10, duration: "2:00", sets: "2x5"}
+    {:ok, request} = BurpeeTrainerWeb.HomeWorkoutRequest.request(params)
+
+    definition = %{
+      "version" => 1,
+      "name" => "Varying pace",
+      "burpee_type" => "six_count",
+      "target_reps" => 10,
+      "target_duration_sec" => 120,
+      "pacing_style" => "unbroken",
+      "rationale" => "Two continuous sets.",
+      "events" => [
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 5},
+        %{"kind" => "rest", "duration_sec" => 75},
+        %{"kind" => "work", "reps" => 5, "sec_per_rep" => 4, "sec_per_burpee" => 4}
+      ]
+    }
+
+    {:ok, validated} = WorkoutDefinition.new(definition)
+    assert {:ok, _} = PlanCompiler.compile(validated)
+
+    form =
+      Phoenix.Component.to_form(BurpeeTrainerWeb.HomeWorkoutRequest.changeset(params, %{}),
+        as: :home_workout
+      )
+
+    html =
+      render_component(&HomeWorkoutComponents.authoring_form/1,
+        form: form,
+        stage: :review,
+        candidate: %{
+          definition: definition,
+          request: request,
+          original_request: request,
+          alternative?: false
+        }
+      )
+      |> LazyHTML.from_fragment()
+
+    assert LazyHTML.query(html, "#home-workout-budget") |> text() =~ "0:45"
+    assert LazyHTML.query(html, "#home-workout-budget") |> text() =~ "1:15"
+
+    assert LazyHTML.query(html, "#home_workout_pace[placeholder='Varies by set']") |> Enum.count() ==
+             1
+  end
+
+  test "confirmation shows exact interpreted targets and both elapsed-time rests" do
+    {:ok, request} =
+      WorkoutRequest.new(%{
+        "burpee_type" => "six_count",
+        "target_reps" => 140,
+        "target_duration_sec" => 1_200,
+        "pacing_style" => "unbroken",
+        "recovery" => "required",
+        "timed_rests" => [
+          %{"start_sec" => 660, "duration_sec" => 60},
+          %{"start_sec" => 1_080, "duration_sec" => 30}
+        ],
+        "requested_pace_sec" => nil
+      })
+
+    html =
+      render_component(&HomeWorkoutComponents.request_confirmation/1, request: request)
+      |> LazyHTML.from_fragment()
+
+    assert LazyHTML.query(html, "#home-request-confirmation") |> Enum.count() == 1
+    assert LazyHTML.query(html, "#home-request-reps") |> text() =~ "140"
+    assert LazyHTML.query(html, "#home-request-duration") |> text() =~ "20 min"
+    assert LazyHTML.query(html, "#home-request-rest-0") |> text() =~ "11:00"
+    assert LazyHTML.query(html, "#home-request-rest-1") |> text() =~ "18:00"
+    assert LazyHTML.query(html, "#home-request-timing") |> text() =~ "10 seconds"
+    assert LazyHTML.query(html, "#home-request-timing") |> text() =~ "saved duration"
+    assert LazyHTML.query(html, "#home-request-confirm") |> Enum.count() == 1
+    assert LazyHTML.query(html, "#home-request-back") |> Enum.count() == 1
+  end
+
+  test "bootstrap confirmation replaces the request form until approved or sent back" do
+    {:ok, request} =
+      WorkoutRequest.new(%{
+        "burpee_type" => "six_count",
+        "target_reps" => 10,
+        "target_duration_sec" => 120,
+        "pacing_style" => "even",
+        "recovery" => "optional",
+        "timed_rests" => [],
+        "requested_pace_sec" => nil
+      })
+
+    state = %{
+      busy?: false,
+      pending_request: %{request: request},
+      bootstrap_form: Phoenix.Component.to_form(%{"prompt" => "test"}, as: :home_bootstrap),
+      local_error: nil,
+      alternatives_empty?: true,
+      active_tab: :workouts,
+      streams: %{alternatives: []}
+    }
+
+    html =
+      render_component(&HomeWorkoutComponents.bootstrap/1, state: state)
+      |> LazyHTML.from_fragment()
+
+    assert LazyHTML.query(html, "#home-request-confirmation") |> Enum.count() == 1
+    assert LazyHTML.query(html, "#home-bootstrap-form") |> Enum.count() == 0
+  end
+
   test "weekly progress uses actual seconds and ISO week, with bounded visual fill" do
-    for {completed, target, fill, now} <- [
-          {1935, 4800, "40.3125%", "1935"},
-          {6000, 4800, "100%", "4800"},
-          {0, 0, "0%", "0"}
+    for {completed, target, fill, now, label} <- [
+          {2, 4800, "0.041666666666666664%", "2", "0 / 80 min"},
+          {1935, 4800, "40.3125%", "1935", "32 / 80 min"},
+          {6000, 4800, "100%", "4800", "100 / 80 min"},
+          {0, 0, "0%", "0", "0 / 0 min"}
         ] do
       html =
         render_component(&HomeWorkoutComponents.week_progress/1,
@@ -28,11 +137,47 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
                "width: #{fill}"
              ]
 
+      assert LazyHTML.query(html, "#home-week-duration") |> text() == label
+
+      assert LazyHTML.query(html, "[role=progressbar]") |> LazyHTML.attribute("aria-valuetext") ==
+               ["#{completed} of #{target} seconds completed"]
+
       assert LazyHTML.query(html, "#home-week-number") |> text() == "Week 37"
     end
   end
 
-  test "pacing columns retain cadence, interval and ordered nonuniform recoveries" do
+  test "shared History command isolates the workspace for either return target" do
+    for return_to <- ["#home-history-toggle", "#home-result-history"] do
+      assert HomeWorkoutComponents.open_history(return_to).ops == [
+               ["set_attr", %{attr: ["hidden", ""], to: "#home-state-content"}],
+               ["set_attr", %{attr: ["inert", ""], to: "#home-state-content"}],
+               ["push", %{event: "open_history", value: %{return_to: return_to}}]
+             ]
+    end
+  end
+
+  test "busy workspace leaves shared progress and page spacing to Home" do
+    html =
+      render_component(&HomeWorkoutComponents.workspace/1,
+        state: %{
+          expanded?: true,
+          busy?: true,
+          authoring_stage: :idle,
+          home_selection: %{
+            plan: %{name: "Six-count", target_duration_sec: 1200, target_reps: 120}
+          }
+        }
+      )
+      |> LazyHTML.from_fragment()
+
+    assert LazyHTML.query(html, "#home-workout-area[aria-busy=true] #home-update-loading")
+           |> Enum.count() == 1
+
+    assert LazyHTML.query(html, ".home-hero .home-workout-name") |> text() == "Six-count"
+    assert LazyHTML.query(html, "#home-week-progress, .adaptive-home") |> Enum.empty?()
+  end
+
+  test "expanded pattern rows retain complete prescriptions and ordered nonuniform recoveries" do
     events = [work(2, 5_000_000, 10), rest(10_000), work(3, 6_125_000, 18.375), rest(11_250)]
     rows = rows(events ++ events ++ [work(2, 5_000_000, 9)])
     [group, final] = rows
@@ -43,20 +188,20 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
              "SetsRepsPaceCadenceRest"
 
     assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-reps") |> text() ==
-             "23"
+             "2"
 
     assert LazyHTML.query(html, "##{group.id} > tr:first-child .home-prescription-rest") |> text() ==
-             "10s11.25s"
+             "10s"
 
-    assert LazyHTML.query(html, "##{group.id}-details li .home-constituent-prescription")
-           |> text() ==
-             "2 reps · 5s pace · 5s cadence · Interval 10s · 10s rest " <>
-               "3 reps · 6.125s pace · 6.125s cadence · Interval 18.375s · 11.25s rest " <>
-               "2 reps · 5s pace · 5s cadence · Interval 10s · 10s rest " <>
-               "3 reps · 6.125s pace · 6.125s cadence · Interval 18.375s · 11.25s rest"
+    assert prescription_rows(html, group.id) == [
+             ["Set 1", "2", "5s", "5s", "10s"],
+             ["Set 2", "3", "6.125s", "6.125s", "11.25s"],
+             ["Set 3", "2", "5s", "5s", "10s"],
+             ["Set 4", "3", "6.125s", "6.125s", "11.25s"]
+           ]
 
     assert LazyHTML.query(html, "##{final.id} .home-prescription-rest") |> text() == "—"
-    assert LazyHTML.query(html, "##{final.id} .home-interval") |> text() == "Interval 9s"
+    refute text(html) =~ "Interval"
     assert LazyHTML.query(html, "caption") |> LazyHTML.text() =~ "prescribed"
   end
 
@@ -64,12 +209,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     rows = rows([work(2, 5_000_000, 10), work(2, 5_000_000, 10), rest(1250)])
     [group, recovery] = rows
     html = inspection(rows, MapSet.new([group.id]))
-    assert LazyHTML.query(html, "##{group.id} button") |> LazyHTML.text() =~ "2 sets"
+    assert LazyHTML.query(html, "##{group.id} button") |> text() == "Set 1"
     assert LazyHTML.query(html, "##{recovery.id} th") |> text() == "Final recovery"
     assert LazyHTML.query(html, "##{recovery.id} .home-prescription-rest") |> text() == "1.25s"
   end
 
-  test "compiler-shortened terminal work exposes its exact interval without expanding a group" do
+  test "compiler-shortened terminal work keeps exact timing without a cadence annotation" do
     attrs = %{
       "version" => 1,
       "name" => "Terminal active",
@@ -99,53 +244,85 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     [ordinary, terminal] = rows
     html = inspection(rows)
 
-    assert LazyHTML.query(html, "##{ordinary.id} .home-interval.sr-only") |> text() ==
-             "Interval 16s"
-
-    assert LazyHTML.query(html, "##{terminal.id} .home-interval:not(.sr-only)") |> text() ==
-             "Interval 14s"
-
-    assert LazyHTML.query(html, "##{terminal.id} .home-prescription-cadence") |> text() ==
-             "9s Interval 14s"
+    assert LazyHTML.query(html, "##{ordinary.id} .home-prescription-rest") |> text() == "13s"
+    assert LazyHTML.query(html, "##{terminal.id} .home-prescription-cadence") |> text() == "9s"
+    assert LazyHTML.query(html, "##{terminal.id} .home-prescription-rest") |> text() == "—"
+    assert List.last(Inspection.flatten(rows))["duration_sec"] == 14
+    refute text(html) =~ "Interval"
   end
 
-  test "ordered constituent outline labels shared prescription and keeps exceptional intervals visible" do
-    [group] = rows([work(2, 9_000_000, 14), work(2, 9_000_000, 14)])
-    html = inspection([group], MapSet.new([group.id]))
-    details = LazyHTML.query(html, "##{group.id}-details")
+  test "expanded even and unbroken sets use complete rows under the single shared header" do
+    for {style, active, duration, values} <- [
+          {"even", 5, 573, ["20", "5s", "8s", "51s"]},
+          {"unbroken", 8, 576, ["20", "8s", "48s"]}
+        ] do
+      w = definition_work(20, 8, active)
+      plan = compiled_plan(style, [w, definition_rest(48), w, definition_rest(48), w], duration)
+      [group, _final] = rows = Inspection.rows(plan)
+      html = inspection(rows, MapSet.new([group.id]), style)
 
-    assert LazyHTML.query(details, "ol[aria-label='Ordered constituent sets'] li .home-set-label")
-           |> text() == "Set 1Set 2"
+      assert prescription_rows(html, group.id) == [["Set 1" | values], ["Set 2" | values]]
+      assert LazyHTML.query(html, "table") |> Enum.count() == 1
+      assert LazyHTML.query(html, "thead") |> Enum.count() == 1
 
-    assert LazyHTML.query(details, "table") |> Enum.empty?()
+      assert LazyHTML.query(html, "##{group.id}-details > tr > th[scope=row]") |> Enum.count() ==
+               1
 
-    assert LazyHTML.query(details, ".home-shared-prescription") |> text() ==
-             "Prescription as above"
-
-    for item <- LazyHTML.query(details, "li") do
-      assert text(item) =~ "2 reps · 5s pace · 9s cadence · Interval 14s · No recovery"
+      assert Inspection.flatten(rows) == plan.program_json["events"]
+      refute text(html) =~ "Prescription as above"
+      refute text(html) =~ "Interval"
     end
-
-    assert LazyHTML.query(details, ".home-interval:not(.sr-only)") |> text() ==
-             "Interval 14s Interval 14s"
   end
 
   test "group activation retains one native button with row-wide target and disclosure context" do
     [group] = rows([work(2, 5_000_000, 10), work(2, 5_000_000, 10)])
     html = inspection([group])
-    button = LazyHTML.query(html, "##{group.id} > tr.home-group-summary button[type=button]")
+    button = LazyHTML.query(html, "##{group.id} > tr.home-group-row button[type=button]")
     assert LazyHTML.attribute(button, "phx-click") == ["toggle_group"]
     assert LazyHTML.attribute(button, "aria-controls") == ["#{group.id}-details"]
     assert LazyHTML.attribute(button, "aria-expanded") == ["false"]
     assert LazyHTML.attribute(button, "aria-describedby") == ["#{group.id}-prescription"]
 
     assert LazyHTML.query(html, "##{group.id}-prescription") |> text() ==
-             "2 reps · 5s pace · 5s cadence · Interval 10s · No recovery"
+             "2 reps · 5s pace · 5s cadence · No recovery"
 
     assert LazyHTML.query(html, "##{group.id}-details[hidden]") |> Enum.count() == 1
     expanded = inspection([group], MapSet.new([group.id]))
     assert LazyHTML.query(expanded, "button[aria-expanded=true]") |> Enum.count() == 1
     assert LazyHTML.query(expanded, "##{group.id}-details[hidden]") |> Enum.empty?()
+  end
+
+  test "row-wide hit target stays anchored when a reconnect retains the prior stylesheet" do
+    [group] = rows([work(2, 5_000_000, 10), work(2, 5_000_000, 10)])
+
+    for expanded <- [MapSet.new(), MapSet.new([group.id])] do
+      html = inspection([group], expanded)
+
+      assert LazyHTML.query(html, "##{group.id} > tr.relative > th > .home-group-toggle")
+             |> Enum.count() == 1
+    end
+  end
+
+  test "expansion replaces the summary with its first set and keeps the same toggle identity" do
+    [group] = rows([work(2, 5_000_000, 10), work(2, 5_000_000, 10)])
+    collapsed = inspection([group])
+    expanded = inspection([group], MapSet.new([group.id]))
+
+    for html <- [collapsed, expanded] do
+      assert LazyHTML.query(html, "##{group.id}-toggle") |> Enum.count() == 1
+      assert LazyHTML.query(html, ".home-group-detail") |> Enum.empty?()
+    end
+
+    assert LazyHTML.query(collapsed, "##{group.id}-toggle") |> text() == "2 sets"
+    assert LazyHTML.query(expanded, "##{group.id}-toggle") |> text() == "Set 1"
+    assert LazyHTML.query(expanded, "tbody:not([hidden]) > tr") |> Enum.count() == 2
+
+    assert prescription_rows(expanded, group.id) == [
+             ["Set 1", "2", "5s", "5s", "—"],
+             ["Set 2", "2", "5s", "5s", "—"]
+           ]
+
+    assert LazyHTML.query(expanded, "##{group.id}-details > tr") |> Enum.count() == 1
   end
 
   test "alternative metadata uses exact known duration and reps without turning unknown into zero" do
@@ -170,7 +347,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
 
       assert LazyHTML.query(html, ".home-alternative-metadata") |> text() == expected
 
-      assert LazyHTML.query(html, "button[phx-click=select_alternative]")
+      assert LazyHTML.query(html, "button.home-alternative")
              |> LazyHTML.attribute("phx-value-kind") == [to_string(kind)]
 
       assert LazyHTML.query(html, ".home-alternative-name") |> text() == "Stored item"
@@ -180,7 +357,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
   test "ordinary fractional and large duration values never use exponent notation or lose precision" do
     html = inspection(rows([work(100, 12_000_001, 1200.000001), rest(1), work(1, 1_000_000, 1)]))
     assert LazyHTML.query(html, ".home-prescription-cadence") |> LazyHTML.text() =~ "12.000001s"
-    assert LazyHTML.query(html, ".home-interval") |> LazyHTML.text() =~ "Interval 1200.000001s"
+    assert LazyHTML.query(html, ".home-interval") |> Enum.empty?()
     assert LazyHTML.query(html, ".home-prescription-rest") |> LazyHTML.text() =~ "0.001s"
     refute LazyHTML.text(html) =~ ~r/\d[eE][+-]?\d/
   end
@@ -246,7 +423,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     assert LazyHTML.query(html, "caption.sr-only") |> text() =~
              "Pace is prescribed active seconds"
 
-    assert LazyHTML.query(html, ".home-interval:not(.sr-only)") |> text() == "Interval 157s"
+    assert LazyHTML.query(html, ".home-prescription-cadence") |> text() == "8s"
+    refute text(html) =~ "Interval"
   end
 
   test "terminal floating-point representation cannot invent a sub-microsecond rest" do
@@ -300,6 +478,19 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
       definition_json: WorkoutDefinition.canonical_map(definition),
       program_json: ProgramHash.canonical_map(program)
     }
+  end
+
+  defp prescription_rows(html, group_id) do
+    for row <- LazyHTML.query(html, "##{group_id} > tr, ##{group_id}-details > tr") do
+      row = LazyHTML.query(row, "th, td")
+
+      Enum.map(row, fn cell ->
+        case LazyHTML.query(cell, "button") |> Enum.to_list() do
+          [button] -> text(button)
+          [] -> text(cell)
+        end
+      end)
+    end
   end
 
   defp text(html), do: html |> LazyHTML.text() |> String.replace(~r/\s+/, " ") |> String.trim()

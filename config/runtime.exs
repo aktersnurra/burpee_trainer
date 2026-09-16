@@ -102,7 +102,7 @@ if adaptive_e2e_fixture? do
     enabled: false,
     url: nil,
     api_key: nil,
-    model: "openai/gpt-5-mini",
+    model: "openai/gpt-6-luna",
     timeout_ms: 20_000
 
   config :burpee_trainer, :adaptive_e2e_fixture,
@@ -126,7 +126,7 @@ unless adaptive_e2e_fixture? do
         is_binary(provider_api_key) and provider_api_key != "",
     url: provider_url,
     api_key: provider_api_key,
-    model: System.get_env("LLM_PROVIDER_MODEL", "openai/gpt-5-mini"),
+    model: System.get_env("LLM_PROVIDER_MODEL", "openai/gpt-6-luna"),
     timeout_ms: timeout_ms
 end
 

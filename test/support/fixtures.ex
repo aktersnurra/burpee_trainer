@@ -102,21 +102,24 @@ defmodule BurpeeTrainer.Fixtures do
     end
   end
 
-  @doc """
-  Build a free-form session.
-  """
+  @doc "Insert a completed manual history row (legacy manual logs have no creation UI)."
   def free_form_session_fixture(user, attrs \\ %{}) do
-    defaults = %{
-      "burpee_type" => "six_count",
-      "burpee_count_actual" => 25,
-      "duration_sec_actual" => 100,
-      "completed_at" => DateTime.add(DateTime.utc_now(:second), -1, :second)
+    attrs = stringify_keys(attrs)
+
+    %BurpeeTrainer.Workouts.WorkoutSession{
+      user_id: user.id,
+      state: :completed,
+      source_kind: :manual,
+      capture_mode: :logged
     }
-
-    {:ok, session} =
-      Workouts.create_free_form_session(user, Map.merge(defaults, stringify_keys(attrs)))
-
-    session
+    |> Ecto.Changeset.change(
+      burpee_type: String.to_existing_atom(Map.get(attrs, "burpee_type", "six_count")),
+      burpee_count_actual: Map.get(attrs, "burpee_count_actual", 25),
+      duration_sec_actual: Map.get(attrs, "duration_sec_actual", 100),
+      completed_at:
+        Map.get(attrs, "completed_at", DateTime.add(DateTime.utc_now(:second), -1, :second))
+    )
+    |> BurpeeTrainer.Repo.insert!()
   end
 
   @doc """

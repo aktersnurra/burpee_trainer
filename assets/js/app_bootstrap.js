@@ -4,7 +4,9 @@ import { LiveSocket } from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
 import HomeAdjustment from "./hooks/home_adjustment.mjs";
+import HomePendingSession from "./hooks/home_pending_session.mjs";
 import SessionHook from "./hooks/session_hook";
+import SessionCompleted from "./hooks/session_completed.mjs";
 import VideoHook from "./hooks/video_hook";
 import PoseDebug from "./hooks/pose_debug";
 import PoseTraceButton from "./hooks/pose_trace_button";
@@ -82,7 +84,9 @@ export function startApp(PoseTracker) {
 		hooks: {
 			ChartHook,
 			HomeAdjustment,
+			HomePendingSession,
 			SessionHook,
+			SessionCompleted,
 			VideoHook,
 			PoseTracker,
 			PoseDebug,

@@ -2,7 +2,9 @@ defmodule BurpeeTrainer.Coach.Memory do
   import Ecto.Query
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
   alias BurpeeTrainer.Coach.Context
-  alias BurpeeTrainer.Coach.{Setting, WorkoutMemory}
+  alias BurpeeTrainer.Coach.{Guidance, Setting, WorkoutMemory}
+
+  @workout_memory_limit 12
 
   def global_context(user) do
     settings =
@@ -15,12 +17,15 @@ defmodule BurpeeTrainer.Coach.Memory do
       Repo.all(
         from(m in WorkoutMemory,
           where: m.user_id == ^user.id,
-          order_by: [asc: m.id]
+          order_by: [desc: m.id],
+          limit: @workout_memory_limit
         )
       )
+      |> Enum.reverse()
 
     %{
       settings: settings,
+      coach_guidance: Guidance.context(user),
       workout_memories:
         Enum.map(memories, fn m ->
           %{
@@ -47,6 +52,16 @@ defmodule BurpeeTrainer.Coach.Memory do
             (e.payload["workout_plan_id"] == plan.id or e.payload["pending_draft_id"] == plan.id)
         end)
         |> MapSet.new(& &1.attempt_id)
+
+      # An approved review is accepted under its approval attempt; its instruction
+      # belongs to the prepared attempt whose audited review names that approval.
+      attempts =
+        entries
+        |> Enum.filter(fn e ->
+          e.kind == :outcome and e.payload["status"] == "prepared" and
+            MapSet.member?(attempts, e.payload["review"]["approval_attempt"])
+        end)
+        |> Enum.reduce(attempts, &MapSet.put(&2, &1.attempt_id))
 
       instructions =
         entries

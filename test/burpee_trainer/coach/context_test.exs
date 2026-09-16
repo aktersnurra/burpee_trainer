@@ -80,11 +80,65 @@ defmodule BurpeeTrainer.Coach.ContextTest do
     b = Ecto.UUID.generate()
     {:ok, _} = Context.append(user, s.id, a, :instruction, %{"text" => "Six-counts"})
     {:ok, _} = Context.append(user, s.id, b, :instruction, %{"text" => "Navy SEALs"})
+    {:ok, _} = Context.append(user, s.id, b, :proposal, %{"invalid_rest_free_plan" => true})
+    {:ok, _} = Context.append(user, s.id, b, :outcome, %{"status" => "failed"})
     {:ok, [_, _, message]} = Context.messages(user, s.id, source, a, "Contract")
     body = Jason.decode!(message.content)
     assert body["active_attempt"]["id"] == a
     assert body["active_attempt"]["instruction"] == "Six-counts"
-    assert Enum.any?(body["entries"], &(&1["attempt_id"] == b))
+    assert body["current_definition"] == source.definition_json
+
+    assert Enum.map(body["entries"], & &1["kind"]) == [
+             "initial_context",
+             "baseline",
+             "instruction"
+           ]
+
+    refute message.content =~ "invalid_rest_free_plan"
+    assert length(elem(Context.entries(user, s.id), 1)) == 6
+  end
+
+  test "automatic recommendation retries retain their log without overflowing provider context" do
+    user = user_fixture()
+    {:ok, session} = Context.ensure_session(user, nil, "recommendation:123:1")
+
+    for _ <- 1..70 do
+      attempt = Ecto.UUID.generate()
+
+      {:ok, _} =
+        Context.append(user, session.id, attempt, :instruction, %{
+          "text" => "Choose the next workout for this slot.",
+          "request_messages" => [%{role: "user", content: String.duplicate("x", 5_000)}]
+        })
+
+      {:ok, _} =
+        Context.append(user, session.id, attempt, :outcome, %{
+          "status" => "failed",
+          "code" => "provider_unavailable"
+        })
+    end
+
+    active = Ecto.UUID.generate()
+
+    {:ok, _} =
+      Context.append(user, session.id, active, :instruction, %{
+        "text" => "Choose the next workout for this slot.",
+        "request_messages" => [%{role: "user", content: "current slot"}]
+      })
+
+    assert {:ok, [_, _, message]} =
+             Context.messages(user, session.id, nil, active, "Coach recommendation")
+
+    body = Jason.decode!(message.content)
+
+    assert Enum.map(body["entries"], & &1["kind"]) == [
+             "initial_context",
+             "baseline",
+             "instruction"
+           ]
+
+    assert List.last(body["entries"])["attempt_id"] == active
+    assert length(elem(Context.entries(user, session.id), 1)) == 143
   end
 
   test "concurrent initializers produce one context and one initial baseline" do
@@ -183,6 +237,19 @@ defmodule BurpeeTrainer.Coach.ContextTest do
       Context.append(user, original.id, Ecto.UUID.generate(), :instruction, %{"text" => "later"})
 
     assert {:ok, ^before_entries} = Context.entries(user, imported.id)
+
+    active = Ecto.UUID.generate()
+    {:ok, _} = Context.append(user, imported.id, active, :instruction, %{"text" => "Refine"})
+
+    assert {:ok, [_, _, message]} =
+             Context.messages(user, imported.id, published, active, "Contract")
+
+    request = Jason.decode!(message.content)
+    projected_baseline = Enum.find(request["entries"], &(&1["kind"] == "baseline"))
+    refute Map.has_key?(projected_baseline["payload"], "prior_owned_entries")
+    assert projected_baseline["payload"]["definition"] == published.definition_json
+    refute message.content =~ "owned history"
+
     disposable = workout_plan_draft_fixture(user)
     {:ok, retained} = Context.ensure_session(user, disposable, "unused")
     Repo.delete!(disposable)
@@ -217,7 +284,7 @@ defmodule BurpeeTrainer.Coach.ContextTest do
              Context.messages(user, s.id, nil, Ecto.UUID.generate(), "prompt")
   end
 
-  test "persisted global context is owned, current and history overflow is explicit" do
+  test "persisted global context is owned while historical overflow stays out of requests" do
     alias BurpeeTrainer.Coach.{Memory, Setting, WorkoutMemory}
     user = user_fixture()
     other = user_fixture()
@@ -245,9 +312,46 @@ defmodule BurpeeTrainer.Coach.ContextTest do
     {:ok, _} =
       Context.append(user, s.id, attempt, :proposal, %{"large" => String.duplicate("x", 262_145)})
 
-    assert {:error, %{code: :authoring_context_too_large}} =
-             Context.messages(user, s.id, nil, attempt, "prompt")
-
+    assert {:ok, [_, _, message]} = Context.messages(user, s.id, nil, attempt, "prompt")
+    refute message.content =~ String.duplicate("x", 100)
     assert {:ok, [_, _, _, _]} = Context.entries(user, s.id)
+
+    oversized_active = Ecto.UUID.generate()
+
+    {:ok, _} =
+      Context.append(user, s.id, oversized_active, :instruction, %{
+        "text" => String.duplicate("x", 262_145)
+      })
+
+    assert {:error, %{code: :authoring_context_too_large}} =
+             Context.messages(user, s.id, nil, oversized_active, "prompt")
+  end
+
+  test "accumulated finalized-workout memories stay bounded in authoring requests" do
+    alias BurpeeTrainer.Coach.{Memory, WorkoutMemory}
+    user = user_fixture()
+    instruction = String.duplicate("i", 500)
+    rationale = String.duplicate("r", 400)
+
+    for plan_id <- 1..400 do
+      Repo.insert!(%WorkoutMemory{
+        user_id: user.id,
+        workout_plan_id: plan_id,
+        facts: %{"reps" => 100, "duration_sec" => 1200},
+        workout_reason: %{"rationale" => rationale, "accepted_instructions" => [instruction]}
+      })
+    end
+
+    memories = Memory.global_context(user).workout_memories
+    assert length(memories) < 400
+    assert List.last(memories).workout_plan_id == 400
+
+    assert Enum.map(memories, & &1.workout_plan_id) ==
+             Enum.sort(Enum.map(memories, & &1.workout_plan_id))
+
+    {:ok, s} = Context.ensure_session(user, nil, "creator")
+    attempt = Ecto.UUID.generate()
+    {:ok, _} = Context.append(user, s.id, attempt, :instruction, %{"text" => "active"})
+    assert {:ok, _messages} = Context.messages(user, s.id, nil, attempt, "prompt")
   end
 end

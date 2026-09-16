@@ -4,50 +4,61 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
+  alias BurpeeTrainer.Workouts
+
   setup %{conn: conn} do
     user = user_fixture()
-    {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
+    plan = plan_fixture(user)
+    {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user, plan: plan}
   end
 
-  test "an unknown filter value does not crash the view", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/workouts")
+  test "unknown filter values do not crash the current Home chooser", %{conn: conn, plan: plan} do
+    view = home_view(conn, plan)
 
-    for {key, value} <- [
+    for {kind, value} <- [
           {"source", "not_a_real_source"},
-          {"burpee_type", "not_a_real_type"},
+          {"type", "not_a_real_type"},
           {"level", "not_a_real_level"}
         ] do
-      render_click(view, "toggle_filter", %{key => value})
-      assert render(view)
+      render_click(view, "filter", %{"kind" => kind, "filter" => value})
+      assert has_element?(view, "#home-title-action")
     end
   end
 
-  test "a malformed plan id does not crash the view", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/workouts")
+  test "malformed plan ids do not crash selection or archival", %{conn: conn, plan: plan} do
+    view = home_view(conn, plan)
 
-    for event <- ["duplicate", "delete"] do
-      render_click(view, event, %{"id" => "not_a_number"})
-      assert render(view), "#{event} killed the view"
+    for event <- ["select_alternative", "delete_workout"] do
+      render_click(view, event, %{"id" => "not_a_number", "kind" => "plan"})
+      assert has_element?(view, "#home-title-action")
     end
   end
 
-  test "a plan id belonging to another user does not crash the view", %{conn: conn} do
+  test "another user's plan cannot be selected or archived", %{conn: conn, plan: plan} do
     other = user_fixture()
-    plan = plan_fixture(other)
+    foreign = plan_fixture(other)
+    view = home_view(conn, plan)
 
-    {:ok, view, _html} = live(conn, ~p"/workouts")
-
-    for event <- ["duplicate", "delete"] do
-      render_click(view, event, %{"id" => to_string(plan.id)})
-      assert render(view), "#{event} killed the view"
+    for event <- ["select_alternative", "delete_workout"] do
+      render_click(view, event, %{"id" => to_string(foreign.id), "kind" => "plan"})
+      assert has_element?(view, "#home-title-action")
+      assert Workouts.get_plan!(other, foreign.id).state == :published
+      assert Workouts.get_plan!(other, foreign.id).content_hash == foreign.content_hash
     end
   end
 
-  test "a known filter value still applies", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/workouts")
+  test "a known filter value still toggles the current chooser", %{conn: conn, plan: plan} do
+    view = home_view(conn, plan)
+    render_click(view, "open_chooser")
+    render_click(view, "toggle_filters")
+    selected? = has_element?(view, "#home-type-six_count[aria-pressed=true]")
+    view |> element("#home-type-six_count") |> render_click()
+    assert has_element?(view, "#home-type-six_count[aria-pressed=#{not selected?}]")
+  end
 
-    render_click(view, "toggle_filter", %{"burpee_type" => "six_count"})
-
-    assert_patched(view, ~p"/workouts?burpee_type=six_count")
+  defp home_view(conn, plan) do
+    {:ok, view, _html} = live(conn, ~p"/")
+    render_click(view, "select_alternative", %{"id" => to_string(plan.id), "kind" => "plan"})
+    view
   end
 end

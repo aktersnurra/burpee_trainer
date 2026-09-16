@@ -9,8 +9,17 @@ defmodule BurpeeTrainer.Repo.Migrations.RebuildWorkoutLibrary do
 
   # These hash the complete normalized sqlite_master catalog: table SQL (including
   # columns, constraints, and FKs), index SQL, trigger bodies, and all object names.
-  @source_schema_fingerprint "065f39fa56dc8f7a2d2464de0304499191b4ec7f5bd923a4327f798aaf6d447a"
-  @target_schema_fingerprint "ce0d0198f4bd48af3a4a44b095020672136c0f261f0049d05feb620f441420ee"
+  # Databases deployed from upstream already applied 20260908000000_add_oidc_sub_to_users
+  # (password_hash removed, oidc_sub added) before this migration exists. This migration
+  # never touches `users`, so each accepted source maps to exactly one accepted target.
+  @source_schema_fingerprints [
+    "065f39fa56dc8f7a2d2464de0304499191b4ec7f5bd923a4327f798aaf6d447a",
+    "f71f8586f40ea64f70cc5fd190ff8a5ac7982d43292a61951db9f1ef9ffb91f5"
+  ]
+  @target_schema_fingerprints [
+    "ce0d0198f4bd48af3a4a44b095020672136c0f261f0049d05feb620f441420ee",
+    "53bc8433c102b76a48cbcca5a41dd69b1492a483960c97056fa618986f58ad06"
+  ]
 
   @obsolete_tables ~w[
     blocks sets plan_steps execution_programs coach_profiles coach_workout_threads
@@ -83,8 +92,8 @@ defmodule BurpeeTrainer.Repo.Migrations.RebuildWorkoutLibrary do
     end
   end
 
-  defp complete_source?, do: schema_fingerprint() == @source_schema_fingerprint
-  defp complete_target?, do: schema_fingerprint() == @target_schema_fingerprint
+  defp complete_source?, do: schema_fingerprint() in @source_schema_fingerprints
+  defp complete_target?, do: schema_fingerprint() in @target_schema_fingerprints
 
   defp validate_complete_target! do
     unless complete_target?() do

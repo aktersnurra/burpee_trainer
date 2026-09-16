@@ -255,30 +255,6 @@ defmodule BurpeeTrainerWeb.CoreComponents do
   end
 
   @doc """
-  Renders a small property tag.
-  """
-  attr :tone, :string, default: "neutral", values: ~w(neutral tag info)
-  attr :class, :any, default: nil
-  slot :inner_block, required: true
-
-  def qs_property_tag(assigns) do
-    ~H"""
-    <span class={[
-      "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
-      @tone == "neutral" &&
-        "border-[var(--session-border)] bg-[var(--session-track)] text-[var(--session-ink)]",
-      @tone == "tag" &&
-        "border-[var(--session-tag-border)] bg-[var(--session-tag-bg)] text-[var(--session-tag-ink)]",
-      @tone == "info" &&
-        "border-[var(--session-info-border)] bg-[var(--session-info-bg)] text-[var(--session-info-ink)]",
-      @class
-    ]}>
-      {render_slot(@inner_block)}
-    </span>
-    """
-  end
-
-  @doc """
   Renders an input with label and error messages.
 
   A `Phoenix.HTML.FormField` may be passed as argument,
