@@ -36,10 +36,7 @@ function restoredCountProvenance(draft, tracking) {
 		tracking.trust === "finished" &&
 		Number.isInteger(actualReps);
 
-	if (
-		draft.burpee_count_provenance === "camera_confirmed" &&
-		cameraConfirmed
-	) {
+	if (draft.burpee_count_provenance === "camera_confirmed" && cameraConfirmed) {
 		return "camera_confirmed";
 	}
 	if (
@@ -152,10 +149,7 @@ const SessionHook = {
 			"pose-tracker:initialized",
 			this.onPoseTrackerInitialized,
 		);
-		this.el.addEventListener(
-			"pose-tracker:finished",
-			this.onPoseTrackerFinished,
-		);
+		this.el.addEventListener("pose-tracker:finished", this.onPoseTrackerFinished);
 		this.el.addEventListener(
 			"pose-tracker:trace-chunk",
 			this.onPoseTrackerTraceChunk,
@@ -230,9 +224,7 @@ const SessionHook = {
 				e.target.closest("#workout-ready-continue");
 			const ringContainer = e.target.closest("#ring-container");
 			const finishEarly = e.target.closest("#finish-early-btn");
-			const retryReportPending = e.target.closest(
-				"#session-report-pending-retry",
-			);
+			const retryReportPending = e.target.closest("#session-report-pending-retry");
 			const abort = e.target.closest("#session-abort-btn");
 			const discard = e.target.closest("#session-discard-btn");
 			const mood = e.target.dataset?.mood;
@@ -290,8 +282,7 @@ const SessionHook = {
 
 		this.el.addEventListener("keydown", (e) => {
 			const ringContainer = e.target.closest("#ring-container");
-			if (!ringContainer || !isPauseToggleKey(e) || !this.canTogglePause())
-				return;
+			if (!ringContainer || !isPauseToggleKey(e) || !this.canTogglePause()) return;
 
 			e.preventDefault();
 			if (!e.repeat) this.togglePause();
@@ -444,42 +435,60 @@ const SessionHook = {
 	requestBeginSession() {
 		const generation = this.lifecycleGeneration;
 		this.renderer.clearBeginConflict();
-		void this.queueLifecycleCommand(this.lifecycleCommand("begin_session")).then(() => {
-			if (!this.lifecycleActive(generation) || this.flow.mode !== "starting_session") return;
-			try {
-				this.pushEvent("begin_session", { client_session_id: this.clientSessionId }, (reply) => {
-					if (!this.lifecycleActive(generation)) return;
-					if (reply?.status === "ok") {
-						void this.deleteAcknowledgedLifecycleCommand(generation).then(() =>
-							this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" }),
-						);
-					} else {
-						this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
-						this.handleLifecycleFailure(reply);
-					}
-				});
-			} catch (_error) {
-				this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
-				this.handleLifecycleFailure({ message: "Could not start workout. Try again." });
-			}
-		});
+		void this.queueLifecycleCommand(this.lifecycleCommand("begin_session")).then(
+			() => {
+				if (
+					!this.lifecycleActive(generation) ||
+					this.flow.mode !== "starting_session"
+				)
+					return;
+				try {
+					this.pushEvent(
+						"begin_session",
+						{ client_session_id: this.clientSessionId },
+						(reply) => {
+							if (!this.lifecycleActive(generation)) return;
+							if (reply?.status === "ok") {
+								void this.deleteAcknowledgedLifecycleCommand(generation).then(() =>
+									this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" }),
+								);
+							} else {
+								this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
+								this.handleLifecycleFailure(reply);
+							}
+						},
+					);
+				} catch (_error) {
+					this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
+					this.handleLifecycleFailure({
+						message: "Could not start workout. Try again.",
+					});
+				}
+			},
+		);
 	},
 
 	requestReportPending() {
 		const generation = this.lifecycleGeneration;
 		try {
-			this.pushEvent("mark_report_pending", { client_session_id: this.clientSessionId }, (reply) => {
-				if (!this.lifecycleActive(generation)) return;
-				if (reply?.status === "ok") {
-					this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
-				} else {
-					this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
-					this.handleLifecycleFailure(reply);
-				}
-			});
+			this.pushEvent(
+				"mark_report_pending",
+				{ client_session_id: this.clientSessionId },
+				(reply) => {
+					if (!this.lifecycleActive(generation)) return;
+					if (reply?.status === "ok") {
+						this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
+					} else {
+						this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
+						this.handleLifecycleFailure(reply);
+					}
+				},
+			);
 		} catch (_error) {
 			this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
-			this.handleLifecycleFailure({ message: "Could not finish workout. Try again." });
+			this.handleLifecycleFailure({
+				message: "Could not finish workout. Try again.",
+			});
 		}
 	},
 
@@ -503,7 +512,9 @@ const SessionHook = {
 
 		this.renderer.renderSaveErrors({
 			field_errors: {},
-			global_errors: [reply.message || "Could not update workout lifecycle. Try again."],
+			global_errors: [
+				reply.message || "Could not update workout lifecycle. Try again.",
+			],
 		});
 	},
 
@@ -582,7 +593,11 @@ const SessionHook = {
 			SAVE_NAVIGATION_DEADLINE_MS,
 		);
 
-		this.saveCleanup = Promise.all([this.traceWrite, this.draftWrite, this.lifecycleWrite])
+		this.saveCleanup = Promise.all([
+			this.traceWrite,
+			this.draftWrite,
+			this.lifecycleWrite,
+		])
 			.then(async () => {
 				const store = await this.storeReady;
 				if (store && (await store.hasTraceChunks(this.clientSessionId))) {
@@ -638,9 +653,7 @@ const SessionHook = {
 		const completion = {
 			scheduledRepsDone: draft.scheduled_reps_done ?? 0,
 			burpeeCountActual:
-				burpeeCountProvenance === "unresolved"
-					? null
-					: draft.burpee_count_actual,
+				burpeeCountProvenance === "unresolved" ? null : draft.burpee_count_actual,
 			burpeeCountProvenance,
 			burpeeCountPlanned: draft.burpee_count_planned ?? 0,
 			durationSecActual: draft.duration_sec_actual ?? 0,
@@ -691,18 +704,24 @@ const SessionHook = {
 		const generation = this.lifecycleGeneration;
 
 		try {
-			this.pushEvent("abort_session", { client_session_id: this.clientSessionId }, (reply) => {
-				if (!this.lifecycleActive(generation)) return;
-				if (reply?.status !== "ok") {
-					this.discarding = false;
-					this.handleLifecycleFailure(reply);
-					return;
-				}
-				this.finishLocalDiscard(generation);
-			});
+			this.pushEvent(
+				"abort_session",
+				{ client_session_id: this.clientSessionId },
+				(reply) => {
+					if (!this.lifecycleActive(generation)) return;
+					if (reply?.status !== "ok") {
+						this.discarding = false;
+						this.handleLifecycleFailure(reply);
+						return;
+					}
+					this.finishLocalDiscard(generation);
+				},
+			);
 		} catch (_error) {
 			this.discarding = false;
-			this.handleLifecycleFailure({ message: "Could not discard workout. Try again." });
+			this.handleLifecycleFailure({
+				message: "Could not discard workout. Try again.",
+			});
 		}
 	},
 
@@ -714,7 +733,11 @@ const SessionHook = {
 		this.inMemoryCompletionDraft = null;
 		this.dispatchFlow({ type: "DISCARD_LOCAL" });
 
-		this.discardWrite = Promise.all([this.traceWrite, this.draftWrite, this.lifecycleWrite])
+		this.discardWrite = Promise.all([
+			this.traceWrite,
+			this.draftWrite,
+			this.lifecycleWrite,
+		])
 			.then(async () => {
 				const store = await this.storeReady;
 				if (store) await store.discardSession(clientSessionId);
@@ -733,8 +756,7 @@ const SessionHook = {
 
 	activeRuntimeForFlow() {
 		return (
-			(this.flow.mode === "warmup_running" &&
-				this.activeSegment === "warmup") ||
+			(this.flow.mode === "warmup_running" && this.activeSegment === "warmup") ||
 			(this.flow.mode === "workout_running" && this.activeSegment === "workout")
 		);
 	},
@@ -762,10 +784,7 @@ const SessionHook = {
 			this.onPoseTrackerStartFailed,
 		);
 		this.el.removeEventListener("pose-tracker:rep", this.onPoseTrackerRep);
-		this.el.removeEventListener(
-			"pose-tracker:status",
-			this.onPoseTrackerStatus,
-		);
+		this.el.removeEventListener("pose-tracker:status", this.onPoseTrackerStatus);
 		this.el.removeEventListener(
 			"pose-tracker:readiness",
 			this.onPoseTrackerReadiness,
@@ -918,10 +937,7 @@ const SessionHook = {
 				Math.max(this.warmupTimeoutDeadline - performance.now(), 0),
 			);
 		}
-		const seconds = Math.max(
-			1,
-			Math.ceil(this.warmupTimeoutRemainingMs / 1_000),
-		);
+		const seconds = Math.max(1, Math.ceil(this.warmupTimeoutRemainingMs / 1_000));
 		const output = this.el.querySelector("#warmup-skip-seconds");
 		if (output) output.textContent = String(seconds);
 	},
@@ -1008,7 +1024,7 @@ const SessionHook = {
 				this.beginSegment();
 				break;
 			case "renderRunningFrame":
-				this.renderRunningFrame(command.elapsedSec);
+				this.renderRunningFrame(command.elapsedSec, command.frame);
 				break;
 			case "updateVisibleRepTotal":
 				this.renderer.updateTotalCounter(command.burpeeCountDone);
@@ -1207,15 +1223,9 @@ const SessionHook = {
 		this.dispatchSegment({ type: "TICK", elapsedSec: elapsed });
 	},
 
-	renderRunningFrame(elapsed) {
-		const frame = currentFrame(this.timeline, elapsed);
-
-		this.dispatchSegment({ type: "ACCOUNT_REPS", frame });
+	renderRunningFrame(elapsed, frame) {
 		this.syncRepStateFromSegment();
-		const remainingReps = Math.max(
-			(frame?.event?.reps || 0) - this.doneReps,
-			0,
-		);
+		const remainingReps = Math.max((frame?.event?.reps || 0) - this.doneReps, 0);
 
 		const totalDurationSec = this.segment.clock.totalDurationSec;
 		const sessionProgress =
@@ -1298,8 +1308,7 @@ const SessionHook = {
 		const n = this.countdownCount;
 		if (n === null) return;
 
-		this.countdownStartedAt =
-			performance.now() - (this.countdownElapsedMs || 0);
+		this.countdownStartedAt = performance.now() - (this.countdownElapsedMs || 0);
 		this.countdownShowCount(n, false);
 		if (this.renderCountdownFrame) {
 			this.renderCountdownContinuously(this.renderCountdownFrame);
@@ -1467,8 +1476,7 @@ const SessionHook = {
 			this.startTime === null
 		)
 			return;
-		if (!confirm("End the session now and log what you've done so far?"))
-			return;
+		if (!confirm("End the session now and log what you've done so far?")) return;
 		const elapsed = this.segment?.clock?.elapsedSec ?? 0;
 		this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });
 	},

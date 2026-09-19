@@ -102,18 +102,18 @@ function completedRepsForElapsed(event, phaseElapsedSec) {
 	);
 
 	const activeBoundaryToleranceSec =
-		Number.EPSILON *
-		4 *
-		Math.max(1, eventElapsedSec, activeSec, cadenceSec);
+		Number.EPSILON * 4 * Math.max(1, eventElapsedSec, activeSec, cadenceSec);
 
-	if (cadenceSec <= 0 || eventElapsedSec + activeBoundaryToleranceSec < activeSec) {
+	if (
+		cadenceSec <= 0 ||
+		eventElapsedSec + activeBoundaryToleranceSec < activeSec
+	) {
 		return 0;
 	}
 
 	return Math.min(
 		Math.floor(
-			(eventElapsedSec - activeSec + activeBoundaryToleranceSec) /
-				cadenceSec,
+			(eventElapsedSec - activeSec + activeBoundaryToleranceSec) / cadenceSec,
 		) + 1,
 		target,
 	);
@@ -352,10 +352,7 @@ function tickSegment(state, event) {
 		const nextReps = frame
 			? {
 					...accountReps(state.reps.previousFrame, frame, state.reps),
-					burpeeCountDone: scheduledRepsAtElapsed(
-						state.timeline,
-						event.elapsedSec,
-					),
+					burpeeCountDone: scheduledRepsAtElapsed(state.timeline, event.elapsedSec),
 					previousFrame: frame,
 				}
 			: state.reps;
@@ -367,7 +364,11 @@ function tickSegment(state, event) {
 				reps: nextReps,
 			},
 			commands: [
-				{ type: "renderRunningFrame", elapsedSec: event.elapsedSec },
+				{
+					type: "renderRunningFrame",
+					elapsedSec: event.elapsedSec,
+					frame,
+				},
 				{ type: "scheduleAnimationFrame" },
 			],
 		};
@@ -390,7 +391,11 @@ function tickSegment(state, event) {
 			reps: nextReps,
 		},
 		commands: [
-			{ type: "renderRunningFrame", elapsedSec: completionElapsedSec },
+			{
+				type: "renderRunningFrame",
+				elapsedSec: completionElapsedSec,
+				frame,
+			},
 			{
 				type: "segmentDone",
 				result: segmentResult(nextReps, completionElapsedSec),
@@ -454,10 +459,7 @@ export function segmentTransition(state, event) {
 			};
 
 		case "COUNTDOWN_RESUME": {
-			const remainingMs = Math.max(
-				1000 - (state.countdown.stepElapsedMs || 0),
-				0,
-			);
+			const remainingMs = Math.max(1000 - (state.countdown.stepElapsedMs || 0), 0);
 			return {
 				state: {
 					...state,
@@ -532,8 +534,7 @@ export function segmentTransition(state, event) {
 		case "DISPLAY_FRAME": {
 			const result = displayCommandsForFrame(state.display, {
 				...event,
-				totalDurationSec:
-					event.totalDurationSec || state.clock.totalDurationSec,
+				totalDurationSec: event.totalDurationSec || state.clock.totalDurationSec,
 			});
 			return {
 				state: { ...state, display: result.display },
@@ -606,14 +607,11 @@ export function segmentTransition(state, event) {
 			const inactiveStart = [state.clock.hiddenAt, state.clock.pauseTime]
 				.filter((time) => time !== null)
 				.reduce(
-					(earliest, time) =>
-						earliest === null ? time : Math.min(earliest, time),
+					(earliest, time) => (earliest === null ? time : Math.min(earliest, time)),
 					null,
 				);
 			const inactiveFor =
-				inactiveStart === null
-					? 0
-					: Math.max((event.now || 0) - inactiveStart, 0);
+				inactiveStart === null ? 0 : Math.max((event.now || 0) - inactiveStart, 0);
 			return {
 				state: {
 					...state,

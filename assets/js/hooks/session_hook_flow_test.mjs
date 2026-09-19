@@ -1052,8 +1052,7 @@ test("stale inference settlement cannot affect a restarted tracker", async () =>
 					return new Promise((resolve, reject) => {
 						settleStaleInference =
 							settlement === "resolve"
-								? () =>
-										resolve(trackerFrame(trackerSample({ confidence: 0.1 }), 0))
+								? () => resolve(trackerFrame(trackerSample({ confidence: 0.1 }), 0))
 								: () => reject(new Error("stale detector exploded"));
 					});
 				}
@@ -1092,9 +1091,7 @@ test("camera gesture cannot confirm while readiness is not_ready", async () => {
 	const harness = poseTrackerHarness({ frames: gestureFrames });
 	await harness.startAndArm("camera_setup", 3);
 	assert.equal(
-		harness.events.some(
-			(event) => event.type === "pose-tracker:gesture-confirm",
-		),
+		harness.events.some((event) => event.type === "pose-tracker:gesture-confirm"),
 		false,
 	);
 });
@@ -1402,10 +1399,7 @@ test("completion display and every stable edit queue the full draft", async () =
 	await ctx.draftRestore;
 	const renderCompletion = ctx.renderer.renderCompletion.bind(ctx.renderer);
 	ctx.renderer.renderCompletion = (completion) => {
-		assert.ok(
-			ctx.inMemoryCompletionDraft,
-			"draft must be queued before render",
-		);
+		assert.ok(ctx.inMemoryCompletionDraft, "draft must be queued before render");
 		renderCompletion(completion);
 	};
 	ctx.flow = {
@@ -1514,10 +1508,7 @@ test("completion draft restores only for the server-minted client UUID", async (
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.clientSessionId, "client-1");
 	assert.equal(ctx.flow.completion.scheduledRepsDone, 4);
-	assert.equal(
-		ctx.flow.completion.burpeeCountProvenance,
-		"camera_confirmed",
-	);
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "camera_confirmed");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
 	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
 	assert.equal(
@@ -1536,10 +1527,11 @@ test("completion draft restores only for the server-minted client UUID", async (
 });
 
 test("legacy completion drafts recover a non-camera count as manual", async () => {
-	const { burpee_count_provenance: _provenance, ...legacyDraft } = completionDraft({
-		client_session_id: "client-1",
-		tracking: { enabled: false, trust: "disabled" },
-	});
+	const { burpee_count_provenance: _provenance, ...legacyDraft } =
+		completionDraft({
+			client_session_id: "client-1",
+			tracking: { enabled: false, trust: "disabled" },
+		});
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
@@ -1557,9 +1549,10 @@ test("legacy completion drafts recover a non-camera count as manual", async () =
 });
 
 test("legacy finished-camera completion drafts recover an integer count as manual", async () => {
-	const { burpee_count_provenance: _provenance, ...legacyDraft } = completionDraft({
-		client_session_id: "client-1",
-	});
+	const { burpee_count_provenance: _provenance, ...legacyDraft } =
+		completionDraft({
+			client_session_id: "client-1",
+		});
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
@@ -1976,10 +1969,7 @@ test("camera through completion review requires no server event", async () => {
 	await flushHookPromises();
 
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(
-		ctx.el.querySelector("#session-completion-review").hidden,
-		false,
-	);
+	assert.equal(ctx.el.querySelector("#session-completion-review").hidden, false);
 	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
 	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "0");
@@ -1990,8 +1980,7 @@ test("camera through completion review requires no server event", async () => {
 	assert.deepEqual(ctx.events, []);
 	assert.ok(
 		trackerCommands.some(
-			({ type, detail }) =>
-				type === "pose-tracker:arm" && detail?.step === null,
+			({ type, detail }) => type === "pose-tracker:arm" && detail?.step === null,
 		),
 	);
 	ctx.destroyed();
@@ -2105,10 +2094,7 @@ test("manual no-camera journey reaches local completion review", async () => {
 	await flushHookPromises();
 
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(
-		ctx.el.querySelector("#session-completion-review").hidden,
-		false,
-	);
+	assert.equal(ctx.el.querySelector("#session-completion-review").hidden, false);
 	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
 	assert.equal(
@@ -2153,9 +2139,7 @@ test("absent camera observations leave the warmup timeout active", async () => {
 	const readyFrames = Array.from({ length: 8 }, (_, index) =>
 		trackerFrame(trackerSample({ tMs: index * 100 })),
 	);
-	const absentFrame = trackerFrame(
-		trackerSample({ tMs: 800, confidence: 0.1 }),
-	);
+	const absentFrame = trackerFrame(trackerSample({ tMs: 800, confidence: 0.1 }));
 	const harness = poseTrackerHarness({
 		frames: [...readyFrames, absentFrame],
 		trackerElement: ctx.el.querySelector("#pose-tracker"),
@@ -2645,9 +2629,7 @@ test("readiness transitions update the dataset and stay local", async () => {
 test("ordinary absent samples emit no tracking state or server event", async () => {
 	const harness = buildPoseTrackerHarness(
 		[0.2, 0.5, 0.25, 0.2].map((closeness, index) =>
-			trackerFrame(
-				trackerSample({ tMs: [0, 500, 900, 1_100][index], closeness }),
-			),
+			trackerFrame(trackerSample({ tMs: [0, 500, 900, 1_100][index], closeness })),
 		),
 	);
 
@@ -2780,6 +2762,47 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	assert.equal(abort.hasAttribute("disabled"), true);
 });
 
+test("tick accounts scheduled totals once and renders its command frame", () => {
+	const originalNow = performance.now;
+	performance.now = () => 4_500;
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 2 }];
+	const dispatchedEvents = [];
+	const dispatchSegment = ctx.dispatchSegment;
+	let renderedFrame;
+	const renderRunningFrame = ctx.renderRunningFrame;
+	ctx.dispatchSegment = function (event) {
+		dispatchedEvents.push(event);
+		return dispatchSegment.call(this, event);
+	};
+	ctx.renderRunningFrame = function (elapsedSec, frame) {
+		renderedFrame = frame;
+		return renderRunningFrame.call(this, elapsedSec, frame);
+	};
+
+	try {
+		ctx.dispatchSegment({
+			type: "SEGMENT_READY",
+			timeline,
+			burpeeCountTarget: 3,
+		});
+		ctx.activeSegment = "workout";
+		ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
+		ctx.startTime = 0;
+		ctx.tick();
+
+		assert.equal(ctx.segment.reps.burpeeCountDone, 2);
+		assert.equal(ctx.renderedModels[0].totalDone, 2);
+		assert.equal(renderedFrame, ctx.segment.reps.previousFrame);
+		assert.deepEqual(
+			dispatchedEvents.filter(({ type }) => type === "ACCOUNT_REPS"),
+			[],
+		);
+	} finally {
+		performance.now = originalNow;
+	}
+});
+
 test("running frames cue authoritative remaining reps during work recovery", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 	const timeline = Object.freeze([
@@ -2799,9 +2822,9 @@ test("running frames cue authoritative remaining reps during work recovery", () 
 	ctx.activeSegment = "workout";
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
 
-	ctx.renderRunningFrame(4);
-	ctx.renderRunningFrame(5);
-	ctx.renderRunningFrame(10.5);
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 4 });
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 5 });
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10.5 });
 
 	assert.equal(ctx.renderedModels[0].visual.state, "work_recovery");
 	assert.equal(ctx.renderedModels[0].primaryCount, "6");
@@ -2826,7 +2849,7 @@ test("running frames derive rest set progress from the hook timeline", () => {
 	});
 	ctx.activeSegment = "workout";
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
-	ctx.renderRunningFrame(30);
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 30 });
 
 	assert.equal(ctx.renderedModels.length, 1);
 	assert.equal(ctx.renderedModels[0].setProgress, "1/3");
@@ -2840,7 +2863,7 @@ test("running frames derive rest set progress from the hook timeline", () => {
 	});
 	warmupCtx.activeSegment = "warmup";
 	warmupCtx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
-	warmupCtx.renderRunningFrame(30);
+	warmupCtx.dispatchSegment({ type: "TICK", elapsedSec: 30 });
 	assert.equal(warmupCtx.renderedModels[0].sessionProgress, null);
 });
 
@@ -3296,9 +3319,7 @@ test("begin lifecycle conflicts restore the ready UI and surface server resoluti
 		"Finish or discard your current workout before starting another one.",
 	);
 	assert.equal(
-		ctx.el
-			.querySelector("#session-begin-conflict-resolve")
-			.getAttribute("href"),
+		ctx.el.querySelector("#session-begin-conflict-resolve").getAttribute("href"),
 		"/sessions/42/resolve",
 	);
 	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, true);

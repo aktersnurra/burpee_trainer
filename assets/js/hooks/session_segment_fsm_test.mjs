@@ -71,6 +71,29 @@ test("resume excludes overlapping hidden and paused time exactly once", () => {
 	assert.deepEqual(resumed.commands, [{ type: "startAnimationFrame" }]);
 });
 
+test("tick renders the frame already stored in rep state", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20 }];
+	let runningState = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 3,
+	}).state;
+	runningState = segmentTransition(runningState, {
+		type: "COUNTDOWN_DONE",
+		now: 0,
+	}).state;
+
+	const result = segmentTransition(runningState, {
+		type: "TICK",
+		elapsedSec: 0.5,
+	});
+	const command = result.commands.find(
+		({ type }) => type === "renderRunningFrame",
+	);
+
+	assert.equal(command.frame, result.state.reps.previousFrame);
+});
+
 test("natural completion clamps a delayed animation tick to timeline duration", () => {
 	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20 }];
 	let state = segmentTransition(initialSegmentState(), {
@@ -118,7 +141,9 @@ test("active completion advances pace progress before rest and final active ends
 	assert.equal(state.reps.burpeeCountDone, 1);
 
 	const complete = segmentTransition(state, { type: "TICK", elapsedSec: 25 });
-	const done = complete.commands.find((command) => command.type === "segmentDone");
+	const done = complete.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 	assert.deepEqual(done.result, {
 		burpeeCountDone: 2,
 		scheduledRepsDone: 2,
@@ -140,7 +165,9 @@ test("finishing before the first active tick does not count scheduled work", () 
 		type: "FINISH_EARLY",
 		elapsedSec: 0,
 	});
-	const done = finished.commands.find((command) => command.type === "segmentDone");
+	const done = finished.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 
 	assert.equal(finished.state.reps.burpeeCountDone, 0);
 	assert.equal(done.result.scheduledRepsDone, 0);
@@ -159,7 +186,9 @@ test("finishing early at five seconds does not credit a partial active interval"
 		type: "FINISH_EARLY",
 		elapsedSec: 5,
 	});
-	const done = finished.commands.find((command) => command.type === "segmentDone");
+	const done = finished.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 
 	assert.equal(finished.state.reps.burpeeCountDone, 0);
 	assert.equal(done.result.scheduledRepsDone, 0);
@@ -178,7 +207,9 @@ test("finishing early at 25 seconds credits one completed active interval", () =
 		type: "FINISH_EARLY",
 		elapsedSec: 25,
 	});
-	const done = finished.commands.find((command) => command.type === "segmentDone");
+	const done = finished.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 
 	assert.equal(finished.state.reps.burpeeCountDone, 1);
 	assert.equal(done.result.scheduledRepsDone, 1);
@@ -201,7 +232,9 @@ test("finishing early during rest credits completed work but not rest", () => {
 		type: "FINISH_EARLY",
 		elapsedSec: 65,
 	});
-	const done = finished.commands.find((command) => command.type === "segmentDone");
+	const done = finished.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 
 	assert.equal(finished.state.reps.burpeeCountDone, 3);
 	assert.equal(done.result.scheduledRepsDone, 3);
@@ -209,9 +242,21 @@ test("finishing early during rest credits completed work but not rest", () => {
 
 test("explicit work duration credits reps at active ends and finishes at terminal active end", () => {
 	const timeline = [
-		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 20,
+		},
 		{ kind: "rest", duration_sec: 5 },
-		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 13,
+		},
 	];
 	let state = segmentTransition(initialSegmentState(), {
 		type: "SEGMENT_READY",
@@ -242,7 +287,9 @@ test("explicit work duration credits reps at active ends and finishes at termina
 	assert.equal(currentFrame(timeline, 38), null);
 
 	const complete = segmentTransition(state, { type: "TICK", elapsedSec: 38 });
-	const done = complete.commands.filter((command) => command.type === "segmentDone");
+	const done = complete.commands.filter(
+		(command) => command.type === "segmentDone",
+	);
 	assert.equal(complete.state.reps.burpeeCountDone, 4);
 	assert.deepEqual(done, [
 		{
@@ -278,7 +325,9 @@ test("natural completion credits every fractional scheduled active interval", ()
 	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
 
 	const completed = segmentTransition(state, { type: "TICK", elapsedSec: 40 });
-	const done = completed.commands.find((command) => command.type === "segmentDone");
+	const done = completed.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 
 	assert.deepEqual(done.result, {
 		burpeeCountDone: 4,
@@ -289,9 +338,21 @@ test("natural completion credits every fractional scheduled active interval", ()
 
 test("delayed ticks and early finish credit only completed active portions", () => {
 	const timeline = [
-		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 20,
+		},
 		{ kind: "rest", duration_sec: 5 },
-		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 13,
+		},
 	];
 	const runningState = () => {
 		const state = segmentTransition(initialSegmentState(), {
@@ -302,7 +363,10 @@ test("delayed ticks and early finish credit only completed active portions", () 
 		return segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
 	};
 
-	let delayed = segmentTransition(runningState(), { type: "TICK", elapsedSec: 28.1 });
+	let delayed = segmentTransition(runningState(), {
+		type: "TICK",
+		elapsedSec: 28.1,
+	});
 	delayed = segmentTransition(delayed.state, {
 		type: "ACCOUNT_REPS",
 		frame: currentFrame(timeline, 28.1),
@@ -329,8 +393,14 @@ test("delayed ticks and early finish credit only completed active portions", () 
 			type: "FINISH_EARLY",
 			elapsedSec,
 		});
-		const done = finished.commands.find((command) => command.type === "segmentDone");
-		assert.equal(done.result.scheduledRepsDone, expected, `finish at ${elapsedSec}s`);
+		const done = finished.commands.find(
+			(command) => command.type === "segmentDone",
+		);
+		assert.equal(
+			done.result.scheduledRepsDone,
+			expected,
+			`finish at ${elapsedSec}s`,
+		);
 	}
 });
 
@@ -368,7 +438,13 @@ test("delayed ticks derive scheduled progress from all elapsed work while preser
 
 test("short explicit work durations never fabricate scheduled reps on departure or finish", () => {
 	const timeline = [
-		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 12 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 12,
+		},
 	];
 	const runningState = () => {
 		const ready = segmentTransition(initialSegmentState(), {
@@ -379,7 +455,10 @@ test("short explicit work durations never fabricate scheduled reps on departure 
 		return segmentTransition(ready, { type: "COUNTDOWN_DONE", now: 0 }).state;
 	};
 
-	const completed = segmentTransition(runningState(), { type: "TICK", elapsedSec: 12 });
+	const completed = segmentTransition(runningState(), {
+		type: "TICK",
+		elapsedSec: 12,
+	});
 	const naturallyDone = completed.commands.find(
 		(command) => command.type === "segmentDone",
 	);
@@ -389,7 +468,9 @@ test("short explicit work durations never fabricate scheduled reps on departure 
 		type: "FINISH_EARLY",
 		elapsedSec: 12,
 	});
-	const earlyDone = finished.commands.find((command) => command.type === "segmentDone");
+	const earlyDone = finished.commands.find(
+		(command) => command.type === "segmentDone",
+	);
 	assert.equal(earlyDone.result.scheduledRepsDone, 1);
 });
 
