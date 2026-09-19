@@ -198,7 +198,7 @@ const SessionHook = {
 
 		try {
 			this.program = JSON.parse(this.el.dataset.sessionProgram || "{}");
-		} catch (_error) {
+		} catch {
 			this.program = {};
 		}
 		this.planId = this.el.dataset.planId;
@@ -458,7 +458,7 @@ const SessionHook = {
 							}
 						},
 					);
-				} catch (_error) {
+				} catch {
 					this.dispatchFlow({ type: "SESSION_BEGIN_FAILED" });
 					this.handleLifecycleFailure({
 						message: "Could not start workout. Try again.",
@@ -484,7 +484,7 @@ const SessionHook = {
 					}
 				},
 			);
-		} catch (_error) {
+		} catch {
 			this.dispatchFlow({ type: "REPORT_PENDING_FAILED" });
 			this.handleLifecycleFailure({
 				message: "Could not finish workout. Try again.",
@@ -559,7 +559,7 @@ const SessionHook = {
 				if (!this.lifecycleActive(generation)) return;
 				void this.handleSaveReply(reply, generation);
 			});
-		} catch (_error) {
+		} catch {
 			this.handleSaveFailure({
 				status: "error",
 				message: "Could not save. Try again.",
@@ -717,7 +717,7 @@ const SessionHook = {
 					this.finishLocalDiscard(generation);
 				},
 			);
-		} catch (_error) {
+		} catch {
 			this.discarding = false;
 			this.handleLifecycleFailure({
 				message: "Could not discard workout. Try again.",
@@ -825,6 +825,9 @@ const SessionHook = {
 		switch (command.type) {
 			case "renderFlow":
 				this.renderer.renderFlowState(this.flow);
+				this.dispatchTrackerCommand("pose-tracker:preview-visibility", {
+					visible: this.flow.mode === "camera_setup",
+				});
 				break;
 			case "startCamera":
 				this.dispatchTrackerCommand("pose-tracker:start");
@@ -1324,6 +1327,7 @@ const SessionHook = {
 		if (this.rafId) cancelAnimationFrame(this.rafId);
 		this.rafId = null;
 		this.audio.stop();
+		this.dispatchTrackerCommand("pose-tracker:suspend");
 		this.renderer.updatePauseButton(true);
 		this.updatePauseActionsVisibility();
 	},
@@ -1334,6 +1338,7 @@ const SessionHook = {
 		this.startTime = this.segment.clock.startTime;
 		this.paused = false;
 		this.hiddenAt = null;
+		this.dispatchTrackerCommand("pose-tracker:resume");
 		this.resetPoseTracker();
 		if (!this.rafId) this.rafId = requestAnimationFrame(() => this.tick());
 		this.renderer.updatePauseButton(false);

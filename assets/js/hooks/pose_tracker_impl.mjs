@@ -79,8 +79,7 @@ export function createPoseTracker(hook, runtime = {}) {
 		runtime.requestAnimationFrame ||
 		((callback) => requestAnimationFrame(callback));
 	const cancelFrame = runtime.cancelAnimationFrame || cancelAnimationFrame;
-	const scheduleTimeout =
-		runtime.setTimeout || ((cb, ms) => setTimeout(cb, ms));
+	const scheduleTimeout = runtime.setTimeout || ((cb, ms) => setTimeout(cb, ms));
 	const clearScheduledTimeout = runtime.clearTimeout || clearTimeout;
 	const poseSample = runtime.sampleFromPose || sampleFromPose;
 	const waitForFrame = runtime.waitForVideoFrame || waitForVideoFrame;
@@ -107,6 +106,9 @@ export function createPoseTracker(hook, runtime = {}) {
 	let trackingState = "lost";
 	let mounted = false;
 	let running = false;
+	let suspended = false;
+	let previewVisible = false;
+	let resizeObserver = null;
 	let startGeneration = 0;
 	let lastPoseMs = -Infinity;
 	let lastFeature = null;
@@ -124,6 +126,45 @@ export function createPoseTracker(hook, runtime = {}) {
 	const reset = () => {
 		state = initialBurpeeHsmmState();
 		lastFeature = null;
+		lastPoseMs = -Infinity;
+	};
+
+	const resizeCanvasIfVisible = () => {
+		if (!previewVisible || !canvas) return;
+		const { width = 0, height = 0 } = canvas.getBoundingClientRect();
+		if (width <= 0 || height <= 0) return;
+		resizePoseCanvas(canvas);
+	};
+
+	const observeCanvasSize = () => {
+		resizeObserver?.disconnect();
+		resizeObserver = null;
+		const ResizeObserverClass =
+			runtime.ResizeObserver || globalThis.ResizeObserver;
+		if (!canvas || !ResizeObserverClass) return;
+		resizeObserver = new ResizeObserverClass(resizeCanvasIfVisible);
+		resizeObserver.observe(canvas);
+	};
+
+	const setPreviewVisibility = (event) => {
+		previewVisible = Boolean(event.detail?.visible);
+		if (previewVisible) resizeCanvasIfVisible();
+	};
+
+	const suspend = () => {
+		if (suspended) return;
+		suspended = true;
+		if (raf !== null) cancelFrame(raf);
+		raf = null;
+	};
+
+	const resume = () => {
+		if (!suspended) return;
+		suspended = false;
+		reset();
+		if (mounted && running && detector && video && startedAt !== null) {
+			raf = requestFrame(() => loop(startGeneration));
+		}
 	};
 
 	const stopCameraSetupAutoConfirmTimer = () => {
@@ -181,6 +222,8 @@ export function createPoseTracker(hook, runtime = {}) {
 	function releaseResources() {
 		if (raf !== null) cancelFrame(raf);
 		raf = null;
+		resizeObserver?.disconnect();
+		resizeObserver = null;
 		if (stream) stream.getTracks().forEach((track) => track.stop());
 		stream = null;
 		if (video) video.srcObject = null;
@@ -201,7 +244,8 @@ export function createPoseTracker(hook, runtime = {}) {
 				video = resolvePreviewVideo(hook);
 				canvas = hook.el.querySelector("#pose-tracker-canvas");
 				if (!canvas) throw new Error("Pose tracker canvas is unavailable");
-				resizePoseCanvas(canvas);
+				observeCanvasSize();
+				resizeCanvasIfVisible();
 				detector = {};
 				startedAt = now();
 				dispatchLocal("pose-tracker:started", {});
@@ -230,7 +274,8 @@ export function createPoseTracker(hook, runtime = {}) {
 
 			canvas = hook.el.querySelector("#pose-tracker-canvas");
 			if (!canvas) throw new Error("Pose tracker canvas is unavailable");
-			resizePoseCanvas(canvas);
+			observeCanvasSize();
+			resizeCanvasIfVisible();
 
 			const createdDetector = await createDetector();
 			if (!mounted || !running || generation !== startGeneration) {
@@ -256,6 +301,7 @@ export function createPoseTracker(hook, runtime = {}) {
 		if (
 			!mounted ||
 			!running ||
+			suspended ||
 			generation !== startGeneration ||
 			!detector ||
 			!video ||
@@ -265,7 +311,8 @@ export function createPoseTracker(hook, runtime = {}) {
 		}
 
 		const scheduleNextFrame = () => {
-			if (!mounted || !running || generation !== startGeneration) return;
+			if (!mounted || !running || suspended || generation !== startGeneration)
+				return;
 			raf = requestFrame(() => loop(generation));
 		};
 
@@ -290,7 +337,7 @@ export function createPoseTracker(hook, runtime = {}) {
 		} else {
 			try {
 				poses = await detector.estimatePoses(video);
-			} catch (_error) {
+			} catch {
 				if (!mounted || !running || generation !== startGeneration) return;
 				running = false;
 				markLost("detector_error");
@@ -301,7 +348,7 @@ export function createPoseTracker(hook, runtime = {}) {
 
 			sample = poseSample(poses[0], sampledAt - startedAt, video, lastFeature);
 		}
-		if (!controlledFrames) drawPoseOverlay(canvas, poses[0], video);
+		if (previewVisible) drawPoseOverlay(canvas, poses[0], video);
 		lastFeature = sample.features;
 
 		const nextReadiness = stepPoseReadiness(readiness, {
@@ -378,7 +425,7 @@ export function createPoseTracker(hook, runtime = {}) {
 				"pose-tracker:finished",
 				trackingFinishPayload(event.detail || {}),
 			);
-		} catch (_error) {
+		} catch {
 			// Invalid local finish input does not represent a camera failure.
 		}
 	}
@@ -390,6 +437,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	function stop() {
 		startGeneration += 1;
 		running = false;
+		suspended = false;
 		clearArmState();
 		delete hook.el.dataset.poseTrackerReady;
 		readiness = initialPoseReadiness();
@@ -407,6 +455,12 @@ export function createPoseTracker(hook, runtime = {}) {
 		hook.el.addEventListener("pose-tracker:finish", finish);
 		hook.el.addEventListener("pose-tracker:reset", reset);
 		hook.el.addEventListener("pose-tracker:arm", armStep);
+		hook.el.addEventListener("pose-tracker:suspend", suspend);
+		hook.el.addEventListener("pose-tracker:resume", resume);
+		hook.el.addEventListener(
+			"pose-tracker:preview-visibility",
+			setPreviewVisibility,
+		);
 		document.addEventListener("pose-capture:segment", onCaptureSegment);
 	}
 
@@ -419,6 +473,12 @@ export function createPoseTracker(hook, runtime = {}) {
 		hook.el.removeEventListener("pose-tracker:finish", finish);
 		hook.el.removeEventListener("pose-tracker:reset", reset);
 		hook.el.removeEventListener("pose-tracker:arm", armStep);
+		hook.el.removeEventListener("pose-tracker:suspend", suspend);
+		hook.el.removeEventListener("pose-tracker:resume", resume);
+		hook.el.removeEventListener(
+			"pose-tracker:preview-visibility",
+			setPreviewVisibility,
+		);
 		document.removeEventListener("pose-capture:segment", onCaptureSegment);
 	}
 

@@ -29,8 +29,7 @@ class FakeElement {
 	}
 
 	dispatchEvent(event) {
-		for (const listener of this.listeners.get(event.type) || [])
-			listener(event);
+		for (const listener of this.listeners.get(event.type) || []) listener(event);
 		return true;
 	}
 
@@ -198,10 +197,7 @@ function absentFrames(startMs, durationMs = 200) {
 	);
 }
 
-function rawLowFrontFrame(
-	tMs,
-	{ missingWorld = [], lowConfidence = [] } = {},
-) {
+function rawLowFrontFrame(tMs, { missingWorld = [], lowConfidence = [] } = {}) {
 	const point = (name, x, y, world) => ({
 		name,
 		x,
@@ -338,8 +334,7 @@ function mountedTrackerWithSamples(
 		traceChunks: () =>
 			events.filter((event) => event.type === "pose-tracker:trace-chunk"),
 		traceChunkCount: () =>
-			events.filter((event) => event.type === "pose-tracker:trace-chunk")
-				.length,
+			events.filter((event) => event.type === "pose-tracker:trace-chunk").length,
 		traceSampleTimes: () =>
 			events
 				.filter((event) => event.type === "pose-tracker:trace-chunk")
@@ -491,4 +486,162 @@ test("invalid finish data does not report a tracker loss", async () => {
 	tracker.finish({ durationMs: -1, cadenceMs: [] });
 
 	assert.deepEqual(tracker.statusEvents(), ["live"]);
+});
+
+test("hidden preview continues pose processing without drawing the overlay", async () => {
+	const tracker = new FakeElement();
+	const video = {
+		id: "pose-tracker-preview",
+		videoWidth: 640,
+		videoHeight: 480,
+	};
+	let drawCalls = 0;
+	const canvas = {
+		id: "pose-tracker-canvas",
+		getBoundingClientRect: () => ({ width: 320, height: 240 }),
+		getContext: () => ({
+			setTransform() {},
+			clearRect() {
+				drawCalls += 1;
+			},
+			save() {},
+			scale() {},
+			translate() {},
+			beginPath() {},
+			moveTo() {},
+			lineTo() {},
+			stroke() {},
+			arc() {},
+			fill() {},
+			restore() {},
+		}),
+	};
+	tracker.append(video, canvas);
+	video.play = async () => {};
+	const animationFrames = [];
+	let nowMs = 0;
+	let samples = 0;
+	const impl = createPoseTracker(
+		{ el: tracker },
+		{
+			createBlazePoseDetector: async () => ({
+				estimatePoses: async () => [{ keypoints: [] }],
+			}),
+			mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) },
+			waitForVideoFrame: async () => video,
+			webglAvailable: () => true,
+			now: () => nowMs,
+			requestAnimationFrame(callback) {
+				animationFrames.push(callback);
+				return animationFrames.length;
+			},
+			cancelAnimationFrame() {},
+			sampleFromPose: () => {
+				samples += 1;
+				return upright(nowMs);
+			},
+		},
+	);
+
+	await impl.mounted();
+	tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:preview-visibility", {
+			detail: { visible: false },
+		}),
+	);
+	await impl.start();
+	nowMs = 100;
+	await animationFrames.shift()();
+
+	assert.equal(samples, 2);
+	assert.equal(drawCalls, 0);
+});
+
+test("preview sizing waits for a visible non-zero canvas", async () => {
+	const tracker = new FakeElement();
+	const video = {
+		id: "pose-tracker-preview",
+		videoWidth: 640,
+		videoHeight: 480,
+	};
+	let rect = { width: 0, height: 0 };
+	const canvas = {
+		id: "pose-tracker-canvas",
+		width: 0,
+		height: 0,
+		getBoundingClientRect: () => rect,
+		getContext: () => ({ setTransform() {} }),
+	};
+	tracker.append(video, canvas);
+	const impl = createPoseTracker(
+		{ el: tracker },
+		{
+			controlledPoseFixture: [rawLowFrontFrame(0)],
+			requestAnimationFrame: () => 1,
+			cancelAnimationFrame() {},
+			sampleFromPose: () => upright(0),
+		},
+	);
+
+	await impl.mounted();
+	await impl.start();
+	assert.equal(canvas.width, 0);
+	assert.equal(canvas.height, 0);
+
+	rect = { width: 320, height: 240 };
+	tracker.dispatchEvent(
+		new CustomEvent("pose-tracker:preview-visibility", {
+			detail: { visible: true },
+		}),
+	);
+	assert.equal(canvas.width, 320);
+	assert.equal(canvas.height, 240);
+});
+
+test("suspending skips scheduled pose work and resume resets temporal sampling", async () => {
+	const tracker = new FakeElement();
+	const video = {
+		id: "pose-tracker-preview",
+		videoWidth: 640,
+		videoHeight: 480,
+	};
+	const canvas = {
+		id: "pose-tracker-canvas",
+		getBoundingClientRect: () => ({ width: 320, height: 240 }),
+		getContext: () => ({ setTransform() {} }),
+	};
+	tracker.append(video, canvas);
+	const frames = [rawLowFrontFrame(0), rawLowFrontFrame(100)];
+	const animationFrames = [];
+	let nowMs = 0;
+	let samples = 0;
+	const impl = createPoseTracker(
+		{ el: tracker },
+		{
+			controlledPoseFixture: frames,
+			now: () => nowMs,
+			requestAnimationFrame(callback) {
+				animationFrames.push(callback);
+				return animationFrames.length;
+			},
+			cancelAnimationFrame() {},
+			sampleFromPose: () => {
+				samples += 1;
+				return upright(nowMs);
+			},
+		},
+	);
+
+	await impl.mounted();
+	await impl.start();
+	const scheduledBeforeSuspend = animationFrames.shift();
+	tracker.dispatchEvent(new CustomEvent("pose-tracker:suspend"));
+	nowMs = 10;
+	await scheduledBeforeSuspend();
+	assert.equal(samples, 1);
+
+	tracker.dispatchEvent(new CustomEvent("pose-tracker:resume"));
+	assert.equal(animationFrames.length, 1);
+	await animationFrames.shift()();
+	assert.equal(samples, 2);
 });

@@ -524,6 +524,37 @@ function mountedTrackedCountdown(timeline) {
 	return ctx;
 }
 
+test("flow rendering reports whether the camera setup preview is visible", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const visibility = [];
+	tracker.addEventListener("pose-tracker:preview-visibility", (event) =>
+		visibility.push(event.detail.visible),
+	);
+
+	ctx.flow = { ...ctx.flow, mode: "camera_setup" };
+	ctx.runFlowCommand({ type: "renderFlow" });
+	ctx.flow = { ...ctx.flow, mode: "warmup_choice" };
+	ctx.runFlowCommand({ type: "renderFlow" });
+
+	assert.deepEqual(visibility, [true, false]);
+});
+
+test("session pause and resume suspend and resume the pose tracker", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4 }]);
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const commands = [];
+	for (const type of ["pose-tracker:suspend", "pose-tracker:resume"]) {
+		tracker.addEventListener(type, () => commands.push(type));
+	}
+	ctx.startTime = 1;
+
+	ctx.pause();
+	ctx.resume();
+
+	assert.deepEqual(commands, ["pose-tracker:suspend", "pose-tracker:resume"]);
+});
+
 test("tracked reps use session elapsed time without updating visible reps", () => {
 	const ctx = trackedContext([
 		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
