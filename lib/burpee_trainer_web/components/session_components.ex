@@ -270,7 +270,9 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           class="pointer-events-none absolute inset-0 overflow-hidden"
           aria-hidden="true"
         >
-          <div id="session-work-fill" class="absolute inset-0 origin-bottom"></div>
+          <div id="session-work-fill" class="absolute inset-0"></div>
+          <div id="session-rest-breathe-light" class="absolute inset-0" inert></div>
+          <div id="session-rest-breathe-dark" class="absolute inset-0" inert></div>
         </div>
         <div
           id="session-runner-layout"

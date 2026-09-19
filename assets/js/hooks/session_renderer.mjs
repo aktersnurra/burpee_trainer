@@ -412,9 +412,13 @@ export class SessionRenderer {
 		if (!fill) return;
 
 		const clampedProgress = Math.min(Math.max(Number(progress) || 0, 0), 1);
-		const clip = `inset(${(1 - clampedProgress) * 100}% 0 0 0)`;
-		this.setStyle(fill, "clipPath", clip, "workFillClipPath");
-		this.setStyle(fill, "webkitClipPath", clip, "workFillWebkitClipPath");
+		const translateY = (1 - clampedProgress) * 100;
+		this.setStyle(
+			fill,
+			"transform",
+			`translate3d(0, ${translateY}%, 0)`,
+			"workFillTransform",
+		);
 	}
 
 	updateAccessibleState({ state, primaryCount, setProgress }) {

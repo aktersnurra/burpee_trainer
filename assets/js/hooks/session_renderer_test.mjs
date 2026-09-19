@@ -294,21 +294,20 @@ test("panel heading focus prevents scroll", () => {
 	assert.deepEqual(heading.focusOptions, { preventScroll: true });
 });
 
-test("active fill rises from neutral to full orange without scaling", () => {
+test("active fill rises from neutral to full orange with a compositor transform", () => {
 	const { renderer, elements } = harness();
-
-	renderer.updateWorkFill(0.5);
-	assert.equal(
-		elements["#session-work-fill"].style.clipPath,
-		"inset(50% 0 0 0)",
-	);
-	assert.equal(elements["#session-work-fill"].style.transform, undefined);
+	const fill = elements["#session-work-fill"];
 
 	renderer.updateWorkFill(0);
-	assert.equal(
-		elements["#session-work-fill"].style.clipPath,
-		"inset(100% 0 0 0)",
-	);
+	assert.equal(fill.style.transform, "translate3d(0, 100%, 0)");
+
+	renderer.updateWorkFill(0.5);
+	assert.equal(fill.style.transform, "translate3d(0, 50%, 0)");
+
+	renderer.updateWorkFill(1);
+	assert.equal(fill.style.transform, "translate3d(0, 0%, 0)");
+	assert.equal(fill.style.clipPath, undefined);
+	assert.equal(fill.style.webkitClipPath, undefined);
 });
 
 test("overall progress uses a clamped horizontal transform and freezes on pause", () => {
@@ -380,8 +379,8 @@ test("duplicate visual states skip class mutations while live values still updat
 	});
 	assert.equal(surfaceClasses.mutationCount(), workMutations);
 	assert.equal(
-		elements["#session-work-fill"].style.clipPath,
-		"inset(25% 0 0 0)",
+		elements["#session-work-fill"].style.transform,
+		"translate3d(0, 25%, 0)",
 	);
 	assert.equal(elements["#count"].textContent, "4");
 	assert.equal(surfaceClasses.contains("is-working"), true);
@@ -593,8 +592,8 @@ test("zero transitions to work and resets the active fill", () => {
 	assert.equal(surfaceClasses.contains("is-work-active"), true);
 	assert.equal(surfaceClasses.contains("is-work-recovery"), false);
 	assert.equal(
-		elements["#session-work-fill"].style.clipPath,
-		"inset(100% 0 0 0)",
+		elements["#session-work-fill"].style.transform,
+		"translate3d(0, 100%, 0)",
 	);
 	assert.equal(elements["#set-progress"].hidden, true);
 });

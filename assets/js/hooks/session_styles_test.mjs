@@ -105,12 +105,11 @@ test("runner and paused actions use fixed contrast-safe active tokens in both th
 
 	const workFill = ruleFor("#session-work-fill")?.declarations || "";
 	assert.match(workFill, /background:\s*var\(--session-work\);/);
-	assert.match(workFill, /clip-path:\s*inset\(100% 0 0 0\);/);
-	assert.doesNotMatch(
-		workFill,
-		/linear-gradient|var\(--session-rest\)|opacity:/,
-	);
-	assert.doesNotMatch(workFill, /transform:\s*scaleY/);
+	assert.match(workFill, /transform:\s*translate3d\(0,\s*100%,\s*0\);/);
+	assert.match(workFill, /will-change:\s*transform;/);
+	assert.doesNotMatch(workFill, /clip-path|scaleY|opacity:/);
+	assert.doesNotMatch(css, /#session-work-fill[^{}]*\{[^}]*clip-path/);
+	assert.doesNotMatch(sessionSurface, /scale-y-0/);
 	assert.doesNotMatch(css, /#session-work-(?:track|threshold)/);
 	assert.doesNotMatch(css, /#session-rest-shape/);
 	assert.doesNotMatch(sessionSurface, /session-work-(?:track|threshold)/);
@@ -162,41 +161,60 @@ test("Abort uses the actual fixed active ink with normal-text contrast on every 
 	}
 });
 
-test("pause freezes the underlying full-screen rest breath", () => {
-	const pausedRest =
-		ruleFor("#session-runner-client.is-rest.is-paused")?.declarations || "";
-	assert.match(pausedRest, /animation-play-state:\s*paused;/);
-	assert.doesNotMatch(
-		pausedRest,
-		/(?:display:\s*none|visibility:\s*hidden|opacity\s*:\s*0)/,
-	);
+test("pause freezes both full-screen rest breathing layers", () => {
+	const pausedLight =
+		ruleFor(
+			"#session-runner-client.is-rest.is-paused #session-rest-breathe-light",
+		)?.declarations || "";
+	const pausedDark =
+		ruleFor("#session-runner-client.is-rest.is-paused #session-rest-breathe-dark")
+			?.declarations || "";
+
+	for (const declarations of [pausedLight, pausedDark]) {
+		assert.match(declarations, /animation-play-state:\s*paused;/);
+		assert.doesNotMatch(declarations, /(?:display:\s*none|visibility:\s*hidden)/);
+	}
 });
 
-test("between-set rest breathes across the full blue screen", () => {
-	const breathing = blockFor("@keyframes session-blue-breathe");
-	assert.match(
-		breathing,
-		/0%,\s*100%[^}]*background-color:\s*var\(--session-rest-light\);/,
-	);
-	assert.match(breathing, /50%[^}]*background-color:\s*var\(--session-rest\);/);
-
+test("between-set rest breathes across compositor opacity layers", () => {
+	const light = ruleFor("#session-rest-breathe-light")?.declarations || "";
+	const dark = ruleFor("#session-rest-breathe-dark")?.declarations || "";
 	const rest = ruleFor("#session-runner-client.is-rest")?.declarations || "";
+	const restLight =
+		ruleFor("#session-runner-client.is-rest #session-rest-breathe-light")
+			?.declarations || "";
+	const restDark =
+		ruleFor("#session-runner-client.is-rest #session-rest-breathe-dark")
+			?.declarations || "";
+
+	assert.match(light, /background:\s*var\(--session-rest-light\);/);
+	assert.match(dark, /background:\s*var\(--session-rest\);/);
+	assert.match(restLight, /animation:[^;]*5s\s+ease-in-out\s+infinite;/);
+	assert.match(restDark, /animation:[^;]*5s\s+ease-in-out\s+infinite;/);
 	assert.match(rest, /background:\s*var\(--session-rest-light\);/);
-	assert.match(
-		rest,
-		/animation:\s*session-blue-breathe\s+5s\s+ease-in-out\s+infinite;/,
+	for (const animation of [
+		blockFor("@keyframes session-rest-breathe-light"),
+		blockFor("@keyframes session-rest-breathe-dark"),
+	]) {
+		assert.match(animation, /opacity:/);
+		assert.doesNotMatch(animation, /background|transform|clip-path/);
+	}
+	assert.doesNotMatch(
+		css,
+		/@keyframes session-blue-breathe[\s\S]*background-color:/,
 	);
-	assert.doesNotMatch(rest, /border-radius:|transform:|opacity:/);
+	assert.doesNotMatch(rest, /animation:|border-radius:|transform:|opacity:/);
+	assert.match(
+		sessionComponents,
+		/id="session-rest-breathe-light"[\s\S]*id="session-rest-breathe-dark"/,
+	);
 });
 
 test("all blue rest screens breathe without adding a label", () => {
 	const recovery =
 		ruleFor("#session-runner-client.is-work-recovery")?.declarations || "";
 
-	assert.match(
-		renderer,
-		/work_recovery:\s*\["is-rest",\s*"is-work-recovery"\]/,
-	);
+	assert.match(renderer, /work_recovery:\s*\["is-rest",\s*"is-work-recovery"\]/);
 	assert.doesNotMatch(recovery, /animation:\s*none/);
 	assert.doesNotMatch(sessionSurface, />\s*RECOVER\s*</i);
 });
@@ -223,8 +241,7 @@ test("rest_count_in is paper-only with undecorated center content", () => {
 					selector === "#ring-container" ||
 					selector === "#count" ||
 					(selector.includes(".is-rest-count-in") &&
-						(selector.includes("#ring-container") ||
-							selector.includes("#count"))),
+						(selector.includes("#ring-container") || selector.includes("#count"))),
 			),
 		)
 		.map((rule) => rule.declarations)
@@ -408,14 +425,14 @@ test("scrollbars are hidden globally without clipping page overflow", () => {
 
 test("deprecated rest aliases are absent from model, renderer, and styles", () => {
 	const runnerSources = `${displayModel}\n${renderer}\n${css}`;
-	assert.doesNotMatch(runnerSources, /rest-(?:breathe|settle|countdown)/);
+	assert.doesNotMatch(runnerSources, /rest-(?:settle|countdown)/);
 });
 
 test("reduced motion stops full-screen breathing without suppressing fills", () => {
 	const reducedMotion = blockFor("@media (prefers-reduced-motion: reduce)");
 	assert.match(
 		reducedMotion,
-		/#session-runner-client\.is-rest[\s\S]*animation:\s*none\s*!important;/,
+		/#session-rest-breathe-light,[\s\S]*#session-rest-breathe-dark[\s\S]*animation:\s*none\s*!important;/,
 	);
 	assert.match(
 		reducedMotion,
@@ -429,11 +446,7 @@ test("reduced motion stops full-screen breathing without suppressing fills", () 
 
 test("numeric count-in and active values retain approved ink", () => {
 	for (const state of activeStates) {
-		for (const target of [
-			"#count",
-			"#pause-icon",
-			"#session-status-line span",
-		]) {
+		for (const target of ["#count", "#pause-icon", "#session-status-line span"]) {
 			const selector = `#session-runner-client.${state} ${target}`;
 			assert.match(
 				ruleFor(selector)?.declarations || "",

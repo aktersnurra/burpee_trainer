@@ -248,9 +248,8 @@ body {
 
 #session-work-fill {
   background: var(--session-work);
-  -webkit-clip-path: inset(100% 0 0 0);
-  clip-path: inset(100% 0 0 0);
-  will-change: clip-path;
+  transform: translate3d(0, 100%, 0);
+  will-change: transform;
 }
 
 #session-runner-client:not(.is-working) #session-work-fill {
@@ -261,22 +260,43 @@ body {
   visibility: visible;
 }
 
-@keyframes session-blue-breathe {
-  0%, 100% {
-    background-color: var(--session-rest-light);
-  }
-  50% {
-    background-color: var(--session-rest);
-  }
+#session-rest-breathe-light {
+  background: var(--session-rest-light);
+  opacity: 0;
+  will-change: opacity;
+}
+
+#session-rest-breathe-dark {
+  background: var(--session-rest);
+  opacity: 0;
+  will-change: opacity;
+}
+
+@keyframes session-rest-breathe-light {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes session-rest-breathe-dark {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
 
 #session-runner-client.is-rest {
   background: var(--session-rest-light);
   color: var(--session-active-ink);
-  animation: session-blue-breathe 5s ease-in-out infinite;
 }
 
-#session-runner-client.is-rest.is-paused {
+#session-runner-client.is-rest #session-rest-breathe-light {
+  animation: session-rest-breathe-light 5s ease-in-out infinite;
+}
+
+#session-runner-client.is-rest #session-rest-breathe-dark {
+  animation: session-rest-breathe-dark 5s ease-in-out infinite;
+}
+
+#session-runner-client.is-rest.is-paused #session-rest-breathe-light,
+#session-runner-client.is-rest.is-paused #session-rest-breathe-dark {
   animation-play-state: paused;
 }
 
@@ -418,7 +438,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #session-work-fill,
-  #session-runner-client.is-rest,
+  #session-rest-breathe-light,
+  #session-rest-breathe-dark,
   #count,
   #session-pause-actions {
     animation: none !important;
