@@ -20,11 +20,24 @@ function classList() {
 }
 
 function styleDeclaration() {
-	return {
-		setProperty(name, value) {
-			this[name] = value;
+	let assignments = 0;
+	return new Proxy(
+		{
+			setProperty(name, value) {
+				this[name] = value;
+			},
+			get assignmentCount() {
+				return assignments;
+			},
 		},
-	};
+		{
+			set(target, property, value) {
+				assignments += 1;
+				target[property] = value;
+				return true;
+			},
+		},
+	);
 }
 
 function element() {
@@ -32,6 +45,9 @@ function element() {
 	const children = [];
 	let textContent = "";
 	let textContentAssignments = 0;
+	let hidden = false;
+	let hiddenAssignments = 0;
+	let attributeAssignments = 0;
 	let focusCalls = 0;
 	let focusOptions;
 	const node = {
@@ -39,7 +55,19 @@ function element() {
 		children,
 		classList: classList(),
 		className: "",
-		hidden: false,
+		get hidden() {
+			return hidden;
+		},
+		set hidden(value) {
+			hidden = Boolean(value);
+			hiddenAssignments += 1;
+		},
+		get hiddenAssignments() {
+			return hiddenAssignments;
+		},
+		get attributeAssignments() {
+			return attributeAssignments;
+		},
 		style: styleDeclaration(),
 		ownerDocument: {
 			createElement() {
@@ -81,6 +109,7 @@ function element() {
 		},
 		setAttribute(name, value) {
 			attributes.set(name, String(value));
+			attributeAssignments += 1;
 		},
 		toggleAttribute(name, force) {
 			if (force) this.setAttribute(name, "");
@@ -88,6 +117,7 @@ function element() {
 		},
 		removeAttribute(name) {
 			attributes.delete(name);
+			attributeAssignments += 1;
 		},
 		hasAttribute(name) {
 			return attributes.has(name);
@@ -211,15 +241,22 @@ test("begin conflicts are visible and link to the server-provided resolution rou
 	const resolve = elements["#session-begin-conflict-resolve"];
 
 	renderer.renderBeginConflict({
-		message: "Finish or discard your current workout before starting another one.",
+		message:
+			"Finish or discard your current workout before starting another one.",
 		resolve_to: "/sessions/42/resolve",
 	});
 
 	assert.equal(conflict.hidden, false);
 	assert.equal(conflict.hasAttribute("inert"), false);
-	assert.equal(message.textContent, "Finish or discard your current workout before starting another one.");
+	assert.equal(
+		message.textContent,
+		"Finish or discard your current workout before starting another one.",
+	);
 	assert.equal(resolve.getAttribute("href"), "/sessions/42/resolve");
-	assert.equal(elements["#session-live-status"].textContent, message.textContent);
+	assert.equal(
+		elements["#session-live-status"].textContent,
+		message.textContent,
+	);
 
 	renderer.clearBeginConflict();
 	assert.equal(conflict.hidden, true);
@@ -241,13 +278,15 @@ test("pending report states keep the completion panel visible and expose retry o
 	assert.equal(completionPanel.hidden, false);
 	assert.equal(elements["#session-report-pending-status"].hidden, false);
 	assert.equal(elements["#session-report-pending-retry"].hidden, false);
-	assert.equal(elements["#session-live-status"].textContent, "Could not prepare workout report. Try again.");
+	assert.equal(
+		elements["#session-live-status"].textContent,
+		"Could not prepare workout report. Try again.",
+	);
 });
 
 test("panel heading focus prevents scroll", () => {
 	const { renderer, elements } = harness();
-	const heading =
-		elements["#session-completion-review [data-session-heading]"];
+	const heading = elements["#session-completion-review [data-session-heading]"];
 
 	renderer.focusPanelHeading("session-completion-review");
 
@@ -295,6 +334,30 @@ test("overall progress uses a clamped horizontal transform and freezes on pause"
 	assert.equal(fill.style.transform, "scaleX(0)");
 });
 
+test("identical display models skip hot-path DOM mutations", () => {
+	const { renderer, elements } = harness();
+	const workModel = model("work_active", {
+		visual: { state: "work_active", progress: 0.25, pulse: null },
+	});
+	const mutationCounts = () =>
+		Object.values(elements).reduce(
+			(counts, node) => ({
+				text: counts.text + node.textContentAssignments,
+				hidden: counts.hidden + node.hiddenAssignments,
+				attributes: counts.attributes + node.attributeAssignments,
+				styles: counts.styles + node.style.assignmentCount,
+				classes: counts.classes + node.classList.mutationCount(),
+			}),
+			{ text: 0, hidden: 0, attributes: 0, styles: 0, classes: 0 },
+		);
+
+	renderer.renderDisplayModel(workModel);
+	const firstRender = mutationCounts();
+	renderer.renderDisplayModel(workModel);
+
+	assert.deepEqual(mutationCounts(), firstRender);
+});
+
 test("duplicate visual states skip class mutations while live values still update", () => {
 	const { renderer, elements } = harness();
 	const surfaceClasses = elements["#session-runner-client"].classList;
@@ -329,6 +392,18 @@ test("duplicate visual states skip class mutations while live values still updat
 	assert.equal(surfaceClasses.contains("is-working"), false);
 	assert.equal(surfaceClasses.contains("is-rest"), true);
 	assert.equal(elements["#count"].textContent, "18");
+});
+
+test("DOWN cue does not force layout before animating", () => {
+	const { renderer, elements } = harness();
+	Object.defineProperty(elements["#count"], "offsetWidth", {
+		get() {
+			throw new Error("triggerDown must not read layout");
+		},
+	});
+
+	assert.doesNotThrow(() => renderer.triggerDown(4));
+	renderer.clearTimers();
 });
 
 test("work count distinguishes single, double, and triple digit values", () => {
@@ -649,10 +724,7 @@ test("structured Save errors reuse stable field and global targets", () => {
 		"must be at least 0",
 	);
 	assert.equal(elements["#completion-reps-error"].hidden, false);
-	assert.equal(
-		elements["#completion-duration-error"].textContent,
-		"is invalid",
-	);
+	assert.equal(elements["#completion-duration-error"].textContent, "is invalid");
 	assert.equal(elements["#completion-duration-error"].hidden, false);
 	assert.equal(elements["#completion-note-error"].hidden, true);
 	assert.equal(
