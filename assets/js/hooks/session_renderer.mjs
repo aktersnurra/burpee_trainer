@@ -671,11 +671,17 @@ export class SessionRenderer {
 			"is-countdown-dots",
 		);
 		countEl.classList.add("is-down-cue");
-		countEl.textContent = "DOWN";
-		countEl.style.color = "";
-		countEl.style.visibility = "";
+		this.rendered.currentSetRep = undefined;
+		this.rendered.restCount = undefined;
+		this.rendered.restCountVisibility = undefined;
+		this.setText(countEl, "DOWN", "countText");
+		this.setStyle(countEl, "color", "", "countColor");
+		this.setStyle(countEl, "visibility", "", "countVisibility");
 		countEl.classList.remove("countdown-pop");
-		if (typeof countEl.animate === "function") {
+		const reducedMotion = globalThis.matchMedia?.(
+			"(prefers-reduced-motion: reduce)",
+		)?.matches;
+		if (!reducedMotion && typeof countEl.animate === "function") {
 			countEl.animate(
 				[
 					{ transform: "scale(1.35)", opacity: 0.6 },
@@ -688,7 +694,7 @@ export class SessionRenderer {
 					fill: "both",
 				},
 			);
-		} else {
+		} else if (!reducedMotion) {
 			const scheduleFrame =
 				globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 0));
 			this.downAnimationFrame = scheduleFrame(() => {

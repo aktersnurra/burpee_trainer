@@ -406,6 +406,63 @@ test("DOWN cue does not force layout before animating", () => {
 	renderer.clearTimers();
 });
 
+test("DOWN cue restores the current count and normal classes after its timeout", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const { renderer, elements } = harness();
+	const count = elements["#count"];
+
+	renderer.updateCurrentSetRepCount(4);
+	renderer.triggerDown(4);
+	assert.equal(count.textContent, "DOWN");
+	assert.equal(count.classList.contains("is-down-cue"), true);
+
+	t.mock.timers.tick(650);
+
+	assert.equal(count.textContent, "4");
+	assert.equal(count.classList.contains("is-down-cue"), false);
+	assert.equal(count.classList.contains("is-rest-time-long"), false);
+	assert.equal(count.classList.contains("is-count-double"), false);
+	assert.equal(count.classList.contains("is-count-long"), false);
+	assert.equal(count.classList.contains("is-countdown-dots"), false);
+	assert.equal(count.classList.contains("countdown-pop"), false);
+});
+
+test("DOWN cue uses WAAPI when reduced motion is not preferred", (t) => {
+	const originalMatchMedia = globalThis.matchMedia;
+	t.after(() => {
+		if (originalMatchMedia) globalThis.matchMedia = originalMatchMedia;
+		else delete globalThis.matchMedia;
+	});
+	globalThis.matchMedia = () => ({ matches: false });
+
+	const { renderer, elements } = harness();
+	const animations = [];
+	elements["#count"].animate = (...args) => animations.push(args);
+
+	renderer.triggerDown(4);
+
+	assert.equal(animations.length, 1);
+	renderer.clearTimers();
+});
+
+test("DOWN cue skips WAAPI when reduced motion is preferred", (t) => {
+	const originalMatchMedia = globalThis.matchMedia;
+	t.after(() => {
+		if (originalMatchMedia) globalThis.matchMedia = originalMatchMedia;
+		else delete globalThis.matchMedia;
+	});
+	globalThis.matchMedia = () => ({ matches: true });
+
+	const { renderer, elements } = harness();
+	let animations = 0;
+	elements["#count"].animate = () => animations++;
+
+	renderer.triggerDown(4);
+
+	assert.equal(animations, 0);
+	renderer.clearTimers();
+});
+
 test("work count distinguishes single, double, and triple digit values", () => {
 	const { renderer, elements } = harness();
 	const count = elements["#count"];
