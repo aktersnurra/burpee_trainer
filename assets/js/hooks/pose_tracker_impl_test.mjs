@@ -756,6 +756,30 @@ test("a pending inference settled while suspended cannot capture or revive its l
 	assert.deepEqual(subject.traceSampleTimes(), [0, 200, 300, 400]);
 });
 
+test("resume waits for a pending inference before starting another detector call", async () => {
+	const subject = mountedDeferredDetectorTracker();
+	await subject.start();
+	assert.equal(subject.estimates.length, 1);
+
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:suspend"));
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:resume"));
+	assert.equal(subject.animationFrames.length, 1);
+
+	subject.setNow(100);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	assert.equal(subject.estimates.length, 1);
+
+	subject.estimates[0].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	assert.equal(subject.animationFrames.length, 1);
+
+	subject.setNow(200);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	assert.equal(subject.estimates.length, 2);
+});
+
 test("resuming before a pending inference settles retains one sampling loop", async () => {
 	const subject = mountedDeferredDetectorTracker();
 	await subject.start();

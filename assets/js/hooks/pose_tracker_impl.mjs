@@ -96,6 +96,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	let raf = null;
 	let nextRafToken = 0;
 	let samplingEpoch = 0;
+	let inferencePending = false;
 	let state = initialBurpeeHsmmState();
 	let candidateIndex = 0;
 	let readiness = initialPoseReadiness();
@@ -323,6 +324,10 @@ export function createPoseTracker(hook, runtime = {}) {
 
 	async function loop(generation, epoch = samplingEpoch) {
 		if (!samplingIsCurrent(generation, epoch)) return;
+		if (!controlledFrames && inferencePending) {
+			scheduleSamplingFrame(generation, epoch);
+			return;
+		}
 
 		const scheduleNextFrame = () => scheduleSamplingFrame(generation, epoch);
 
@@ -346,15 +351,24 @@ export function createPoseTracker(hook, runtime = {}) {
 			sample = poseSample(poses[0], frame.tMs, video, lastFeature);
 		} else {
 			try {
+				inferencePending = true;
 				poses = await detector.estimatePoses(video);
 			} catch {
-				if (!samplingIsCurrent(generation, epoch)) return;
+				inferencePending = false;
+				if (!samplingIsCurrent(generation, epoch)) {
+					scheduleSamplingFrame(startGeneration, samplingEpoch);
+					return;
+				}
 				running = false;
 				markLost("detector_error");
 				releaseResources();
 				return;
 			}
-			if (!samplingIsCurrent(generation, epoch)) return;
+			inferencePending = false;
+			if (!samplingIsCurrent(generation, epoch)) {
+				scheduleSamplingFrame(startGeneration, samplingEpoch);
+				return;
+			}
 
 			sample = poseSample(poses[0], sampledAt - startedAt, video, lastFeature);
 		}

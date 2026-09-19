@@ -292,7 +292,20 @@ function trackerElement(root) {
 	const canvas = new FixtureElement("canvas");
 	canvas.id = "pose-tracker-canvas";
 	canvas.getBoundingClientRect = () => ({ width: 320, height: 240 });
-	canvas.getContext = () => ({ setTransform() {}, clearRect() {} });
+	canvas.getContext = () => ({
+		setTransform() {},
+		clearRect() {},
+		save() {},
+		scale() {},
+		translate() {},
+		beginPath() {},
+		moveTo() {},
+		lineTo() {},
+		stroke() {},
+		arc() {},
+		fill() {},
+		restore() {},
+	});
 	tracker.append(video, canvas);
 	root.append(tracker);
 	return tracker;
