@@ -1287,6 +1287,7 @@ const SessionHook = {
 	pauseCountdown() {
 		this.dispatchSegment({ type: "COUNTDOWN_PAUSE", now: performance.now() });
 		this.countdownPaused = true;
+		this.dispatchTrackerCommand("pose-tracker:suspend");
 		if (this.countdownTimeoutId) {
 			clearTimeout(this.countdownTimeoutId);
 			this.countdownTimeoutId = null;
@@ -1305,6 +1306,7 @@ const SessionHook = {
 	resumeCountdown() {
 		this.dispatchSegment({ type: "COUNTDOWN_RESUME", now: performance.now() });
 		this.countdownPaused = false;
+		this.dispatchTrackerCommand("pose-tracker:resume");
 		this.renderer.updatePauseButton(false);
 		this.updatePauseActionsVisibility();
 

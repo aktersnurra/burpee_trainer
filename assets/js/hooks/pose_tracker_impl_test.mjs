@@ -598,6 +598,187 @@ test("preview sizing waits for a visible non-zero canvas", async () => {
 	assert.equal(canvas.height, 240);
 });
 
+function deferred() {
+	let resolve;
+	const promise = new Promise((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
+async function settleAsyncWork() {
+	await Promise.resolve();
+	await Promise.resolve();
+}
+
+function mountedDeferredDetectorTracker(samples = []) {
+	const tracker = new FakeElement();
+	const video = {
+		id: "pose-tracker-preview",
+		videoWidth: 640,
+		videoHeight: 480,
+		play: async () => {},
+	};
+	const canvas = {
+		id: "pose-tracker-canvas",
+		getBoundingClientRect: () => ({ width: 320, height: 240 }),
+		getContext: () => ({ setTransform() {} }),
+	};
+	tracker.append(video, canvas);
+
+	const estimates = [];
+	const animationFrames = [];
+	const cancelledFrames = new Set();
+	const traceChunks = [];
+	const previousFeatures = [];
+	const repIndexes = [];
+	let sampleIndex = 0;
+	let nowMs = 0;
+	tracker.addEventListener("pose-tracker:rep", (event) =>
+		repIndexes.push(event.detail.index),
+	);
+	tracker.addEventListener("pose-tracker:trace-chunk", (event) =>
+		traceChunks.push(event.detail.chunk),
+	);
+
+	const impl = createPoseTracker(
+		{ el: tracker },
+		{
+			createBlazePoseDetector: async () => ({
+				estimatePoses() {
+					const next = deferred();
+					estimates.push(next);
+					return next.promise;
+				},
+			}),
+			mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) },
+			waitForVideoFrame: async () => video,
+			webglAvailable: () => true,
+			now: () => nowMs,
+			requestAnimationFrame(callback) {
+				const frame = { id: animationFrames.length + 1, callback };
+				animationFrames.push(frame);
+				return frame.id;
+			},
+			cancelAnimationFrame(id) {
+				cancelledFrames.add(id);
+			},
+			sampleFromPose(_pose, _tMs, _video, lastFeature) {
+				previousFeatures.push(lastFeature);
+				return samples[sampleIndex++] || upright(nowMs);
+			},
+		},
+	);
+
+	return {
+		tracker,
+		estimates,
+		animationFrames,
+		cancelledFrames,
+		previousFeatures,
+		repIndexes,
+		traceSampleTimes() {
+			return traceChunks.flatMap((chunk) =>
+				chunk.payload.samples.map((sample) => sample.tMs),
+			);
+		},
+		setNow(value) {
+			nowMs = value;
+		},
+		async start() {
+			await impl.mounted();
+			document.dispatchEvent(
+				new CustomEvent("pose-capture:segment", {
+					detail: { segment: "workout" },
+				}),
+			);
+			await impl.start();
+		},
+		finish() {
+			tracker.dispatchEvent(
+				new CustomEvent("pose-tracker:finish", {
+					detail: { durationMs: nowMs, cadenceMs: [] },
+				}),
+			);
+		},
+	};
+}
+
+test("a pending inference settled while suspended cannot capture or revive its loop", async () => {
+	const subject = mountedDeferredDetectorTracker([
+		lowering(0),
+		floorWork(200),
+		returning(300),
+		upright(400),
+	]);
+	await subject.start();
+
+	subject.estimates[0].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	assert.deepEqual(subject.previousFeatures, [null]);
+
+	subject.setNow(100);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	assert.equal(subject.estimates.length, 2);
+
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:suspend"));
+	subject.estimates[1].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	assert.deepEqual(subject.previousFeatures, [null]);
+
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:resume"));
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:resume"));
+	assert.equal(subject.animationFrames.length, 1);
+
+	subject.setNow(200);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	subject.estimates[2].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+
+	subject.setNow(300);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	subject.estimates[3].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+
+	subject.setNow(400);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	subject.estimates[4].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	subject.finish();
+
+	assert.equal(subject.previousFeatures[0], null);
+	assert.equal(subject.previousFeatures[1], null);
+	assert.deepEqual(subject.repIndexes, []);
+	assert.deepEqual(subject.traceSampleTimes(), [0, 200, 300, 400]);
+});
+
+test("resuming before a pending inference settles retains one sampling loop", async () => {
+	const subject = mountedDeferredDetectorTracker();
+	await subject.start();
+	assert.equal(subject.estimates.length, 1);
+
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:suspend"));
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:resume"));
+	assert.equal(subject.animationFrames.length, 1);
+
+	subject.estimates[0].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	assert.deepEqual(subject.previousFeatures, []);
+	assert.equal(subject.animationFrames.length, 1);
+
+	subject.setNow(100);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	assert.equal(subject.estimates.length, 2);
+	subject.estimates[1].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	assert.deepEqual(subject.previousFeatures, [null]);
+});
+
 test("suspending skips scheduled pose work and resume resets temporal sampling", async () => {
 	const tracker = new FakeElement();
 	const video = {

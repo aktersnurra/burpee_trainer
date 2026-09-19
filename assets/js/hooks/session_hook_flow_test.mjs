@@ -555,6 +555,24 @@ test("session pause and resume suspend and resume the pose tracker", () => {
 	assert.deepEqual(commands, ["pose-tracker:suspend", "pose-tracker:resume"]);
 });
 
+test("countdown pause and resume suspend and resume the pose tracker", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const tracker = ctx.el.querySelector("#pose-tracker");
+	const commands = [];
+	for (const type of ["pose-tracker:suspend", "pose-tracker:resume"]) {
+		tracker.addEventListener(type, () => commands.push(type));
+	}
+	ctx.countdownCount = 3;
+	ctx.countdownShowCount = () => {};
+
+	ctx.togglePause();
+	ctx.togglePause();
+
+	assert.deepEqual(commands, ["pose-tracker:suspend", "pose-tracker:resume"]);
+	assert.equal(ctx.countdownPaused, false);
+	assert.equal(ctx.countdownCount, 3);
+});
+
 test("tracked reps use session elapsed time without updating visible reps", () => {
 	const ctx = trackedContext([
 		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },

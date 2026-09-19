@@ -94,6 +94,8 @@ export function createPoseTracker(hook, runtime = {}) {
 	let video = null;
 	let canvas = null;
 	let raf = null;
+	let nextRafToken = 0;
+	let samplingEpoch = 0;
 	let state = initialBurpeeHsmmState();
 	let candidateIndex = 0;
 	let readiness = initialPoseReadiness();
@@ -129,6 +131,31 @@ export function createPoseTracker(hook, runtime = {}) {
 		lastPoseMs = -Infinity;
 	};
 
+	const samplingIsCurrent = (generation, epoch) =>
+		mounted &&
+		running &&
+		!suspended &&
+		generation === startGeneration &&
+		epoch === samplingEpoch &&
+		detector &&
+		video &&
+		startedAt !== null;
+
+	const cancelScheduledFrame = () => {
+		if (raf !== null) cancelFrame(raf.id);
+		raf = null;
+	};
+
+	const scheduleSamplingFrame = (generation, epoch) => {
+		if (!samplingIsCurrent(generation, epoch) || raf !== null) return;
+		const token = ++nextRafToken;
+		const id = requestFrame(() => {
+			if (raf?.token === token) raf = null;
+			return loop(generation, epoch);
+		});
+		raf = { id, token };
+	};
+
 	const resizeCanvasIfVisible = () => {
 		if (!previewVisible || !canvas) return;
 		const { width = 0, height = 0 } = canvas.getBoundingClientRect();
@@ -154,17 +181,15 @@ export function createPoseTracker(hook, runtime = {}) {
 	const suspend = () => {
 		if (suspended) return;
 		suspended = true;
-		if (raf !== null) cancelFrame(raf);
-		raf = null;
+		samplingEpoch += 1;
+		cancelScheduledFrame();
 	};
 
 	const resume = () => {
 		if (!suspended) return;
 		suspended = false;
 		reset();
-		if (mounted && running && detector && video && startedAt !== null) {
-			raf = requestFrame(() => loop(startGeneration));
-		}
+		scheduleSamplingFrame(startGeneration, samplingEpoch);
 	};
 
 	const stopCameraSetupAutoConfirmTimer = () => {
@@ -220,8 +245,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	}
 
 	function releaseResources() {
-		if (raf !== null) cancelFrame(raf);
-		raf = null;
+		cancelScheduledFrame();
 		resizeObserver?.disconnect();
 		resizeObserver = null;
 		if (stream) stream.getTracks().forEach((track) => track.stop());
@@ -297,24 +321,10 @@ export function createPoseTracker(hook, runtime = {}) {
 		}
 	}
 
-	async function loop(generation) {
-		if (
-			!mounted ||
-			!running ||
-			suspended ||
-			generation !== startGeneration ||
-			!detector ||
-			!video ||
-			startedAt === null
-		) {
-			return;
-		}
+	async function loop(generation, epoch = samplingEpoch) {
+		if (!samplingIsCurrent(generation, epoch)) return;
 
-		const scheduleNextFrame = () => {
-			if (!mounted || !running || suspended || generation !== startGeneration)
-				return;
-			raf = requestFrame(() => loop(generation));
-		};
+		const scheduleNextFrame = () => scheduleSamplingFrame(generation, epoch);
 
 		const sampledAt = now();
 		if (!shouldSamplePose(sampledAt, lastPoseMs)) {
@@ -338,13 +348,13 @@ export function createPoseTracker(hook, runtime = {}) {
 			try {
 				poses = await detector.estimatePoses(video);
 			} catch {
-				if (!mounted || !running || generation !== startGeneration) return;
+				if (!samplingIsCurrent(generation, epoch)) return;
 				running = false;
 				markLost("detector_error");
 				releaseResources();
 				return;
 			}
-			if (!mounted || !running || generation !== startGeneration) return;
+			if (!samplingIsCurrent(generation, epoch)) return;
 
 			sample = poseSample(poses[0], sampledAt - startedAt, video, lastFeature);
 		}
