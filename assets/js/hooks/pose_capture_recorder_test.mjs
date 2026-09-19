@@ -16,11 +16,18 @@ function largeSamples() {
 	];
 }
 
-test("recorder flushes before a payload exceeds the chunk byte budget", () => {
-	let state = initialPoseCaptureRecorder();
+test("recorder measures each accepted sample once while keeping chunks below the byte budget", () => {
+	const measuredSamples = [];
+	let state = initialPoseCaptureRecorder({
+		sampleByteLength: (sample) => {
+			measuredSamples.push(sample);
+			return serializedJsonBytes(sample);
+		},
+	});
 	const chunks = [];
+	const samples = largeSamples();
 
-	for (const sample of largeSamples()) {
+	for (const sample of samples) {
 		const recorded = recordPoseSample(state, sample, {
 			segment: "main",
 			nowMs: sample.tMs,
@@ -32,6 +39,8 @@ test("recorder flushes before a payload exceeds the chunk byte budget", () => {
 	const flushed = flushPoseCaptureRecorder(state);
 	chunks.push(...flushed.chunks);
 
+	assert.equal(flushed.state.pendingSamplesByteLength, 0);
+	assert.deepEqual(measuredSamples, samples);
 	assert.ok(
 		chunks.every(
 			(chunk) => serializedJsonBytes(chunk.payload) < MAX_TRACE_CHUNK_BYTES,
@@ -41,7 +50,10 @@ test("recorder flushes before a payload exceeds the chunk byte budget", () => {
 
 test("recorder never emits a payload at the chunk byte boundary", () => {
 	const sample = { tMs: 0, landmark_data: "" };
-	const emptyPayloadBytes = serializedJsonBytes({ version: 1, samples: [sample] });
+	const emptyPayloadBytes = serializedJsonBytes({
+		version: 1,
+		samples: [sample],
+	});
 	sample.landmark_data = "x".repeat(MAX_TRACE_CHUNK_BYTES - emptyPayloadBytes);
 
 	assert.equal(

@@ -1,5 +1,8 @@
 const DEFAULT_FLUSH_INTERVAL_MS = 3000;
 export const MAX_TRACE_CHUNK_BYTES = 200_000;
+const EMPTY_PAYLOAD_BYTES = new TextEncoder().encode(
+	JSON.stringify({ version: 1, samples: [] }),
+).byteLength;
 
 export function serializedJsonBytes(value) {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
@@ -8,10 +11,12 @@ export function serializedJsonBytes(value) {
 export function initialPoseCaptureRecorder(options = {}) {
 	return {
 		flushIntervalMs: options.flushIntervalMs || DEFAULT_FLUSH_INTERVAL_MS,
+		sampleByteLength: options.sampleByteLength ?? serializedJsonBytes,
 		nextChunkIndex: 0,
 		pendingSegment: null,
 		pendingStartedAtMs: null,
 		pendingSamples: [],
+		pendingSamplesByteLength: 0,
 		diagnostics: [],
 	};
 }
@@ -26,16 +31,20 @@ export function recordPoseSample(state, sample, { segment, nowMs }) {
 		chunks.push(flushed.chunk);
 	}
 
-	const candidateSamples = [...current.pendingSamples, sample];
+	const sampleByteLength = current.sampleByteLength(sample);
+	const candidateSamplesByteLength =
+		current.pendingSamplesByteLength +
+		(current.pendingSamples.length > 0 ? 1 : 0) +
+		sampleByteLength;
 
-	if (serializedJsonBytes(payloadFor(candidateSamples)) >= MAX_TRACE_CHUNK_BYTES) {
+	if (payloadByteLength(candidateSamplesByteLength) >= MAX_TRACE_CHUNK_BYTES) {
 		if (current.pendingSamples.length > 0) {
 			const flushed = flushPending(current);
 			current = flushed.state;
 			chunks.push(flushed.chunk);
 		}
 
-		if (serializedJsonBytes(payloadFor([sample])) >= MAX_TRACE_CHUNK_BYTES) {
+		if (payloadByteLength(sampleByteLength) >= MAX_TRACE_CHUNK_BYTES) {
 			return {
 				state: {
 					...current,
@@ -50,15 +59,17 @@ export function recordPoseSample(state, sample, { segment, nowMs }) {
 	}
 
 	const pendingStartedAtMs =
-		current.pendingSamples.length === 0
-			? sample.tMs
-			: current.pendingStartedAtMs;
+		current.pendingSamples.length === 0 ? sample.tMs : current.pendingStartedAtMs;
 
 	current = {
 		...current,
 		pendingSegment: segment,
 		pendingStartedAtMs,
 		pendingSamples: [...current.pendingSamples, sample],
+		pendingSamplesByteLength:
+			current.pendingSamplesByteLength +
+			(current.pendingSamples.length > 0 ? 1 : 0) +
+			sampleByteLength,
 	};
 
 	if (
@@ -89,6 +100,10 @@ function payloadFor(samples) {
 	};
 }
 
+function payloadByteLength(samplesByteLength) {
+	return EMPTY_PAYLOAD_BYTES + samplesByteLength;
+}
+
 function flushPending(state) {
 	const samples = state.pendingSamples;
 	const chunk = {
@@ -108,6 +123,7 @@ function flushPending(state) {
 			pendingSegment: null,
 			pendingStartedAtMs: null,
 			pendingSamples: [],
+			pendingSamplesByteLength: 0,
 		},
 	};
 }
