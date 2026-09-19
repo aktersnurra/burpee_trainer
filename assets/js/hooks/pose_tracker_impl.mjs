@@ -180,14 +180,14 @@ export function createPoseTracker(hook, runtime = {}) {
 	};
 
 	const suspend = () => {
-		if (suspended) return;
+		if (!running || suspended) return;
 		suspended = true;
 		samplingEpoch += 1;
 		cancelScheduledFrame();
 	};
 
 	const resume = () => {
-		if (!suspended) return;
+		if (!running || !suspended) return;
 		suspended = false;
 		reset();
 		scheduleSamplingFrame(startGeneration, samplingEpoch);

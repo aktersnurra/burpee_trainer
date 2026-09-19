@@ -72,6 +72,17 @@ export class SessionRenderer {
 		node.style[property] = value;
 	}
 
+	clearCountdown() {
+		const count = this.node("#count");
+		this.rendered.currentSetRep = undefined;
+		this.rendered.restCount = undefined;
+		this.rendered.restCountVisibility = undefined;
+		this.rendered.countVisibility = undefined;
+		this.rendered.countColor = undefined;
+		this.setText(count, "—", "countText");
+		this.setStyle(count, "color", "", "countColor");
+	}
+
 	clearTimers() {
 		if (this.downTimeout) clearTimeout(this.downTimeout);
 		if (this.downAnimationFrame != null) {

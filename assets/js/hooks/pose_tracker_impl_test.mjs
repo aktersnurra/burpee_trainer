@@ -803,6 +803,40 @@ test("resuming before a pending inference settles retains one sampling loop", as
 	assert.deepEqual(subject.previousFeatures, [null]);
 });
 
+test("suspending a stopped tracker does not block its next start", async () => {
+	const tracker = new FakeElement();
+	const video = {
+		id: "pose-tracker-preview",
+		videoWidth: 640,
+		videoHeight: 480,
+	};
+	const canvas = {
+		id: "pose-tracker-canvas",
+		getBoundingClientRect: () => ({ width: 320, height: 240 }),
+		getContext: () => ({ setTransform() {} }),
+	};
+	tracker.append(video, canvas);
+	let sampleCalls = 0;
+	const impl = createPoseTracker(
+		{ el: tracker },
+		{
+			controlledPoseFixture: [rawLowFrontFrame(0)],
+			requestAnimationFrame: () => 1,
+			cancelAnimationFrame() {},
+			sampleFromPose: () => {
+				sampleCalls += 1;
+				return upright(0);
+			},
+		},
+	);
+
+	await impl.mounted();
+	tracker.dispatchEvent(new CustomEvent("pose-tracker:suspend"));
+	await impl.start();
+
+	assert.equal(sampleCalls, 1);
+});
+
 test("suspending skips scheduled pose work and resume resets temporal sampling", async () => {
 	const tracker = new FakeElement();
 	const video = {

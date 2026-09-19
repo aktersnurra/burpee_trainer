@@ -398,6 +398,7 @@ function buildHarness({
 		},
 		updatePauseButton() {},
 		clearTimers() {},
+		clearCountdown() {},
 		clearSaveErrors() {},
 		renderSaveErrors(reply) {
 			saveErrorReplies.push(reply);
@@ -571,6 +572,18 @@ test("countdown pause and resume suspend and resume the pose tracker", () => {
 	assert.deepEqual(commands, ["pose-tracker:suspend", "pose-tracker:resume"]);
 	assert.equal(ctx.countdownPaused, false);
 	assert.equal(ctx.countdownCount, 3);
+});
+
+test("clearing a countdown delegates count rendering to the renderer", () => {
+	const ctx = buildHarness();
+	let clearCalls = 0;
+	ctx.renderer.clearCountdown = () => {
+		clearCalls += 1;
+	};
+
+	ctx.clearCountdown();
+
+	assert.equal(clearCalls, 1);
 });
 
 test("tracked reps use session elapsed time without updating visible reps", () => {

@@ -1176,11 +1176,7 @@ const SessionHook = {
 		this.renderCountdownFrame = null;
 		this.countdownTimeoutId = null;
 		this.countdownStepStarted = null;
-		const countEl = this.el.querySelector("#count");
-		if (countEl) {
-			countEl.style.color = "";
-			countEl.textContent = "—";
-		}
+		this.renderer.clearCountdown();
 	},
 
 	beginSegment() {

@@ -570,6 +570,20 @@ test("legacy rest rendering always uses bare total seconds", () => {
 	assert.equal(elements["#count"].textContent, "65");
 });
 
+test("clearing countdown state renders a subsequent one-second rest count-in", () => {
+	const { renderer, elements } = harness();
+
+	renderer.renderDisplayModel(
+		model("count_in", { primaryCount: 1, setProgress: null }),
+	);
+	renderer.clearCountdown();
+	renderer.renderDisplayModel(
+		model("rest_count_in", { primaryCount: 1, setProgress: null }),
+	);
+
+	assert.equal(elements["#count"].textContent, "1");
+});
+
 test("zero transitions to work and resets the active fill", () => {
 	const { renderer, elements } = harness();
 

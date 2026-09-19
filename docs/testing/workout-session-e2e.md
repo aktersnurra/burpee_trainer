@@ -188,9 +188,11 @@ At portrait and `640x360` short-landscape viewports, verify:
 - no horizontal or document-level overflow;
 - the active panel heading receives focus without scrolling the page;
 - Enter and Space toggle pause when the pause control is focused;
-- all blue rest and recovery screens use `session-blue-breathe` unless reduced
-  motion is enabled;
-- reduced motion disables animation without hiding progress;
+- all blue rest and recovery screens cross-fade the solid
+  `#session-rest-breathe-light` and `#session-rest-breathe-dark` layers through
+  opacity; pausing freezes those layers at their current opacity;
+- reduced motion disables the breathing-layer animation without hiding progress
+  or the static rest state;
 - completion field errors and global Save errors are announced;
 - scrollbars remain visually hidden while targeted scrolling still works;
 - browser zoom remains disabled by the viewport contract.
