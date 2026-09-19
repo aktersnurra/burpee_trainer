@@ -2803,6 +2803,45 @@ test("tick accounts scheduled totals once and renders its command frame", () => 
 	}
 });
 
+test("delayed rest-to-work ticks render and cue the accounted work frame", () => {
+	const ctx = buildHarness({ poseTrackerReady: null });
+	const timeline = [
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 3, sec_per_rep: 2 },
+	];
+	const dispatchedEvents = [];
+	const dispatchSegment = ctx.dispatchSegment;
+	const renderedFrames = [];
+	const renderRunningFrame = ctx.renderRunningFrame;
+	ctx.dispatchSegment = function (event) {
+		dispatchedEvents.push(event);
+		return dispatchSegment.call(this, event);
+	};
+	ctx.renderRunningFrame = function (elapsedSec, frame) {
+		renderedFrames.push(frame);
+		return renderRunningFrame.call(this, elapsedSec, frame);
+	};
+
+	ctx.dispatchSegment({
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 3,
+	});
+	ctx.activeSegment = "workout";
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 1 });
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 9.5 });
+
+	assert.equal(ctx.segment.reps.burpeeCountDone, 2);
+	assert.equal(ctx.renderedModels.at(-1).primaryCount, 1);
+	assert.equal(renderedFrames.at(-1), ctx.segment.reps.previousFrame);
+	assert.deepEqual(ctx.downCueValues, [1]);
+	assert.deepEqual(
+		dispatchedEvents.filter(({ type }) => type === "ACCOUNT_REPS"),
+		[],
+	);
+});
+
 test("running frames cue authoritative remaining reps during work recovery", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 	const timeline = Object.freeze([

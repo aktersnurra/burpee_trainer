@@ -167,7 +167,15 @@ export function accountReps(previousFrame, nextFrame, reps) {
 		};
 	}
 
-	if (!isBurpee) return { ...reps, currentEventKey: nextKey, doneInEvent: 0 };
+	if (!isBurpee) {
+		const completed = completedRepsInFrame(nextFrame);
+		return {
+			...reps,
+			currentEventKey: nextKey,
+			doneInEvent: completed,
+			burpeeCountDone: reps.burpeeCountDone + completed,
+		};
+	}
 
 	const target = previousEvent.reps || 0;
 	const doneInEvent =

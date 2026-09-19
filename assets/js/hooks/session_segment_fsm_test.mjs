@@ -94,6 +94,29 @@ test("tick renders the frame already stored in rep state", () => {
 	assert.equal(command.frame, result.state.reps.previousFrame);
 });
 
+test("delayed rest-to-work ticks account the reps in the displayed work frame", () => {
+	const timeline = [
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 3, sec_per_rep: 2 },
+	];
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+		burpeeCountTarget: 3,
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 1 }).state;
+
+	const delayed = segmentTransition(state, { type: "TICK", elapsedSec: 9.5 });
+	const command = delayed.commands.find(
+		({ type }) => type === "renderRunningFrame",
+	);
+
+	assert.equal(delayed.state.reps.burpeeCountDone, 2);
+	assert.equal(delayed.state.reps.doneInEvent, 2);
+	assert.equal(command.frame, delayed.state.reps.previousFrame);
+});
+
 test("natural completion clamps a delayed animation tick to timeline duration", () => {
 	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20 }];
 	let state = segmentTransition(initialSegmentState(), {
