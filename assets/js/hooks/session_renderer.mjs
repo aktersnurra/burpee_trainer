@@ -782,15 +782,17 @@ export class SessionRenderer {
 			counter.dataset.totalPlan = n;
 		}
 		this.setText(this.node("#total-plan"), n, "totalPlan");
-		this.updateTotalCounter(
-			Number.parseInt(counter?.textContent || "0", 10) || 0,
-		);
+		// Re-render the counter so the pace announcement picks up the new goal,
+		// keeping the rep count the cache already holds.
+		this.updateTotalCounter(this.rendered.totalDone ?? "");
 	}
 
+	// Both totals come from the render cache rather than the DOM: this runs on
+	// every animation frame, and the cache is authoritative for what is shown.
 	updateTotalAccessibility() {
-		const done = this.node("#total-done")?.textContent;
-		const target = this.node("#total-plan")?.textContent;
-		if (done !== "" && target !== "") {
+		const done = this.rendered.totalDone;
+		const target = this.rendered.totalPlan;
+		if (done && target) {
 			this.setText(
 				this.node("#total-reps-accessible"),
 				`Pace progress: ${done} of ${target} reps`,

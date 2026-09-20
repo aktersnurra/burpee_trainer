@@ -45,6 +45,7 @@ function element() {
 	const children = [];
 	let textContent = "";
 	let textContentAssignments = 0;
+	let textContentReads = 0;
 	let hidden = false;
 	let hiddenAssignments = 0;
 	let attributeAssignments = 0;
@@ -55,6 +56,7 @@ function element() {
 		children,
 		classList: classList(),
 		className: "",
+		dataset: {},
 		get hidden() {
 			return hidden;
 		},
@@ -75,6 +77,7 @@ function element() {
 			},
 		},
 		get textContent() {
+			textContentReads += 1;
 			return textContent;
 		},
 		set textContent(value) {
@@ -84,6 +87,9 @@ function element() {
 		},
 		get textContentAssignments() {
 			return textContentAssignments;
+		},
+		get textContentReads() {
+			return textContentReads;
 		},
 		get focusCalls() {
 			return focusCalls;
@@ -876,4 +882,49 @@ test("a repeated work rep count is restored after a ready reset", () => {
 
 	renderer.updateCurrentSetRepCount(4);
 	assert.equal(elements["#count"].textContent, "4");
+});
+
+test("steady work frames read no total counter text from the DOM", () => {
+	const { renderer, elements } = harness();
+	const workFrame = (progress) =>
+		model("work_active", {
+			visual: { state: "work_active", progress, pulse: null },
+			primaryCount: 6,
+			timeLeftSec: 40 - progress,
+			sessionProgress: 0.25 + progress / 100,
+		});
+
+	renderer.renderDisplayModel(workFrame(0));
+	const before = {
+		done: elements["#total-done"].textContentReads,
+		plan: elements["#total-plan"].textContentReads,
+	};
+
+	for (let i = 1; i <= 30; i += 1) renderer.renderDisplayModel(workFrame(i / 30));
+
+	assert.equal(elements["#total-done"].textContentReads - before.done, 0);
+	assert.equal(elements["#total-plan"].textContentReads - before.plan, 0);
+});
+
+test("updating the rep goal preserves the completed rep count", () => {
+	const { renderer, elements } = harness();
+
+	renderer.updateTotalCounter(7);
+	renderer.updateTotalGoal(25);
+
+	assert.equal(elements["#total-done"].textContent, "7");
+	assert.equal(elements["#total-plan"].textContent, "25");
+	assert.equal(elements["#total-done"].dataset.totalPlan, 25);
+	assert.equal(
+		elements["#total-reps-accessible"].textContent,
+		"Pace progress: 7 of 25 reps",
+	);
+});
+
+test("the pace announcement waits until both totals are known", () => {
+	const { renderer, elements } = harness();
+
+	renderer.updateTotalCounter(3);
+
+	assert.equal(elements["#total-reps-accessible"].textContent, "");
 });
