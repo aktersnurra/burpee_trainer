@@ -374,3 +374,26 @@ test("deleteDraft removes only the selected completion", async () => {
     "session-2",
   );
 });
+
+test("a blocked database upgrade rejects instead of hanging forever", async () => {
+  // Another tab holding the old version blocks the upgrade. IndexedDB fires
+  // onblocked and then nothing else, so without a handler the open promise
+  // never settles and every awaiting caller stalls.
+  const indexedDB = {
+    open() {
+      const request = { result: null, error: null };
+      queueMicrotask(() => request.onblocked?.({}));
+      return request;
+    },
+  };
+
+  await assert.rejects(
+    Promise.race([
+      openSessionStore(indexedDB),
+      new Promise((_resolve, reject) =>
+        setTimeout(() => reject(new Error("timed out: open never settled")), 50),
+      ),
+    ]),
+    /blocked/i,
+  );
+});

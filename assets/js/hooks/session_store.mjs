@@ -123,6 +123,11 @@ function openDatabase(indexedDB) {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    // Another tab on the old version blocks the upgrade. IndexedDB fires this
+    // and then nothing else, so reject rather than leaving every caller
+    // awaiting the store forever.
+    request.onblocked = () =>
+      reject(new Error("session database upgrade blocked by another tab"));
   });
 }
 
