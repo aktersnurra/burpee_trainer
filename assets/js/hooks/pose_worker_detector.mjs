@@ -5,21 +5,27 @@ const POSE_MODEL_PATH = "/models/mediapipe_pose/pose_landmarker_full.task";
 
 const POSE_WORKER_PATH = "/assets/js/pose_worker.js";
 
-// BlazePose works from a 256x256 crop, so copying a full camera frame each
-// tick is wasted main-thread work. Landmarks come back normalised and are
-// scaled against the video element, so the smaller bitmap does not move them.
-const MAX_FRAME_WIDTH = 640;
+// The bundled models take fixed square inputs -- pose_detector.tflite is
+// 224x224 and pose_landmarks_detector.tflite is 256x256 -- and MediaPipe fits
+// the frame's short side to that square. Detail below the larger of the two is
+// discarded before inference, so transferring more is wasted copy work.
+//
+// The cap is on the SHORT side, not the width: a portrait camera frame capped
+// by width stays nearly full size on its long side.
+const MODEL_INPUT_PX = 256;
 
 function frameSize(video) {
 	const width = video?.videoWidth || video?.width || 0;
 	const height = video?.videoHeight || video?.height || 0;
-	if (width <= 0 || height <= 0 || width <= MAX_FRAME_WIDTH) {
+	const shortSide = Math.min(width, height);
+	if (shortSide <= 0 || shortSide <= MODEL_INPUT_PX) {
 		return { resizeWidth: width, resizeHeight: height, resizeQuality: "low" };
 	}
 
+	const scale = MODEL_INPUT_PX / shortSide;
 	return {
-		resizeWidth: MAX_FRAME_WIDTH,
-		resizeHeight: Math.round((height / width) * MAX_FRAME_WIDTH),
+		resizeWidth: Math.round(width * scale),
+		resizeHeight: Math.round(height * scale),
 		resizeQuality: "low",
 	};
 }
