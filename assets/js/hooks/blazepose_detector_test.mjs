@@ -6,6 +6,7 @@ import {
 	poseFromBlazePoseResults,
 	poseFromPoseLandmarkerResult,
 } from "./blazepose_detector.mjs";
+import { createWorkerPoseDetector } from "./pose_worker_detector.mjs";
 
 const video = { videoWidth: 640, videoHeight: 480 };
 
@@ -177,4 +178,136 @@ test("timestamps passed to the landmarker never go backwards", async () => {
 		seen.slice().sort((a, b) => a - b),
 	);
 	assert.equal(new Set(seen).size, seen.length);
+});
+
+function fakeWorker({ onDetect, failInit = false } = {}) {
+	const worker = {
+		posted: [],
+		terminated: false,
+		onmessage: null,
+		postMessage(message, transfer) {
+			worker.posted.push({ message, transfer });
+			queueMicrotask(() => {
+				const { id, type, payload } = message;
+				if (type === "init") {
+					worker.onmessage?.({
+						data: failInit
+							? { id, ok: false, error: "no gpu" }
+							: { id, ok: true },
+					});
+					return;
+				}
+				if (type === "detect") {
+					worker.onmessage?.({
+						data: {
+							id,
+							ok: true,
+							result: onDetect
+								? onDetect(payload)
+								: { landmarks: [], worldLandmarks: [] },
+						},
+					});
+					return;
+				}
+				worker.onmessage?.({ data: { id, ok: true } });
+			});
+		},
+		terminate() {
+			worker.terminated = true;
+		},
+	};
+	return worker;
+}
+
+const bitmapVideo = { videoWidth: 640, videoHeight: 480 };
+
+test("the worker detector transfers a frame bitmap and maps the result back", async () => {
+	const closed = [];
+	const worker = fakeWorker({
+		onDetect: () => ({
+			landmarks: [{ x: 0.5, y: 0.25, z: 0, visibility: 0.9 }],
+			worldLandmarks: [{ x: 0.1, y: 0.2, z: 0.3, visibility: 0.9 }],
+		}),
+	});
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => worker,
+		createImageBitmap: async () => ({ close: () => closed.push(true) }),
+		now: () => 500,
+	});
+
+	const poses = await detector.estimatePoses(bitmapVideo);
+
+	assert.equal(poses.length, 1);
+	assert.equal(poses[0].keypoints[0].name, "nose");
+	assert.equal(poses[0].keypoints[0].x, 320);
+	assert.equal(poses[0].keypoints[0].y, 120);
+	assert.deepEqual(poses[0].keypoints[0].world, {
+		x: 0.1,
+		y: 0.2,
+		z: 0.3,
+		visibility: 0.9,
+	});
+
+	const detectCall = worker.posted.find((c) => c.message.type === "detect");
+	assert.deepEqual(detectCall.transfer, [detectCall.message.payload.bitmap]);
+	assert.equal(detectCall.message.payload.timestamp, 500);
+});
+
+test("a frame with no detected pose reports no poses", async () => {
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => fakeWorker(),
+		createImageBitmap: async () => ({ close() {} }),
+	});
+
+	assert.deepEqual(await detector.estimatePoses(bitmapVideo), []);
+});
+
+test("worker timestamps never repeat or go backwards", async () => {
+	const seen = [];
+	let clock = 100;
+	const detector = await createWorkerPoseDetector({
+		createWorker: () =>
+			fakeWorker({
+				onDetect: (payload) => {
+					seen.push(payload.timestamp);
+					return { landmarks: [], worldLandmarks: [] };
+				},
+			}),
+		createImageBitmap: async () => ({ close() {} }),
+		now: () => clock,
+	});
+
+	await detector.estimatePoses(bitmapVideo);
+	clock = 100;
+	await detector.estimatePoses(bitmapVideo);
+	clock = 40;
+	await detector.estimatePoses(bitmapVideo);
+
+	assert.deepEqual(
+		seen,
+		seen.slice().sort((a, b) => a - b),
+	);
+	assert.equal(new Set(seen).size, seen.length);
+});
+
+test("a failed worker initialization rejects instead of returning a detector", async () => {
+	await assert.rejects(
+		createWorkerPoseDetector({
+			createWorker: () => fakeWorker({ failInit: true }),
+			createImageBitmap: async () => ({ close() {} }),
+		}),
+		/no gpu/,
+	);
+});
+
+test("disposing terminates the worker", async () => {
+	const worker = fakeWorker();
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => worker,
+		createImageBitmap: async () => ({ close() {} }),
+	});
+
+	detector.dispose();
+
+	assert.equal(worker.terminated, true);
 });

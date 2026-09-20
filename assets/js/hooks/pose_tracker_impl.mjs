@@ -1,4 +1,5 @@
 import { createBlazePoseDetector } from "./blazepose_detector.mjs";
+import { createWorkerPoseDetector } from "./pose_worker_detector.mjs";
 import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
 import {
@@ -71,8 +72,18 @@ export function requestPreferredCameraStream(mediaDevices) {
 }
 
 export function createPoseTracker(hook, runtime = {}) {
+	// Inference runs in a worker so it cannot block the animation frame that
+	// drives the workout fill. A browser that cannot start the worker falls
+	// back to the main-thread detector rather than losing tracking.
 	const createDetector =
-		runtime.createBlazePoseDetector || createBlazePoseDetector;
+		runtime.createBlazePoseDetector ||
+		(async () => {
+			try {
+				return await createWorkerPoseDetector();
+			} catch (_error) {
+				return createBlazePoseDetector();
+			}
+		});
 	const mediaDevices = runtime.mediaDevices || navigator.mediaDevices;
 	const now = runtime.now || (() => performance.now());
 	const requestFrame =

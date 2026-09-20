@@ -95,18 +95,21 @@ defmodule BurpeeTrainer.MixProject do
       ],
       "assets.pose": ["cmd scripts/prepare_pose_assets.sh"],
       "assets.fixture": ["esbuild burpee_trainer_fixture"],
+      "assets.worker": ["esbuild burpee_trainer_pose_worker"],
       "assets.build": [
         "compile",
         "tailwind burpee_trainer",
         "assets.fonts",
         "assets.pose",
-        "esbuild burpee_trainer"
+        "esbuild burpee_trainer",
+        "assets.worker"
       ],
       "assets.deploy": [
         "tailwind burpee_trainer --minify",
         "assets.fonts",
         "assets.pose",
         "esbuild burpee_trainer --minify",
+        "esbuild burpee_trainer_pose_worker --minify",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
