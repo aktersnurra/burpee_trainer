@@ -9,6 +9,8 @@ const RESOLUTION_TAGS = [
   "hot",
 ];
 
+const REPORT_REPLY_TIMEOUT_MS = 15_000;
+
 const SessionRecoveryHook = {
   mounted() {
     this.clientSessionId = this.el.dataset.clientSessionId;
@@ -185,9 +187,23 @@ const SessionRecoveryHook = {
     );
   },
 
+  // A dropped socket means the reply callback may never fire. Without a
+  // deadline the caller's await never settles, stranding the submit guard and
+  // wedging the form until reload.
   pushEventReply(name, payload) {
+    const timeoutMs = this.reportReplyTimeoutMs ?? REPORT_REPLY_TIMEOUT_MS;
+
     return new Promise((resolve) => {
-      this.pushEvent(name, payload, resolve);
+      let settled = false;
+      const settle = (reply) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(reply);
+      };
+
+      const timer = setTimeout(() => settle(null), timeoutMs);
+      this.pushEvent(name, payload, settle);
     });
   },
 

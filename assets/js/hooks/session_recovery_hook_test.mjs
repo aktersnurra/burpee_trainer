@@ -434,3 +434,16 @@ test("failed trace acknowledgement retains recovery data for a report replay", a
   ]);
   assert.deepEqual(navigations, ["/stats"]);
 });
+
+test("a report push that never replies releases the submit guard", async () => {
+  const { hook } = mountedHook({ localDraft: null });
+  // The server never invokes the reply callback, as when the socket drops
+  // mid-push. Without a timeout the await never settles and `reporting`
+  // stays true, wedging the form until reload.
+  hook.pushEvent = () => {};
+  hook.reportReplyTimeoutMs = 10;
+
+  await hook.submitReport();
+
+  assert.equal(hook.reporting, false);
+});

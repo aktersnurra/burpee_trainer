@@ -62,6 +62,19 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc """
+  Fetch a source plan by id for a user, or `nil` when it does not exist or
+  belongs to a different user.
+  """
+  @spec get_plan(User.t(), integer) :: WorkoutPlan.t() | nil
+  def get_plan(%User{id: user_id}, id) do
+    Repo.one(
+      from(plan in WorkoutPlan,
+        where: plan.id == ^id and plan.user_id == ^user_id
+      )
+    )
+  end
+
+  @doc """
   Return a blank changeset for a new plan, suitable for rendering a
   create form.
   """

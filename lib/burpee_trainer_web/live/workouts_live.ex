@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
   alias BurpeeTrainer.{Levels, WeeklyTrainingContract, Workouts}
   alias BurpeeTrainer.WorkoutFeed
   alias BurpeeTrainer.WorkoutFeed.WorkoutItem
-  alias BurpeeTrainerWeb.{Fmt, Layouts}
+  alias BurpeeTrainerWeb.{Fmt, Layouts, Params}
 
   @source_values ~w(mine videos)
   @burpee_type_values ~w(six_count navy_seal)
@@ -67,8 +67,38 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
   end
 
   def handle_event("duplicate", %{"id" => id}, socket) do
-    plan = Workouts.get_plan!(socket.assigns.current_user, String.to_integer(id))
+    with {:ok, plan} <- fetch_own_plan(socket, id) do
+      duplicate_own_plan(socket, plan)
+    else
+      :error -> {:noreply, put_flash(socket, :error, "Could not duplicate plan.")}
+    end
+  end
 
+  def handle_event("delete", %{"id" => id}, socket) do
+    with {:ok, plan} <- fetch_own_plan(socket, id) do
+      delete_own_plan(socket, plan)
+    else
+      :error -> {:noreply, put_flash(socket, :error, "Could not delete plan.")}
+    end
+  end
+
+  defp delete_own_plan(socket, plan) do
+    case Workouts.delete_plan(plan) do
+      {:ok, _} ->
+        items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Plan deleted.")
+         |> assign(:items, items)
+         |> assign(:open_menu_id, nil)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not delete plan.")}
+    end
+  end
+
+  defp duplicate_own_plan(socket, plan) do
     case Workouts.duplicate_plan(plan) do
       {:ok, _copy} ->
         items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
@@ -84,21 +114,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     end
   end
 
-  def handle_event("delete", %{"id" => id}, socket) do
-    plan = Workouts.get_plan!(socket.assigns.current_user, String.to_integer(id))
-
-    case Workouts.delete_plan(plan) do
-      {:ok, _} ->
-        items = WorkoutFeed.list(socket.assigns.current_user, socket.assigns.filters)
-
-        {:noreply,
-         socket
-         |> put_flash(:info, "Plan deleted.")
-         |> assign(:items, items)
-         |> assign(:open_menu_id, nil)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not delete plan.")}
+  # An id from the client may be malformed, or name a plan owned by somebody
+  # else. get_plan!/2 raises in both cases, which would kill the view.
+  defp fetch_own_plan(socket, id) do
+    with {:ok, plan_id} <- Params.index(id),
+         plan when not is_nil(plan) <-
+           Workouts.get_plan(socket.assigns.current_user, plan_id) do
+      {:ok, plan}
+    else
+      _ -> :error
     end
   end
 

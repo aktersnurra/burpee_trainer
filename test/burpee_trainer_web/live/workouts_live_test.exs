@@ -22,6 +22,27 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     end
   end
 
+  test "a malformed plan id does not crash the view", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/workouts")
+
+    for event <- ["duplicate", "delete"] do
+      render_click(view, event, %{"id" => "not_a_number"})
+      assert render(view), "#{event} killed the view"
+    end
+  end
+
+  test "a plan id belonging to another user does not crash the view", %{conn: conn} do
+    other = user_fixture()
+    plan = plan_fixture(other)
+
+    {:ok, view, _html} = live(conn, ~p"/workouts")
+
+    for event <- ["duplicate", "delete"] do
+      render_click(view, event, %{"id" => to_string(plan.id)})
+      assert render(view), "#{event} killed the view"
+    end
+  end
+
   test "a known filter value still applies", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/workouts")
 
