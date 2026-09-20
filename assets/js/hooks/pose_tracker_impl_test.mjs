@@ -884,3 +884,43 @@ test("suspending skips scheduled pose work and resume resets temporal sampling",
 	await animationFrames.shift()();
 	assert.equal(samples, 2);
 });
+
+test("a pose worker that cannot start fails the camera instead of falling back", async () => {
+	const tracker = new FakeElement();
+	const video = {
+		id: "pose-tracker-preview",
+		videoWidth: 640,
+		videoHeight: 480,
+		play: async () => {},
+	};
+	const canvas = {
+		id: "pose-tracker-canvas",
+		getBoundingClientRect: () => ({ width: 320, height: 240 }),
+		getContext: () => ({ setTransform() {} }),
+	};
+	tracker.append(video, canvas);
+	const failures = [];
+	tracker.addEventListener("pose-tracker:start-failed", (event) =>
+		failures.push(event.detail),
+	);
+
+	const impl = createPoseTracker(
+		{ el: tracker },
+		{
+			createBlazePoseDetector: async () => {
+				throw new Error("pose worker unavailable");
+			},
+			mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) },
+			waitForVideoFrame: async () => video,
+			webglAvailable: () => true,
+			requestAnimationFrame: () => 1,
+			cancelAnimationFrame() {},
+		},
+	);
+
+	await impl.mounted();
+	await impl.start();
+
+	assert.equal(failures.length, 1);
+	assert.match(failures[0].reason, /pose worker unavailable/);
+});

@@ -1,4 +1,3 @@
-import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { createWorkerPoseDetector } from "./pose_worker_detector.mjs";
 import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
@@ -72,24 +71,11 @@ export function requestPreferredCameraStream(mediaDevices) {
 }
 
 export function createPoseTracker(hook, runtime = {}) {
-	// Inference runs in a worker so it cannot block the animation frame that
-	// drives the workout fill. A browser that cannot start the worker falls
-	// back to the main-thread detector rather than losing tracking.
+	// Inference only ever runs in the worker. On the main thread it blocks the
+	// animation frame driving the workout fill, so a worker that will not start
+	// fails the camera outright rather than quietly degrading the session.
 	const createDetector =
-		runtime.createBlazePoseDetector ||
-		(async () => {
-			try {
-				const detector = await createWorkerPoseDetector();
-				hook.el.dataset.poseInference = "worker";
-				return detector;
-			} catch (error) {
-				// Main-thread inference blocks the animation frame, so a silent
-				// fallback looks identical to a slow device. Record why.
-				hook.el.dataset.poseInference = "main-thread";
-				hook.el.dataset.poseWorkerError = error?.message || "worker unavailable";
-				return createBlazePoseDetector();
-			}
-		});
+		runtime.createBlazePoseDetector || createWorkerPoseDetector;
 	const mediaDevices = runtime.mediaDevices || navigator.mediaDevices;
 	const now = runtime.now || (() => performance.now());
 	const requestFrame =
