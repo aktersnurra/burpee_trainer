@@ -5,6 +5,25 @@ const POSE_MODEL_PATH = "/models/mediapipe_pose/pose_landmarker_full.task";
 
 const POSE_WORKER_PATH = "/assets/js/pose_worker.js";
 
+// BlazePose works from a 256x256 crop, so copying a full camera frame each
+// tick is wasted main-thread work. Landmarks come back normalised and are
+// scaled against the video element, so the smaller bitmap does not move them.
+const MAX_FRAME_WIDTH = 640;
+
+function frameSize(video) {
+	const width = video?.videoWidth || video?.width || 0;
+	const height = video?.videoHeight || video?.height || 0;
+	if (width <= 0 || height <= 0 || width <= MAX_FRAME_WIDTH) {
+		return { resizeWidth: width, resizeHeight: height, resizeQuality: "low" };
+	}
+
+	return {
+		resizeWidth: MAX_FRAME_WIDTH,
+		resizeHeight: Math.round((height / width) * MAX_FRAME_WIDTH),
+		resizeQuality: "low",
+	};
+}
+
 function createDefaultWorker() {
 	return new Worker(POSE_WORKER_PATH, { type: "module" });
 }
@@ -69,7 +88,7 @@ export async function createWorkerPoseDetector(runtime = {}) {
 			const timestamp = Math.max(now(), lastTimestamp + 1);
 			lastTimestamp = timestamp;
 
-			const bitmap = await grabFrame(video);
+			const bitmap = await grabFrame(video, frameSize(video));
 			const result = await send("detect", { bitmap, timestamp }, [bitmap]);
 			const landmarks = result?.landmarks;
 			if (!landmarks?.length) return [];

@@ -79,8 +79,14 @@ export function createPoseTracker(hook, runtime = {}) {
 		runtime.createBlazePoseDetector ||
 		(async () => {
 			try {
-				return await createWorkerPoseDetector();
-			} catch (_error) {
+				const detector = await createWorkerPoseDetector();
+				hook.el.dataset.poseInference = "worker";
+				return detector;
+			} catch (error) {
+				// Main-thread inference blocks the animation frame, so a silent
+				// fallback looks identical to a slow device. Record why.
+				hook.el.dataset.poseInference = "main-thread";
+				hook.el.dataset.poseWorkerError = error?.message || "worker unavailable";
 				return createBlazePoseDetector();
 			}
 		});

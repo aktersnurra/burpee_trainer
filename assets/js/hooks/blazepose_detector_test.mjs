@@ -351,3 +351,41 @@ test("disposing rejects a frame still in flight", async () => {
 
 	await assert.rejects(inFlight);
 });
+
+test("frames are downscaled before transfer to cut main-thread copy cost", async () => {
+	const requested = [];
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => fakeWorker(),
+		createImageBitmap: async (_video, options) => {
+			requested.push(options);
+			return { close() {} };
+		},
+	});
+
+	await detector.estimatePoses({ videoWidth: 1280, videoHeight: 720 });
+
+	const [options] = requested;
+	assert.ok(options, "expected resize options to be passed");
+	assert.equal(options.resizeWidth <= 640, true);
+	assert.equal(
+		Math.round((options.resizeWidth / options.resizeHeight) * 100),
+		Math.round((1280 / 720) * 100),
+		"aspect ratio must be preserved so landmark scaling stays correct",
+	);
+});
+
+test("a frame smaller than the cap is not upscaled", async () => {
+	const requested = [];
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => fakeWorker(),
+		createImageBitmap: async (_video, options) => {
+			requested.push(options);
+			return { close() {} };
+		},
+	});
+
+	await detector.estimatePoses({ videoWidth: 320, videoHeight: 240 });
+
+	assert.equal(requested[0].resizeWidth, 320);
+	assert.equal(requested[0].resizeHeight, 240);
+});
