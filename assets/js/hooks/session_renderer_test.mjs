@@ -835,3 +835,45 @@ test("a repeated rest count is restored after the rest clock overwrites it", () 
 	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
 	assert.equal(elements["#count"].textContent, "18");
 });
+
+test("pausing and resuming restores a repeated work rep count", () => {
+	const { renderer, elements } = harness();
+
+	renderer.updateCurrentSetRepCount(6);
+	assert.equal(elements["#count"].textContent, "6");
+
+	renderer.updatePauseButton(true);
+	assert.equal(elements["#count"].style.visibility, "hidden");
+
+	renderer.updatePauseButton(false);
+	renderer.updateCurrentSetRepCount(6);
+	assert.equal(elements["#count"].style.visibility, "");
+	assert.equal(elements["#count"].textContent, "6");
+});
+
+test("a repeated rest count is restored after entering the count-in phase", () => {
+	const { renderer, elements } = harness();
+
+	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
+	assert.equal(elements["#count"].textContent, "18");
+
+	renderer.enterCountInPhase();
+	renderer.renderRestProgress(9);
+	assert.equal(elements["#count"].textContent, "9");
+
+	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
+	assert.equal(elements["#count"].textContent, "18");
+});
+
+test("a repeated work rep count is restored after a ready reset", () => {
+	const { renderer, elements } = harness();
+
+	renderer.updateCurrentSetRepCount(4);
+	assert.equal(elements["#count"].textContent, "4");
+
+	renderer.resetReady();
+	assert.equal(elements["#count"].textContent, "—");
+
+	renderer.updateCurrentSetRepCount(4);
+	assert.equal(elements["#count"].textContent, "4");
+});

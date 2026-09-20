@@ -72,15 +72,32 @@ export class SessionRenderer {
 		node.style[property] = value;
 	}
 
-	clearCountdown() {
+	// Sole writer of #count. Owns every cache key for that element so callers
+	// cannot leave the cache disagreeing with what is on screen. `identity`
+	// names the fast path a caller may later short-circuit on ("restCount" or
+	// "currentSetRep"); the other identity is always invalidated.
+	writeCount({ text, visibility = "", color = "", identity = null } = {}) {
 		const count = this.node("#count");
-		this.rendered.currentSetRep = undefined;
+		if (!count) return;
+
 		this.rendered.restCount = undefined;
 		this.rendered.restCountVisibility = undefined;
-		this.rendered.countVisibility = undefined;
-		this.rendered.countColor = undefined;
-		this.setText(count, "—", "countText");
-		this.setStyle(count, "color", "", "countColor");
+		this.rendered.currentSetRep = undefined;
+
+		if (text !== undefined) this.setText(count, text, "countText");
+		this.setStyle(count, "visibility", visibility, "countVisibility");
+		this.setStyle(count, "color", color, "countColor");
+
+		if (identity === "restCount") {
+			this.rendered.restCount = this.rendered.countText;
+			this.rendered.restCountVisibility = visibility;
+		} else if (identity === "currentSetRep") {
+			this.rendered.currentSetRep = this.rendered.countText;
+		}
+	}
+
+	clearCountdown() {
+		this.writeCount({ text: "—" });
 	}
 
 	clearTimers() {
@@ -462,7 +479,7 @@ export class SessionRenderer {
 	updatePauseButton(paused) {
 		this.paused = paused;
 		const pauseIcon = this.root.querySelector("#pause-icon");
-		const countEl = this.root.querySelector("#count");
+		const countEl = this.node("#count");
 		const downEl = this.root.querySelector("#down-word");
 		const ringContainer = this.root.querySelector("#ring-container");
 		const surface = this.root.querySelector("#session-runner-client");
@@ -475,7 +492,7 @@ export class SessionRenderer {
 			this.clearTimers();
 			if (countEl) {
 				countEl.classList.remove("is-down-cue", "countdown-pop");
-				countEl.style.visibility = "hidden";
+				this.writeCount({ visibility: "hidden" });
 			}
 			if (downEl) downEl.style.display = "none";
 			if (pauseIcon) pauseIcon.style.display = "";
@@ -491,7 +508,7 @@ export class SessionRenderer {
 			if (totalSeparator) totalSeparator.hidden = true;
 			if (totalPlan) totalPlan.hidden = true;
 			surface?.classList.remove("is-paused");
-			if (countEl) countEl.style.visibility = "";
+			if (countEl) this.writeCount({});
 			this.updateSetProgress(this.currentSetProgress);
 		}
 
@@ -511,7 +528,7 @@ export class SessionRenderer {
 		this.lastPulseValue = null;
 		this.currentSetProgress = null;
 		this.updateSetProgress(null);
-		const countEl = this.root.querySelector("#count");
+		const countEl = this.node("#count");
 		if (countEl) {
 			countEl.classList.remove(
 				"is-down-cue",
@@ -521,9 +538,7 @@ export class SessionRenderer {
 				"is-countdown-dots",
 				"countdown-pop",
 			);
-			countEl.textContent = "—";
-			countEl.style.visibility = "";
-			countEl.style.color = "";
+			this.writeCount({ text: "—" });
 		}
 		const downEl = this.root.querySelector("#down-word");
 		if (downEl) downEl.style.display = "none";
@@ -593,7 +608,7 @@ export class SessionRenderer {
 		this.updateWorkFill(0);
 		this.updateSetProgress(null);
 		this.lastPulseValue = null;
-		const countEl = this.root.querySelector("#count");
+		const countEl = this.node("#count");
 		if (countEl) {
 			countEl.classList.remove(
 				"is-down-cue",
@@ -601,8 +616,7 @@ export class SessionRenderer {
 				"is-count-long",
 				"countdown-pop",
 			);
-			countEl.style.color = "";
-			countEl.style.visibility = "";
+			this.writeCount({});
 		}
 	}
 
@@ -632,11 +646,7 @@ export class SessionRenderer {
 			"is-countdown-dots",
 			"countdown-pop",
 		);
-		this.rendered.currentSetRep = undefined;
-		this.rendered.restCount = text;
-		this.rendered.restCountVisibility = visibility;
-		this.setText(count, text, "countText");
-		this.setStyle(count, "visibility", visibility, "countVisibility");
+		this.writeCount({ text, visibility, identity: "restCount" });
 		this.lastPulseValue = null;
 	}
 
@@ -661,12 +671,7 @@ export class SessionRenderer {
 				"is-count-long",
 				"is-countdown-dots",
 			);
-			this.rendered.currentSetRep = undefined;
-			this.rendered.restCount = undefined;
-			this.rendered.restCountVisibility = undefined;
-			this.setStyle(countEl, "visibility", "", "countVisibility");
-			this.setText(countEl, timeText, "countText");
-			this.setStyle(countEl, "color", "", "countColor");
+			this.writeCount({ text: timeText });
 		}
 		const downEl = this.root.querySelector("#down-word");
 		if (downEl) downEl.style.display = "none";
@@ -674,7 +679,7 @@ export class SessionRenderer {
 
 	triggerDown(repsLeft) {
 		this.clearTimers();
-		const countEl = this.root.querySelector("#count");
+		const countEl = this.node("#count");
 		const downEl = this.root.querySelector("#down-word");
 		if (!countEl) return;
 
@@ -689,12 +694,7 @@ export class SessionRenderer {
 			"is-countdown-dots",
 		);
 		countEl.classList.add("is-down-cue");
-		this.rendered.currentSetRep = undefined;
-		this.rendered.restCount = undefined;
-		this.rendered.restCountVisibility = undefined;
-		this.setText(countEl, "DOWN", "countText");
-		this.setStyle(countEl, "color", "", "countColor");
-		this.setStyle(countEl, "visibility", "", "countVisibility");
+		this.writeCount({ text: "DOWN" });
 		countEl.classList.remove("countdown-pop");
 		const reducedMotion = globalThis.matchMedia?.(
 			"(prefers-reduced-motion: reduce)",
@@ -749,12 +749,8 @@ export class SessionRenderer {
 			"is-countdown-dots",
 			"countdown-pop",
 		);
-		this.rendered.restCount = undefined;
-		this.rendered.currentSetRep = text;
 		this.setCountLengthClass(countEl, text);
-		this.setText(countEl, text, "countText");
-		this.setStyle(countEl, "color", "", "countColor");
-		this.setStyle(countEl, "visibility", visibility, "countVisibility");
+		this.writeCount({ text, visibility, identity: "currentSetRep" });
 		this.lastDisplayed = repsLeft;
 	}
 
