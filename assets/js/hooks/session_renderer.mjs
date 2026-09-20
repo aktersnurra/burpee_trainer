@@ -651,7 +651,7 @@ export class SessionRenderer {
 	}
 
 	renderRestProgress(timeLeftSec) {
-		const countEl = this.root.querySelector("#count");
+		const countEl = this.node("#count");
 		if (countEl) {
 			const timeText = this.formatClock(timeLeftSec);
 			countEl.classList.remove(
@@ -661,9 +661,12 @@ export class SessionRenderer {
 				"is-count-long",
 				"is-countdown-dots",
 			);
-			countEl.style.visibility = "";
-			countEl.textContent = timeText;
-			countEl.style.color = "";
+			this.rendered.currentSetRep = undefined;
+			this.rendered.restCount = undefined;
+			this.rendered.restCountVisibility = undefined;
+			this.setStyle(countEl, "visibility", "", "countVisibility");
+			this.setText(countEl, timeText, "countText");
+			this.setStyle(countEl, "color", "", "countColor");
 		}
 		const downEl = this.root.querySelector("#down-word");
 		if (downEl) downEl.style.display = "none";

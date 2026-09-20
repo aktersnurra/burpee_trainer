@@ -822,3 +822,16 @@ test("structured Save errors reuse stable field and global targets", () => {
 		false,
 	);
 });
+
+test("a repeated rest count is restored after the rest clock overwrites it", () => {
+	const { renderer, elements } = harness();
+
+	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
+	assert.equal(elements["#count"].textContent, "18");
+
+	renderer.renderRestProgress(12);
+	assert.equal(elements["#count"].textContent, "12");
+
+	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
+	assert.equal(elements["#count"].textContent, "18");
+});
