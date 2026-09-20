@@ -6,6 +6,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
   alias BurpeeTrainer.WorkoutFeed.WorkoutItem
   alias BurpeeTrainerWeb.{Fmt, Layouts}
 
+  @source_values ~w(mine videos)
+  @burpee_type_values ~w(six_count navy_seal)
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok, assign(socket, filters: %{}, items: [], open_menu_id: nil, available_levels: [])}
@@ -43,18 +46,15 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   @impl true
   def handle_event("toggle_filter", %{"source" => val}, socket) do
-    filters = toggle_filter(socket.assigns.filters, :source, String.to_existing_atom(val))
-    {:noreply, push_patch(socket, to: build_path(filters))}
+    apply_filter_toggle(socket, :source, val, @source_values)
   end
 
   def handle_event("toggle_filter", %{"burpee_type" => val}, socket) do
-    filters = toggle_filter(socket.assigns.filters, :burpee_type, String.to_existing_atom(val))
-    {:noreply, push_patch(socket, to: build_path(filters))}
+    apply_filter_toggle(socket, :burpee_type, val, @burpee_type_values)
   end
 
   def handle_event("toggle_filter", %{"level" => val}, socket) do
-    filters = toggle_filter(socket.assigns.filters, :level, String.to_existing_atom(val))
-    {:noreply, push_patch(socket, to: build_path(filters))}
+    apply_filter_toggle(socket, :level, val, level_values())
   end
 
   def handle_event("toggle_menu", %{"id" => id}, socket) do
@@ -102,6 +102,17 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
     end
   end
 
+  # Client events are untrusted, so a value outside the known set is ignored
+  # rather than converted to an atom, which would raise and kill the view.
+  defp apply_filter_toggle(socket, key, value, allowed) do
+    if value in allowed do
+      filters = toggle_filter(socket.assigns.filters, key, String.to_existing_atom(value))
+      {:noreply, push_patch(socket, to: build_path(filters))}
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp toggle_filter(filters, key, value) do
     if Map.get(filters, key) == value,
       do: Map.delete(filters, key),
@@ -110,10 +121,12 @@ defmodule BurpeeTrainerWeb.WorkoutsLive do
 
   defp decode_filters(params) do
     %{}
-    |> maybe_put(:source, params["source"], ~w(mine videos))
-    |> maybe_put(:burpee_type, params["burpee_type"], ~w(six_count navy_seal))
-    |> maybe_put(:level, params["level"], Enum.map(Levels.all_levels(), &Atom.to_string/1))
+    |> maybe_put(:source, params["source"], @source_values)
+    |> maybe_put(:burpee_type, params["burpee_type"], @burpee_type_values)
+    |> maybe_put(:level, params["level"], level_values())
   end
+
+  defp level_values, do: Enum.map(Levels.all_levels(), &Atom.to_string/1)
 
   defp maybe_put(map, _key, nil, _valid), do: map
 
