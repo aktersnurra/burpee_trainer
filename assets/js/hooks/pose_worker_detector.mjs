@@ -6,23 +6,27 @@ const POSE_MODEL_PATH = "/models/mediapipe_pose/pose_landmarker_full.task";
 const POSE_WORKER_PATH = "/assets/js/pose_worker.js";
 
 // The bundled models take fixed square inputs -- pose_detector.tflite is
-// 224x224 and pose_landmarks_detector.tflite is 256x256 -- and MediaPipe fits
-// the frame's short side to that square. Detail below the larger of the two is
-// discarded before inference, so transferring more is wasted copy work.
+// 224x224 and pose_landmarks_detector.tflite is 256x256 -- but the landmark
+// model does NOT see the whole frame. AlignmentPointsRectsCalculator crops an
+// ROI around the tracked person and scales THAT to 256, so effective detail is
+// 256px across the body, not across the frame. Capping the frame at 256 would
+// hand the model an upscaled crop whenever the person does not fill it.
 //
-// The cap is on the SHORT side, not the width: a portrait camera frame capped
-// by width stays nearly full size on its long side.
-const MODEL_INPUT_PX = 256;
+// 512 on the short side keeps a person filling half the frame at roughly the
+// model's native input, while still cutting the per-frame copy substantially.
+// The cap is on the SHORT side, not the width: a portrait frame capped by
+// width stays nearly full size on its long side.
+const MIN_SHORT_SIDE_PX = 512;
 
 function frameSize(video) {
 	const width = video?.videoWidth || video?.width || 0;
 	const height = video?.videoHeight || video?.height || 0;
 	const shortSide = Math.min(width, height);
-	if (shortSide <= 0 || shortSide <= MODEL_INPUT_PX) {
+	if (shortSide <= 0 || shortSide <= MIN_SHORT_SIDE_PX) {
 		return { resizeWidth: width, resizeHeight: height, resizeQuality: "low" };
 	}
 
-	const scale = MODEL_INPUT_PX / shortSide;
+	const scale = MIN_SHORT_SIDE_PX / shortSide;
 	return {
 		resizeWidth: Math.round(width * scale),
 		resizeHeight: Math.round(height * scale),

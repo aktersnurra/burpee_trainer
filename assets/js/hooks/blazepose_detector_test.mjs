@@ -352,6 +352,27 @@ test("disposing rejects a frame still in flight", async () => {
 	await assert.rejects(inFlight);
 });
 
+test("the short-side cap leaves headroom for the cropped pose ROI", async () => {
+	const requested = [];
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => fakeWorker(),
+		createImageBitmap: async (_video, options) => {
+			requested.push(options);
+			return { close() {} };
+		},
+	});
+
+	await detector.estimatePoses({ videoWidth: 1080, videoHeight: 1920 });
+
+	// The landmark model runs on a crop around the person, not the whole
+	// frame, so the short side must stay well above the 256px model input or
+	// a person filling part of the frame gets upscaled detail.
+	assert.equal(
+		Math.min(requested[0].resizeWidth, requested[0].resizeHeight) >= 512,
+		true,
+	);
+});
+
 test("portrait frames are capped on their short side, not their width", async () => {
 	const requested = [];
 	const detector = await createWorkerPoseDetector({
@@ -366,11 +387,7 @@ test("portrait frames are capped on their short side, not their width", async ()
 	await detector.estimatePoses({ videoWidth: 720, videoHeight: 1280 });
 
 	const [options] = requested;
-	assert.equal(
-		Math.min(options.resizeWidth, options.resizeHeight),
-		256,
-		"the short side must land on the model input size",
-	);
+	assert.equal(Math.min(options.resizeWidth, options.resizeHeight), 512);
 	assert.equal(
 		Math.round((options.resizeWidth / options.resizeHeight) * 1000),
 		Math.round((720 / 1280) * 1000),
@@ -392,7 +409,7 @@ test("frames are downscaled before transfer to cut main-thread copy cost", async
 
 	const [options] = requested;
 	assert.ok(options, "expected resize options to be passed");
-	assert.equal(Math.min(options.resizeWidth, options.resizeHeight), 256);
+	assert.equal(Math.min(options.resizeWidth, options.resizeHeight), 512);
 	assert.equal(
 		Math.round((options.resizeWidth / options.resizeHeight) * 100),
 		Math.round((1280 / 720) * 100),
