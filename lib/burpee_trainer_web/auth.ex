@@ -33,14 +33,17 @@ defmodule BurpeeTrainerWeb.Auth do
   end
 
   @doc """
-  Plug that requires an authenticated user. Redirects to `/login` with a
-  flash if no user is present.
+  Plug that requires an authenticated user, redirecting to `/login` when no
+  user is present.
+
+  No flash: opening the app logged out is the ordinary first visit, and the
+  login page already says what to do. An error toast there reads as a
+  failure when nothing has gone wrong.
   """
   def require_authenticated_user(conn, _opts) do
     case conn.assigns[:current_user] do
       nil ->
         conn
-        |> put_flash(:error, "You must log in to continue.")
         |> redirect(to: ~p"/login")
         |> halt()
 
@@ -103,12 +106,7 @@ defmodule BurpeeTrainerWeb.Auth do
 
     case user do
       nil ->
-        socket =
-          socket
-          |> Phoenix.LiveView.put_flash(:error, "You must log in to continue.")
-          |> Phoenix.LiveView.redirect(to: ~p"/login")
-
-        {:halt, socket}
+        {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/login")}
 
       _ ->
         level = user |> Workouts.list_sessions() |> Levels.current_level()
