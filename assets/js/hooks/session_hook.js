@@ -248,13 +248,15 @@ const SessionHook = {
 			if (tag !== undefined) this.toggleCompletionTag(tag);
 			if (
 				abort &&
-				window.confirm(abort.dataset.confirm || "Abort this session?")
+				window.confirm(abort.dataset.confirmMessage || "Abort this session?")
 			) {
 				this.discardSessionLocally();
 			}
 			if (
 				discard &&
-				window.confirm(discard.dataset.confirm || "Discard this session?")
+				window.confirm(
+					discard.dataset.confirmMessage || "Discard this session?",
+				)
 			) {
 				this.discardSessionLocally();
 			}

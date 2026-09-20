@@ -459,3 +459,25 @@ test("numeric count-in and active values retain approved ink", () => {
 	assert.doesNotMatch(css, /\.countdown-dot/);
 	assert.doesNotMatch(renderer, /renderCountdownDots/);
 });
+
+test("hook-confirmed session actions do not also carry a LiveView data-confirm", () => {
+	// The session hook owns these confirmations. A data-confirm attribute would
+	// make LiveView prompt as well, so aborting or discarding would ask twice.
+	for (const id of ["session-abort-btn", "session-discard-btn"]) {
+		const button = sessionComponents.slice(
+			sessionComponents.indexOf(`id="${id}"`),
+		);
+		const markup = button.slice(0, button.indexOf(">"));
+
+		assert.equal(
+			/data-confirm=/.test(markup),
+			false,
+			`${id} must not carry data-confirm`,
+		);
+		assert.match(
+			markup,
+			/data-confirm-message=/,
+			`${id} must supply its message as data-confirm-message`,
+		);
+	}
+});

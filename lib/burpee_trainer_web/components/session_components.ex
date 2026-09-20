@@ -355,7 +355,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
                 id="session-abort-btn"
                 type="button"
                 disabled
-                data-confirm="Abort this session without saving?"
+                data-confirm-message="Abort this session without saving?"
                 class="px-6 py-3 text-base text-[var(--session-active-ink)]"
               >
                 Abort
@@ -511,7 +511,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           <button
             id="session-discard-btn"
             type="button"
-            data-confirm="Discard this session?"
+            data-confirm-message="Discard this session?"
             class="mx-auto mt-2 block min-h-11 px-6 py-3 text-sm text-[var(--session-muted)]"
           >
             Discard

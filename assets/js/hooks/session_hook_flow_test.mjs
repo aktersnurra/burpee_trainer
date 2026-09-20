@@ -297,7 +297,7 @@ function appendStablePanels(root) {
 			element.setAttribute("inert", "");
 		}
 		if (id === "session-discard-btn") {
-			element.dataset.confirm = "Discard this session?";
+			element.dataset.confirmMessage = "Discard this session?";
 		}
 		if (id === "workout_session_burpee_type") element.value = "six_count";
 		if (id.endsWith("-error") || id === "session-save-errors") {
