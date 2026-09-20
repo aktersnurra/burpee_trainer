@@ -3,32 +3,45 @@ set -eu
 
 ROOT_DIR="$(unset CDPATH && cd -- "$(dirname -- "$0")/.." && pwd)"
 MEDIAPIPE_DIR="$ROOT_DIR/priv/static/models/mediapipe_pose"
+WASM_DIR="$MEDIAPIPE_DIR/wasm"
+TASKS_DIR="$ROOT_DIR/assets/node_modules/@mediapipe/tasks-vision"
 
-mkdir -p "$MEDIAPIPE_DIR"
+MODEL_NAME="pose_landmarker_full.task"
+MODEL_URL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/$MODEL_NAME"
 
-copy_mediapipe() {
+mkdir -p "$WASM_DIR"
+
+copy_wasm() {
 	name="$1"
-	src="$ROOT_DIR/assets/node_modules/@mediapipe/pose/$name"
-	dest="$MEDIAPIPE_DIR/$name"
+	src="$TASKS_DIR/wasm/$name"
+	dest="$WASM_DIR/$name"
 
 	if [ ! -e "$src" ]; then
-		echo "ERROR: missing MediaPipe Pose asset $src; run mix assets.setup" >&2
+		echo "ERROR: missing MediaPipe tasks-vision asset $src; run mix assets.setup" >&2
 		exit 1
 	fi
 
-	echo "copy $name"
+	echo "copy wasm/$name"
 	cp "$src" "$dest"
 }
 
-copy_mediapipe pose.js
-copy_mediapipe pose_landmark_full.tflite
-copy_mediapipe pose_web.binarypb
-copy_mediapipe pose_solution_packed_assets_loader.js
-copy_mediapipe pose_solution_packed_assets.data
-copy_mediapipe pose_solution_simd_wasm_bin.js
-copy_mediapipe pose_solution_simd_wasm_bin.wasm
-copy_mediapipe pose_solution_simd_wasm_bin.data
-copy_mediapipe pose_solution_wasm_bin.js
-copy_mediapipe pose_solution_wasm_bin.wasm
+copy_wasm vision_wasm_internal.js
+copy_wasm vision_wasm_internal.wasm
+copy_wasm vision_wasm_nosimd_internal.js
+copy_wasm vision_wasm_nosimd_internal.wasm
+
+# The pose landmarker bundle is not published to npm, so fetch it once and keep
+# it cached in priv/static.
+if [ ! -e "$MEDIAPIPE_DIR/$MODEL_NAME" ]; then
+	echo "download $MODEL_NAME"
+	if ! curl -fsSL -o "$MEDIAPIPE_DIR/$MODEL_NAME.tmp" "$MODEL_URL"; then
+		rm -f "$MEDIAPIPE_DIR/$MODEL_NAME.tmp"
+		echo "ERROR: could not download $MODEL_URL" >&2
+		exit 1
+	fi
+	mv "$MEDIAPIPE_DIR/$MODEL_NAME.tmp" "$MEDIAPIPE_DIR/$MODEL_NAME"
+else
+	echo "cached $MODEL_NAME"
+fi
 
 echo "MediaPipe Pose assets ready in $MEDIAPIPE_DIR"

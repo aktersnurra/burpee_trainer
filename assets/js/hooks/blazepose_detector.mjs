@@ -1,8 +1,7 @@
-import mediapipePose from "@mediapipe/pose";
+import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
 
-const { Pose } = mediapipePose;
-
-const BLAZEPOSE_MODEL_PATH = "/models/mediapipe_pose";
+const POSE_WASM_PATH = "/models/mediapipe_pose/wasm";
+const POSE_MODEL_PATH = "/models/mediapipe_pose/pose_landmarker_full.task";
 
 const LANDMARK_NAMES = Object.freeze([
 	"nose",
@@ -40,35 +39,54 @@ const LANDMARK_NAMES = Object.freeze([
 	"right_foot_index",
 ]);
 
-export async function createBlazePoseDetector() {
-	let latestLandmarks = null;
-	const pose = new Pose({
-		locateFile: (file) => `${BLAZEPOSE_MODEL_PATH}/${file}`,
-	});
+async function createDefaultPoseLandmarker() {
+	const fileset = await FilesetResolver.forVisionTasks(POSE_WASM_PATH);
 
-	pose.setOptions({
-		modelComplexity: 1,
-		smoothLandmarks: true,
-		enableSegmentation: false,
-		smoothSegmentation: false,
-		minDetectionConfidence: 0.5,
+	return PoseLandmarker.createFromOptions(fileset, {
+		baseOptions: { modelAssetPath: POSE_MODEL_PATH, delegate: "GPU" },
+		runningMode: "VIDEO",
+		numPoses: 1,
+		minPoseDetectionConfidence: 0.5,
+		minPosePresenceConfidence: 0.5,
 		minTrackingConfidence: 0.5,
+		outputSegmentationMasks: false,
 	});
-	pose.onResults((results) => {
-		latestLandmarks = results || null;
-	});
-	await pose.initialize();
+}
+
+export async function createBlazePoseDetector(runtime = {}) {
+	const createLandmarker =
+		runtime.createPoseLandmarker || createDefaultPoseLandmarker;
+	const now = runtime.now || (() => performance.now());
+	const landmarker = await createLandmarker();
+	// detectForVideo rejects a timestamp that does not advance, so keep our own
+	// strictly increasing clock rather than trusting the caller's.
+	let lastTimestamp = -1;
 
 	return {
 		async estimatePoses(video) {
-			latestLandmarks = null;
-			await pose.send({ image: video });
-			if (!latestLandmarks?.poseLandmarks) return [];
-			return [poseFromBlazePoseResults(latestLandmarks, video)];
+			const timestamp = Math.max(now(), lastTimestamp + 1);
+			lastTimestamp = timestamp;
+			const result = landmarker.detectForVideo(video, timestamp);
+			const pose = poseFromPoseLandmarkerResult(result, video);
+			return pose ? [pose] : [];
 		},
 		dispose() {
-			pose.close();
+			landmarker.close();
 		},
+	};
+}
+
+export function poseFromPoseLandmarkerResult(result, video) {
+	const landmarks = result?.landmarks?.[0];
+	if (!landmarks?.length) return null;
+
+	return {
+		model: "blazepose-full",
+		keypoints: keypointsFromPoseLandmarks(
+			landmarks,
+			video,
+			result.worldLandmarks?.[0] || [],
+		),
 	};
 }
 
