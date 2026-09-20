@@ -32,6 +32,19 @@ export async function createWorkerPoseDetector(runtime = {}) {
 		else settle.reject(new Error(error || "pose worker failed"));
 	};
 
+	// A worker that dies must reject everything waiting on it. Leaving those
+	// promises pending would hang the sampling loop, and the tracker would stop
+	// reporting without ever raising a detector error.
+	const rejectPending = (reason) => {
+		const waiting = [...pending.values()];
+		pending.clear();
+		for (const settle of waiting) settle.reject(reason);
+	};
+
+	worker.onerror = (event) => {
+		rejectPending(new Error(event?.message || "pose worker crashed"));
+	};
+
 	const send = (type, payload, transfer) =>
 		new Promise((resolve, reject) => {
 			const id = ++nextId;
@@ -74,6 +87,7 @@ export async function createWorkerPoseDetector(runtime = {}) {
 		},
 		dispose() {
 			worker.terminate();
+			rejectPending(new Error("pose worker disposed"));
 		},
 	};
 }

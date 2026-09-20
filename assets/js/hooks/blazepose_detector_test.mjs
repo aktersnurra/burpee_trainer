@@ -311,3 +311,43 @@ test("disposing terminates the worker", async () => {
 
 	assert.equal(worker.terminated, true);
 });
+
+test("a worker error rejects the frame in flight instead of hanging", async () => {
+	const worker = fakeWorker({ onDetect: () => null });
+	worker.postMessage = (message) => {
+		if (message.type === "init") {
+			queueMicrotask(() =>
+				worker.onmessage?.({ data: { id: message.id, ok: true } }),
+			);
+			return;
+		}
+		queueMicrotask(() => worker.onerror?.(new Error("worker crashed")));
+	};
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => worker,
+		createImageBitmap: async () => ({ close() {} }),
+	});
+
+	await assert.rejects(detector.estimatePoses(bitmapVideo));
+});
+
+test("disposing rejects a frame still in flight", async () => {
+	const worker = fakeWorker();
+	worker.postMessage = (message) => {
+		if (message.type === "init") {
+			queueMicrotask(() =>
+				worker.onmessage?.({ data: { id: message.id, ok: true } }),
+			);
+		}
+	};
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => worker,
+		createImageBitmap: async () => ({ close() {} }),
+	});
+
+	const inFlight = detector.estimatePoses(bitmapVideo);
+	await Promise.resolve();
+	detector.dispose();
+
+	await assert.rejects(inFlight);
+});
