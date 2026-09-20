@@ -4,7 +4,9 @@ defmodule BurpeeTrainerWeb.StatsLive do
   alias BurpeeTrainer.{Goals, Levels, Scoring, Streak, Workouts}
   alias BurpeeTrainer.Stats.Series
   alias BurpeeTrainer.Streak.State
-  alias BurpeeTrainerWeb.Fmt
+  alias BurpeeTrainerWeb.{Fmt, Params}
+
+  @burpee_type_values ~w(six_count navy_seal)
 
   embed_templates("stats_live/*")
 
@@ -124,14 +126,19 @@ defmodule BurpeeTrainerWeb.StatsLive do
   end
 
   def handle_event("open_goal_modal", %{"type" => type_str}, socket) do
-    user = socket.assigns.current_user
-    burpee_type = String.to_existing_atom(type_str)
-    baseline = Workouts.last_session_for_type(user, burpee_type)
+    case Params.known_atom(type_str, @burpee_type_values) do
+      {:ok, burpee_type} ->
+        user = socket.assigns.current_user
+        baseline = Workouts.last_session_for_type(user, burpee_type)
 
-    {:noreply,
-     socket
-     |> assign(:goal_modal_type, burpee_type)
-     |> assign(:goal_baseline_session, baseline)}
+        {:noreply,
+         socket
+         |> assign(:goal_modal_type, burpee_type)
+         |> assign(:goal_baseline_session, baseline)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("close_goal_modal", _, socket) do

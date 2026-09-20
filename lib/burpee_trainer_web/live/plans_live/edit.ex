@@ -24,7 +24,7 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   alias BurpeeTrainer.PlanSolver.Input, as: PlanSolverInput
   alias BurpeeTrainer.PlanEditor.{Block, PlanStep, Set}
   alias BurpeeTrainer.Workouts.WorkoutPlan
-  alias BurpeeTrainerWeb.Fmt
+  alias BurpeeTrainerWeb.{Fmt, Params}
   alias BurpeeTrainerWeb.PlansLive.Edit.Presentation
 
   embed_templates("edit/*")
@@ -1945,11 +1945,16 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("toggle_block_menu", %{"index" => idx_str}, socket) do
-    idx = String.to_integer(idx_str)
-    open = if socket.assigns.editor.open_block_menu == idx, do: nil, else: idx
-    editor = %{socket.assigns.editor | open_block_menu: open}
+    case Params.index(idx_str) do
+      {:ok, idx} ->
+        open = if socket.assigns.editor.open_block_menu == idx, do: nil, else: idx
+        editor = %{socket.assigns.editor | open_block_menu: open}
 
-    {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, open)}
+        {:noreply, socket |> put_editor(editor) |> assign(:open_block_menu, open)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("close_block_menu", _, socket) do
@@ -1958,7 +1963,10 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("toggle_timeline_block", %{"row-index" => row_index}, socket) do
-    {:noreply, assign(socket, :expanded_timeline_row, String.to_integer(row_index))}
+    case Params.index(row_index) do
+      {:ok, row} -> {:noreply, assign(socket, :expanded_timeline_row, row)}
+      :error -> {:noreply, socket}
+    end
   end
 
   def handle_event("change_timeline_set", %{"set" => set_params}, socket) do
@@ -1980,16 +1988,21 @@ defmodule BurpeeTrainerWeb.PlansLive.Edit do
   end
 
   def handle_event("toggle_block_expand", %{"index" => idx_str}, socket) do
-    idx = String.to_integer(idx_str)
-    expanded = socket.assigns.editor.expanded_blocks
+    case Params.index(idx_str) do
+      {:ok, idx} ->
+        expanded = socket.assigns.editor.expanded_blocks
 
-    expanded =
-      if MapSet.member?(expanded, idx),
-        do: MapSet.delete(expanded, idx),
-        else: MapSet.put(expanded, idx)
+        expanded =
+          if MapSet.member?(expanded, idx),
+            do: MapSet.delete(expanded, idx),
+            else: MapSet.put(expanded, idx)
 
-    editor = %{socket.assigns.editor | expanded_blocks: expanded}
-    {:noreply, socket |> put_editor(editor) |> assign(:expanded_blocks, expanded)}
+        editor = %{socket.assigns.editor | expanded_blocks: expanded}
+        {:noreply, socket |> put_editor(editor) |> assign(:expanded_blocks, expanded)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("validate", %{"workout_plan" => params}, socket) do
