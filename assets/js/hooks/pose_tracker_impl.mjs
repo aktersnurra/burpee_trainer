@@ -1,3 +1,4 @@
+import { createBlazePoseDetector } from "./blazepose_detector.mjs";
 import { createWorkerPoseDetector } from "./pose_worker_detector.mjs";
 import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
@@ -71,11 +72,27 @@ export function requestPreferredCameraStream(mediaDevices) {
 }
 
 export function createPoseTracker(hook, runtime = {}) {
-	// Inference only ever runs in the worker. On the main thread it blocks the
-	// animation frame driving the workout fill, so a worker that will not start
-	// fails the camera outright rather than quietly degrading the session.
+	// Inference runs in a worker so it cannot block the animation frame that
+	// drives the workout fill. A device where the worker cannot start (module
+	// workers unsupported, GPU delegate unavailable off the main thread, the
+	// worker script failing to load) falls back to main-thread inference
+	// rather than losing the camera feature outright -- a session with a
+	// slower fill beats no session. The chosen path and any worker failure
+	// are recorded on the tracker element so a regression here stays visible
+	// instead of looking identical to a slow device.
 	const createDetector =
-		runtime.createBlazePoseDetector || createWorkerPoseDetector;
+		runtime.createBlazePoseDetector ||
+		(async () => {
+			try {
+				const detector = await createWorkerPoseDetector();
+				hook.el.dataset.poseInference = "worker";
+				return detector;
+			} catch (error) {
+				hook.el.dataset.poseInference = "main-thread";
+				hook.el.dataset.poseWorkerError = error?.message || "worker unavailable";
+				return createBlazePoseDetector();
+			}
+		});
 	const mediaDevices = runtime.mediaDevices || navigator.mediaDevices;
 	const now = runtime.now || (() => performance.now());
 	const requestFrame =
