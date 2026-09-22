@@ -885,7 +885,7 @@ test("suspending skips scheduled pose work and resume resets temporal sampling",
 	assert.equal(samples, 2);
 });
 
-test("a detector that cannot be created fails the camera with the underlying reason", async () => {
+test("a pose worker that cannot start fails the camera instead of falling back", async () => {
 	const tracker = new FakeElement();
 	const video = {
 		id: "pose-tracker-preview",
