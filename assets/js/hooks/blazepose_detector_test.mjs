@@ -180,7 +180,7 @@ test("timestamps passed to the landmarker never go backwards", async () => {
 	assert.equal(new Set(seen).size, seen.length);
 });
 
-function fakeWorker({ onDetect, failInit = false } = {}) {
+function fakeWorker({ onDetect, failInit = false, initDelegate } = {}) {
 	const worker = {
 		posted: [],
 		terminated: false,
@@ -193,7 +193,11 @@ function fakeWorker({ onDetect, failInit = false } = {}) {
 					worker.onmessage?.({
 						data: failInit
 							? { id, ok: false, error: "no gpu" }
-							: { id, ok: true },
+							: {
+									id,
+									ok: true,
+									result: { delegate: initDelegate || payload.delegate },
+								},
 					});
 					return;
 				}
@@ -288,6 +292,29 @@ test("worker timestamps never repeat or go backwards", async () => {
 		seen.slice().sort((a, b) => a - b),
 	);
 	assert.equal(new Set(seen).size, seen.length);
+});
+
+test("the worker is asked for the GPU delegate by default", async () => {
+	const worker = fakeWorker();
+	await createWorkerPoseDetector({
+		createWorker: () => worker,
+		createImageBitmap: async () => ({ close() {} }),
+	});
+
+	const initCall = worker.posted.find((c) => c.message.type === "init");
+	assert.equal(initCall.message.payload.delegate, "GPU");
+});
+
+test("the detector reports the delegate the worker actually started with", async () => {
+	// pose_worker.js requests GPU but degrades to CPU internally when GPU
+	// initialization fails in that worker; the detector surfaces whichever one
+	// actually started so a WebKit-only degrade stays visible.
+	const detector = await createWorkerPoseDetector({
+		createWorker: () => fakeWorker({ initDelegate: "CPU" }),
+		createImageBitmap: async () => ({ close() {} }),
+	});
+
+	assert.equal(detector.delegate, "CPU");
 });
 
 test("a failed worker initialization rejects instead of returning a detector", async () => {

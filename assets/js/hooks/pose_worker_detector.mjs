@@ -42,18 +42,16 @@ function createDefaultWorker() {
 // frame that drives the workout fill. Each frame is copied into an ImageBitmap
 // and transferred, because a video element cannot cross the worker boundary.
 //
-// The GPU delegate needs its own WebGL context, which inside a worker can only
-// come from OffscreenCanvas. That path has been unreliable in WebKit: the same
-// tasks-vision GPU delegate that runs fine on the main thread fails to
-// initialize off it, so createFromOptions in the worker rejects. The CPU
-// delegate does not need a GPU context at all, so it starts reliably in a
-// worker on every engine -- it is slower per frame, but it still runs on the
-// worker's own thread, so the animation frame stays unblocked either way.
+// GPU is the requested delegate: it is faster and lighter on the CPU wherever
+// it works. The worker itself falls back to the CPU delegate, without ever
+// leaving the worker thread, on engines where GPU initialization fails (see
+// pose_worker.js) -- so this only ever requests GPU, and reports back
+// whichever delegate the worker actually started with.
 export async function createWorkerPoseDetector(runtime = {}) {
 	const spawn = runtime.createWorker || createDefaultWorker;
 	const grabFrame = runtime.createImageBitmap || globalThis.createImageBitmap;
 	const now = runtime.now || (() => performance.now());
-	const delegate = runtime.delegate || "CPU";
+	const delegate = runtime.delegate || "GPU";
 
 	const worker = spawn();
 	const pending = new Map();
@@ -89,8 +87,9 @@ export async function createWorkerPoseDetector(runtime = {}) {
 			worker.postMessage({ id, type, payload }, transfer);
 		});
 
+	let initResult;
 	try {
-		await send("init", {
+		initResult = await send("init", {
 			wasmPath: runtime.wasmPath || POSE_WASM_PATH,
 			modelPath: runtime.modelPath || POSE_MODEL_PATH,
 			delegate,
@@ -101,6 +100,7 @@ export async function createWorkerPoseDetector(runtime = {}) {
 	}
 
 	return {
+		delegate: initResult?.delegate || delegate,
 		async estimatePoses(video) {
 			// The video running mode rejects a timestamp that does not advance.
 			const timestamp = Math.max(now(), lastTimestamp + 1);

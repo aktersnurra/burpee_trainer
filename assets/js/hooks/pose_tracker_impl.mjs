@@ -311,6 +311,7 @@ export function createPoseTracker(hook, runtime = {}) {
 				return;
 			}
 			detector = createdDetector;
+			if (detector.delegate) hook.el.dataset.poseInferenceDelegate = detector.delegate;
 
 			startedAt = now();
 			dispatchLocal("pose-tracker:started", {});
