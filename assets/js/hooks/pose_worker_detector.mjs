@@ -41,11 +41,19 @@ function createDefaultWorker() {
 // Runs BlazePose in a dedicated worker so inference never blocks the animation
 // frame that drives the workout fill. Each frame is copied into an ImageBitmap
 // and transferred, because a video element cannot cross the worker boundary.
+//
+// The GPU delegate needs its own WebGL context, which inside a worker can only
+// come from OffscreenCanvas. That path has been unreliable in WebKit: the same
+// tasks-vision GPU delegate that runs fine on the main thread fails to
+// initialize off it, so createFromOptions in the worker rejects. The CPU
+// delegate does not need a GPU context at all, so it starts reliably in a
+// worker on every engine -- it is slower per frame, but it still runs on the
+// worker's own thread, so the animation frame stays unblocked either way.
 export async function createWorkerPoseDetector(runtime = {}) {
 	const spawn = runtime.createWorker || createDefaultWorker;
 	const grabFrame = runtime.createImageBitmap || globalThis.createImageBitmap;
 	const now = runtime.now || (() => performance.now());
-	const delegate = runtime.delegate || "GPU";
+	const delegate = runtime.delegate || "CPU";
 
 	const worker = spawn();
 	const pending = new Map();
