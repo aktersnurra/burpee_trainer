@@ -175,7 +175,7 @@ export class SessionRenderer {
 		}
 	}
 
-	renderCameraStatus(state) {
+		renderCameraStatus(state) {
 		const starting = this.root.querySelector("#camera-status-starting");
 		const error = this.root.querySelector("#camera-status-error");
 		const failed = state.mode === "camera_error";
@@ -187,6 +187,21 @@ export class SessionRenderer {
 			error.hidden = !failed;
 			error.toggleAttribute("inert", !failed);
 		}
+		const detail = this.root.querySelector("#camera-status-failure-detail");
+		const stage = {
+			webgl: "WebGL",
+			camera_stream: "Camera stream",
+			video_playback: "Video playback",
+			video_frame: "Video frame",
+			canvas: "Canvas",
+			detector: "Detector",
+		}[state.camera?.stage] || "Startup";
+		this.setText(
+			detail,
+			failed && state.camera?.reason ? `${stage}: ${state.camera.reason}` : "",
+			"cameraFailureDetail",
+		);
+		this.setHidden(detail, !failed || !state.camera?.reason, "cameraFailureHidden");
 	}
 
 	renderReportPendingStatus(state) {

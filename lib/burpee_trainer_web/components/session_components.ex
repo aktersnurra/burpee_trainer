@@ -68,6 +68,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         <div id="camera-status-error" hidden inert="inert">
           <h2 class="qs-heading-tight text-4xl font-medium leading-tight">Camera unavailable</h2>
           <p class="mt-4 text-base text-[var(--session-muted)]">Nothing has started.</p>
+          <p
+            id="camera-status-failure-detail"
+            hidden
+            class="mt-4 break-words text-sm text-[var(--session-muted)]"
+          >
+          </p>
           <div class="mt-10 grid w-full gap-3">
             <button
               id="camera-status-retry"

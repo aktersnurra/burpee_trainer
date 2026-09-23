@@ -42,7 +42,7 @@ config :esbuild,
   ],
   burpee_trainer_pose_worker: [
     args:
-      ~w(js/hooks/pose_worker.js --bundle --format=esm --target=es2022 --outdir=../priv/static/assets/js --alias:@=.),
+      ~w(js/hooks/pose_worker.js --bundle --format=iife --target=es2022 --outdir=../priv/static/assets/js --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ],

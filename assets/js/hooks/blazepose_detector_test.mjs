@@ -225,6 +225,28 @@ function fakeWorker({ onDetect, failInit = false, initDelegate } = {}) {
 
 const bitmapVideo = { videoWidth: 640, videoHeight: 480 };
 
+test("the pose worker is classic so MediaPipe can import its WASM loader", async () => {
+	const originalWorker = globalThis.Worker;
+	const worker = fakeWorker();
+	let workerPath;
+	let workerOptions;
+	globalThis.Worker = class {
+		constructor(path, options) {
+			workerPath = path;
+			workerOptions = options;
+			return worker;
+		}
+	};
+
+	try {
+		await createWorkerPoseDetector({ createImageBitmap: async () => ({}) });
+		assert.equal(workerPath, "/assets/js/pose_worker.js");
+		assert.equal(workerOptions, undefined);
+	} finally {
+		globalThis.Worker = originalWorker;
+	}
+});
+
 test("the worker detector transfers a frame bitmap and maps the result back", async () => {
 	const closed = [];
 	const worker = fakeWorker({

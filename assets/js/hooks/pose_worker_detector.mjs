@@ -35,7 +35,8 @@ function frameSize(video) {
 }
 
 function createDefaultWorker() {
-	return new Worker(POSE_WORKER_PATH, { type: "module" });
+	// MediaPipe loads its WASM helper with importScripts, which requires a classic worker.
+	return new Worker(POSE_WORKER_PATH);
 }
 
 // Runs BlazePose in a dedicated worker so inference never blocks the animation

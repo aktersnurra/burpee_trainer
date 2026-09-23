@@ -266,6 +266,7 @@ export function createPoseTracker(hook, runtime = {}) {
 		if (!mounted || running) return;
 		running = true;
 		const generation = ++startGeneration;
+		let stage = "fixture";
 
 		try {
 			if (controlledFrames) {
@@ -281,12 +282,14 @@ export function createPoseTracker(hook, runtime = {}) {
 				return;
 			}
 
+			stage = "webgl";
 			if (!hasWebgl()) {
 				throw new Error(
 					"WebGL is unavailable; BlazePose cannot start in this browser/context",
 				);
 			}
 
+			stage = "camera_stream";
 			const requestedStream = await requestPreferredCameraStream(mediaDevices);
 			if (!mounted || !running || generation !== startGeneration) {
 				requestedStream.getTracks().forEach((track) => track.stop());
@@ -294,17 +297,21 @@ export function createPoseTracker(hook, runtime = {}) {
 			}
 			stream = requestedStream;
 
+			stage = "video_playback";
 			video = resolvePreviewVideo(hook);
 			video.srcObject = stream;
 			await video.play();
+			stage = "video_frame";
 			await waitForFrame(video);
 			if (!mounted || !running || generation !== startGeneration) return;
 
+			stage = "canvas";
 			canvas = hook.el.querySelector("#pose-tracker-canvas");
 			if (!canvas) throw new Error("Pose tracker canvas is unavailable");
 			observeCanvasSize();
 			resizeCanvasIfVisible();
 
+			stage = "detector";
 			const createdDetector = await createDetector();
 			if (!mounted || !running || generation !== startGeneration) {
 				createdDetector?.dispose?.();
@@ -322,7 +329,7 @@ export function createPoseTracker(hook, runtime = {}) {
 			const reason = error?.message || error?.name || "tracker_error";
 			markLost(reason);
 			releaseResources();
-			dispatchLocal("pose-tracker:start-failed", { reason });
+			dispatchLocal("pose-tracker:start-failed", { reason, stage });
 		}
 	}
 

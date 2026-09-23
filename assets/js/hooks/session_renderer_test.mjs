@@ -156,6 +156,7 @@ function harness() {
 		"#total-plan": element(),
 		"#pause-icon": element(),
 		"#session-live-status": element(),
+		"#camera-status-failure-detail": element(),
 		"#session-begin-conflict": element(),
 		"#session-begin-conflict-message": element(),
 		"#session-begin-conflict-resolve": element(),
@@ -238,6 +239,22 @@ test("camera, count-in, pause, completion, save, and errors are announced", () =
 	const assignments = status.textContentAssignments;
 	renderer.announce("Could not save. Try again.");
 	assert.equal(status.textContentAssignments, assignments);
+});
+
+test("camera failure shows its stage and reason and clears them on retry", () => {
+	const { renderer, elements } = harness();
+	const detail = elements["#camera-status-failure-detail"];
+
+	renderer.renderFlowState({
+		mode: "camera_error",
+		camera: { stage: "detector", reason: "pose worker crashed" },
+	});
+	assert.equal(detail.textContent, "Detector: pose worker crashed");
+	assert.equal(detail.hidden, false);
+
+	renderer.renderFlowState({ mode: "camera_starting" });
+	assert.equal(detail.textContent, "");
+	assert.equal(detail.hidden, true);
 });
 
 test("begin conflicts are visible and link to the server-provided resolution route", () => {

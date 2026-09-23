@@ -923,4 +923,5 @@ test("a pose worker that cannot start fails the camera instead of falling back",
 
 	assert.equal(failures.length, 1);
 	assert.match(failures[0].reason, /pose worker unavailable/);
+	assert.equal(failures[0].stage, "detector");
 });

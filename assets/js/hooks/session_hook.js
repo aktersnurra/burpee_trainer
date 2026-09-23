@@ -106,6 +106,7 @@ const SessionHook = {
 			this.dispatchFlow({
 				type: "CAMERA_START_FAILED",
 				reason: event.detail?.reason,
+				stage: event.detail?.stage,
 			});
 		this.onPoseTrackerRep = (event) => this.observePoseRep(event.detail || {});
 		this.onPoseTrackerStatus = (event) =>

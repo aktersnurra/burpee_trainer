@@ -256,6 +256,7 @@ function appendStablePanels(root) {
 		["camera-choice-no", "button", "No, continue"],
 		["camera-status-starting", "div", ""],
 		["camera-status-error", "div", ""],
+		["camera-status-failure-detail", "p", ""],
 		["camera-status-retry", "button", "Try again"],
 		["camera-status-continue", "button", "Continue without camera"],
 		["camera-setup-arming", "div", "Step into frame"],
@@ -1073,7 +1074,7 @@ test("pose tracker mount is lazy and emits local startup failure", async () => {
 	assert.equal(harness.mediaRequests, 1);
 	assert.deepEqual(harness.events.at(-1), {
 		type: "pose-tracker:start-failed",
-		detail: { reason: "permission denied" },
+		detail: { reason: "permission denied", stage: "camera_stream" },
 	});
 	assert.deepEqual(harness.serverPushes, []);
 });
@@ -2115,6 +2116,22 @@ test("completed workout stays quiescent across hidden and visible lifecycle", as
 		globalThis.requestAnimationFrame = originalRequestAnimationFrame;
 		ctx.destroyed();
 	}
+});
+
+test("camera startup failure carries its stage and reason into the error screen", () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	click(ctx, "camera-choice-yes");
+	trackerEvent(ctx, "pose-tracker:start-failed", {
+		stage: "detector",
+		reason: "pose worker crashed",
+	});
+	assert.equal(ctx.flow.mode, "camera_error");
+	assert.equal(ctx.flow.camera.stage, "detector");
+	assert.equal(
+		ctx.el.querySelector("#camera-status-failure-detail").textContent,
+		"Detector: pose worker crashed",
+	);
+	ctx.destroyed();
 });
 
 test("absent camera observations do not change the running flow", () => {

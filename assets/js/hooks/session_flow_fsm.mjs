@@ -264,6 +264,7 @@ export function flowTransition(state, event) {
           status: "failed",
           readiness: "not_ready",
           reason: event.reason || null,
+          stage: event.stage || null,
         },
         trackingTrust: "disabled",
       });

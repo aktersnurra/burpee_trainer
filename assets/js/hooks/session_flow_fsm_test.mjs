@@ -39,9 +39,11 @@ test("camera choice starts locally and startup failure has explicit recovery", (
   result = step(result.state, {
     type: "CAMERA_START_FAILED",
     reason: "permission_denied",
+    stage: "camera_stream",
   });
   assert.equal(result.state.mode, "camera_error");
   assert.equal(result.state.camera.reason, "permission_denied");
+  assert.equal(result.state.camera.stage, "camera_stream");
 });
 
 test("camera confirmation is ignored until readiness is valid", () => {
