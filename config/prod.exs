@@ -26,8 +26,16 @@ config :swoosh, api_client: Swoosh.ApiClient.Req
 # Disable Swoosh Local Memory Storage
 config :swoosh, local: false
 
-# Do not print debug messages in production
+# Keep production diagnostics in a bounded jail-local file. The release runs
+# in daemon mode, so redirecting its launcher does not capture runtime logs.
 config :logger, level: :info
+
+config :logger, :default_handler,
+  config: [
+    file: ~c"/var/log/burpee/trainer-runtime.log",
+    max_no_bytes: 10_000_000,
+    max_no_files: 5
+  ]
 
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.
