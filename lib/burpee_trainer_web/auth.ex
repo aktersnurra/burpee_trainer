@@ -15,6 +15,7 @@ defmodule BurpeeTrainerWeb.Auth do
   import Phoenix.Controller
 
   alias BurpeeTrainer.{Accounts, Levels, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
 
   @session_key :user_id
 
@@ -29,7 +30,9 @@ defmodule BurpeeTrainerWeb.Auth do
         user_id -> Accounts.get_user(user_id)
       end
 
-    assign(conn, :current_user, user)
+    conn
+    |> assign(:current_user, user)
+    |> assign(:current_scope, Scope.for_user(user))
   end
 
   @doc """
@@ -115,6 +118,7 @@ defmodule BurpeeTrainerWeb.Auth do
         {:cont,
          socket
          |> Phoenix.Component.assign(:current_user, user)
+         |> Phoenix.Component.assign(:current_scope, Scope.for_user(user))
          |> Phoenix.Component.assign(:current_level, level)}
     end
   end

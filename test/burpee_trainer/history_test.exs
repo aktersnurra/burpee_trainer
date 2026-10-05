@@ -1,4 +1,4 @@
-defmodule BurpeeTrainerWeb.HomeHistoryTest do
+defmodule BurpeeTrainer.HistoryTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import BurpeeTrainer.Fixtures
@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.WorkoutSession
-  alias BurpeeTrainerWeb.HomeHistory
+  alias BurpeeTrainer.History
 
   test "local four-week window and actual density retain session identity" do
     user = user_fixture()
@@ -35,15 +35,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       end
 
     [outside, included, zero, future] = rows
-    assert {:ok, filtered} = HomeHistory.filter_sessions(rows, user, now, "four_weeks")
+    assert {:ok, filtered} = History.filter_sessions(rows, user, now, "four_weeks")
     assert Enum.map(filtered, & &1.id) == [included.id, zero.id]
 
     assert [%{id: id, actual_reps: 30, actual_duration_sec: 600, density: 60}] =
-             HomeHistory.points(filtered)
+             History.points(filtered)
 
     assert id == included.id
-    assert {:ok, [^zero]} = HomeHistory.filter_sessions(rows, user, now, "week")
-    assert {:ok, all} = HomeHistory.filter_sessions(rows, user, now, "all")
+    assert {:ok, [^zero]} = History.filter_sessions(rows, user, now, "week")
+    assert {:ok, all} = History.filter_sessions(rows, user, now, "all")
     assert outside in all
     refute future in all
   end
@@ -56,22 +56,22 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
     plan = plan_fixture(user)
     {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
 
-    assert {:ok, first, cursor, true} = HomeHistory.page(user, now, "all")
+    assert {:ok, first, cursor, true} = History.page(user, now, "all")
     assert length(first) == 5
     assert cursor == {List.last(first).completed_at, List.last(first).id}
-    assert {:ok, second, cursor, true} = HomeHistory.page(user, now, "all", cursor)
+    assert {:ok, second, cursor, true} = History.page(user, now, "all", cursor)
     assert length(second) == 5
     assert cursor == {List.last(second).completed_at, List.last(second).id}
-    assert {:ok, third, cursor, false} = HomeHistory.page(user, now, "all", cursor)
+    assert {:ok, third, cursor, false} = History.page(user, now, "all", cursor)
     assert length(third) == 2
-    assert {:ok, [], ^cursor, false} = HomeHistory.page(user, now, "all", cursor)
+    assert {:ok, [], ^cursor, false} = History.page(user, now, "all", cursor)
 
     ids = Enum.map(first ++ second ++ third, & &1.id)
     assert ids == Enum.map(Workouts.list_sessions(user), & &1.id)
     assert length(Enum.uniq(ids)) == 12
     refute foreign.id in ids
     refute started.id in ids
-    assert {:ok, [], _, false} = HomeHistory.page(user, ~U[2025-10-06 12:00:00Z], "week")
+    assert {:ok, [], _, false} = History.page(user, ~U[2025-10-06 12:00:00Z], "week")
   end
 
   test "page scans past future rows and stops after the last matching period row" do
@@ -81,9 +81,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
     matching = for _ <- 1..7, do: insert_session(user, now)
     for _ <- 1..6, do: insert_session(user, ~U[2025-08-01 00:00:00Z])
 
-    assert {:ok, first, cursor, true} = HomeHistory.page(user, now, "week")
+    assert {:ok, first, cursor, true} = History.page(user, now, "week")
     assert length(first) == 5
-    assert {:ok, last, _, false} = HomeHistory.page(user, now, "week", cursor)
+    assert {:ok, last, _, false} = History.page(user, now, "week", cursor)
     assert length(last) == 2
     assert Enum.map(first ++ last, & &1.id) == Enum.map(Enum.reverse(matching), & &1.id)
   end
@@ -94,14 +94,14 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
     invalid = %{user | timezone: "Invalid/Zone"}
 
     for period <- ["week", "four_weeks", "all"] do
-      assert {:error, :invalid_timezone} = HomeHistory.filter_sessions([], invalid, now, period)
-      assert {:error, :invalid_timezone} = HomeHistory.page(invalid, now, period)
+      assert {:error, :invalid_timezone} = History.filter_sessions([], invalid, now, period)
+      assert {:error, :invalid_timezone} = History.page(invalid, now, period)
     end
 
-    assert {:error, :invalid_timezone} = HomeHistory.results(invalid, now)
-    assert {:error, :invalid_cursor} = HomeHistory.page(user, now, "all", "invalid")
-    assert {:ok, [], nil, false} = HomeHistory.page(user, now, "all")
-    assert {:ok, %{today: [], week: []}} = HomeHistory.results(user, now)
+    assert {:error, :invalid_timezone} = History.results(invalid, now)
+    assert {:error, :invalid_cursor} = History.page(user, now, "all", "invalid")
+    assert {:ok, [], nil, false} = History.page(user, now, "all")
+    assert {:ok, %{today: [], week: []}} = History.results(user, now)
   end
 
   test "week and four weeks include local Monday across year and DST changes; all has no lower bound" do
@@ -120,10 +120,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       future = session(user, DateTime.add(now, 1, :second))
       rows = [before, boundary, current, future]
 
-      assert {:ok, [^boundary, ^current]} = HomeHistory.filter_sessions(rows, user, now, period)
+      assert {:ok, [^boundary, ^current]} = History.filter_sessions(rows, user, now, period)
 
       assert {:ok, [^before, ^boundary, ^current]} =
-               HomeHistory.filter_sessions(rows, user, now, "all")
+               History.filter_sessions(rows, user, now, "all")
     end
   end
 
@@ -143,12 +143,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       end
 
     for period <- ["week", "four_weeks", "all"] do
-      assert {:ok, ^rows} = HomeHistory.filter_sessions(rows, user, now, period)
+      assert {:ok, ^rows} = History.filter_sessions(rows, user, now, period)
     end
 
-    assert HomeHistory.points(rows) == []
-    assert HomeHistory.points([]) == []
-    assert {:ok, []} = HomeHistory.filter_sessions([session(user, nil)], user, now, "all")
+    assert History.points(rows) == []
+    assert History.points([]) == []
+    assert {:ok, []} = History.filter_sessions([session(user, nil)], user, now, "all")
   end
 
   test "density uses Series rounding and chronological timestamp then identity ordering" do
@@ -158,7 +158,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
     second = insert_session(user, now, burpee_type: :navy_seal)
     earlier = insert_session(user, DateTime.add(now, -1, :second))
 
-    assert [early_point, first_point, second_point] = HomeHistory.points([second, first, earlier])
+    assert [early_point, first_point, second_point] = History.points([second, first, earlier])
 
     assert Enum.map([early_point, first_point, second_point], & &1.id) == [
              earlier.id,
@@ -183,15 +183,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
     now = ~U[2025-09-24 12:00:00Z]
     warmup = insert_session(user, now, tags: "warmup", display_name_snapshot: "Saved warmup")
 
-    assert {:ok, %{today: [^warmup], week: [^warmup]}} = HomeHistory.results(user, now)
+    assert {:ok, %{today: [^warmup], week: [^warmup]}} = History.results(user, now)
     assert {:ok, %{completed_sec: 0}} = Policy.required_slot(user, now)
-    assert {:ok, [row], _, false} = HomeHistory.page(user, now, "week")
+    assert {:ok, [row], _, false} = History.page(user, now, "week")
     assert row.id == warmup.id
     assert row.tags == "warmup"
     assert row.display_name_snapshot == "Saved warmup"
     assert row.burpee_count_actual == 30
     assert row.burpee_count_planned == 100
-    assert [%{density: 60}] = HomeHistory.points([row])
+    assert [%{density: 60}] = History.points([row])
   end
 
   test "results select owned authoritative today and week facts by local completion date" do
@@ -207,7 +207,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
     current = insert_session(user, now)
 
     assert {:ok, %{today: [^current, ^today], week: [^current, ^today, ^yesterday, ^week_start]}} =
-             HomeHistory.results(user, now)
+             History.results(user, now)
   end
 
   test "summary derives display totals and latest existing density without persistence" do
@@ -219,7 +219,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       session(user, ~U[2026-09-10 08:00:00Z], burpee_count_actual: nil, duration_sec_actual: nil)
     ]
 
-    assert HomeHistory.summary(sessions) == %{
+    assert History.summary(sessions) == %{
              sessions: 3,
              total_reps: 50,
              active_time_sec: 600,
@@ -228,7 +228,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
   end
 
   test "summary returns honest zero and unavailable density" do
-    assert HomeHistory.summary([]) == %{
+    assert History.summary([]) == %{
              sessions: 0,
              total_reps: 0,
              active_time_sec: 0,
@@ -250,10 +250,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       session(user, DateTime.add(now, 10, :second), duration_sec_actual: 4_800)
     ]
 
-    assert {:ok, days} = HomeHistory.week_days(sessions, user, now, week)
+    assert {:ok, days} = History.week_days(sessions, user, now, week)
     assert Enum.map(days, & &1.minutes) == [20, 5, 0, 0, 0, 0, 0]
     assert Enum.map(days, & &1.date) == Enum.map(0..6, &Date.add(week, &1))
-    assert {:ok, weeks} = HomeHistory.weeks(sessions, user, now, "twelve_weeks")
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
     assert List.last(weeks).minutes == 25
   end
 
@@ -268,10 +268,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       session(user, ~U[2026-09-22 12:00:00Z], duration_sec_actual: 59)
     ]
 
-    assert {:ok, days} = HomeHistory.week_days(sessions, user, now, week)
+    assert {:ok, days} = History.week_days(sessions, user, now, week)
     assert Enum.map(days, & &1.seconds) == [59, 59, 0, 0, 0, 0, 0]
     assert Enum.map(days, & &1.minutes) == [0, 0, 0, 0, 0, 0, 0]
-    assert {:ok, weeks} = HomeHistory.weeks(sessions, user, now, "twelve_weeks")
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
     assert List.last(weeks).minutes == 1
   end
 
@@ -287,12 +287,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryTest do
       session(user, ~U[2026-09-21 13:00:00Z], tags: "warmup", duration_sec_actual: 2_000)
     ]
 
-    assert {:ok, weeks} = HomeHistory.weeks(sessions, user, now, "twelve_weeks")
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
     assert length(weeks) == 12
     assert Enum.map(Enum.take(weeks, -3), & &1.minutes) == [80, 80, 83]
-    assert HomeHistory.streak(weeks) == 2
+    assert History.streak(weeks) == 2
     assert List.last(weeks).open?
-    assert {:ok, year} = HomeHistory.weeks(sessions, user, now, "year")
+    assert {:ok, year} = History.weeks(sessions, user, now, "year")
     assert length(year) >= 52
   end
 

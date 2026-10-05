@@ -1,4 +1,4 @@
-defmodule BurpeeTrainerWeb.HomeHistory do
+defmodule BurpeeTrainer.History do
   @moduledoc "Read-only local periods, session pages and actual density for Home."
 
   alias BurpeeTrainer.{UserTime, Workouts}

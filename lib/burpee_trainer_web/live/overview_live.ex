@@ -3,7 +3,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Coach, CoachReconciler, Repo, Workouts}
+  alias BurpeeTrainer.{Coach, CoachReconciler, History, Repo, Workouts}
   alias BurpeeTrainer.Coach.{Catalog, Guidance, Policy}
   alias BurpeeTrainer.Workouts.{CoachRecommendation, Inspection, WorkoutSession}
 
@@ -13,7 +13,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     HomeAdjustment,
     HomeCoachComponents,
     HomeDayBoundary,
-    HomeHistory,
     HomeHistoryComponents,
     HomeWorkoutComponents,
     HomeWorkoutRequest
@@ -49,7 +48,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         history_empty?: true,
         history_expanded: MapSet.new(),
         history_points: %{six_count: [], navy_seal: []},
-        history_summary: HomeHistory.summary([]),
+        history_summary: History.summary([]),
         history_loaded_ids: [],
         history_loaded_count: 0,
         coach_guidance_form: to_form(%{"text" => ""}, as: :coach_guidance),
@@ -386,7 +385,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
          {:ok, date} <- Date.from_iso8601(raw),
          %{start: ^date} <- Enum.find(a.history_weeks, &(&1.start == date)),
          {:ok, days} <-
-           HomeHistory.week_days(
+           History.week_days(
              Workouts.list_sessions(a.current_user),
              a.current_user,
              a.home_now.(),
@@ -408,7 +407,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
          {id, ""} when id > 0 <- Integer.parse(raw),
          %{state: :completed} = session <- Workouts.get_session(a.current_user, id),
          {:ok, [_]} <-
-           HomeHistory.filter_sessions([session], a.current_user, a.home_now.(), a.history_period) do
+           History.filter_sessions([session], a.current_user, a.home_now.(), a.history_period) do
       expanded =
         if MapSet.member?(a.history_expanded, id),
           do: MapSet.delete(a.history_expanded, id),
@@ -467,7 +466,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
          id when is_integer(id) <- a.history_selected_id,
          %{state: :completed} = session <- Workouts.get_session(a.current_user, id),
          {:ok, [_]} <-
-           HomeHistory.filter_sessions([session], a.current_user, a.home_now.(), a.history_period),
+           History.filter_sessions([session], a.current_user, a.home_now.(), a.history_period),
          {:ok, _} <- Workouts.delete_session(a.current_user, session) do
       refreshed =
         socket
@@ -1306,13 +1305,13 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     cursor = if reset?, do: nil, else: a.history_cursor
 
     with {:ok, rows, next, more?} <-
-           HomeHistory.page(a.current_user, now, a.history_period, cursor) do
+           History.page(a.current_user, now, a.history_period, cursor) do
       {points, summary} =
         if reset? do
           history_sessions =
             Map.new([:six_count, :navy_seal], fn type ->
               {:ok, sessions} =
-                HomeHistory.filter_sessions(
+                History.filter_sessions(
                   Workouts.list_sessions_for_chart(a.current_user, type),
                   a.current_user,
                   now,
@@ -1324,7 +1323,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
           points =
             Map.new(history_sessions, fn {type, sessions} ->
-              {type, HomeHistory.points(sessions)}
+              {type, History.points(sessions)}
             end)
 
           summary =
@@ -1332,7 +1331,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
             |> Map.values()
             |> List.flatten()
             |> Enum.uniq_by(& &1.id)
-            |> HomeHistory.summary()
+            |> History.summary()
 
           {points, summary}
         else
@@ -1348,11 +1347,11 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       all_sessions = Workouts.list_sessions(a.current_user)
 
       {:ok, available_sessions} =
-        HomeHistory.filter_sessions(all_sessions, a.current_user, now, "all")
+        History.filter_sessions(all_sessions, a.current_user, now, "all")
 
       history_available? = available_sessions != []
-      {:ok, weeks} = HomeHistory.weeks(all_sessions, a.current_user, now, a.history_period)
-      {:ok, all_weeks} = HomeHistory.weeks(all_sessions, a.current_user, now, "all")
+      {:ok, weeks} = History.weeks(all_sessions, a.current_user, now, a.history_period)
+      {:ok, all_weeks} = History.weeks(all_sessions, a.current_user, now, "all")
 
       selected_week =
         if Enum.any?(weeks, &(&1.start == a.history_week_start)),
@@ -1361,7 +1360,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
       days =
         if selected_week do
-          {:ok, days} = HomeHistory.week_days(all_sessions, a.current_user, now, selected_week)
+          {:ok, days} = History.week_days(all_sessions, a.current_user, now, selected_week)
           days
         else
           []
@@ -1373,7 +1372,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         history_weeks: weeks,
         history_week_start: selected_week,
         history_week_days: days,
-        history_streak: HomeHistory.streak(all_weeks),
+        history_streak: History.streak(all_weeks),
         history_error: nil,
         history_cursor: next,
         history_has_more?: more?,
@@ -1400,7 +1399,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
           history_week_days: [],
           history_streak: 0,
           history_points: %{six_count: [], navy_seal: []},
-          history_summary: HomeHistory.summary([])
+          history_summary: History.summary([])
         )
         |> stream(:history_sessions, [], reset: true)
     end
@@ -1418,7 +1417,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       |> Enum.filter(&match?(%{state: :completed}, &1))
 
     {:ok, rows} =
-      HomeHistory.filter_sessions(rows, a.current_user, now, a.history_period)
+      History.filter_sessions(rows, a.current_user, now, a.history_period)
 
     rows = Enum.sort_by(rows, &{DateTime.to_unix(&1.completed_at, :microsecond), &1.id}, :desc)
 
@@ -1799,7 +1798,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   defp history_available?(user, now) do
-    case HomeHistory.page(user, now, "all") do
+    case History.page(user, now, "all") do
       {:ok, rows, _, _} -> rows != []
       {:error, _} -> true
     end
@@ -1815,7 +1814,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   defp assign_results(socket, now) do
-    case HomeHistory.results(socket.assigns.current_user, now) do
+    case History.results(socket.assigns.current_user, now) do
       {:ok, results} ->
         rows =
           if socket.assigns.slot.home_state == :done_today, do: results.today, else: results.week

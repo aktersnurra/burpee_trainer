@@ -3,7 +3,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   use BurpeeTrainerWeb, :html
 
-  alias BurpeeTrainerWeb.{Fmt, HomeHistory}
+  alias BurpeeTrainer.History
+  alias BurpeeTrainerWeb.Fmt
   alias Phoenix.LiveView.JS
 
   attr(:state, :map, required: true)
@@ -680,7 +681,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
 
   def session_details(assigns) do
-    assigns = assign(assigns, density: HomeHistory.points([assigns.session]))
+    assigns = assign(assigns, density: History.points([assigns.session]))
 
     ~H"""
     <dl id={@id} class="home-history-comparison">
