@@ -76,7 +76,7 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
 
       assert redirected_to(conn) == ~p"/"
       assert get_session(conn, :user_id) == user.id
-      assert Accounts.get_user!(user.id).oidc_sub == "sub-fresh"
+      assert Repo.get!(Accounts.User, user.id).oidc_sub == "sub-fresh"
       # Adopted, not duplicated — this is what keeps existing history reachable.
       assert Repo.aggregate(Accounts.User, :count) == before_count
     end
@@ -110,7 +110,7 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
       assert redirected_to(conn) == ~p"/login"
       refute get_session(conn, :user_id)
       # The impostor sub must not overwrite the established link.
-      assert Accounts.get_user!(user.id).oidc_sub == "sub-abc-123"
+      assert Repo.get!(Accounts.User, user.id).oidc_sub == "sub-abc-123"
       assert Repo.aggregate(Accounts.User, :count) == before_count
     end
 

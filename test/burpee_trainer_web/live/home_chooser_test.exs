@@ -1,10 +1,8 @@
-defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
+defmodule BurpeeTrainerWeb.HomeChooserTest do
   use BurpeeTrainerWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
-
-  alias BurpeeTrainer.Workouts
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -42,8 +40,9 @@ defmodule BurpeeTrainerWeb.WorkoutsLiveTest do
     for event <- ["select_alternative", "delete_workout"] do
       render_click(view, event, %{"id" => to_string(foreign.id), "kind" => "plan"})
       assert has_element?(view, "#home-title-action")
-      assert Workouts.get_plan!(other, foreign.id).state == :published
-      assert Workouts.get_plan!(other, foreign.id).content_hash == foreign.content_hash
+      persisted = BurpeeTrainer.Repo.get!(BurpeeTrainer.Workouts.WorkoutPlan, foreign.id)
+      assert persisted.state == :published
+      assert persisted.content_hash == foreign.content_hash
     end
   end
 

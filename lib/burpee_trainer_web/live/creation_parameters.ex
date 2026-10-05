@@ -58,16 +58,6 @@ defmodule BurpeeTrainerWeb.CreationParameters do
       if(note == "", do: "", else: "\nNote: #{note}")
   end
 
-  def from_draft(draft, %__MODULE__{} = previous \\ %__MODULE__{}) do
-    %__MODULE__{
-      previous
-      | burpee_type: Atom.to_string(draft.burpee_type),
-        duration: duration_label(draft.target_duration_sec),
-        reps: draft.target_reps,
-        pacing: draft.definition_json["pacing_style"]
-    }
-  end
-
   def type_label("six_count"), do: "6-count"
   def type_label("navy_seal"), do: "Navy SEAL"
   def pacing_label("unbroken"), do: "Unbroken"

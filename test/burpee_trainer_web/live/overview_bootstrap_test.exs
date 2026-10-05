@@ -5,7 +5,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.{Coach, Repo, Workouts}
+  alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.OverviewLive
@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   test "obsolete bootstrap completion leaves a newer pending request and token exactly intact", %{
     conn: _conn
   } do
-    {_user, _now, _slot, old_id, _req, socket, _selected, _alternative} =
+    {_user, _now, _slot, old_id, socket, _selected, _alternative} =
       committed_pending_bootstrap()
 
     newer_id = make_ref()
@@ -86,7 +86,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   test "duplicate matching bootstrap completion preserves selected identity and Start token", %{
     conn: _conn
   } do
-    {_user, _now, _slot, id, _req, socket, selected, _alternative} = committed_pending_bootstrap()
+    {_user, _now, _slot, id, socket, selected, _alternative} = committed_pending_bootstrap()
 
     assert {:noreply, completed} =
              OverviewLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, socket)
@@ -105,7 +105,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   end
 
   test "bootstrap delivery rejects a replaced pointer without a stale Start", %{conn: _conn} do
-    {user, _now, expected_slot, id, _req, socket, selected, alternative} =
+    {user, _now, expected_slot, id, socket, selected, alternative} =
       committed_pending_bootstrap()
 
     {:ok, replacement} = Workouts.ensure_home_selection(user, expected_slot)
@@ -115,7 +115,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   end
 
   test "bootstrap delivery rejects a recommendation slot-date mismatch", %{conn: _conn} do
-    {user, _now, expected_slot, id, _req, socket, selected, _alternative} =
+    {user, _now, expected_slot, id, socket, selected, _alternative} =
       committed_pending_bootstrap()
 
     {1, nil} =
@@ -130,7 +130,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   test "bootstrap delivery rejects when the presentation current policy slot changed", %{
     conn: _conn
   } do
-    {user, now, expected_slot, id, _req, socket, selected, _alternative} =
+    {user, now, expected_slot, id, socket, selected, _alternative} =
       committed_pending_bootstrap()
 
     future_now = DateTime.add(now, 7 * 86_400, :second)
@@ -145,7 +145,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   end
 
   test "bootstrap delivery rejects a competing started session after commit", %{conn: _conn} do
-    {user, _now, _expected_slot, id, _req, socket, selected, alternative} =
+    {user, _now, _expected_slot, id, socket, selected, alternative} =
       committed_pending_bootstrap()
 
     assert {:ok, _selected_plan} = Workouts.verify_home_selection(user, selected)
@@ -195,8 +195,13 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   } do
     user = returning_user()
     draft = workout_plan_draft_fixture(user, %{name: "Keep archived"})
-    {:ok, published} = Workouts.publish_draft(user, draft.id)
-    {:ok, archived} = Workouts.archive_plan(user, published.id)
+
+    archived =
+      draft
+      |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second))
+      |> Repo.update!()
+      |> WorkoutPlan.archive_changeset(DateTime.utc_now(:second))
+      |> Repo.update!()
 
     assert_returning_mount_preserves_plan(user, archived, :archived)
   end
@@ -295,16 +300,11 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     now = DateTime.utc_now(:second)
     {:ok, expected_slot} = Policy.required_slot(user, now)
     id = make_ref()
-    req = immediate_req(definition("Bootstrap delivery"))
     socket = pending_bootstrap_socket(user, now, expected_slot, id, "Build intervals")
     assert Workouts.home_entry_state(user, expected_slot) == {:ok, :bootstrap}
-
-    assert {:ok, selected} =
-             Coach.bootstrap_home_draft(user, expected_slot, "Build intervals", opts(req))
-
+    {:ok, selected} = Workouts.ensure_home_selection(user, expected_slot)
     alternative = plan_fixture(user)
-    assert %Req.Request{} = req
-    {user, now, expected_slot, id, req, socket, selected, alternative}
+    {user, now, expected_slot, id, socket, selected, alternative}
   end
 
   defp pending_bootstrap_socket(user, now, expected_slot, id, prompt) do
@@ -403,45 +403,6 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     {:ok, socket} = OverviewLive.mount(%{}, %{}, socket)
     socket
   end
-
-  defp immediate_req(workout_definition) do
-    Req.new(
-      adapter: fn request ->
-        {request, %Req.Response{status: 200, body: provider_body(workout_definition)}}
-      end
-    )
-  end
-
-  defp opts(req), do: [req: req, config: provider_config()]
-
-  defp provider_config,
-    do: [
-      enabled: true,
-      url: "https://provider.test/v1/chat/completions",
-      api_key: "test-secret",
-      model: "test/model",
-      timeout_ms: 12_345
-    ]
-
-  defp provider_body(workout_definition),
-    do:
-      Jason.encode!(%{
-        "choices" => [%{"message" => %{"content" => Jason.encode!(workout_definition)}}]
-      })
-
-  defp definition(name),
-    do: %{
-      "version" => 1,
-      "name" => name,
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "events" => [
-        %{"kind" => "work", "reps" => 10, "sec_per_rep" => 12.0, "sec_per_burpee" => 12.0}
-      ],
-      "rationale" => "bootstrap fixture"
-    }
 
   defp rendered(socket), do: render_component(&OverviewLive.render/1, socket.assigns)
 

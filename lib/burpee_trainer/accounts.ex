@@ -33,12 +33,6 @@ defmodule BurpeeTrainer.Accounts do
   end
 
   @doc """
-  Fetch a user by id, raising if not found.
-  """
-  @spec get_user!(integer) :: User.t()
-  def get_user!(id), do: Repo.get!(User, id)
-
-  @doc """
   Fetch a user by id, returning nil if not found.
   """
   @spec get_user(integer) :: User.t() | nil
@@ -184,22 +178,5 @@ defmodule BurpeeTrainer.Accounts do
     end
 
     :ok
-  end
-
-  @doc """
-  Return a blank registration changeset, useful for login/registration
-  forms.
-  """
-  @spec change_user_registration(User.t(), map) :: Ecto.Changeset.t()
-  def change_user_registration(%User{} = user, attrs \\ %{}) do
-    User.registration_changeset(user, attrs)
-  end
-
-  @doc """
-  True when any user exists. Used by the mix task to avoid double-seeding.
-  """
-  @spec any_user?() :: boolean
-  def any_user? do
-    Repo.exists?(User)
   end
 end

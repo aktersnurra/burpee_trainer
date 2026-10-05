@@ -3,10 +3,10 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
 
   import Ecto.Query
 
-  alias BurpeeTrainer.{Accounts, Repo, Videos, Workouts}
+  alias BurpeeTrainer.{Accounts, PlanCompiler, Repo, Videos, Workouts}
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Coach.{Client, Policy}
-  alias BurpeeTrainer.PlanCompiler.ProgramHash
+  alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
 
   alias BurpeeTrainer.Workouts.{
     CoachRecommendation,
@@ -149,7 +149,6 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
          slot_strategy: slot.strategy,
          slot_completed_sec: slot.completed_sec,
          candidate_ceiling_reps: candidate_reps(slot),
-         candidate_verified: Policy.verify_candidate(user, slot.slot_date, draft) == :ok,
          history_session_id: history && history.id,
          history_user_id: history && history.user_id,
          history_completed_at: history && history.completed_at,
@@ -369,14 +368,13 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
         {:ok, plan}
 
       nil ->
-        with {:ok, draft} <-
-               Workouts.create_user_draft(user, %{
-                 "definition" => definition(name, duration_sec),
-                 "request_text" => "Create deterministic E2E library content"
-               }),
-             {:ok, plan} <- Workouts.publish_draft(user, draft.id) do
-          {:ok, plan}
-        end
+        {:ok,
+         insert_plan!(
+           user,
+           definition(name, duration_sec),
+           "Create deterministic E2E library content",
+           :published
+         )}
     end
   end
 
@@ -466,12 +464,46 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
   end
 
   defp attach_pending_candidate(user, recommendation, run_id, slot) do
-    Workouts.attach_candidate(user, recommendation.id, %{
-      definition:
+    draft =
+      insert_plan!(
+        user,
         definition("Pending candidate #{run_id}", slot.duration_sec, candidate_reps(slot)),
-      request_text: "Create the deterministic pending candidate",
-      rationale: "Candidate awaits explicit acceptance"
-    })
+        "Create the deterministic pending candidate",
+        :draft
+      )
+
+    recommendation
+    |> Ecto.Changeset.change(pending_draft_id: draft.id)
+    |> Repo.update()
+  end
+
+  defp insert_plan!(user, definition_attrs, request_text, state) do
+    {:ok, definition} = WorkoutDefinition.new(definition_attrs)
+    {:ok, program} = PlanCompiler.compile(definition)
+
+    content = %{
+      name: definition.name,
+      request_text: request_text,
+      definition_json: WorkoutDefinition.canonical_map(definition),
+      program_json: ProgramHash.canonical_map(program),
+      content_hash: ProgramHash.hash(program),
+      burpee_type: definition.burpee_type,
+      target_reps: definition.target_reps,
+      target_duration_sec: definition.target_duration_sec
+    }
+
+    draft =
+      %WorkoutPlan{user_id: user.id, origin: :user, state: :draft}
+      |> WorkoutPlan.new_draft_changeset(content)
+      |> Repo.insert!()
+
+    case state do
+      :draft ->
+        draft
+
+      :published ->
+        draft |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
+    end
   end
 
   defp ensure_available_video(user, run_id, count) do

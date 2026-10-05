@@ -17,9 +17,6 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
   secret_key_base: "huMiWRpdLrjHA7H+QE14KSdIJwQ8ZdTq8Z/TNM4r/LRTO2ZK3Nqb2j/mi1BkUvGk",
   server: false
 
-# In test we don't send emails
-config :burpee_trainer, BurpeeTrainer.Mailer, adapter: Swoosh.Adapters.Test
-
 # Tests opt into supervised coach network work explicitly.
 config :burpee_trainer, :coach_reconciler, enabled: false
 
@@ -30,9 +27,6 @@ config :burpee_trainer, :llm_provider,
   api_key: nil,
   model: "openai/gpt-6-luna",
   timeout_ms: 20_000
-
-# Disable swoosh api client as it is only required for production adapters
-config :swoosh, :api_client, false
 
 # Print only warnings and errors during test
 config :logger, level: :warning

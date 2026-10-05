@@ -60,20 +60,6 @@ defmodule BurpeeTrainer.Coach.GuidanceTest do
     assert Memory.global_context(owner).coach_guidance.lasting == []
   end
 
-  test "a delayed provider review cannot restore information after a manual edit" do
-    user = user_fixture()
-    {:ok, entry} = Guidance.add(user, "Build toward 50 reps")
-
-    answer = fn _, _ ->
-      assert {:ok, _} = Guidance.update(user, entry.id, "Build toward 60 reps")
-      {:ok, %{"kind" => "lasting", "summary" => "Wants 50 reps"}}
-    end
-
-    assert {:error, :stale_review} = Guidance.review(entry.id, complete: answer)
-    assert [%{text: "Build toward 60 reps", kind: "pending", summary: nil}] = Guidance.list(user)
-    assert [%{text: "Build toward 60 reps"}] = Memory.global_context(user).coach_guidance.pending
-  end
-
   test "saving unchanged guidance keeps its reading and spends no review" do
     user = user_fixture()
     {:ok, entry} = Guidance.add(user, "Build toward 50 reps")

@@ -3,21 +3,7 @@ defmodule BurpeeTrainer.Workouts.FinalizationTest do
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.Memory
-
-  test "enclosing rollback emits no finalization event" do
-    user = user_fixture()
-    draft = workout_plan_draft_fixture(user)
-    Phoenix.PubSub.subscribe(BurpeeTrainer.PubSub, "workout_finalized")
-
-    assert {:error, :forced} =
-             Repo.transaction(fn ->
-               assert {:ok, _} = Workouts.publish_draft(user, draft.id)
-               Repo.rollback(:forced)
-             end)
-
-    refute_received {:workout_finalized, _}
-    assert {:ok, %{state: :draft}} = Workouts.get_draft(user, draft.id)
-  end
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   test "memory rejects foreign, draft, missing and mismatched context identities" do
     user = user_fixture()
@@ -53,7 +39,7 @@ defmodule BurpeeTrainer.Workouts.FinalizationTest do
         })
     end
 
-    {:ok, plan} = Workouts.publish_draft(user, draft.id)
+    plan = draft |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
     assert :ok = Memory.record_finalized_workout(user.id, plan.id, context.id)
     drain_coach_memory_tasks()
     assert [memory] = Memory.global_context(user).workout_memories

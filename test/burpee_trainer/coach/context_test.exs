@@ -1,8 +1,9 @@
 defmodule BurpeeTrainer.Coach.ContextTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Coach.Context
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   test "failed published workspace is found after reload" do
     user = user_fixture()
@@ -222,7 +223,9 @@ defmodule BurpeeTrainer.Coach.ContextTest do
     {:ok, _} =
       Context.append(user, original.id, attempt, :instruction, %{"text" => "owned history"})
 
-    {:ok, published} = Workouts.publish_draft(user, draft.id)
+    published =
+      draft |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
+
     {:ok, imported} = Context.ensure_session(user, published, "independent")
     refute imported.id == original.id
     {:ok, before_entries} = Context.entries(user, imported.id)

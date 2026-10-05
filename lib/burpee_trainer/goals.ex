@@ -9,31 +9,7 @@ defmodule BurpeeTrainer.Goals do
 
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Goals.Goal
-  alias BurpeeTrainer.{PerformanceGoal, Repo}
-
-  @doc """
-  Active goals for a user, one per `burpee_type` at most.
-  """
-  @spec list_active_goals(User.t()) :: [Goal.t()]
-  def list_active_goals(%User{id: user_id}) do
-    Repo.all(
-      from goal in Goal,
-        where: goal.user_id == ^user_id and goal.status == :active
-    )
-  end
-
-  @doc """
-  Active and achieved goals for a user (excludes abandoned).
-  Used to display both in-progress and completed goal cards.
-  """
-  @spec list_current_goals(User.t()) :: [Goal.t()]
-  def list_current_goals(%User{id: user_id}) do
-    Repo.all(
-      from goal in Goal,
-        where: goal.user_id == ^user_id and goal.status in [:active, :achieved],
-        order_by: [desc: goal.updated_at]
-    )
-  end
+  alias BurpeeTrainer.Repo
 
   @doc """
   Fetch the (single) active goal for a `(user, burpee_type)` pair, or
@@ -51,101 +27,10 @@ defmodule BurpeeTrainer.Goals do
   end
 
   @doc """
-  Fetch the active persisted goal as a `%PerformanceGoal{}` for coach planning.
-  """
-  @spec get_active_performance_goal(User.t(), atom) :: PerformanceGoal.t() | nil
-  def get_active_performance_goal(%User{} = user, burpee_type) when is_atom(burpee_type) do
-    user
-    |> get_active_goal(burpee_type)
-    |> to_performance_goal()
-  end
-
-  @doc """
-  Convert a persisted goal row to the pure performance-goal struct used by the intelligence layer.
-  """
-  @spec to_performance_goal(Goal.t() | nil) :: PerformanceGoal.t() | nil
-  def to_performance_goal(nil), do: nil
-
-  def to_performance_goal(%Goal{} = goal) do
-    %PerformanceGoal{
-      id: goal.id,
-      burpee_type: goal.burpee_type,
-      target_reps: goal.burpee_count_target,
-      target_duration_min: div(goal.duration_sec_target, 60),
-      start_reps: goal.burpee_count_baseline,
-      start_date: goal.date_baseline,
-      target_date: goal.date_target,
-      status: performance_status(goal.status)
-    }
-  end
-
-  @doc """
-  Fetch a goal by id scoped to a user. Raises if not found.
-  """
-  @spec get_goal!(User.t(), integer) :: Goal.t()
-  def get_goal!(%User{id: user_id}, id) do
-    Repo.one!(
-      from goal in Goal,
-        where: goal.id == ^id and goal.user_id == ^user_id
-    )
-  end
-
-  @doc """
-  Create a goal for a user. Any existing `:active` goal for the same
-  `burpee_type` is abandoned atomically.
-  """
-  @spec create_goal(User.t(), map) :: {:ok, Goal.t()} | {:error, Ecto.Changeset.t()}
-  def create_goal(%User{id: user_id} = user, attrs) do
-    Repo.transaction(fn ->
-      burpee_type = attrs["burpee_type"] || attrs[:burpee_type]
-
-      if burpee_type do
-        case get_active_goal(user, normalize_burpee_type(burpee_type)) do
-          nil -> :noop
-          existing -> existing |> Goal.status_changeset(:abandoned) |> Repo.update!()
-        end
-      end
-
-      result =
-        %Goal{user_id: user_id}
-        |> Goal.changeset(attrs)
-        |> Repo.insert()
-
-      case result do
-        {:ok, goal} -> goal
-        {:error, changeset} -> Repo.rollback(changeset)
-      end
-    end)
-  end
-
-  @doc """
-  Transition a goal to `:abandoned`.
-  """
-  @spec abandon_goal(Goal.t()) :: {:ok, Goal.t()} | {:error, Ecto.Changeset.t()}
-  def abandon_goal(%Goal{} = goal) do
-    goal |> Goal.status_changeset(:abandoned) |> Repo.update()
-  end
-
-  @doc """
   Transition a goal to `:achieved`.
   """
   @spec mark_achieved(Goal.t()) :: {:ok, Goal.t()} | {:error, Ecto.Changeset.t()}
   def mark_achieved(%Goal{} = goal) do
     goal |> Goal.status_changeset(:achieved) |> Repo.update()
   end
-
-  @doc """
-  Blank changeset for a new goal, useful for forms.
-  """
-  @spec change_goal(Goal.t(), map) :: Ecto.Changeset.t()
-  def change_goal(%Goal{} = goal, attrs \\ %{}), do: Goal.changeset(goal, attrs)
-
-  defp performance_status(:active), do: :active
-  defp performance_status(:achieved), do: :completed
-  defp performance_status(:abandoned), do: :paused
-
-  defp normalize_burpee_type(value) when is_atom(value), do: value
-  defp normalize_burpee_type("six_count"), do: :six_count
-  defp normalize_burpee_type("navy_seal"), do: :navy_seal
-  defp normalize_burpee_type(_), do: nil
 end

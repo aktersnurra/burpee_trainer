@@ -289,6 +289,60 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     assert :ok = WorkoutRequest.validate_definition(request, definition)
   end
 
+  test "recovery-required pace limits use the confirmed request rather than instruction wording",
+       %{
+         user: user
+       } do
+    work = %{"kind" => "work", "reps" => 5, "sec_per_rep" => 11, "sec_per_burpee" => 11}
+
+    proposal = %{
+      "version" => 1,
+      "name" => "Slow reps",
+      "burpee_type" => "six_count",
+      "target_reps" => 10,
+      "target_duration_sec" => 120,
+      "pacing_style" => "even",
+      "rationale" => "Two sets.",
+      "phase_1" => %{"work_rest_pairs" => [], "last_work" => work},
+      "rest_1" => %{"kind" => "rest", "duration_sec" => 10},
+      "phase_2" => %{"work_rest_pairs" => [], "last_work" => work}
+    }
+
+    provider(self(), proposal)
+
+    request = fn requested_pace_sec ->
+      WorkoutRequest.new(%{
+        "burpee_type" => "six_count",
+        "target_reps" => 10,
+        "target_duration_sec" => 120,
+        "pacing_style" => "even",
+        "recovery" => "required",
+        "timed_rests" => [],
+        "requested_pace_sec" => requested_pace_sec
+      })
+    end
+
+    {:ok, unrequested_pace} = request.(nil)
+
+    assert {:error, %{code: :invalid_workout_definition}} =
+             Coach.prepare_plan(user, "ten reps please", unrequested_pace,
+               workspace_key: "pace-rule-unrequested"
+             )
+
+    {:ok, explicit_pace} = request.(11)
+
+    assert {:ok, prepared} =
+             Coach.prepare_plan(user, "ten reps please", explicit_pace,
+               workspace_key: "pace-rule-explicit"
+             )
+
+    assert prepared.definition["events"] == [
+             %{"kind" => "work", "reps" => 5, "sec_per_rep" => 11, "sec_per_burpee" => 11},
+             %{"kind" => "rest", "duration_sec" => 10},
+             %{"kind" => "work", "reps" => 5, "sec_per_rep" => 11, "sec_per_burpee" => 11}
+           ]
+  end
+
   defp request(rests) do
     WorkoutRequest.new(%{
       "burpee_type" => "six_count",

@@ -52,19 +52,6 @@ defmodule BurpeeTrainer.UserTime do
     end
   end
 
-  @spec in_week?(DateTime.t() | NaiveDateTime.t() | Date.t(), Date.t(), String.t()) :: boolean()
-  def in_week?(inserted_at, %Date{} = week_start, timezone) when is_binary(timezone) do
-    week_end = Date.add(week_start, 7)
-
-    case local_date(inserted_at, timezone) do
-      {:ok, date} ->
-        Date.compare(date, week_start) != :lt and Date.compare(date, week_end) == :lt
-
-      {:error, _reason} ->
-        false
-    end
-  end
-
   @spec local_date(DateTime.t() | NaiveDateTime.t() | Date.t(), String.t()) ::
           {:ok, Date.t()} | {:error, :invalid_timezone | :invalid_timestamp}
   def local_date(%DateTime{} = inserted_at, timezone) do

@@ -60,13 +60,6 @@ defmodule BurpeeTrainer.Workouts.CoachRecommendation do
     )
   end
 
-  @spec candidate_changeset(t(), map()) :: Ecto.Changeset.t()
-  def candidate_changeset(recommendation, attrs) do
-    recommendation
-    |> cast(attrs, [:pending_draft_id])
-    |> foreign_key_constraint(:pending_draft_id)
-  end
-
   defp validate_selection(changeset) do
     plan_id = get_field(changeset, :selected_workout_plan_id)
     video_id = get_field(changeset, :selected_workout_video_id)

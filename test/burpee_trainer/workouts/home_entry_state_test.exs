@@ -82,9 +82,8 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
   defp owned_published(user, _slot), do: plan_fixture(user)
 
   defp owned_archived(user, _slot) do
-    draft = workout_plan_draft_fixture(user)
-    {:ok, published} = Workouts.publish_draft(user, draft.id)
-    {:ok, _archived} = Workouts.archive_plan(user, published.id)
+    plan = plan_fixture(user)
+    {:ok, _archived} = Workouts.archive_plan(user, plan.id)
   end
 
   defp current_builtin_pin(user, slot), do: current_recommendation(user, slot)

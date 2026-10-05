@@ -51,12 +51,4 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
     |> change(status: :completed)
     |> validate_required([:workout_session_id, :completed_at])
   end
-
-  @spec abort_changeset(t(), map()) :: Ecto.Changeset.t()
-  def abort_changeset(run, attrs) do
-    run
-    |> cast(attrs, [:abort_reason, :aborted_at])
-    |> change(status: :aborted)
-    |> validate_required([:aborted_at])
-  end
 end

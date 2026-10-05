@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
   import BurpeeTrainer.Fixtures
   import Phoenix.LiveViewTest
 
-  alias BurpeeTrainer.{Goals, Repo, Workouts}
+  alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Workouts.WorkoutSession
 
   setup %{conn: conn} do
@@ -161,7 +161,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     completed = Repo.get!(WorkoutSession, started.id)
     assert completed.state == :completed
     assert completed.goal_id == goal.id
-    assert Goals.get_goal!(user, goal.id).status == :achieved
+    assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :achieved
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 

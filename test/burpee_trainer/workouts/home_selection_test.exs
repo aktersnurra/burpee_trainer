@@ -46,7 +46,12 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
   test "legacy automatic video is normalized without starting it", %{user: u, slot: slot} do
     {:ok, r} = Workouts.ensure_recommendation(u, Map.take(slot, [:slot_key, :slot_date]))
     video = video_fixture()
-    {:ok, _} = Workouts.select_recommendation(u, r.id, {:video, video.id}, "Legacy")
+
+    _ =
+      r
+      |> Ecto.Changeset.change(selected_workout_plan_id: nil, selected_workout_video_id: video.id)
+      |> Repo.update!()
+
     {:ok, shown} = Workouts.ensure_home_selection(u, slot)
     assert shown.plan.origin == :built_in
     assert Repo.get!(CoachRecommendation, r.id).selected_workout_video_id == nil

@@ -87,9 +87,8 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
   Never infer a medical condition or an unmeasured movement pace from prior results.
   """
 
-  @spec system_prompt(BurpeeTrainer.Accounts.User.t(), :definition | :recommendation) ::
-          String.t()
-  def system_prompt(user, kind) when kind in [:definition, :recommendation] do
+  @spec system_prompt(BurpeeTrainer.Accounts.User.t(), :definition) :: String.t()
+  def system_prompt(user, kind) when kind == :definition do
     {:ok, context} = UserTime.context(user, DateTime.utc_now(:second))
 
     levels =
@@ -117,16 +116,8 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
       end)
 
     output_rule =
-      case kind do
-        :definition ->
-          "Return only one version-1 workout definition object matching the exact schema. " <>
-            "Include at least one work event. If the user requests no rest, include no rest events."
-
-        :recommendation ->
-          "Return the coach recommendation schema. Choose select_existing or create; " <>
-            "when creating, the embedded definition must follow these same event rules. " <>
-            "Use the active attempt's slot and library facts. Never select a video."
-      end
+      "Return only one version-1 workout definition object matching the exact schema. " <>
+        "Include at least one work event. If the user requests no rest, include no rest events."
 
     @training_rules <>
       "\n" <>

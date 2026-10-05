@@ -1,4 +1,4 @@
-defmodule BurpeeTrainerWeb.LegacyPageRoutesTest do
+defmodule BurpeeTrainerWeb.VideoRoutesTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import BurpeeTrainer.Fixtures
@@ -11,9 +11,10 @@ defmodule BurpeeTrainerWeb.LegacyPageRoutesTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "obsolete workout and video pages return to Home", %{conn: conn} do
-    for path <- ["/workouts", "/workouts/new", "/workouts/drafts/42", "/videos", "/videos/42"] do
-      assert conn |> get(path) |> redirected_to() == ~p"/"
+  test "removed pages are not routed", %{conn: conn} do
+    for path <-
+          ~w[/workouts /workouts/new /workouts/drafts/1 /videos /videos/1 /stats /stats/sessions/1] do
+      assert get(conn, path).status == 404
     end
   end
 

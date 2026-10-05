@@ -96,7 +96,7 @@ defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
     assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='27']")
     assert has_element?(view, "#home-history-sheet-details-#{session.id}", "Reps · —")
 
-    persisted = Workouts.get_session!(user, session.id)
+    persisted = Repo.get!(WorkoutSession, session.id)
     assert persisted.video_snapshot["count"] == nil
     assert persisted.burpee_count_planned == nil
     assert persisted.burpee_count_actual == 27

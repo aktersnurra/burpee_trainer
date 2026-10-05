@@ -54,14 +54,6 @@ defmodule BurpeeTrainer.Coach.AuthoritativeSession do
 
   def within_window?(_value, _lower_bound, _now), do: false
 
-  @spec session_sort_key(map()) :: {integer(), integer()}
-  def session_sort_key(session) when is_map(session) do
-    {datetime_sort_key(field(session, :completed_at)),
-     positive_integer_or_zero(field(session, :id))}
-  end
-
-  def session_sort_key(_session), do: {0, 0}
-
   @spec datetime_sort_key(DateTime.t() | NaiveDateTime.t() | term()) :: integer()
   def datetime_sort_key(value) do
     with {:ok, datetime} <- normalize_datetime(value) do
@@ -104,7 +96,5 @@ defmodule BurpeeTrainer.Coach.AuthoritativeSession do
   defp normalize_burpee_type(_value), do: nil
 
   defp positive_integer?(value), do: is_integer(value) and value > 0
-  defp positive_integer_or_zero(value) when is_integer(value) and value > 0, do: value
-  defp positive_integer_or_zero(_value), do: 0
   defp field(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
 end

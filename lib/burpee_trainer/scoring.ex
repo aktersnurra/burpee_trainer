@@ -56,23 +56,6 @@ defmodule BurpeeTrainer.Scoring do
   end
 
   @doc """
-  Per-ISO-week push-up totals (Mon–Sun), sorted descending by `week_start`.
-  Warmup sessions are excluded.
-  """
-  @spec weekly_pushups([map]) :: [%{week_start: Date.t(), pushups: non_neg_integer}]
-  def weekly_pushups(sessions) do
-    sessions
-    |> Enum.reject(&warmup?/1)
-    |> Enum.group_by(fn %{completed_at: dt} ->
-      dt |> DateTime.to_date() |> Date.beginning_of_week(:monday)
-    end)
-    |> Enum.map(fn {week_start, rows} ->
-      %{week_start: week_start, pushups: total_pushups(rows)}
-    end)
-    |> Enum.sort_by(& &1.week_start, {:desc, Date})
-  end
-
-  @doc """
   Push-up total for the ISO week containing `date` (warmup excluded).
   """
   @spec week_pushups([map], Date.t()) :: non_neg_integer

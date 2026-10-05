@@ -55,20 +55,12 @@ defmodule BurpeeTrainerWeb.Router do
     pipe_through([:browser, :require_auth])
 
     get("/videos/stream/:filename", VideoController, :stream)
-    get("/workouts", LegacyPageController, :home)
-    get("/workouts/new", LegacyPageController, :home)
-    get("/workouts/drafts/:id", LegacyPageController, :home)
-    get("/videos", LegacyPageController, :home)
-    get("/videos/:id", LegacyPageController, :home)
 
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
       live("/", OverviewLive)
       live("/session/:session_id", SessionLive, :show)
       live("/videos/:video_id/session/:session_id", VideoLive.Show, :session)
-      live("/stats", StatsLive, :index)
-      live("/stats/sessions/:id", StatsLive, :index)
-      live("/tracking-test", TrackingTestLive)
     end
   end
 
@@ -79,7 +71,15 @@ defmodule BurpeeTrainerWeb.Router do
       pipe_through(:browser)
 
       live_dashboard("/dashboard", metrics: BurpeeTrainerWeb.Telemetry)
-      forward("/mailbox", Plug.Swoosh.MailboxPreview)
+    end
+
+    scope "/", BurpeeTrainerWeb do
+      pipe_through([:browser, :require_auth])
+
+      live_session :dev_authed,
+        on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
+        live("/tracking-test", TrackingTestLive)
+      end
     end
   end
 end

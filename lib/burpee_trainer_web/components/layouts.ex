@@ -112,36 +112,6 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false
 
-  attr(:id, :string, default: "theme-toggle")
-  attr(:session_nav?, :boolean, default: false)
-  attr(:label, :boolean, default: false)
-  attr(:class, :any, default: nil)
-
-  def theme_button(assigns) do
-    ~H"""
-    <button
-      id={@id}
-      type="button"
-      phx-click={JS.dispatch("phx:toggle-theme")}
-      class={[
-        "items-center justify-center gap-2 rounded-xl border transition",
-        @label && "px-3 py-2 text-sm font-medium",
-        !@label && "size-9",
-        @session_nav? &&
-          "session-surface border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-surface-alt)]",
-        !@session_nav? &&
-          "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised",
-        @class
-      ]}
-      aria-label="Toggle color theme"
-    >
-      <.icon name="hero-moon" class="size-4 dark:hidden" />
-      <.icon name="hero-sun" class="hidden size-4 dark:block" />
-      <span :if={@label}>Theme</span>
-    </button>
-    """
-  end
-
   attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
   attr(:title, :string, required: true)

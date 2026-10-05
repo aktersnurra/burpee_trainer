@@ -13,7 +13,7 @@ defmodule BurpeeTrainer.Workouts do
 
   alias BurpeeTrainer.{CoachReconciler, PlanCompiler, UserTime}
 
-  alias BurpeeTrainer.PlanCompiler.{Program, ProgramHash, WorkoutDefinition}
+  alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
 
   alias BurpeeTrainer.Goals
   alias BurpeeTrainer.Goals.Goal
@@ -38,9 +38,6 @@ defmodule BurpeeTrainer.Workouts do
   # a full-length-ish bout (≤ 20 min) of at least this many burpees.
   @pace_pr_min_count 20
   @pace_pr_max_duration 1200
-  @coach_evidence_plan_limit 24
-  @coach_evidence_plan_page_size @coach_evidence_plan_limit * 2
-  @coach_evidence_plan_scan_limit @coach_evidence_plan_limit * 10
   @pose_chunk_identity_fields [
     :segment,
     :chunk_index,
@@ -64,17 +61,6 @@ defmodule BurpeeTrainer.Workouts do
           plan.state == :published and
             (plan.user_id == ^user_id or (is_nil(plan.user_id) and plan.origin == :built_in)),
         order_by: [asc: plan.name, asc: plan.id]
-      )
-    )
-  end
-
-  @doc "Lists only drafts owned by the user."
-  @spec list_drafts(User.t()) :: [WorkoutPlan.t()]
-  def list_drafts(%User{id: user_id}) do
-    Repo.all(
-      from(plan in WorkoutPlan,
-        where: plan.user_id == ^user_id and plan.state == :draft,
-        order_by: [desc: plan.updated_at, desc: plan.id]
       )
     )
   end
@@ -472,175 +458,6 @@ defmodule BurpeeTrainer.Workouts do
   def ensure_recommendation(%User{}, _attrs),
     do: {:error, Error.new(:invalid_recommendation_selection)}
 
-  @doc "Selects one currently available published plan or video."
-  @spec select_recommendation(User.t(), pos_integer(), recommendation_selection(), String.t()) ::
-          {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def select_recommendation(%User{} = user, recommendation_id, selection, rationale) do
-    select_recommendation_if_current(user, recommendation_id, selection, rationale, :any)
-  end
-
-  @doc "Selects a plan or video only while the recommendation retains the expected selection."
-  @spec select_recommendation_if_current(
-          User.t(),
-          pos_integer(),
-          recommendation_selection(),
-          String.t(),
-          recommendation_selection() | :any
-        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def select_recommendation_if_current(
-        %User{id: user_id} = user,
-        recommendation_id,
-        selection,
-        rationale,
-        expected_selection
-      )
-      when is_integer(recommendation_id) and recommendation_id > 0 and is_binary(rationale) do
-    immediate_lifecycle_transaction(fn ->
-      with %CoachRecommendation{} = recommendation <-
-             Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id),
-           :ok <- recommendation_selection_matches(recommendation, expected_selection),
-           {:ok, selection_attrs} <- recommendation_selection_attrs(user, selection),
-           {:ok, updated} <-
-             recommendation
-             |> CoachRecommendation.selection_changeset(
-               Map.put(selection_attrs, :rationale, rationale)
-             )
-             |> Repo.update() do
-        {:ok, updated}
-      else
-        {:error, %Error{} = error} ->
-          {:error, error}
-
-        {:error, %Ecto.Changeset{}} ->
-          {:error, Error.new(:invalid_recommendation_selection)}
-
-        _missing ->
-          {:error, Error.new(:invalid_recommendation_selection)}
-      end
-    end)
-  end
-
-  def select_recommendation_if_current(
-        %User{},
-        _recommendation_id,
-        _selection,
-        _rationale,
-        _expected_selection
-      ),
-      do: {:error, Error.new(:invalid_recommendation_selection)}
-
-  @doc "Atomically verifies and selects an existing provider candidate against current facts."
-  @spec select_recommendation_candidate_if_current(
-          User.t(),
-          pos_integer(),
-          pos_integer(),
-          String.t(),
-          recommendation_selection()
-        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def select_recommendation_candidate_if_current(
-        %User{id: user_id} = user,
-        recommendation_id,
-        plan_id,
-        rationale,
-        expected_selection
-      )
-      when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(plan_id) and
-             plan_id > 0 and is_binary(rationale) do
-    immediate_lifecycle_transaction(fn ->
-      with %CoachRecommendation{} = recommendation <-
-             Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id),
-           :ok <- recommendation_selection_matches(recommendation, expected_selection),
-           {:ok, %WorkoutPlan{} = plan} <- get_library_plan(user, plan_id),
-           :ok <- candidate_matches_slot_policy(user, recommendation, plan),
-           {:ok, updated} <-
-             recommendation
-             |> CoachRecommendation.selection_changeset(%{
-               selected_workout_plan_id: plan.id,
-               selected_workout_video_id: nil,
-               rationale: rationale
-             })
-             |> Repo.update() do
-        {:ok, updated}
-      else
-        {:error, %Error{code: :recommendation_selection_changed} = error} ->
-          {:error, error}
-
-        {:error, %Error{}} ->
-          {:error, Error.new(:invalid_recommendation_selection, %{reason: :policy_mismatch})}
-
-        {:error, %Ecto.Changeset{}} ->
-          {:error, Error.new(:invalid_recommendation_selection)}
-
-        _missing ->
-          {:error, Error.new(:invalid_recommendation_selection)}
-      end
-    end)
-  end
-
-  def select_recommendation_candidate_if_current(
-        %User{},
-        _recommendation_id,
-        _plan_id,
-        _rationale,
-        _expected_selection
-      ),
-      do: {:error, Error.new(:invalid_recommendation_selection)}
-
-  @doc "Creates a verified coach draft and attaches it only if the candidate slot is empty."
-  @spec attach_candidate(User.t(), pos_integer(), map()) ::
-          {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def attach_candidate(%User{} = user, recommendation_id, attrs) do
-    attach_candidate_if_current(user, recommendation_id, attrs, :any)
-  end
-
-  @doc "Attaches a verified draft only while the recommendation retains the expected selection."
-  @spec attach_candidate_if_current(
-          User.t(),
-          pos_integer(),
-          map(),
-          recommendation_selection() | :any
-        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def attach_candidate_if_current(
-        %User{id: user_id} = user,
-        recommendation_id,
-        attrs,
-        expected_selection
-      )
-      when is_integer(recommendation_id) and recommendation_id > 0 and is_map(attrs) do
-    immediate_lifecycle_transaction(fn ->
-      recommendation =
-        Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id)
-
-      with %CoachRecommendation{pending_draft_id: nil} <- recommendation,
-           :ok <- recommendation_selection_matches(recommendation, expected_selection),
-           {:ok, draft} <- create_coach_draft(user, provider_draft_attrs(attrs)),
-           :ok <- candidate_matches_slot_policy(user, recommendation, draft),
-           {1, _rows} <-
-             Repo.update_all(
-               from(candidate in CoachRecommendation,
-                 where:
-                   candidate.id == ^recommendation_id and candidate.user_id == ^user_id and
-                     is_nil(candidate.pending_draft_id)
-               ),
-               set: candidate_attachment_updates(attrs, draft.id)
-             ),
-           %CoachRecommendation{} = attached <- Repo.get(CoachRecommendation, recommendation_id) do
-        {:ok, attached}
-      else
-        {:error, %Error{} = error} -> {:error, error}
-        _stale -> {:error, Error.new(:candidate_no_longer_current)}
-      end
-    end)
-  end
-
-  def attach_candidate_if_current(
-        %User{},
-        _recommendation_id,
-        _attrs,
-        _expected_selection
-      ),
-      do: {:error, Error.new(:candidate_no_longer_current)}
-
   @doc "Atomically accepts the exact pending draft against the caller's expected selection."
   @spec accept_candidate(
           User.t(),
@@ -724,40 +541,6 @@ defmodule BurpeeTrainer.Workouts do
          _expected_selection
        ),
        do: {:error, Error.new(:candidate_no_longer_current)}
-
-  @doc "Atomically rejects and deletes the exact pending draft without changing selection."
-  @spec reject_candidate(
-          User.t(),
-          pos_integer(),
-          pos_integer(),
-          recommendation_selection()
-        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def reject_candidate(
-        %User{id: user_id},
-        recommendation_id,
-        draft_id,
-        expected_selection
-      )
-      when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(draft_id) and
-             draft_id > 0 do
-    immediate_lifecycle_transaction(fn ->
-      with {:ok, recommendation} <-
-             current_candidate(user_id, recommendation_id, draft_id, expected_selection),
-           {1, _rows} <- clear_current_candidate(recommendation, draft_id, expected_selection),
-           %WorkoutPlan{user_id: ^user_id, state: :draft} = draft <-
-             Repo.get(WorkoutPlan, draft_id),
-           {:ok, _deleted} <- Repo.delete(draft),
-           %CoachRecommendation{} = retained <- Repo.get(CoachRecommendation, recommendation_id) do
-        {:ok, retained}
-      else
-        {:error, %Error{} = error} -> {:error, error}
-        _stale -> {:error, Error.new(:candidate_no_longer_current)}
-      end
-    end)
-  end
-
-  def reject_candidate(%User{}, _recommendation_id, _draft_id, _expected_selection),
-    do: {:error, Error.new(:candidate_no_longer_current)}
 
   @doc "Keeps a recommendation startable by selecting the built-in fallback when its source disappears."
   @spec ensure_recommendation_selection_available(User.t(), pos_integer()) ::
@@ -843,100 +626,6 @@ defmodule BurpeeTrainer.Workouts do
   def get_draft(%User{}, draft_id),
     do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
 
-  @spec create_user_draft(User.t(), map()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def create_user_draft(%User{} = user, attrs) when is_map(attrs) do
-    create_draft(user, :user, attrs)
-  end
-
-  @doc false
-  @spec create_coach_draft(User.t(), map()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def create_coach_draft(%User{} = user, attrs) when is_map(attrs) do
-    create_draft(user, :coach, attrs)
-  end
-
-  @spec replace_draft(User.t(), pos_integer(), map()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def replace_draft(%User{} = user, draft_id, attrs)
-      when is_integer(draft_id) and draft_id > 0 and is_map(attrs) do
-    immediate_lifecycle_transaction(fn ->
-      with {:ok, draft} <- get_mutable_draft(user, draft_id),
-           :ok <- compare_expected_draft_revision(draft, attrs),
-           {:ok, content} <- canonical_draft_content(attrs),
-           {:ok, replaced} <-
-             draft
-             |> WorkoutPlan.replace_draft_changeset(content)
-             |> Repo.update()
-             |> normalize_plan_write() do
-        {:ok, replaced}
-      end
-    end)
-  end
-
-  def replace_draft(%User{}, draft_id, _attrs),
-    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
-
-  @spec publish_draft(User.t(), pos_integer()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def publish_draft(%User{} = user, draft_id) when is_integer(draft_id) and draft_id > 0 do
-    case immediate_lifecycle_transaction(fn -> publish_unattached_draft(user, draft_id) end) do
-      {:ok, plan} ->
-        BurpeeTrainer.Workouts.Finalization.notify(plan)
-        {:ok, plan}
-
-      error ->
-        error
-    end
-  end
-
-  def publish_draft(%User{}, draft_id),
-    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
-
-  @doc "Explicitly publishes the reviewed revision and starts its immutable session atomically."
-  @spec publish_and_start_draft(User.t(), WorkoutPlan.t(), Ecto.UUID.t()) ::
-          {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def publish_and_start_draft(%User{} = user, %WorkoutPlan{} = expected, client_session_id) do
-    immediate_lifecycle_transaction(fn ->
-      with :ok <- valid_start_token(client_session_id),
-           :new <-
-             existing_start(user.id, client_session_id, :plan, expected.id, expected.content_hash),
-           {:ok, draft} <- get_draft(user, expected.id),
-           :ok <- compare_expected_draft_revision(draft, %{expected_revision: expected}),
-           {:ok, published} <- publish_unattached_draft(user, draft.id),
-           {:ok, session} <- start_plan(user, published.id, client_session_id) do
-        {:ok, {session, published}}
-      else
-        {:existing, session} -> {:ok, {session, nil}}
-        {:error, %Error{} = error} -> {:error, error}
-      end
-    end)
-    |> BurpeeTrainer.Workouts.Finalization.deliver()
-  end
-
-  @spec copy_to_draft(User.t(), pos_integer()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def copy_to_draft(%User{id: user_id} = user, plan_id)
-      when is_integer(plan_id) and plan_id > 0 do
-    case Repo.get(WorkoutPlan, plan_id) do
-      %WorkoutPlan{state: state, user_id: ^user_id} = source
-      when state in [:published, :archived] ->
-        copy_library_source(user, source)
-
-      %WorkoutPlan{state: :published, user_id: nil, origin: :built_in} = source ->
-        copy_library_source(user, source)
-
-      %WorkoutPlan{state: :draft, user_id: ^user_id} ->
-        {:error, Error.new(:published_required, %{plan_id: plan_id})}
-
-      _unavailable ->
-        {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
-    end
-  end
-
-  def copy_to_draft(%User{}, plan_id),
-    do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
-
   @spec archive_plan(User.t(), pos_integer()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
   def archive_plan(%User{} = user, plan_id) when is_integer(plan_id) and plan_id > 0 do
@@ -945,24 +634,6 @@ defmodule BurpeeTrainer.Workouts do
 
   def archive_plan(%User{}, plan_id),
     do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
-
-  @spec delete_draft(User.t(), pos_integer()) :: :ok | {:error, Error.t()}
-  def delete_draft(%User{} = user, draft_id) when is_integer(draft_id) and draft_id > 0 do
-    immediate_lifecycle_transaction(fn ->
-      with {:ok, draft} <- get_mutable_draft(user, draft_id),
-           false <- candidate_attached?(draft.id),
-           {:ok, _draft} <- Repo.delete(draft) do
-        :ok
-      else
-        true -> {:error, Error.new(:candidate_attached, %{draft_id: draft_id})}
-        {:error, %Error{} = error} -> {:error, error}
-        {:error, reason} -> {:error, Error.new(:workout_immutable, %{reason: reason})}
-      end
-    end)
-  end
-
-  def delete_draft(%User{}, draft_id),
-    do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
 
   @draft_revision_fields [
     :design_session_id,
@@ -997,15 +668,6 @@ defmodule BurpeeTrainer.Workouts do
     :rationale,
     :events
   ]
-
-  defp create_draft(%User{id: user_id}, origin, attrs) when origin in [:user, :coach] do
-    with {:ok, content} <- canonical_draft_content(attrs) do
-      %WorkoutPlan{user_id: user_id, origin: origin, state: :draft}
-      |> WorkoutPlan.new_draft_changeset(content)
-      |> Repo.insert()
-      |> normalize_plan_write()
-    end
-  end
 
   defp canonical_draft_content(attrs) do
     with {:ok, definition_attrs} <- draft_definition(attrs),
@@ -1124,19 +786,6 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  @copy_name_suffix " (copy)"
-  @max_plan_name_graphemes 80
-
-  defp copy_library_source(%User{} = user, %WorkoutPlan{} = source) do
-    definition = Map.put(source.definition_json, "name", copied_plan_name(source.name))
-    create_user_draft(user, %{definition: definition, request_text: source.request_text})
-  end
-
-  defp copied_plan_name(source_name) do
-    prefix_length = @max_plan_name_graphemes - String.length(@copy_name_suffix)
-    String.slice(source_name, 0, prefix_length) <> @copy_name_suffix
-  end
-
   defp archive_owned_plan(%User{id: user_id}, plan_id) do
     with {:ok, plan} <- published_plan_for_archive(user_id, plan_id),
          {:ok, fallback} <- built_in_fallback(),
@@ -1176,63 +825,6 @@ defmodule BurpeeTrainer.Workouts do
       _unavailable ->
         {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
     end
-  end
-
-  defp recommendation_selection_attrs(%User{} = user, {:plan, plan_id})
-       when is_integer(plan_id) and plan_id > 0 do
-    case get_library_plan(user, plan_id) do
-      {:ok, %WorkoutPlan{}} ->
-        {:ok, %{selected_workout_plan_id: plan_id, selected_workout_video_id: nil}}
-
-      {:error, %Error{}} ->
-        {:error, Error.new(:invalid_recommendation_selection, %{plan_id: plan_id})}
-    end
-  end
-
-  defp recommendation_selection_attrs(%User{}, {:video, video_id})
-       when is_integer(video_id) and video_id > 0 do
-    case Repo.get(WorkoutVideo, video_id) do
-      %WorkoutVideo{available: true} ->
-        {:ok, %{selected_workout_plan_id: nil, selected_workout_video_id: video_id}}
-
-      _unavailable ->
-        {:error, Error.new(:invalid_recommendation_selection, %{video_id: video_id})}
-    end
-  end
-
-  defp recommendation_selection_attrs(%User{}, _selection),
-    do: {:error, Error.new(:invalid_recommendation_selection)}
-
-  defp candidate_matches_slot_policy(
-         %User{} = user,
-         %CoachRecommendation{slot_date: %Date{} = slot_date},
-         %WorkoutPlan{} = draft
-       ) do
-    Policy.verify_candidate(user, slot_date, draft)
-  end
-
-  defp candidate_matches_slot_policy(%User{}, %CoachRecommendation{}, %WorkoutPlan{}),
-    do: {:error, Error.new(:invalid_recommendation_selection, %{reason: :policy_mismatch})}
-
-  defp candidate_attachment_updates(attrs, draft_id) do
-    base = [pending_draft_id: draft_id, updated_at: lifecycle_now()]
-
-    case Map.get(attrs, :rationale) || Map.get(attrs, "rationale") do
-      rationale when is_binary(rationale) and rationale != "" ->
-        Keyword.put(base, :rationale, rationale)
-
-      _missing ->
-        base
-    end
-  end
-
-  defp provider_draft_attrs(attrs) do
-    %{
-      definition:
-        Map.get(attrs, :definition) || Map.get(attrs, "definition") ||
-          Map.get(attrs, :definition_json) || Map.get(attrs, "definition_json"),
-      request_text: Map.get(attrs, :request_text) || Map.get(attrs, "request_text")
-    }
   end
 
   defp current_candidate(user_id, recommendation_id, draft_id, expected_selection) do
@@ -1280,19 +872,6 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp constrain_expected_selection(query, _invalid), do: where(query, [candidate], false)
-
-  defp recommendation_selection_matches(%CoachRecommendation{}, :any), do: :ok
-
-  defp recommendation_selection_matches(
-         %CoachRecommendation{} = recommendation,
-         expected_selection
-       ) do
-    if current_recommendation_selection(recommendation) == expected_selection do
-      :ok
-    else
-      {:error, Error.new(:recommendation_selection_changed)}
-    end
-  end
 
   defp current_recommendation_selection(%CoachRecommendation{
          selected_workout_plan_id: plan_id,
@@ -1364,75 +943,6 @@ defmodule BurpeeTrainer.Workouts do
 
   defp lifecycle_now, do: DateTime.utc_now() |> DateTime.truncate(:second)
 
-  @doc "Returns user-owned published plans with supported self-contained program snapshots."
-  @spec list_owned_supported_plans(User.t()) :: [WorkoutPlan.t()]
-  def list_owned_supported_plans(%User{id: user_id}) do
-    user_id
-    |> list_owned_supported_library_plans_page(0, [])
-    |> Enum.take(@coach_evidence_plan_limit)
-  end
-
-  defp list_owned_supported_library_plans_page(user_id, offset, acc)
-       when offset < @coach_evidence_plan_scan_limit and length(acc) < @coach_evidence_plan_limit do
-    query_limit = min(@coach_evidence_plan_page_size, @coach_evidence_plan_scan_limit - offset)
-
-    batch =
-      Repo.all(
-        from(plan in WorkoutPlan,
-          where:
-            plan.user_id == ^user_id and plan.state == :published and
-              not is_nil(plan.program_json) and not is_nil(plan.content_hash),
-          order_by: [asc: plan.name, asc: plan.id],
-          limit: ^query_limit,
-          offset: ^offset
-        )
-      )
-
-    next_acc = acc ++ Enum.filter(batch, &owned_supported_library_plan?/1)
-
-    cond do
-      batch == [] or length(next_acc) >= @coach_evidence_plan_limit or
-          length(batch) < query_limit ->
-        next_acc
-
-      true ->
-        list_owned_supported_library_plans_page(user_id, offset + length(batch), next_acc)
-    end
-  end
-
-  defp list_owned_supported_library_plans_page(_user_id, _offset, acc), do: acc
-
-  @doc """
-  Fetch a source plan by id for a user.
-  Raises if the plan doesn't exist or belongs to a different user.
-  """
-  @spec get_plan!(User.t(), integer) :: WorkoutPlan.t()
-  def get_plan!(%User{id: user_id}, id) do
-    Repo.one!(
-      from(plan in WorkoutPlan,
-        where: plan.id == ^id and plan.user_id == ^user_id
-      )
-    )
-  end
-
-  @doc "Fetch an owned source plan by id, or nil when missing or owned by another user."
-  @spec get_plan(User.t(), integer) :: WorkoutPlan.t() | nil
-  def get_plan(%User{id: user_id}, id) do
-    Repo.one(from(plan in WorkoutPlan, where: plan.id == ^id and plan.user_id == ^user_id))
-  end
-
-  defp owned_supported_library_plan?(%WorkoutPlan{} = plan) do
-    with {:ok, definition} <- WorkoutDefinition.new(plan.definition_json),
-         {:ok, %Program{} = program} <- PlanCompiler.compile(definition) do
-      program.burpee_type == plan.burpee_type and
-        program.target_reps == plan.target_reps and
-        program.target_duration_sec == plan.target_duration_sec and
-        ProgramHash.hash(program) == plan.content_hash
-    else
-      _invalid -> false
-    end
-  end
-
   defp field_value(map, key) when is_map(map) do
     case Map.fetch(map, key) do
       {:ok, value} -> value
@@ -1445,94 +955,6 @@ defmodule BurpeeTrainer.Workouts do
   # ---------------------------------------------------------------------------
   # Pose capture
   # ---------------------------------------------------------------------------
-
-  @doc "Starts a pose capture run bound to an already-created session authority."
-  @spec start_pose_capture_run(User.t(), WorkoutSession.t(), map()) ::
-          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def start_pose_capture_run(
-        %User{id: user_id},
-        %WorkoutSession{id: session_id},
-        attrs \\ %{}
-      ) do
-    case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
-      %WorkoutSession{} ->
-        attrs = Map.put_new(attrs, "started_at", DateTime.utc_now(:second))
-
-        %PoseCaptureRun{
-          user_id: user_id,
-          workout_session_id: session_id,
-          status: :active
-        }
-        |> PoseCaptureRun.start_changeset(attrs)
-        |> Repo.insert()
-
-      nil ->
-        {:error, :not_found}
-    end
-  end
-
-  @doc """
-  Append one raw-ish pose trace chunk to an active capture run.
-  """
-  @spec append_pose_trace_chunk(User.t(), PoseCaptureRun.t(), map()) ::
-          {:ok, PoseTraceChunk.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def append_pose_trace_chunk(%User{id: user_id}, %PoseCaptureRun{id: run_id}, attrs) do
-    case get_user_pose_capture_run(user_id, run_id) do
-      %PoseCaptureRun{status: :active} = run ->
-        %PoseTraceChunk{pose_capture_run_id: run.id}
-        |> PoseTraceChunk.changeset(attrs)
-        |> Repo.insert()
-
-      %PoseCaptureRun{} ->
-        {:error, :not_found}
-
-      nil ->
-        {:error, :not_found}
-    end
-  end
-
-  @doc "Marks an owned capture run complete without changing its session binding."
-  @spec complete_pose_capture_run(User.t(), PoseCaptureRun.t(), WorkoutSession.t()) ::
-          {:ok, PoseCaptureRun.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def complete_pose_capture_run(
-        %User{id: user_id},
-        %PoseCaptureRun{id: run_id},
-        %WorkoutSession{id: session_id}
-      ) do
-    with %WorkoutSession{state: :completed} <-
-           Repo.get_by(WorkoutSession, id: session_id, user_id: user_id, state: :completed),
-         %PoseCaptureRun{status: :active, workout_session_id: ^session_id} = run <-
-           get_user_pose_capture_run(user_id, run_id) do
-      run
-      |> PoseCaptureRun.complete_changeset(%{"completed_at" => DateTime.utc_now(:second)})
-      |> Repo.update()
-    else
-      _missing_or_mismatched -> {:error, :not_found}
-    end
-  end
-
-  @doc """
-  Abort a capture run by deleting the run and all uploaded chunks.
-
-  Aborted tracked workouts must not retain pose data.
-  """
-  @spec abort_pose_capture_run(User.t(), PoseCaptureRun.t(), String.t() | nil) ::
-          :ok | {:error, Ecto.Changeset.t() | :not_found}
-  def abort_pose_capture_run(%User{id: user_id}, %PoseCaptureRun{id: run_id}, _reason) do
-    case get_user_pose_capture_run(user_id, run_id) do
-      %PoseCaptureRun{status: :active} = run ->
-        case Repo.delete(run) do
-          {:ok, _run} -> :ok
-          {:error, changeset} -> {:error, changeset}
-        end
-
-      %PoseCaptureRun{} ->
-        {:error, :not_found}
-
-      nil ->
-        {:error, :not_found}
-    end
-  end
 
   @doc """
   Ingest a deferred pose-trace batch for an already-saved, user-scoped session.
@@ -1765,18 +1187,6 @@ defmodule BurpeeTrainer.Workouts do
     })
     |> repo.update()
   end
-
-  defp get_user_pose_capture_run(user_id, run_id) do
-    Repo.one(
-      from(run in PoseCaptureRun,
-        where: run.id == ^run_id and run.user_id == ^user_id
-      )
-    )
-  end
-
-  # ---------------------------------------------------------------------------
-  # Sessions
-  # ---------------------------------------------------------------------------
 
   @spec start_plan(User.t(), pos_integer(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
@@ -2151,23 +1561,6 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  @doc "Returns authoritative sessions in the exact trailing six-week preparation window."
-  @spec list_trailing_authoritative_sessions(User.t(), DateTime.t()) :: [WorkoutSession.t()]
-  def list_trailing_authoritative_sessions(%User{id: user_id}, %DateTime{} = now) do
-    lower_bound = DateTime.add(now, -42 * 24 * 60 * 60, :second)
-
-    Repo.all(
-      from(session in WorkoutSession,
-        where:
-          session.user_id == ^user_id and session.state == :completed and
-            session.completed_at >= ^lower_bound and session.completed_at <= ^now,
-        order_by: [desc: session.completed_at, desc: session.id]
-      )
-    )
-    |> preload_session_execution_refs()
-    |> Enum.filter(&BurpeeTrainer.Coach.AuthoritativeSession.confirmed_non_warmup?/1)
-  end
-
   @doc "Returns the latest 16 non-warmup sessions used by coach memory and generation."
   @spec list_recent_training_sessions(User.t()) :: [WorkoutSession.t()]
   def list_recent_training_sessions(%User{id: user_id}) do
@@ -2181,27 +1574,6 @@ defmodule BurpeeTrainer.Workouts do
       )
     )
     |> preload_session_execution_refs()
-  end
-
-  @doc "Returns non-warmup sessions in the user's local current week."
-  @spec list_current_week_training_sessions(User.t(), DateTime.t()) :: [WorkoutSession.t()]
-  def list_current_week_training_sessions(%User{id: user_id} = user, %DateTime{} = now) do
-    with {:ok, context} <- UserTime.context(user, now),
-         {:ok, week_start_utc, week_end_utc} <- UserTime.week_bounds_utc(context) do
-      Repo.all(
-        from(session in WorkoutSession,
-          where:
-            session.user_id == ^user_id and session.state == :completed and
-              (is_nil(session.tags) or session.tags != "warmup") and
-              session.completed_at >= ^week_start_utc and
-              session.completed_at < ^week_end_utc,
-          order_by: [desc: session.completed_at, desc: session.id]
-        )
-      )
-      |> preload_session_execution_refs()
-    else
-      {:error, _reason} -> []
-    end
   end
 
   defp preload_session_execution_refs(sessions) when is_list(sessions), do: sessions
@@ -2220,12 +1592,6 @@ defmodule BurpeeTrainer.Workouts do
       )
     )
   end
-
-  @doc """
-  Return the latest unresolved clarification for a recommendation, if present.
-  """
-  @spec pending_coach_clarification(CoachRecommendation.t()) :: String.t() | nil
-  def pending_coach_clarification(%CoachRecommendation{}), do: nil
 
   @doc """
   Return per-ISO-week training minutes for a user, excluding warmup sessions.
@@ -2253,69 +1619,6 @@ defmodule BurpeeTrainer.Workouts do
       %{week_start: week_start, minutes: minutes, met_goal: minutes >= 79.0}
     end)
     |> Enum.sort_by(& &1.week_start, {:desc, Date})
-  end
-
-  @doc "Returns current local-week minutes and trained dates for Home."
-  @spec current_week_summary(User.t(), DateTime.t()) :: %{
-          week_start: Date.t(),
-          minutes: float(),
-          met_goal: boolean(),
-          trained_days: MapSet.t()
-        }
-  def current_week_summary(user, now \\ DateTime.utc_now()) do
-    {:ok, context} = UserTime.context(user, now)
-    sessions = list_current_week_training_sessions(user, now)
-    minutes = Enum.sum_by(sessions, & &1.duration_sec_actual) / 60.0
-
-    trained_days =
-      sessions
-      |> Enum.map(fn session ->
-        {:ok, local_date} = UserTime.local_date(session.completed_at, context.timezone)
-        local_date
-      end)
-      |> MapSet.new()
-
-    %{
-      week_start: context.week_start,
-      minutes: minutes,
-      met_goal: minutes >= 80.0,
-      trained_days: trained_days
-    }
-  end
-
-  @doc """
-  Returns a MapSet of local dates in the user's current week on which the
-  user completed at least one non-warmup session.
-  """
-  @spec this_week_trained_days(User.t()) :: MapSet.t()
-  def this_week_trained_days(user) do
-    user
-    |> current_week_summary()
-    |> Map.fetch!(:trained_days)
-  end
-
-  @doc """
-  Returns the `%WorkoutPlan{}` from the most recent non-warmup session that has
-  a plan_id, or `nil` if none exists.
-  """
-  @spec last_run_plan(User.t()) :: WorkoutPlan.t() | nil
-  def last_run_plan(%User{id: user_id}) do
-    result =
-      Repo.one(
-        from(s in WorkoutSession,
-          join: p in WorkoutPlan,
-          on: p.id == s.plan_id,
-          where:
-            s.user_id == ^user_id and s.state == :completed and
-              not is_nil(s.plan_id) and
-              (is_nil(s.tags) or s.tags != "warmup"),
-          order_by: [desc: s.completed_at, desc: s.id],
-          limit: 1,
-          select: p
-        )
-      )
-
-    result
   end
 
   @doc """
@@ -2361,6 +1664,10 @@ defmodule BurpeeTrainer.Workouts do
     {Enum.take(rows, limit), has_more}
   end
 
+  @doc """
+  All sessions for a user + burpee type suitable for progress charting:
+  burpee_count_actual > 0 and duration_sec_actual > 0, ordered oldest first.
+  """
   @spec get_session(User.t(), integer) :: WorkoutSession.t() | nil
   def get_session(%User{id: user_id}, id) when is_integer(id) and id > 0 do
     Repo.one(
@@ -2373,61 +1680,6 @@ defmodule BurpeeTrainer.Workouts do
 
   def get_session(%User{}, _invalid_id), do: nil
 
-  @spec get_session!(User.t(), integer) :: WorkoutSession.t()
-  def get_session!(%User{id: user_id}, id) do
-    Repo.one!(
-      from(s in WorkoutSession,
-        where: s.user_id == ^user_id and s.id == ^id,
-        preload: [:plan, :goal]
-      )
-    )
-  end
-
-  @doc """
-  Most recent session for a user + burpee type that has usable baseline data:
-  burpee_count_actual > 0 and duration_sec_actual between 1190 and 1210 (20 min ± 10 sec).
-  """
-  @spec last_session_for_type(User.t(), atom) :: WorkoutSession.t() | nil
-  def last_session_for_type(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
-    Repo.one(
-      from(s in WorkoutSession,
-        where:
-          s.user_id == ^user_id and s.state == :completed and
-            s.burpee_type == ^burpee_type and
-            s.burpee_count_actual > 0 and
-            s.duration_sec_actual >= 1190 and
-            s.duration_sec_actual <= 1210,
-        order_by: [desc: s.completed_at, desc: s.id],
-        limit: 1
-      )
-    )
-  end
-
-  @doc """
-  All-time best qualifying session (highest burpee_count_actual) for a user + burpee type.
-  Qualifying = duration_sec_actual in [1190, 1210] and burpee_count_actual > 0.
-  Returns nil if no qualifying sessions exist.
-  """
-  @spec best_qualifying_session(User.t(), atom) :: WorkoutSession.t() | nil
-  def best_qualifying_session(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
-    Repo.one(
-      from(s in WorkoutSession,
-        where:
-          s.user_id == ^user_id and s.state == :completed and
-            s.burpee_type == ^burpee_type and
-            s.burpee_count_actual > 0 and
-            s.duration_sec_actual >= 1190 and
-            s.duration_sec_actual <= 1210,
-        order_by: [desc: s.burpee_count_actual, desc: s.completed_at, desc: s.id],
-        limit: 1
-      )
-    )
-  end
-
-  @doc """
-  All sessions for a user + burpee type suitable for progress charting:
-  burpee_count_actual > 0 and duration_sec_actual > 0, ordered oldest first.
-  """
   @spec list_sessions_for_chart(User.t(), atom) :: [WorkoutSession.t()]
   def list_sessions_for_chart(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
     Repo.all(
@@ -2506,30 +1758,9 @@ defmodule BurpeeTrainer.Workouts do
   # Helpers
   # ---------------------------------------------------------------------------
 
-  @doc false
-  def preload_plan(%WorkoutPlan{} = plan), do: plan
-
   # ---------------------------------------------------------------------------
   # Gamification — push-up score, personal bests, milestone detection
   # ---------------------------------------------------------------------------
-
-  @doc """
-  Push-up total for the ISO week containing `today` (warmup excluded).
-  """
-  @spec current_week_pushups(User.t(), Date.t()) :: non_neg_integer
-  def current_week_pushups(%User{} = user, today \\ Date.utc_today()) do
-    user
-    |> scoring_sessions()
-    |> localize_scoring_sessions(user.timezone)
-    |> Scoring.week_pushups(today)
-  end
-
-  @doc """
-  Stored gamification bests for a user, with zero/nil defaults when the
-  `user_stats` row does not yet exist.
-  """
-  @spec gamification_stats(User.t()) :: map
-  def gamification_stats(%User{id: user_id}), do: read_gamification_stats(user_id)
 
   @doc """
   Presents milestones for a completed session and updates aggregate bests.
@@ -2645,22 +1876,6 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  defp scoring_sessions(%User{id: user_id}) do
-    Repo.all(
-      from(s in WorkoutSession,
-        where: s.user_id == ^user_id and s.state == :completed,
-        select: %{
-          id: s.id,
-          burpee_type: s.burpee_type,
-          burpee_count_actual: s.burpee_count_actual,
-          duration_sec_actual: s.duration_sec_actual,
-          completed_at: s.completed_at,
-          tags: s.tags
-        }
-      )
-    )
-  end
-
   defp future_completed_session?(user_id, completed_at) do
     Repo.exists?(
       from(s in WorkoutSession,
@@ -2755,30 +1970,6 @@ defmodule BurpeeTrainer.Workouts do
       duration_sec_actual: s.duration_sec_actual,
       tags: s.tags
     }
-  end
-
-  defp read_gamification_stats(user_id) do
-    defaults = %{
-      best_week_pushups: 0,
-      best_session_pushups: 0,
-      best_pace_sec_per_burpee: nil,
-      lifetime_pushup_milestone: 0
-    }
-
-    case Repo.one(
-           from(us in "user_stats",
-             where: us.user_id == ^user_id,
-             select: %{
-               best_week_pushups: us.best_week_pushups,
-               best_session_pushups: us.best_session_pushups,
-               best_pace_sec_per_burpee: us.best_pace_sec_per_burpee,
-               lifetime_pushup_milestone: us.lifetime_pushup_milestone
-             }
-           )
-         ) do
-      nil -> defaults
-      row -> Map.merge(defaults, row)
-    end
   end
 
   defp persist_bests(user_id, today, data) do

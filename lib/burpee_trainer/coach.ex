@@ -40,7 +40,7 @@ defmodule BurpeeTrainer.Coach do
   set_reps only when the user explicitly supplies or asks to preserve that sequence.
   """
 
-  def revise_home_workout(user, expected, instruction, opts \\ []) do
+  defp revise_home_workout(user, expected, instruction, opts) do
     with :ok <- outside_authoring_transaction(),
          {:ok, text} <- validate_authoring_input(instruction),
          {:ok, source} <- Workouts.verify_home_selection(user, expected),
@@ -419,101 +419,17 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  @spec prepare_draft(Accounts.User.t(), String.t(), keyword()) ::
-          {:ok, map()} | {:error, Error.t()}
-  def prepare_draft(%Accounts.User{} = user, instruction, opts \\ [])
-      when is_binary(instruction) and is_list(opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(instruction),
-         key <- Keyword.get(opts, :workspace_key, "creator:#{Ecto.UUID.generate()}"),
-         {:ok, context} <- Context.ensure_session(user, nil, key) do
-      prepare_request(user, nil, context, text, %{kind: :create, workspace_key: key}, opts)
-    end
-  end
-
-  @spec confirm_draft(Accounts.User.t(), map(), keyword()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def confirm_draft(user, prepared, opts \\ [])
-
-  def confirm_draft(
-        %Accounts.User{id: user_id} = user,
-        %{
-          user_id: user_id,
-          scope: %{kind: :create, workspace_key: key},
-          request: %WorkoutRequest{} = request,
-          text: text,
-          context_id: context_id
-        },
-        opts
-      )
-      when is_list(opts) do
-    with {:ok, context} <- Context.ensure_session(user, nil, key),
-         true <- context.id == context_id do
-      create_draft(
-        user,
-        text,
-        opts |> Keyword.put(:workspace_key, key) |> Keyword.put(:confirmed_request, request)
-      )
-    else
-      _ -> {:error, Error.new(:design_workspace_changed)}
-    end
-  end
-
-  def confirm_draft(%Accounts.User{}, _prepared, _opts),
-    do: {:error, Error.new(:design_workspace_changed)}
-
-  @spec prepare_refinement(Accounts.User.t(), pos_integer(), String.t(), keyword()) ::
-          {:ok, map()} | {:error, Error.t()}
-  def prepare_refinement(%Accounts.User{} = user, id, instruction, opts \\ [])
-      when is_integer(id) and id > 0 and is_binary(instruction) and is_list(opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, draft} <- refinable_draft(user, id),
-         {:ok, text} <- validate_authoring_input(instruction),
-         {:ok, context} <- Context.ensure_session(user, draft, "draft:#{draft.id}") do
-      prepare_request(user, draft, context, text, %{kind: :refine, draft_id: id}, opts)
-    end
-  end
-
-  @spec confirm_refinement(Accounts.User.t(), map(), keyword()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def confirm_refinement(user, prepared, opts \\ [])
-
-  def confirm_refinement(
-        %Accounts.User{id: user_id} = user,
-        %{
-          user_id: user_id,
-          scope: %{kind: :refine, draft_id: id},
-          request: %WorkoutRequest{} = request,
-          text: text,
-          context_id: context_id
-        },
-        opts
-      )
-      when is_list(opts) do
-    with {:ok, draft} <- refinable_draft(user, id),
-         {:ok, context} <- Context.ensure_session(user, draft, "draft:#{id}"),
-         true <- context.id == context_id do
-      refine_draft(user, id, text, Keyword.put(opts, :confirmed_request, request))
-    else
-      {:error, %Error{} = error} -> {:error, error}
-      _ -> {:error, Error.new(:design_workspace_changed)}
-    end
-  end
-
-  def confirm_refinement(%Accounts.User{}, _prepared, _opts),
-    do: {:error, Error.new(:design_workspace_changed)}
-
   @spec bootstrap_home_draft(Accounts.User.t(), map(), String.t(), keyword()) ::
           {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  def bootstrap_home_draft(user, slot, request, opts \\ [])
+  defp bootstrap_home_draft(user, slot, request, opts)
 
-  def bootstrap_home_draft(
-        %Accounts.User{} = user,
-        %{slot_key: slot_key} = slot,
-        request,
-        opts
-      )
-      when is_binary(slot_key) and is_binary(request) and is_list(opts) do
+  defp bootstrap_home_draft(
+         %Accounts.User{} = user,
+         %{slot_key: slot_key} = slot,
+         request,
+         opts
+       )
+       when is_binary(slot_key) and is_binary(request) and is_list(opts) do
     with :ok <- outside_authoring_transaction(),
          {:ok, text} <- validate_authoring_input(request),
          {:ok, context} <- Context.ensure_session(user, nil, "home-bootstrap:" <> slot_key) do
@@ -523,51 +439,8 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  def bootstrap_home_draft(%Accounts.User{}, _slot, _request, _opts),
+  defp bootstrap_home_draft(%Accounts.User{}, _slot, _request, _opts),
     do: {:error, Error.new(:invalid_workout_definition)}
-
-  @spec create_draft(Accounts.User.t(), String.t(), keyword()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def create_draft(user, request, opts \\ [])
-
-  def create_draft(%Accounts.User{} = user, request, opts)
-      when is_binary(request) and is_list(opts) do
-    started_at = System.monotonic_time()
-
-    result =
-      with :ok <- outside_authoring_transaction(),
-           {:ok, text} <- validate_authoring_input(request),
-           key <- Keyword.get(opts, :workspace_key, "creator:#{Ecto.UUID.generate()}"),
-           {:ok, context} <- Context.ensure_session(user, nil, key) do
-        author_attempt(user, nil, context, text, opts, fn definition, attempt ->
-          Workouts.commit_authored_revision(user, nil, definition, text, context.id, attempt)
-        end)
-      end
-
-    log_create_failure(result, started_at)
-  end
-
-  def create_draft(%Accounts.User{}, _request, _opts),
-    do: {:error, Error.new(:invalid_workout_definition)}
-
-  @spec refine_draft(Accounts.User.t(), pos_integer(), String.t(), keyword()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def refine_draft(user, id, instruction, opts \\ [])
-
-  def refine_draft(%Accounts.User{} = user, id, instruction, opts)
-      when is_integer(id) and id > 0 and is_binary(instruction) and is_list(opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, draft} <- refinable_draft(user, id),
-         {:ok, text} <- validate_authoring_input(instruction),
-         {:ok, context} <- Context.ensure_session(user, draft, "draft:#{draft.id}") do
-      author_attempt(user, draft, context, text, opts, fn definition, attempt ->
-        Workouts.commit_authored_revision(user, draft, definition, text, context.id, attempt)
-      end)
-    end
-  end
-
-  def refine_draft(%Accounts.User{}, id, _instruction, _opts),
-    do: {:error, Error.new(:draft_not_found, %{draft_id: id})}
 
   defp prepare_request(user, source, context, text, scope, opts) do
     attempt = Ecto.UUID.generate()
@@ -633,11 +506,7 @@ defmodule BurpeeTrainer.Coach do
                  ),
                {:ok, _} <-
                  Context.append(user, context.id, attempt, :proposal, %{"definition" => proposal}) do
-            case validate_provider_definition(
-                   proposal,
-                   text,
-                   Keyword.get(opts, :confirmed_request)
-                 ) do
+            case validate_provider_definition(proposal, Keyword.fetch!(opts, :confirmed_request)) do
               {:ok, definition} ->
                 commit.(WorkoutDefinition.canonical_map(definition), attempt)
 
@@ -652,7 +521,11 @@ defmodule BurpeeTrainer.Coach do
                   end
 
                 {:needs_correction, error, proposal,
-                 correction_feedback(detail, feedback_proposal(proposal, opts), text)}
+                 correction_feedback(
+                   detail,
+                   feedback_proposal(proposal, opts),
+                   Keyword.fetch!(opts, :confirmed_request)
+                 )}
             end
           end
         end)
@@ -736,11 +609,7 @@ defmodule BurpeeTrainer.Coach do
                  ),
                {:ok, _} <-
                  Context.append(user, context.id, attempt, :proposal, %{"definition" => corrected}) do
-            case validate_provider_definition(
-                   corrected,
-                   text,
-                   Keyword.get(opts, :confirmed_request)
-                 ) do
+            case validate_provider_definition(corrected, Keyword.fetch!(opts, :confirmed_request)) do
               {:ok, definition} ->
                 commit.(WorkoutDefinition.canonical_map(definition), attempt)
 
@@ -758,8 +627,11 @@ defmodule BurpeeTrainer.Coach do
                        true <-
                          chosen.timed_rests !=
                            Keyword.fetch!(opts, :confirmed_request).timed_rests,
-                       :ok <- validate_requested_rest(definition, text),
-                       :ok <- validate_default_movement_pace(definition, text) do
+                       :ok <-
+                         validate_default_movement_pace(
+                           definition,
+                           Keyword.fetch!(opts, :confirmed_request)
+                         ) do
                     commit.(WorkoutDefinition.canonical_map(definition), attempt)
                   else
                     _ ->
@@ -813,108 +685,6 @@ defmodule BurpeeTrainer.Coach do
 
   defp record_failed_outcome(_user, _id, _attempt, result), do: result
 
-  def recommend_workout(user, recommendation, original_messages, opts) do
-    key = "recommendation:#{recommendation.id}:#{recommendation.selected_workout_plan_id}"
-
-    with :ok <- outside_authoring_transaction(),
-         {:ok, context} <- Context.ensure_session(user, nil, key) do
-      attempt = Ecto.UUID.generate()
-
-      with {:ok, _} <-
-             Context.append(user, context.id, attempt, :instruction, %{
-               "text" => "Choose the next workout for this slot.",
-               "request_messages" => original_messages
-             }) do
-        result =
-          safe_authoring(fn ->
-            with {:ok, messages} <-
-                   Context.messages(
-                     user,
-                     context.id,
-                     nil,
-                     attempt,
-                     WorkoutGuidance.system_prompt(user, :recommendation)
-                   ),
-                 {:ok, response} <-
-                   Client.complete(
-                     messages,
-                     Keyword.put(opts, :response_kind, :coach_recommendation)
-                   ),
-                 {:ok, _} <- Context.append(user, context.id, attempt, :proposal, response) do
-              BurpeeTrainer.Repo.immediate_transaction(fn ->
-                expected = {:plan, recommendation.selected_workout_plan_id}
-
-                with {:ok, changed} <-
-                       BurpeeTrainer.Coach.Recommendation.apply_proposal(
-                         user,
-                         recommendation.id,
-                         response,
-                         expected
-                       ),
-                     :ok <- link_recommendation_context(user, changed, context.id),
-                     {:ok, _} <-
-                       Context.append(user, context.id, attempt, :outcome, %{
-                         "status" => "accepted",
-                         "pending_draft_id" => changed.pending_draft_id,
-                         "selected_plan_id" => changed.selected_workout_plan_id
-                       }) do
-                  changed
-                else
-                  {:error, error} -> BurpeeTrainer.Repo.rollback(error)
-                end
-              end)
-            end
-          end)
-
-        record_failed_outcome(user, context.id, attempt, result)
-      end
-    end
-  end
-
-  defp link_recommendation_context(_user, %{pending_draft_id: nil}, _id), do: :ok
-
-  defp link_recommendation_context(user, recommendation, id) do
-    with {:ok, draft} <- Workouts.get_draft(user, recommendation.pending_draft_id),
-         :ok <- Context.check_source(user, id, nil) do
-      case draft |> Ecto.Changeset.change(design_session_id: id) |> BurpeeTrainer.Repo.update() do
-        {:ok, _} -> :ok
-        {:error, _} -> {:error, Error.new(:design_log_failed)}
-      end
-    end
-  end
-
-  defp refinable_draft(%Accounts.User{} = user, draft_id) do
-    case Workouts.get_draft(user, draft_id) do
-      {:error, %Error{code: :draft_required}} ->
-        {:error, Error.new(:workout_immutable, %{draft_id: draft_id})}
-
-      result ->
-        result
-    end
-  end
-
-  defp log_create_failure({:error, %Error{} = error} = result, started_at) do
-    elapsed_ms =
-      System.monotonic_time()
-      |> Kernel.-(started_at)
-      |> System.convert_time_unit(:native, :millisecond)
-
-    provider_status =
-      case error.context do
-        %{status: status} when is_integer(status) -> Integer.to_string(status)
-        _other -> "none"
-      end
-
-    Logger.warning(
-      "workout_draft_create_failed error_code=#{error.code} " <>
-        "provider_status=#{provider_status} elapsed_ms=#{elapsed_ms}"
-    )
-
-    result
-  end
-
-  defp log_create_failure(result, _started_at), do: result
-
   defp current_bootstrap_slot(user, slot) do
     with {:ok, current} <- Policy.required_slot(user, DateTime.utc_now(:second)),
          true <- current.slot_key == slot.slot_key and current.slot_date == slot.slot_date,
@@ -938,14 +708,13 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  defp validate_provider_definition(provider_definition, instruction, request) do
+  defp validate_provider_definition(provider_definition, %WorkoutRequest{} = request) do
     with {:ok, flattened} <- flatten_provider_definition(provider_definition, request) do
       case WorkoutDefinition.new(flattened) do
         {:ok, definition} ->
           with {:ok, definition} <- validate_compiled_definition(definition),
-               :ok <- validate_confirmed_request(definition, request),
-               :ok <- validate_requested_rest(definition, instruction),
-               :ok <- validate_default_movement_pace(definition, instruction) do
+               :ok <- WorkoutRequest.validate_definition(request, definition),
+               :ok <- validate_default_movement_pace(definition, request) do
             {:ok, definition}
           end
 
@@ -1039,45 +808,16 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  defp validate_confirmed_request(_definition, nil), do: :ok
-
-  defp validate_confirmed_request(definition, %WorkoutRequest{} = request),
-    do: WorkoutRequest.validate_definition(request, definition)
-
-  defp validate_requested_rest(definition, instruction) do
-    if requested_rest?(instruction) do
-      cond do
-        not Enum.any?(definition.events, &(&1.kind == :rest)) ->
-          {:error, Error.new(:invalid_workout_definition),
-           "field=events rest_events=0 rest events required by instruction; unbroken applies within sets"}
-
-        definition.events
-        |> Enum.chunk_every(2, 1, :discard)
-        |> Enum.any?(fn [left, right] -> left.kind == :work and right.kind == :work end) ->
-          {:error, Error.new(:invalid_workout_definition),
-           "field=events adjacent_work_sets_without_rest=true; put explicit rest between work sets"}
-
-        true ->
-          :ok
-      end
-    else
-      :ok
-    end
-  end
-
-  defp validate_default_movement_pace(definition, instruction) do
+  defp validate_default_movement_pace(definition, %WorkoutRequest{} = request) do
     {fastest, slowest} = WorkoutGuidance.default_active_seconds_range(definition.burpee_type)
 
     outside_reference? =
       Enum.any?(definition.events, fn
-        %{kind: :work, sec_per_burpee: active} ->
-          active < fastest or active > slowest
-
-        %{kind: :rest} ->
-          false
+        %{kind: :work, sec_per_burpee: active} -> active < fastest or active > slowest
+        %{kind: :rest} -> false
       end)
 
-    if requested_rest?(instruction) and not requested_active_pace?(instruction) and
+    if request.recovery == "required" and is_nil(request.requested_pace_sec) and
          outside_reference? do
       {:error, Error.new(:invalid_workout_definition),
        "field=events movement_pace_outside_default_reference_sec_per_rep=#{fastest}-#{slowest}; use between-set rest rather than an artificially fast or slow movement pace"}
@@ -1086,26 +826,7 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  defp requested_rest?(instruction) do
-    instruction
-    |> String.split(~r/\b(?:but|and)\b|[;,!?\n]|\.\s+/i)
-    |> Enum.any?(fn clause ->
-      Regex.match?(~r/\b(?:rests?|breaks?|recovery)\b/i, clause) and
-        not Regex.match?(
-          ~r/\b(?:no|without|zero)\s+(?:any\s+)?(?:rests?|breaks?|recovery)\b/i,
-          clause
-        )
-    end)
-  end
-
-  defp requested_active_pace?(instruction) do
-    Regex.match?(
-      ~r/\b\d+(?:\.\d+)?\s*(?:s|secs?|seconds?)\s*(?:per|\/)\s*(?:rep|burpee)\b/i,
-      instruction
-    )
-  end
-
-  defp correction_feedback(detail, %{"events" => events} = proposal, instruction)
+  defp correction_feedback(detail, %{"events" => events} = proposal, %WorkoutRequest{} = request)
        when is_list(events) do
     rest_count = Enum.count(events, &(is_map(&1) and &1["kind"] == "rest"))
 
@@ -1131,14 +852,14 @@ defmodule BurpeeTrainer.Coach do
                 "allocate remaining time to explicit between-set rest events"
             end
 
-          {format_timeline_arithmetic(totals, proposal, instruction), rep_advice, time_advice}
+          {format_timeline_arithmetic(totals, proposal, request), rep_advice, time_advice}
 
         :error ->
           {"", "Recalculate the rep count and", "encode requested recovery explicitly"}
       end
 
     advice =
-      if requested_rest?(instruction) do
+      if request.recovery == "required" do
         " #{rep_advice} recompute the rest budget; #{time_advice}. Preserve requested timed " <>
           "rest starts and durations; do not slow reps to fill the clock."
       else
@@ -1148,7 +869,7 @@ defmodule BurpeeTrainer.Coach do
     detail <> arithmetic <> " rest_events=#{rest_count}." <> advice
   end
 
-  defp correction_feedback(detail, _proposal, _instruction), do: detail
+  defp correction_feedback(detail, _proposal, _request), do: detail
 
   defp timeline_arithmetic(%{
          "events" => events,
@@ -1235,7 +956,7 @@ defmodule BurpeeTrainer.Coach do
 
   defp timeline_arithmetic(_proposal), do: :error
 
-  defp format_timeline_arithmetic(totals, proposal, instruction) do
+  defp format_timeline_arithmetic(totals, proposal, request) do
     accounted_us = totals.work_us + totals.rest_us
     gap_us = totals.target_duration_sec * 1_000_000 - accounted_us
 
@@ -1244,7 +965,7 @@ defmodule BurpeeTrainer.Coach do
         do: " missing_sec=#{format_seconds(gap_us)}",
         else: " excess_sec=#{format_seconds(-gap_us)}"
 
-    target_rest_budget = target_rest_budget(totals, proposal, instruction)
+    target_rest_budget = target_rest_budget(totals, proposal, request)
 
     " work_reps=#{totals.work_reps} target_reps=#{totals.target_reps}" <>
       " work_sec=#{format_seconds(totals.work_us)} rest_sec=#{format_seconds(totals.rest_us)}" <>
@@ -1252,7 +973,7 @@ defmodule BurpeeTrainer.Coach do
       " adjacent_work_sets_without_rest=#{totals.adjacent_work_sets}"
   end
 
-  defp target_rest_budget(totals, proposal, instruction) do
+  defp target_rest_budget(totals, proposal, request) do
     case totals.uniform_pace_us do
       {pace_us, active_us} ->
         default_range =
@@ -1265,7 +986,7 @@ defmodule BurpeeTrainer.Coach do
         reference_pace_us =
           case default_range do
             {fastest, slowest} ->
-              if requested_rest?(instruction) and not requested_active_pace?(instruction) and
+              if request.recovery == "required" and is_nil(request.requested_pace_sec) and
                    (pace_us < round(fastest * 1_000_000) or
                       pace_us > round(slowest * 1_000_000) or
                       active_us < round(fastest * 1_000_000) or

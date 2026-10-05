@@ -2,7 +2,8 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   use ExUnit.Case, async: false
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.PlanCompiler.ProgramHash
+  alias BurpeeTrainer.{PlanCompiler, PlanCompiler.ProgramHash}
+  alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.TestSupport.IsolatedMigrationRepo
 
   alias BurpeeTrainer.Workouts.{
@@ -251,7 +252,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
       report = output |> report_line!("WEEKEND=") |> Jason.decode!()
       assert report["slot_strategy"] == "catch_up"
       assert report["slot_completed_sec"] == 0
-      assert report["candidate_verified"] == true
       assert report["history_user_id"] == report["user_id"]
       assert report["history_session_id"] > 0
       assert String.starts_with?(report["history_completed_at"], "2026-08-30")
@@ -743,6 +743,14 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert draft.definition_json == report["pending_draft_definition_json"]
     assert draft.program_json == report["pending_draft_program_json"]
     assert draft.content_hash == report["pending_draft_content_hash"]
+
+    {:ok, definition} = WorkoutDefinition.new(draft.definition_json)
+    {:ok, program} = PlanCompiler.compile(definition)
+    assert draft.burpee_type == definition.burpee_type
+    assert draft.target_reps == definition.target_reps
+    assert draft.target_duration_sec == definition.target_duration_sec
+    assert draft.program_json == ProgramHash.canonical_map(program)
+    assert draft.content_hash == ProgramHash.hash(program)
   end
 
   defp assert_persisted_report!(mode, report)

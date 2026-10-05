@@ -10,7 +10,7 @@ Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks
 - **Safe LLM authoring** — bounded `Req` extraction, planning, and repair produce a validated, audited review before a workout is saved. Home approval is provider-free and saves a new immutable workout; selecting it is a separate action. Invalid proposals do not replace the current workout.
 - **Deterministic coaching** — Home projects the weekly target, done-today state, fallback, and recommendation pointer from persisted facts. A supervised transient reconciler recovers missing recommendations without durable jobs, attempts, leases, checkpoints, or outboxes.
 - **Immutable execution** — Start creates the exact `started` session ID and stores a plan Work/Rest or video snapshot. Resume reads that snapshot; completion updates the same row exactly once and remains offline-capable during the runner.
-- **Stable History and Stats** — completed views use session snapshots, so later plan archival or video changes cannot rewrite the workout that was performed.
+- **Stable History** — completed views use session snapshots, so later plan archival or video changes cannot rewrite the workout that was performed.
 - **Live session runner** — terminal-active timing, audio cues, wake lock, pause/resume, breathing, count-in, and optional BlazePose rep tracking with timer fallback.
 - **OIDC authentication** — Pocket ID sign-in with all application data scoped to the local user; identity linking preserves an existing account's history.
 
@@ -59,7 +59,7 @@ If Phoenix reports pending migrations, stop the server, run the command above, a
 
 ### Sign in
 
-Configure the OIDC provider and sign in through Pocket ID. OIDC resolves a known subject first, adopts an unlinked matching username, or creates a new local user on first sign-in. Conflicting identity links are refused so existing history is not assigned to another account. The old password-based `burpee_trainer.create_user` task has been removed; local fixture provisioning uses `Accounts.create_user/1` without creating a login password.
+Configure the OIDC provider and sign in through Pocket ID. OIDC resolves a known subject first, adopts an unlinked matching username, or creates a new local user on first sign-in. Conflicting identity links are refused so existing history is not assigned to another account. Local fixture provisioning uses `Accounts.create_user/1`.
 
 ### Assets
 

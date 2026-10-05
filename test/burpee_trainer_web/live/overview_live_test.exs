@@ -1,12 +1,13 @@
 defmodule BurpeeTrainerWeb.OverviewLiveTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.{Guidance, Policy}
-  alias BurpeeTrainer.Workouts.{WorkoutSession}
+  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.OverviewLive
 
   setup %{conn: conn} do
@@ -49,50 +50,6 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     view |> element("#home-history-toggle") |> render_click()
     assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
     refute has_element?(view, "#home-coach-panel")
-  end
-
-  test "completed Home keeps Coach behind its icon; saved guidance survives reload and removal",
-       %{conn: conn, user: user} do
-    complete_history(user, DateTime.utc_now(:second), 120)
-    {:ok, view, _} = live(conn, ~p"/")
-    refute has_element?(view, "#home-coach-guidance-form")
-    view |> element("#home-result-coach") |> render_click()
-
-    view
-    |> form("#home-coach-guidance-form", coach_guidance: %{text: "  Build toward 50 reps  "})
-    |> render_submit()
-
-    assert has_element?(view, "#home-coach-guidance-status[role=status]", "Saved for your coach")
-    assert [%{text: "Build toward 50 reps"} = entry] = Guidance.list(user)
-    {:ok, reopened, _} = live(conn, ~p"/")
-    refute has_element?(reopened, "#home-coach-guidance-form")
-    reopened |> element("#home-result-coach") |> render_click()
-    assert has_element?(reopened, "#home-coach-summary", entry.text)
-    assert has_element?(reopened, "#history-coach-memory:not([open])")
-    refute has_element?(reopened, ".coach-guidance-description, .history-coach-summary")
-    assert has_element?(reopened, "#history-coach-entry-#{entry.id}", entry.text)
-    reopened |> element("#history-coach-memory-toggle") |> render_click()
-    reopened |> element("#history-coach-edit-#{entry.id}") |> render_click()
-    assert has_element?(reopened, "#history-coach-memory[open]")
-
-    reopened
-    |> form("#history-coach-edit-form-#{entry.id}", coach_memory: %{text: "Build toward 60 reps"})
-    |> render_submit()
-
-    assert has_element?(reopened, "#home-coach-summary", "Build toward 60 reps")
-    assert has_element?(reopened, "#history-coach-memory[open]")
-    assert [%{text: "Build toward 60 reps"}] = Guidance.list(user)
-    {:ok, reopened, _} = live(conn, ~p"/?history=1")
-    reopened |> element("#history-coach-open") |> render_click()
-    assert has_element?(reopened, "#home-coach-summary", "Build toward 60 reps")
-    reopened |> element("#history-coach-remove-#{entry.id}") |> render_click()
-    refute has_element?(reopened, "#home-coach-summary", "Build toward 60 reps")
-    refute has_element?(reopened, "#history-coach-entry-#{entry.id}")
-    assert Guidance.list(user) == []
-    reopened |> element("#home-coach-back") |> render_click()
-    assert has_element?(reopened, "#home-history")
-    reopened |> element("#home-history-toggle") |> render_click()
-    assert has_element?(reopened, "#home-done-today")
   end
 
   test "invalid guidance remains editable and can be corrected and saved", %{
@@ -713,18 +670,6 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#home-ready-recommendation")
   end
 
-  test "completed week offers Coach and returns to completion", %{conn: conn, user: user} do
-    complete_history(user, DateTime.add(DateTime.utc_now(:second), -86400), 4_800)
-    {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-week-complete #home-result-coach")
-    refute has_element?(view, "#home-coach-toggle, .home-view-nav")
-    view |> element("#home-result-coach") |> render_click()
-    assert has_element?(view, "#home-coach-panel")
-    view |> element("#home-coach-back") |> render_click()
-    assert has_element?(view, "#home-week-complete")
-    assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
-  end
-
   test "done today renders before the workout-needed recommendation", %{conn: conn, user: user} do
     complete_history(user, DateTime.utc_now(:second), 1_200)
     _recommendation = recommendation_fixture(user)
@@ -742,12 +687,15 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     recommendation = recommendation_fixture(user)
     slot = slot!(user)
 
-    assert {:ok, _recommendation} =
-             Workouts.attach_candidate(user, recommendation.id, %{
-               definition: definition_for(slot, "Hidden after reaching today's target"),
-               request_text: "Hidden after reaching today's target",
-               rationale: "A pending alternative."
-             })
+    candidate =
+      workout_plan_draft_fixture(user, %{
+        definition: definition_for(slot, "Hidden after reaching today's target"),
+        request_text: "Hidden after reaching today's target"
+      })
+
+    recommendation
+    |> Ecto.Changeset.change(pending_draft_id: candidate.id)
+    |> Repo.update!()
 
     complete_history(user, DateTime.utc_now(:second), 4_800)
     {:ok, view, _html} = live(conn, ~p"/")
@@ -764,12 +712,15 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     recommendation = recommendation_fixture(user)
     slot = slot!(user)
 
-    assert {:ok, _recommendation} =
-             Workouts.attach_candidate(user, recommendation.id, %{
-               definition: definition_for(slot, "Hidden after today's workout"),
-               request_text: "Hidden after today's workout",
-               rationale: "A pending alternative."
-             })
+    candidate =
+      workout_plan_draft_fixture(user, %{
+        definition: definition_for(slot, "Hidden after today's workout"),
+        request_text: "Hidden after today's workout"
+      })
+
+    recommendation
+    |> Ecto.Changeset.change(pending_draft_id: candidate.id)
+    |> Repo.update!()
 
     complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _html} = live(conn, ~p"/")
@@ -872,7 +823,11 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-request-confirmation #home-request-reps", "10")
     refute has_element?(view, "#home-bootstrap-form")
     assert Agent.get(counter, & &1.calls) == ["workout_request"]
-    assert Workouts.list_drafts(user) == []
+
+    assert Repo.aggregate(
+             from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
+             :count
+           ) == 0
 
     view |> element("#home-request-back") |> render_click()
     assert has_element?(view, "#home-bootstrap-form")
@@ -929,7 +884,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert Agent.get(counter, & &1.calls) ==
              ["workout_request", "phased_workout_definition", "phased_workout_definition"]
 
-    assert Workouts.list_drafts(user) == []
+    assert Repo.aggregate(
+             from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
+             :count
+           ) == 0
   end
 
   test "fresh mount shows bootstrap and a persisted selection remains stable", %{
@@ -1531,7 +1489,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     Repo.delete!(deleted)
 
     plan = workout_plan_draft_fixture(user)
-    {:ok, plan} = Workouts.publish_draft(user, plan.id)
+    plan = plan |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
     {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
 
     old = complete_history(user, DateTime.add(now, -100 * 86400), 1200)
@@ -1820,6 +1778,35 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert Map.take(before.assigns, keys) == Map.take(after_socket.assigns, keys)
   end
 
+  test "History sheet displays only feedback persisted on the selected session", %{
+    conn: conn,
+    user: user
+  } do
+    completed_at = DateTime.utc_now(:second)
+
+    tagged =
+      complete_history(user, completed_at, 1_200,
+        tags: "heat, low_energy",
+        note_post: "Kept going"
+      )
+
+    plain = complete_history(user, DateTime.add(completed_at, -1, :second), 1_200)
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-history-toggle") |> render_click()
+    view |> element("#home-history-density-sessions") |> render_click()
+
+    view |> element("#home-history-inspect-#{tagged.id}") |> render_click()
+    assert has_element?(view, "#home-history-sheet[role=dialog][aria-modal=true]")
+    assert has_element?(view, "#home-history-sheet-tags", "Heat")
+    assert has_element?(view, "#home-history-sheet-tags", "Low energy")
+    assert has_element?(view, "#home-history-sheet-note", "Kept going")
+    view |> element("#home-history-sheet-close") |> render_click()
+
+    view |> element("#home-history-inspect-#{plain.id}") |> render_click()
+    refute has_element?(view, "#home-history-sheet-tags")
+    refute has_element?(view, "#home-history-sheet-note")
+  end
+
   defp complete_history(user, completed_at, duration_sec, attrs \\ []) do
     %WorkoutSession{
       user_id: user.id,
@@ -1863,8 +1850,8 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       definition =
         definition_for(%{slot | strategy: :standard, duration_sec: 1_200}, "Prior-week PB")
 
-      {:ok, draft} = Workouts.create_user_draft(user, %{definition: definition})
-      {:ok, plan} = Workouts.publish_draft(user, draft.id)
+      draft = workout_plan_draft_fixture(user, %{definition: definition})
+      plan = draft |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
 
       {:ok, completed_at} =
         BurpeeTrainer.UserTime.resolve_local(

@@ -12,7 +12,6 @@ defmodule BurpeeTrainer.CoachReconciler do
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts
-  alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan}
 
   @default_task_supervisor BurpeeTrainer.CoachTaskSupervisor
   @default_scan_interval_ms :timer.minutes(5)
@@ -56,8 +55,6 @@ defmodule BurpeeTrainer.CoachReconciler do
       in_flight: %{},
       max_concurrency: max_concurrency,
       now: Keyword.get(opts, :now, &DateTime.utc_now/0),
-      provider_options: Keyword.get(opts, :provider_options, []),
-      provider_requests_enabled?: Keyword.get(opts, :provider_requests_enabled?, false) == true,
       queue: :queue.new(),
       queued_user_ids: MapSet.new(),
       scan_interval_ms: scan_interval_ms,
@@ -183,7 +180,7 @@ defmodule BurpeeTrainer.CoachReconciler do
         task =
           Task.Supervisor.async_nolink(state.task_supervisor, fn ->
             stop_when_reconciler_stops(reconciler)
-            reconcile_user(user, now, state.provider_options, state.provider_requests_enabled?)
+            reconcile_user(user, now)
           end)
 
         state = %{
@@ -278,12 +275,7 @@ defmodule BurpeeTrainer.CoachReconciler do
     end)
   end
 
-  defp reconcile_user(
-         %User{} = user,
-         %DateTime{} = now,
-         provider_options,
-         provider_requests_enabled?
-       ) do
+  defp reconcile_user(%User{} = user, %DateTime{} = now) do
     with {:ok, slot} <- Policy.required_slot(user, DateTime.truncate(now, :second)),
          {:ok, recommendation} <-
            Workouts.ensure_recommendation(user, %{
@@ -291,102 +283,10 @@ defmodule BurpeeTrainer.CoachReconciler do
              slot_date: slot.slot_date,
              rationale: "Built-in fallback while coach reconciliation completes."
            }),
-         {:ok, recommendation} <-
+         {:ok, _recommendation} <-
            Workouts.ensure_recommendation_selection_available(user, recommendation.id) do
-      if provider_requests_enabled?,
-        do: maybe_request_candidate(user, recommendation, slot, provider_options),
-        else: :ok
-    end
-  end
-
-  defp maybe_request_candidate(
-         %User{},
-         %CoachRecommendation{pending_draft_id: pending_draft_id},
-         _slot,
-         _provider_options
-       )
-       when is_integer(pending_draft_id),
-       do: :ok
-
-  defp maybe_request_candidate(user, recommendation, slot, provider_options) do
-    if fallback_selected?(user, recommendation) do
-      BurpeeTrainer.Coach.recommend_workout(
-        user,
-        recommendation,
-        provider_messages(user, slot),
-        provider_options
-      )
-    else
       :ok
     end
-  end
-
-  defp fallback_selected?(
-         user,
-         %CoachRecommendation{
-           selected_workout_plan_id: plan_id,
-           selected_workout_video_id: nil
-         }
-       )
-       when is_integer(plan_id) do
-    match?({:ok, %WorkoutPlan{origin: :built_in}}, Workouts.get_library_plan(user, plan_id))
-  end
-
-  defp fallback_selected?(_user, %CoachRecommendation{}), do: false
-
-  defp provider_messages(%User{} = user, slot) do
-    context = %{
-      deterministic_slot: %{
-        slot_key: slot.slot_key,
-        slot_date: slot.slot_date,
-        burpee_type: slot.burpee_type,
-        duration_sec: slot.duration_sec,
-        strategy: slot.strategy,
-        exploration_allowed: slot.exploration_allowed?,
-        feedback: slot.feedback
-      },
-      recent_history: Enum.map(Workouts.list_recent_training_sessions(user), &history_context/1),
-      published_library: Enum.map(Workouts.list_library(user), &library_context/1)
-    }
-
-    [
-      %{
-        role: "system",
-        content:
-          "Return one coach proposal: select_existing with workout_plan_id or create with definition, plus rationale. Optionally rank eligible published library IDs in ranked_workout_plan_ids; null means no ranking. Never select a video."
-      },
-      %{role: "user", content: Jason.encode!(context)}
-    ]
-  end
-
-  defp history_context(session) do
-    %{
-      id: session.id,
-      completed_at: session.completed_at,
-      source_kind: session.source_kind,
-      display_name: session.display_name_snapshot,
-      burpee_type: session.burpee_type,
-      burpee_count_actual: session.burpee_count_actual,
-      duration_sec_actual: session.duration_sec_actual,
-      mood: session.mood,
-      context_low_energy: session.context_low_energy,
-      context_high_energy: session.context_high_energy,
-      context_heat_affected: session.context_heat_affected,
-      primary_limiter: session.primary_limiter,
-      preference_feedback: session.preference_feedback
-    }
-  end
-
-  defp library_context(plan) do
-    %{
-      id: plan.id,
-      name: plan.name,
-      origin: plan.origin,
-      burpee_type: plan.burpee_type,
-      target_reps: plan.target_reps,
-      target_duration_sec: plan.target_duration_sec,
-      definition: plan.definition_json
-    }
   end
 
   defp schedule_scan(:infinity), do: :ok

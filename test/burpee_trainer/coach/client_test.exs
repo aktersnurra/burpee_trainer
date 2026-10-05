@@ -52,20 +52,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     %{counter: counter}
   end
 
-  test "coach response kind selects the proposal schema", %{counter: counter} do
-    req =
-      request(counter, fn conn -> json_response(conn, 200, %{"action" => "select_existing"}) end)
-
-    assert {:ok, _} =
-             Client.complete([], Keyword.put(opts(req), :response_kind, :coach_recommendation))
-
-    [recorded] = requests(counter)
-    schema = recorded.body["response_format"]["json_schema"]
-    assert schema["name"] == "coach_recommendation"
-    assert schema["schema"] == BurpeeTrainer.Coach.Recommendation.json_schema()
-    assert schema["schema"]["properties"]["ranked_workout_plan_ids"]["maxItems"] == 256
-  end
-
   test "coach guidance review requests bounded classification", %{counter: counter} do
     answer = %{"kind" => "lasting", "summary" => "Build toward 50 reps"}
     req = request(counter, fn conn -> json_response(conn, 200, answer) end)

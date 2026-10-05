@@ -153,9 +153,6 @@ defmodule BurpeeTrainer.Coach.Client do
   defp response_schema(:workout_definition),
     do: {:ok, {"workout_definition", WorkoutDefinition.json_schema()}}
 
-  defp response_schema(:coach_recommendation),
-    do: {:ok, {"coach_recommendation", BurpeeTrainer.Coach.Recommendation.json_schema()}}
-
   defp response_schema(:coach_guidance) do
     {:ok,
      {"coach_guidance",

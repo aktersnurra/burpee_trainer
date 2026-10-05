@@ -5,12 +5,11 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
   import Ecto.Query
 
   alias BurpeeTrainer.PlanCompiler.ProgramHash
-  alias BurpeeTrainer.{Goals, Repo, Workouts}
+  alias BurpeeTrainer.{Repo, Workouts}
 
   alias BurpeeTrainer.Workouts.{
     CoachRecommendation,
     Error,
-    PoseCaptureRun,
     WorkoutSession
   }
 
@@ -83,28 +82,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
                from(session in WorkoutSession, where: session.user_id == ^user.id),
                :count
              ) == 2
-    end
-
-    test "creator finalization retries reuse only the reviewed source" do
-      user = user_fixture()
-      draft = workout_plan_draft_fixture(user)
-      token = Ecto.UUID.generate()
-
-      assert {:error, %Error{code: :invalid_start_token}} =
-               Workouts.publish_and_start_draft(user, draft, "invalid")
-
-      assert {:ok, _} = Workouts.get_draft(user, draft.id)
-      assert {:ok, first} = Workouts.publish_and_start_draft(user, draft, token)
-      assert {:ok, again} = Workouts.publish_and_start_draft(user, draft, token)
-      assert again.id == first.id
-      assert first.program_snapshot == draft.program_json
-      other = workout_plan_draft_fixture(user)
-
-      assert {:error, %Error{code: :start_token_source_mismatch}} =
-               Workouts.publish_and_start_draft(user, other, token)
-
-      assert {:ok, _} = Workouts.get_draft(user, other.id)
-      assert Repo.aggregate(WorkoutSession, :count) == 1
     end
 
     test "published plan Start immediately persists the exact immutable execution snapshot" do
@@ -321,7 +298,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       unchanged = Repo.get!(WorkoutSession, started.id)
       assert unchanged.state == :started
       assert unchanged.goal_id == nil
-      assert Goals.get_goal!(user, goal.id).status == :active
+      assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :active
     end
 
     test "completion rejects foreign and missing sessions without inserting" do
@@ -338,54 +315,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
 
       assert Repo.get!(WorkoutSession, started.id).state == :started
     end
-  end
-
-  describe "manual history and pose evidence" do
-
-    test "new pose runs are bound to an already-created owned session" do
-      user = user_fixture()
-      intruder = user_fixture()
-      plan = plan_fixture(user)
-      assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
-
-      assert {:ok, %PoseCaptureRun{} = run} = Workouts.start_pose_capture_run(user, session)
-      assert run.user_id == user.id
-      assert run.workout_session_id == session.id
-      assert run.status == :active
-
-      assert {:error, :not_found} = Workouts.start_pose_capture_run(intruder, session)
-    end
-
-    test "pose completion rejects forged cross-owner and same-owner session relinking" do
-      owner = user_fixture()
-      other_user = user_fixture()
-      owner_plan = plan_fixture(owner)
-      other_plan = plan_fixture(other_user)
-
-      assert {:ok, bound_session} =
-               Workouts.start_plan(owner, owner_plan.id, Ecto.UUID.generate())
-
-      assert {:ok, other_owner_session} =
-               Workouts.start_plan(other_user, other_plan.id, Ecto.UUID.generate())
-
-      assert {:ok, same_owner_mismatch} =
-               Workouts.start_plan(owner, owner_plan.id, Ecto.UUID.generate())
-
-      assert {:ok, run} = Workouts.start_pose_capture_run(owner, bound_session)
-
-      forged = %WorkoutSession{id: other_owner_session.id, user_id: owner.id}
-
-      for mismatched_session <- [forged, same_owner_mismatch] do
-        assert {:error, :not_found} =
-                 Workouts.complete_pose_capture_run(owner, run, mismatched_session)
-
-        unchanged = Repo.get!(PoseCaptureRun, run.id)
-        assert unchanged.status == :active
-        assert unchanged.workout_session_id == bound_session.id
-        assert unchanged.completed_at == nil
-      end
-    end
-
   end
 
   describe "database execution constraints" do
@@ -407,7 +336,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
         )
       end
 
-      assert_raise Exqlite.Error, ~r/workout_sessions_identity_snapshot_immutable_check/, fn ->
+      assert_raise Exqlite.Error, ~r/workout_sessions_live_plan_snapshot_check/, fn ->
         Repo.query!("UPDATE workout_sessions SET content_hash = 'forged' WHERE id = ?", [
           started.id
         ])

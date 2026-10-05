@@ -94,12 +94,6 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     assert slot.personal_best.completed_at == DateTime.add(now, -41 * 86_400, :second)
   end
 
-  test "catch-up ceilings are exactly 75, 60, and 50 percent at 40, 60, and 80 minutes" do
-    assert Policy.catch_up_ceiling(100, 2_400) == 150
-    assert Policy.catch_up_ceiling(100, 3_600) == 180
-    assert Policy.catch_up_ceiling(100, 4_800) == 200
-  end
-
   test "persisted immutable snapshot transitions enforce one exploration in three workouts" do
     user = user_fixture() |> provision_timezone("Etc/UTC")
 
@@ -160,84 +154,6 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-01 08:00:00Z])
     assert slot.completed_sec == 0
     assert slot.home_state == :workout_needed
-  end
-
-  test "immutable fingerprint derivation rejects zero work timing" do
-    work_event = %{
-      kind: :work,
-      reps: 10,
-      sec_per_rep_us: 1_000_000,
-      sec_per_burpee_us: 1_000_000
-    }
-
-    for timing <- [:sec_per_rep_us, :sec_per_burpee_us] do
-      plan = %BurpeeTrainer.Workouts.WorkoutPlan{
-        burpee_type: :six_count,
-        target_duration_sec: 1_200,
-        target_reps: 10,
-        program_json: %{
-          burpee_type: :six_count,
-          events: [Map.put(work_event, timing, 0)],
-          semantics: %{pacing_style: :even}
-        }
-      }
-
-      assert {:error, error} = Policy.verify_candidate(user_fixture(), ~D[2025-09-01], plan)
-      assert error.code == :invalid_recommendation_selection
-    end
-  end
-
-  test "immutable fingerprint derivation rejects zero rest duration" do
-    plan = %BurpeeTrainer.Workouts.WorkoutPlan{
-      burpee_type: :six_count,
-      target_duration_sec: 1_200,
-      target_reps: 10,
-      program_json: %{
-        burpee_type: :six_count,
-        events: [
-          %{
-            kind: :work,
-            reps: 10,
-            sec_per_rep_us: 1_000_000,
-            sec_per_burpee_us: 1_000_000
-          },
-          %{kind: :rest, duration_ms: 0}
-        ],
-        semantics: %{pacing_style: :even}
-      }
-    }
-
-    assert {:error, error} = Policy.verify_candidate(user_fixture(), ~D[2025-09-01], plan)
-    assert error.code == :invalid_recommendation_selection
-  end
-
-  test "candidate verification rejects malformed typed program facts even without history" do
-    user = user_fixture() |> provision_timezone("Etc/UTC")
-
-    candidate = %BurpeeTrainer.Workouts.WorkoutPlan{
-      burpee_type: :six_count,
-      target_duration_sec: 1_200,
-      target_reps: 10,
-      program_json: %{
-        "burpee_type" => "six_count",
-        "events" => [%{"kind" => "work", "reps" => "ten"}],
-        "semantics" => %{"pacing_style" => "even"}
-      }
-    }
-
-    assert {:error, error} = Policy.verify_candidate(user, ~D[2025-09-01], candidate)
-    assert error.code == :invalid_recommendation_selection
-  end
-
-  test "slot-day cutoff follows local midnight across DST and excludes the next local day" do
-    user = user_fixture() |> provision_timezone("America/Los_Angeles")
-
-    complete(user, ~U[2025-03-10 06:30:00Z], 1_200)
-    complete(user, ~U[2025-03-10 07:30:00Z], 1_200)
-
-    assert {:ok, slot} = Policy.required_slot_for_date(user, ~D[2025-03-09])
-    assert slot.local_date == ~D[2025-03-09]
-    assert slot.completed_sec == 1_200
   end
 
   test "surfaces only typed transient, limiter, and preference feedback" do

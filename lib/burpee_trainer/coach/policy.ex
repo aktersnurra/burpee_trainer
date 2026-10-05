@@ -8,7 +8,7 @@ defmodule BurpeeTrainer.Coach.Policy do
   alias BurpeeTrainer.Coach.{AuthoritativeSession, CatchUpPolicy}
 
   alias BurpeeTrainer.{Repo, UserTime}
-  alias BurpeeTrainer.Workouts.{Error, WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{Error, WorkoutSession}
 
   @weekly_target_sec 4_800
   @standard_duration_sec 1_200
@@ -88,59 +88,6 @@ defmodule BurpeeTrainer.Coach.Policy do
     end
   end
 
-  @doc "Recomputes a slot from all completions persisted on its local calendar day."
-  @spec required_slot_for_date(User.t(), Date.t()) :: {:ok, slot()} | {:error, Error.t()}
-  def required_slot_for_date(%User{} = user, %Date{} = slot_date) do
-    with {:ok, next_midnight} <-
-           UserTime.resolve_local(Date.add(slot_date, 1), ~T[00:00:00], user.timezone),
-         {:ok, cutoff_utc} <-
-           next_midnight
-           |> DateTime.add(-1, :second)
-           |> DateTime.shift_zone("Etc/UTC") do
-      required_slot(user, cutoff_utc)
-    else
-      _invalid_timezone -> {:error, Error.new(:invalid_timezone)}
-    end
-  end
-
-  @doc "Verifies one structured candidate against the authoritative slot and snapshot history."
-  @spec verify_candidate(User.t(), Date.t(), WorkoutPlan.t()) :: :ok | {:error, Error.t()}
-  def verify_candidate(%User{id: user_id} = user, %Date{} = slot_date, %WorkoutPlan{} = candidate) do
-    with {:ok, slot} <- required_slot_for_date(user, slot_date),
-         true <- candidate.burpee_type == slot.burpee_type,
-         true <- candidate.target_duration_sec == slot.duration_sec,
-         {:ok, candidate_fingerprint} <- fingerprint_for_plan(candidate) do
-      verify_candidate_strategy(
-        slot,
-        candidate,
-        candidate_fingerprint,
-        completed_sessions_for_slot(user_id, user, slot_date)
-      )
-    else
-      {:error, %Error{} = error} -> {:error, error}
-      _invalid -> invalid_candidate()
-    end
-  end
-
-  @spec catch_up_ceiling(pos_integer(), pos_integer()) :: non_neg_integer()
-  def catch_up_ceiling(personal_best_reps, duration_sec)
-      when is_integer(personal_best_reps) and personal_best_reps > 0 and
-             duration_sec in [2_400, 3_600, 4_800] do
-    factor = %{2_400 => 75, 3_600 => 60, 4_800 => 50} |> Map.fetch!(duration_sec)
-    duration_multiplier = div(duration_sec, @standard_duration_sec)
-    div(factor * personal_best_reps * duration_multiplier, 100)
-  end
-
-  defp completed_sessions_for_slot(user_id, user, slot_date) do
-    with {:ok, next_midnight} <-
-           UserTime.resolve_local(Date.add(slot_date, 1), ~T[00:00:00], user.timezone),
-         {:ok, cutoff_utc} <- DateTime.shift_zone(next_midnight, "Etc/UTC") do
-      completed_sessions(user_id, DateTime.add(cutoff_utc, -1, :second))
-    else
-      _invalid -> []
-    end
-  end
-
   defp completed_sessions(user_id, now) do
     Repo.all(
       from(session in WorkoutSession,
@@ -183,51 +130,6 @@ defmodule BurpeeTrainer.Coach.Policy do
     end
   end
 
-  defp verify_candidate_strategy(
-         %{strategy: :catch_up} = slot,
-         candidate,
-         _fingerprint,
-         _sessions
-       ) do
-    with %{reps: personal_best_reps}
-         when is_integer(personal_best_reps) and personal_best_reps > 0 <-
-           slot.personal_best,
-         {:ok, %{ceiling_reps: ceiling}} <-
-           CatchUpPolicy.prescription(slot.duration_sec, personal_best_reps, %{}),
-         true <- candidate.target_reps <= ceiling do
-      :ok
-    else
-      _invalid -> invalid_candidate()
-    end
-  end
-
-  defp verify_candidate_strategy(slot, _candidate, candidate_fingerprint, sessions) do
-    case latest_structured_fingerprint(sessions) do
-      nil ->
-        :ok
-
-      reference ->
-        case changed_dimensions(reference, candidate_fingerprint) do
-          [] -> :ok
-          [_one] when slot.exploration_allowed? -> :ok
-          _invalid -> invalid_candidate()
-        end
-    end
-  end
-
-  defp latest_structured_fingerprint(sessions) do
-    Enum.find_value(sessions, fn session ->
-      case fingerprint_for_session(session) do
-        {:ok, %{video_format: :program} = fingerprint} -> fingerprint
-        _unstructured -> nil
-      end
-    end)
-  end
-
-  defp invalid_candidate do
-    {:error, Error.new(:invalid_recommendation_selection, %{reason: :policy_mismatch})}
-  end
-
   defp exploration_allowed?(sessions) do
     recent_ids = sessions |> Enum.take(3) |> MapSet.new(& &1.id)
 
@@ -262,12 +164,6 @@ defmodule BurpeeTrainer.Coach.Policy do
        do: video_fingerprint(snapshot, session.burpee_type)
 
   defp fingerprint_for_session(%WorkoutSession{}), do: :unfingerprintable
-
-  defp fingerprint_for_plan(%WorkoutPlan{program_json: snapshot, burpee_type: burpee_type})
-       when is_map(snapshot),
-       do: program_fingerprint(snapshot, burpee_type)
-
-  defp fingerprint_for_plan(%WorkoutPlan{}), do: :unfingerprintable
 
   defp changed_dimensions(left, right) do
     Enum.filter(

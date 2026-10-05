@@ -73,7 +73,7 @@ defmodule BurpeeTrainer.AccountsTest do
       parent = self()
 
       wake = fn user_id, reason ->
-        persisted = Accounts.get_user!(user_id)
+        persisted = Repo.get!(User, user_id)
         send(parent, {:timezone_wake, user_id, reason, persisted.timezone})
         :ok
       end
@@ -126,18 +126,8 @@ defmodule BurpeeTrainer.AccountsTest do
                  wake: wake
                )
 
-      assert Accounts.get_user!(user.id).timezone == "Europe/Stockholm"
+      assert Repo.get!(User, user.id).timezone == "Europe/Stockholm"
       assert updated.timezone == "Europe/Stockholm"
-    end
-  end
-
-  describe "any_user?/0" do
-    # No `refute` on an empty table here: this case is `async: true`, so
-    # concurrently-running tests create users in the same database and a
-    # global "table is empty" assertion is not stable.
-    test "true once a user exists" do
-      _user = user_fixture(%{"username" => "alice"})
-      assert Accounts.any_user?()
     end
   end
 

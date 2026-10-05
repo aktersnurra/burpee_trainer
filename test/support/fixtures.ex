@@ -8,7 +8,9 @@ defmodule BurpeeTrainer.Fixtures do
   are exercised.
   """
 
-  alias BurpeeTrainer.{Accounts, Goals, Workouts}
+  alias BurpeeTrainer.{Accounts, PlanCompiler, Workouts}
+  alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   @doc """
   Build and register a user. Username defaults are uniquified via
@@ -31,32 +33,22 @@ defmodule BurpeeTrainer.Fixtures do
     user
   end
 
-  @doc "Build a valid published workout through the state-specific lifecycle APIs."
+  @doc "Build a valid published workout through the compiler-backed persistence path."
   def plan_fixture(user, attrs \\ %{}) do
     attrs = stringify_keys(attrs)
-    definition = fixture_workout_definition(attrs)
 
-    {:ok, draft} =
-      Workouts.create_user_draft(user, %{
-        "definition" => definition,
-        "request_text" => Map.get(attrs, "request_text")
-      })
-
-    {:ok, plan} = Workouts.publish_draft(user, draft.id)
-    plan
+    insert_plan!(
+      user,
+      fixture_workout_definition(attrs),
+      Map.get(attrs, "request_text"),
+      :published
+    )
   end
 
-  @doc "Build a valid user-owned draft through the state-specific lifecycle API."
+  @doc "Build a valid user-owned draft through the compiler-backed persistence path."
   def workout_plan_draft_fixture(user, attrs \\ %{}) do
     attrs = stringify_keys(attrs)
-
-    {:ok, draft} =
-      Workouts.create_user_draft(user, %{
-        "definition" => fixture_workout_definition(attrs),
-        "request_text" => Map.get(attrs, "request_text")
-      })
-
-    draft
+    insert_plan!(user, fixture_workout_definition(attrs), Map.get(attrs, "request_text"), :draft)
   end
 
   @doc "Build a completed session tied to a plan."
@@ -139,8 +131,9 @@ defmodule BurpeeTrainer.Fixtures do
       "date_baseline" => Date.to_iso8601(today)
     }
 
-    {:ok, goal} = Goals.create_goal(user, Map.merge(defaults, stringify_keys(attrs)))
-    goal
+    %BurpeeTrainer.Goals.Goal{user_id: user.id}
+    |> BurpeeTrainer.Goals.Goal.changeset(Map.merge(defaults, stringify_keys(attrs)))
+    |> BurpeeTrainer.Repo.insert!()
   end
 
   @doc """
@@ -161,6 +154,37 @@ defmodule BurpeeTrainer.Fixtures do
 
     {:ok, video} = BurpeeTrainer.Videos.create_video(Map.merge(defaults, attrs))
     video
+  end
+
+  defp insert_plan!(user, definition_attrs, request_text, state) do
+    {:ok, definition} = WorkoutDefinition.new(definition_attrs)
+    {:ok, program} = PlanCompiler.compile(definition)
+
+    content = %{
+      name: definition.name,
+      request_text: request_text,
+      definition_json: WorkoutDefinition.canonical_map(definition),
+      program_json: ProgramHash.canonical_map(program),
+      content_hash: ProgramHash.hash(program),
+      burpee_type: definition.burpee_type,
+      target_reps: definition.target_reps,
+      target_duration_sec: definition.target_duration_sec
+    }
+
+    draft =
+      %WorkoutPlan{user_id: user.id, origin: :user, state: :draft}
+      |> WorkoutPlan.new_draft_changeset(content)
+      |> BurpeeTrainer.Repo.insert!()
+
+    case state do
+      :draft ->
+        draft
+
+      :published ->
+        draft
+        |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second))
+        |> BurpeeTrainer.Repo.update!()
+    end
   end
 
   defp fixture_workout_definition(attrs) do

@@ -3,7 +3,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   use BurpeeTrainerWeb, :html
 
-  alias BurpeeTrainer.UserTime
   alias BurpeeTrainerWeb.{Fmt, HomeHistory}
   alias Phoenix.LiveView.JS
 
@@ -709,27 +708,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     """
   end
 
-  attr(:id, :string, required: true)
-  attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
-  attr(:timezone, :string, required: true)
-
-  def result_session(assigns) do
-    assigns =
-      assign(assigns,
-        display_name: display_name(assigns.session),
-        date: local_date(assigns.session, assigns.timezone)
-      )
-
-    ~H"""
-    <details id={@id} class="border-b border-stone-200 py-2">
-      <summary class="min-h-11 cursor-pointer rounded-sm py-3 break-words focus-visible:outline-2 focus-visible:outline-offset-2">
-        {@display_name} · {Fmt.burpee_type(@session.workout_type_snapshot || @session.burpee_type)} · {@date}<span class="block text-sm text-stone-600">{@session.burpee_count_actual || "—"} actual reps · {Fmt.duration_sec(@session.duration_sec_actual)}</span>
-      </summary>
-      <.session_details id={"home-result-details-#{@session.id}"} session={@session} />
-    </details>
-    """
-  end
-
   defp plot_series(series, axis_min, axis_max, period_start, now) do
     all =
       series
@@ -787,13 +765,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp display_name(%{source_kind: :video}), do: "Video workout"
   defp display_name(%{source_kind: :plan}), do: "Workout"
   defp display_name(_), do: "Manual workout"
-
-  defp local_date(session, timezone) do
-    case UserTime.local_date(session.completed_at, timezone) do
-      {:ok, date} -> Date.to_iso8601(date)
-      _ -> "—"
-    end
-  end
 
   defp local_completion(%{completed_at: %DateTime{} = completed_at}, timezone) do
     case DateTime.shift_zone(completed_at, timezone) do

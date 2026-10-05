@@ -20,12 +20,6 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
     ]
   ]
 
-# Configure Swoosh API Client
-config :swoosh, api_client: Swoosh.ApiClient.Req
-
-# Disable Swoosh Local Memory Storage
-config :swoosh, local: false
-
 # Keep production diagnostics in a bounded jail-local file. The release runs
 # in daemon mode, so redirecting its launcher does not capture runtime logs.
 config :logger, level: :info
