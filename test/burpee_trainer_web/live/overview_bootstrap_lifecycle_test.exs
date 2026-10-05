@@ -7,6 +7,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
   alias BurpeeTrainer.Coach.DesignSession
+  alias BurpeeTrainer.LayoutFixtures
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.OverviewLive
 
@@ -198,7 +199,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     render_click(view, "confirm_workout_request", %{})
     _ = :sys.get_state(view.pid)
     refute_received {:provider_waiting, _, _, _}
-    send(planner, {:respond, planning_barrier, provider_body(definition("Bootstrap intervals"))})
+    send(planner, {:respond, planning_barrier, provider_body(layout("Bootstrap intervals"))})
     render_async(view)
 
     refute has_element?(view, "#home-history")
@@ -282,7 +283,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
 
     view |> element("#home-request-confirm") |> render_click()
     assert_receive {:provider_waiting, planner, planning_barrier, _planning_request}
-    send(planner, {:respond, planning_barrier, provider_body(definition("Retried bootstrap"))})
+    send(planner, {:respond, planning_barrier, provider_body(layout("Retried bootstrap"))})
     render_async(view)
 
     assert has_element?(view, "#home-summary")
@@ -305,7 +306,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     render_click(view, "confirm_workout_request", %{})
     _ = :sys.get_state(view.pid)
     refute_received {:provider_waiting, _, _, _}
-    send(updater, {:respond, updater_barrier, provider_body(definition("Refined bootstrap"))})
+    send(updater, {:respond, updater_barrier, provider_body(layout("Refined bootstrap"))})
     render_async(view)
     assert has_element?(view, "#home-summary")
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
@@ -439,18 +440,5 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     }
   end
 
-  defp definition(name) do
-    %{
-      "version" => 1,
-      "name" => name,
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "events" => [
-        %{"kind" => "work", "reps" => 10, "sec_per_rep" => 12.0, "sec_per_burpee" => 12.0}
-      ],
-      "rationale" => "lifecycle fixture"
-    }
-  end
+  defp layout(name), do: LayoutFixtures.layout([[{10, 12.0, 12.0}]], name)
 end

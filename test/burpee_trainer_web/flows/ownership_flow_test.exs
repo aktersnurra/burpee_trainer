@@ -12,13 +12,13 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
        %{conn: conn} do
     owner = user_fixture()
     attacker = user_fixture()
-    counter = fake_authoring_provider(%{"workout_definition" => definition()})
+    counter = fake_authoring_provider(%{"workout_layout" => layout()})
     {:ok, request} = request()
 
     {:ok, prepared} =
       Coach.prepare_plan(owner, "10 reps in 2 minutes", request, workspace_key: "owned-review")
 
-    assert Agent.get(counter, & &1.calls) == ["workout_definition"]
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
     plans_before = Repo.all(WorkoutPlan)
     assert {:error, _} = Coach.approve_plan(attacker, prepared)
     assert Repo.all(WorkoutPlan) == plans_before
@@ -67,7 +67,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
 
   test "stale prepared approval and archived replay leave persisted rows unchanged", _context do
     user = user_fixture()
-    counter = fake_authoring_provider(%{"workout_definition" => definition()})
+    counter = fake_authoring_provider(%{"workout_layout" => layout()})
     {:ok, request} = request()
 
     assert {:ok, stale} =
@@ -83,7 +83,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     plans_before = Repo.all(WorkoutPlan)
     assert {:error, _} = Coach.approve_plan(user, stale)
     assert Repo.all(WorkoutPlan) == plans_before
-    assert Agent.get(counter, & &1.calls) == ["workout_definition", "workout_definition"]
+    assert Agent.get(counter, & &1.calls) == ["workout_layout", "workout_layout"]
 
     plan = plan_fixture(user)
     assert {:ok, archived} = Workouts.archive_plan(user, plan.id)
@@ -122,16 +122,16 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     })
   end
 
-  defp definition do
+  defp layout do
     %{
-      "version" => 1,
       "name" => "Prepared plan",
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
       "rationale" => "Ten steady reps.",
-      "events" => [%{"kind" => "work", "reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}]
+      "phases" => [
+        %{
+          "sets" => [%{"reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}],
+          "rest_weights" => []
+        }
+      ]
     }
   end
 

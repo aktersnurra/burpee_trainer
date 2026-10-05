@@ -78,42 +78,24 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
             else: constraints
 
         reps = constraints["target_reps"]
-        duration = constraints["target_duration_sec"]
 
         work = fn reps ->
           %{"kind" => "work", "reps" => reps, "sec_per_rep" => 5, "sec_per_burpee" => 5}
         end
 
-        definition = %{
-          "version" => 1,
+        layout = %{
           "name" => "Independent new workout",
-          "burpee_type" => constraints["burpee_type"],
-          "target_reps" => reps,
-          "target_duration_sec" => duration,
-          "pacing_style" => constraints["pacing_style"],
           "rationale" => "Continuous sets and local recovery.",
-          "events" => [
-            work.(div(reps, 2)),
-            %{"kind" => "rest", "duration_sec" => duration - reps * 5},
-            work.(reps - div(reps, 2))
+          "phases" => [
+            %{
+              "sets" => [
+                Map.delete(work.(div(reps, 2)), "kind"),
+                Map.delete(work.(reps - div(reps, 2)), "kind")
+              ],
+              "rest_weights" => [1]
+            }
           ]
         }
-
-        definition =
-          if body["response_format"]["json_schema"]["name"] == "phased_workout_definition" do
-            [first, pause, last] = definition["events"]
-
-            definition
-            |> Map.delete("events")
-            |> Map.put("rest_1", pause)
-            |> Map.put("phase_2", %{"work_rest_pairs" => [], "last_work" => last})
-            |> Map.put("phase_1", %{
-              "work_rest_pairs" => [],
-              "last_work" => first
-            })
-          else
-            definition
-          end
 
         {request,
          %Req.Response{
@@ -123,8 +105,7 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
                "choices" => [
                  %{
                    "message" => %{
-                     "content" =>
-                       Jason.encode!(if(extracting?, do: constraints, else: definition))
+                     "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
                    }
                  }
                ]
@@ -308,68 +289,6 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
     assert Repo.aggregate(WorkoutPlan, :count) == count
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
-  end
-
-  test "validated alternate pauses require a separate explicit choice", %{view: view} do
-    parent = self()
-
-    work = fn reps ->
-      %{"kind" => "work", "reps" => reps, "sec_per_rep" => 5, "sec_per_burpee" => 5}
-    end
-
-    proposal = %{
-      "version" => 1,
-      "name" => "Chosen pauses",
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 110,
-      "pacing_style" => "unbroken",
-      "rationale" => "A validated alternate pause.",
-      "phase_1" => %{"work_rest_pairs" => [], "last_work" => work.(6)},
-      "rest_1" => %{"kind" => "rest", "duration_sec" => 60},
-      "phase_2" => %{"work_rest_pairs" => [], "last_work" => work.(4)}
-    }
-
-    Req.default_options(
-      adapter: fn request ->
-        send(parent, :alternate_request)
-
-        {request,
-         %Req.Response{
-           status: 200,
-           body:
-             Jason.encode!(%{
-               "choices" => [%{"message" => %{"content" => Jason.encode!(proposal)}}]
-             })
-         }}
-      end
-    )
-
-    open_new(view)
-    count = Repo.aggregate(WorkoutPlan, :count)
-
-    view
-    |> form("#home-new-form",
-      home_workout: %{reps: 10, duration: "1:50", pace: 5, sets: "1x6,1x4", rests: "60s at 0:45"}
-    )
-    |> render_submit()
-
-    render_async(view)
-    assert_receive :alternate_request
-    assert_receive :alternate_request
-    assert has_element?(view, "#home-request-confirm[disabled]")
-    assert has_element?(view, "#home-rest-alternative", "0:45 → 60s at 0:30")
-    assert has_element?(view, "#home_workout_rests", "60s at 0:45")
-    render_click(view, "confirm_workout_request", %{"definition" => %{}})
-    assert Repo.aggregate(WorkoutPlan, :count) == count
-    view |> element("#home-use-rest-alternative") |> render_click()
-    assert has_element?(view, "#home_workout_rests", "60s at 0:30")
-    refute has_element?(view, "#home-request-confirm[disabled]")
-    view |> element("#home-request-confirm") |> render_click()
-    render_async(view)
-    assert has_element?(view, "#home-new-saved")
-    assert Repo.aggregate(WorkoutPlan, :count) == count + 1
-    refute_received :alternate_request
   end
 
   defp open_new(view) do

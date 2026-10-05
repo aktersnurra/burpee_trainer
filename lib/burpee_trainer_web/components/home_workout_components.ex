@@ -175,8 +175,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   attr(:form, :any, required: true)
   attr(:stage, :atom, default: :new)
   attr(:candidate, :map, default: nil)
-  attr(:alternative_accepted, :boolean, default: false)
   attr(:busy, :boolean, default: false)
+  attr(:review_inspection_rows, :list, default: [])
+  attr(:expanded_groups, :any, default: MapSet.new())
 
   def authoring_form(assigns) do
     params = Ecto.Changeset.apply_changes(assigns.form.source)
@@ -320,32 +321,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <p id="home-request-timing" class="home-budget-detail">
         Timing ±{WorkoutRequest.timing_tolerance_sec()}s · reps and pauses exact.
       </p>
-      <section
-        :if={@candidate && @candidate.alternative?}
-        id="home-rest-alternative"
-        class="home-rest-alternative"
-        aria-label="Validated rest alternative"
-      >
-        <p>The returned plan uses different pauses:</p>
-        <p :for={
-          {original, proposed} <-
-            Enum.zip(@candidate.original_request.timed_rests, @candidate.request.timed_rests)
-        }>
-          {original.duration_sec}s at {elapsed_clock(original.start_sec)} → {proposed.duration_sec}s at {elapsed_clock(
-            proposed.start_sec
-          )}
-        </p>
-        <button
-          :if={!@alternative_accepted}
-          id="home-use-rest-alternative"
-          type="button"
-          phx-click="use_prepared_alternative"
-          class="home-alternative-choice"
-        >
-          Use these pauses
-        </button>
-        <p :if={@alternative_accepted}>Selected · validated against these pauses.</p>
-      </section>
       <p :if={@busy} id="home-update-loading" role="status" class="home-budget-detail">
         {if(@locked, do: "Saving…", else: "Preparing and validating…")}
       </p>
@@ -381,9 +356,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           class="home-icon-button"
           aria-label="Approve and save workout"
           title="Approve"
-          disabled={
-            @busy || is_nil(@candidate) || (@candidate.alternative? && !@alternative_accepted)
-          }
+          disabled={@busy || is_nil(@candidate)}
         >
           <.icon name="hero-check" class="size-5" />
         </button>
@@ -399,6 +372,28 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <.icon name="hero-arrow-right" class="size-5" />
         </button>
       </div>
+      <section
+        :if={@locked && @candidate}
+        id="home-new-review-inspection"
+        aria-label="Proposed workout structure"
+      >
+        <.inspection
+          rows={@review_inspection_rows}
+          expanded={@expanded_groups}
+          pacing_style={@candidate.definition["pacing_style"]}
+        />
+        <p
+          :if={@candidate.request.timed_rests != []}
+          id="home-new-review-pauses"
+          class="home-local-message"
+        >
+          {Enum.map_join(
+            @candidate.request.timed_rests,
+            " · ",
+            &"#{&1.duration_sec}s at #{elapsed_clock(round(&1.start_sec))}"
+          )}
+        </p>
+      </section>
     </.form>
     """
   end
@@ -555,15 +550,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               &"#{&1.duration_sec}s at #{elapsed_clock(round(&1.start_sec))}"
             )}
           </p>
-          <button
-            :if={@state.pending_request.alternative? and not @state.accepted_alternative?}
-            id="home-rest-alternative"
-            type="button"
-            phx-click="use_prepared_alternative"
-            class="home-state-action min-h-11"
-          >
-            Accept different pause timing
-          </button>
           <div class="home-review-actions">
             <button
               type="button"
@@ -588,7 +574,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-confirm"
               class="home-icon-button"
               aria-label="Approve variation"
-              disabled={@state.pending_request.alternative? and not @state.accepted_alternative?}
               phx-click="confirm_workout_request"
             >
               <.icon name="hero-check" class="size-5" />
@@ -724,8 +709,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   form={@state.workout_form}
                   stage={@state.authoring_stage}
                   candidate={@state.pending_request}
-                  alternative_accepted={@state.accepted_alternative?}
                   busy={@state.busy?}
+                  review_inspection_rows={@state.review_inspection_rows}
+                  expanded_groups={@state.expanded_groups}
                 />
                 <.current_edit
                   :if={

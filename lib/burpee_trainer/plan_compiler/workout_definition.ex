@@ -86,41 +86,6 @@ defmodule BurpeeTrainer.PlanCompiler.WorkoutDefinition do
 
   def new(value), do: invalid(:definition, value)
 
-  @spec json_schema() :: map()
-  def json_schema do
-    %{
-      "type" => "object",
-      "additionalProperties" => false,
-      "required" => @definition_fields,
-      "properties" => %{
-        "version" => %{"type" => "integer", "enum" => [@version]},
-        "name" => %{"type" => "string"},
-        "burpee_type" => %{"type" => "string", "enum" => ["six_count", "navy_seal"]},
-        "target_duration_sec" => %{
-          "type" => "integer",
-          "description" => "Exact total duration in seconds across every event."
-        },
-        "target_reps" => %{
-          "type" => "integer",
-          "description" => "Exact sum of reps across all work events."
-        },
-        "pacing_style" => %{"type" => "string", "enum" => ["even", "unbroken"]},
-        "rationale" => %{"type" => "string"},
-        "events" => %{
-          "type" => "array",
-          "minItems" => 1,
-          "description" =>
-            "Ordered workout timeline. Non-terminal work duration is reps * sec_per_rep. " <>
-              "Terminal work duration is (reps - 1) * sec_per_rep + sec_per_burpee. " <>
-              "Rest duration is duration_sec.",
-          "items" => %{
-            "anyOf" => [work_event_json_schema(), rest_event_json_schema()]
-          }
-        }
-      }
-    }
-  end
-
   @spec canonical_map(t()) :: map()
   def canonical_map(%__MODULE__{} = definition) do
     %{
@@ -142,43 +107,6 @@ defmodule BurpeeTrainer.PlanCompiler.WorkoutDefinition do
     |> canonical_json()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
-  end
-
-  defp work_event_json_schema do
-    %{
-      "type" => "object",
-      "description" =>
-        "A work interval. Only work events contribute repetitions; all requested repetitions " <>
-          "must be represented by the sum of work-event reps.",
-      "additionalProperties" => false,
-      "required" => ["kind", "reps", "sec_per_rep", "sec_per_burpee"],
-      "properties" => %{
-        "kind" => %{"type" => "string", "enum" => ["work"]},
-        "reps" => %{"type" => "integer"},
-        "sec_per_rep" => %{
-          "type" => "number",
-          "description" => "Start-to-start cadence in seconds."
-        },
-        "sec_per_burpee" => %{
-          "type" => "number",
-          "description" => "Active duration of one burpee; must not exceed sec_per_rep."
-        }
-      }
-    }
-  end
-
-  defp rest_event_json_schema do
-    %{
-      "type" => "object",
-      "description" =>
-        "A rest interval. Rest events contribute zero repetitions and must never replace work.",
-      "additionalProperties" => false,
-      "required" => ["kind", "duration_sec"],
-      "properties" => %{
-        "kind" => %{"type" => "string", "enum" => ["rest"]},
-        "duration_sec" => %{"type" => "number"}
-      }
-    }
   end
 
   defp events(values) when is_list(values) and values != [] do

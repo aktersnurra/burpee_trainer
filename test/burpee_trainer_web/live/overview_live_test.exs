@@ -797,21 +797,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       "requested_pace_sec" => nil
     }
 
-    plan = %{
-      "version" => 1,
-      "name" => "Confirmed first workout",
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "rationale" => "Ten reps over two minutes.",
-      "events" => [
-        %{"kind" => "work", "reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}
-      ]
-    }
+    layout = single_set_layout("Confirmed first workout", "Ten reps over two minutes.")
 
     counter =
-      fake_authoring_provider(%{"workout_request" => extraction, "workout_definition" => plan})
+      fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
 
     {:ok, view, _} = live(conn, ~p"/")
 
@@ -844,7 +833,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-ready-recommendation")
 
     assert Agent.get(counter, & &1.calls) ==
-             ["workout_request", "workout_request", "workout_definition"]
+             ["workout_request", "workout_request", "workout_layout"]
   end
 
   test "failed confirmed phased planning restores the first-use request without publishing", %{
@@ -864,7 +853,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     counter =
       fake_authoring_provider(%{
         "workout_request" => extraction,
-        "phased_workout_definition" => %{}
+        "workout_layout" => %{}
       })
 
     {:ok, view, _} = live(conn, ~p"/")
@@ -882,7 +871,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#home-request-confirmation")
 
     assert Agent.get(counter, & &1.calls) ==
-             ["workout_request", "phased_workout_definition", "phased_workout_definition"]
+             ["workout_request", "workout_layout", "workout_layout"]
 
     assert Repo.aggregate(
              from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
@@ -944,21 +933,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       "requested_pace_sec" => nil
     }
 
-    plan = %{
-      "version" => 1,
-      "name" => "Confirmed adjustment",
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "rationale" => "A shorter session.",
-      "events" => [
-        %{"kind" => "work", "reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}
-      ]
-    }
+    layout = single_set_layout("Confirmed adjustment", "A shorter session.")
 
     counter =
-      fake_authoring_provider(%{"workout_request" => extraction, "workout_definition" => plan})
+      fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
 
     {:ok, view, _} = live(conn, ~p"/")
     original = Workouts.ensure_home_selection(user, slot!(user)) |> elem(1)
@@ -974,14 +952,14 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     render_async(view)
     assert has_element?(view, "#home-new-reps[disabled][value='10']")
-    assert Agent.get(counter, & &1.calls) == ["workout_definition"]
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
     assert {:ok, ^original} = Workouts.ensure_home_selection(user, slot!(user))
 
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
     assert has_element?(view, "#home-new-saved", "Confirmed adjustment")
     assert {:ok, ^original} = Workouts.ensure_home_selection(user, slot!(user))
-    assert Agent.get(counter, & &1.calls) == ["workout_definition"]
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
   end
 
   test "submit does not trust the previous Start label", %{conn: conn, user: user} do
@@ -1887,6 +1865,19 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       assert refreshed.completed_sec == 0
       assert refreshed.personal_best.reps == plan.target_reps
     end
+  end
+
+  defp single_set_layout(name, rationale) do
+    %{
+      "name" => name,
+      "rationale" => rationale,
+      "phases" => [
+        %{
+          "sets" => [%{"reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}],
+          "rest_weights" => []
+        }
+      ]
+    }
   end
 
   defp fake_authoring_provider(responses) do

@@ -78,42 +78,24 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
             else: constraints
 
         reps = constraints["target_reps"]
-        duration = constraints["target_duration_sec"]
 
         work = fn reps ->
           %{"kind" => "work", "reps" => reps, "sec_per_rep" => 5, "sec_per_burpee" => 5}
         end
 
-        definition = %{
-          "version" => 1,
+        layout = %{
           "name" => "Independent new workout",
-          "burpee_type" => constraints["burpee_type"],
-          "target_reps" => reps,
-          "target_duration_sec" => duration,
-          "pacing_style" => constraints["pacing_style"],
           "rationale" => "Continuous sets and local recovery.",
-          "events" => [
-            work.(div(reps, 2)),
-            %{"kind" => "rest", "duration_sec" => duration - reps * 5},
-            work.(reps - div(reps, 2))
+          "phases" => [
+            %{
+              "sets" => [
+                Map.delete(work.(div(reps, 2)), "kind"),
+                Map.delete(work.(reps - div(reps, 2)), "kind")
+              ],
+              "rest_weights" => [1]
+            }
           ]
         }
-
-        definition =
-          if body["response_format"]["json_schema"]["name"] == "phased_workout_definition" do
-            [first, pause, last] = definition["events"]
-
-            definition
-            |> Map.delete("events")
-            |> Map.put("rest_1", pause)
-            |> Map.put("phase_2", %{"work_rest_pairs" => [], "last_work" => last})
-            |> Map.put("phase_1", %{
-              "work_rest_pairs" => [],
-              "last_work" => first
-            })
-          else
-            definition
-          end
 
         {request,
          %Req.Response{
@@ -123,8 +105,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
                "choices" => [
                  %{
                    "message" => %{
-                     "content" =>
-                       Jason.encode!(if(extracting?, do: constraints, else: definition))
+                     "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
                    }
                  }
                ]

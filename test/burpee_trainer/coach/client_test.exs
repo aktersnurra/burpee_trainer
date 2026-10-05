@@ -21,6 +21,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
              Client.complete(
                [%{role: "user", content: String.duplicate("x", 262_145)}],
                req: req,
+               response_kind: :workout_request,
                config: [
                  enabled: true,
                  url: "https://provider.test/v1",
@@ -96,7 +97,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
              |> Jason.decode!()
   end
 
-  test "confirmed recovery uses a schema with required rest fields", %{counter: counter} do
+  test "confirmed request uses the request-dependent workout layout schema", %{counter: counter} do
     {:ok, confirmed} =
       BurpeeTrainer.Coach.WorkoutRequest.new(%{
         "burpee_type" => "six_count",
@@ -111,17 +112,23 @@ defmodule BurpeeTrainer.Coach.ClientTest do
         "requested_pace_sec" => nil
       })
 
-    req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
-    assert {:ok, %{}} = Client.complete([], Keyword.put(opts(req), :confirmed_request, confirmed))
+    layout = %{"name" => "layout", "rationale" => "fixture", "phases" => []}
+    req = request(counter, fn conn -> json_response(conn, 200, layout) end)
+
+    assert {:ok, ^layout} =
+             Client.complete(
+               [],
+               opts(req)
+               |> Keyword.put(:confirmed_request, confirmed)
+               |> Keyword.put(:response_kind, :workout_layout)
+             )
 
     [recorded] = requests(counter)
     response = recorded.body["response_format"]["json_schema"]
-    assert response["name"] == "phased_workout_definition"
-
-    assert Enum.all?(
-             ~w[phase_1 rest_1 phase_2 rest_2 phase_3],
-             &(&1 in response["schema"]["required"])
-           )
+    assert response["name"] == "workout_layout"
+    assert response["schema"]["required"] == ["name", "rationale", "phases"]
+    assert response["schema"]["properties"]["phases"]["minItems"] == 3
+    assert response["schema"]["properties"]["phases"]["maxItems"] == 3
   end
 
   test "unknown response kinds fail closed without HTTP", %{counter: counter} do
@@ -177,7 +184,10 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       |> Keyword.update!(:config, &Keyword.put(&1, :max_tokens, 88_888))
 
     assert {:ok, ^definition} =
-             Client.complete([%{role: "user", content: "steady"}], boundary_opts)
+             Client.complete(
+               [%{role: "user", content: "steady"}],
+               Keyword.put(boundary_opts, :response_kind, :workout_request)
+             )
 
     assert request_count(counter) == 1
 
@@ -201,41 +211,17 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert %{
              "type" => "json_schema",
              "json_schema" => %{
-               "name" => "workout_definition",
+               "name" => "workout_request",
                "strict" => true,
                "schema" => schema
              }
            } = recorded.body["response_format"]
 
-    assert schema["type"] == "object"
-    assert schema["additionalProperties"] == false
+    assert schema ==
+             BurpeeTrainer.Coach.WorkoutRequest.json_schema()
+             |> Jason.encode!()
+             |> Jason.decode!()
 
-    assert schema["required"] == [
-             "version",
-             "name",
-             "burpee_type",
-             "target_duration_sec",
-             "target_reps",
-             "pacing_style",
-             "rationale",
-             "events"
-           ]
-
-    assert schema["properties"]["version"] == %{"type" => "integer", "enum" => [1]}
-    assert schema["properties"]["burpee_type"]["enum"] == ["six_count", "navy_seal"]
-    assert schema["properties"]["pacing_style"]["enum"] == ["even", "unbroken"]
-
-    assert %{"type" => "array", "minItems" => 1, "items" => %{"anyOf" => events}} =
-             schema["properties"]["events"]
-
-    assert Enum.map(events, & &1["required"]) == [
-             ["kind", "reps", "sec_per_rep", "sec_per_burpee"],
-             ["kind", "duration_sec"]
-           ]
-
-    assert Enum.all?(events, &(&1["additionalProperties"] == false))
-    assert Enum.at(events, 0)["description"] =~ "Only work events contribute repetitions"
-    assert Enum.at(events, 1)["description"] =~ "Rest events contribute zero repetitions"
     assert recorded.body["messages"] == [%{"role" => "user", "content" => "steady"}]
   end
 
@@ -609,6 +595,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   defp opts(req) do
     [
       req: req,
+      response_kind: :workout_request,
       config: [
         enabled: true,
         url: "https://provider.test/v1/chat/completions",

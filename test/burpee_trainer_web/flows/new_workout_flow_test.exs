@@ -5,7 +5,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
-  alias BurpeeTrainer.Coach.Policy
+  alias BurpeeTrainer.Coach.{Policy, WorkoutRequest}
+  alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
   setup %{conn: conn} do
@@ -25,18 +26,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
          selected: selected,
          conn: conn
        } do
-    definition = %{
-      "version" => 1,
-      "name" => "Independent new workout",
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "rationale" => "A recorded local provider response.",
-      "events" => [%{"kind" => "work", "reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}]
-    }
+    layout = layout([[{10, 12.0, 12.0}]], "Independent new workout")
 
-    counter = fake_authoring_provider(%{"workout_definition" => definition})
+    counter = fake_authoring_provider(%{"workout_layout" => layout})
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()
     count = Repo.aggregate(WorkoutPlan, :count)
@@ -47,17 +39,17 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#home-new-form[data-stage=review]")
     assert has_element?(view, "#home-new-reps[disabled][value='10']")
     assert Repo.aggregate(WorkoutPlan, :count) == count
-    assert Agent.get(counter, & &1.calls) == ["workout_definition"]
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
     assert has_element?(view, "#home-new-saved")
-    [saved] = Enum.filter(Workouts.list_library(user), &(&1.name == definition["name"]))
+    [saved] = Enum.filter(Workouts.list_library(user), &(&1.name == layout["name"]))
     assert saved.state == :published
     assert Repo.aggregate(WorkoutPlan, :count) == count + 1
     assert {:ok, unchanged} = Workouts.ensure_home_selection(user, selected_slot(user))
     assert unchanged.plan.id == selected.plan.id
-    assert Agent.get(counter, & &1.calls) == ["workout_definition"]
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 
     view |> element("#home-new-select") |> render_click()
 
@@ -87,6 +79,91 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert_reply(runner, %{status: "ok"})
     {:ok, history, _} = live(conn, ~p"/?history=1")
     assert has_element?(history, "#home-history-session-#{session.id}")
+  end
+
+  test "New fits recorded fixed pauses exactly before publishing without selecting", %{
+    view: view,
+    user: user,
+    selected: selected
+  } do
+    eight = {8, 5.0, 5.0}
+    six = {6, 5.0, 5.0}
+
+    counter =
+      fake_authoring_provider(%{
+        "workout_layout" =>
+          layout(
+            [List.duplicate(eight, 10), List.duplicate(eight, 6), [six, six]],
+            "Minute blocks"
+          )
+      })
+
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+    view |> element("#home-pill-pacing_style-unbroken") |> render_click()
+
+    view
+    |> form("#home-new-form",
+      home_workout: %{
+        reps: 140,
+        duration: "20:00",
+        pace: "5.0",
+        rests: "60s at 11:00\n40s at 18:00"
+      }
+    )
+    |> render_submit()
+
+    render_async(view)
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
+    assert has_element?(view, "#home-new-form[data-stage=review]")
+    assert has_element?(view, "#home-new-review-inspection #home-inspection")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "40s")
+    assert has_element?(view, "#home-new-review-pauses", "60s at 11:00")
+    assert has_element?(view, "#home-new-review-pauses", "40s at 18:00")
+    assert has_element?(view, "#home_workout_rests[disabled]", "60s at 11:00")
+    assert has_element?(view, "#home_workout_rests[disabled]", "40s at 18:00")
+
+    first_group =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#home-new-review-inspection .home-group-toggle")
+
+    [group_id | _] = LazyHTML.attribute(first_group, "id")
+    view |> element("##{group_id}") |> render_click()
+    assert has_element?(view, "##{group_id}[aria-expanded=true]")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
+
+    view |> element("#home-request-confirm") |> render_click()
+    render_async(view)
+
+    [saved] = Enum.filter(Workouts.list_library(user), &(&1.name == "Minute blocks"))
+    assert saved.target_duration_sec == 1200
+    assert {:ok, definition} = WorkoutDefinition.new(saved.definition_json)
+
+    assert {660_000_000, 60_000_000} in WorkoutRequest.rest_timeline(definition.events)
+    assert {1_080_000_000, 40_000_000} in WorkoutRequest.rest_timeline(definition.events)
+    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
+    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, selected_slot(user))
+    assert unchanged.plan.id == selected.plan.id
+  end
+
+  defp layout(phases, name) do
+    %{
+      "name" => name,
+      "rationale" => "Recorded layout response.",
+      "phases" =>
+        Enum.map(phases, fn sets ->
+          %{
+            "sets" =>
+              Enum.map(sets, fn {reps, cadence, active} ->
+                %{"reps" => reps, "sec_per_rep" => cadence, "sec_per_burpee" => active}
+              end),
+            "rest_weights" => List.duplicate(1, length(sets) - 1)
+          }
+        end)
+    }
   end
 
   defp fake_authoring_provider(responses) do

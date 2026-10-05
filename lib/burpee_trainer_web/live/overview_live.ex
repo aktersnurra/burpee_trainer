@@ -701,20 +701,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
   end
 
   def handle_event(
-        "use_prepared_alternative",
-        _,
-        %{assigns: %{authoring_stage: :review, pending_request: %{alternative?: true} = prepared}} =
-          socket
-      ) do
-    params = HomeWorkoutRequest.from_request(prepared.request, socket.assigns.workout_parameters)
-
-    {:noreply,
-     socket
-     |> assign(accepted_alternative?: true, workout_parameters: params)
-     |> workout_form(params, %{})}
-  end
-
-  def handle_event(
         "review_new_workout",
         %{"home_workout" => attrs},
         %{assigns: %{authoring_stage: stage}} = socket
@@ -828,7 +814,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
 
   def handle_event("toggle_group", %{"id" => id}, socket) do
     rows =
-      if socket.assigns.authoring_stage == :review and socket.assigns.editing_source,
+      if socket.assigns.authoring_stage == :review,
         do: socket.assigns.review_inspection_rows,
         else: socket.assigns.inspection_rows
 
@@ -964,15 +950,12 @@ defmodule BurpeeTrainerWeb.OverviewLive do
     id = make_ref()
     user = a.current_user
     prepared = a.pending_request
-    accepted = a.accepted_alternative?
 
-    if prepared && (!prepared.alternative? || accepted) && verify_edit_selection(socket) == :ok do
+    if prepared && verify_edit_selection(socket) == :ok do
       {:noreply,
        socket
        |> assign(busy?: true, update_id: id, local_error: nil)
-       |> start_async({:new_plan, id}, fn ->
-         Coach.approve_plan(user, prepared, accept_alternative: accepted)
-       end)}
+       |> start_async({:new_plan, id}, fn -> Coach.approve_plan(user, prepared) end)}
     else
       {:noreply, assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
     end
@@ -1059,11 +1042,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       params =
         HomeWorkoutRequest.from_request(prepared.request, socket.assigns.workout_parameters)
 
-      params =
-        if prepared.alternative?,
-          do: %{params | rests: socket.assigns.workout_parameters.rests},
-          else: params
-
       {:noreply,
        socket
        |> assign(
@@ -1072,8 +1050,7 @@ defmodule BurpeeTrainerWeb.OverviewLive do
          pending_request: prepared,
          workout_parameters: params,
          busy?: false,
-         update_id: nil,
-         accepted_alternative?: false
+         update_id: nil
        )
        |> workout_form(params, %{})}
     end
@@ -1491,7 +1468,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
         creation_key: nil,
         created_plan: nil,
         pending_request: nil,
-        accepted_alternative?: false,
         busy?: false,
         update_id: nil,
         bootstrap?: false,
@@ -1576,7 +1552,6 @@ defmodule BurpeeTrainerWeb.OverviewLive do
       pending_request: nil,
       busy?: false,
       update_id: nil,
-      accepted_alternative?: false,
       local_error: nil
     )
   end

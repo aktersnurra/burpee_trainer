@@ -6,8 +6,8 @@ defmodule BurpeeTrainer.Coach do
   alias BurpeeTrainer.Coach.{
     Client,
     Context,
-    PhasedWorkoutDefinition,
     Policy,
+    RestFitter,
     WorkoutGuidance,
     WorkoutRequest
   }
@@ -19,8 +19,6 @@ defmodule BurpeeTrainer.Coach do
 
   @authoring_max_graphemes 500
   @authoring_max_bytes 4_000
-  @feedback_event_limit 512
-  @feedback_max_seconds 86_400
 
   @request_extraction_prompt """
   Extract one concrete workout request from the user's active instruction and supplied workout context.
@@ -162,8 +160,7 @@ defmodule BurpeeTrainer.Coach do
 
       author_attempt(user, nil, context, text, opts, fn canonical, attempt ->
         with {:ok, definition} <- WorkoutDefinition.new(canonical),
-             {:ok, chosen} <- review_request(request, definition),
-             {:ok, chosen} <- complete_review_request(chosen, definition) do
+             {:ok, chosen} <- complete_review_request(request, definition) do
           prepared = %{
             user_id: user.id,
             context_id: context.id,
@@ -173,8 +170,7 @@ defmodule BurpeeTrainer.Coach do
             request: chosen,
             original_request: request,
             source: review_source,
-            text: text,
-            alternative?: chosen.timed_rests != request.timed_rests
+            text: text
           }
 
           with {:ok, _} <-
@@ -205,13 +201,12 @@ defmodule BurpeeTrainer.Coach do
           approval_attempt: approval_attempt,
           definition: %{},
           text: text,
-          alternative?: alternative?,
           request: %WorkoutRequest{},
           original_request: %WorkoutRequest{}
         } = prepared,
         opts
       )
-      when is_binary(text) and is_boolean(alternative?) and is_list(opts) do
+      when is_binary(text) and is_list(opts) do
     BurpeeTrainer.Repo.immediate_transaction(fn ->
       with :ok <- Context.check_source(user, id, nil),
            {:ok, entries} <- Context.entries(user, id),
@@ -225,7 +220,6 @@ defmodule BurpeeTrainer.Coach do
              ),
            true <- audited == review_payload(prepared),
            :ok <- verify_review_source(user, Map.get(prepared, :source)),
-           :ok <- alternative_confirmation(prepared, opts),
            {:ok, definition} <- WorkoutDefinition.new(prepared.definition),
            {:ok, definition} <- validate_compiled_definition(definition),
            :ok <- WorkoutRequest.validate_definition(prepared.request, definition) do
@@ -278,14 +272,6 @@ defmodule BurpeeTrainer.Coach do
 
   def approve_plan(%Accounts.User{}, _, _), do: {:error, Error.new(:design_workspace_changed)}
 
-  defp alternative_confirmation(%{alternative?: true}, opts) do
-    if Keyword.get(opts, :accept_alternative, false),
-      do: :ok,
-      else: {:error, Error.new(:alternative_confirmation_required)}
-  end
-
-  defp alternative_confirmation(_, _), do: :ok
-
   defp review_payload(prepared) do
     %{
       "approval_attempt" => prepared.approval_attempt,
@@ -293,8 +279,7 @@ defmodule BurpeeTrainer.Coach do
       "request" => WorkoutRequest.to_map(prepared.request),
       "original_request" => WorkoutRequest.to_map(prepared.original_request),
       "source" => Map.get(prepared, :source),
-      "text" => prepared.text,
-      "alternative" => prepared.alternative?
+      "text" => prepared.text
     }
   end
 
@@ -366,56 +351,6 @@ defmodule BurpeeTrainer.Coach do
       {:ok, complete}
     else
       _ -> {:error, Error.new(:invalid_workout_definition, %{field: :requested_pace_sec})}
-    end
-  end
-
-  defp review_request(request, definition) do
-    case WorkoutRequest.validate_definition(request, definition) do
-      :ok ->
-        {:ok, request}
-
-      {:error, _, _} ->
-        with {:ok, core} <-
-               WorkoutRequest.new(Map.put(WorkoutRequest.to_map(request), "timed_rests", [])),
-             :ok <- WorkoutRequest.validate_definition(core, definition),
-             rests <-
-               definition.events
-               |> WorkoutRequest.rest_timeline()
-               |> Enum.filter(fn {_, duration} -> rem(duration, 1_000_000) == 0 end),
-             {:ok, chosen} <- choose_review_rests(request.timed_rests, rests, []),
-             {:ok, alternative} <-
-               WorkoutRequest.new(Map.put(WorkoutRequest.to_map(request), "timed_rests", chosen)),
-             :ok <- WorkoutRequest.validate_definition(alternative, definition) do
-          {:ok, alternative}
-        else
-          _ -> {:error, Error.new(:invalid_workout_definition)}
-        end
-    end
-  end
-
-  defp choose_review_rests([], _available, chosen), do: {:ok, Enum.reverse(chosen)}
-
-  defp choose_review_rests([wanted | remaining], available, chosen) do
-    case Enum.min_by(
-           available,
-           fn {start, duration} ->
-             abs(start / 1_000_000 - wanted.start_sec) +
-               abs(duration / 1_000_000 - wanted.duration_sec)
-           end,
-           fn -> nil end
-         ) do
-      nil ->
-        {:error, :no_rest_alternative}
-
-      {start, duration} = rest ->
-        following = Enum.drop_while(available, &(&1 != rest)) |> Enum.drop(1)
-
-        value = %{
-          "start_sec" => round(start / 1_000_000),
-          "duration_sec" => div(duration, 1_000_000)
-        }
-
-        choose_review_rests(remaining, following, [value | chosen])
     end
   end
 
@@ -496,36 +431,19 @@ defmodule BurpeeTrainer.Coach do
                    context.id,
                    source,
                    attempt,
-                   WorkoutGuidance.system_prompt(user, :definition),
-                   confirmed_request_message(opts)
+                   WorkoutGuidance.system_prompt(user),
+                   layout_messages(opts)
                  ),
                {:ok, proposal} <-
-                 Client.complete(
-                   messages,
-                   Keyword.put(opts, :response_kind, :workout_definition)
-                 ),
+                 Client.complete(messages, Keyword.put(opts, :response_kind, :workout_layout)),
                {:ok, _} <-
-                 Context.append(user, context.id, attempt, :proposal, %{"definition" => proposal}) do
-            case validate_provider_definition(proposal, Keyword.fetch!(opts, :confirmed_request)) do
+                 Context.append(user, context.id, attempt, :proposal, %{"layout" => proposal}) do
+            case build_definition(Keyword.fetch!(opts, :confirmed_request), proposal) do
               {:ok, definition} ->
                 commit.(WorkoutDefinition.canonical_map(definition), attempt)
 
               {:error, error, detail} ->
-                detail =
-                  case Keyword.get(opts, :confirmed_request) do
-                    %WorkoutRequest{} = request ->
-                      detail <> PhasedWorkoutDefinition.phase_feedback(request, proposal)
-
-                    _ ->
-                      detail
-                  end
-
-                {:needs_correction, error, proposal,
-                 correction_feedback(
-                   detail,
-                   feedback_proposal(proposal, opts),
-                   Keyword.fetch!(opts, :confirmed_request)
-                 )}
+                {:needs_correction, error, proposal, detail}
             end
           end
         end)
@@ -581,13 +499,11 @@ defmodule BurpeeTrainer.Coach do
         role: "user",
         content:
           Jason.encode!(%{
-            scope: "timeline_correction",
-            instruction: text,
-            validation: detail,
-            rejected_definition: proposal,
-            confirmed_request: confirmed_request_map(opts),
+            scope: "layout_correction",
+            rejected_layout: proposal,
+            problem: detail,
             rule:
-              "One correction only. Keep requested reps, duration, and rest constraints. Return a complete replacement definition with exact totals. Use a sustainable movement pace; allocate available time to explicit between-set rest events instead of slowing reps to fill the clock. Never add rests if the user asked for no rest."
+              "One correction only. Change sets, reps per set, pace or weights so the layout fits. Keep every confirmed constraint. Rest durations are computed for you."
           })
       }
 
@@ -599,48 +515,19 @@ defmodule BurpeeTrainer.Coach do
                    context.id,
                    source,
                    attempt,
-                   WorkoutGuidance.system_prompt(user, :definition),
-                   confirmed_request_message(opts) ++ [correction]
+                   WorkoutGuidance.system_prompt(user),
+                   layout_messages(opts) ++ [correction]
                  ),
                {:ok, corrected} <-
-                 Client.complete(
-                   messages,
-                   Keyword.put(opts, :response_kind, :workout_definition)
-                 ),
+                 Client.complete(messages, Keyword.put(opts, :response_kind, :workout_layout)),
                {:ok, _} <-
-                 Context.append(user, context.id, attempt, :proposal, %{"definition" => corrected}) do
-            case validate_provider_definition(corrected, Keyword.fetch!(opts, :confirmed_request)) do
+                 Context.append(user, context.id, attempt, :proposal, %{"layout" => corrected}) do
+            case build_definition(Keyword.fetch!(opts, :confirmed_request), corrected) do
               {:ok, definition} ->
                 commit.(WorkoutDefinition.canonical_map(definition), attempt)
 
               {:error, error, detail} ->
-                if Keyword.get(opts, :prepare_review, false) do
-                  with {:ok, flattened} <-
-                         flatten_provider_definition(
-                           corrected,
-                           Keyword.fetch!(opts, :confirmed_request)
-                         ),
-                       {:ok, definition} <- WorkoutDefinition.new(flattened),
-                       {:ok, definition} <- validate_compiled_definition(definition),
-                       {:ok, chosen} <-
-                         review_request(Keyword.fetch!(opts, :confirmed_request), definition),
-                       true <-
-                         chosen.timed_rests !=
-                           Keyword.fetch!(opts, :confirmed_request).timed_rests,
-                       :ok <-
-                         validate_default_movement_pace(
-                           definition,
-                           Keyword.fetch!(opts, :confirmed_request)
-                         ) do
-                    commit.(WorkoutDefinition.canonical_map(definition), attempt)
-                  else
-                    _ ->
-                      {:error,
-                       %{error | context: Map.put(error.context || %{}, :diagnostic, detail)}}
-                  end
-                else
-                  {:error, error}
-                end
+                {:error, %{error | context: Map.put(error.context || %{}, :diagnostic, detail)}}
             end
           end
         end)
@@ -708,104 +595,50 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  defp validate_provider_definition(provider_definition, %WorkoutRequest{} = request) do
-    with {:ok, flattened} <- flatten_provider_definition(provider_definition, request) do
-      case WorkoutDefinition.new(flattened) do
-        {:ok, definition} ->
-          with {:ok, definition} <- validate_compiled_definition(definition),
-               :ok <- WorkoutRequest.validate_definition(request, definition),
-               :ok <- validate_default_movement_pace(definition, request) do
-            {:ok, definition}
-          end
+  defp build_definition(%WorkoutRequest{} = request, layout) do
+    case RestFitter.fit(request, layout) do
+      {:ok, attrs} ->
+        with {:ok, definition} <- WorkoutDefinition.new(attrs),
+             {:ok, definition} <- validate_compiled_definition(definition),
+             :ok <- WorkoutRequest.validate_definition(request, definition),
+             :ok <- validate_default_movement_pace(definition, request) do
+          {:ok, definition}
+        else
+          {:error, %Error{} = error, detail} ->
+            {:error, error, detail}
 
-        {:error, %Error{} = error} ->
-          reject_provider_definition(:schema, error)
-      end
-    else
-      {:error, %Error{} = error} -> reject_provider_definition(:schema, error)
+          {:error, %Error{} = error} ->
+            reject_provider_definition(:schema, error)
+
+          {:error, reason, details} ->
+            {:error, Error.new(:invalid_workout_definition),
+             "validation #{inspect({reason, details})}"}
+
+          _ ->
+            {:error, Error.new(:invalid_workout_definition), "validation failed"}
+        end
+
+      {:error, reason} ->
+        {:error, Error.new(:infeasible_workout_definition, %{reason: elem(reason, 0)}),
+         RestFitter.describe(reason)}
     end
   end
 
-  defp flatten_provider_definition(proposal, %WorkoutRequest{} = request) do
-    flattened =
-      if PhasedWorkoutDefinition.use_phases?(request),
-        do: PhasedWorkoutDefinition.flatten(request, proposal),
-        else: {:ok, proposal}
+  defp layout_messages(opts) do
+    request = Keyword.fetch!(opts, :confirmed_request)
 
-    case flattened do
-      {:ok, definition} -> {:ok, reconcile_actual_duration(definition, request)}
-      error -> error
-    end
-  end
-
-  defp flatten_provider_definition(proposal, _request), do: {:ok, proposal}
-
-  defp reconcile_actual_duration(definition, request) do
-    with true <- definition["target_duration_sec"] == request.target_duration_sec,
-         {:ok, totals} <- timeline_arithmetic(definition),
-         actual_us = totals.work_us + totals.rest_us,
-         true <- rem(actual_us, 1_000_000) == 0,
-         true <-
-           abs(actual_us - request.target_duration_sec * 1_000_000) <=
-             WorkoutRequest.timing_tolerance_sec() * 1_000_000 do
-      Map.put(definition, "target_duration_sec", div(actual_us, 1_000_000))
-    else
-      _ -> definition
-    end
-  end
-
-  defp confirmed_request_message(opts) do
-    messages =
-      case Keyword.get(opts, :confirmed_request) do
-        %WorkoutRequest{} = request ->
-          [
-            %{
-              role: "system",
-              content:
-                Jason.encode!(%{
-                  scope: "confirmed_workout_request",
-                  request: WorkoutRequest.to_map(request),
-                  rule:
-                    if(PhasedWorkoutDefinition.use_phases?(request),
-                      do:
-                        "These user-confirmed constraints are authoritative. Follow the phased response schema: phase_1 and each subsequent phase_N has work_rest_pairs of work plus positive rest_after, followed by last_work; each rest_N is mandatory between phases. The model chooses sets, cadence, and flexible rest durations. Phase work plus flexible recovery must total #{inspect(PhasedWorkoutDefinition.phase_budgets(request))} seconds in order when fixed anchors are present. The mandatory rests begin at their exact elapsed seconds. Do not echo a different target or describe rests only in rationale.",
-                      else:
-                        "These user-confirmed constraints are authoritative. Encode timed rests as events starting at their exact elapsed seconds. Do not echo a different target."
-                    )
-                })
-            }
-          ]
-
-        _missing ->
-          []
-      end
-
-    messages ++ Keyword.get(opts, :source_reference_messages, [])
-  end
-
-  defp confirmed_request_map(opts) do
-    case Keyword.get(opts, :confirmed_request) do
-      %WorkoutRequest{} = request -> WorkoutRequest.to_map(request)
-      _missing -> nil
-    end
-  end
-
-  defp feedback_proposal(%{} = proposal, opts) do
-    case Keyword.get(opts, :confirmed_request) do
-      %WorkoutRequest{} = request ->
-        proposal =
-          case flatten_provider_definition(proposal, request) do
-            {:ok, flattened} -> flattened
-            {:error, _} -> proposal
-          end
-
-        proposal
-        |> Map.put("target_reps", request.target_reps)
-        |> Map.put("target_duration_sec", request.target_duration_sec)
-
-      _missing ->
-        proposal
-    end
+    [
+      %{
+        role: "system",
+        content:
+          Jason.encode!(%{
+            scope: "confirmed_workout_request",
+            request: WorkoutRequest.to_map(request),
+            rule:
+              "These constraints are authoritative. Return a layout with exactly #{length(request.timed_rests) + 1} phases; fixed pauses sit between phases and are not part of the layout. Rest durations are computed from your weights."
+          })
+      }
+    ] ++ Keyword.get(opts, :source_reference_messages, [])
   end
 
   defp validate_default_movement_pace(definition, %WorkoutRequest{} = request) do
@@ -824,203 +657,6 @@ defmodule BurpeeTrainer.Coach do
     else
       :ok
     end
-  end
-
-  defp correction_feedback(detail, %{"events" => events} = proposal, %WorkoutRequest{} = request)
-       when is_list(events) do
-    rest_count = Enum.count(events, &(is_map(&1) and &1["kind"] == "rest"))
-
-    {arithmetic, rep_advice, time_advice} =
-      case timeline_arithmetic(proposal) do
-        {:ok, totals} ->
-          rep_advice =
-            if totals.work_reps == totals.target_reps,
-              do: "Keep the rep count fixed and",
-              else: "Correct the rep count first, then"
-
-          target_us = totals.target_duration_sec * 1_000_000
-
-          time_advice =
-            cond do
-              totals.work_us > target_us ->
-                "work alone exceeds the target; use only an allowed pace or report infeasibility"
-
-              totals.work_us + totals.rest_us > target_us ->
-                "reduce flexible rest without moving required timed rests"
-
-              true ->
-                "allocate remaining time to explicit between-set rest events"
-            end
-
-          {format_timeline_arithmetic(totals, proposal, request), rep_advice, time_advice}
-
-        :error ->
-          {"", "Recalculate the rep count and", "encode requested recovery explicitly"}
-      end
-
-    advice =
-      if request.recovery == "required" do
-        " #{rep_advice} recompute the rest budget; #{time_advice}. Preserve requested timed " <>
-          "rest starts and durations; do not slow reps to fill the clock."
-      else
-        " If the user requests no rest, do not add rest events. Keep explicit pace constraints."
-      end
-
-    detail <> arithmetic <> " rest_events=#{rest_count}." <> advice
-  end
-
-  defp correction_feedback(detail, _proposal, _request), do: detail
-
-  defp timeline_arithmetic(%{
-         "events" => events,
-         "target_reps" => target_reps,
-         "target_duration_sec" => target_duration_sec
-       })
-       when is_list(events) and is_integer(target_reps) and target_reps > 0 and
-              target_reps <= 100_000 and is_integer(target_duration_sec) and
-              target_duration_sec > 0 and target_duration_sec <= @feedback_max_seconds do
-    if events == [] or length(events) > @feedback_event_limit do
-      :error
-    else
-      terminal_index = length(events) - 1
-
-      events
-      |> Enum.with_index()
-      |> Enum.reduce_while(
-        {:ok,
-         %{
-           target_reps: target_reps,
-           target_duration_sec: target_duration_sec,
-           work_reps: 0,
-           work_us: 0,
-           rest_us: 0,
-           adjacent_work_sets: 0,
-           previous_work?: false,
-           uniform_pace_us: nil
-         }},
-        fn
-          {%{"kind" => "work", "reps" => reps, "sec_per_rep" => pace, "sec_per_burpee" => active},
-           index},
-          {:ok, totals}
-          when is_integer(reps) and reps > 0 and reps <= 100_000 and is_number(pace) and
-                 pace > 0 and pace <= @feedback_max_seconds and is_number(active) and
-                 active > 0 and active <= pace ->
-            pace_us = round(pace * 1_000_000)
-            active_us = round(active * 1_000_000)
-
-            if pace_us > 0 and active_us > 0 do
-              duration_us =
-                if index == terminal_index,
-                  do: (reps - 1) * pace_us + active_us,
-                  else: reps * pace_us
-
-              uniform_pace_us =
-                case totals.uniform_pace_us do
-                  nil -> {pace_us, active_us}
-                  {^pace_us, ^active_us} -> {pace_us, active_us}
-                  _mixed -> :mixed
-                end
-
-              {:cont,
-               {:ok,
-                %{
-                  totals
-                  | work_reps: totals.work_reps + reps,
-                    work_us: totals.work_us + duration_us,
-                    adjacent_work_sets:
-                      totals.adjacent_work_sets + if(totals.previous_work?, do: 1, else: 0),
-                    previous_work?: true,
-                    uniform_pace_us: uniform_pace_us
-                }}}
-            else
-              {:halt, :error}
-            end
-
-          {%{"kind" => "rest", "duration_sec" => seconds}, _index}, {:ok, totals}
-          when is_number(seconds) and seconds > 0 and seconds <= @feedback_max_seconds ->
-            duration_us = round(seconds * 1_000) * 1_000
-
-            if duration_us > 0 do
-              {:cont,
-               {:ok, %{totals | rest_us: totals.rest_us + duration_us, previous_work?: false}}}
-            else
-              {:halt, :error}
-            end
-
-          _event, _totals ->
-            {:halt, :error}
-        end
-      )
-    end
-  end
-
-  defp timeline_arithmetic(_proposal), do: :error
-
-  defp format_timeline_arithmetic(totals, proposal, request) do
-    accounted_us = totals.work_us + totals.rest_us
-    gap_us = totals.target_duration_sec * 1_000_000 - accounted_us
-
-    gap =
-      if gap_us >= 0,
-        do: " missing_sec=#{format_seconds(gap_us)}",
-        else: " excess_sec=#{format_seconds(-gap_us)}"
-
-    target_rest_budget = target_rest_budget(totals, proposal, request)
-
-    " work_reps=#{totals.work_reps} target_reps=#{totals.target_reps}" <>
-      " work_sec=#{format_seconds(totals.work_us)} rest_sec=#{format_seconds(totals.rest_us)}" <>
-      " accounted_sec=#{format_seconds(accounted_us)}#{gap}#{target_rest_budget}" <>
-      " adjacent_work_sets_without_rest=#{totals.adjacent_work_sets}"
-  end
-
-  defp target_rest_budget(totals, proposal, request) do
-    case totals.uniform_pace_us do
-      {pace_us, active_us} ->
-        default_range =
-          case proposal["burpee_type"] do
-            "six_count" -> WorkoutGuidance.default_active_seconds_range(:six_count)
-            "navy_seal" -> WorkoutGuidance.default_active_seconds_range(:navy_seal)
-            _other -> nil
-          end
-
-        reference_pace_us =
-          case default_range do
-            {fastest, slowest} ->
-              if request.recovery == "required" and is_nil(request.requested_pace_sec) and
-                   (pace_us < round(fastest * 1_000_000) or
-                      pace_us > round(slowest * 1_000_000) or
-                      active_us < round(fastest * 1_000_000) or
-                      active_us > round(slowest * 1_000_000)),
-                 do: round(slowest * 1_000_000),
-                 else: nil
-
-            _missing ->
-              nil
-          end
-
-        {label, target_work_us} =
-          if reference_pace_us do
-            {"rest_budget_at_reference_pace_sec", totals.target_reps * reference_pace_us}
-          else
-            terminal_adjustment = if totals.previous_work?, do: active_us - pace_us, else: 0
-            {"rest_budget_at_target_reps_sec", totals.target_reps * pace_us + terminal_adjustment}
-          end
-
-        rest_budget_us = totals.target_duration_sec * 1_000_000 - target_work_us
-
-        if rest_budget_us >= 0,
-          do: " #{label}=#{format_seconds(rest_budget_us)}",
-          else: " target_reps_infeasible_at_proposed_pace=true"
-
-      _mixed_or_missing ->
-        ""
-    end
-  end
-
-  defp format_seconds(microseconds) do
-    if rem(microseconds, 1_000_000) == 0,
-      do: Integer.to_string(div(microseconds, 1_000_000)),
-      else: microseconds |> Kernel./(1_000_000) |> Float.round(6) |> Float.to_string()
   end
 
   defp validate_compiled_definition(definition) do

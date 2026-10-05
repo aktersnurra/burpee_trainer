@@ -1,8 +1,7 @@
 defmodule BurpeeTrainer.Coach.Client do
   @moduledoc "One-call Req boundary for structured workout authoring."
 
-  alias BurpeeTrainer.Coach.{PhasedWorkoutDefinition, WorkoutRequest}
-  alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
+  alias BurpeeTrainer.Coach.{WorkoutLayout, WorkoutRequest}
   alias BurpeeTrainer.Workouts.Error
 
   require Logger
@@ -48,7 +47,7 @@ defmodule BurpeeTrainer.Coach.Client do
   defp complete_with_config(messages, opts, config) do
     with {:ok, {schema_name, schema}} <-
            response_schema(
-             Keyword.get(opts, :response_kind, :workout_definition),
+             Keyword.get(opts, :response_kind, :workout_request),
              Keyword.get(opts, :confirmed_request)
            ),
          :ok <- require_enabled(config),
@@ -137,21 +136,13 @@ defmodule BurpeeTrainer.Coach.Client do
       else: {:error, Error.new(:authoring_context_too_large)}
   end
 
-  defp response_schema(:workout_definition, %WorkoutRequest{} = request) do
-    if PhasedWorkoutDefinition.use_phases?(request) do
-      {:ok, {"phased_workout_definition", PhasedWorkoutDefinition.json_schema(request)}}
-    else
-      response_schema(:workout_definition)
-    end
-  end
+  defp response_schema(:workout_layout, %WorkoutRequest{} = request),
+    do: {:ok, {"workout_layout", WorkoutLayout.json_schema(request)}}
 
   defp response_schema(kind, _request), do: response_schema(kind)
 
   defp response_schema(:workout_request),
     do: {:ok, {"workout_request", WorkoutRequest.json_schema()}}
-
-  defp response_schema(:workout_definition),
-    do: {:ok, {"workout_definition", WorkoutDefinition.json_schema()}}
 
   defp response_schema(:coach_guidance) do
     {:ok,

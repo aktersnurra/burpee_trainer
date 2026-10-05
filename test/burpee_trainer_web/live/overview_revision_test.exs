@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.Policy
+  alias BurpeeTrainer.LayoutFixtures
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
 
   setup do
@@ -138,7 +139,7 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
     assert_receive {:provider_waiting, retry_worker}
     view |> element("#home-history-toggle") |> render_click()
     assert has_element?(view, "#home-history")
-    definition = Map.put(shown.plan.definition_json, "name", "Revised in Home")
+    layout = layout_from_definition(shown.plan.definition_json, "Revised in Home")
 
     extracted = %{
       "burpee_type" => Atom.to_string(shown.plan.burpee_type),
@@ -165,7 +166,7 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
     send(
       planner,
       {:respond,
-       Jason.encode!(%{"choices" => [%{"message" => %{"content" => Jason.encode!(definition)}}]})}
+       Jason.encode!(%{"choices" => [%{"message" => %{"content" => Jason.encode!(layout)}}]})}
     )
 
     render_async(view)
@@ -229,12 +230,20 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
       |> Ecto.Changeset.change(slot_key: "obsolete-slot")
       |> Repo.update!()
 
-    definition = Map.put(shown.plan.definition_json, "name", "Must not be accepted")
+    extracted = %{
+      "burpee_type" => Atom.to_string(shown.plan.burpee_type),
+      "target_reps" => shown.plan.target_reps,
+      "target_duration_sec" => shown.plan.target_duration_sec,
+      "pacing_style" => shown.plan.definition_json["pacing_style"],
+      "recovery" => "optional",
+      "timed_rests" => [],
+      "requested_pace_sec" => nil
+    }
 
     send(
       worker,
       {:respond,
-       Jason.encode!(%{"choices" => [%{"message" => %{"content" => Jason.encode!(definition)}}]})}
+       Jason.encode!(%{"choices" => [%{"message" => %{"content" => Jason.encode!(extracted)}}]})}
     )
 
     render_async(view)
@@ -260,6 +269,15 @@ defmodule BurpeeTrainerWeb.OverviewRevisionTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
     assert Repo.all(WorkoutPlan) == plans_before
     refute_received {:provider_waiting, _}
+  end
+
+  defp layout_from_definition(definition, name) do
+    sets =
+      for %{"kind" => "work"} = event <- definition["events"] do
+        {event["reps"], event["sec_per_rep"], event["sec_per_burpee"]}
+      end
+
+    LayoutFixtures.layout([sets], name)
   end
 
   defp seed_past_history(user) do
