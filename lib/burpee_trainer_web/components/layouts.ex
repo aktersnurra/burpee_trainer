@@ -8,11 +8,10 @@ defmodule BurpeeTrainerWeb.Layouts do
   embed_templates("layouts/*")
 
   @doc """
-  Main app layout. `current_user` is optional — the login page passes
+  Main app layout. `current_scope` is optional — the login page passes
   `nil` and the navigation adapts accordingly.
   """
   attr(:flash, :map, required: true)
-  attr(:current_user, :any, default: nil)
   attr(:current_level, :atom, default: nil)
   attr(:current_scope, :any, default: nil)
   attr(:current_page, :atom, default: nil)
@@ -25,7 +24,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       Map.put(assigns, :session_surface_page?, session_surface_page?(assigns.current_page))
 
     ~H"""
-    <%= if @current_user && @navigation? do %>
+    <%= if @current_scope && @navigation? do %>
       <%!-- Desktop top nav — hidden on mobile --%>
       <nav class={[
         "hidden sm:flex items-center justify-center gap-2 px-4 py-3 border-b",
@@ -36,6 +35,7 @@ defmodule BurpeeTrainerWeb.Layouts do
         <.nav_icon
           id="desktop-home-nav"
           navigate={~p"/"}
+          patch?={@current_page in [:home, :history, :coach]}
           title="Home"
           active={@current_page == :home}
           session_nav?={@session_surface_page?}
@@ -46,7 +46,8 @@ defmodule BurpeeTrainerWeb.Layouts do
 
         <.nav_icon
           id="desktop-history-nav"
-          navigate={~p"/?history=1"}
+          navigate={~p"/history"}
+          patch?={@current_page in [:home, :history, :coach]}
           title="History"
           active={false}
           session_nav?={@session_surface_page?}
@@ -65,6 +66,7 @@ defmodule BurpeeTrainerWeb.Layouts do
         <.bottom_tab
           id="mobile-home-nav"
           navigate={~p"/"}
+          patch?={@current_page in [:home, :history, :coach]}
           active={@current_page == :home}
           label="Home"
           session_nav?={@session_surface_page?}
@@ -75,7 +77,8 @@ defmodule BurpeeTrainerWeb.Layouts do
 
         <.bottom_tab
           id="mobile-history-nav"
-          navigate={~p"/?history=1"}
+          navigate={~p"/history"}
+          patch?={@current_page in [:home, :history, :coach]}
           active={false}
           label="History"
           session_nav?={@session_surface_page?}
@@ -94,7 +97,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       {render_slot(@inner_block)}
     </main>
 
-    <%= if @current_user && @navigation? do %>
+    <%= if @current_scope && @navigation? do %>
       <div class={[
         "sm:hidden",
         @session_surface_page? &&
@@ -114,6 +117,7 @@ defmodule BurpeeTrainerWeb.Layouts do
 
   attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
+  attr(:patch?, :boolean, default: false)
   attr(:title, :string, required: true)
   attr(:active, :boolean, required: true)
   attr(:session_nav?, :boolean, default: false)
@@ -123,7 +127,8 @@ defmodule BurpeeTrainerWeb.Layouts do
     ~H"""
     <.link
       id={@id}
-      navigate={@navigate}
+      navigate={if(!@patch?, do: @navigate)}
+      patch={if(@patch?, do: @navigate)}
       title={@title}
       class={[
         "relative inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors",
@@ -148,6 +153,7 @@ defmodule BurpeeTrainerWeb.Layouts do
   attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
   attr(:active, :boolean, required: true)
+  attr(:patch?, :boolean, default: false)
   attr(:label, :string, required: true)
   attr(:session_nav?, :boolean, default: false)
   slot(:inner_block, required: true)
@@ -156,7 +162,8 @@ defmodule BurpeeTrainerWeb.Layouts do
     ~H"""
     <.link
       id={@id}
-      navigate={@navigate}
+      navigate={if(!@patch?, do: @navigate)}
+      patch={if(@patch?, do: @navigate)}
       class={[
         "relative inline-flex flex-col items-center transition-colors",
         @session_nav? && "h-[84px] min-w-0 flex-1 justify-start gap-1.5 pt-5",

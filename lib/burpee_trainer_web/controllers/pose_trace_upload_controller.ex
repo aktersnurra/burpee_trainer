@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadController do
     complete? = params["complete"] == true
 
     case Workouts.ingest_pose_trace_batch(
-           conn.assigns.current_user,
+           conn.assigns.current_scope,
            parse_session_id(session_id),
            client_session_id,
            chunks,

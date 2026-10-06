@@ -4,6 +4,7 @@ import { LiveSocket } from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
 import HomeAdjustment from "./hooks/home_adjustment.mjs";
+import { registerHomeChooserFeedback } from "./hooks/home_chooser_feedback.mjs";
 import HomePendingSession from "./hooks/home_pending_session.mjs";
 import SessionHook from "./hooks/session_hook";
 import SessionCompleted from "./hooks/session_completed.mjs";
@@ -119,6 +120,7 @@ export function startApp(PoseTracker) {
 		drainPoseTraces();
 	});
 
+	registerHomeChooserFeedback();
 	liveSocket.connect();
 	drainPoseTraces();
 	window.liveSocket = liveSocket;

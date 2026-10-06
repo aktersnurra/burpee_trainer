@@ -24,7 +24,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             phx-mounted={
               JS.focus(
                 to:
-                  if(Map.get(@state, :coach_return_to) == "#history-coach-open",
+                  if(Map.get(@state, :history_focus_return?, false),
                     do: "#history-coach-open",
                     else: "#home-history-heading"
                   )
@@ -193,7 +193,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             empty?={@state.history_empty?}
             period={@state.history_period}
             period_start={List.first(@state.history_weeks).start}
-            now={Map.get(@state, :home_snapshot_now)}
+            now={@state.history_snapshot_now}
             show_sessions?={@state.history_show_sessions?}
           />
         <% end %>
@@ -272,7 +272,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                   :for={{id, session} <- @state.streams.history_sessions}
                   id={id}
                   session={session}
-                  timezone={@state.current_user.timezone}
+                  timezone={@state.current_scope.user.timezone}
                   expanded?={MapSet.member?(@state.history_expanded, session.id)}
                 />
               </tbody>
@@ -296,7 +296,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         :if={@state.history_selected_session}
         session={@state.history_selected_session}
         confirm?={@state.history_confirm_delete?}
-        timezone={@state.current_user.timezone}
+        timezone={@state.current_scope.user.timezone}
         return_to={@state.history_session_return_to}
         error={@state.history_error}
       />
@@ -339,7 +339,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       phx-remove={
         @confirm? &&
           JS.remove_attribute("inert", to: "#home-history-body")
-          |> JS.remove_attribute("inert", to: "#home-history-toggle")
+          |> JS.remove_attribute("inert", to: "#home-history-close")
           |> JS.focus(to: "#home-history-heading")
       }
     >
@@ -409,13 +409,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp open_session_sheet do
     JS.set_attribute({"inert", ""}, to: "#home-history-body")
-    |> JS.set_attribute({"inert", ""}, to: "#home-history-toggle")
+    |> JS.set_attribute({"inert", ""}, to: "#home-history-close")
     |> JS.push("history_session")
   end
 
   defp close_session_sheet(return_to) do
     JS.remove_attribute("inert", to: "#home-history-body")
-    |> JS.remove_attribute("inert", to: "#home-history-toggle")
+    |> JS.remove_attribute("inert", to: "#home-history-close")
     |> JS.focus(to: return_to)
     |> JS.push("history_close_session")
   end

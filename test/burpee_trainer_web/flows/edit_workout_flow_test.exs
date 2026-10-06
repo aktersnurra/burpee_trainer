@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Accounts, Workouts, Repo}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
@@ -117,8 +118,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     user = user_fixture()
     {:ok, user} = Accounts.update_timezone(user, "Etc/UTC")
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     %{view: view, user: user, selected: selected}
   end
@@ -165,8 +166,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
         completed_at: used_at
       })
 
-    {:ok, selected} = Workouts.ensure_home_selection(user, selected_slot(user))
-    {:ok, pin} = Workouts.select_home_workout(user, selected, original.id)
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+    {:ok, pin} = Workouts.select_home_workout(Scope.for_user(user), selected, original.id)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
     view |> element("#home-edit-workout") |> render_click()
@@ -177,7 +178,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     |> render_change()
 
     view |> element("#home-request-abort") |> render_click()
-    assert {:ok, ^pin} = Workouts.ensure_home_selection(user, selected_slot(user))
+    assert {:ok, ^pin} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
     assert Repo.aggregate(
              from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
@@ -196,7 +197,9 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     view |> element("#home-history-toggle") |> render_click()
     view |> element("#history-coach-open") |> render_click()
     view |> element("#home-coach-back") |> render_click()
-    view |> element("#home-history-toggle") |> render_click()
+    assert_patch(view, "/history")
+    view |> element("#home-history-close") |> render_click()
+    assert_patch(view, "/")
     assert has_element?(view, "#home-edit-instruction", instruction)
     refute_received {:provider_request, _}
     count = Repo.aggregate(WorkoutPlan, :count)
@@ -239,14 +242,17 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
            ) == 0
 
     [saved] =
-      Enum.filter(Workouts.list_library(user), &(&1.user_id == user.id and &1.target_reps == 150))
+      Enum.filter(
+        Workouts.list_library(Scope.for_user(user)),
+        &(&1.user_id == user.id and &1.target_reps == 150)
+      )
 
     assert saved.state == :published
     assert saved.id != original.id
     assert saved.definition_json["target_reps"] == 150
     assert Repo.aggregate(WorkoutPlan, :count) == count + 1
     refute_received {:provider_request, _}
-    assert {:ok, ^pin} = Workouts.ensure_home_selection(user, selected_slot(user))
+    assert {:ok, ^pin} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
     assert Repo.get!(WorkoutPlan, original.id).definition_json == original.definition_json
 
     assert Repo.get!(BurpeeTrainer.Workouts.WorkoutSession, used.id).program_snapshot ==
@@ -255,16 +261,16 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     view |> element("#home-new-select") |> render_click()
     {:ok, reopened, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     assert has_element?(reopened, "#home-ready-recommendation .home-workout-name", saved.name)
-    assert Enum.any?(Workouts.list_library(user), &(&1.id == original.id))
+    assert Enum.any?(Workouts.list_library(Scope.for_user(user)), &(&1.id == original.id))
 
     assert {:ok, %{plan: %{id: saved_id}}} =
-             Workouts.ensure_home_selection(user, selected_slot(user))
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
     assert saved_id == saved.id
   end
 
   defp selected_slot(user) do
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
   end
 end

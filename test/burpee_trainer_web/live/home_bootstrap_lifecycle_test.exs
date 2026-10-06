@@ -1,4 +1,4 @@
-defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
+defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import Ecto.Query
@@ -6,10 +6,11 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.DesignSession
   alias BurpeeTrainer.LayoutFixtures
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
-  alias BurpeeTrainerWeb.OverviewLive
+  alias BurpeeTrainerWeb.HomeLive
 
   setup do
     parent = self()
@@ -55,7 +56,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     token = socket.assigns.start_client_session_id
 
     assert {:noreply, ^socket} =
-             OverviewLive.handle_event(
+             HomeLive.handle_event(
                "submit_home_action",
                %{
                  "client_session_id" => token,
@@ -64,7 +65,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
                socket
              )
 
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     refute_received {:provider_waiting, _, _, _}
   end
 
@@ -75,7 +76,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     token = socket.assigns.start_client_session_id
 
     assert {:noreply, ^socket} =
-             OverviewLive.handle_event(
+             HomeLive.handle_event(
                "submit_home_action",
                %{
                  "client_session_id" => token,
@@ -84,7 +85,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
                socket
              )
 
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     refute_received {:provider_waiting, _, _, _}
   end
 
@@ -94,13 +95,13 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     socket = mounted_bootstrap_socket(user)
 
     assert {:noreply, ^socket} =
-             OverviewLive.handle_event(
+             HomeLive.handle_event(
                "change_adjustment",
                %{"home_adjustment" => %{"instruction" => "Make it harder"}},
                socket
              )
 
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     refute_received {:provider_waiting, _, _, _}
   end
 
@@ -166,7 +167,8 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     view |> element("#home-history-toggle") |> render_click()
     assert has_element?(view, "#home-history-empty")
     refute has_element?(view, "#home-history-weekly")
-    view |> element("#home-history-toggle") |> render_click()
+    view |> element("#home-history-close") |> render_click()
+    assert_patch(view, "/")
     still_pending = bootstrap_socket(view)
     assert still_pending.assigns.bootstrap_id == pending_id
     assert still_pending.assigns.bootstrap_prompt == prompt
@@ -222,7 +224,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
              Repo.get!(WorkoutPlan, selected_plan_id)
 
     assert user_id == user.id
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     first_token = client_session_id(view)
 
     {:ok, reloaded, _} = live(conn, ~p"/")
@@ -316,7 +318,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
       "home_adjustment" => %{"instruction" => ""}
     })
 
-    assert %{state: :started} = Workouts.current_started_session(user)
+    assert %{state: :started} = Workouts.current_started_session(Scope.for_user(user))
   end
 
   test "bootstrap built-in selection enters the selected workspace without a provider request", %{
@@ -360,7 +362,9 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
       "home_adjustment" => %{"instruction" => ""}
     })
 
-    assert %{plan_id: plan_id, state: :started} = Workouts.current_started_session(user)
+    assert %{plan_id: plan_id, state: :started} =
+             Workouts.current_started_session(Scope.for_user(user))
+
     assert plan_id == plan.id
     _ = :sys.get_state(view.pid)
     refute_received {:provider_waiting, _, _, _}
@@ -379,7 +383,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
     _ = :sys.get_state(view.pid)
     refute_received {:provider_waiting, _, _, _}
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
-    assert %{workout_video_id: video_id} = Workouts.current_started_session(user)
+    assert %{workout_video_id: video_id} = Workouts.current_started_session(Scope.for_user(user))
     assert video_id == video.id
     refute_received {:provider_waiting, _, _, _}
   end
@@ -390,14 +394,14 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapLifecycleTest do
       private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}},
       assigns: %{
         __changed__: %{},
-        current_user: user,
+        current_scope: BurpeeTrainer.Accounts.Scope.for_user(user),
         current_level: :level_1a,
         flash: %{},
         home_now: fn -> DateTime.utc_now(:second) end
       }
     }
 
-    {:ok, socket} = OverviewLive.mount(%{}, %{}, socket)
+    {:ok, socket} = HomeLive.mount(%{}, %{}, socket)
     socket
   end
 

@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
   import Ecto.Query
 
   alias BurpeeTrainer.{Accounts, PlanCompiler, Repo, Videos, Workouts}
-  alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.{Client, Policy}
   alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
 
@@ -130,11 +130,11 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
   defp create_mode_fixture(user, "pending-candidate", run_id, options) do
     now = Keyword.get_lazy(options, :now, fn -> DateTime.utc_now(:second) end)
 
-    with {:ok, initial_slot} <- Policy.required_slot(user, now),
+    with {:ok, initial_slot} <- Policy.required_slot(Scope.for_user(user), now),
          {:ok, history} <- ensure_weekend_history(user, run_id, initial_slot),
-         {:ok, slot} <- Policy.required_slot(user, now),
+         {:ok, slot} <- Policy.required_slot(Scope.for_user(user), now),
          {:ok, recommendation} <-
-           Workouts.ensure_recommendation(user, %{
+           Workouts.ensure_recommendation(Scope.for_user(user), %{
              slot_key: slot.slot_key,
              slot_date: slot.slot_date,
              rationale: "Deterministic pending candidate fixture"
@@ -192,7 +192,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     client_session_id = fixture_client_session_id(run_id, "started-plan-session")
 
     with {:ok, plan} <- published_plan(user, "Started session #{run_id}"),
-         {:ok, session} <- Workouts.start_plan(user, plan.id, client_session_id) do
+         {:ok, session} <- Workouts.start_plan(Scope.for_user(user), plan.id, client_session_id) do
       persisted = Repo.get_by!(WorkoutSession, id: session.id, user_id: user.id)
 
       {:ok,
@@ -220,7 +220,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     client_session_id = fixture_client_session_id(run_id, "completed-history")
 
     with {:ok, plan} <- published_plan(user, "Completed history #{run_id}"),
-         {:ok, started} <- Workouts.start_plan(user, plan.id, client_session_id),
+         {:ok, started} <- Workouts.start_plan(Scope.for_user(user), plan.id, client_session_id),
          {:ok, completed} <- complete_history_session(user, started) do
       persisted = Repo.get_by!(WorkoutSession, id: completed.id, user_id: user.id)
 
@@ -267,7 +267,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
 
   defp create_mode_fixture(user, "provider-failure", run_id, _options) do
     with {:ok, recommendation} <-
-           Workouts.ensure_recommendation(user, %{
+           Workouts.ensure_recommendation(Scope.for_user(user), %{
              slot_key: "e2e-provider-failure-#{run_id}",
              slot_date: next_monday(Date.utc_today()),
              rationale: "Provider disabled; deterministic fallback remains"
@@ -531,7 +531,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
 
   defp complete_history_session(user, %WorkoutSession{state: :started} = session) do
     Workouts.complete_session(
-      user,
+      Scope.for_user(user),
       session.id,
       %{
         "burpee_count_actual" => 10,

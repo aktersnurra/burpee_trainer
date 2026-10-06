@@ -5,6 +5,7 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
   import Phoenix.LiveViewTest
 
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Workouts.WorkoutSession
 
   setup %{conn: conn} do
@@ -16,10 +17,11 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     conn: conn,
     user: user
   } do
-    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} =
+      BurpeeTrainer.Coach.Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
 
     assert {:ok, recommendation} =
-             Workouts.ensure_recommendation(user, %{
+             Workouts.ensure_recommendation(Scope.for_user(user), %{
                slot_key: slot.slot_key,
                slot_date: slot.slot_date,
                rationale: "Ready from Home."
@@ -29,7 +31,7 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     home |> element("#home-summary") |> render_click()
     home |> element("#home-action") |> render_click()
-    started = Workouts.current_started_session(user)
+    started = Workouts.current_started_session(Scope.for_user(user))
     assert started.plan_id == recommendation.selected_workout_plan_id
     assert_redirect(home, ~p"/session/#{started.id}")
     assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -62,7 +64,9 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
   } do
     video = video_fixture(%{burpee_count: nil})
 
-    assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+    assert {:ok, started} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
     assert Repo.aggregate(WorkoutSession, :count) == 1
 
     {:ok, first_mount, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
@@ -78,10 +82,11 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     conn: conn,
     user: user
   } do
-    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} =
+      BurpeeTrainer.Coach.Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
 
     assert {:ok, recommendation} =
-             Workouts.ensure_recommendation(user, %{
+             Workouts.ensure_recommendation(Scope.for_user(user), %{
                slot_key: slot.slot_key,
                slot_date: slot.slot_date,
                rationale: "Fallback remains ready."
@@ -94,9 +99,9 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     home |> element("#home-action") |> render_click()
 
-    started = Workouts.current_started_session(user)
+    started = Workouts.current_started_session(Scope.for_user(user))
     assert started.plan_id == recommendation.selected_workout_plan_id
-    assert {:ok, plan} = Workouts.get_library_plan(user, started.plan_id)
+    assert {:ok, plan} = Workouts.get_library_plan(Scope.for_user(user), started.plan_id)
     assert started.program_snapshot == plan.program_json
     assert started.content_hash == plan.content_hash
     assert Repo.aggregate(WorkoutSession, :count) == 1

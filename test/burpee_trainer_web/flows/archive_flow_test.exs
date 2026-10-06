@@ -3,6 +3,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Accounts, Workouts, Repo}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
@@ -116,8 +117,8 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
 
     user = user_fixture()
     {:ok, user} = Accounts.update_timezone(user, "Etc/UTC")
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     %{view: view, user: user, selected: selected}
   end
@@ -165,8 +166,8 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
         completed_at: used_at
       })
 
-    {:ok, selected} = Workouts.ensure_home_selection(user, selected_slot(user))
-    {:ok, _pin} = Workouts.select_home_workout(user, selected, original.id)
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+    {:ok, _pin} = Workouts.select_home_workout(Scope.for_user(user), selected, original.id)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
     view |> element("#home-title-action") |> render_click()
@@ -186,7 +187,18 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert archived.content_hash == original.content_hash
     assert Repo.get!(BurpeeTrainer.Workouts.WorkoutSession, used.id) == used
     refute has_element?(view, "#home-alternative-plan-#{original.id}")
-    {:ok, fallback} = Workouts.ensure_home_selection(user, selected_slot(user))
+    # Observe the replacement immediately, before any external ensure or reload.
+    after_archive = :sys.get_state(view.pid).socket.assigns
+    assert {:start, immediate_fallback} = after_archive.home_state
+    assert immediate_fallback == after_archive.home_facts.selection
+    assert after_archive.home_selection == immediate_fallback
+    refute immediate_fallback.plan.id == original.id
+
+    assert after_archive.inspection_rows ==
+             BurpeeTrainer.Workouts.Inspection.rows(immediate_fallback.plan)
+
+    assert has_element?(view, "#home-summary .home-workout-name", immediate_fallback.plan.name)
+    {:ok, fallback} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
     refute fallback.plan.id == original.id
     refute has_element?(view, "#home-delete-workout-#{fallback.plan.id}")
     foreign = plan_fixture(user_fixture(), %{"definition" => definition, "state" => "published"})
@@ -206,6 +218,24 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
 
     refute has_element?(reloaded, "#home-alternative-plan-#{original.id}")
     assert Repo.get!(BurpeeTrainer.Workouts.WorkoutSession, used.id) == used
+    # The original view (not a reload or separately ensured fallback) must offer
+    # the genuine replacement and successfully start its displayed snapshot.
+    view |> element("#home-chooser-close") |> render_click()
+    state = :sys.get_state(view.pid).socket.assigns
+    assert {:start, shown} = state.home_state
+    assert shown == state.home_facts.selection
+    assert state.home_selection == shown
+    assert shown.plan.id == fallback.plan.id
+    assert state.inspection_rows == BurpeeTrainer.Workouts.Inspection.rows(shown.plan)
+    assert has_element?(view, "#home-summary .home-workout-name", shown.plan.name)
+    view |> element("#home-action[data-primary-action=start]") |> render_click()
+    started = Workouts.current_started_session(Scope.for_user(user))
+    assert started.plan_id == shown.plan.id
+    assert started.program_snapshot == shown.plan.program_json
+    assert started.content_hash == shown.plan.content_hash
+    assert_redirect(view, "/session/#{started.id}")
+    assert Repo.reload!(used) == used
+    assert Repo.reload!(foreign).state == :published
     refute_received {:provider_request, _}
   end
 
@@ -213,9 +243,12 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     user = user_fixture()
     plan = plan_fixture(user, %{name: "Archived source"})
     fallback = plan_fixture(user, %{name: "Fallback"})
-    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, shown} = Workouts.ensure_home_selection(user, slot)
-    {:ok, _} = Workouts.select_home_workout(user, shown, plan.id)
+
+    {:ok, slot} =
+      BurpeeTrainer.Coach.Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
+    {:ok, _} = Workouts.select_home_workout(Scope.for_user(user), shown, plan.id)
     completed_at = DateTime.add(DateTime.utc_now(:second), -86_400, :second)
 
     completed =
@@ -248,8 +281,169 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert has_element?(view, "#home-alternative-plan-#{fallback.id}")
   end
 
+  test "settled real adjustment defers archive without changing workspace or database", %{
+    conn: conn,
+    user: user
+  } do
+    original =
+      plan_fixture(user, %{
+        "definition" => %{
+          "version" => 1,
+          "name" => "Keep prepared source",
+          "burpee_type" => "six_count",
+          "target_reps" => 30,
+          "target_duration_sec" => 1200,
+          "pacing_style" => "even",
+          "rationale" => "Preserve prepared identity and expanded group.",
+          "events" =>
+            List.duplicate(
+              %{"kind" => "work", "reps" => 15, "sec_per_rep" => 40, "sec_per_burpee" => 40},
+              2
+            )
+        }
+      })
+
+    foreign = plan_fixture(user_fixture(), %{name: "Foreign source"})
+    completed_at = DateTime.add(DateTime.utc_now(:second), -86_400, :second)
+
+    completed =
+      Repo.insert!(%WorkoutSession{
+        user_id: user.id,
+        plan_id: original.id,
+        state: :completed,
+        source_kind: :plan,
+        client_session_id: Ecto.UUID.generate(),
+        display_name_snapshot: original.name,
+        workout_type_snapshot: original.burpee_type,
+        burpee_type: original.burpee_type,
+        program_snapshot: original.program_json,
+        content_hash: original.content_hash,
+        burpee_count_planned: original.target_reps,
+        duration_sec_planned: original.target_duration_sec,
+        burpee_count_actual: 1,
+        duration_sec_actual: 1,
+        capture_mode: :timed,
+        started_at: DateTime.add(completed_at, -1, :second),
+        completed_at: completed_at
+      })
+
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+    {:ok, pinned} = Workouts.select_home_workout(Scope.for_user(user), selected, original.id)
+    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
+    render_patch(view, "/coach?from=home")
+
+    view
+    |> form("#home-coach-guidance-form", coach_guidance: %{text: "Keep this unsent"})
+    |> render_change()
+
+    view |> element("#home-coach-back") |> render_click()
+    view |> element("#home-summary") |> render_click()
+    initial = :sys.get_state(view.pid).socket.assigns
+    assert initial.home_selection == pinned
+
+    for row <- initial.inspection_rows, row.count > 1 do
+      render_click(view, "toggle_group", %{"id" => row.id})
+    end
+
+    assert MapSet.size(:sys.get_state(view.pid).socket.assigns.expanded_groups) == 1
+    view |> element("#home-new-workout") |> render_click()
+    view |> form("#home-new-form", home_workout: %{reps: 140, sets: "20x7"}) |> render_change()
+    view |> element("#home-request-abort") |> render_click()
+
+    instruction = "Change to 120 reps in 20 minutes, in two sets at 5 seconds active pace"
+
+    render_change(view, "change_adjustment", %{
+      "home_adjustment" => %{"instruction" => instruction}
+    })
+
+    render_submit(view, "submit_home_action", %{
+      "client_session_id" => initial.start_client_session_id,
+      "home_adjustment" => %{"instruction" => instruction}
+    })
+
+    render_async(view)
+    assert_receive {:provider_request, _}
+    assert has_element?(view, "#home-request-confirmation")
+    prepared = :sys.get_state(view.pid).socket.assigns
+    assert prepared.busy? == false
+    assert prepared.authoring_stage == :idle
+    assert prepared.pending_request.scope.kind == :revision
+    assert prepared.pending_request.scope.expected == pinned
+    assert prepared.instruction == instruction
+    assert prepared.home_selection == prepared.home_facts.selection
+    assert prepared.home_state == {:start, pinned}
+
+    view |> element("#home-title-action:not([disabled])") |> render_click()
+    view |> element("#home-filter-toggle") |> render_click()
+
+    for level <- BurpeeTrainer.Levels.all_levels() do
+      selector = "#home-level-#{level}[aria-pressed=false]"
+      if has_element?(view, selector), do: view |> element(selector) |> render_click()
+    end
+
+    assert has_element?(view, "#home-delete-workout-#{original.id}[data-confirm]")
+    before = :sys.get_state(view.pid).socket.assigns
+    rows = database_rows()
+    view |> element("#home-delete-workout-#{original.id}") |> render_click()
+    after_rejection = :sys.get_state(view.pid).socket.assigns
+    assert database_rows() == rows
+    # All assigns (including streams/forms/identities/facts/snapshot/timer/token)
+    # stay identical; only the existing rejection flash may change.
+    assert Map.drop(after_rejection, [:flash, :__changed__]) ==
+             Map.drop(before, [:flash, :__changed__])
+
+    assert after_rejection.flash["error"] ==
+             "That workout could not be deleted. Your history is unchanged."
+
+    assert Repo.reload!(original) == original
+    assert Repo.reload!(foreign) == foreign
+    assert Repo.reload!(completed) == completed
+    assert has_element?(view, "#home-alternative-plan-#{original.id}")
+    assert has_element?(view, "#home-summary .home-workout-name", original.name)
+    assert has_element?(view, "#home-request-confirmation")
+    refute_received {:provider_request, _}
+
+    view |> element("#home-chooser-close") |> render_click()
+    view |> element("#home-request-back") |> render_click()
+    cancelled = :sys.get_state(view.pid).socket.assigns
+    assert cancelled.pending_request == nil
+    assert cancelled.instruction == instruction
+    assert cancelled.home_selection == pinned
+    assert cancelled.home_facts == before.home_facts
+    assert cancelled.home_snapshot_now == before.home_snapshot_now
+    assert cancelled.start_client_session_id == before.start_client_session_id
+    assert database_rows() == rows
+    view |> element("#home-action[data-primary-action=start]:not([disabled])") |> render_click()
+    started = Workouts.current_started_session(Scope.for_user(user))
+    assert started.plan_id == pinned.plan.id
+    assert started.program_snapshot == pinned.plan.program_json
+    assert started.content_hash == pinned.plan.content_hash
+    assert started.client_session_id == before.start_client_session_id
+    assert_redirect(view, "/session/#{started.id}")
+    assert Repo.reload!(original) == original
+    assert Repo.reload!(foreign) == foreign
+    assert Repo.reload!(completed) == completed
+    refute_received {:provider_request, _}
+  end
+
+  defp database_rows do
+    %{rows: tables} =
+      Ecto.Adapters.SQL.query!(
+        Repo,
+        "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+        []
+      )
+
+    Enum.map(tables, fn [table] ->
+      quoted = String.replace(table, "\"", "\"\"")
+
+      {table,
+       Ecto.Adapters.SQL.query!(Repo, "SELECT * FROM \"#{quoted}\" ORDER BY rowid", []).rows}
+    end)
+  end
+
   defp selected_slot(user) do
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
   end
 end

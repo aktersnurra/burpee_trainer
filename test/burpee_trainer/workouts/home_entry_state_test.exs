@@ -13,18 +13,21 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
   test "classifies only a user with no persisted Home or training evidence as bootstrap" do
     for {label, arrange, expected} <- cases() do
       user = user_fixture()
-      {:ok, slot} = Policy.required_slot(user, @now)
+      {:ok, slot} = Policy.required_slot(BurpeeTrainer.Accounts.Scope.for_user(user), @now)
       arrange.(user, slot)
       before = rows()
 
-      assert Workouts.home_entry_state(user, slot) == {:ok, expected}, label
+      assert Workouts.home_entry_state(BurpeeTrainer.Accounts.Scope.for_user(user), slot) ==
+               {:ok, expected},
+             label
+
       assert rows() == before, label
     end
   end
 
   test "rejects malformed slots" do
     assert {:error, %Error{}} =
-             Workouts.home_entry_state(user_fixture(), %{
+             Workouts.home_entry_state(scope_fixture(), %{
                slot_key: "",
                slot_date: nil,
                home_state: :workout_needed
@@ -33,14 +36,14 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
 
   test "returns an unavailable error when its valid-slot query fails" do
     user = user_fixture()
-    {:ok, slot} = Policy.required_slot(user, @now)
+    {:ok, slot} = Policy.required_slot(BurpeeTrainer.Accounts.Scope.for_user(user), @now)
     before = rows()
 
     Ecto.Adapters.SQL.Sandbox.mode(Repo, :manual)
 
     try do
       assert {:error, %Error{code: :home_entry_state_unavailable}} =
-               Workouts.home_entry_state(user, slot)
+               Workouts.home_entry_state(BurpeeTrainer.Accounts.Scope.for_user(user), slot)
     after
       :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
       :ok = Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
@@ -50,16 +53,30 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
 
   test "does not treat another user's evidence as this user's evidence" do
     existing_user = user_fixture()
-    {:ok, existing_slot} = Policy.required_slot(existing_user, @now)
+
+    {:ok, existing_slot} =
+      Policy.required_slot(BurpeeTrainer.Accounts.Scope.for_user(existing_user), @now)
+
     plan_fixture(existing_user)
     current_recommendation(existing_user, existing_slot)
-    session_from_plan_fixture(existing_user, Workouts.list_library(existing_user) |> hd())
+
+    session_from_plan_fixture(
+      existing_user,
+      Workouts.list_library(BurpeeTrainer.Accounts.Scope.for_user(existing_user)) |> hd()
+    )
 
     fresh_user = user_fixture()
-    {:ok, fresh_slot} = Policy.required_slot(fresh_user, @now)
+
+    {:ok, fresh_slot} =
+      Policy.required_slot(BurpeeTrainer.Accounts.Scope.for_user(fresh_user), @now)
+
     before = rows()
 
-    assert Workouts.home_entry_state(fresh_user, fresh_slot) == {:ok, :bootstrap}
+    assert Workouts.home_entry_state(
+             BurpeeTrainer.Accounts.Scope.for_user(fresh_user),
+             fresh_slot
+           ) == {:ok, :bootstrap}
+
     assert rows() == before
   end
 
@@ -83,7 +100,7 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
 
   defp owned_archived(user, _slot) do
     plan = plan_fixture(user)
-    {:ok, _archived} = Workouts.archive_plan(user, plan.id)
+    {:ok, _archived} = Workouts.archive_plan(BurpeeTrainer.Accounts.Scope.for_user(user), plan.id)
   end
 
   defp current_builtin_pin(user, slot), do: current_recommendation(user, slot)
@@ -118,17 +135,28 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
   end
 
   defp completed_builtin_session(user, _slot) do
-    built_in = Enum.find(Workouts.list_library(user), &(&1.origin == :built_in))
+    built_in =
+      Enum.find(
+        Workouts.list_library(BurpeeTrainer.Accounts.Scope.for_user(user)),
+        &(&1.origin == :built_in)
+      )
+
     session_from_plan_fixture(user, built_in)
   end
 
   defp completed_video_session(user, _slot) do
     video = video_fixture()
-    {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    {:ok, started} =
+      Workouts.start_video(
+        BurpeeTrainer.Accounts.Scope.for_user(user),
+        video.id,
+        Ecto.UUID.generate()
+      )
 
     {:ok, _completed} =
       Workouts.complete_session(
-        user,
+        BurpeeTrainer.Accounts.Scope.for_user(user),
         started.id,
         %{"burpee_count_actual" => 25, "duration_sec_actual" => 120},
         :timed
@@ -137,7 +165,10 @@ defmodule BurpeeTrainer.Workouts.HomeEntryStateTest do
 
   defp current_recommendation(user, slot),
     do:
-      Workouts.ensure_recommendation(user, %{slot_key: slot.slot_key, slot_date: slot.slot_date})
+      Workouts.ensure_recommendation(BurpeeTrainer.Accounts.Scope.for_user(user), %{
+        slot_key: slot.slot_key,
+        slot_date: slot.slot_date
+      })
 
   defp rows,
     do: %{

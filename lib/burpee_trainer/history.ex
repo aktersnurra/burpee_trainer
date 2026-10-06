@@ -181,18 +181,25 @@ defmodule BurpeeTrainer.History do
     }
   end
 
-  @spec page(map(), DateTime.t(), period(), cursor()) ::
+  @spec page(BurpeeTrainer.Accounts.Scope.t(), DateTime.t(), period(), cursor()) ::
           {:ok, [WorkoutSession.t()], cursor(), boolean()} | {:error, term()}
-  def page(user, now, period, cursor \\ nil) do
+  def page(%BurpeeTrainer.Accounts.Scope{user: user} = scope, now, period, cursor \\ nil) do
     with {:ok, _} <- filter_sessions([], user, now, period) do
-      scan(user, now, period, cursor, 5, [])
+      scan(scope, now, period, cursor, 5, [])
     end
   end
 
-  defp scan(user, now, period, cursor, remaining, accumulated) do
+  defp scan(
+         %BurpeeTrainer.Accounts.Scope{user: user} = scope,
+         now,
+         period,
+         cursor,
+         remaining,
+         accumulated
+       ) do
     opts = if cursor, do: [before: cursor], else: []
 
-    case Workouts.list_sessions_page(user, remaining, opts) do
+    case Workouts.list_sessions_page(scope, remaining, opts) do
       {rows, more?} when is_list(rows) ->
         {:ok, matching} = filter_sessions(rows, user, now, period)
 
@@ -206,7 +213,7 @@ defmodule BurpeeTrainer.History do
         remaining = remaining - length(matching)
 
         if more? and remaining > 0 do
-          scan(user, now, period, next, remaining, accumulated)
+          scan(scope, now, period, next, remaining, accumulated)
         else
           {:ok, accumulated, next, more?}
         end
@@ -216,11 +223,11 @@ defmodule BurpeeTrainer.History do
     end
   end
 
-  @spec results(map(), DateTime.t()) ::
+  @spec results(BurpeeTrainer.Accounts.Scope.t(), DateTime.t()) ::
           {:ok, %{today: [WorkoutSession.t()], week: [WorkoutSession.t()]}} | {:error, term()}
-  def results(user, now) do
+  def results(%BurpeeTrainer.Accounts.Scope{user: user} = scope, now) do
     with {:ok, context} <- UserTime.context(user, now),
-         {:ok, week} <- filter_sessions(Workouts.list_sessions(user), user, now, "week") do
+         {:ok, week} <- filter_sessions(Workouts.list_sessions(scope), user, now, "week") do
       week = Enum.filter(week, &AuthoritativeSession.authoritative?/1)
 
       today =

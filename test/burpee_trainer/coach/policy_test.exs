@@ -4,6 +4,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
   import BurpeeTrainer.Fixtures
   import Ecto.Query
 
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.{PlanCompiler, Repo}
 
@@ -12,7 +13,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
 
     complete(user, ~U[2025-08-31 23:00:00Z], 4_800)
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-01 08:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-01 08:00:00Z])
     assert slot.weekly_target_sec == 4_800
     assert slot.completed_sec == 0
     assert slot.remaining_sec == 4_800
@@ -23,15 +24,16 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     user = user_fixture() |> provision_timezone("Etc/UTC")
     monday = ~U[2025-09-01 12:00:00Z]
 
-    assert {:ok, %{home_state: :workout_needed}} = Policy.required_slot(user, monday)
+    assert {:ok, %{home_state: :workout_needed}} =
+             Policy.required_slot(Scope.for_user(user), monday)
 
     complete(user, monday, 1_200)
-    assert {:ok, %{home_state: :done_today}} = Policy.required_slot(user, monday)
+    assert {:ok, %{home_state: :done_today}} = Policy.required_slot(Scope.for_user(user), monday)
 
     complete(user, ~U[2025-09-02 12:00:00Z], 3_600)
 
     assert {:ok, %{home_state: :week_complete}} =
-             Policy.required_slot(user, ~U[2025-09-03 12:00:00Z])
+             Policy.required_slot(Scope.for_user(user), ~U[2025-09-03 12:00:00Z])
   end
 
   test "today wins at target, next day completes week, Monday has no debt" do
@@ -39,25 +41,25 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     complete(user, ~U[2025-09-01 12:00:00Z], 1_200)
 
     assert {:ok, %{home_state: :done_today, completed_sec: 1_200}} =
-             Policy.required_slot(user, ~U[2025-09-01 12:00:00Z])
+             Policy.required_slot(Scope.for_user(user), ~U[2025-09-01 12:00:00Z])
 
     complete(user, ~U[2025-09-02 12:00:00Z], 3_600)
 
     assert {:ok, %{home_state: :done_today, completed_sec: 4_800, remaining_sec: 0}} =
-             Policy.required_slot(user, ~U[2025-09-02 12:00:00Z])
+             Policy.required_slot(Scope.for_user(user), ~U[2025-09-02 12:00:00Z])
 
     assert {:ok, %{home_state: :week_complete, completed_sec: 4_800}} =
-             Policy.required_slot(user, ~U[2025-09-03 12:00:00Z])
+             Policy.required_slot(Scope.for_user(user), ~U[2025-09-03 12:00:00Z])
 
     assert {:ok, %{home_state: :workout_needed, completed_sec: 0, remaining_sec: 4_800}} =
-             Policy.required_slot(user, ~U[2025-09-08 00:00:00Z])
+             Policy.required_slot(Scope.for_user(user), ~U[2025-09-08 00:00:00Z])
   end
 
   test "weekend catch-up covers the full remainder at 2,400 seconds and is never exploration" do
     user = user_fixture() |> provision_timezone("Etc/UTC")
     complete(user, ~U[2025-09-01 12:00:00Z], 2_400)
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-06 12:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-06 12:00:00Z])
     assert slot.duration_sec == 2_400
     assert slot.remaining_sec == 2_400
     assert slot.strategy == :catch_up
@@ -89,7 +91,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
       type: :six_count
     )
 
-    assert {:ok, slot} = Policy.required_slot(user, now)
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
     assert slot.personal_best.reps == 100
     assert slot.personal_best.completed_at == DateTime.add(now, -41 * 86_400, :second)
   end
@@ -117,7 +119,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     assert is_map(first.program_snapshot)
     assert is_map(second.program_snapshot)
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-01 12:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-01 12:00:00Z])
     refute slot.exploration_allowed?
   end
 
@@ -142,7 +144,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
       )
     end
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-01 12:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-01 12:00:00Z])
     assert slot.exploration_allowed?
   end
 
@@ -151,7 +153,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     session = complete(user, ~U[2025-09-01 06:59:59Z], 1_200)
     assert DateTime.compare(session.inserted_at, session.completed_at) == :gt
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-01 08:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-01 08:00:00Z])
     assert slot.completed_sec == 0
     assert slot.home_state == :workout_needed
   end
@@ -165,7 +167,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
       preference: :avoid
     )
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-02 12:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-02 12:00:00Z])
     assert slot.feedback.transient == [:low_energy]
     assert slot.feedback.limiters == [:legs]
     assert slot.feedback.preferences == [:avoid]

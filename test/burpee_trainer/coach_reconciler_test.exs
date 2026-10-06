@@ -112,7 +112,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
     unavailable_video = video_fixture(%{available: false})
 
     {:ok, recommendation} =
-      Workouts.ensure_recommendation(user, %{
+      Workouts.ensure_recommendation(BurpeeTrainer.Accounts.Scope.for_user(user), %{
         slot_key: "2025-09-01:standard",
         slot_date: ~D[2025-09-01],
         rationale: "Fallback"
@@ -125,7 +125,8 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
       |> Ecto.Changeset.change(pending_draft_id: pending_draft.id)
       |> Repo.update!()
 
-    {:ok, _archived} = Workouts.archive_plan(user, archived.id)
+    {:ok, _archived} =
+      Workouts.archive_plan(BurpeeTrainer.Accounts.Scope.for_user(user), archived.id)
 
     Repo.update_all(from(r in CoachRecommendation, where: r.id == ^recommendation.id),
       set: [selected_workout_plan_id: archived.id, selected_workout_video_id: nil]
@@ -215,7 +216,7 @@ defmodule BurpeeTrainer.CoachReconcilerTest do
 
     assert {:ok, _session} =
              Workouts.start_plan(
-               user,
+               BurpeeTrainer.Accounts.Scope.for_user(user),
                recommendation.selected_workout_plan_id,
                Ecto.UUID.generate()
              )

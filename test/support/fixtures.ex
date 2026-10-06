@@ -33,6 +33,13 @@ defmodule BurpeeTrainer.Fixtures do
     user
   end
 
+  @doc "Build an authorization scope around a persisted fixture user."
+  def scope_fixture(attrs \\ %{}) do
+    attrs
+    |> user_fixture()
+    |> BurpeeTrainer.Accounts.Scope.for_user()
+  end
+
   @doc "Build a valid published workout through the compiler-backed persistence path."
   def plan_fixture(user, attrs \\ %{}) do
     attrs = stringify_keys(attrs)
@@ -77,8 +84,16 @@ defmodule BurpeeTrainer.Fixtures do
         "preference_feedback"
       ])
 
-    {:ok, started} = Workouts.start_plan(user, plan.id, client_session_id)
-    {:ok, session} = Workouts.complete_session(user, started.id, completion_attrs, :timed)
+    {:ok, started} =
+      Workouts.start_plan(BurpeeTrainer.Accounts.Scope.for_user(user), plan.id, client_session_id)
+
+    {:ok, session} =
+      Workouts.complete_session(
+        BurpeeTrainer.Accounts.Scope.for_user(user),
+        started.id,
+        completion_attrs,
+        :timed
+      )
 
     if match?(%DateTime{}, inserted_at) do
       BurpeeTrainer.Repo.update_all(

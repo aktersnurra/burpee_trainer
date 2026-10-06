@@ -21,7 +21,8 @@ defmodule BurpeeTrainer.Workouts.CompletedAtHistoryTest do
       capture_mode: :logged
     })
 
-    assert [%{week_start: ~D[2025-08-25], minutes: 20.0}] = Workouts.weekly_minutes(user)
+    assert [%{week_start: ~D[2025-08-25], minutes: 20.0}] =
+             Workouts.weekly_minutes(BurpeeTrainer.Accounts.Scope.for_user(user))
   end
 
   defp provision_timezone(user, timezone) do

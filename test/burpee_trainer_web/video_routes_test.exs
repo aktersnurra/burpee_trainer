@@ -23,7 +23,14 @@ defmodule BurpeeTrainerWeb.VideoRoutesTest do
     user: user
   } do
     video = video_fixture()
-    assert {:ok, session} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_video(
+               BurpeeTrainer.Accounts.Scope.for_user(user),
+               video.id,
+               Ecto.UUID.generate()
+             )
+
     {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{session.id}")
 
     assert has_element?(view, "#desktop-home-nav")

@@ -10,7 +10,7 @@ defmodule BurpeeTrainerWeb.Router do
     plug(:put_root_layout, html: {BurpeeTrainerWeb.Layouts, :root})
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
-    plug(:fetch_current_user)
+    plug(:fetch_current_scope)
   end
 
   pipeline :require_auth do
@@ -27,7 +27,7 @@ defmodule BurpeeTrainerWeb.Router do
     plug(:fetch_live_flash)
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
-    plug(:fetch_current_user)
+    plug(:fetch_current_scope)
     plug(:require_authenticated_user)
   end
 
@@ -58,7 +58,9 @@ defmodule BurpeeTrainerWeb.Router do
 
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
-      live("/", OverviewLive)
+      live("/", HomeLive, :home)
+      live("/history", HomeLive, :history)
+      live("/coach", HomeLive, :coach)
       live("/session/:session_id", SessionLive, :show)
       live("/videos/:video_id/session/:session_id", VideoLive.Show, :session)
     end

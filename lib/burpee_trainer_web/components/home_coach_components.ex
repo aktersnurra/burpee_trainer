@@ -4,19 +4,19 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   use BurpeeTrainerWeb, :html
 
   attr(:id, :string, required: true)
+  attr(:return_focus?, :boolean, default: false)
 
   def entry(assigns) do
     ~H"""
-    <button
+    <.link
       id={@id}
-      type="button"
+      patch={if(@id == "history-coach-open", do: ~p"/coach?from=history", else: ~p"/coach?from=home")}
       class="home-coach-entry"
-      aria-controls="home-coach-panel"
-      phx-click={BurpeeTrainerWeb.HomeWorkoutComponents.open_coach()}
+      phx-mounted={@return_focus? && JS.focus(to: "#" <> @id)}
     >
       <.icon name="hero-chat-bubble-left-right" class="size-5" />
       <span>Coach</span>
-    </button>
+    </.link>
     """
   end
 
@@ -28,6 +28,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       id="home-coach-panel"
       class="home-coach-panel"
       aria-label="Coach"
+      phx-window-keydown="close_coach"
+      phx-key="Escape"
       phx-mounted={JS.focus(to: "#home-coach-heading")}
     >
       <button
@@ -35,12 +37,12 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         type="button"
         class="home-state-action min-h-11 min-w-11"
         aria-label={
-          if(@state.coach_return_to == "#history-coach-open",
+          if(@state.coach_return_to == "/history",
             do: "Back to History",
             else: "Back to workout"
           )
         }
-        phx-click={BurpeeTrainerWeb.HomeWorkoutComponents.close_coach(@state.coach_return_to)}
+        phx-click="close_coach"
       >
         <.icon name="hero-arrow-left" class="size-5" />
       </button>
@@ -188,16 +190,14 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         </div>
       </.form>
       <p id={"#{@base_id}-status"} class="coach-guidance-status" role="status">{@status}</p>
-      <button
+      <.link
         :if={@memory_link?}
         id="home-coach-memory-link"
-        type="button"
-        phx-click="open_history"
-        phx-value-return_to="#home-coach-memory-link"
+        patch={~p"/history"}
         class="coach-guidance-memory-link"
       >
         View coach memory in History
-      </button>
+      </.link>
     </section>
     """
   end

@@ -6,7 +6,8 @@ defmodule BurpeeTrainer.Coach.Memory do
 
   @workout_memory_limit 12
 
-  def global_context(user) do
+  @spec global_context(Accounts.Scope.t()) :: map()
+  def global_context(%Accounts.Scope{user: %Accounts.User{} = user} = scope) do
     settings =
       case Repo.get_by(Setting, user_id: user.id) do
         nil -> %{}
@@ -25,7 +26,7 @@ defmodule BurpeeTrainer.Coach.Memory do
 
     %{
       settings: settings,
-      coach_guidance: Guidance.context(user),
+      coach_guidance: Guidance.context(scope),
       workout_memories:
         Enum.map(memories, fn m ->
           %{
@@ -103,5 +104,5 @@ defmodule BurpeeTrainer.Coach.Memory do
   end
 
   defp memory_entries(_user, nil), do: {:ok, []}
-  defp memory_entries(user, id), do: Context.entries(user, id)
+  defp memory_entries(user, id), do: Context.entries(Accounts.Scope.for_user(user), id)
 end

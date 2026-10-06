@@ -1,4 +1,4 @@
-defmodule BurpeeTrainerWeb.OverviewLiveTest do
+defmodule BurpeeTrainerWeb.HomeLiveTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import Ecto.Query
@@ -6,9 +6,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.{Guidance, Policy}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
-  alias BurpeeTrainerWeb.OverviewLive
+  alias BurpeeTrainerWeb.HomeLive
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -29,10 +30,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     render_click(view, "open_coach", %{})
     refute has_element?(view, "#home-coach-panel")
-    view |> element("#home-history-toggle") |> render_click()
+    pid = view.pid
+    view = history_route(conn, view)
     assert has_element?(view, "#home-history-empty")
     refute has_element?(view, "#history-coach-area, #home-coach-guidance-form")
     view |> element("#history-coach-open") |> render_click()
+    assert_patch(view, "/coach?from=history")
+    assert view.pid == pid
     refute has_element?(view, "#home-history")
     assert has_element?(view, "#home-coach-panel")
 
@@ -41,13 +45,16 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     |> render_change()
 
     view |> element("#home-coach-back") |> render_click()
+    assert_patch(view, "/history")
     assert has_element?(view, "#home-history")
     refute has_element?(view, "#home-coach-panel")
     view |> element("#history-coach-open") |> render_click()
     assert has_element?(view, "#home-coach-guidance-text", "Build toward 50 reps")
-    assert Guidance.list(user) == []
+    assert Guidance.list(Scope.for_user(user)) == []
     view |> element("#home-coach-back") |> render_click()
-    view |> element("#home-history-toggle") |> render_click()
+    assert_patch(view, "/history")
+    view = home_route(conn, view)
+    assert view.pid == pid
     assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
     refute has_element?(view, "#home-coach-panel")
   end
@@ -56,11 +63,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     conn: conn,
     user: user
   } do
-    {:ok, view, _} = live(conn, ~p"/?history=1")
-    view |> element("#history-coach-open") |> render_click()
+    {:ok, history, _} = live(conn, ~p"/history")
+    history |> element("#history-coach-open") |> render_click()
+    assert_patch(history, "/coach?from=history")
+    view = history
     view |> form("#home-coach-guidance-form", coach_guidance: %{text: "  "}) |> render_submit()
     assert has_element?(view, "#home-coach-guidance-status[role=status]", "Enter an instruction")
-    assert Guidance.list(user) == []
+    assert Guidance.list(Scope.for_user(user)) == []
     long_text = String.duplicate("x", 1001)
 
     view
@@ -68,40 +77,33 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     |> render_submit()
 
     assert has_element?(view, "#home-coach-guidance-text", long_text)
-    assert Guidance.list(user) == []
+    assert Guidance.list(Scope.for_user(user)) == []
 
     view
     |> form("#home-coach-guidance-form", coach_guidance: %{text: "Keep sets shorter"})
     |> render_submit()
 
-    assert [%{text: "Keep sets shorter"}] = Guidance.list(user)
+    assert [%{text: "Keep sets shorter"}] = Guidance.list(Scope.for_user(user))
     assert has_element?(view, "#home-coach-guidance-status[role=status]", "Saved for your coach")
   end
 
   test "empty History opens from weekly progress without showing a dashboard", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#home-week-track")
-    assert has_element?(view, "#home-history-toggle[type=button]")
+    assert has_element?(view, "#home-history-toggle[href='/history']")
 
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     assert has_element?(view, "#home-history-empty")
     refute has_element?(view, "#home-history-status, #home-history-weekly")
     refute has_element?(view, "#home-history-period-twelve_weeks, .home-history-sessions-heading")
 
-    assert has_element?(
-             view,
-             "#home-history-toggle[aria-label='Close History'][aria-expanded=true]"
-           )
+    assert has_element?(view, "#home-history-close[aria-label='Back to Home']")
+    refute has_element?(view, "#home-state-content, #home-week-track")
+    view = home_route(conn, view)
+    assert has_element?(view, "#home-history-toggle[href='/history'][aria-label='Open History']")
 
-    refute has_element?(view, "#home-history-close")
-    view |> element("#home-history-toggle") |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-history-toggle[aria-label='Open History'][aria-expanded=false]"
-           )
-
-    {:ok, linked_view, _} = live(conn, ~p"/?history=1")
+    assert {:error, {:live_redirect, %{to: "/history"}}} = live(conn, ~p"/?history=1")
+    {:ok, linked_view, _} = live(conn, ~p"/history")
     assert has_element?(linked_view, "#home-history-empty")
   end
 
@@ -117,25 +119,22 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     view |> element("#home-new-workout") |> render_click()
     view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
 
-    {:ok, before} = Workouts.ensure_home_selection(user, slot!(user))
-    view |> element("#home-history-toggle") |> render_click()
+    {:ok, before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
+    pid = view.pid
+    view = history_route(conn, view)
     assert has_element?(view, "#home-history")
     assert has_element?(view, "#home-history-empty")
-    assert has_element?(view, "#home-state-content[hidden][inert]")
-    assert has_element?(view, "#home-history-toggle[aria-expanded=true]")
+    refute has_element?(view, "#home-state-content, #home-week-track")
+    assert has_element?(view, "#home-history-close[aria-label='Back to Home']")
 
-    assert render(view)
-           |> LazyHTML.from_fragment()
-           |> LazyHTML.query("#home-week-track")
-           |> Enum.count() == 1
-
-    view |> element("#home-history-toggle") |> render_click()
+    view = home_route(conn, view)
+    assert view.pid == pid
     refute has_element?(view, "#home-history")
     assert has_element?(view, "#home-expansion[data-open=true]")
     assert has_element?(view, "#home-new-form")
     assert :sys.get_state(view.pid).socket.assigns.workout_form[:sets].value == "20x6"
 
-    assert {:ok, ^before} = Workouts.ensure_home_selection(user, slot!(user))
+    assert {:ok, ^before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
@@ -161,15 +160,15 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     conn: conn,
     user: user
   } do
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, shown} = Workouts.ensure_home_selection(user, slot)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     plan = workout_plan_draft_fixture(user)
 
     Repo.get!(BurpeeTrainer.Workouts.CoachRecommendation, shown.recommendation_id)
     |> Ecto.Changeset.change(pending_draft_id: plan.id)
     |> Repo.update!()
 
-    {:ok, pinned} = Workouts.select_home_workout(user, shown, plan.id)
+    {:ok, pinned} = Workouts.select_home_workout(Scope.for_user(user), shown, plan.id)
 
     corrupt =
       plan
@@ -181,7 +180,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     {:ok, view, _html} = live(conn, ~p"/")
     assert has_element?(view, "#home-ready-recommendation")
     assert has_element?(view, "#home-action")
-    assert {:ok, fallback} = Workouts.ensure_home_selection(user, slot)
+    assert {:ok, fallback} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     assert fallback.plan.origin == :built_in
     assert fallback.home_revision == pinned.home_revision + 1
     assert Repo.reload!(corrupt) == corrupt
@@ -306,7 +305,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#home-alternative-video-#{unknown.id}")
     assert has_element?(view, "#home-summary", plan.name)
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
-    session = Workouts.current_started_session(user)
+    session = Workouts.current_started_session(Scope.for_user(user))
     assert session.workout_video_id == video.id
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{session.id}")
   end
@@ -412,7 +411,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     view |> element("#home-action") |> render_click()
 
-    session = Workouts.current_started_session(user)
+    session = Workouts.current_started_session(Scope.for_user(user))
     assert session.source_kind == :plan
     assert_redirect(view, ~p"/session/#{session.id}")
   end
@@ -450,7 +449,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     assert {:ok, replayed} =
              Workouts.start_plan(
-               user,
+               Scope.for_user(user),
                recommendation.selected_workout_plan_id,
                client_session_id
              )
@@ -471,7 +470,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#home-week-complete")
     refute has_element?(view, "#home-action")
     assert has_element?(view, "#home-result-actual-seconds[data-duration-sec='4800']", "1:20:00")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     assert has_element?(view, "#home-history-trend")
     assert has_element?(view, "#home-history-six-count")
     refute has_element?(view, "#home-history-navy-seal")
@@ -493,7 +492,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   } do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
 
     assert has_element?(view, "#home-history-trend:not([hidden])")
     assert has_element?(view, "#home-history-sessions-panel[hidden]")
@@ -512,10 +511,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   } do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-sheet")
-    assert has_element?(view, "#home-history-toggle[inert]")
+    assert has_element?(view, "#home-history-close[inert]")
     assert has_element?(view, "#home-history-body[inert]")
 
     [commands] =
@@ -530,7 +529,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     view |> element("#home-history-sheet-close") |> render_click()
     refute has_element?(view, "#home-history-sheet")
-    refute has_element?(view, "#home-history-toggle[inert]")
+    refute has_element?(view, "#home-history-close[inert]")
     refute has_element?(view, "#home-history-body[inert]")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-sheet")
@@ -542,7 +541,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   } do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     view |> element("#home-history-delete") |> render_click()
     Repo.delete!(saved)
@@ -550,7 +549,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-history-sheet-error[role=status]")
     assert has_element?(view, "#home-history-sheet")
     assert has_element?(view, "#home-history-body[inert]")
-    assert has_element?(view, "#home-history-toggle[inert]")
+    assert has_element?(view, "#home-history-close[inert]")
 
     [commands] =
       render(view)
@@ -563,13 +562,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
            end)
 
     view |> element("#home-history-sheet-close") |> render_click()
-    refute has_element?(view, "#home-history-toggle[inert]")
+    refute has_element?(view, "#home-history-close[inert]")
   end
 
   test "a weekly cell opens actual day minutes and returns to the grid", %{conn: conn, user: user} do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     week = :sys.get_state(view.pid).socket.assigns.history_weeks |> List.last()
     day = DateTime.to_date(saved.completed_at)
 
@@ -623,7 +622,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     saved = complete_history(user, DateTime.utc_now(:second), 4_800)
     foreign = complete_history(user_fixture(), DateTime.utc_now(:second), 1200)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
 
     assert render(view)
            |> LazyHTML.from_fragment()
@@ -649,14 +648,15 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
            end)
 
     view |> element("#home-history-delete-confirm") |> render_click()
-    refute has_element?(view, "#home-history-toggle[inert]")
+    refute has_element?(view, "#home-history-close[inert]")
     refute has_element?(view, "#home-history-body[inert]")
     assert Repo.get(WorkoutSession, saved.id) == nil
     assert Repo.reload!(foreign) == foreign
     refute has_element?(view, "#home-history-inspect-#{saved.id}")
     assert has_element?(view, "#home-history-empty")
     refute has_element?(view, "#home-history-weekly")
-    assert has_element?(view, "#home-history-toggle")
+    assert has_element?(view, "#home-history-close")
+    view = home_route(conn, view)
     assert has_element?(view, "#home-week-track[aria-valuenow='0']")
   end
 
@@ -736,7 +736,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     assert {:ok, started} =
              Workouts.start_plan(
-               user,
+               Scope.for_user(user),
                recommendation.selected_workout_plan_id,
                Ecto.UUID.generate()
              )
@@ -763,7 +763,11 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     recommendation = recommendation_fixture(user)
 
     {:ok, started} =
-      Workouts.start_plan(user, recommendation.selected_workout_plan_id, Ecto.UUID.generate())
+      Workouts.start_plan(
+        Scope.for_user(user),
+        recommendation.selected_workout_plan_id,
+        Ecto.UUID.generate()
+      )
 
     {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#resume-recommended-workout")
@@ -778,7 +782,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-expansion[data-open='true']")
     assert has_element?(view, "#home-inspection")
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
@@ -896,10 +900,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       |> String.trim()
 
     assert empty_text == "No matching videos. Try another request or browse Workouts."
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     {:ok, reloaded, _} = live(conn, ~p"/")
     assert has_element?(reloaded, "#home-workout-area")
-    {:ok, same} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, same} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert selected == same
   end
 
@@ -939,7 +943,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
 
     {:ok, view, _} = live(conn, ~p"/")
-    original = Workouts.ensure_home_selection(user, slot!(user)) |> elem(1)
+    original = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user)) |> elem(1)
     view |> element("#home-summary") |> render_click()
 
     view |> element("#home-new-workout") |> render_click()
@@ -953,12 +957,12 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     render_async(view)
     assert has_element?(view, "#home-new-reps[disabled][value='10']")
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-    assert {:ok, ^original} = Workouts.ensure_home_selection(user, slot!(user))
+    assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
 
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
     assert has_element?(view, "#home-new-saved", "Confirmed adjustment")
-    assert {:ok, ^original} = Workouts.ensure_home_selection(user, slot!(user))
+    assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
   end
 
@@ -969,7 +973,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     view |> element("#home-new-workout") |> render_click()
     view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
     assert has_element?(view, "#home-adjustment-error")
   end
@@ -985,11 +989,11 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       render_click(view, event, %{})
     end
 
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
 
     view |> element("#home-action") |> render_click()
 
-    session = Workouts.current_started_session(user)
+    session = Workouts.current_started_session(Scope.for_user(user))
     assert_redirect(view, ~p"/session/#{session.id}")
   end
 
@@ -1028,7 +1032,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
              "#home-filter-toggle[aria-expanded=true][aria-controls=home-filters]"
            )
 
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 
   test "malformed adjustment change is ignored", %{conn: conn, user: user} do
@@ -1038,41 +1042,47 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
   end
 
-  test "nil-selection History is a presentation seam, not first-use reachability", %{user: user} do
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot!(user))
+  test "real missing-selection chooser preserves History and the mounted token", %{user: user} do
     complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
+
+    Repo.update_all(from(p in WorkoutPlan, where: is_nil(p.user_id) and p.origin == :built_in),
+      set: [state: :archived, archived_at: DateTime.utc_now(:second)]
+    )
+
     socket = mounted_socket(user)
-    assert socket.assigns.home_selection == selected
-    socket = Phoenix.Component.assign(socket, home_selection: nil)
+    assert socket.assigns.home_selection == nil
+    assert socket.assigns.home_state == :choose
     token = socket.assigns.start_client_session_id
 
-    assert LazyHTML.query(
-             render_home(socket),
-             "#home-ready-recommendation.home-result > h1.home-state-heading"
-           )
+    assert LazyHTML.query(render_home(socket), "#home-page[data-home-state=choose]")
            |> Enum.count() == 1
 
-    assert LazyHTML.query(render_home(socket), "#retry-recommendation-button.min-h-11")
+    assert LazyHTML.query(render_home(socket), "#home-title-action[data-primary-action=choose]")
            |> Enum.count() == 1
 
-    assert {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, socket)
+    assert {:noreply, opened} = workspace_screen(socket, :history)
     assert opened.assigns.history_open?
     assert opened.assigns.home_selection == nil
     assert opened.assigns.start_client_session_id == token
     html = render_home(opened)
-    assert_shared_progress(html)
+
+    assert LazyHTML.query(html, "#home-history-heading[tabindex='-1'][phx-mounted]")
+           |> Enum.count() == 1
+
     assert LazyHTML.query(html, "#home-history-empty") |> Enum.count() == 1
-    assert LazyHTML.query(html, "#home-state-content[hidden][inert]") |> Enum.count() == 1
+    assert LazyHTML.query(html, "#home-state-content, #home-week-track") |> Enum.empty?()
 
     for event <- ["submit_home_action", "select_alternative", "toggle_summary", "start_collapsed"] do
-      assert {:noreply, ^opened} = OverviewLive.handle_event(event, %{}, opened)
+      assert {:noreply, ^opened} = HomeLive.handle_event(event, %{}, opened)
     end
 
     assert {:noreply, filtered} =
-             OverviewLive.handle_event("history_period", %{"period" => "all"}, opened)
+             HomeLive.handle_event("history_period", %{"period" => "all"}, opened)
 
     assert filtered.assigns.history_period == "all"
-    assert {:noreply, closed} = OverviewLive.handle_event("close_history", %{}, filtered)
+    assert {:noreply, closing} = HomeLive.handle_event("close_history", %{}, filtered)
+    assert closing.redirected == {:live, :patch, %{to: "/", kind: :push}}
+    assert {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
     refute closed.assigns.history_open?
     assert_workspace_unchanged(socket, closed)
     assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -1082,13 +1092,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     user: user
   } do
     id = make_ref()
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
     socket = mounted_socket(user)
     assert socket.assigns.home_selection == selected
 
     {:noreply, socket} =
-      OverviewLive.handle_event(
+      HomeLive.handle_event(
         "change_adjustment",
         %{"home_adjustment" => %{"instruction" => "Less rest"}},
         socket
@@ -1106,15 +1116,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       )
 
     assert_shared_progress(render_home(socket))
-    assert {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, socket)
+    assert {:noreply, opened} = workspace_screen(socket, :history)
     assert opened.assigns.history_open?
     assert_workspace_unchanged(socket, opened)
     assert opened.assigns.history_expanded == MapSet.new([123])
     html = render_home(opened)
-    assert_shared_progress(html)
-
-    assert LazyHTML.query(html, "#home-state-content[hidden][inert] #home-update-loading")
-           |> Enum.count() == 1
+    assert LazyHTML.query(html, "#home-history-heading") |> Enum.count() == 1
+    assert LazyHTML.query(html, "#home-state-content, #home-update-loading") |> Enum.empty?()
 
     for event <- [
           "submit_home_action",
@@ -1122,42 +1130,43 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
           "resume_recommendation",
           "retry_recommendation"
         ] do
-      assert {:noreply, ^opened} = OverviewLive.handle_event(event, %{}, opened)
+      assert {:noreply, ^opened} = HomeLive.handle_event(event, %{}, opened)
     end
 
     assert {:noreply, changed} =
-             OverviewLive.handle_event("history_period", %{"period" => "all"}, opened)
+             HomeLive.handle_event("history_period", %{"period" => "all"}, opened)
 
     assert changed.assigns.history_period == "all"
     assert changed.assigns.history_expanded == MapSet.new()
     assert_workspace_unchanged(socket, changed)
-    assert {:noreply, ^changed} = OverviewLive.handle_event("history_more", %{}, changed)
-    assert {:noreply, closed} = OverviewLive.handle_event("close_history", %{}, changed)
+    assert {:noreply, ^changed} = HomeLive.handle_event("history_more", %{}, changed)
+    assert {:noreply, closing} = HomeLive.handle_event("close_history", %{}, changed)
+    assert {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
     refute closed.assigns.history_open?
     assert_workspace_unchanged(socket, closed)
 
     assert {:noreply, finished} =
-             OverviewLive.handle_async(
+             HomeLive.handle_async(
                {:home_revision, id},
                {:ok, {:error, :unavailable}},
                opened
              )
 
     assert finished.assigns.history_open?
-    assert finished.assigns.history_expanded == MapSet.new([123])
+    assert finished.assigns.history_expanded == opened.assigns.history_expanded
     assert finished.assigns.instruction == "Less rest"
     assert finished.assigns.home_selection == socket.assigns.home_selection
     assert finished.assigns.start_client_session_id == socket.assigns.start_client_session_id
 
     assert {:noreply, revised} =
-             OverviewLive.handle_async(
+             HomeLive.handle_async(
                {:home_revision, id},
                {:ok, {:ok, socket.assigns.home_selection}},
                opened
              )
 
     assert revised.assigns.history_open?
-    assert revised.assigns.history_expanded == MapSet.new([123])
+    assert revised.assigns.history_expanded == opened.assigns.history_expanded
     assert revised.assigns.history_period == opened.assigns.history_period
     assert revised.assigns.history_points == opened.assigns.history_points
     assert revised.assigns.history_summary == opened.assigns.history_summary
@@ -1180,13 +1189,17 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
           {"history_period", %{}},
           {"history_session", %{"id" => "bogus"}}
         ] do
-      assert {:noreply, ^socket} = OverviewLive.handle_event(event, params, socket)
+      assert {:noreply, ^socket} = HomeLive.handle_event(event, params, socket)
     end
 
-    {:noreply, opened} =
-      OverviewLive.handle_event("open_history", %{"return_to" => "#untrusted"}, socket)
+    {:noreply, opened} = workspace_screen(socket, :history, %{"return_to" => "#untrusted"})
 
-    assert opened.assigns.history_return_to == "#home-history-toggle"
+    assert LazyHTML.query(
+             render_home(opened),
+             "#home-history-close[phx-click=close_history][aria-label='Back to Home']"
+           )
+           |> Enum.count() == 1
+
     assert opened.assigns.history_loaded_count == 5
     assert opened.assigns.history_has_more?
     assert LazyHTML.query(render_home(opened), "#home-history-count") |> LazyHTML.text() =~ "5"
@@ -1203,19 +1216,20 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
              latest_density: 20
            }
 
-    {:noreply, more} = OverviewLive.handle_event("history_more", %{}, opened)
+    {:noreply, more} = HomeLive.handle_event("history_more", %{}, opened)
     assert more.assigns.history_loaded_count == 7
     assert more.assigns.history_summary == opened.assigns.history_summary
     assert more.assigns.history_loaded_ids == sessions |> Enum.map(& &1.id) |> Enum.reverse()
     refute more.assigns.history_has_more?
-    assert {:noreply, ^more} = OverviewLive.handle_event("history_more", %{}, more)
-    {:noreply, closed} = OverviewLive.handle_event("close_history", %{}, more)
+    assert {:noreply, ^more} = HomeLive.handle_event("history_more", %{}, more)
+    {:noreply, closed} = HomeLive.handle_event("close_history", %{}, more)
     assert closed.assigns.history_loaded_ids == more.assigns.history_loaded_ids
 
-    {:noreply, reopened} =
-      OverviewLive.handle_event("open_history", %{"return_to" => "#home-result-history"}, closed)
+    {:noreply, reopened} = workspace_screen(%{closed | redirected: nil}, :history)
 
-    assert reopened.assigns.history_return_to == "#home-result-history"
+    assert LazyHTML.query(render_home(reopened), "#home-history-close[phx-click=close_history]")
+           |> Enum.count() == 1
+
     assert reopened.assigns.history_loaded_count == 5
     assert_workspace_unchanged(socket, reopened)
     assert Repo.aggregate(WorkoutSession, :count) == 8
@@ -1226,20 +1240,20 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     recent = complete_history(user, now, 1200)
     previous_year = complete_history(user, ~U[2025-08-01 12:00:00Z], 1200)
     socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
-    {:noreply, recent_view} = OverviewLive.handle_event("open_history", %{}, socket)
+    {:noreply, recent_view} = workspace_screen(socket, :history)
     assert length(recent_view.assigns.history_weeks) == 12
     assert recent_view.assigns.history_summary.sessions == 1
     assert recent.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
     refute previous_year.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
 
     {:noreply, year_view} =
-      OverviewLive.handle_event("history_period", %{"period" => "year"}, recent_view)
+      HomeLive.handle_event("history_period", %{"period" => "year"}, recent_view)
 
     assert length(year_view.assigns.history_weeks) == 52
     assert year_view.assigns.history_summary.sessions == 1
 
     {:noreply, all_view} =
-      OverviewLive.handle_event("history_period", %{"period" => "all"}, year_view)
+      HomeLive.handle_event("history_period", %{"period" => "all"}, year_view)
 
     assert length(all_view.assigns.history_weeks) > 52
     assert all_view.assigns.history_summary.sessions == 2
@@ -1250,8 +1264,13 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
     socket = mounted_socket(user)
     invalid_user = %{user | timezone: "Invalid/Zone"}
-    socket = Phoenix.Component.assign(socket, current_user: invalid_user)
-    {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, socket)
+
+    socket =
+      Phoenix.Component.assign(socket,
+        current_scope: BurpeeTrainer.Accounts.Scope.for_user(invalid_user)
+      )
+
+    {:noreply, opened} = workspace_screen(socket, :history)
     assert opened.assigns.history_error
     assert opened.assigns.history_loaded_count == 0
     assert opened.assigns.history_points == %{six_count: [], navy_seal: []}
@@ -1268,12 +1287,17 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     html = render_home(opened)
     assert LazyHTML.query(html, "#home-history-error") |> Enum.count() == 1
     assert LazyHTML.query(html, "#home-history-empty, #home-history-count") |> Enum.empty?()
-    assert LazyHTML.query(html, "#home-history-close") |> Enum.empty?()
 
-    assert LazyHTML.query(html, "#home-history-toggle[aria-label='Close History']")
+    assert LazyHTML.query(
+             html,
+             "#home-history-close[aria-label='Back to Home'][phx-click=close_history]"
+           )
            |> Enum.count() == 1
 
-    {:noreply, closed} = OverviewLive.handle_event("close_history", %{}, opened)
+    assert LazyHTML.query(html, "#home-state-content, #home-history-toggle") |> Enum.empty?()
+
+    {:noreply, closing} = HomeLive.handle_event("close_history", %{}, opened)
+    {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
     refute closed.assigns.history_open?
     assert_workspace_unchanged(socket, closed)
   end
@@ -1287,47 +1311,32 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     before = :sys.get_state(view.pid).socket
 
-    # LiveViewTest checks command serialization and server state, not browser sticky execution.
+    # Inspect real client commands as well as server patch handling: no retired overlay DOM.
     for _cycle <- 1..3 do
+      assert has_element?(view, "#home-history-toggle[href='/history'][data-phx-link=patch]")
+      view = history_route(conn, view)
+      assert view.pid == before.root_pid
+      html = render(view) |> LazyHTML.from_fragment()
+
+      [commands] =
+        LazyHTML.query(html, "#home-history-heading") |> LazyHTML.attribute("phx-mounted")
+
+      assert [["focus", %{"to" => "#home-history-heading"}]] = Jason.decode!(commands)
+      assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
+      assert has_element?(view, "#home-history-close[phx-click=close_history]")
+      refute has_element?(view, "#home-state-content, #home-week-track, #home-coach-panel")
+      view = home_route(conn, view)
+      refute has_element?(view, "#home-history")
+      assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
+
       [commands] =
         render(view)
         |> LazyHTML.from_fragment()
-        |> LazyHTML.query("#home-history-toggle[type=button]")
-        |> LazyHTML.attribute("phx-click")
+        |> LazyHTML.query("#home-history-toggle")
+        |> LazyHTML.attribute("phx-mounted")
 
-      assert [
-               ["set_attr", %{"attr" => ["hidden", ""], "to" => "#home-state-content"}],
-               ["set_attr", %{"attr" => ["inert", ""], "to" => "#home-state-content"}],
-               [
-                 "push",
-                 %{"event" => "open_history", "value" => %{"return_to" => "#home-history-toggle"}}
-               ]
-             ] = Jason.decode!(commands)
-
-      view |> element("#home-history-toggle") |> render_click()
-      assert has_element?(view, "#home-state-content[hidden][inert]")
-      assert has_element?(view, "#home-history-toggle[aria-expanded=true]")
-      html = render(view) |> LazyHTML.from_fragment()
-
-      assert LazyHTML.query(html, "#home-history-heading[tabindex='-1'][phx-mounted]")
-             |> Enum.count() == 1
-
-      [commands] =
-        LazyHTML.query(html, "#home-history-toggle[type=button]")
-        |> LazyHTML.attribute("phx-click")
-
-      assert [
-               ["remove_attr", %{"attr" => "hidden", "to" => "#home-state-content"}],
-               ["remove_attr", %{"attr" => "inert", "to" => "#home-state-content"}],
-               ["focus", %{"to" => "#home-history-toggle"}],
-               ["push", %{"event" => "close_history"}]
-             ] = Jason.decode!(commands)
-
-      view |> element("#home-history-toggle") |> render_click()
-      refute has_element?(view, "#home-history")
-      refute has_element?(view, "#home-state-content[hidden]")
-      refute has_element?(view, "#home-state-content[inert]")
-      assert has_element?(view, "#home-history-toggle[aria-expanded=false]")
+      assert [["focus", %{"to" => "#home-history-toggle"}]] = Jason.decode!(commands)
+      assert has_element?(view, "#home-history-toggle[aria-label='Open History']")
       after_close = :sys.get_state(view.pid).socket
       assert_workspace_unchanged(before, after_close)
       assert after_close.redirected == nil
@@ -1338,34 +1347,44 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     user: user
   } do
     now = ~U[2026-09-09 12:00:00Z]
-    {:ok, _selected} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     complete_history(user, DateTime.add(now, -90 * 86400), 1200)
-    socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
+    socket = mounted_socket(user, now)
     selection = socket.assigns.home_selection
-    {:ok, started} = Workouts.start_plan(user, selection.plan.id, Ecto.UUID.generate())
-    started_socket = Phoenix.Component.assign(socket, started_session: started)
+
+    complete_history(user, DateTime.add(now, -86400), 4800)
+    {:ok, week_slot} = Policy.required_slot(Scope.for_user(user), now)
+    assert week_slot.home_state == :week_complete
+    week_socket = mounted_socket(user, now)
+    assert_shared_progress(render_home(week_socket))
+    assert LazyHTML.query(render_home(week_socket), "#home-week-complete") |> Enum.count() == 1
+
+    complete_history(user, now, 1200)
+    {:ok, today_slot} = Policy.required_slot(Scope.for_user(user), now)
+    assert today_slot.home_state == :done_today
+    today_socket = mounted_socket(user, now)
+
+    {:ok, started} =
+      Workouts.start_plan(Scope.for_user(user), selection.plan.id, Ecto.UUID.generate())
+
+    started_socket = mounted_socket(user, now)
+    assert started_socket.assigns.started_session.id == started.id
     assert_shared_progress(render_home(started_socket))
 
     assert LazyHTML.query(render_home(started_socket), "#resume-recommended-workout")
            |> Enum.count() == 1
 
-    complete_history(user, DateTime.add(now, -86400), 4800)
-    {:ok, week_slot} = Policy.required_slot(user, now)
-    assert week_slot.home_state == :week_complete
-    week_socket = Phoenix.Component.assign(socket, slot: week_slot, home_selection: nil)
-    assert_shared_progress(render_home(week_socket))
-    assert LazyHTML.query(render_home(week_socket), "#home-week-complete") |> Enum.count() == 1
-
-    complete_history(user, now, 1200)
-    {:ok, today_slot} = Policy.required_slot(user, now)
-    assert today_slot.home_state == :done_today
-    today_socket = Phoenix.Component.assign(socket, slot: today_slot, home_selection: nil)
-
     for state <- [week_socket, today_socket, started_socket] do
-      {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, state)
-      assert_shared_progress(render_home(opened))
+      {:noreply, opened} = workspace_screen(state, :history)
+      assert LazyHTML.query(render_home(opened), "#home-history-heading") |> Enum.count() == 1
+
+      assert LazyHTML.query(render_home(opened), "#home-state-content, #home-week-track")
+             |> Enum.empty?()
+
       assert opened.assigns.history_loaded_count == 2
-      {:noreply, closed} = OverviewLive.handle_event("close_history", %{}, opened)
+      {:noreply, closing} = HomeLive.handle_event("close_history", %{}, opened)
+      {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
+      assert_shared_progress(render_home(closed))
       assert_workspace_unchanged(state, closed)
     end
   end
@@ -1375,7 +1394,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   } do
     now = DateTime.utc_now(:second)
     rows = for _ <- 1..7, do: complete_history(user, now, 1200)
-    {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, mounted_socket(user))
+    {:noreply, opened} = workspace_screen(mounted_socket(user), :history)
     loaded = opened.assigns.history_loaded_ids
     oldest = hd(rows)
     retained_id = hd(loaded)
@@ -1393,7 +1412,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       socket = %{socket | assigns: Map.put(socket.assigns, :streams, streams)}
 
       {:noreply, inspected} =
-        OverviewLive.handle_event("history_session", %{"id" => to_string(id)}, socket)
+        HomeLive.handle_event("history_session", %{"id" => to_string(id)}, socket)
 
       refute inspected.assigns.streams.history_sessions.reset?
       assert inspected.assigns.streams.history_sessions.deletes == []
@@ -1417,7 +1436,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     newest = hd(sessions)
     oldest = List.last(sessions)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     view |> element("#home-history-period-all") |> render_click()
     refute has_element?(view, "#home-history-session-#{oldest.id}")
     cursor = :sys.get_state(view.pid).socket.assigns.history_cursor
@@ -1468,14 +1487,15 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     plan = workout_plan_draft_fixture(user)
     plan = plan |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
-    {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+    {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
     old = complete_history(user, DateTime.add(now, -100 * 86400), 1200)
     future = complete_history(user, DateTime.add(now, 3600), 1200)
     {:ok, view, _} = live(conn, ~p"/")
     render_click(view, "history_session", %{"id" => to_string(owned.id)})
-    assert :sys.get_state(view.pid).socket.assigns.history_expanded == MapSet.new()
-    view |> element("#home-history-toggle") |> render_click()
+    refute has_element?(view, "#home-history, #home-history-sheet")
+    assert Repo.reload!(owned) == owned
+    view = history_route(conn, view)
     before = :sys.get_state(view.pid).socket.assigns
 
     for params <- [
@@ -1511,17 +1531,21 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     user: user
   } do
     now = ~U[2026-09-09 12:00:00Z]
-    {:ok, _selected} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     deleted = complete_history(user, now, 1200)
     _previous_week = complete_history(user, now, 1200)
     socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
 
     {:ok, started} =
-      Workouts.start_plan(user, socket.assigns.home_selection.plan.id, Ecto.UUID.generate())
+      Workouts.start_plan(
+        Scope.for_user(user),
+        socket.assigns.home_selection.plan.id,
+        Ecto.UUID.generate()
+      )
 
     next_week = DateTime.add(now, 12 * 7 * 86400)
     kept = complete_history(user, next_week, 1200)
-    {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, socket)
+    {:noreply, opened} = workspace_screen(socket, :history)
     Repo.delete!(deleted)
     # Exercise the defensive retained-ID seam without violating immutable completion triggers.
     opened =
@@ -1531,7 +1555,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
       )
 
     {:noreply, inspected} =
-      OverviewLive.handle_event("history_session", %{"id" => to_string(kept.id)}, opened)
+      HomeLive.handle_event("history_session", %{"id" => to_string(kept.id)}, opened)
 
     assert inspected.assigns.history_loaded_ids == [kept.id]
     assert inspected.assigns.history_loaded_count == 1
@@ -1541,10 +1565,10 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   test "busy inspection remains read-only and re-renders details", %{user: user} do
     saved = complete_history(user, DateTime.utc_now(:second), 1200)
     socket = mounted_socket(user) |> Phoenix.Component.assign(busy?: true)
-    {:noreply, opened} = OverviewLive.handle_event("open_history", %{}, socket)
+    {:noreply, opened} = workspace_screen(socket, :history)
 
     {:noreply, inspected} =
-      OverviewLive.handle_event("history_session", %{"id" => to_string(saved.id)}, opened)
+      HomeLive.handle_event("history_session", %{"id" => to_string(saved.id)}, opened)
 
     assert MapSet.member?(inspected.assigns.history_expanded, saved.id)
     assert_workspace_unchanged(socket, inspected)
@@ -1581,16 +1605,16 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute has_element?(view, "#home-result-sessions, #home-result-history")
     refute has_element?(view, "#home-action, #home-other-workouts")
 
-    view |> element("#home-history-toggle") |> render_click()
-    assert has_element?(view, "#home-state-content[hidden][inert]")
-    assert :sys.get_state(view.pid).socket.assigns.history_return_to == "#home-history-toggle"
+    view = history_route(conn, view)
+    refute has_element?(view, "#home-state-content")
+    assert has_element?(view, "#home-history-close[phx-click=close_history]")
 
     for row <- [first, second] do
       assert has_element?(view, "#home-history-inspect-#{row.id}")
     end
 
-    view |> element("#home-history-toggle") |> render_click()
-    refute has_element?(view, "#home-state-content[hidden]")
+    view = home_route(conn, view)
+    assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
   end
 
   test "unfinished session stays reachable even after today's target", %{
@@ -1600,21 +1624,25 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     recommendation = recommendation_fixture(user)
 
     {:ok, started} =
-      Workouts.start_plan(user, recommendation.selected_workout_plan_id, Ecto.UUID.generate())
+      Workouts.start_plan(
+        Scope.for_user(user),
+        recommendation.selected_workout_plan_id,
+        Ecto.UUID.generate()
+      )
 
     complete_history(user, DateTime.utc_now(:second), 4800)
     {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#resume-recommended-workout[phx-value-session-id='#{started.id}']")
     refute has_element?(view, "#home-done-today, #home-week-complete, #home-action")
-    view |> element("#home-history-toggle") |> render_click()
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
+    view = home_route(conn, view)
 
     render_click(view, "submit_home_action", %{
       "client_session_id" => Ecto.UUID.generate(),
       "home_adjustment" => %{"instruction" => ""}
     })
 
-    assert Workouts.current_started_session(user).id == started.id
+    assert Workouts.current_started_session(Scope.for_user(user)).id == started.id
     assert Repo.reload!(started) == started
     assert Repo.aggregate(WorkoutSession, :count) == 2
     view |> element("#resume-recommended-workout") |> render_click()
@@ -1625,19 +1653,19 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     conn: conn,
     user: user
   } do
-    {:ok, shown} = Workouts.ensure_home_selection(user, slot!(user))
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     video = video_fixture(%{duration_sec: 1200, burpee_count: 60})
 
     {:ok, started} =
-      Workouts.start_home_video(user, shown, video.id, Ecto.UUID.generate())
+      Workouts.start_home_video(Scope.for_user(user), shown, video.id, Ecto.UUID.generate())
 
     complete_history(user, DateTime.utc_now(:second), 4800)
     {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#resume-recommended-workout[phx-value-session-id='#{started.id}']")
     refute has_element?(view, "#home-done-today, #home-week-complete, #home-action")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     view |> element("#home-history-period-all") |> render_click()
-    view |> element("#home-history-toggle") |> render_click()
+    view = home_route(conn, view)
 
     render_click(view, "submit_home_action", %{
       "client_session_id" => Ecto.UUID.generate(),
@@ -1645,7 +1673,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     })
 
     render_click(view, "select_alternative", %{"kind" => "video", "id" => to_string(video.id)})
-    assert Workouts.current_started_session(user).id == started.id
+    assert Workouts.current_started_session(Scope.for_user(user)).id == started.id
     assert Repo.reload!(started) == started
     assert started.source_kind == :video
     assert started.workout_video_id == video.id
@@ -1696,25 +1724,39 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     refute Map.has_key?(socket.assigns, :result_sessions)
   end
 
+  defp history_route(_conn, view) do
+    view |> element("#home-history-toggle") |> render_click()
+    assert_patch(view, "/history")
+    refute has_element?(view, "#home-state-content, #home-week-track")
+    assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
+    view
+  end
+
+  defp home_route(_conn, view) do
+    view |> element("#home-history-close") |> render_click()
+    assert_patch(view, "/")
+    view
+  end
+
   defp mounted_socket(user, now \\ DateTime.utc_now(:second)) do
     socket = %Phoenix.LiveView.Socket{
       endpoint: BurpeeTrainerWeb.Endpoint,
       private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}},
       assigns: %{
         __changed__: %{},
-        current_user: user,
+        current_scope: BurpeeTrainer.Accounts.Scope.for_user(user),
         current_level: :level_1a,
         flash: %{},
         home_now: fn -> now end
       }
     }
 
-    {:ok, socket} = OverviewLive.mount(%{}, %{}, socket)
+    {:ok, socket} = HomeLive.mount(%{}, %{}, socket)
     socket
   end
 
   defp render_home(socket),
-    do: render_component(&OverviewLive.render/1, socket.assigns) |> LazyHTML.from_fragment()
+    do: render_component(&HomeLive.render/1, socket.assigns) |> LazyHTML.from_fragment()
 
   defp assert_shared_progress(html) do
     assert LazyHTML.query(html, ".adaptive-home") |> Enum.count() == 1
@@ -1725,7 +1767,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
         do: "Open History",
         else: "Close History"
 
-    assert LazyHTML.query(html, "#home-history-toggle[type=button][aria-label='#{label}']")
+    assert LazyHTML.query(html, "#home-history-toggle[href='/history'][aria-label='#{label}']")
            |> Enum.count() == 1
 
     assert LazyHTML.query(
@@ -1770,7 +1812,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
 
     plain = complete_history(user, DateTime.add(completed_at, -1, :second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-history-toggle") |> render_click()
+    view = history_route(conn, view)
     view |> element("#home-history-density-sessions") |> render_click()
 
     view |> element("#home-history-inspect-#{tagged.id}") |> render_click()
@@ -1806,7 +1848,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
     slot = slot!(user)
 
     {:ok, recommendation} =
-      Workouts.ensure_recommendation(user, %{
+      Workouts.ensure_recommendation(Scope.for_user(user), %{
         slot_key: slot.slot_key,
         slot_date: slot.slot_date,
         rationale: "A steady workout for today."
@@ -1816,7 +1858,7 @@ defmodule BurpeeTrainerWeb.OverviewLiveTest do
   end
 
   defp slot!(user) do
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
   end
 

@@ -3,6 +3,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
 
   import BurpeeTrainer.Fixtures
 
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.{Coach, LayoutFixtures, Repo, Workouts}
   alias BurpeeTrainer.Coach.{Policy, WorkoutRequest}
   alias BurpeeTrainer.Workouts.WorkoutPlan
@@ -35,16 +36,19 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     )
 
     selected_plan = plan_fixture(user)
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, selection} = Workouts.ensure_home_selection(user, slot)
-    assert {:ok, selected} = Workouts.select_home_workout(user, selection, selected_plan.id)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+    {:ok, selection} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
+
+    assert {:ok, selected} =
+             Workouts.select_home_workout(Scope.for_user(user), selection, selected_plan.id)
+
     selected_before = {:ok, selected}
 
     {:ok, request} = request([])
     before = Repo.aggregate(WorkoutPlan, :count)
 
     assert {:ok, old} =
-             Coach.prepare_plan(user, "10 reps in 2 minutes", request,
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
                workspace_key: "owned-review"
              )
 
@@ -52,25 +56,37 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     refute Map.has_key?(old, :alternative?)
 
     assert {:ok, prepared} =
-             Coach.prepare_plan(user, "10 reps in 2 minutes", request,
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
                workspace_key: "owned-review"
              )
 
     assert_receive :provider_call
-    assert {:error, _} = Coach.approve_plan(user, old)
+    assert {:error, _} = Coach.approve_plan(Scope.for_user(user), old)
     assert Repo.aggregate(WorkoutPlan, :count) == before
-    assert {:error, _} = Coach.approve_plan(user_fixture(), prepared)
-    assert {:error, _} = Coach.approve_plan(user, Map.delete(prepared, :definition))
-    assert {:error, _} = Coach.approve_plan(user, put_in(prepared.definition["name"], "Tampered"))
+    assert {:error, _} = Coach.approve_plan(scope_fixture(), prepared)
 
-    assert {:ok, saved} = Coach.approve_plan(user, prepared)
+    assert {:error, _} =
+             Coach.approve_plan(Scope.for_user(user), Map.delete(prepared, :definition))
+
+    assert {:error, _} =
+             Coach.approve_plan(
+               Scope.for_user(user),
+               put_in(prepared.definition["name"], "Tampered")
+             )
+
+    assert {:ok, saved} = Coach.approve_plan(Scope.for_user(user), prepared)
     assert saved.state == :published
     assert saved.id != selected.plan.id
-    assert Workouts.ensure_home_selection(user, slot) == selected_before
-    assert Enum.any?(BurpeeTrainer.Workouts.list_library(user), &(&1.id == saved.id))
-    assert {:ok, replay} = Coach.approve_plan(user, prepared)
+    assert Workouts.ensure_home_selection(Scope.for_user(user), slot) == selected_before
+
+    assert Enum.any?(
+             BurpeeTrainer.Workouts.list_library(Scope.for_user(user)),
+             &(&1.id == saved.id)
+           )
+
+    assert {:ok, replay} = Coach.approve_plan(Scope.for_user(user), prepared)
     assert saved.id == replay.id
-    assert Workouts.ensure_home_selection(user, slot) == selected_before
+    assert Workouts.ensure_home_selection(Scope.for_user(user), slot) == selected_before
     assert Repo.aggregate(WorkoutPlan, :count) == before + 1
     refute_received :provider_call
   end
@@ -98,7 +114,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
         ]
       })
 
-    assert {:ok, prepared} = Coach.prepare_plan(user, "minute blocks", request)
+    assert {:ok, prepared} = Coach.prepare_plan(Scope.for_user(user), "minute blocks", request)
     assert_receive :provider_call
     refute_received :provider_call
     assert prepared.definition["target_duration_sec"] == 1200
@@ -115,7 +131,9 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     provider(self(), [bad, good])
     {:ok, request} = request([])
 
-    assert {:ok, prepared} = Coach.prepare_plan(user, "10 reps in 2 minutes", request)
+    assert {:ok, prepared} =
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request)
+
     assert prepared.definition["name"] == "Corrected"
     assert_receive :provider_call
     assert_receive :provider_call
@@ -130,7 +148,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     {:ok, request} = request([])
 
     assert {:ok, prepared} =
-             Coach.prepare_plan(user, "10 reps in 2 minutes", request,
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
                workspace_key: "schema-correction"
              )
 
@@ -143,7 +161,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     provider(self(), [wrong_reps, good])
 
     assert {:ok, prepared} =
-             Coach.prepare_plan(user, "10 reps in 2 minutes", request,
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
                workspace_key: "rep-correction"
              )
 
@@ -159,7 +177,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     before = Repo.aggregate(WorkoutPlan, :count)
 
     assert {:error, %{code: :infeasible_workout_definition, context: %{diagnostic: diagnostic}}} =
-             Coach.prepare_plan(user, "10 reps in 2 minutes", request)
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request)
 
     assert is_binary(diagnostic)
     assert_receive :provider_call
@@ -184,7 +202,9 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
         "requested_pace_sec" => nil
       })
 
-    assert {:ok, prepared} = Coach.prepare_plan(user, "unbroken ten reps", request)
+    assert {:ok, prepared} =
+             Coach.prepare_plan(Scope.for_user(user), "unbroken ten reps", request)
+
     assert prepared.definition["name"] == "Compiler corrected"
     assert_receive :provider_call
     assert_receive :provider_call
@@ -209,7 +229,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
       })
 
     assert {:error, %{code: :invalid_workout_definition, context: %{diagnostic: diagnostic}}} =
-             Coach.prepare_plan(user, "ten reps please", request)
+             Coach.prepare_plan(Scope.for_user(user), "ten reps please", request)
 
     assert diagnostic =~ "movement_pace_outside_default"
     assert_receive :provider_call
@@ -229,7 +249,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     {:ok, request} = request([])
 
     assert {:ok, prepared} =
-             Coach.prepare_plan(user, instruction, request,
+             Coach.prepare_plan(Scope.for_user(user), instruction, request,
                workspace_key: "edit-source-correction",
                edit_source: %{id: original.id, content_hash: original_hash}
              )
@@ -285,7 +305,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     request = %{request | requested_pace_sec: 15}
 
     assert {:error, %{code: :invalid_workout_definition}} =
-             Coach.prepare_plan(user, "10 reps in 2 minutes", request)
+             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request)
 
     refute_received :provider_call
   end

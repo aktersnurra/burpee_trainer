@@ -31,6 +31,16 @@ defmodule BurpeeTrainerWeb.ConnCase do
     end
   end
 
+  @doc "Drive the workspace's real route callback for isolated callback tests."
+  def workspace_screen(socket, action, params \\ %{}) do
+    socket = Phoenix.Component.assign(socket, :live_action, action)
+    BurpeeTrainerWeb.HomeLive.handle_params(params, workspace_path(action), socket)
+  end
+
+  defp workspace_path(:home), do: "/"
+  defp workspace_path(:history), do: "/history"
+  defp workspace_path(:coach), do: "/coach"
+
   setup tags do
     BurpeeTrainer.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}

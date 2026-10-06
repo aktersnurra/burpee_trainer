@@ -1,6 +1,7 @@
 defmodule BurpeeTrainer.Coach.Context do
   import Ecto.Query
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.{DesignSession, DesignEntry, Memory}
   alias BurpeeTrainer.Workouts.Error
   @kinds [:initial_context, :baseline, :instruction, :proposal, :outcome]
@@ -8,20 +9,23 @@ defmodule BurpeeTrainer.Coach.Context do
   def home_key(expected),
     do: "home:#{expected.recommendation_id}:#{expected.home_revision}"
 
-  def ensure_session(user, source, key) do
+  @spec ensure_session(Scope.t(), Workouts.WorkoutPlan.t() | nil, String.t()) ::
+          {:ok, struct()} | {:error, Error.t()}
+  def ensure_session(%Scope{user: %User{} = user} = scope, source, key) do
     safe(fn ->
-      with :ok <- authorized_source(user, source) do
+      with :ok <- authorized_source(scope, source) do
         if source && source.state == :draft && source.design_session_id do
           owned_session(user, source.design_session_id)
         else
           key = if source && source.state == :draft, do: "draft:#{source.id}", else: key
-          initialize(user, source, key)
+          initialize(scope, source, key)
         end
       end
     end)
   end
 
-  defp initialize(user, source, key) when is_binary(key) and byte_size(key) in 1..200 do
+  defp initialize(%Scope{user: user} = scope, source, key)
+       when is_binary(key) and byte_size(key) in 1..200 do
     Repo.immediate_transaction(fn ->
       now = DateTime.utc_now()
       source_id = source && source.id
@@ -42,11 +46,11 @@ defmodule BurpeeTrainer.Coach.Context do
       if inserted == 1 do
         attempt = Ecto.UUID.generate()
 
-        insert_or_rollback(user, session.id, attempt, :initial_context, %{
-          "global_context" => Memory.global_context(user)
+        insert_or_rollback(scope, session.id, attempt, :initial_context, %{
+          "global_context" => Memory.global_context(scope)
         })
 
-        insert_or_rollback(user, session.id, attempt, :baseline, baseline(user, source))
+        insert_or_rollback(scope, session.id, attempt, :baseline, baseline(scope, source))
       end
 
       session
@@ -55,7 +59,9 @@ defmodule BurpeeTrainer.Coach.Context do
 
   defp initialize(_user, _source, _key), do: {:error, Error.new(:design_workspace_changed)}
 
-  def append(user, session_id, attempt, kind, payload) do
+  @spec append(Scope.t(), integer(), Ecto.UUID.t(), atom(), map()) ::
+          {:ok, struct()} | {:error, Error.t()}
+  def append(%Scope{user: %User{} = user}, session_id, attempt, kind, payload) do
     safe(fn ->
       with {:ok, _} <- owned_session(user, session_id),
            {:ok, ^attempt} <- Ecto.UUID.cast(attempt),
@@ -80,7 +86,8 @@ defmodule BurpeeTrainer.Coach.Context do
     end)
   end
 
-  def entries(user, session_id) do
+  @spec entries(Scope.t(), integer()) :: {:ok, [struct()]} | {:error, Error.t()}
+  def entries(%Scope{user: %User{} = user}, session_id) do
     safe(fn ->
       with {:ok, _} <- owned_session(user, session_id) do
         {:ok,
@@ -94,11 +101,29 @@ defmodule BurpeeTrainer.Coach.Context do
     end)
   end
 
-  def messages(user, session_id, source, attempt, prompt, extra_messages \\ []) do
+  @spec messages(Scope.t(), integer(), Workouts.WorkoutPlan.t() | nil, Ecto.UUID.t(), String.t()) ::
+          {:ok, [map()]} | {:error, Error.t()}
+  @spec messages(
+          Scope.t(),
+          integer(),
+          Workouts.WorkoutPlan.t() | nil,
+          Ecto.UUID.t(),
+          String.t(),
+          [map()]
+        ) ::
+          {:ok, [map()]} | {:error, Error.t()}
+  def messages(
+        %Scope{user: %User{} = user} = scope,
+        session_id,
+        source,
+        attempt,
+        prompt,
+        extra_messages \\ []
+      ) do
     safe(fn ->
-      with :ok <- check_source(user, session_id, source),
+      with :ok <- check_source(scope, session_id, source),
            {:ok, _session} <- owned_session(user, session_id),
-           {:ok, entries} <- entries(user, session_id),
+           {:ok, entries} <- entries(scope, session_id),
            %DesignEntry{} = active <-
              Enum.find(
                entries,
@@ -115,7 +140,7 @@ defmodule BurpeeTrainer.Coach.Context do
               content:
                 Jason.encode!(%{
                   scope: "global",
-                  context: Memory.global_context(user),
+                  context: Memory.global_context(scope),
                   rule: "Local workout instructions are not enduring global preferences."
                 })
             },
@@ -142,9 +167,11 @@ defmodule BurpeeTrainer.Coach.Context do
     end)
   end
 
-  def check_source(user, id, source) do
+  @spec check_source(Scope.t(), integer(), Workouts.WorkoutPlan.t() | nil) ::
+          :ok | {:error, Error.t()}
+  def check_source(%Scope{user: %User{} = user} = scope, id, source) do
     safe(fn ->
-      with :ok <- authorized_source(user, source),
+      with :ok <- authorized_source(scope, source),
            {:ok, session} <- owned_session(user, id) do
         valid =
           cond do
@@ -164,9 +191,11 @@ defmodule BurpeeTrainer.Coach.Context do
     end)
   end
 
-  def check_home_workspace(user, id, expected) do
+  @spec check_home_workspace(Scope.t(), integer(), Workouts.HomeSelection.t()) ::
+          :ok | {:error, Error.t()}
+  def check_home_workspace(%Scope{user: %User{} = user} = scope, id, expected) do
     safe(fn ->
-      with :ok <- check_source(user, id, expected.plan),
+      with :ok <- check_source(scope, id, expected.plan),
            {:ok, session} <- owned_session(user, id) do
         if (expected.plan != nil and expected.plan.state == :draft) or
              session.workspace_key == home_key(expected),
@@ -185,8 +214,9 @@ defmodule BurpeeTrainer.Coach.Context do
 
   defp authorized_source(_user, nil), do: :ok
 
-  defp authorized_source(user, source) do
-    with {:ok, current} <- Workouts.design_source(user, source.id),
+  defp authorized_source(scope, source) do
+    with {:ok, current} <-
+           Workouts.design_source(scope, source.id),
          true <-
            current.updated_at == source.updated_at and
              current.content_hash == source.content_hash do
@@ -198,7 +228,7 @@ defmodule BurpeeTrainer.Coach.Context do
 
   defp baseline(_user, nil), do: %{"imported" => true, "source" => nil}
 
-  defp baseline(user, source) do
+  defp baseline(%Scope{user: user} = scope, source) do
     public = %{
       "imported" => true,
       "source_plan_id" => source.id,
@@ -213,7 +243,7 @@ defmodule BurpeeTrainer.Coach.Context do
             []
 
           id ->
-            case entries(user, id) do
+            case entries(scope, id) do
               {:ok, values} -> Enum.map(values, &entry_payload/1)
               {:error, error} -> Repo.rollback(error)
             end
@@ -236,8 +266,8 @@ defmodule BurpeeTrainer.Coach.Context do
 
   defp request_entry_payload(entry), do: entry_payload(entry)
 
-  defp insert_or_rollback(user, id, attempt, kind, payload) do
-    case append(user, id, attempt, kind, payload) do
+  defp insert_or_rollback(scope, id, attempt, kind, payload) do
+    case append(scope, id, attempt, kind, payload) do
       {:ok, entry} -> entry
       {:error, error} -> Repo.rollback(error)
     end

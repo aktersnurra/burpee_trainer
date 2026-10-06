@@ -1,8 +1,9 @@
-defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
+defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
   use BurpeeTrainerWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Accounts, Workouts, Repo}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
@@ -116,8 +117,8 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
 
     user = user_fixture()
     {:ok, user} = Accounts.update_timezone(user, "Etc/UTC")
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     %{view: view, user: user, selected: selected}
   end
@@ -143,14 +144,17 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
     assert_receive {:provider_request, _}
     assert has_element?(view, "#home-request-confirm")
     other = plan_fixture(user, %{"state" => "published"})
-    {:ok, changed} = Workouts.select_home_workout(user, selected, other.id)
+    {:ok, changed} = Workouts.select_home_workout(Scope.for_user(user), selected, other.id)
     count = Repo.aggregate(WorkoutPlan, :count)
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
     refute has_element?(view, "#home-new-saved")
     assert has_element?(view, "#home-adjustment-error", "changed")
     assert Repo.aggregate(WorkoutPlan, :count) == count
-    assert {:ok, ^changed} = Workouts.ensure_home_selection(user, selected_slot(user))
+
+    assert {:ok, ^changed} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
     refute_received {:provider_request, _}
   end
 
@@ -170,8 +174,15 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
     view |> element("#home-new-dismiss") |> render_click()
     refute has_element?(view, "#home-new-saved")
 
-    [saved] = Enum.filter(Workouts.list_library(user), &(&1.name == "Independent new workout"))
-    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, selected_slot(user))
+    [saved] =
+      Enum.filter(
+        Workouts.list_library(Scope.for_user(user)),
+        &(&1.name == "Independent new workout")
+      )
+
+    assert {:ok, unchanged} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
     assert unchanged.plan.id == selected.plan.id
 
     render_click(view, "open_chooser", %{})
@@ -196,7 +207,10 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
     refute has_element?(view, "#home-request-confirm")
     assert has_element?(view, "#home-adjustment-error", "Coach unavailable")
     assert Repo.aggregate(WorkoutPlan, :count) == count
-    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, selected_slot(user))
+
+    assert {:ok, unchanged} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
     assert unchanged.plan.id == selected.plan.id
   end
 
@@ -228,9 +242,9 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
     refute_received {:provider_request, _}
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
-    assert {:ok, unchanged} = Workouts.verify_home_selection(user, selected)
+    assert {:ok, unchanged} = Workouts.verify_home_selection(Scope.for_user(user), selected)
     assert unchanged.id == selected.plan.id
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 
   test "malformed rests and contradictory patterns are local errors", %{view: view} do
@@ -306,7 +320,7 @@ defmodule BurpeeTrainerWeb.OverviewAuthoringUXTest do
   end
 
   defp selected_slot(user) do
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
   end
 end

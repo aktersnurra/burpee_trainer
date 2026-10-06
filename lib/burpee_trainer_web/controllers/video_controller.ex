@@ -2,7 +2,7 @@ defmodule BurpeeTrainerWeb.VideoController do
   use BurpeeTrainerWeb, :controller
 
   def stream(conn, %{"filename" => filename}) do
-    if conn.assigns[:current_user] do
+    if conn.assigns[:current_scope] do
       conn
       |> put_resp_header("x-accel-redirect", "/protected-videos/#{filename}")
       |> put_resp_header("content-type", "video/mp4")

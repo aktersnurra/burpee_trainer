@@ -28,15 +28,15 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   @impl true
   def mount(%{"session_id" => session_id}, _session, socket) do
-    user = socket.assigns.current_user
+    scope = socket.assigns.current_scope
 
     with {:ok, id} <- parse_positive_id(session_id),
          {:ok, %WorkoutSession{source_kind: :plan} = workout_session} <-
-           Workouts.resume_session(user, id) do
+           Workouts.resume_session(scope, id) do
       {:ok, mount_session(socket, workout_session)}
     else
       {:error, %Workouts.Error{code: :session_already_completed}} ->
-        case Workouts.get_session(user, String.to_integer(session_id)) do
+        case Workouts.get_session(scope, String.to_integer(session_id)) do
           %WorkoutSession{state: :completed, source_kind: :plan} = completed ->
             {:ok, assign(socket, :workout_session, completed)}
 
@@ -81,7 +81,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
          :ok <- validate_tracking(tracking) do
       result =
         Workouts.complete_session(
-          socket.assigns.current_user,
+          socket.assigns.current_scope,
           socket.assigns.workout_session.id,
           attrs,
           persistence_mode(attrs, tracking, socket.assigns.target_pace_sec)
@@ -122,9 +122,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <Layouts.app
       flash={@flash}
-      current_user={@current_user}
       current_level={@current_level}
-      current_scope={assigns[:current_scope]}
+      current_scope={@current_scope}
       navigation?={false}
       flash?={false}
     >
@@ -147,9 +146,8 @@ defmodule BurpeeTrainerWeb.SessionLive do
     ~H"""
     <Layouts.app
       flash={@flash}
-      current_user={@current_user}
       current_level={@current_level}
-      current_scope={assigns[:current_scope]}
+      current_scope={@current_scope}
       navigation?={false}
       flash?={false}
     >

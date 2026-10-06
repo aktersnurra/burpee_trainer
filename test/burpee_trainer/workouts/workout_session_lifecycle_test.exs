@@ -4,6 +4,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
   import BurpeeTrainer.Fixtures
   import Ecto.Query
 
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.PlanCompiler.ProgramHash
   alias BurpeeTrainer.{Repo, Workouts}
 
@@ -20,28 +21,28 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       draft = workout_plan_draft_fixture(owner, %{"name" => "Draft source"})
       archived = plan_fixture(owner, %{"name" => "Archived source"})
       foreign = plan_fixture(other_user, %{"name" => "Foreign source"})
-      assert {:ok, archived} = Workouts.archive_plan(owner, archived.id)
+      assert {:ok, archived} = Workouts.archive_plan(Scope.for_user(owner), archived.id)
 
       assert {:error, %Error{code: :draft_cannot_start, context: %{plan_id: draft_id}}} =
-               Workouts.start_plan(owner, draft.id, Ecto.UUID.generate())
+               Workouts.start_plan(Scope.for_user(owner), draft.id, Ecto.UUID.generate())
 
       assert draft_id == draft.id
 
       assert {:error, %Error{code: :archived_workout, context: %{plan_id: archived_id}}} =
-               Workouts.start_plan(owner, archived.id, Ecto.UUID.generate())
+               Workouts.start_plan(Scope.for_user(owner), archived.id, Ecto.UUID.generate())
 
       assert archived_id == archived.id
 
       for plan_id <- [foreign.id, 2_147_483_647] do
         assert {:error, %Error{code: :source_unavailable, context: %{plan_id: ^plan_id}}} =
-                 Workouts.start_plan(owner, plan_id, Ecto.UUID.generate())
+                 Workouts.start_plan(Scope.for_user(owner), plan_id, Ecto.UUID.generate())
       end
 
       unavailable = video_fixture(%{available: false})
 
       for video_id <- [unavailable.id, 2_147_483_646] do
         assert {:error, %Error{code: :source_unavailable, context: %{video_id: ^video_id}}} =
-                 Workouts.start_video(owner, video_id, Ecto.UUID.generate())
+                 Workouts.start_video(Scope.for_user(owner), video_id, Ecto.UUID.generate())
       end
 
       assert Repo.aggregate(WorkoutSession, :count) == 0
@@ -54,28 +55,32 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       other_plan = plan_fixture(other_user)
       client_id = Ecto.UUID.generate()
 
-      assert {:ok, first} = Workouts.start_plan(user, plan.id, client_id)
+      assert {:ok, first} = Workouts.start_plan(Scope.for_user(user), plan.id, client_id)
 
-      assert {:ok, same} = Workouts.start_plan(user, plan.id, client_id)
+      assert {:ok, same} = Workouts.start_plan(Scope.for_user(user), plan.id, client_id)
       assert same.id == first.id
       video = video_fixture()
       another_plan = plan_fixture(user)
 
       assert {:error, %Error{code: :start_token_source_mismatch}} =
-               Workouts.start_video(user, video.id, client_id)
+               Workouts.start_video(Scope.for_user(user), video.id, client_id)
 
       assert {:error, %Error{code: :start_token_source_mismatch}} =
-               Workouts.start_plan(user, another_plan.id, client_id)
+               Workouts.start_plan(Scope.for_user(user), another_plan.id, client_id)
 
       assert {:error, %Error{code: :source_unavailable}} =
-               Workouts.start_video(user, 2_147_483_647, client_id)
+               Workouts.start_video(Scope.for_user(user), 2_147_483_647, client_id)
 
       assert Repo.aggregate(WorkoutSession, :count) == 1
 
-      assert {:ok, other_session} = Workouts.start_plan(other_user, other_plan.id, client_id)
+      assert {:ok, other_session} =
+               Workouts.start_plan(Scope.for_user(other_user), other_plan.id, client_id)
+
       assert other_session.id != first.id
 
-      assert {:ok, second} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+      assert {:ok, second} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
       assert second.id != first.id
 
       assert Repo.aggregate(
@@ -90,7 +95,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       client_id = Ecto.UUID.generate()
       before_start = DateTime.utc_now(:second)
 
-      assert {:ok, session} = Workouts.start_plan(user, plan.id, client_id)
+      assert {:ok, session} = Workouts.start_plan(Scope.for_user(user), plan.id, client_id)
       after_start = DateTime.utc_now(:second)
 
       assert session.state == :started
@@ -143,7 +148,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
                  ProgramHash.video_snapshot(expected_snapshot)
 
         assert {:ok, session} =
-                 Workouts.start_video(user, video.id, Ecto.UUID.generate())
+                 Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
         assert session.state == :started
         assert session.source_kind == :video
@@ -183,29 +188,33 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
         }
         |> Repo.insert!()
 
-      assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
       snapshot = started.program_snapshot
-      assert {:ok, _archived} = Workouts.archive_plan(user, plan.id)
+      assert {:ok, _archived} = Workouts.archive_plan(Scope.for_user(user), plan.id)
       assert Repo.reload(recommendation).selected_workout_plan_id == fallback.id
 
-      assert {:ok, resumed} = Workouts.resume_session(user, started.id)
+      assert {:ok, resumed} = Workouts.resume_session(Scope.for_user(user), started.id)
       assert resumed.id == started.id
       assert resumed.program_snapshot == snapshot
       assert resumed.state == :started
 
       assert {:error, %Error{code: :session_not_owned, context: %{session_id: session_id}}} =
-               Workouts.resume_session(intruder, started.id)
+               Workouts.resume_session(Scope.for_user(intruder), started.id)
 
       assert session_id == started.id
 
       assert {:error, %Error{code: :session_not_owned}} =
-               Workouts.resume_session(user, 2_147_483_647)
+               Workouts.resume_session(Scope.for_user(user), 2_147_483_647)
     end
 
     test "completion updates the same row once and retains derived capture and typed feedback" do
       user = user_fixture()
       plan = plan_fixture(user)
-      assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
       attrs = %{
         "burpee_count_actual" => 4,
@@ -222,7 +231,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
 
       assert {:ok, completed} =
                Workouts.complete_session(
-                 user,
+                 Scope.for_user(user),
                  started.id,
                  attrs,
                  {:trusted, [5_000, 10_000, 15_000, 20_000], 5.0}
@@ -244,7 +253,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
 
       assert {:error,
               %Error{code: :session_already_completed, context: %{session_id: session_id}}} =
-               Workouts.complete_session(user, started.id, attrs, :timed)
+               Workouts.complete_session(Scope.for_user(user), started.id, attrs, :timed)
 
       assert session_id == started.id
       assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -254,12 +263,15 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
     test "nil-count videos preserve confirmed actual reps at completion" do
       user = user_fixture()
       video = video_fixture(%{burpee_count: nil})
-      assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+      assert {:ok, started} =
+               Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
       assert started.burpee_count_planned == nil
 
       assert {:ok, completed} =
                Workouts.complete_session(
-                 user,
+                 Scope.for_user(user),
                  started.id,
                  %{"burpee_count_actual" => 37, "duration_sec_actual" => 600},
                  :logged
@@ -268,6 +280,31 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       assert completed.id == started.id
       assert completed.burpee_count_planned == nil
       assert completed.burpee_count_actual == 37
+    end
+
+    test "goal-achieving completion attributes and marks only the user's active goal" do
+      user = user_fixture()
+      plan = plan_fixture(user)
+
+      goal =
+        goal_fixture(user, %{
+          "burpee_count_target" => 10,
+          "burpee_count_baseline" => 5
+        })
+
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
+      assert {:ok, completed} =
+               Workouts.complete_session(
+                 Scope.for_user(user),
+                 started.id,
+                 %{"burpee_count_actual" => 10, "duration_sec_actual" => 1200},
+                 :timed
+               )
+
+      assert completed.goal_id == goal.id
+      assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :achieved
     end
 
     test "failed goal-achieving completion rolls back both session attribution and goal state" do
@@ -280,11 +317,12 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
           "burpee_count_baseline" => 5
         })
 
-      assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
       assert {:error, %Ecto.Changeset{}} =
                Workouts.complete_session(
-                 user,
+                 Scope.for_user(user),
                  started.id,
                  %{
                    "burpee_count_actual" => 10,
@@ -305,12 +343,15 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       owner = user_fixture()
       intruder = user_fixture()
       plan = plan_fixture(owner)
-      assert {:ok, started} = Workouts.start_plan(owner, plan.id, Ecto.UUID.generate())
+
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(owner), plan.id, Ecto.UUID.generate())
+
       attrs = %{"burpee_count_actual" => 1, "duration_sec_actual" => 1}
 
       for id <- [started.id, 2_147_483_647] do
         assert {:error, %Error{code: :session_not_owned}} =
-                 Workouts.complete_session(intruder, id, attrs, :timed)
+                 Workouts.complete_session(Scope.for_user(intruder), id, attrs, :timed)
       end
 
       assert Repo.get!(WorkoutSession, started.id).state == :started
@@ -321,7 +362,10 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
     test "direct SQL enforces the source union, immutable snapshot, and one-way completion" do
       user = user_fixture()
       plan = plan_fixture(user)
-      assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
       now = DateTime.utc_now(:second) |> DateTime.to_iso8601()
 
       assert_raise Exqlite.Error, ~r/workout_sessions_source_snapshot_check/, fn ->
@@ -344,7 +388,7 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
 
       assert {:ok, completed} =
                Workouts.complete_session(
-                 user,
+                 Scope.for_user(user),
                  started.id,
                  %{"burpee_count_actual" => 1, "duration_sec_actual" => 1},
                  :timed

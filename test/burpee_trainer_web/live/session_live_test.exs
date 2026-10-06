@@ -5,6 +5,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
   import Phoenix.LiveViewTest
 
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Workouts.WorkoutSession
 
   setup %{conn: conn} do
@@ -17,7 +18,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     user: user
   } do
     plan = plan_fixture(user)
-    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     assert Repo.aggregate(WorkoutSession, :count) == 1
 
     assert {:ok, view, _html} = live(conn, ~p"/session/#{session.id}")
@@ -50,7 +54,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     user: user
   } do
     plan = plan_fixture(user, %{name: "Three steady sets"})
-    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
 
     for panel <-
@@ -70,7 +77,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
   test "back to Home preserves the started session for resume", %{conn: conn, user: user} do
     plan = plan_fixture(user)
-    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
 
     view |> element("#session-capture-choice-back") |> render_click()
@@ -84,9 +94,12 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     user: user
   } do
     plan = plan_fixture(user)
-    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     snapshot = session.program_snapshot
-    assert {:ok, _archived} = Workouts.archive_plan(user, plan.id)
+    assert {:ok, _archived} = Workouts.archive_plan(Scope.for_user(user), plan.id)
 
     assert {:ok, view, _html} = live(conn, ~p"/session/#{session.id}")
 
@@ -105,7 +118,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     user: user
   } do
     plan = plan_fixture(user)
-    assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, started} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     assert {:ok, view, _html} = live(conn, ~p"/session/#{started.id}")
 
     _html =
@@ -205,7 +221,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     for {section, field, forged} <- forged_payloads do
       plan = plan_fixture(user)
-      assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+      assert {:ok, started} =
+               Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
       assert {:ok, view, _html} = live(conn, ~p"/session/#{started.id}")
       attrs = Map.put(valid_attrs, "client_session_id", started.client_session_id)
       payload = %{"workout_session" => attrs, "tracking" => valid_tracking}
@@ -220,7 +239,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
   test "valid HTML string completion values remain accepted", %{conn: conn, user: user} do
     plan = plan_fixture(user)
-    assert {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, started} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     assert {:ok, view, _html} = live(conn, ~p"/session/#{started.id}")
 
     render_hook(view, "save_session", %{
@@ -255,7 +277,10 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
   test "renders the client-owned surface and minimal completion review", %{conn: conn, user: user} do
     plan = plan_fixture(user)
-    assert {:ok, session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     assert {:ok, view, _html} = live(conn, ~p"/session/#{session.id}")
 
     for id <- ~w[

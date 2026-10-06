@@ -40,8 +40,10 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
   conditions. If the targets cannot be met, say so in the rationale instead of inventing a plan.
   """
 
-  @spec system_prompt(BurpeeTrainer.Accounts.User.t()) :: String.t()
-  def system_prompt(user) do
+  @spec system_prompt(BurpeeTrainer.Accounts.Scope.t()) :: String.t()
+  def system_prompt(
+        %BurpeeTrainer.Accounts.Scope{user: %BurpeeTrainer.Accounts.User{} = user} = scope
+      ) do
     {:ok, context} = UserTime.context(user, DateTime.utc_now(:second))
 
     levels =
@@ -56,7 +58,7 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
       end)
 
     recent_results =
-      user
+      scope
       |> Workouts.list_recent_training_sessions()
       |> Enum.filter(&(is_integer(&1.burpee_count_actual) and is_integer(&1.duration_sec_actual)))
       |> Enum.map(fn session ->
@@ -71,7 +73,11 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
     @training_rules <>
       "\nReturn only the layout JSON.\n" <>
       Jason.encode!(%{
-        current_level: Levels.current_level(Workouts.list_sessions(user), context.date),
+        current_level:
+          Levels.current_level(
+            Workouts.list_sessions(scope),
+            context.date
+          ),
         level_landmarks: levels,
         recent_results: recent_results
       })

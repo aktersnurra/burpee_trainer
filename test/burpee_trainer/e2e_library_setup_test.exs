@@ -543,6 +543,150 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     stop_supervised(IsolatedMigrationRepo)
   end
 
+  @tag timeout: :infinity
+  test "completed genuine recovery cleanup is owner-qualified and repeatable", %{
+    database: database
+  } do
+    env = fixture_env(database) ++ [{"E2E_LIBRARY_SETUP_ONLY", "1"}]
+    assert_mix_ok!(["ecto.create", "--quiet"], env)
+    assert_mix_ok!(["ecto.migrate", "--quiet"], env)
+
+    script = """
+    Code.require_file("scripts/e2e/library_setup.exs")
+    alias BurpeeTrainer.{Accounts, Home, Repo, Workouts}
+    alias BurpeeTrainer.Accounts.Scope
+    alias BurpeeTrainer.Coach.Policy
+    alias BurpeeTrainer.Workouts.WorkoutPlan
+    import Ecto.Query
+    {:ok, report} = BurpeeTrainer.E2E.LibrarySetup.run("published-plan")
+    {:ok, decoy} = BurpeeTrainer.E2E.LibrarySetup.run("available-video", run_id: "cleanup-decoy")
+    {:ok, ordinary} = Accounts.create_user(%{"username" => "ordinary_cleanup_decoy"})
+    scope = Scope.for_user(Repo.get!(BurpeeTrainer.Accounts.User, report.user_id))
+    now = DateTime.utc_now(:second)
+    Repo.all(from p in WorkoutPlan, where: is_nil(p.user_id) and p.state == :published)
+    |> Enum.each(fn p -> p |> WorkoutPlan.archive_changeset(now) |> Repo.update!() end)
+    {:ok, facts} = Home.facts(scope, now)
+    :choose = Home.state(facts)
+    {:ok, slot} = Policy.required_slot(scope, now)
+    {:ok, selection} = Workouts.recover_home_workout_selection(scope, slot, report.plan_id)
+    {:ok, started} = Workouts.start_home_workout(scope, selection, Ecto.UUID.generate())
+    {:ok, completed} = Workouts.complete_session(scope, started.id,
+      %{"burpee_count_actual" => 1, "duration_sec_actual" => 12, "note_post" => "real recovery"}, :timed)
+    IO.puts("RECOVERY=" <> Jason.encode!(%{user_id: report.user_id, plan_id: report.plan_id,
+      session_id: completed.id, state: completed.state, decoy: decoy, ordinary_id: ordinary.id}))
+    IO.puts("DEPENDENCIES=" <> Jason.encode!(%{
+      foreign_keys: Repo.query!("PRAGMA foreign_key_list(coach_recommendations)").rows,
+      schema: Repo.query!("SELECT sql FROM sqlite_master WHERE name = 'coach_recommendations'").rows,
+      recommendations: Repo.query!("SELECT * FROM coach_recommendations WHERE user_id = ?", [report.user_id]).rows,
+      memories: Repo.query!("SELECT * FROM coach_workout_memories WHERE user_id = ?", [report.user_id]).rows}))
+    """
+
+    {output, status} = System.cmd("mix", ["run", "-e", script], env: env, stderr_to_stdout: true)
+    assert status == 0, output
+    report = output |> report_line!("RECOVERY=") |> Jason.decode!()
+    IO.puts("RECOVERY=" <> report_line!(output, "RECOVERY="))
+    IO.puts("DEPENDENCIES=" <> report_line!(output, "DEPENDENCIES="))
+    assert report["state"] == "completed"
+    user_id = report["user_id"]
+    marker = database <> ".marker"
+    File.write!(marker, "cleanup-decoy-marker")
+    on_exit(fn -> File.rm!(marker) end)
+
+    start_isolated_repo!(database)
+    before = cleanup_database_snapshot()
+    stop_supervised(IsolatedMigrationRepo)
+
+    {failed_output, failed_status} =
+      run_cleanup_process(user_id, env, [
+        {"E2E_CLEANUP_INDUCED_FAILURE_AFTER", "after-trigger-drop"}
+      ])
+
+    assert failed_status != 0
+    assert failed_output =~ "induced cleanup failure"
+    start_isolated_repo!(database)
+    assert cleanup_database_snapshot() == before
+    stop_supervised(IsolatedMigrationRepo)
+
+    {cleanup_output, cleanup_status} = run_cleanup_process(user_id, env)
+
+    if cleanup_status != 0 do
+      start_isolated_repo!(database)
+      assert cleanup_database_snapshot() == before
+      stop_supervised(IsolatedMigrationRepo)
+    end
+
+    assert cleanup_status == 0, cleanup_output
+    IO.puts("E2E_CLEANUP=" <> report_line!(cleanup_output, "E2E_CLEANUP="))
+
+    assert (cleanup_output |> report_line!("E2E_CLEANUP=") |> Jason.decode!())["status"] ==
+             "deleted"
+
+    for pass <- [:deleted, :already_absent] do
+      if pass == :already_absent do
+        absent = run_cleanup!(user_id, env)
+        assert absent["status"] == "already_absent"
+        IO.puts("E2E_CLEANUP=" <> Jason.encode!(absent))
+      end
+
+      start_isolated_repo!(database)
+      after_cleanup = cleanup_database_snapshot()
+      assert after_cleanup.schema == before.schema
+
+      for {table, rows} <- before.tables do
+        cond do
+          table == "users" ->
+            assert after_cleanup.tables[table] == Enum.reject(rows, &(hd(&1) == user_id))
+
+          table in [
+            "workout_plans",
+            "workout_sessions",
+            "coach_recommendations",
+            "user_stats",
+            "coach_guidance_entries",
+            "coach_settings",
+            "coach_workout_memories",
+            "workout_design_sessions",
+            "goals",
+            "pose_capture_runs"
+          ] ->
+            columns = IsolatedMigrationRepo.query!("PRAGMA table_info(#{table})").rows
+            index = Enum.find_index(columns, &(Enum.at(&1, 1) == "user_id"))
+
+            assert after_cleanup.tables[table] ==
+                     Enum.reject(rows, &(Enum.at(&1, index) == user_id))
+
+          true ->
+            assert after_cleanup.tables[table] == rows
+        end
+      end
+
+      assert IsolatedMigrationRepo.get!(User, report["ordinary_id"])
+      assert IsolatedMigrationRepo.get!(User, report["decoy"]["user_id"])
+      assert IsolatedMigrationRepo.get!(WorkoutVideo, report["decoy"]["video_id"])
+      assert File.read!(marker) == "cleanup-decoy-marker"
+      IO.puts("RECOVERY_CLEANUP=#{pass}; exact decoys/marker/schema survive")
+      stop_supervised(IsolatedMigrationRepo)
+    end
+  end
+
+  defp cleanup_database_snapshot do
+    tables =
+      IsolatedMigrationRepo.query!(
+        "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+      ).rows
+
+    %{
+      schema:
+        IsolatedMigrationRepo.query!(
+          "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+        ).rows,
+      tables:
+        Map.new(tables, fn [table] ->
+          {table, IsolatedMigrationRepo.query!("SELECT * FROM #{table} ORDER BY rowid").rows}
+        end)
+    }
+  end
+
   test "fixture entrypoint rejects unknown modes" do
     source = File.read!(@script)
     assert source =~ Enum.join(@modes, "|")

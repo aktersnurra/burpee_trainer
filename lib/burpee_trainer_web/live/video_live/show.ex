@@ -26,7 +26,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   @impl true
   def mount(%{"video_id" => video_id, "session_id" => session_id}, _session, socket) do
-    user = socket.assigns.current_user
+    scope = socket.assigns.current_scope
 
     with {:ok, video_id} <- parse_positive_id(video_id),
          {:ok, session_id} <- parse_positive_id(session_id),
@@ -35,7 +35,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
             source_kind: :video,
             workout_video_id: ^video_id,
             video_snapshot: snapshot
-          } = workout_session} <- Workouts.resume_session(user, session_id) do
+          } = workout_session} <- Workouts.resume_session(scope, session_id) do
       {:ok, mount_video_session(socket, video_id, snapshot, workout_session)}
     else
       _unavailable -> unavailable_video(socket)
@@ -116,7 +116,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         %{"workout_session" => params},
         %{
           assigns: %{
-            current_user: %{id: user_id},
+            current_scope: %{user: %{id: user_id}},
             workout_session:
               %WorkoutSession{state: :started, source_kind: :video} = workout_session
           }
@@ -140,7 +140,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         %{"workout_session" => params},
         %{
           assigns: %{
-            current_user: %{id: user_id} = current_user,
+            current_scope: %{user: %{id: user_id}} = scope,
             workout_session:
               %WorkoutSession{state: :started, source_kind: :video} = workout_session
           }
@@ -155,13 +155,13 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       |> Map.put("tags", socket.assigns.log_tags |> Enum.sort() |> Enum.join(","))
 
     case Workouts.complete_session(
-           current_user,
+           scope,
            workout_session.id,
            params,
            :logged
          ) do
       {:ok, session} ->
-        _events = Workouts.session_milestones(socket.assigns.current_user, session)
+        _events = Workouts.session_milestones(socket.assigns.current_scope, session)
 
         {:noreply,
          socket
@@ -217,9 +217,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     ~H"""
     <Layouts.app
       flash={@flash}
-      current_user={@current_user}
       current_level={@current_level}
-      current_scope={assigns[:current_scope]}
+      current_scope={@current_scope}
       current_page={:session}
     >
       <div

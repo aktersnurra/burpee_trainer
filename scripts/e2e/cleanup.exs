@@ -104,6 +104,15 @@ case arguments do
                   raise "induced cleanup failure after trigger drop"
                 end
 
+                # SQLite's immediate RESTRICT on selected_workout_plan_id can fire
+                # before the user's recommendation cascade when its plans are deleted.
+                # Remove only this fixture owner's recommendations before that cascade.
+                Repo.delete_all(
+                  from(recommendation in CoachRecommendation,
+                    where: recommendation.user_id == ^user_id
+                  )
+                )
+
                 delete_result = Repo.delete(user)
                 Repo.query!(trigger_sql)
 

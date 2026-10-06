@@ -3,6 +3,7 @@ defmodule BurpeeTrainer.HistoryTest do
 
   import BurpeeTrainer.Fixtures
 
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.WorkoutSession
@@ -54,24 +55,26 @@ defmodule BurpeeTrainer.HistoryTest do
     for _ <- 1..12, do: insert_session(user, now)
     foreign = insert_session(user_fixture(), now)
     plan = plan_fixture(user)
-    {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+    {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
-    assert {:ok, first, cursor, true} = History.page(user, now, "all")
+    assert {:ok, first, cursor, true} = History.page(Scope.for_user(user), now, "all")
     assert length(first) == 5
     assert cursor == {List.last(first).completed_at, List.last(first).id}
-    assert {:ok, second, cursor, true} = History.page(user, now, "all", cursor)
+    assert {:ok, second, cursor, true} = History.page(Scope.for_user(user), now, "all", cursor)
     assert length(second) == 5
     assert cursor == {List.last(second).completed_at, List.last(second).id}
-    assert {:ok, third, cursor, false} = History.page(user, now, "all", cursor)
+    assert {:ok, third, cursor, false} = History.page(Scope.for_user(user), now, "all", cursor)
     assert length(third) == 2
-    assert {:ok, [], ^cursor, false} = History.page(user, now, "all", cursor)
+    assert {:ok, [], ^cursor, false} = History.page(Scope.for_user(user), now, "all", cursor)
 
     ids = Enum.map(first ++ second ++ third, & &1.id)
-    assert ids == Enum.map(Workouts.list_sessions(user), & &1.id)
+    assert ids == Enum.map(Workouts.list_sessions(Scope.for_user(user)), & &1.id)
     assert length(Enum.uniq(ids)) == 12
     refute foreign.id in ids
     refute started.id in ids
-    assert {:ok, [], _, false} = History.page(user, ~U[2025-10-06 12:00:00Z], "week")
+
+    assert {:ok, [], _, false} =
+             History.page(Scope.for_user(user), ~U[2025-10-06 12:00:00Z], "week")
   end
 
   test "page scans past future rows and stops after the last matching period row" do
@@ -81,9 +84,9 @@ defmodule BurpeeTrainer.HistoryTest do
     matching = for _ <- 1..7, do: insert_session(user, now)
     for _ <- 1..6, do: insert_session(user, ~U[2025-08-01 00:00:00Z])
 
-    assert {:ok, first, cursor, true} = History.page(user, now, "week")
+    assert {:ok, first, cursor, true} = History.page(Scope.for_user(user), now, "week")
     assert length(first) == 5
-    assert {:ok, last, _, false} = History.page(user, now, "week", cursor)
+    assert {:ok, last, _, false} = History.page(Scope.for_user(user), now, "week", cursor)
     assert length(last) == 2
     assert Enum.map(first ++ last, & &1.id) == Enum.map(Enum.reverse(matching), & &1.id)
   end
@@ -95,13 +98,13 @@ defmodule BurpeeTrainer.HistoryTest do
 
     for period <- ["week", "four_weeks", "all"] do
       assert {:error, :invalid_timezone} = History.filter_sessions([], invalid, now, period)
-      assert {:error, :invalid_timezone} = History.page(invalid, now, period)
+      assert {:error, :invalid_timezone} = History.page(Scope.for_user(invalid), now, period)
     end
 
-    assert {:error, :invalid_timezone} = History.results(invalid, now)
-    assert {:error, :invalid_cursor} = History.page(user, now, "all", "invalid")
-    assert {:ok, [], nil, false} = History.page(user, now, "all")
-    assert {:ok, %{today: [], week: []}} = History.results(user, now)
+    assert {:error, :invalid_timezone} = History.results(Scope.for_user(invalid), now)
+    assert {:error, :invalid_cursor} = History.page(Scope.for_user(user), now, "all", "invalid")
+    assert {:ok, [], nil, false} = History.page(Scope.for_user(user), now, "all")
+    assert {:ok, %{today: [], week: []}} = History.results(Scope.for_user(user), now)
   end
 
   test "week and four weeks include local Monday across year and DST changes; all has no lower bound" do
@@ -183,9 +186,11 @@ defmodule BurpeeTrainer.HistoryTest do
     now = ~U[2025-09-24 12:00:00Z]
     warmup = insert_session(user, now, tags: "warmup", display_name_snapshot: "Saved warmup")
 
-    assert {:ok, %{today: [^warmup], week: [^warmup]}} = History.results(user, now)
-    assert {:ok, %{completed_sec: 0}} = Policy.required_slot(user, now)
-    assert {:ok, [row], _, false} = History.page(user, now, "week")
+    assert {:ok, %{today: [^warmup], week: [^warmup]}} =
+             History.results(Scope.for_user(user), now)
+
+    assert {:ok, %{completed_sec: 0}} = Policy.required_slot(Scope.for_user(user), now)
+    assert {:ok, [row], _, false} = History.page(Scope.for_user(user), now, "week")
     assert row.id == warmup.id
     assert row.tags == "warmup"
     assert row.display_name_snapshot == "Saved warmup"
@@ -207,7 +212,7 @@ defmodule BurpeeTrainer.HistoryTest do
     current = insert_session(user, now)
 
     assert {:ok, %{today: [^current, ^today], week: [^current, ^today, ^yesterday, ^week_start]}} =
-             History.results(user, now)
+             History.results(Scope.for_user(user), now)
   end
 
   test "summary derives display totals and latest existing density without persistence" do

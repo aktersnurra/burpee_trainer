@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Coach.Policy do
 
   import Ecto.Query
 
-  alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Accounts.{Scope, User}
 
   alias BurpeeTrainer.Coach.{AuthoritativeSession, CatchUpPolicy}
 
@@ -31,8 +31,8 @@ defmodule BurpeeTrainer.Coach.Policy do
           feedback: map()
         }
 
-  @spec required_slot(User.t(), DateTime.t()) :: {:ok, slot()} | {:error, Error.t()}
-  def required_slot(%User{id: user_id} = user, %DateTime{} = now) do
+  @spec required_slot(Scope.t(), DateTime.t()) :: {:ok, slot()} | {:error, Error.t()}
+  def required_slot(%Scope{user: %User{id: user_id} = user}, %DateTime{} = now) do
     with {:ok, context} <- UserTime.context(user, now),
          {:ok, week_start_utc, week_end_utc} <- UserTime.week_bounds_utc(context) do
       sessions = completed_sessions(user_id, now)

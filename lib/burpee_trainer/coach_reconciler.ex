@@ -276,15 +276,20 @@ defmodule BurpeeTrainer.CoachReconciler do
   end
 
   defp reconcile_user(%User{} = user, %DateTime{} = now) do
-    with {:ok, slot} <- Policy.required_slot(user, DateTime.truncate(now, :second)),
+    scope = Accounts.Scope.for_user(user)
+
+    with {:ok, slot} <- Policy.required_slot(scope, DateTime.truncate(now, :second)),
          {:ok, recommendation} <-
-           Workouts.ensure_recommendation(user, %{
+           Workouts.ensure_recommendation(scope, %{
              slot_key: slot.slot_key,
              slot_date: slot.slot_date,
              rationale: "Built-in fallback while coach reconciliation completes."
            }),
          {:ok, _recommendation} <-
-           Workouts.ensure_recommendation_selection_available(user, recommendation.id) do
+           Workouts.ensure_recommendation_selection_available(
+             scope,
+             recommendation.id
+           ) do
       :ok
     end
   end

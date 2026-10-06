@@ -1,4 +1,4 @@
-defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
+defmodule BurpeeTrainerWeb.HomeBootstrapTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import Ecto.Query
@@ -6,9 +6,10 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
-  alias BurpeeTrainerWeb.OverviewLive
+  alias BurpeeTrainerWeb.HomeLive
 
   setup do
     previous_req = Req.default_options()
@@ -47,7 +48,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     assert has_element?(view, "#home-bootstrap-error")
     view |> element("#home-tab-videos") |> render_click()
     assert has_element?(view, "#home-tab-videos[aria-selected=true]")
-    assert Workouts.current_started_session(user) == nil
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
     refute_received :unexpected_provider
   end
 
@@ -72,7 +73,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
       )
 
     assert {:noreply, ^newer_socket} =
-             OverviewLive.handle_async(
+             HomeLive.handle_async(
                {:home_bootstrap, old_id},
                {:ok, {:error, :obsolete}},
                newer_socket
@@ -89,14 +90,14 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     {_user, _now, _slot, id, socket, selected, _alternative} = committed_pending_bootstrap()
 
     assert {:noreply, completed} =
-             OverviewLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, socket)
+             HomeLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, socket)
 
     selected_id = completed.assigns.home_selection.recommendation_id
     token = completed.assigns.start_client_session_id
     html = rendered(completed)
 
     assert {:noreply, ^completed} =
-             OverviewLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, completed)
+             HomeLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, completed)
 
     assert completed.assigns.home_selection.recommendation_id == selected_id
     assert completed.assigns.start_client_session_id == token
@@ -108,8 +109,10 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     {user, _now, expected_slot, id, socket, selected, alternative} =
       committed_pending_bootstrap()
 
-    {:ok, replacement} = Workouts.ensure_home_selection(user, expected_slot)
-    {:ok, _replacement} = Workouts.select_home_workout(user, replacement, alternative.id)
+    {:ok, replacement} = Workouts.ensure_home_selection(Scope.for_user(user), expected_slot)
+
+    {:ok, _replacement} =
+      Workouts.select_home_workout(Scope.for_user(user), replacement, alternative.id)
 
     assert_delivery_rejected(user, id, selected, socket, "Build intervals", false)
   end
@@ -134,7 +137,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
       committed_pending_bootstrap()
 
     future_now = DateTime.add(now, 7 * 86_400, :second)
-    {:ok, next_slot} = Policy.required_slot(user, future_now)
+    {:ok, next_slot} = Policy.required_slot(Scope.for_user(user), future_now)
 
     refute {next_slot.slot_key, next_slot.slot_date} ==
              {expected_slot.slot_key, expected_slot.slot_date}
@@ -148,8 +151,10 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     {user, _now, _expected_slot, id, socket, selected, alternative} =
       committed_pending_bootstrap()
 
-    assert {:ok, _selected_plan} = Workouts.verify_home_selection(user, selected)
-    assert {:ok, _session} = Workouts.start_plan(user, alternative.id, Ecto.UUID.generate())
+    assert {:ok, _selected_plan} = Workouts.verify_home_selection(Scope.for_user(user), selected)
+
+    assert {:ok, _session} =
+             Workouts.start_plan(Scope.for_user(user), alternative.id, Ecto.UUID.generate())
 
     assert_delivery_rejected(user, id, selected, socket, "Build intervals", true)
   end
@@ -159,10 +164,13 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   } do
     user = returning_user()
     now = DateTime.utc_now(:second)
-    {:ok, slot} = Policy.required_slot(user, now)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
 
     {:ok, pinned} =
-      Workouts.ensure_recommendation(user, %{slot_key: slot.slot_key, slot_date: slot.slot_date})
+      Workouts.ensure_recommendation(Scope.for_user(user), %{
+        slot_key: slot.slot_key,
+        slot_date: slot.slot_date
+      })
 
     socket = mounted_socket(user, now)
 
@@ -211,10 +219,10 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   } do
     user = returning_user()
     now = DateTime.utc_now(:second)
-    {:ok, slot} = Policy.required_slot(user, now)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
 
     {:ok, historical} =
-      Workouts.ensure_recommendation(user, %{
+      Workouts.ensure_recommendation(Scope.for_user(user), %{
         slot_key: "historical:" <> slot.slot_key,
         slot_date: Date.add(slot.slot_date, -7)
       })
@@ -235,7 +243,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   } do
     user = returning_user()
     now = DateTime.utc_now(:second)
-    {:ok, slot} = Policy.required_slot(user, now)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
     completed_at = DateTime.add(now, -86_400, :second)
 
     session =
@@ -263,11 +271,11 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     conn: _conn
   } do
     user = returning_user()
-    built_in = Enum.find(Workouts.list_library(user), &(&1.origin == :built_in))
+    built_in = Enum.find(Workouts.list_library(Scope.for_user(user)), &(&1.origin == :built_in))
     session = session_from_plan_fixture(user, built_in)
     completed_at = session.completed_at
     now = DateTime.add(completed_at, 86_400, :second)
-    {:ok, slot} = Policy.required_slot(user, now)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
 
     assert_historical_session_mount(user, now, slot, session, :plan, completed_at)
   end
@@ -277,11 +285,11 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
   } do
     user = returning_user()
     video = video_fixture(%{burpee_count: 60})
-    {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+    {:ok, started} = Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
     {:ok, session} =
       Workouts.complete_session(
-        user,
+        Scope.for_user(user),
         started.id,
         %{"burpee_count_actual" => 25, "duration_sec_actual" => 120},
         :timed
@@ -289,7 +297,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
 
     completed_at = session.completed_at
     now = DateTime.add(completed_at, 86_400, :second)
-    {:ok, slot} = Policy.required_slot(user, now)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
 
     assert_historical_session_mount(user, now, slot, session, :video, completed_at)
   end
@@ -298,11 +306,11 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
     now = DateTime.utc_now(:second)
-    {:ok, expected_slot} = Policy.required_slot(user, now)
+    {:ok, expected_slot} = Policy.required_slot(Scope.for_user(user), now)
     id = make_ref()
     socket = pending_bootstrap_socket(user, now, expected_slot, id, "Build intervals")
-    assert Workouts.home_entry_state(user, expected_slot) == {:ok, :bootstrap}
-    {:ok, selected} = Workouts.ensure_home_selection(user, expected_slot)
+    assert Workouts.home_entry_state(Scope.for_user(user), expected_slot) == {:ok, :bootstrap}
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), expected_slot)
     alternative = plan_fixture(user)
     {user, now, expected_slot, id, socket, selected, alternative}
   end
@@ -324,7 +332,7 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
 
   defp assert_delivery_rejected(user, id, selected, socket, prompt, started?) do
     assert {:noreply, delivered} =
-             OverviewLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, socket)
+             HomeLive.handle_async({:home_bootstrap, id}, {:ok, {:ok, selected}}, socket)
 
     assert delivered.assigns.bootstrap_prompt == prompt
     assert delivered.assigns.bootstrap_form.params["prompt"] == prompt
@@ -332,9 +340,9 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
     assert delivered.assigns.history_open? == socket.assigns.history_open?
 
     if started? do
-      assert %{state: :started} = Workouts.current_started_session(user)
+      assert %{state: :started} = Workouts.current_started_session(Scope.for_user(user))
     else
-      assert Workouts.current_started_session(user) == nil
+      assert Workouts.current_started_session(Scope.for_user(user)) == nil
     end
 
     html = rendered(delivered)
@@ -393,18 +401,18 @@ defmodule BurpeeTrainerWeb.OverviewBootstrapTest do
       private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}},
       assigns: %{
         __changed__: %{},
-        current_user: user,
+        current_scope: BurpeeTrainer.Accounts.Scope.for_user(user),
         current_level: :level_1a,
         flash: %{},
         home_now: fn -> now end
       }
     }
 
-    {:ok, socket} = OverviewLive.mount(%{}, %{}, socket)
+    {:ok, socket} = HomeLive.mount(%{}, %{}, socket)
     socket
   end
 
-  defp rendered(socket), do: render_component(&OverviewLive.render/1, socket.assigns)
+  defp rendered(socket), do: render_component(&HomeLive.render/1, socket.assigns)
 
   defp selector?(html, selector),
     do: html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?()

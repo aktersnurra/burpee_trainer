@@ -1,4 +1,4 @@
-defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
+defmodule BurpeeTrainerWeb.HistorySnapshotTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import BurpeeTrainer.Fixtures
@@ -37,7 +37,7 @@ defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
         completed_at: ~U[2025-01-02 03:04:05Z]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/?history=1")
+    {:ok, view, _html} = live(conn, ~p"/history")
     view |> element("#home-history-period-all") |> render_click()
 
     assert has_element?(
@@ -51,7 +51,7 @@ defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
     assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='38']")
     assert has_element?(view, "#home-history-sheet-details-#{session.id}", "Reps · 40")
 
-    [persisted] = Workouts.list_sessions(user)
+    [persisted] = Workouts.list_sessions(BurpeeTrainer.Accounts.Scope.for_user(user))
     assert persisted.completed_at == ~U[2025-01-02 03:04:05Z]
     assert persisted.display_name_snapshot == "Legacy ladder snapshot"
     assert is_nil(persisted.program_snapshot)
@@ -83,7 +83,7 @@ defmodule BurpeeTrainer.Workouts.HistorySnapshotTest do
         completed_at: ~U[2025-02-03 04:05:06Z]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/?history=1")
+    {:ok, view, _html} = live(conn, ~p"/history")
     view |> element("#home-history-period-all") |> render_click()
 
     assert has_element?(

@@ -4,6 +4,7 @@ defmodule BurpeeTrainer.Coach.FeedbackEvidenceTest do
   import BurpeeTrainer.Fixtures
   import Ecto.Query
 
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.{Repo, Workouts.WorkoutSession}
 
@@ -24,7 +25,7 @@ defmodule BurpeeTrainer.Coach.FeedbackEvidenceTest do
     assert session.display_name_snapshot == "Snapshot workout"
     assert session.program_snapshot == program_snapshot()
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-02 12:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-02 12:00:00Z])
     assert slot.completed_sec == 1_200
     assert slot.feedback.transient == [:heat_affected_performance, :low_energy]
     assert slot.feedback.limiters == [:breathing]
@@ -43,7 +44,7 @@ defmodule BurpeeTrainer.Coach.FeedbackEvidenceTest do
     completed_session(user, ~U[2025-08-31 12:00:00Z], primary_limiter: :upper_body)
     completed_session(user, ~U[2025-09-01 12:00:00Z], preference_feedback: :choose_again)
 
-    assert {:ok, slot} = Policy.required_slot(user, ~U[2025-09-02 12:00:00Z])
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-02 12:00:00Z])
     assert slot.feedback.transient == [:high_energy]
     assert slot.feedback.limiters == [:upper_body]
     assert slot.feedback.preferences == [:choose_again]

@@ -7,16 +7,16 @@ defmodule BurpeeTrainer.Goals do
 
   import Ecto.Query
 
-  alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Goals.Goal
   alias BurpeeTrainer.Repo
 
   @doc """
-  Fetch the (single) active goal for a `(user, burpee_type)` pair, or
+  Fetch the (single) active goal for a `(scope, burpee_type)` pair, or
   nil if none exists.
   """
-  @spec get_active_goal(User.t(), atom) :: Goal.t() | nil
-  def get_active_goal(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
+  @spec get_active_goal(Scope.t(), atom) :: Goal.t() | nil
+  def get_active_goal(%Scope{user: %User{id: user_id}}, burpee_type) when is_atom(burpee_type) do
     Repo.one(
       from goal in Goal,
         where:

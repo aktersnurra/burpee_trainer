@@ -7,30 +7,29 @@ defmodule BurpeeTrainer.Home do
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Home.{Facts, State}
-  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
 
   @spec facts(Scope.t(), DateTime.t()) :: {:ok, Facts.t()} | {:error, :invalid_timezone}
-  def facts(%Scope{user: user}, %DateTime{} = now) do
-    with {:ok, slot} <- slot(user, now) do
-      started_session = Workouts.current_started_session(user)
+  def facts(%Scope{user: user} = scope, %DateTime{} = now) do
+    with {:ok, slot} <- slot(scope, now) do
+      started_session = Workouts.current_started_session(scope)
 
       history? =
-        Repo.exists?(
-          from(session in WorkoutSession,
-            where: session.user_id == ^user.id and session.state == :completed
+        Repo.exists?(from(session in WorkoutSession, where: session.user_id == ^user.id)) or
+          Repo.exists?(
+            from(recommendation in CoachRecommendation, where: recommendation.user_id == ^user.id)
           )
-        )
 
       owned_plan? =
         Repo.exists?(
           from(plan in WorkoutPlan,
-            where: plan.user_id == ^user.id and plan.state == :published
+            where: plan.user_id == ^user.id
           )
         )
 
-      selection = ensure_selection(user, slot, started_session, history?, owned_plan?)
+      selection = ensure_selection(scope, slot, started_session, history?, owned_plan?)
 
-      with {:ok, results} <- History.results(user, now) do
+      with {:ok, results} <- History.results(scope, now) do
         {:ok,
          %Facts{
            slot: slot,
@@ -49,25 +48,24 @@ defmodule BurpeeTrainer.Home do
   @spec state(Facts.t()) :: State.t()
   defdelegate state(facts), to: State, as: :derive
 
-  defp ensure_selection(user, %{home_state: :workout_needed} = slot, nil, true, _owned_plan?) do
-    selection(user, slot)
-  end
-
-  defp ensure_selection(user, %{home_state: :workout_needed} = slot, nil, _history?, true) do
-    selection(user, slot)
+  defp ensure_selection(scope, %{home_state: :workout_needed} = slot, nil, history?, owned_plan?) do
+    case Workouts.current_home_selection(scope, slot) do
+      nil when history? or owned_plan? -> selection(scope, slot)
+      current -> current
+    end
   end
 
   defp ensure_selection(_user, _slot, _started_session, _history?, _owned_plan?), do: nil
 
-  defp selection(user, slot) do
-    case Workouts.ensure_home_selection(user, slot) do
+  defp selection(scope, slot) do
+    case Workouts.ensure_home_selection(scope, slot) do
       {:ok, selection} -> selection
       {:error, _reason} -> nil
     end
   end
 
-  defp slot(user, now) do
-    case Policy.required_slot(user, now) do
+  defp slot(scope, now) do
+    case Policy.required_slot(scope, now) do
       {:ok, slot} -> {:ok, slot}
       {:error, _reason} -> {:error, :invalid_timezone}
     end

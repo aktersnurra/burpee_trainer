@@ -8,7 +8,7 @@ defmodule BurpeeTrainer.Workouts do
 
   alias BurpeeTrainer.Coach.Context
   alias Ecto.Multi
-  alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.Policy
 
   alias BurpeeTrainer.{CoachReconciler, PlanCompiler, UserTime}
@@ -53,8 +53,8 @@ defmodule BurpeeTrainer.Workouts do
   # ---------------------------------------------------------------------------
 
   @doc "Lists the user's published plans together with shared published built-ins."
-  @spec list_library(User.t()) :: [WorkoutPlan.t()]
-  def list_library(%User{id: user_id}) do
+  @spec list_library(Scope.t()) :: [WorkoutPlan.t()]
+  def list_library(%Scope{user: %User{id: user_id}}) do
     Repo.all(
       from(plan in WorkoutPlan,
         where:
@@ -68,10 +68,10 @@ defmodule BurpeeTrainer.Workouts do
   @type home_entry_state :: :bootstrap | :existing
 
   @doc "Classifies whether a workout-needed Home slot has any persisted user evidence."
-  @spec home_entry_state(User.t(), Policy.slot()) ::
+  @spec home_entry_state(Scope.t(), Policy.slot()) ::
           {:ok, home_entry_state()} | {:error, Error.t()}
   def home_entry_state(
-        %User{id: user_id},
+        %Scope{user: %User{id: user_id}},
         %{slot_key: slot_key, slot_date: %Date{}, home_state: :workout_needed}
       )
       when is_binary(slot_key) and slot_key != "" do
@@ -90,7 +90,7 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def home_entry_state(%User{}, _slot),
+  def home_entry_state(%Scope{}, _slot),
     do: {:error, Error.new(:invalid_recommendation_selection)}
 
   # The slot and all evidence are re-read in lifecycle transactions; a presentation-time
@@ -100,11 +100,11 @@ defmodule BurpeeTrainer.Workouts do
          %{slot_key: slot_key, slot_date: %Date{} = slot_date, home_state: :workout_needed}
        )
        when is_binary(slot_key) and slot_key != "" do
-    with {:ok, current} <- Policy.required_slot(user, DateTime.utc_now(:second)),
+    with {:ok, current} <- Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second)),
          true <-
            current.slot_key == slot_key and current.slot_date == slot_date and
              current.home_state == :workout_needed,
-         {:ok, :bootstrap} <- home_entry_state(user, current) do
+         {:ok, :bootstrap} <- home_entry_state(Scope.for_user(user), current) do
       :ok
     else
       {:error, %Error{} = error} -> {:error, error}
@@ -137,13 +137,31 @@ defmodule BurpeeTrainer.Workouts do
     Repo.exists?(from(session in WorkoutSession, where: session.user_id == ^user_id))
   end
 
+  @doc "Reads a verified owned slot pointer without repairing or creating it."
+  @spec current_home_selection(Scope.t(), Policy.slot()) :: HomeSelection.t() | nil
+  def current_home_selection(
+        %Scope{user: %User{} = user},
+        %{slot_key: key, slot_date: %Date{} = date, home_state: :workout_needed}
+      )
+      when is_binary(key) and key != "" do
+    with %CoachRecommendation{} = recommendation <-
+           Repo.get_by(CoachRecommendation, user_id: user.id, slot_key: key, slot_date: date),
+         {:ok, plan} <- verified_home_plan(user, recommendation.home_workout_plan_id) do
+      HomeSelection.new(recommendation, plan)
+    else
+      _ -> nil
+    end
+  end
+
+  def current_home_selection(%Scope{}, _slot), do: nil
+
   @doc "Pins the first available Home workout without replacing a valid existing pin."
-  @spec ensure_home_selection(User.t(), Policy.slot()) ::
+  @spec ensure_home_selection(Scope.t(), Policy.slot()) ::
           {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def ensure_home_selection(%User{} = user, slot) do
+  def ensure_home_selection(%Scope{user: %User{} = user} = scope, slot) do
     immediate_lifecycle_transaction(fn ->
-      with {:ok, r} <- ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
-           {:ok, r} <- ensure_recommendation_selection_available(user, r.id) do
+      with {:ok, r} <- ensure_recommendation(scope, Map.take(slot, [:slot_key, :slot_date])),
+           {:ok, r} <- ensure_recommendation_selection_available(scope, r.id) do
         case verified_home_plan(user, r.home_workout_plan_id) do
           {:ok, plan} ->
             {:ok, HomeSelection.new(r, plan)}
@@ -158,12 +176,138 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
+  @doc "Recovers a genuinely missing Home selection after an explicit published plan choice."
+  @spec recover_home_workout_selection(Scope.t(), Policy.slot(), pos_integer()) ::
+          {:ok, HomeSelection.t()} | {:error, Error.t()}
+  def recover_home_workout_selection(%Scope{user: %User{} = user} = scope, slot, plan_id) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, current, recommendation} <- verified_recovery_slot(scope, slot),
+           :ok <- no_other_started_session(user),
+           :ok <- missing_ensurable_selection(user, recommendation),
+           {:ok, plan} <- get_library_plan(scope, plan_id),
+           :ok <- verify_stored_draft(plan),
+           {:ok, recommendation} <-
+             recovery_recommendation(scope, current, recommendation, {:plan, plan.id}),
+           {:ok, pinned} <- write_home_pointer(recommendation, plan.id) do
+        {:ok, HomeSelection.new(pinned, plan)}
+      end
+    end)
+  end
+
+  @doc "Starts an explicitly chosen recovery video with exact source/hash/token replay."
+  @spec start_recovery_home_video(Scope.t(), Policy.slot(), pos_integer(), Ecto.UUID.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Error.t()}
+  def start_recovery_home_video(%Scope{user: %User{} = user} = scope, slot, video_id, token)
+      when is_integer(video_id) and video_id > 0 do
+    immediate_lifecycle_transaction(fn ->
+      with :ok <- valid_start_token(token),
+           {:ok, current, recommendation} <- verified_recovery_slot(scope, slot),
+           {:ok, video} <- get_available_video_for_start(video_id),
+           {:ok, _snapshot, hash} <- canonical_video_snapshot(video) do
+        case existing_start(user.id, token, :video, video.id, hash) do
+          {:existing, session} ->
+            case recommendation do
+              %CoachRecommendation{selected_workout_video_id: ^video_id} -> {:ok, session}
+              _ -> {:error, Error.new(:home_selection_changed)}
+            end
+
+          :new ->
+            with :ok <- no_other_started_session(user),
+                 :ok <- missing_ensurable_selection(user, recommendation),
+                 {:ok, recommendation} <-
+                   recovery_recommendation(scope, current, recommendation, {:video, video.id}),
+                 {:ok, _changed} <- write_home_pointer(recommendation, nil) do
+              start_video(scope, video.id, token)
+            end
+
+          {:error, %Error{} = error} ->
+            {:error, error}
+        end
+      end
+    end)
+  end
+
+  def start_recovery_home_video(%Scope{}, _slot, _video_id, _token),
+    do: {:error, Error.new(:source_unavailable)}
+
+  # Reuse the existing first-use evidence classification inside the current-slot
+  # transaction, with no valid Home pointer. Home.facts observes the same owned evidence.
+  # The immediate transaction prevents a concurrent command from replacing the winner.
+  defp verified_recovery_slot(
+         %Scope{user: %User{id: user_id}} = scope,
+         %{slot_key: key, slot_date: %Date{} = date, home_state: :workout_needed}
+       )
+       when is_binary(key) and key != "" do
+    with {:ok, current} <- Policy.required_slot(scope, lifecycle_now()),
+         true <-
+           current.slot_key == key and current.slot_date == date and
+             current.home_state == :workout_needed,
+         {:ok, :existing} <- home_entry_state(scope, current),
+         nil <- current_home_selection(scope, current) do
+      {:ok, current,
+       Repo.get_by(CoachRecommendation, user_id: user_id, slot_key: key, slot_date: date)}
+    else
+      _ -> {:error, Error.new(:home_selection_changed)}
+    end
+  end
+
+  defp verified_recovery_slot(_scope, _slot),
+    do: {:error, Error.new(:invalid_recommendation_selection)}
+
+  # Do not broaden normal first-use authorization or recover a slot which the loader
+  # could already pin. In particular, a revision-zero pending candidate remains normal.
+  defp missing_ensurable_selection(user, recommendation) do
+    # ensure_home_selection first requires the real fallback-backed slot row even
+    # when a recommendation already exists. Absence of that fallback is genuine
+    # choose eligibility; do not mistake an unpinned selected source for a winner.
+    result =
+      with {:ok, _fallback} <- built_in_fallback() do
+        case recommendation do
+          nil -> verified_home_fallback()
+          %CoachRecommendation{} = r -> initial_home_plan(user, r)
+        end
+      end
+
+    case result do
+      {:ok, _plan} -> {:error, Error.new(:home_selection_changed)}
+      {:error, %Error{}} -> :ok
+    end
+  end
+
+  # Recovery has no fallback dependency: the real validated explicit source backs the
+  # slot row. Reuse the exact selection changeset, unique slot constraint and pin writer.
+  defp recovery_recommendation(%Scope{user: %User{id: user_id}}, slot, recommendation, source) do
+    attrs =
+      case source do
+        {:plan, id} -> %{selected_workout_plan_id: id, selected_workout_video_id: nil}
+        {:video, id} -> %{selected_workout_plan_id: nil, selected_workout_video_id: id}
+      end
+
+    result =
+      case recommendation do
+        nil ->
+          %CoachRecommendation{user_id: user_id}
+          |> CoachRecommendation.changeset(
+            Map.merge(attrs, Map.take(slot, [:slot_key, :slot_date]))
+          )
+          |> Repo.insert()
+
+        %CoachRecommendation{} = r ->
+          r |> CoachRecommendation.selection_changeset(attrs) |> Repo.update()
+      end
+
+    case result do
+      {:ok, r} -> {:ok, r}
+      {:error, _changeset} -> {:error, Error.new(:home_selection_changed)}
+    end
+  end
+
   @doc "Lists filtered first-use alternatives without creating a recommendation."
-  @spec bootstrap_alternatives(User.t(), Policy.slot(), map(), :workouts | :videos) :: [map()]
-  def bootstrap_alternatives(%User{} = user, slot, filters, :workouts) do
+  @spec bootstrap_alternatives(Scope.t(), Policy.slot(), map(), :workouts | :videos) :: [map()]
+  def bootstrap_alternatives(%Scope{user: %User{} = user} = scope, slot, filters, :workouts) do
     with :ok <- verified_bootstrap_slot(user, slot) do
       BurpeeTrainer.Coach.Catalog.order_plans(
-        list_library(user),
+        list_library(scope),
         [],
         slot,
         BurpeeTrainer.Levels.current_level([])
@@ -174,7 +318,7 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def bootstrap_alternatives(%User{} = user, slot, filters, :videos) do
+  def bootstrap_alternatives(%Scope{user: %User{} = user}, slot, filters, :videos) do
     with :ok <- verified_bootstrap_slot(user, slot) do
       BurpeeTrainer.Videos.list_home_videos()
       |> BurpeeTrainer.Coach.Catalog.order_videos()
@@ -185,16 +329,16 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc "Pins a first-use Home plan atomically."
-  @spec select_bootstrap_home_workout(User.t(), Policy.slot(), pos_integer()) ::
+  @spec select_bootstrap_home_workout(Scope.t(), Policy.slot(), pos_integer()) ::
           {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def select_bootstrap_home_workout(%User{} = user, slot, plan_id) do
+  def select_bootstrap_home_workout(%Scope{user: %User{} = user} = scope, slot, plan_id) do
     immediate_lifecycle_transaction(fn ->
       with :ok <- verified_bootstrap_slot(user, slot),
            :ok <- no_other_started_session(user),
-           {:ok, plan} <- get_library_plan(user, plan_id),
+           {:ok, plan} <- get_library_plan(scope, plan_id),
            :ok <- verify_stored_draft(plan),
            {:ok, recommendation} <-
-             ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
+             ensure_recommendation(scope, Map.take(slot, [:slot_key, :slot_date])),
            {:ok, changed} <- write_home_pointer(recommendation, plan.id) do
         {:ok, HomeSelection.new(changed, plan)}
       end
@@ -202,9 +346,9 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc "Starts a first-use Home video, preserving exact-token replay semantics."
-  @spec start_bootstrap_home_video(User.t(), Policy.slot(), pos_integer(), Ecto.UUID.t()) ::
+  @spec start_bootstrap_home_video(Scope.t(), Policy.slot(), pos_integer(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def start_bootstrap_home_video(%User{} = user, slot, video_id, token) do
+  def start_bootstrap_home_video(%Scope{user: %User{} = user}, slot, video_id, token) do
     with {:ok, video} <- get_available_video_for_start(video_id),
          {:ok, _snapshot, hash} <- canonical_video_snapshot(video) do
       immediate_lifecycle_transaction(fn ->
@@ -222,8 +366,8 @@ defmodule BurpeeTrainer.Workouts do
     with :ok <- verified_bootstrap_slot(user, slot),
          :ok <- no_other_started_session(user),
          {:ok, _recommendation} <-
-           ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])) do
-      start_video(user, video.id, token)
+           ensure_recommendation(Scope.for_user(user), Map.take(slot, [:slot_key, :slot_date])) do
+      start_video(Scope.for_user(user), video.id, token)
     end
   end
 
@@ -231,9 +375,9 @@ defmodule BurpeeTrainer.Workouts do
     do: {:error, error}
 
   @doc "Changes the Home pointer only if the reviewed selection is still current."
-  @spec select_home_workout(User.t(), HomeSelection.t(), pos_integer()) ::
+  @spec select_home_workout(Scope.t(), HomeSelection.t(), pos_integer()) ::
           {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def select_home_workout(%User{} = user, %HomeSelection{} = expected, id) do
+  def select_home_workout(%Scope{user: %User{} = user}, %HomeSelection{} = expected, id) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
            {:ok, plan} <- selectable_home_plan(user, r, id),
@@ -245,18 +389,18 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc "Atomically finalizes and starts the reviewed Home selection."
-  @spec start_home_workout(User.t(), HomeSelection.t(), Ecto.UUID.t()) ::
+  @spec start_home_workout(Scope.t(), HomeSelection.t(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def start_home_workout(user, %HomeSelection{} = expected, token) do
+  def start_home_workout(%Scope{user: %User{} = user} = scope, %HomeSelection{} = expected, token) do
     immediate_lifecycle_transaction(fn ->
       with :ok <- valid_start_token(token),
            {:ok, _r} <- home_recommendation(user, expected),
            :new <-
              existing_start(user.id, token, :plan, expected.plan.id, expected.plan.content_hash),
            :ok <- no_other_started_session(user),
-           {:ok, plan} <- verify_home_selection(user, expected),
+           {:ok, plan} <- verify_home_selection(scope, expected),
            {:ok, published} <- finalize_home_plan(user, expected, plan),
-           {:ok, session} <- start_plan(user, published.id, token) do
+           {:ok, session} <- start_plan(scope, published.id, token) do
         finalized = if plan.state == :draft, do: published, else: nil
         {:ok, {session, finalized}}
       else
@@ -267,9 +411,14 @@ defmodule BurpeeTrainer.Workouts do
     |> BurpeeTrainer.Workouts.Finalization.deliver()
   end
 
-  @spec start_home_video(User.t(), HomeSelection.t(), pos_integer(), Ecto.UUID.t()) ::
+  @spec start_home_video(Scope.t(), HomeSelection.t(), pos_integer(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def start_home_video(user, %HomeSelection{} = expected, video_id, token) do
+  def start_home_video(
+        %Scope{user: %User{} = user} = scope,
+        %HomeSelection{} = expected,
+        video_id,
+        token
+      ) do
     immediate_lifecycle_transaction(fn ->
       with :ok <- valid_start_token(token),
            {:ok, _r} <- home_recommendation(user, expected),
@@ -277,7 +426,7 @@ defmodule BurpeeTrainer.Workouts do
            {:ok, _snapshot, hash} <- canonical_video_snapshot(video),
            :new <- existing_start(user.id, token, :video, video.id, hash),
            :ok <- no_other_started_session(user) do
-        start_video(user, video.id, token)
+        start_video(scope, video.id, token)
       else
         {:existing, session} -> {:ok, session}
         {:error, %Error{} = error} -> {:error, error}
@@ -291,12 +440,12 @@ defmodule BurpeeTrainer.Workouts do
     if expected.pending_draft_id == plan.id do
       with {:ok, _} <-
              accept_candidate(
-               user,
+               Scope.for_user(user),
                expected.recommendation_id,
                plan.id,
                expected.recommendation_selection
              ) do
-        get_library_plan(user, plan.id)
+        get_library_plan(Scope.for_user(user), plan.id)
       end
     else
       publish_unattached_draft(user, plan.id)
@@ -311,7 +460,9 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp no_other_started_session(user) do
-    if current_started_session(user), do: {:error, Error.new(:session_in_progress)}, else: :ok
+    if current_started_session(Scope.for_user(user)),
+      do: {:error, Error.new(:session_in_progress)},
+      else: :ok
   end
 
   defp existing_start(user_id, token, kind, id, hash) do
@@ -332,9 +483,9 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc "Returns the exact current Home plan, rejecting stale identity or draft content."
-  @spec verify_home_selection(User.t(), HomeSelection.t()) ::
+  @spec verify_home_selection(Scope.t(), HomeSelection.t()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def verify_home_selection(%User{} = user, %HomeSelection{} = expected) do
+  def verify_home_selection(%Scope{user: %User{} = user}, %HomeSelection{} = expected) do
     with {:ok, _r} <- home_recommendation(user, expected),
          {:ok, plan} <- home_plan(user, expected.plan.id),
          :ok <- compare_expected_draft_revision(plan, %{expected_revision: expected.plan}),
@@ -345,12 +496,14 @@ defmodule BurpeeTrainer.Workouts do
 
   def verify_plan_content(%WorkoutPlan{} = plan), do: verify_stored_draft(plan)
 
-  def design_source(%User{} = user, id), do: home_plan(user, id)
+  @spec design_source(Scope.t(), pos_integer()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def design_source(%Scope{user: %User{} = user}, id), do: home_plan(user, id)
 
   defp home_recommendation(user, expected) do
     with %CoachRecommendation{} = r <-
            Repo.get_by(CoachRecommendation, id: expected.recommendation_id, user_id: user.id),
-         {:ok, slot} <- Policy.required_slot(user, DateTime.utc_now(:second)),
+         {:ok, slot} <- Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second)),
          true <- r.slot_key == slot.slot_key and slot.home_state == :workout_needed,
          true <-
            r.home_workout_plan_id == expected.plan.id and
@@ -362,9 +515,9 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp home_plan(user, id) when is_integer(id) and id > 0 do
-    case get_draft(user, id) do
+    case get_draft(Scope.for_user(user), id) do
       {:ok, plan} -> {:ok, plan}
-      {:error, _} -> get_library_plan(user, id)
+      {:error, _} -> get_library_plan(Scope.for_user(user), id)
     end
   end
 
@@ -402,9 +555,9 @@ defmodule BurpeeTrainer.Workouts do
   defp initial_home_plan(_user, _r), do: verified_home_fallback()
 
   defp selectable_home_plan(user, %{pending_draft_id: id}, id)
-       when is_integer(id), do: get_draft(user, id)
+       when is_integer(id), do: get_draft(Scope.for_user(user), id)
 
-  defp selectable_home_plan(user, _r, id), do: get_library_plan(user, id)
+  defp selectable_home_plan(user, _r, id), do: get_library_plan(Scope.for_user(user), id)
 
   defp write_home_pointer(r, id) do
     case r
@@ -421,9 +574,9 @@ defmodule BurpeeTrainer.Workouts do
   @type recommendation_selection :: {:plan, pos_integer()} | {:video, pos_integer()}
 
   @doc "Ensures one fallback-backed recommendation for a deterministic user slot."
-  @spec ensure_recommendation(User.t(), map()) ::
+  @spec ensure_recommendation(Scope.t(), map()) ::
           {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def ensure_recommendation(%User{id: user_id}, attrs) when is_map(attrs) do
+  def ensure_recommendation(%Scope{user: %User{id: user_id}}, attrs) when is_map(attrs) do
     immediate_lifecycle_transaction(fn ->
       with slot_key when is_binary(slot_key) and slot_key != "" <-
              Map.get(attrs, :slot_key) || Map.get(attrs, "slot_key"),
@@ -455,17 +608,22 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  def ensure_recommendation(%User{}, _attrs),
+  def ensure_recommendation(%Scope{}, _attrs),
     do: {:error, Error.new(:invalid_recommendation_selection)}
 
   @doc "Atomically accepts the exact pending draft against the caller's expected selection."
   @spec accept_candidate(
-          User.t(),
+          Scope.t(),
           pos_integer(),
           pos_integer(),
           recommendation_selection()
         ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def accept_candidate(user, recommendation_id, draft_id, expected_selection) do
+  def accept_candidate(
+        %Scope{user: %User{} = user} = scope,
+        recommendation_id,
+        draft_id,
+        expected_selection
+      ) do
     case accept_candidate_without_notification(
            user,
            recommendation_id,
@@ -473,7 +631,7 @@ defmodule BurpeeTrainer.Workouts do
            expected_selection
          ) do
       {:ok, recommendation} ->
-        case get_library_plan(user, draft_id) do
+        case get_library_plan(scope, draft_id) do
           {:ok, plan} -> BurpeeTrainer.Workouts.Finalization.notify(plan)
           _ -> :ok
         end
@@ -543,9 +701,12 @@ defmodule BurpeeTrainer.Workouts do
        do: {:error, Error.new(:candidate_no_longer_current)}
 
   @doc "Keeps a recommendation startable by selecting the built-in fallback when its source disappears."
-  @spec ensure_recommendation_selection_available(User.t(), pos_integer()) ::
+  @spec ensure_recommendation_selection_available(Scope.t(), pos_integer()) ::
           {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def ensure_recommendation_selection_available(%User{id: user_id} = user, recommendation_id)
+  def ensure_recommendation_selection_available(
+        %Scope{user: %User{id: user_id} = user},
+        recommendation_id
+      )
       when is_integer(recommendation_id) and recommendation_id > 0 do
     immediate_lifecycle_transaction(fn ->
       case Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id) do
@@ -577,12 +738,12 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  def ensure_recommendation_selection_available(%User{}, _recommendation_id),
+  def ensure_recommendation_selection_available(%Scope{}, _recommendation_id),
     do: {:error, Error.new(:invalid_recommendation_selection)}
 
-  @spec get_library_plan(User.t(), pos_integer()) ::
+  @spec get_library_plan(Scope.t(), pos_integer()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def get_library_plan(%User{id: user_id}, plan_id)
+  def get_library_plan(%Scope{user: %User{id: user_id}}, plan_id)
       when is_integer(plan_id) and plan_id > 0 do
     case Repo.get(WorkoutPlan, plan_id) do
       %WorkoutPlan{state: :published, user_id: ^user_id} = plan ->
@@ -602,12 +763,13 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def get_library_plan(%User{}, plan_id),
+  def get_library_plan(%Scope{}, plan_id),
     do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
 
-  @spec get_draft(User.t(), pos_integer()) ::
+  @spec get_draft(Scope.t(), pos_integer()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def get_draft(%User{id: user_id}, draft_id) when is_integer(draft_id) and draft_id > 0 do
+  def get_draft(%Scope{user: %User{id: user_id}}, draft_id)
+      when is_integer(draft_id) and draft_id > 0 do
     case Repo.get(WorkoutPlan, draft_id) do
       %WorkoutPlan{user_id: ^user_id, state: :draft} = draft ->
         {:ok, draft}
@@ -623,16 +785,17 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def get_draft(%User{}, draft_id),
+  def get_draft(%Scope{}, draft_id),
     do: {:error, Error.new(:draft_not_found, %{draft_id: draft_id})}
 
-  @spec archive_plan(User.t(), pos_integer()) ::
+  @spec archive_plan(Scope.t(), pos_integer()) ::
           {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def archive_plan(%User{} = user, plan_id) when is_integer(plan_id) and plan_id > 0 do
+  def archive_plan(%Scope{user: %User{} = user}, plan_id)
+      when is_integer(plan_id) and plan_id > 0 do
     immediate_lifecycle_transaction(fn -> archive_owned_plan(user, plan_id) end)
   end
 
-  def archive_plan(%User{}, plan_id),
+  def archive_plan(%Scope{}, plan_id),
     do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
 
   @draft_revision_fields [
@@ -735,7 +898,7 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp get_mutable_draft(%User{} = user, draft_id) do
-    case get_draft(user, draft_id) do
+    case get_draft(Scope.for_user(user), draft_id) do
       {:error, %Error{code: :draft_required}} ->
         {:error, Error.new(:workout_immutable, %{draft_id: draft_id})}
 
@@ -895,7 +1058,7 @@ defmodule BurpeeTrainer.Workouts do
        ) do
     case current_recommendation_selection(recommendation) do
       {:plan, plan_id} ->
-        match?({:ok, %WorkoutPlan{}}, get_library_plan(user, plan_id))
+        match?({:ok, %WorkoutPlan{}}, get_library_plan(Scope.for_user(user), plan_id))
 
       {:video, _video_id} ->
         false
@@ -963,7 +1126,7 @@ defmodule BurpeeTrainer.Workouts do
   caller marks the final acknowledged batch complete.
   """
   @spec ingest_pose_trace_batch(
-          User.t(),
+          Scope.t(),
           pos_integer(),
           Ecto.UUID.t(),
           [map()],
@@ -972,7 +1135,7 @@ defmodule BurpeeTrainer.Workouts do
           {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
           | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
   def ingest_pose_trace_batch(
-        %User{id: user_id},
+        %Scope{user: %User{id: user_id}},
         session_id,
         client_session_id,
         chunks,
@@ -1012,7 +1175,7 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   def ingest_pose_trace_batch(
-        %User{},
+        %Scope{},
         _session_id,
         _client_session_id,
         _chunks,
@@ -1188,9 +1351,9 @@ defmodule BurpeeTrainer.Workouts do
     |> repo.update()
   end
 
-  @spec start_plan(User.t(), pos_integer(), Ecto.UUID.t()) ::
+  @spec start_plan(Scope.t(), pos_integer(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def start_plan(%User{id: user_id}, plan_id, client_session_id)
+  def start_plan(%Scope{user: %User{id: user_id}}, plan_id, client_session_id)
       when is_integer(plan_id) and plan_id > 0 and is_binary(client_session_id) do
     start_session(user_id, client_session_id, fn ->
       with {:ok, plan} <- get_visible_plan_for_start(user_id, plan_id),
@@ -1215,12 +1378,12 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  def start_plan(%User{}, plan_id, _client_session_id),
+  def start_plan(%Scope{}, plan_id, _client_session_id),
     do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
 
-  @spec start_video(User.t(), pos_integer(), Ecto.UUID.t()) ::
+  @spec start_video(Scope.t(), pos_integer(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def start_video(%User{id: user_id}, video_id, client_session_id)
+  def start_video(%Scope{user: %User{id: user_id}}, video_id, client_session_id)
       when is_integer(video_id) and video_id > 0 and is_binary(client_session_id) do
     start_session(user_id, client_session_id, fn ->
       with {:ok, video} <- get_available_video_for_start(video_id),
@@ -1251,7 +1414,7 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  def start_video(%User{}, video_id, _client_session_id),
+  def start_video(%Scope{}, video_id, _client_session_id),
     do: {:error, Error.new(:source_unavailable, %{video_id: video_id})}
 
   defp canonical_video_snapshot(video) do
@@ -1338,8 +1501,8 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  @spec current_started_session(User.t()) :: WorkoutSession.t() | nil
-  def current_started_session(%User{id: user_id}) do
+  @spec current_started_session(Scope.t()) :: WorkoutSession.t() | nil
+  def current_started_session(%Scope{user: %User{id: user_id}}) do
     Repo.one(
       from(session in WorkoutSession,
         where: session.user_id == ^user_id and session.state == :started,
@@ -1349,9 +1512,9 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  @spec resume_session(User.t(), pos_integer()) ::
+  @spec resume_session(Scope.t(), pos_integer()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def resume_session(%User{id: user_id}, session_id)
+  def resume_session(%Scope{user: %User{id: user_id}}, session_id)
       when is_integer(session_id) and session_id > 0 do
     case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
       %WorkoutSession{state: :started} = session ->
@@ -1365,12 +1528,12 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def resume_session(%User{}, session_id),
+  def resume_session(%Scope{}, session_id),
     do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
 
-  @spec complete_session(User.t(), pos_integer(), map(), term()) ::
+  @spec complete_session(Scope.t(), pos_integer(), map(), term()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t() | Ecto.Changeset.t()}
-  def complete_session(%User{id: user_id} = user, session_id, attrs, capture)
+  def complete_session(%Scope{user: %User{id: user_id} = user}, session_id, attrs, capture)
       when is_integer(session_id) and session_id > 0 and is_map(attrs) do
     Repo.immediate_transaction(fn ->
       case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
@@ -1404,7 +1567,7 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def complete_session(%User{}, session_id, _attrs, _capture),
+  def complete_session(%Scope{}, session_id, _attrs, _capture),
     do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
 
   defp best_effort_coach_wake(user_id, reason) do
@@ -1441,7 +1604,7 @@ defmodule BurpeeTrainer.Workouts do
       count = Ecto.Changeset.get_field(changeset, :burpee_count_actual)
       duration = Ecto.Changeset.get_field(changeset, :duration_sec_actual)
       completed_at = Ecto.Changeset.get_field(changeset, :completed_at)
-      goal = Goals.get_active_goal(user, burpee_type)
+      goal = Goals.get_active_goal(Scope.for_user(user), burpee_type)
 
       if goal && goal_achieved_by_completion?(goal, count, duration, completed_at, user.timezone) do
         {Ecto.Changeset.put_change(changeset, :goal_id, goal.id), goal}
@@ -1539,8 +1702,8 @@ defmodule BurpeeTrainer.Workouts do
   List sessions for a user, most recent first. Optional `burpee_type`
   filter.
   """
-  @spec list_sessions(User.t()) :: [WorkoutSession.t()]
-  def list_sessions(%User{id: user_id}) do
+  @spec list_sessions(Scope.t()) :: [WorkoutSession.t()]
+  def list_sessions(%Scope{user: %User{id: user_id}}) do
     Repo.all(
       from(session in WorkoutSession,
         where: session.user_id == ^user_id and session.state == :completed,
@@ -1549,8 +1712,8 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  @spec list_sessions(User.t(), atom) :: [WorkoutSession.t()]
-  def list_sessions(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
+  @spec list_sessions(Scope.t(), atom) :: [WorkoutSession.t()]
+  def list_sessions(%Scope{user: %User{id: user_id}}, burpee_type) when is_atom(burpee_type) do
     Repo.all(
       from(session in WorkoutSession,
         where:
@@ -1562,8 +1725,8 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc "Returns the latest 16 non-warmup sessions used by coach memory and generation."
-  @spec list_recent_training_sessions(User.t()) :: [WorkoutSession.t()]
-  def list_recent_training_sessions(%User{id: user_id}) do
+  @spec list_recent_training_sessions(Scope.t()) :: [WorkoutSession.t()]
+  def list_recent_training_sessions(%Scope{user: %User{id: user_id}}) do
     Repo.all(
       from(session in WorkoutSession,
         where:
@@ -1581,8 +1744,8 @@ defmodule BurpeeTrainer.Workouts do
   @doc """
   Return the newest persisted coach recommendation for a user.
   """
-  @spec current_coach_recommendation(User.t()) :: CoachRecommendation.t() | nil
-  def current_coach_recommendation(%User{id: user_id}) do
+  @spec current_coach_recommendation(Scope.t()) :: CoachRecommendation.t() | nil
+  def current_coach_recommendation(%Scope{user: %User{id: user_id}}) do
     Repo.one(
       from(recommendation in CoachRecommendation,
         where: recommendation.user_id == ^user_id,
@@ -1597,8 +1760,8 @@ defmodule BurpeeTrainer.Workouts do
   Return per-ISO-week training minutes for a user, excluding warmup sessions.
   Weeks are Mon–Sun. Result is sorted descending by `week_start`.
   """
-  @spec weekly_minutes(User.t()) :: [%{week_start: Date.t(), minutes: float, met_goal: bool}]
-  def weekly_minutes(%User{id: user_id, timezone: timezone}) do
+  @spec weekly_minutes(Scope.t()) :: [%{week_start: Date.t(), minutes: float, met_goal: bool}]
+  def weekly_minutes(%Scope{user: %User{id: user_id, timezone: timezone}}) do
     sessions =
       Repo.all(
         from(s in WorkoutSession,
@@ -1629,9 +1792,11 @@ defmodule BurpeeTrainer.Workouts do
   sessions sharing a completion timestamp are neither skipped nor repeated.
   Malformed cursors return `{:error, :invalid_cursor}`.
   """
-  @spec list_sessions_page(User.t(), pos_integer(), keyword()) ::
+  @spec list_sessions_page(Scope.t(), pos_integer()) ::
           {[WorkoutSession.t()], boolean()} | {:error, :invalid_cursor}
-  def list_sessions_page(%User{id: user_id}, limit, opts \\ []) do
+  @spec list_sessions_page(Scope.t(), pos_integer(), keyword()) ::
+          {[WorkoutSession.t()], boolean()} | {:error, :invalid_cursor}
+  def list_sessions_page(%Scope{user: %User{id: user_id}}, limit, opts \\ []) do
     query =
       from(s in WorkoutSession,
         where: s.user_id == ^user_id and s.state == :completed,
@@ -1668,8 +1833,8 @@ defmodule BurpeeTrainer.Workouts do
   All sessions for a user + burpee type suitable for progress charting:
   burpee_count_actual > 0 and duration_sec_actual > 0, ordered oldest first.
   """
-  @spec get_session(User.t(), integer) :: WorkoutSession.t() | nil
-  def get_session(%User{id: user_id}, id) when is_integer(id) and id > 0 do
+  @spec get_session(Scope.t(), integer) :: WorkoutSession.t() | nil
+  def get_session(%Scope{user: %User{id: user_id}}, id) when is_integer(id) and id > 0 do
     Repo.one(
       from(s in WorkoutSession,
         where: s.user_id == ^user_id and s.id == ^id,
@@ -1678,10 +1843,11 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  def get_session(%User{}, _invalid_id), do: nil
+  def get_session(%Scope{}, _invalid_id), do: nil
 
-  @spec list_sessions_for_chart(User.t(), atom) :: [WorkoutSession.t()]
-  def list_sessions_for_chart(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
+  @spec list_sessions_for_chart(Scope.t(), atom) :: [WorkoutSession.t()]
+  def list_sessions_for_chart(%Scope{user: %User{id: user_id}}, burpee_type)
+      when is_atom(burpee_type) do
     Repo.all(
       from(s in WorkoutSession,
         where:
@@ -1722,16 +1888,20 @@ defmodule BurpeeTrainer.Workouts do
   Linked tracked capture runs are deleted first so stored pose traces are not
   left behind after removing an accidental saved session.
   """
-  @spec delete_session(User.t(), integer() | WorkoutSession.t()) ::
+  @spec delete_session(Scope.t(), integer() | WorkoutSession.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
-  def delete_session(%User{id: user_id} = user, session_id) when is_integer(session_id) do
+  def delete_session(%Scope{user: %User{id: user_id}} = scope, session_id)
+      when is_integer(session_id) do
     case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
       nil -> {:error, :not_found}
-      session -> delete_session(user, session)
+      session -> delete_session(scope, session)
     end
   end
 
-  def delete_session(%User{id: user_id}, %WorkoutSession{user_id: user_id} = session) do
+  def delete_session(
+        %Scope{user: %User{id: user_id}},
+        %WorkoutSession{user_id: user_id} = session
+      ) do
     result =
       Repo.transaction(fn ->
         Repo.delete_all(
@@ -1752,7 +1922,7 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  def delete_session(%User{}, %WorkoutSession{}), do: {:error, :not_found}
+  def delete_session(%Scope{}, %WorkoutSession{}), do: {:error, :not_found}
 
   # ---------------------------------------------------------------------------
   # Helpers
@@ -1768,9 +1938,10 @@ defmodule BurpeeTrainer.Workouts do
   Goal attribution is read-only here: completion already persisted `goal_id`
   and the achieved goal atomically with the session transition.
   """
-  @spec session_milestones(User.t(), WorkoutSession.t(), Date.t()) :: [map]
+  @spec session_milestones(Scope.t(), WorkoutSession.t()) :: [map]
+  @spec session_milestones(Scope.t(), WorkoutSession.t(), Date.t() | nil) :: [map]
   def session_milestones(
-        %User{id: user_id, timezone: timezone},
+        %Scope{user: %User{id: user_id, timezone: timezone}},
         %WorkoutSession{state: :completed, completed_at: %DateTime{} = completed_at} = session,
         today \\ nil
       ) do
@@ -2407,7 +2578,7 @@ defmodule BurpeeTrainer.Workouts do
 
   @doc "Commits a generated first-use draft and its Home pointer as one lifecycle write."
   @spec commit_home_bootstrap(
-          User.t(),
+          Scope.t(),
           Policy.slot(),
           map(),
           String.t(),
@@ -2415,19 +2586,26 @@ defmodule BurpeeTrainer.Workouts do
           Ecto.UUID.t()
         ) ::
           {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def commit_home_bootstrap(user, slot, definition, text, context_id, attempt) do
+  def commit_home_bootstrap(
+        %Scope{user: %User{} = user} = scope,
+        slot,
+        definition,
+        text,
+        context_id,
+        attempt
+      ) do
     immediate_lifecycle_transaction(fn ->
       with :ok <- verified_bootstrap_slot(user, slot),
            :ok <- no_other_started_session(user),
-           :ok <- Context.check_source(user, context_id, nil),
+           :ok <- Context.check_source(scope, context_id, nil),
            {:ok, recommendation} <-
-             ensure_recommendation(user, Map.take(slot, [:slot_key, :slot_date])),
+             ensure_recommendation(scope, Map.take(slot, [:slot_key, :slot_date])),
            {:ok, content} <-
              canonical_draft_content(%{definition: definition, request_text: text}),
            {:ok, draft} <- save_authored_draft(user, nil, content, context_id),
            {:ok, changed} <- write_home_pointer(recommendation, draft.id),
            {:ok, _} <-
-             Context.append(user, context_id, attempt, :outcome, %{
+             Context.append(scope, context_id, attempt, :outcome, %{
                "status" => "accepted",
                "workout_plan_id" => draft.id,
                "content_hash" => draft.content_hash,
@@ -2438,28 +2616,58 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  def commit_home_revision(user, expected, definition, text, context_id, attempt) do
+  @spec commit_home_revision(
+          Scope.t(),
+          HomeSelection.t(),
+          map(),
+          String.t(),
+          pos_integer(),
+          Ecto.UUID.t()
+        ) :: {:ok, HomeSelection.t()} | {:error, Error.t()}
+  def commit_home_revision(
+        %Scope{user: %User{} = user} = scope,
+        expected,
+        definition,
+        text,
+        context_id,
+        attempt
+      ) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
-           {:ok, source} <- verify_home_selection(user, expected),
-           :ok <- Context.check_home_workspace(user, context_id, expected),
+           {:ok, source} <- verify_home_selection(scope, expected),
+           :ok <- Context.check_home_workspace(scope, context_id, expected),
            {:ok, draft} <-
-             commit_authored_revision(user, source, definition, text, context_id, attempt),
+             commit_authored_revision(scope, source, definition, text, context_id, attempt),
            {:ok, changed} <- write_home_pointer(r, draft.id) do
         {:ok, HomeSelection.new(changed, draft)}
       end
     end)
   end
 
-  def commit_authored_revision(user, expected, definition, text, context_id, attempt) do
+  @spec commit_authored_revision(
+          Scope.t(),
+          WorkoutPlan.t() | nil,
+          map(),
+          String.t(),
+          pos_integer(),
+          Ecto.UUID.t()
+        ) :: {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def commit_authored_revision(
+        %Scope{user: %User{} = user} = scope,
+        expected,
+        definition,
+        text,
+        context_id,
+        attempt
+      ) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, source} <- current_authoring_source(user, expected),
-           :ok <- Context.check_source(user, context_id, expected),
+           :ok <- Context.check_source(scope, context_id, expected),
            {:ok, content} <-
              canonical_draft_content(%{definition: definition, request_text: text}),
            {:ok, draft} <- save_authored_draft(user, source, content, context_id),
            {:ok, _} <-
-             Context.append(user, context_id, attempt, :outcome, %{
+             Context.append(scope, context_id, attempt, :outcome, %{
                "status" => "accepted",
                "workout_plan_id" => draft.id,
                "content_hash" => draft.content_hash,
@@ -2471,10 +2679,18 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   @doc "Saves an approved review candidate as a new published workout, without selecting it."
-  def commit_approved_workout(user, definition, text, context_id, attempt) do
+  @spec commit_approved_workout(Scope.t(), map(), String.t(), pos_integer(), Ecto.UUID.t()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def commit_approved_workout(
+        %Scope{user: %User{} = user} = scope,
+        definition,
+        text,
+        context_id,
+        attempt
+      ) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, draft} <-
-             commit_authored_revision(user, nil, definition, text, context_id, attempt) do
+             commit_authored_revision(scope, nil, definition, text, context_id, attempt) do
         publish_unattached_draft(user, draft.id)
       end
     end)

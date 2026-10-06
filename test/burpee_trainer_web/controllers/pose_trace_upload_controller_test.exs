@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Workouts.{PoseCaptureRun, PoseTraceChunk}
 
   test "requires an authenticated user", %{conn: conn} do
@@ -36,7 +37,7 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
   test "started sessions reject deferred evidence without persisting it", %{conn: conn} do
     user = user_fixture()
     plan = plan_fixture(user)
-    {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+    {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
     response =
       conn
@@ -238,11 +239,11 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
 
   defp completed_session(user) do
     plan = plan_fixture(user)
-    {:ok, started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+    {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
     {:ok, completed} =
       Workouts.complete_session(
-        user,
+        Scope.for_user(user),
         started.id,
         %{"burpee_count_actual" => 30, "duration_sec_actual" => 120},
         :timed

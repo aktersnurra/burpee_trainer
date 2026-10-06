@@ -64,9 +64,13 @@ defmodule BurpeeTrainer.HomeTest do
     })
 
     {:ok, selection} =
-      Workouts.ensure_home_selection(other, slot(other, DateTime.utc_now(:second)))
+      Workouts.ensure_home_selection(
+        Scope.for_user(other),
+        slot(other, DateTime.utc_now(:second))
+      )
 
-    {:ok, _started} = Workouts.start_home_workout(other, selection, Ecto.UUID.generate())
+    {:ok, _started} =
+      Workouts.start_home_workout(Scope.for_user(other), selection, Ecto.UUID.generate())
 
     assert {:ok, facts} = Home.facts(Scope.for_user(owner), DateTime.utc_now(:second))
     assert facts.started_session == nil
@@ -85,10 +89,13 @@ defmodule BurpeeTrainer.HomeTest do
     other_history = completed_session(other, DateTime.add(@now, -1, :hour))
 
     {:ok, other_selection} =
-      Workouts.ensure_home_selection(other, slot(other, DateTime.utc_now(:second)))
+      Workouts.ensure_home_selection(
+        Scope.for_user(other),
+        slot(other, DateTime.utc_now(:second))
+      )
 
     {:ok, other_selected} =
-      Workouts.select_home_workout(other, other_selection, other_plan.id)
+      Workouts.select_home_workout(Scope.for_user(other), other_selection, other_plan.id)
 
     assert other_selected.plan.id == other_plan.id
 
@@ -99,7 +106,7 @@ defmodule BurpeeTrainer.HomeTest do
     assert other_plan_id == other_plan.id
 
     {:ok, other_started} =
-      Workouts.start_home_workout(other, other_selected, Ecto.UUID.generate())
+      Workouts.start_home_workout(Scope.for_user(other), other_selected, Ecto.UUID.generate())
 
     assert {:ok, facts} = Home.facts(Scope.for_user(owner), @now)
     assert facts.history?
@@ -126,6 +133,35 @@ defmodule BurpeeTrainer.HomeTest do
     refute other_started.id in Enum.map(facts.results.week, & &1.id)
   end
 
+  test "current selection lookup is read-only for first use without a pointer" do
+    user = user_fixture()
+    scope = Scope.for_user(user)
+    current = slot(user, DateTime.utc_now(:second))
+    before = recommendation_snapshot(user)
+
+    assert Workouts.current_home_selection(scope, current) == nil
+    assert recommendation_snapshot(user) == before
+    assert Workouts.current_started_session(scope) == nil
+  end
+
+  test "authorized first-use shared pin is recognized with recommendation evidence but no owned plan" do
+    user = user_fixture()
+    scope = Scope.for_user(user)
+    now = DateTime.utc_now(:second)
+    current = slot(user, now)
+    built_in = Enum.find(Workouts.list_library(scope), &is_nil(&1.user_id))
+    assert built_in
+    assert {:ok, selected} = Workouts.select_bootstrap_home_workout(scope, current, built_in.id)
+    before = recommendation_snapshot(user)
+
+    assert {:ok, facts} = Home.facts(scope, now)
+    assert facts.history?
+    refute facts.owned_plan?
+    assert facts.selection == selected
+    assert {:start, ^selected} = Home.state(facts)
+    assert recommendation_snapshot(user) == before
+  end
+
   test "a first-use user does not ensure a selection" do
     user = user_fixture()
 
@@ -144,14 +180,19 @@ defmodule BurpeeTrainer.HomeTest do
       _plan = plan_fixture(user)
 
       {:ok, selection} =
-        Workouts.ensure_home_selection(user, slot(user, DateTime.utc_now(:second)))
+        Workouts.ensure_home_selection(
+          Scope.for_user(user),
+          slot(user, DateTime.utc_now(:second))
+        )
 
       before = recommendation_snapshot(user)
 
       facts =
         case guard do
           :started ->
-            {:ok, started} = Workouts.start_home_workout(user, selection, Ecto.UUID.generate())
+            {:ok, started} =
+              Workouts.start_home_workout(Scope.for_user(user), selection, Ecto.UUID.generate())
+
             started_id = started.id
             assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
             assert {:resume, %{id: ^started_id}} = Home.state(facts)
@@ -177,11 +218,11 @@ defmodule BurpeeTrainer.HomeTest do
     end
   end
 
-  test "draft, archived, and global built-in plans do not count as an owned published plan" do
+  test "draft and archived plans count as owned evidence while global built-ins do not" do
     user = user_fixture()
     _draft = workout_plan_draft_fixture(user)
     published = plan_fixture(user)
-    {:ok, _archived} = Workouts.archive_plan(user, published.id)
+    {:ok, _archived} = Workouts.archive_plan(Scope.for_user(user), published.id)
 
     assert %WorkoutPlan{user_id: nil, origin: :built_in, state: :published} =
              Repo.one!(
@@ -194,10 +235,10 @@ defmodule BurpeeTrainer.HomeTest do
 
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
     refute facts.history?
-    refute facts.owned_plan?
-    assert facts.selection == nil
-    assert :first_workout = Home.state(facts)
-    assert recommendation_snapshot(user) == []
+    assert facts.owned_plan?
+    assert %{plan: %{user_id: nil, origin: :built_in}} = facts.selection
+    assert {:start, _} = Home.state(facts)
+    assert [{_, _, _, _, _}] = recommendation_snapshot(user)
   end
 
   test "missing built-in fallback leaves an eligible user in choose without writing a recommendation" do
@@ -254,7 +295,7 @@ defmodule BurpeeTrainer.HomeTest do
   end
 
   defp slot(user, now) do
-    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(user, now)
+    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(Scope.for_user(user), now)
     slot
   end
 end

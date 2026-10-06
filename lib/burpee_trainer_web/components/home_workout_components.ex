@@ -3,40 +3,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   alias BurpeeTrainer.Coach.WorkoutRequest
   alias BurpeeTrainerWeb.CreationParameters
 
-  # Match close's sticky removals so every reopen keeps the mounted workspace isolated.
-  def open_history(return_to \\ "#home-history-toggle") do
-    JS.set_attribute({"hidden", ""}, to: "#home-state-content")
-    |> JS.set_attribute({"inert", ""}, to: "#home-state-content")
-    |> JS.push("open_history", value: %{return_to: return_to})
-  end
-
-  def close_history do
-    JS.remove_attribute("hidden", to: "#home-state-content")
-    |> JS.remove_attribute("inert", to: "#home-state-content")
-    |> JS.focus(to: "#home-history-toggle")
-    |> JS.push("close_history")
-  end
-
-  def open_coach do
-    JS.set_attribute({"hidden", ""}, to: "#home-state-content")
-    |> JS.set_attribute({"inert", ""}, to: "#home-state-content")
-    |> JS.push("open_coach")
-  end
-
-  def close_coach(return_to) do
-    command =
-      if return_to == "#history-coach-open" do
-        JS.set_attribute({"hidden", ""}, to: "#home-state-content")
-        |> JS.set_attribute({"inert", ""}, to: "#home-state-content")
-      else
-        JS.remove_attribute("hidden", to: "#home-state-content")
-        |> JS.remove_attribute("inert", to: "#home-state-content")
-        |> JS.focus(to: return_to)
-      end
-
-    JS.push(command, "close_coach")
-  end
-
   defp open_chooser do
     JS.set_attribute({"inert", ""},
       to: "#home-summary, .home-workout-actions, #home-expansion-content"
@@ -660,6 +626,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             </button>
             <button
               id="home-action"
+              data-primary-action="start"
               type="button"
               phx-click="start_workout"
               phx-value-client_session_id={@state.start_client_session_id}
@@ -752,116 +719,176 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </div>
             </section>
           </div>
-          <div :if={@state.chooser_open?} id="home-chooser-backdrop" phx-click={close_chooser()}>
-          </div>
-          <div
-            id="home-alternatives-panel"
-            hidden={!@state.chooser_open?}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Choose a workout"
-            phx-window-keydown={close_chooser()}
-            phx-key="Escape"
-          >
-            <.focus_wrap
-              id="home-chooser-focus"
-              phx-mounted={@state.chooser_open? && JS.focus(to: "#home-chooser-close")}
-            >
-              <header class="home-chooser-header">
-                <h2>Choose a workout</h2>
-                <button
-                  id="home-chooser-close"
-                  type="button"
-                  aria-label="Close chooser"
-                  phx-click={close_chooser()}
-                >
-                  <.icon name="hero-x-mark" class="size-5" />
-                </button>
-              </header>
-              <div id="home-alternatives-toolbar">
-                <div role="tablist" aria-label="Other workouts">
-                  <button
-                    :for={tab <- [:workouts, :videos]}
-                    id={"home-tab-#{tab}"}
-                    role="tab"
-                    type="button"
-                    phx-click="tab"
-                    phx-value-tab={tab}
-                    aria-selected={to_string(@state.active_tab == tab)}
-                  >
-                    {if tab == :workouts, do: "Workouts", else: "Videos"}
-                  </button>
-                </div>
-                <button
-                  id="home-filter-toggle"
-                  aria-label="Filter"
-                  title="Filter"
-                  type="button"
-                  phx-click="toggle_filters"
-                  aria-expanded={to_string(@state.filters_open?)}
-                  aria-controls="home-filters"
-                >
-                  <span aria-hidden="true">
-                    <.icon name="hero-adjustments-horizontal" class="size-5" />
-                  </span>
-                </button>
-              </div>
-              <div :if={@state.filters_open?} id="home-filters">
-                <div role="group" aria-label="Workout type">
-                  <button
-                    :for={type <- [:six_count, :navy_seal]}
-                    id={"home-type-#{type}"}
-                    type="button"
-                    phx-click="filter"
-                    phx-value-kind="type"
-                    phx-value-filter={type}
-                    aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
-                  >
-                    {CreationParameters.type_label(Atom.to_string(type))}
-                  </button>
-                </div>
-                <div class="home-filter-level-heading">
-                  <span>Levels</span>
-                  <button id="home-filter-reset" type="button" phx-click="reset_filters">
-                    Reset
-                  </button>
-                </div>
-                <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
-                  <button
-                    :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
-                    id={"home-level-#{level}"}
-                    type="button"
-                    phx-click="filter"
-                    phx-value-kind="level"
-                    phx-value-filter={level}
-                    aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
-                  >
-                    {level_label(level)}
-                  </button>
-                </div>
-                <p id="home-current-level">
-                  {level_label(@state.current_level)} is your current level.
-                </p>
-              </div>
-              <p
-                :if={@state.alternatives_empty?}
-                id="home-alternatives-empty"
-                class="home-local-message"
-              >
-                No matching {if(@state.active_tab == :videos, do: "videos", else: "workouts")}. Try changing the filters.
-              </p>
-              <div id="home-alternatives" phx-update="stream">
-                <.alternative
-                  :for={{id, item} <- @state.streams.alternatives}
-                  id={id}
-                  item={item}
-                  current?={item.kind == :plan and item.source_id == @state.home_selection.plan.id}
-                />
-              </div>
-            </.focus_wrap>
-          </div>
+          <.chooser state={@state} />
         <% end %>
       </div>
+    </section>
+    """
+  end
+
+  attr(:state, :map, required: true)
+
+  def chooser(assigns) do
+    ~H"""
+    <div :if={@state.chooser_open?} id="home-chooser-backdrop" phx-click={close_chooser()}></div>
+    <div
+      id="home-alternatives-panel"
+      hidden={!@state.chooser_open?}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose a workout"
+      phx-window-keydown={close_chooser()}
+      phx-key="Escape"
+    >
+      <.focus_wrap
+        id="home-chooser-focus"
+        phx-mounted={@state.chooser_open? && JS.focus(to: "#home-chooser-close")}
+      >
+        <header class="home-chooser-header">
+          <h2>Choose a workout</h2>
+          <button
+            id="home-chooser-close"
+            type="button"
+            aria-label="Close chooser"
+            phx-click={close_chooser()}
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+        </header>
+        <p
+          :if={
+            @state.home_state == :choose and is_nil(@state.home_selection) and
+              Phoenix.Flash.get(@state.flash, :error)
+          }
+          id="home-chooser-error"
+          role="alert"
+          tabindex="-1"
+          class="home-local-message focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          {Phoenix.Flash.get(@state.flash, :error)}
+        </p>
+        <div id="home-alternatives-toolbar">
+          <div role="tablist" aria-label="Other workouts">
+            <button
+              :for={tab <- [:workouts, :videos]}
+              id={"home-tab-#{tab}"}
+              role="tab"
+              type="button"
+              phx-click="tab"
+              phx-value-tab={tab}
+              aria-selected={to_string(@state.active_tab == tab)}
+            >
+              {if tab == :workouts, do: "Workouts", else: "Videos"}
+            </button>
+          </div>
+          <button
+            id="home-filter-toggle"
+            aria-label="Filter"
+            title="Filter"
+            type="button"
+            phx-click="toggle_filters"
+            aria-expanded={to_string(@state.filters_open?)}
+            aria-controls="home-filters"
+          >
+            <span aria-hidden="true">
+              <.icon name="hero-adjustments-horizontal" class="size-5" />
+            </span>
+          </button>
+        </div>
+        <div :if={@state.filters_open?} id="home-filters">
+          <div role="group" aria-label="Workout type">
+            <button
+              :for={type <- [:six_count, :navy_seal]}
+              id={"home-type-#{type}"}
+              type="button"
+              phx-click="filter"
+              phx-value-kind="type"
+              phx-value-filter={type}
+              aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
+            >
+              {CreationParameters.type_label(Atom.to_string(type))}
+            </button>
+          </div>
+          <div class="home-filter-level-heading">
+            <span>Levels</span>
+            <button id="home-filter-reset" type="button" phx-click="reset_filters">
+              Reset
+            </button>
+          </div>
+          <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
+            <button
+              :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
+              id={"home-level-#{level}"}
+              type="button"
+              phx-click="filter"
+              phx-value-kind="level"
+              phx-value-filter={level}
+              aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
+            >
+              {level_label(level)}
+            </button>
+          </div>
+          <p id="home-current-level">
+            {level_label(@state.current_level)} is your current level.
+          </p>
+        </div>
+        <p
+          :if={@state.alternatives_empty?}
+          id="home-alternatives-empty"
+          class="home-local-message"
+        >
+          No matching {if(@state.active_tab == :videos, do: "videos", else: "workouts")}. Try changing the filters.
+        </p>
+        <div id="home-alternatives" phx-update="stream">
+          <.alternative
+            :for={{id, item} <- @state.streams.alternatives}
+            id={id}
+            item={item}
+            current?={
+              not is_nil(@state.home_selection) and item.kind == :plan and
+                item.source_id == @state.home_selection.plan.id
+            }
+          />
+        </div>
+      </.focus_wrap>
+    </div>
+    """
+  end
+
+  attr(:state, :map, required: true)
+
+  def choose(assigns) do
+    ~H"""
+    <section id="home-ready-recommendation" class="home-result" data-expanded="true">
+      <h1 class="home-state-heading">Your workout is being prepared</h1>
+      <p :if={@state.local_error} id="home-initialization-error" role="status">
+        {@state.local_error}
+      </p>
+      <a
+        :if={@state.local_error}
+        id="home-fallback-reload"
+        href={~p"/"}
+        class="mt-4 inline-flex min-h-11 items-center underline focus-visible:outline-2"
+      >
+        Reload Home
+      </a>
+      <div class="home-workout-actions" data-expanded="true">
+        <button
+          id="home-title-action"
+          type="button"
+          phx-click={open_chooser()}
+          data-primary-action="choose"
+          aria-label="Switch workout"
+          title="Switch workout"
+          aria-haspopup="dialog"
+          aria-expanded={to_string(@state.chooser_open?)}
+          aria-controls="home-alternatives-panel"
+          class="home-icon-button home-expanded-action"
+        >
+          <.icon name="hero-arrows-right-left" class="size-6" />
+        </button>
+      </div>
+      <.chooser state={@state} />
     </section>
     """
   end
@@ -912,7 +939,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             >
               {@state.local_error}
             </p>
-            <button id="home-bootstrap-submit" type="submit" class="home-action">
+            <button
+              id="home-bootstrap-submit"
+              data-primary-action="describe_first"
+              type="submit"
+              class="home-action"
+            >
               Create workout
             </button>
           </.form>

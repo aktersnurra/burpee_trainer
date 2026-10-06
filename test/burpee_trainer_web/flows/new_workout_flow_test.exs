@@ -5,6 +5,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.{Policy, WorkoutRequest}
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
@@ -12,8 +13,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
   setup %{conn: conn} do
     user = user_fixture()
     {:ok, user} = Accounts.update_timezone(user, "Etc/UTC")
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
-    {:ok, selected} = Workouts.ensure_home_selection(user, slot)
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     conn = init_test_session(conn, %{user_id: user.id})
     {:ok, view, _} = live(conn, ~p"/")
     %{conn: conn, view: view, user: user, selected: selected}
@@ -44,10 +45,16 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
     assert has_element?(view, "#home-new-saved")
-    [saved] = Enum.filter(Workouts.list_library(user), &(&1.name == layout["name"]))
+
+    [saved] =
+      Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == layout["name"]))
+
     assert saved.state == :published
     assert Repo.aggregate(WorkoutPlan, :count) == count + 1
-    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, selected_slot(user))
+
+    assert {:ok, unchanged} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
     assert unchanged.plan.id == selected.plan.id
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 
@@ -77,7 +84,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     })
 
     assert_reply(runner, %{status: "ok"})
-    {:ok, history, _} = live(conn, ~p"/?history=1")
+    {:ok, history, _} = live(conn, ~p"/history")
     assert has_element?(history, "#home-history-session-#{session.id}")
   end
 
@@ -138,14 +145,19 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
 
-    [saved] = Enum.filter(Workouts.list_library(user), &(&1.name == "Minute blocks"))
+    [saved] =
+      Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == "Minute blocks"))
+
     assert saved.target_duration_sec == 1200
     assert {:ok, definition} = WorkoutDefinition.new(saved.definition_json)
 
     assert {660_000_000, 60_000_000} in WorkoutRequest.rest_timeline(definition.events)
     assert {1_080_000_000, 40_000_000} in WorkoutRequest.rest_timeline(definition.events)
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-    assert {:ok, unchanged} = Workouts.ensure_home_selection(user, selected_slot(user))
+
+    assert {:ok, unchanged} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
     assert unchanged.plan.id == selected.plan.id
   end
 
@@ -194,7 +206,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
   end
 
   defp selected_slot(user) do
-    {:ok, slot} = Policy.required_slot(user, DateTime.utc_now(:second))
+    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
   end
 end

@@ -18,11 +18,23 @@ defmodule BurpeeTrainer.Workouts.SessionPaginationTest do
       end
 
     plan = plan_fixture(user)
-    {:ok, _started} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
 
-    {first_page, true} = Workouts.list_sessions_page(user, 2)
+    {:ok, _started} =
+      Workouts.start_plan(
+        BurpeeTrainer.Accounts.Scope.for_user(user),
+        plan.id,
+        Ecto.UUID.generate()
+      )
+
+    {first_page, true} =
+      Workouts.list_sessions_page(BurpeeTrainer.Accounts.Scope.for_user(user), 2)
+
     first_cursor = first_page |> List.last() |> then(&{&1.completed_at, &1.id})
-    {second_page, false} = Workouts.list_sessions_page(user, 2, before: first_cursor)
+
+    {second_page, false} =
+      Workouts.list_sessions_page(BurpeeTrainer.Accounts.Scope.for_user(user), 2,
+        before: first_cursor
+      )
 
     expected_ids = sessions |> Enum.map(& &1.id) |> Enum.sort(:desc)
     actual_ids = Enum.map(first_page ++ second_page, & &1.id)
@@ -35,7 +47,10 @@ defmodule BurpeeTrainer.Workouts.SessionPaginationTest do
     user = user_fixture()
 
     for cursor <- [DateTime.utc_now(), {DateTime.utc_now(), 0}, {"not-a-date", 1}, :invalid] do
-      assert {:error, :invalid_cursor} = Workouts.list_sessions_page(user, 2, before: cursor)
+      assert {:error, :invalid_cursor} =
+               Workouts.list_sessions_page(BurpeeTrainer.Accounts.Scope.for_user(user), 2,
+                 before: cursor
+               )
     end
   end
 end

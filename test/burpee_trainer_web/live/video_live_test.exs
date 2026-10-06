@@ -5,6 +5,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
   import Phoenix.LiveViewTest
 
   alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Workouts.WorkoutSession
 
   setup %{conn: conn} do
@@ -17,7 +18,9 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     user: user
   } do
     video = video_fixture(%{burpee_count: nil, duration_sec: 600})
-    assert {:ok, session} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    assert {:ok, session} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
     assert session.video_snapshot == %{
              "name" => video.name,
@@ -51,7 +54,10 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     user: user
   } do
     video = video_fixture(%{burpee_count: nil, duration_sec: 600})
-    assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    assert {:ok, started} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
 
     render_click(view, "video_ended")
@@ -85,7 +91,10 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
 
   test "forged completion fields never complete the session", %{conn: conn, user: user} do
     video = video_fixture(%{burpee_count: 10, duration_sec: 600})
-    assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    assert {:ok, started} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
     render_click(view, "video_ended")
 
@@ -132,7 +141,10 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
   } do
     video = video_fixture(%{burpee_count: 10, duration_sec: 1200})
     goal = goal_fixture(user, %{"burpee_count_target" => 10, "burpee_count_baseline" => 5})
-    assert {:ok, started} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    assert {:ok, started} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
     render_click(view, "video_ended")
 
@@ -172,13 +184,19 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     video = video_fixture()
     other_video = video_fixture()
     other_user = user_fixture()
-    assert {:ok, foreign} = Workouts.start_video(other_user, video.id, Ecto.UUID.generate())
-    assert {:ok, mismatch} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
-    assert {:ok, completed} = Workouts.start_video(user, video.id, Ecto.UUID.generate())
+
+    assert {:ok, foreign} =
+             Workouts.start_video(Scope.for_user(other_user), video.id, Ecto.UUID.generate())
+
+    assert {:ok, mismatch} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
+    assert {:ok, completed} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
     assert {:ok, completed} =
              Workouts.complete_session(
-               user,
+               Scope.for_user(user),
                completed.id,
                %{"burpee_count_actual" => 1, "duration_sec_actual" => 1},
                :logged
@@ -200,18 +218,21 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
 
   test "completion rejects ownership and source mismatches in socket state", %{user: user} do
     plan = plan_fixture(user)
-    assert {:ok, plan_session} = Workouts.start_plan(user, plan.id, Ecto.UUID.generate())
+
+    assert {:ok, plan_session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     foreign_user = user_fixture()
     video = video_fixture()
 
     assert {:ok, foreign_video_session} =
-             Workouts.start_video(foreign_user, video.id, Ecto.UUID.generate())
+             Workouts.start_video(Scope.for_user(foreign_user), video.id, Ecto.UUID.generate())
 
     for session <- [plan_session, foreign_video_session], event <- ["validate", "save"] do
       socket = %Phoenix.LiveView.Socket{
         assigns: %{
           __changed__: %{},
-          current_user: user,
+          current_scope: Scope.for_user(user),
           workout_session: session,
           mood: 0,
           log_tags: [],
