@@ -13,11 +13,6 @@ config :burpee_trainer,
   ecto_repos: [BurpeeTrainer.Repo],
   generators: [timestamp_type: :utc_datetime]
 
-config :burpee_trainer, :coach_reconciler,
-  enabled: true,
-  max_concurrency: 2,
-  scan_interval_ms: :timer.minutes(5)
-
 # Configure the endpoint
 config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
   url: [host: "localhost"],
@@ -73,3 +68,8 @@ config :phoenix, :json_library, Jason
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
+
+config :burpee_trainer, Oban,
+  engine: Oban.Engines.Lite,
+  repo: BurpeeTrainer.Repo,
+  queues: [coach: 2]

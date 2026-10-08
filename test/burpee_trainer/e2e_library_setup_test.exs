@@ -269,7 +269,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
 
   test "fixture entrypoint refuses an ordinary test database before creating a user" do
     {output, status} =
-      System.cmd("mix", ["run", @script, "--", "published-plan"],
+      System.cmd("mix", ["run", "--no-start", @script, "--", "published-plan"],
         env: [{"MIX_ENV", "test"}],
         stderr_to_stdout: true
       )
@@ -578,7 +578,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
       foreign_keys: Repo.query!("PRAGMA foreign_key_list(coach_recommendations)").rows,
       schema: Repo.query!("SELECT sql FROM sqlite_master WHERE name = 'coach_recommendations'").rows,
       recommendations: Repo.query!("SELECT * FROM coach_recommendations WHERE user_id = ?", [report.user_id]).rows,
-      memories: Repo.query!("SELECT * FROM coach_workout_memories WHERE user_id = ?", [report.user_id]).rows}))
+      memories: Repo.query!("SELECT * FROM coach_notebooks WHERE user_id = ?", [report.user_id]).rows}))
     """
 
     {output, status} = System.cmd("mix", ["run", "-e", script], env: env, stderr_to_stdout: true)
@@ -642,10 +642,9 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
             "workout_sessions",
             "coach_recommendations",
             "user_stats",
-            "coach_guidance_entries",
+            "coach_notebooks",
+            "llm_calls",
             "coach_settings",
-            "coach_workout_memories",
-            "workout_design_sessions",
             "goals",
             "pose_capture_runs"
           ] ->
@@ -654,6 +653,15 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
 
             assert after_cleanup.tables[table] ==
                      Enum.reject(rows, &(Enum.at(&1, index) == user_id))
+
+          table == "oban_jobs" ->
+            columns = IsolatedMigrationRepo.query!("PRAGMA table_info(oban_jobs)").rows
+            args_index = Enum.find_index(columns, &(Enum.at(&1, 1) == "args"))
+
+            assert after_cleanup.tables[table] ==
+                     Enum.reject(rows, fn row ->
+                       Jason.decode!(Enum.at(row, args_index))["user_id"] == user_id
+                     end)
 
           true ->
             assert after_cleanup.tables[table] == rows
@@ -692,7 +700,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert source =~ Enum.join(@modes, "|")
 
     {output, status} =
-      System.cmd("mix", ["run", @script, "--", "unknown"],
+      System.cmd("mix", ["run", "--no-start", @script, "--", "unknown"],
         env: [{"MIX_ENV", "test"}],
         stderr_to_stdout: true
       )

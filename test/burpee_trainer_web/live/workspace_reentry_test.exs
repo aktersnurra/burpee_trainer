@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.Guidance
+  alias BurpeeTrainer.Coach.Notebook
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
 
   setup %{conn: conn} do
@@ -39,7 +39,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       assert has_element?(view, "#home-expansion[data-open=true]")
       assert Repo.all(WorkoutPlan) == rows
       assert Workouts.list_sessions(Scope.for_user(user)) == sessions
-      assert Guidance.list(Scope.for_user(user)) == []
+      assert Notebook.get(Scope.for_user(user)).body == ""
     end
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
@@ -110,7 +110,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       assert workspace(view) == before
       assert Repo.aggregate(CoachRecommendation, :count) == 0
       assert Workouts.list_sessions(Scope.for_user(user)) == []
-      assert Guidance.list(Scope.for_user(user)) == []
+      assert Notebook.get(Scope.for_user(user)).body == ""
     end
 
     view |> element("##{row}-select") |> render_click()
@@ -310,13 +310,13 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       assert_patch(view, "/coach?from=history")
 
       view
-      |> form("#home-coach-guidance-form", coach_guidance: %{text: "Unsent"})
+      |> form("#home-coach-message-form", coach_message: %{text: "Unsent"})
       |> render_change()
 
       view |> element("#home-coach-back") |> render_click()
       assert_patch(view, "/history")
       view |> element("#history-coach-open") |> render_click()
-      assert has_element?(view, "#home-coach-guidance-text", "Unsent")
+      assert has_element?(view, "#home-coach-message-text", "Unsent")
       view |> element("#home-coach-back") |> render_click()
       assert_patch(view, "/history")
     end

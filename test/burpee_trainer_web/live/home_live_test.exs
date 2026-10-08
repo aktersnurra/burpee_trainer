@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Guidance, Policy}
+  alias BurpeeTrainer.Coach.{Notebook, Policy}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.HomeLive
 
@@ -25,7 +25,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     refute has_element?(
              view,
-             "#home-coach-guidance-form, #home-coach-toggle, .home-view-nav, #home-result-coach"
+             "#home-coach-message-form, #home-coach-toggle, .home-view-nav, #home-result-coach"
            )
 
     render_click(view, "open_coach", %{})
@@ -33,7 +33,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     pid = view.pid
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-empty")
-    refute has_element?(view, "#history-coach-area, #home-coach-guidance-form")
+    refute has_element?(view, "#history-coach-area, #home-coach-message-form")
     view |> element("#history-coach-open") |> render_click()
     assert_patch(view, "/coach?from=history")
     assert view.pid == pid
@@ -41,7 +41,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-coach-panel")
 
     view
-    |> form("#home-coach-guidance-form", coach_guidance: %{text: "Build toward 50 reps"})
+    |> form("#home-coach-message-form", coach_message: %{text: "Build toward 50 reps"})
     |> render_change()
 
     view |> element("#home-coach-back") |> render_click()
@@ -49,8 +49,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-history")
     refute has_element?(view, "#home-coach-panel")
     view |> element("#history-coach-open") |> render_click()
-    assert has_element?(view, "#home-coach-guidance-text", "Build toward 50 reps")
-    assert Guidance.list(Scope.for_user(user)) == []
+    assert has_element?(view, "#home-coach-message-text", "Build toward 50 reps")
+    assert Notebook.get(Scope.for_user(user)).body == ""
     view |> element("#home-coach-back") |> render_click()
     assert_patch(view, "/history")
     view = home_route(conn, view)
@@ -67,24 +67,25 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     history |> element("#history-coach-open") |> render_click()
     assert_patch(history, "/coach?from=history")
     view = history
-    view |> form("#home-coach-guidance-form", coach_guidance: %{text: "  "}) |> render_submit()
-    assert has_element?(view, "#home-coach-guidance-status[role=status]", "Enter an instruction")
-    assert Guidance.list(Scope.for_user(user)) == []
+    view |> form("#home-coach-message-form", coach_message: %{text: "  "}) |> render_submit()
+    assert has_element?(view, "#home-coach-status[role=status]", "Enter a message")
+    assert Notebook.get(Scope.for_user(user)).body == ""
     long_text = String.duplicate("x", 1001)
 
     view
-    |> form("#home-coach-guidance-form", coach_guidance: %{text: long_text})
+    |> form("#home-coach-message-form", coach_message: %{text: long_text})
     |> render_submit()
 
-    assert has_element?(view, "#home-coach-guidance-text", long_text)
-    assert Guidance.list(Scope.for_user(user)) == []
+    assert has_element?(view, "#home-coach-message-text", long_text)
+    assert Notebook.get(Scope.for_user(user)).body == ""
 
     view
-    |> form("#home-coach-guidance-form", coach_guidance: %{text: "Keep sets shorter"})
+    |> form("#home-coach-message-form", coach_message: %{text: "Keep sets shorter"})
     |> render_submit()
 
-    assert [%{text: "Keep sets shorter"}] = Guidance.list(Scope.for_user(user))
-    assert has_element?(view, "#home-coach-guidance-status[role=status]", "Saved for your coach")
+    render_async(view)
+    assert Notebook.get(Scope.for_user(user)).body == ""
+    assert has_element?(view, "#home-coach-reply[role=status]", "Coach unavailable")
   end
 
   test "empty History opens from weekly progress without showing a dashboard", %{conn: conn} do

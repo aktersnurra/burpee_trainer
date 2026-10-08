@@ -5,7 +5,8 @@ defmodule BurpeeTrainer.Coach do
 
   alias BurpeeTrainer.Coach.{
     Client,
-    Context,
+    AuthoringPrompt,
+    WorkoutLayout,
     Policy,
     RestFitter,
     WorkoutGuidance,
@@ -41,16 +42,13 @@ defmodule BurpeeTrainer.Coach do
   defp revise_home_workout(scope, expected, instruction, opts) do
     with :ok <- outside_authoring_transaction(),
          {:ok, text} <- validate_authoring_input(instruction),
-         {:ok, source} <- Workouts.verify_home_selection(scope, expected),
-         {:ok, context} <- Context.ensure_session(scope, source, Context.home_key(expected)) do
-      author_attempt(scope, source, context, text, opts, fn definition, attempt ->
+         {:ok, source} <- Workouts.verify_home_selection(scope, expected) do
+      author_attempt(scope, source, text, opts, fn definition ->
         Workouts.commit_home_revision(
           scope,
           expected,
           definition,
-          text,
-          context.id,
-          attempt
+          text
         )
       end)
     end
@@ -71,9 +69,8 @@ defmodule BurpeeTrainer.Coach do
       when is_binary(slot_key) and is_binary(text) and is_list(opts) do
     with :ok <- outside_authoring_transaction(),
          {:ok, text} <- validate_authoring_input(text),
-         :ok <- current_bootstrap_slot(scope, slot),
-         {:ok, context} <- Context.ensure_session(scope, nil, "home-bootstrap:" <> slot_key) do
-      prepare_request(scope, nil, context, text, %{kind: :bootstrap, slot: slot}, opts)
+         :ok <- current_bootstrap_slot(scope, slot) do
+      prepare_request(scope, nil, text, %{kind: :bootstrap, slot: slot}, opts)
     end
   end
 
@@ -92,9 +89,8 @@ defmodule BurpeeTrainer.Coach do
       ) do
     with :ok <- outside_authoring_transaction(),
          {:ok, text} <- validate_authoring_input(instruction),
-         {:ok, source} <- Workouts.verify_home_selection(scope, expected),
-         {:ok, context} <- Context.ensure_session(scope, source, Context.home_key(expected)) do
-      prepare_request(scope, source, context, text, %{kind: :revision, expected: expected}, opts)
+         {:ok, source} <- Workouts.verify_home_selection(scope, expected) do
+      prepare_request(scope, source, text, %{kind: :revision, expected: expected}, opts)
     end
   end
 
@@ -110,15 +106,12 @@ defmodule BurpeeTrainer.Coach do
           user_id: user_id,
           scope: %{kind: :bootstrap, slot: slot},
           request: %WorkoutRequest{} = request,
-          text: text,
-          context_id: context_id
+          text: text
         },
         opts
       )
       when is_list(opts) do
-    with :ok <- current_bootstrap_slot(scope, slot),
-         {:ok, context} <- Context.ensure_session(scope, nil, "home-bootstrap:" <> slot.slot_key),
-         true <- context.id == context_id do
+    with :ok <- current_bootstrap_slot(scope, slot) do
       bootstrap_home_draft(scope, slot, text, Keyword.put(opts, :confirmed_request, request))
     else
       _ -> {:error, Error.new(:design_workspace_changed)}
@@ -140,15 +133,12 @@ defmodule BurpeeTrainer.Coach do
           user_id: user_id,
           scope: %{kind: :revision, expected: expected},
           request: %WorkoutRequest{} = request,
-          text: text,
-          context_id: context_id
+          text: text
         },
         opts
       )
       when is_list(opts) do
-    with {:ok, source} <- Workouts.verify_home_selection(scope, expected),
-         {:ok, context} <- Context.ensure_session(scope, source, Context.home_key(expected)),
-         true <- context.id == context_id do
+    with {:ok, _source} <- Workouts.verify_home_selection(scope, expected) do
       revise_home_workout(scope, expected, text, Keyword.put(opts, :confirmed_request, request))
     else
       {:error, %Error{} = error} -> {:error, error}
@@ -177,27 +167,19 @@ defmodule BurpeeTrainer.Coach do
          {:ok, request} <- WorkoutRequest.new(WorkoutRequest.to_map(request)),
          :ok <- validate_review_budget(request),
          {:ok, review_source, reference_messages} <-
-           review_source(scope, Keyword.get(opts, :edit_source)),
-         {:ok, context} <-
-           Context.ensure_session(
-             scope,
-             nil,
-             Keyword.get(opts, :workspace_key, "plan-review:" <> Ecto.UUID.generate())
-           ) do
+           review_source(scope, Keyword.get(opts, :edit_source)) do
       opts =
         opts
         |> Keyword.put(:confirmed_request, request)
         |> Keyword.put(:prepare_review, true)
         |> Keyword.put(:source_reference_messages, reference_messages)
 
-      author_attempt(scope, nil, context, text, opts, fn canonical, attempt ->
+      author_attempt(scope, nil, text, opts, fn canonical ->
         with {:ok, definition} <- WorkoutDefinition.new(canonical),
              {:ok, chosen} <- complete_review_request(request, definition) do
           prepared = %{
             user_id: user.id,
-            context_id: context.id,
-            attempt: attempt,
-            approval_attempt: Ecto.UUID.generate(),
+            approval_key: Ecto.UUID.generate(),
             definition: canonical,
             request: chosen,
             original_request: request,
@@ -205,12 +187,7 @@ defmodule BurpeeTrainer.Coach do
             text: text
           }
 
-          with {:ok, _} <-
-                 Context.append(scope, context.id, attempt, :outcome, %{
-                   "status" => "prepared",
-                   "review" => review_payload(prepared)
-                 }),
-               do: {:ok, prepared}
+          {:ok, prepared}
         end
       end)
     end
@@ -227,95 +204,37 @@ defmodule BurpeeTrainer.Coach do
   def approve_plan(scope, prepared, opts \\ [])
 
   def approve_plan(
-        %Accounts.Scope{user: %Accounts.User{id: user_id} = user} = scope,
+        %Accounts.Scope{user: %{id: user_id}} = scope,
         %{
           user_id: user_id,
-          context_id: id,
-          attempt: attempt,
-          approval_attempt: approval_attempt,
-          definition: %{},
-          text: text,
-          request: %WorkoutRequest{},
-          original_request: %WorkoutRequest{}
+          approval_key: key,
+          definition: %{} = canonical,
+          request: %WorkoutRequest{} = request,
+          original_request: %WorkoutRequest{},
+          text: text
         } = prepared,
         opts
       )
-      when is_binary(text) and is_list(opts) do
+      when is_binary(text) and is_binary(key) and is_list(opts) do
     BurpeeTrainer.Repo.immediate_transaction(fn ->
-      with :ok <- Context.check_source(scope, id, nil),
-           {:ok, entries} <- Context.entries(scope, id),
-           %{attempt_id: ^attempt} <-
-             entries |> Enum.filter(&(&1.kind == :instruction)) |> List.last(),
-           %{payload: %{"review" => audited}} <-
-             Enum.find(
-               entries,
-               &(&1.attempt_id == attempt and &1.kind == :outcome and
-                   &1.payload["status"] == "prepared")
-             ),
-           true <- audited == review_payload(prepared),
-           :ok <- verify_review_source(scope, Map.get(prepared, :source)),
-           {:ok, definition} <- WorkoutDefinition.new(prepared.definition),
+      with :ok <- verify_review_source(scope, Map.get(prepared, :source)),
+           {:ok, definition} <- WorkoutDefinition.new(canonical),
            {:ok, definition} <- validate_compiled_definition(definition),
-           :ok <- WorkoutRequest.validate_definition(prepared.request, definition) do
-        accepted =
-          Enum.find(
-            entries,
-            &(&1.attempt_id == approval_attempt and &1.kind == :outcome and
-                &1.payload["status"] == "accepted")
-          )
-
-        result =
-          if accepted do
-            case BurpeeTrainer.Repo.get_by(WorkoutPlan,
-                   id: accepted.payload["workout_plan_id"],
-                   user_id: user.id
-                 ) do
-              %WorkoutPlan{} = plan ->
-                if plan.content_hash == accepted.payload["content_hash"] and
-                     plan.definition_json == prepared.definition,
-                   do: {:ok, plan},
-                   else: {:error, Error.new(:design_workspace_changed)}
-
-              _ ->
-                {:error, Error.new(:design_workspace_changed)}
-            end
-          else
-            Workouts.commit_approved_workout(
-              scope,
-              prepared.definition,
-              prepared.text,
-              id,
-              approval_attempt
-            )
-          end
-
-        case result do
-          {:ok, plan} -> plan
-          {:error, error} -> BurpeeTrainer.Repo.rollback(error)
-        end
+           {:ok, request} <- WorkoutRequest.new(WorkoutRequest.to_map(request)),
+           :ok <- validate_review_budget(request),
+           :ok <- WorkoutRequest.validate_definition(request, definition),
+           :ok <- WorkoutRequest.validate_definition(prepared.original_request, definition),
+           {:ok, plan} <-
+             Workouts.commit_approved_workout(scope, canonical, text, approval_key: key) do
+        plan
       else
         {:error, %Error{} = error} -> BurpeeTrainer.Repo.rollback(error)
-        _ -> BurpeeTrainer.Repo.rollback(Error.new(:design_workspace_changed))
+        _ -> BurpeeTrainer.Repo.rollback(Error.new(:invalid_workout_definition))
       end
-    end)
-    |> tap(fn
-      {:ok, plan} -> Workouts.Finalization.notify(plan)
-      _ -> :ok
     end)
   end
 
   def approve_plan(%Accounts.Scope{}, _, _), do: {:error, Error.new(:design_workspace_changed)}
-
-  defp review_payload(prepared) do
-    %{
-      "approval_attempt" => prepared.approval_attempt,
-      "definition" => prepared.definition,
-      "request" => WorkoutRequest.to_map(prepared.request),
-      "original_request" => WorkoutRequest.to_map(prepared.original_request),
-      "source" => Map.get(prepared, :source),
-      "text" => prepared.text
-    }
-  end
 
   defp review_source(_user, nil), do: {:ok, nil, []}
 
@@ -400,16 +319,13 @@ defmodule BurpeeTrainer.Coach do
        )
        when is_binary(slot_key) and is_binary(request) and is_list(opts) do
     with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(request),
-         {:ok, context} <- Context.ensure_session(scope, nil, "home-bootstrap:" <> slot_key) do
-      author_attempt(scope, nil, context, text, opts, fn definition, attempt ->
+         {:ok, text} <- validate_authoring_input(request) do
+      author_attempt(scope, nil, text, opts, fn definition ->
         Workouts.commit_home_bootstrap(
           scope,
           slot,
           definition,
-          text,
-          context.id,
-          attempt
+          text
         )
       end)
     end
@@ -418,207 +334,127 @@ defmodule BurpeeTrainer.Coach do
   defp bootstrap_home_draft(%Accounts.Scope{}, _slot, _request, _opts),
     do: {:error, Error.new(:invalid_workout_definition)}
 
-  defp prepare_request(
-         %Accounts.Scope{user: user} = scope,
-         source,
-         context,
-         text,
-         request_scope,
-         opts
-       ) do
-    attempt = Ecto.UUID.generate()
+  defp prepare_request(%Accounts.Scope{user: user} = scope, source, text, request_scope, opts) do
+    messages = AuthoringPrompt.messages(scope, source, text, @request_extraction_prompt, [])
 
-    result =
-      with {:ok, _} <-
-             Context.append(scope, context.id, attempt, :instruction, %{"text" => text}),
-           {:ok, messages} <-
-             Context.messages(scope, context.id, source, attempt, @request_extraction_prompt),
-           {:ok, response} <-
-             Client.complete(messages, Keyword.put(opts, :response_kind, :workout_request)),
-           {:ok, request} <- WorkoutRequest.new(response),
-           {:ok, _} <-
-             Context.append(scope, context.id, attempt, :proposal, %{
-               "request_spec" => WorkoutRequest.to_map(request)
-             }),
-           {:ok, _} <-
-             Context.append(scope, context.id, attempt, :outcome, %{"status" => "accepted"}) do
-        {:ok,
-         %{
-           request: request,
-           text: text,
-           context_id: context.id,
-           user_id: user.id,
-           scope: request_scope
-         }}
+    with {:ok, %{content: response, tool_calls: []}} <-
+           Client.chat(
+             messages,
+             chat_opts(
+               scope,
+               opts,
+               "edit_request",
+               {"workout_request", WorkoutRequest.json_schema()}
+             )
+           ),
+         {:ok, request} <- WorkoutRequest.new(response) do
+      {:ok, %{request: request, text: text, user_id: user.id, scope: request_scope}}
+    else
+      {:error, error} -> {:error, error}
+      _ -> {:error, Error.new(:invalid_provider_response)}
+    end
+  end
+
+  defp author_attempt(scope, source, text, opts, commit) do
+    opts = Keyword.put_new_lazy(opts, :run_id, &Ecto.UUID.generate/0)
+
+    messages =
+      AuthoringPrompt.messages(
+        scope,
+        source,
+        text,
+        WorkoutGuidance.system_prompt(scope),
+        layout_messages(opts)
+      )
+
+    with {:ok, %{content: proposal, tool_calls: []}} <-
+           Client.chat(
+             messages,
+             chat_opts(
+               scope,
+               opts,
+               "layout",
+               {"workout_layout",
+                WorkoutLayout.json_schema(Keyword.fetch!(opts, :confirmed_request))}
+             )
+           ) do
+      case build_definition(Keyword.fetch!(opts, :confirmed_request), proposal) do
+        {:ok, definition} ->
+          commit.(WorkoutDefinition.canonical_map(definition))
+
+        {:error, _error, detail} ->
+          correct_definition(scope, source, text, opts, commit, proposal, detail)
       end
-
-    case result do
-      {:error, %Error{} = error} = failure ->
-        _ =
-          Context.append(scope, context.id, attempt, :outcome, %{
-            "status" => "failed",
-            "code" => Atom.to_string(error.code)
-          })
-
-        failure
-
-      other ->
-        other
+    else
+      {:error, error} -> {:error, error}
+      _ -> {:error, Error.new(:invalid_provider_response)}
     end
   end
 
-  defp author_attempt(scope, source, context, text, opts, commit) do
-    attempt = Ecto.UUID.generate()
+  defp correct_definition(scope, source, text, opts, commit, proposal, detail) do
+    correction = %{
+      role: "user",
+      content:
+        Jason.encode!(%{
+          scope: "layout_correction",
+          rejected_layout: proposal,
+          problem: detail,
+          rule:
+            "One correction only. Change sets, reps, pace or weights so the layout fits. Keep every confirmed constraint. Rest durations are computed for you."
+        })
+    }
 
-    with {:ok, _} <- Context.append(scope, context.id, attempt, :instruction, %{"text" => text}) do
-      result =
-        safe_authoring(fn ->
-          with {:ok, messages} <-
-                 Context.messages(
-                   scope,
-                   context.id,
-                   source,
-                   attempt,
-                   WorkoutGuidance.system_prompt(scope),
-                   layout_messages(opts)
-                 ),
-               {:ok, proposal} <-
-                 Client.complete(messages, Keyword.put(opts, :response_kind, :workout_layout)),
-               {:ok, _} <-
-                 Context.append(scope, context.id, attempt, :proposal, %{"layout" => proposal}) do
-            case build_definition(Keyword.fetch!(opts, :confirmed_request), proposal) do
-              {:ok, definition} ->
-                commit.(WorkoutDefinition.canonical_map(definition), attempt)
+    messages =
+      AuthoringPrompt.messages(
+        scope,
+        source,
+        text,
+        WorkoutGuidance.system_prompt(scope),
+        layout_messages(opts) ++ [correction]
+      )
 
-              {:error, error, detail} ->
-                {:needs_correction, error, proposal, detail}
-            end
-          end
-        end)
+    with {:ok, %{content: corrected, tool_calls: []}} <-
+           Client.chat(
+             messages,
+             chat_opts(
+               scope,
+               opts,
+               "layout",
+               {"workout_layout",
+                WorkoutLayout.json_schema(Keyword.fetch!(opts, :confirmed_request))}
+             )
+           ) do
+      case build_definition(Keyword.fetch!(opts, :confirmed_request), corrected) do
+        {:ok, definition} ->
+          commit.(WorkoutDefinition.canonical_map(definition))
 
-      case result do
-        {:needs_correction, error, proposal, detail} ->
-          case Context.append(scope, context.id, attempt, :outcome, %{
-                 "status" => "failed",
-                 "code" => Atom.to_string(error.code)
-               }) do
-            {:ok, _} ->
-              correct_definition(
-                scope,
-                source,
-                context,
-                text,
-                opts,
-                commit,
-                attempt,
-                proposal,
-                detail
-              )
-
-            {:error, _} ->
-              {:error, error}
-          end
-
-        other ->
-          record_failed_outcome(scope, context.id, attempt, other)
+        {:error, error, detail} ->
+          {:error, %{error | context: Map.put(error.context, :diagnostic, detail)}}
       end
+    else
+      {:error, error} -> {:error, error}
+      _ -> {:error, Error.new(:invalid_provider_response)}
     end
   end
 
-  defp correct_definition(
-         scope,
-         source,
-         context,
-         text,
-         opts,
-         commit,
-         failed_attempt,
-         proposal,
-         detail
-       ) do
-    attempt = Ecto.UUID.generate()
-
-    with {:ok, _} <-
-           Context.append(scope, context.id, attempt, :instruction, %{
-             "text" => text,
-             "repair_of" => failed_attempt
-           }) do
-      correction = %{
-        role: "user",
-        content:
-          Jason.encode!(%{
-            scope: "layout_correction",
-            rejected_layout: proposal,
-            problem: detail,
-            rule:
-              "One correction only. Change sets, reps per set, pace or weights so the layout fits. Keep every confirmed constraint. Rest durations are computed for you."
-          })
-      }
-
-      result =
-        safe_authoring(fn ->
-          with {:ok, messages} <-
-                 Context.messages(
-                   scope,
-                   context.id,
-                   source,
-                   attempt,
-                   WorkoutGuidance.system_prompt(scope),
-                   layout_messages(opts) ++ [correction]
-                 ),
-               {:ok, corrected} <-
-                 Client.complete(messages, Keyword.put(opts, :response_kind, :workout_layout)),
-               {:ok, _} <-
-                 Context.append(scope, context.id, attempt, :proposal, %{"layout" => corrected}) do
-            case build_definition(Keyword.fetch!(opts, :confirmed_request), corrected) do
-              {:ok, definition} ->
-                commit.(WorkoutDefinition.canonical_map(definition), attempt)
-
-              {:error, error, detail} ->
-                {:error, %{error | context: Map.put(error.context || %{}, :diagnostic, detail)}}
-            end
-          end
-        end)
-
-      record_failed_outcome(scope, context.id, attempt, result)
-    end
-  end
+  defp chat_opts(scope, opts, purpose, format),
+    do:
+      opts
+      |> Keyword.take([:req, :config, :budget])
+      |> Keyword.merge(
+        response_format: format,
+        ledger: %{
+          scope: scope,
+          purpose: purpose,
+          run_id: Keyword.get_lazy(opts, :run_id, &Ecto.UUID.generate/0)
+        }
+      )
 
   defp outside_authoring_transaction do
     if BurpeeTrainer.Repo.in_transaction?(),
       do: {:error, Error.new(:authoring_transaction_forbidden)},
       else: :ok
   end
-
-  defp safe_authoring(fun) do
-    fun.()
-  rescue
-    _ -> {:error, Error.new(:provider_unavailable)}
-  catch
-    :exit, _ -> {:error, Error.new(:provider_unavailable)}
-    :throw, _ -> {:error, Error.new(:provider_unavailable)}
-  end
-
-  defp record_failed_outcome(scope, id, attempt, {:error, %Error{} = error} = original) do
-    recorded =
-      try do
-        Context.append(scope, id, attempt, :outcome, %{
-          "status" => "failed",
-          "code" => Atom.to_string(error.code)
-        })
-      rescue
-        _ -> {:error, :log_unavailable}
-      catch
-        _, _ -> {:error, :log_unavailable}
-      end
-
-    if not match?({:ok, _}, recorded),
-      do: Logger.warning("workout_design_failure_outcome_unavailable")
-
-    original
-  end
-
-  defp record_failed_outcome(_user, _id, _attempt, result), do: result
 
   defp current_bootstrap_slot(scope, slot) do
     with {:ok, current} <- Policy.required_slot(scope, DateTime.utc_now(:second)),

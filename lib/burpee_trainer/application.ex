@@ -13,14 +13,10 @@ defmodule BurpeeTrainer.Application do
         BurpeeTrainer.Repo,
         {Ecto.Migrator,
          repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
+        {Oban, Application.fetch_env!(:burpee_trainer, Oban)},
         {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
-        {Phoenix.PubSub, name: BurpeeTrainer.PubSub},
-        # Uncapped: each task is one user-requested review or a local memory write;
-        # a cap only drops classifications and workout memories under load.
-        {Task.Supervisor, name: BurpeeTrainer.CoachMemoryTaskSupervisor},
-        BurpeeTrainer.Coach.MemorySubscriber
+        {Phoenix.PubSub, name: BurpeeTrainer.PubSub}
       ] ++
-        coach_children() ++
         oidc_children() ++
         [BurpeeTrainerWeb.Endpoint]
 
@@ -36,16 +32,6 @@ defmodule BurpeeTrainer.Application do
   def config_change(changed, _new, removed) do
     BurpeeTrainerWeb.Endpoint.config_change(changed, removed)
     :ok
-  end
-
-  defp coach_children do
-    config = Application.get_env(:burpee_trainer, :coach_reconciler, [])
-
-    if Keyword.get(config, :enabled, true) do
-      [{BurpeeTrainer.CoachSupervisor, reconciler_options: Keyword.delete(config, :enabled)}]
-    else
-      []
-    end
   end
 
   defp skip_migrations?() do

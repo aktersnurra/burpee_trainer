@@ -8,14 +8,15 @@ defmodule BurpeeTrainer.Workouts.HomeSelection do
     :recommendation_selection,
     :pending_draft_id
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [:rationale]
 
   @type t :: %__MODULE__{
           recommendation_id: pos_integer(),
           home_revision: non_neg_integer(),
           plan: WorkoutPlan.t(),
           recommendation_selection: CoachRecommendation.selection(),
-          pending_draft_id: pos_integer() | nil
+          pending_draft_id: pos_integer() | nil,
+          rationale: String.t() | nil
         }
 
   def new(r, plan) do
@@ -29,7 +30,8 @@ defmodule BurpeeTrainer.Workouts.HomeSelection do
       home_revision: r.home_revision,
       plan: plan,
       recommendation_selection: selected,
-      pending_draft_id: r.pending_draft_id
+      pending_draft_id: r.pending_draft_id,
+      rationale: r.rationale
     }
   end
 end

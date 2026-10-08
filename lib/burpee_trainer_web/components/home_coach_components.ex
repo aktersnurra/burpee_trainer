@@ -60,6 +60,41 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           )}<span :if={@state.slot}> · {div(@state.slot.weekly_target_sec, 60)} min/week</span>
         </p>
         <p :if={@state.coach_summary != ""} class="home-coach-summary-text">{@state.coach_summary}</p>
+        <div id="home-coach-goals" phx-update="stream">
+          <div
+            :for={{dom_id, goal} <- @state.streams.coach_goals}
+            id={dom_id}
+            data-status={goal.status}
+            class="history-coach-entry"
+          >
+            <p>
+              {if(goal.burpee_type == :six_count, do: "Six-count", else: "Navy seal")} · {goal.burpee_count_target} reps in {div(
+                goal.duration_sec_target,
+                60
+              )} minutes by {goal.date_target} · {goal.status}
+            </p>
+            <button
+              :if={goal.status == :proposed}
+              id={"home-coach-goal-#{goal.id}-confirm"}
+              type="button"
+              phx-click="coach_goal_confirm"
+              phx-value-id={goal.id}
+              class="home-state-action"
+            >
+              Confirm
+            </button>
+            <button
+              :if={goal.status == :proposed}
+              id={"home-coach-goal-#{goal.id}-dismiss"}
+              type="button"
+              phx-click="coach_goal_dismiss"
+              phx-value-id={goal.id}
+              class="home-state-action"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       </section>
       <details
         id="history-coach-memory"
@@ -67,137 +102,71 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         open={@state.coach_details_open?}
       >
         <summary id="history-coach-memory-toggle" phx-click="coach_details_toggle">Details</summary>
-        <div id="history-coach-entries" phx-update="stream">
-          <p id="history-coach-empty" class="hidden only:block coach-guidance-empty">
-            No entries.
-          </p>
-          <div
-            :for={{dom_id, entry} <- @state.streams.coach_guidance_entries}
-            id={dom_id}
-            class="history-coach-entry"
+        <div id="history-coach-entries">
+          <.form
+            for={@state.coach_notebook_form}
+            id="home-coach-notebook-form"
+            phx-submit="coach_notebook_save"
+            phx-change="coach_notebook_change"
           >
-            <%= if @state.coach_guidance_edit_id == entry.id do %>
-              <.form
-                for={@state.coach_guidance_edit_form}
-                id={"history-coach-edit-form-#{entry.id}"}
-                phx-submit="coach_guidance_edit_save"
-                phx-change="coach_guidance_edit_change"
-                class="history-coach-edit-form"
-              >
-                <.input
-                  field={@state.coach_guidance_edit_form[:text]}
-                  id={"history-coach-edit-text-#{entry.id}"}
-                  type="textarea"
-                  label="Edit info"
-                  rows="2"
-                  maxlength="1000"
-                  class="coach-guidance-input"
-                  phx-mounted={JS.focus(to: "#history-coach-edit-text-#{entry.id}")}
-                />
-                <div class="history-coach-edit-actions">
-                  <button
-                    type="button"
-                    id={"history-coach-edit-cancel-#{entry.id}"}
-                    phx-click="coach_guidance_edit_cancel"
-                    class="history-coach-remove"
-                    aria-label="Cancel edit"
-                  >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
-                  <button
-                    type="submit"
-                    id={"history-coach-edit-save-#{entry.id}"}
-                    class="history-coach-remove"
-                    aria-label="Save info"
-                  >
-                    <.icon name="hero-check" class="size-4" />
-                  </button>
-                </div>
-              </.form>
-            <% else %>
-              <p class="history-coach-original">{entry.text}</p>
-              <button
-                id={"history-coach-edit-#{entry.id}"}
-                type="button"
-                aria-label={"Edit info #{entry.id}"}
-                phx-click="coach_guidance_edit"
-                phx-value-id={entry.id}
-                class="history-coach-remove"
-              >
-                <.icon name="hero-pencil-square" class="size-4" />
-              </button>
-            <% end %>
-            <button
-              id={"history-coach-remove-#{entry.id}"}
-              type="button"
-              aria-label={"Remove coach guidance #{entry.id}"}
-              title="Remove guidance"
-              phx-click="coach_guidance_remove"
-              phx-value-id={entry.id}
-              class="history-coach-remove"
-            >
-              <.icon name="hero-trash" class="size-4" />
+            <.input
+              field={@state.coach_notebook_form[:text]}
+              id="home-coach-notebook-text"
+              type="textarea"
+              label="Coach notebook"
+              rows="4"
+              maxlength="4000"
+              class="coach-guidance-input"
+            />
+            <button id="home-coach-notebook-save" type="submit" class="home-state-action">
+              Save
             </button>
-          </div>
+            <button
+              id="home-coach-notebook-clear"
+              type="button"
+              phx-click="coach_notebook_clear"
+              class="home-state-action"
+            >
+              Clear
+            </button>
+          </.form>
         </div>
       </details>
-      <.guidance_form
-        id="home-coach-guidance-form"
-        form={@state.coach_guidance_form}
-        status={@state.coach_guidance_status}
-      />
-    </section>
-    """
-  end
-
-  attr(:id, :string, required: true)
-  attr(:form, :any, required: true)
-  attr(:status, :string, default: nil)
-  attr(:memory_link?, :boolean, default: false)
-
-  def guidance_form(assigns) do
-    assigns = assign(assigns, :base_id, String.replace_suffix(assigns.id, "-form", ""))
-
-    ~H"""
-    <section id={"#{@id}-section"} class="coach-guidance" aria-label="Coach guidance">
       <.form
-        for={@form}
-        id={@id}
-        phx-submit="coach_guidance_submit"
-        phx-change="coach_guidance_change"
+        for={@state.coach_message_form}
+        id="home-coach-message-form"
+        phx-submit="coach_message"
+        phx-change="coach_message_change"
       >
         <div class="coach-guidance-row">
           <.input
-            field={@form[:text]}
-            id={"#{@base_id}-text"}
+            field={@state.coach_message_form[:text]}
+            id="home-coach-message-text"
             type="textarea"
             label="New info"
             rows="2"
             maxlength="1000"
             placeholder="Add a goal or other info"
             class="coach-guidance-input"
+            disabled={@state.coach_busy?}
           />
           <button
-            id={"#{@base_id}-send"}
+            id="home-coach-message-send"
             type="submit"
             aria-label="Send to coach"
-            title="Send to coach"
-            phx-disable-with="Sending…"
             class="coach-guidance-send"
+            disabled={@state.coach_busy?}
+            phx-disable-with="Sending…"
           >
             <.icon name="hero-arrow-up" class="size-5" />
           </button>
         </div>
       </.form>
-      <p id={"#{@base_id}-status"} class="coach-guidance-status" role="status">{@status}</p>
-      <.link
-        :if={@memory_link?}
-        id="home-coach-memory-link"
-        patch={~p"/history"}
-        class="coach-guidance-memory-link"
-      >
-        View coach memory in History
-      </.link>
+      <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-guidance-status">
+        Sending…
+      </p>
+      <p id="home-coach-reply" role="status" class="coach-guidance-status">{@state.coach_reply}</p>
+      <p id="home-coach-status" role="status" class="coach-guidance-status">{@state.coach_status}</p>
     </section>
     """
   end

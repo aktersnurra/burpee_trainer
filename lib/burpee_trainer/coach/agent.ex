@@ -1,0 +1,135 @@
+defmodule BurpeeTrainer.Coach.Agent do
+  @moduledoc "Bounded scoped coach loop; tool errors are visible to the model, not exceptions."
+  alias BurpeeTrainer.Accounts.Scope
+  alias BurpeeTrainer.Coach.{Client, Notebook, Tool, Tools, AgentPrompt}
+
+  @tools %{
+    planner: [
+      Tools.History,
+      Tools.Goals,
+      Tools.Library,
+      Tools.ProposeWorkout,
+      Tools.SelectWorkout,
+      Tools.UpdateNotebook
+    ],
+    coach_page: [Tools.History, Tools.Goals, Tools.UpdateNotebook, Tools.ProposeGoal]
+  }
+  @spec run(Scope.t(), :planner | :coach_page, String.t() | nil, keyword()) ::
+          {:ok, %{reply: String.t()}} | {:error, term()}
+  def run(%Scope{} = scope, surface, input, opts \\ []) when surface in [:planner, :coach_page] do
+    notebook = Notebook.get(scope)
+    tools = Map.fetch!(@tools, surface)
+
+    run = %{
+      run_id: Keyword.get_lazy(opts, :run_id, &Ecto.UUID.generate/0),
+      surface: surface,
+      slot: Keyword.get(opts, :slot),
+      notebook_seen: notebook.updated_at,
+      proposals: 0,
+      call_index: 0
+    }
+
+    if surface == :coach_page and
+         (not is_binary(input) or String.length(input) > 1000 or byte_size(input) > 8000) do
+      {:error, :invalid_input}
+    else
+      messages = AgentPrompt.messages(scope, surface, input, notebook, run.slot)
+      loop(scope, messages, tools, run, 0, opts)
+    end
+  end
+
+  defp loop(_, _, _, _, calls, _) when calls >= 6, do: {:error, :agent_budget_exhausted}
+
+  defp loop(scope, messages, tools, run, calls, opts) do
+    if byte_size(Jason.encode!(messages)) > 262_144 do
+      {:error, :agent_budget_exhausted}
+    else
+      opts =
+        opts
+        |> Keyword.take([:config, :req, :budget])
+        |> Keyword.merge(
+          tools: Enum.map(tools, &Tool.definition/1),
+          response_format:
+            {"coach_reply",
+             Tool.object(%{"reply" => %{"type" => "string", "maxLength" => 600}}, ["reply"])},
+          ledger: %{
+            scope: scope,
+            purpose: if(run.surface == :planner, do: "plan_next", else: "coach_message"),
+            run_id: run.run_id
+          }
+        )
+
+      case Client.chat(messages, opts) do
+        {:ok, %{tool_calls: [], content: %{"reply" => reply} = content}}
+        when is_binary(reply) and map_size(content) == 1 ->
+          if String.length(reply) <= 600,
+            do: {:ok, %{reply: reply}},
+            else: {:error, :invalid_provider_response}
+
+        {:ok, %{tool_calls: [_ | _] = calls_returned}} ->
+          if run.proposals + Enum.count(calls_returned, &(&1.name == Tools.ProposeWorkout.name())) >
+               3 do
+            {:error, :agent_budget_exhausted}
+          else
+            {results, run} =
+              Enum.map_reduce(calls_returned, run, fn call, run ->
+                execute(scope, tools, call, run)
+              end)
+
+            assistant = %{
+              role: "assistant",
+              content: nil,
+              tool_calls:
+                Enum.map(calls_returned, fn c ->
+                  %{
+                    id: c.id,
+                    type: "function",
+                    function: %{name: c.name, arguments: Jason.encode!(c.arguments)}
+                  }
+                end)
+            }
+
+            loop(scope, messages ++ [assistant | results], tools, run, calls + 1, opts)
+          end
+
+        {:error, error} ->
+          {:error, error}
+
+        _ ->
+          {:error, :invalid_provider_response}
+      end
+    end
+  end
+
+  defp execute(scope, tools, call, run) do
+    run = %{run | call_index: run.call_index + 1}
+
+    {result, run} =
+      case Enum.find(tools, &(&1.name() == call.name)) do
+        nil ->
+          {{:error, "unknown or unavailable tool"}, run}
+
+        Tools.ProposeWorkout when run.proposals >= 3 ->
+          {{:error, "workout proposal limit reached"}, run}
+
+        module ->
+          run =
+            if module == Tools.ProposeWorkout,
+              do: %{run | proposals: run.proposals + 1},
+              else: run
+
+          case module.call(scope, call.arguments, run) do
+            {:ok, result, changes} -> {{:ok, result}, Map.merge(run, changes)}
+            result -> {result, run}
+          end
+      end
+
+    content =
+      case result do
+        {:ok, map} -> map
+        {:error, reason} -> %{"error" => reason}
+      end
+
+    {%{role: "tool", tool_call_id: call.id, content: Jason.encode!(content)}, run}
+  end
+end

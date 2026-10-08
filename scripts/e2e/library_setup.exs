@@ -291,7 +291,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
           )
 
         provider_result =
-          Client.complete([], req: req, config: [enabled: false, url: nil, api_key: nil])
+          Client.chat([], req: req, config: [enabled: false, url: nil, api_key: nil], ledger: %{scope: Scope.for_user(user), purpose: "layout", run_id: Ecto.UUID.generate()})
 
         request_count =
           receive do
@@ -580,6 +580,7 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
       ).rows
 
     Repo.query!("DROP TRIGGER #{trigger_name}")
+    Repo.delete_all(from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.PlanNextWorkoutJob" and fragment("json_extract(?, '$.user_id')", job.args) == ^user.id))
     result = Repo.delete(user)
     Repo.query!(trigger_sql)
 

@@ -8,7 +8,7 @@ defmodule BurpeeTrainer.Accounts do
   import Ecto.Query
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.{CoachReconciler, Repo}
+  alias BurpeeTrainer.Repo
 
   @users_page_limit 100
 
@@ -131,8 +131,7 @@ defmodule BurpeeTrainer.Accounts do
   end
 
   @doc """
-  Persist a valid IANA timezone, avoiding a database write and reconciliation
-  wake when an already-provisioned timezone is unchanged.
+  Persist a valid IANA timezone, avoiding a database write when an already-provisioned timezone is unchanged.
   """
   @spec update_timezone(User.t(), String.t()) ::
           {:ok, User.t()} | {:error, Ecto.Changeset.t()}
@@ -141,42 +140,20 @@ defmodule BurpeeTrainer.Accounts do
   end
 
   @doc false
-  @spec update_timezone_at(User.t(), String.t(), DateTime.t(), keyword()) ::
+  @spec update_timezone_at(User.t(), String.t(), DateTime.t()) ::
           {:ok, User.t()} | {:error, Ecto.Changeset.t() | term()}
-  def update_timezone_at(%User{} = user, timezone, %DateTime{} = _now, opts \\ []) do
+  def update_timezone_at(%User{} = user, timezone, %DateTime{} = _now) do
     changeset = User.timezone_changeset(user, %{timezone: timezone})
 
     if changeset.valid? and user.timezone == timezone and user.timezone_provisioned do
       {:ok, user}
     else
-      wake = Keyword.get(opts, :wake, &CoachReconciler.wake/2)
-
       Repo.transaction(fn ->
         case Repo.update(changeset) do
           {:ok, updated_user} -> updated_user
           {:error, changeset} -> Repo.rollback(changeset)
         end
       end)
-      |> case do
-        {:ok, updated_user} ->
-          best_effort_wake(wake, updated_user.id, :timezone_changed)
-          {:ok, updated_user}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
     end
-  end
-
-  defp best_effort_wake(wake, user_id, reason) do
-    try do
-      wake.(user_id, reason)
-    rescue
-      _error -> :ok
-    catch
-      _kind, _reason -> :ok
-    end
-
-    :ok
   end
 end

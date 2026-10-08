@@ -4,8 +4,6 @@ defmodule BurpeeTrainerWeb.CoachWorkspaceTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.Coach.Guidance
-
   test "History coach entry navigates to Coach and close returns to History", %{conn: conn} do
     user = user_fixture()
     conn = init_test_session(conn, %{user_id: user.id})
@@ -109,17 +107,6 @@ defmodule BurpeeTrainerWeb.CoachWorkspaceTest do
   } do
     user = user_fixture()
 
-    memory =
-      render_component(&BurpeeTrainerWeb.HomeCoachComponents.guidance_form/1,
-        id: "test-guidance-form",
-        form: Phoenix.Component.to_form(%{"text" => ""}, as: :coach_guidance),
-        memory_link?: true
-      )
-      |> LazyHTML.from_fragment()
-
-    assert LazyHTML.query(memory, "#home-coach-memory-link[href='/history'][data-phx-link=patch]")
-           |> Enum.count() == 1
-
     for page <- [:home, :history, :coach, :session] do
       document =
         render_component(&BurpeeTrainerWeb.Layouts.app/1,
@@ -147,33 +134,5 @@ defmodule BurpeeTrainerWeb.CoachWorkspaceTest do
                ]
       end
     end
-  end
-
-  test "malformed Coach controls do not mutate guidance", %{conn: conn} do
-    user = user_fixture()
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/coach")
-
-    for event <- ["coach_guidance_remove", "coach_guidance_edit", "coach_guidance_submit"] do
-      for params <- [%{}, %{"id" => %{}}, %{"id" => "bogus"}] do
-        render_click(view, event, params)
-        assert Guidance.list(BurpeeTrainer.Accounts.Scope.for_user(user)) == []
-        assert has_element?(view, "#home-coach-panel")
-      end
-    end
-  end
-
-  test "Coach guidance is saved through the real form", %{conn: conn} do
-    user = user_fixture()
-    conn = init_test_session(conn, %{user_id: user.id})
-    {:ok, view, _html} = live(conn, ~p"/coach?from=home")
-
-    view
-    |> form("#home-coach-guidance-form", coach_guidance: %{text: "Keep sets shorter"})
-    |> render_submit()
-
-    assert has_element?(view, "#home-coach-guidance-status[role=status]", "Saved for your coach")
-
-    assert [%{text: "Keep sets shorter"}] =
-             Guidance.list(BurpeeTrainer.Accounts.Scope.for_user(user))
   end
 end

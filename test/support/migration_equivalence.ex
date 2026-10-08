@@ -198,12 +198,12 @@ defmodule BurpeeTrainer.TestSupport.MigrationEquivalence do
       version =
         path |> Path.basename() |> String.split("_", parts: 2) |> hd() |> String.to_integer()
 
-      Code.require_file(path)
-
       {:defmodule, _, [{:__aliases__, _, parts}, _]} =
         path |> File.read!() |> Code.string_to_quoted!()
 
-      [{version, Module.concat(parts)}]
+      module = Module.concat(parts)
+      unless Code.ensure_loaded?(module), do: Code.require_file(path)
+      [{version, module}]
     end)
   end
 

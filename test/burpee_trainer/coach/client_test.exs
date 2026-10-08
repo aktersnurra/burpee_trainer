@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.Coach.ClientTest do
-  use ExUnit.Case, async: true
+  use BurpeeTrainer.DataCase, async: false
 
   import ExUnit.CaptureLog
 
@@ -18,7 +18,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       )
 
     assert {:error, %Error{code: :authoring_context_too_large}} =
-             Client.complete(
+             structured_chat(
                [%{role: "user", content: String.duplicate("x", 262_145)}],
                req: req,
                response_kind: :workout_request,
@@ -41,7 +41,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
 
     assert {:error, %Error{code: :authoring_context_too_large}} =
-             Client.complete(messages, opts(req))
+             structured_chat(messages, opts(req))
 
     assert requests(counter) == []
   end
@@ -51,22 +51,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   setup do
     counter = start_supervised!({Agent, fn -> %{count: 0, requests: []} end})
     %{counter: counter}
-  end
-
-  test "coach guidance review requests bounded classification", %{counter: counter} do
-    answer = %{"kind" => "lasting", "summary" => "Build toward 50 reps"}
-    req = request(counter, fn conn -> json_response(conn, 200, answer) end)
-
-    assert {:ok, ^answer} =
-             Client.complete([], Keyword.put(opts(req), :response_kind, :coach_guidance))
-
-    [recorded] = requests(counter)
-    schema = recorded.body["response_format"]["json_schema"]
-    assert schema["name"] == "coach_guidance"
-    assert schema["schema"]["additionalProperties"] == false
-
-    assert schema["schema"]["properties"]["kind"]["enum"] ==
-             ~w[lasting temporary observation]
   end
 
   test "workout request extraction uses the compact confirmed-constraints schema", %{
@@ -85,7 +69,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     req = request(counter, fn conn -> json_response(conn, 200, answer) end)
 
     assert {:ok, ^answer} =
-             Client.complete([], Keyword.put(opts(req), :response_kind, :workout_request))
+             structured_chat([], Keyword.put(opts(req), :response_kind, :workout_request))
 
     [recorded] = requests(counter)
     schema = recorded.body["response_format"]["json_schema"]
@@ -116,7 +100,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     req = request(counter, fn conn -> json_response(conn, 200, layout) end)
 
     assert {:ok, ^layout} =
-             Client.complete(
+             structured_chat(
                [],
                opts(req)
                |> Keyword.put(:confirmed_request, confirmed)
@@ -129,17 +113,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert response["schema"]["required"] == ["name", "rationale", "phases"]
     assert response["schema"]["properties"]["phases"]["minItems"] == 3
     assert response["schema"]["properties"]["phases"]["maxItems"] == 3
-  end
-
-  test "unknown response kinds fail closed without HTTP", %{counter: counter} do
-    req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
-
-    for kind <- [:unknown, "coach_recommendation", nil] do
-      assert {:error, %Error{code: :provider_unavailable}} =
-               Client.complete([], Keyword.put(opts(req), :response_kind, kind))
-    end
-
-    assert request_count(counter) == 0
   end
 
   test "OpenRouter requests require a provider supporting every requested parameter", %{
@@ -155,7 +128,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
         |> Keyword.put(:model, "openai/gpt-6-luna-pro")
       end)
 
-    assert {:ok, ^definition} = Client.complete([], options)
+    assert {:ok, ^definition} = structured_chat([], options)
 
     [recorded] = requests(counter)
     assert recorded.body["model"] == "openai/gpt-6-luna-pro"
@@ -184,7 +157,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       |> Keyword.update!(:config, &Keyword.put(&1, :max_tokens, 88_888))
 
     assert {:ok, ^definition} =
-             Client.complete(
+             structured_chat(
                [%{role: "user", content: "steady"}],
                Keyword.put(boundary_opts, :response_kind, :workout_request)
              )
@@ -242,7 +215,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     log =
       capture_log([level: :warning], fn ->
         assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-                 Client.complete([%{role: "user", content: "private"}], opts(req))
+                 structured_chat([%{role: "user", content: "private"}], opts(req))
       end)
 
     assert log =~ "llm_provider_response_rejected"
@@ -258,7 +231,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
 
     assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
-             Client.complete([],
+             structured_chat([],
                req: req,
                config: [enabled: false, url: nil, api_key: nil, model: nil]
              )
@@ -273,7 +246,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
 
     for enabled <- [nil, false, 1, 0, "true", %{}, []] do
       assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
-               Client.complete([],
+               structured_chat([],
                  req: req,
                  config: [
                    enabled: enabled,
@@ -297,7 +270,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
           [enabled: true, url: " ", api_key: "secret", model: "test/model"]
         ] do
       assert {:error, %Error{code: :provider_unavailable}} =
-               Client.complete([], req: req, config: config)
+               structured_chat([], req: req, config: config)
     end
 
     assert request_count(counter) == 0
@@ -309,12 +282,12 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     timeout_req = request(counter, &Req.Test.transport_error(&1, :timeout))
 
     assert {:error, %Error{code: :provider_timeout, context: %{}}} =
-             Client.complete([], opts(timeout_req))
+             structured_chat([], opts(timeout_req))
 
     transport_req = request(counter, &Req.Test.transport_error(&1, :econnrefused))
 
     assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
-             Client.complete([], opts(transport_req))
+             structured_chat([], opts(transport_req))
 
     assert request_count(counter) == 2
   end
@@ -326,7 +299,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     }
 
     assert {:error, %Error{code: :provider_unavailable, context: %{}} = error} =
-             Client.complete([], opts(req))
+             structured_chat([], opts(req))
 
     refute inspect(error) =~ "raw-secret-error"
   end
@@ -345,7 +318,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
         end)
 
       assert {:error, %Error{code: :provider_unavailable, context: %{status: ^status}} = error} =
-               Client.complete([], opts(req))
+               structured_chat([], opts(req))
 
       refute inspect(error) =~ "raw-secret-provider-body"
     end
@@ -373,7 +346,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       |> Req.merge(follow_redirects: true)
 
     assert {:error, %Error{code: :provider_unavailable, context: %{status: 302}}} =
-             Client.complete([], opts(req))
+             structured_chat([], opts(req))
 
     assert request_count(counter) == 1
   end
@@ -391,7 +364,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       )
 
     assert {:error, %Error{code: :provider_unavailable, context: %{status: 503}} = error} =
-             Client.complete([], opts(req))
+             structured_chat([], opts(req))
 
     assert_receive :provider_called
     refute inspect(error) =~ "raw-secret-provider-body"
@@ -409,7 +382,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       }
 
       assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
-               Client.complete([], opts(req))
+               structured_chat([], opts(req))
 
       refute inspect(error) =~ "raw-secret"
     end
@@ -426,7 +399,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       req = request(counter, &Plug.Conn.send_resp(&1, 200, body))
 
       assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-               Client.complete([], opts(req))
+               structured_chat([], opts(req))
     end
 
     assert request_count(counter) == length(duplicate_bodies)
@@ -447,7 +420,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       req = request(counter, &Plug.Conn.send_resp(&1, 200, body))
 
       assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
-               Client.complete([], opts(req))
+               structured_chat([], opts(req))
 
       refute inspect(error) =~ "raw-secret"
     end
@@ -463,12 +436,12 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     exact_body = valid_body <> String.duplicate(" ", @max_response_bytes - byte_size(valid_body))
 
     exact_req = request(counter, &Plug.Conn.send_resp(&1, 200, exact_body))
-    assert {:ok, ^definition} = Client.complete([], opts(exact_req))
+    assert {:ok, ^definition} = structured_chat([], opts(exact_req))
 
     oversized_req = request(counter, &Plug.Conn.send_resp(&1, 200, exact_body <> " "))
 
     assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-             Client.complete([], opts(oversized_req))
+             structured_chat([], opts(oversized_req))
 
     assert request_count(counter) == 2
   end
@@ -487,7 +460,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     }
 
     assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-             Client.complete([], opts(req))
+             structured_chat([], opts(req))
   end
 
   test "the response cap also rejects a chunked body", %{counter: counter} do
@@ -502,7 +475,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
       end)
 
     assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-             Client.complete([], opts(req))
+             structured_chat([], opts(req))
 
     assert request_count(counter) == 1
   end
@@ -513,7 +486,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     req = streaming_adapter(self(), [first_chunk, second_chunk])
 
     assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
-             Client.complete([], opts(req))
+             structured_chat([], opts(req))
 
     assert_receive {:stream_outcomes, [:cont, :halt], {:error, :response_too_large}}
     refute inspect(error) =~ "first-secret"
@@ -527,7 +500,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     <<first_chunk::binary-size(131_072), second_chunk::binary>> = exact_body
     req = streaming_adapter(self(), [first_chunk, second_chunk])
 
-    assert {:ok, ^definition} = Client.complete([], opts(req))
+    assert {:ok, ^definition} = structured_chat([], opts(req))
     assert_receive {:stream_outcomes, [:cont, :cont], body}
     assert byte_size(body) == @max_response_bytes
   end
@@ -590,6 +563,32 @@ defmodule BurpeeTrainer.Coach.ClientTest do
         responder.(conn)
       end
     )
+  end
+
+  defp structured_chat(messages, opts) do
+    format =
+      case Keyword.get(opts, :response_kind, :workout_request) do
+        :workout_request ->
+          {"workout_request", BurpeeTrainer.Coach.WorkoutRequest.json_schema()}
+
+        :workout_layout ->
+          {"workout_layout",
+           BurpeeTrainer.Coach.WorkoutLayout.json_schema(Keyword.fetch!(opts, :confirmed_request))}
+      end
+
+    scope = BurpeeTrainer.Fixtures.scope_fixture()
+
+    opts =
+      opts
+      |> Keyword.drop([:response_kind, :confirmed_request])
+      |> Keyword.put(:response_format, format)
+      |> Keyword.put(:ledger, %{scope: scope, purpose: "layout", run_id: Ecto.UUID.generate()})
+
+    case Client.chat(messages, opts) do
+      {:ok, %{content: content, tool_calls: []}} when is_map(content) -> {:ok, content}
+      {:ok, _} -> {:error, Error.new(:invalid_provider_response)}
+      error -> error
+    end
   end
 
   defp opts(req) do

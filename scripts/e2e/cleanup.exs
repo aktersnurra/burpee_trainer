@@ -57,6 +57,8 @@ case arguments do
                 videos =
                   from(video in WorkoutVideo, where: video.filename == ^owned_video_filename)
 
+                Repo.delete_all(from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.PlanNextWorkoutJob" and fragment("json_extract(?, '$.user_id')", job.args) == ^user_id))
+
                 counts = %{
                   videos: Repo.aggregate(videos, :count),
                   plans:

@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
 
   alias BurpeeTrainer.{Coach, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Guidance, WorkoutRequest}
+  alias BurpeeTrainer.Coach.{Notebook, WorkoutRequest}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
   test "foreign prepared approval, selection, archive, guidance, and session mount leave rows unchanged",
@@ -44,24 +44,19 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     render_click(view, "delete_workout", %{"id" => "#{foreign.id}"})
     assert Repo.get!(WorkoutPlan, foreign.id).state == :published
 
-    {:ok, entry} = Guidance.add(Scope.for_user(owner), "Owner guidance")
+    {:ok, entry} = Notebook.write(Scope.for_user(owner), "Owner notes", nil)
     coach_plans_before = Repo.all(WorkoutPlan)
     pid = view.pid
-    render_patch(view, ~p"/coach?from=home")
+    render_patch(view, ~p"/coach")
     assert view.pid == pid
     assert has_element?(view, "#home-coach-panel")
-    render_click(view, "coach_guidance_edit", %{"id" => "#{entry.id}"})
-    refute has_element?(view, "#history-coach-edit-form-#{entry.id}")
 
-    render_submit(view, "coach_guidance_edit_save", %{
-      "coach_memory" => %{"text" => "Hostile edit"}
-    })
+    view
+    |> form("#home-coach-notebook-form", coach_notebook: %{text: "Attacker notes"})
+    |> render_submit()
 
-    render_click(view, "coach_guidance_remove", %{"id" => "#{entry.id}"})
-    assert [%{id: id}] = Guidance.list(Scope.for_user(owner))
-    assert id == entry.id
-    assert Repo.reload!(entry) == entry
-    assert Guidance.list(Scope.for_user(attacker)) == []
+    assert Notebook.get(Scope.for_user(owner)).body == entry.body
+    assert Notebook.get(Scope.for_user(attacker)).body == "Attacker notes"
     assert Workouts.ensure_home_selection(Scope.for_user(attacker), slot) == selected_before
     assert Repo.all(WorkoutPlan) == coach_plans_before
 
@@ -94,7 +89,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     assert Workouts.ensure_home_selection(Scope.for_user(user), slot) == before
   end
 
-  test "stale prepared approval and archived replay leave persisted rows unchanged", _context do
+  test "foreign prepared approval and archived replay leave persisted rows unchanged", _context do
     user = user_fixture()
     counter = fake_authoring_provider(%{"workout_layout" => layout()})
     {:ok, request} = request()
@@ -110,7 +105,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
              )
 
     plans_before = Repo.all(WorkoutPlan)
-    assert {:error, _} = Coach.approve_plan(Scope.for_user(user), stale)
+    assert {:error, _} = Coach.approve_plan(scope_fixture(), stale)
     assert Repo.all(WorkoutPlan) == plans_before
     assert Agent.get(counter, & &1.calls) == ["workout_layout", "workout_layout"]
 

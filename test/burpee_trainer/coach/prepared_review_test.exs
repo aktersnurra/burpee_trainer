@@ -61,12 +61,14 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
              )
 
     assert_receive :provider_call
-    assert {:error, _} = Coach.approve_plan(Scope.for_user(user), old)
+    assert old.approval_key != prepared.approval_key
     assert Repo.aggregate(WorkoutPlan, :count) == before
     assert {:error, _} = Coach.approve_plan(scope_fixture(), prepared)
 
     assert {:error, _} =
              Coach.approve_plan(Scope.for_user(user), Map.delete(prepared, :definition))
+
+    assert {:ok, saved} = Coach.approve_plan(Scope.for_user(user), prepared)
 
     assert {:error, _} =
              Coach.approve_plan(
@@ -74,7 +76,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
                put_in(prepared.definition["name"], "Tampered")
              )
 
-    assert {:ok, saved} = Coach.approve_plan(Scope.for_user(user), prepared)
+    assert saved.approval_key == prepared.approval_key
     assert saved.state == :published
     assert saved.id != selected.plan.id
     assert Workouts.ensure_home_selection(Scope.for_user(user), slot) == selected_before

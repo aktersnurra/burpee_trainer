@@ -1,10 +1,9 @@
 defmodule BurpeeTrainerWeb.CoachScreen do
-  @moduledoc "Coach summary and saved guidance."
-
+  @moduledoc "Coach conversation and owner-editable bounded notebook within shared HomeLive."
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-
-  alias BurpeeTrainer.Coach.Guidance
+  alias BurpeeTrainer.Coach.{Notebook, Agent}
+  alias BurpeeTrainer.Goals
   alias BurpeeTrainerWeb.HomeCoachComponents
 
   def initialize(socket) do
@@ -12,16 +11,14 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> assign(
       coach_return_to: ~p"/",
       coach_open?: false,
-      coach_guidance_form: to_form(%{"text" => ""}, as: :coach_guidance),
-      coach_guidance_status: nil,
-      coach_summary: "",
       coach_details_open?: false,
-      coach_guidance_edit_id: nil,
-      coach_guidance_edit_form: to_form(%{"text" => ""}, as: :coach_memory)
+      coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
+      coach_busy?: false,
+      coach_reply: nil,
+      coach_status: nil
     )
-    |> stream_configure(:coach_guidance_entries, dom_id: &"history-coach-entry-#{&1.id}")
-    |> stream(:coach_guidance_entries, Guidance.list(socket.assigns.current_scope))
-    |> refresh_coach_guidance()
+    |> stream_configure(:coach_goals, dom_id: &"home-coach-goal-#{&1.id}")
+    |> refresh()
   end
 
   def open(socket, params) do
@@ -30,23 +27,19 @@ defmodule BurpeeTrainerWeb.CoachScreen do
       coach_open?: true,
       coach_return_to: if(params["from"] == "history", do: ~p"/history", else: ~p"/")
     )
-    |> refresh_coach_guidance()
+    |> refresh()
   end
 
-  defp refresh_coach_guidance(socket) do
-    entries = Guidance.list(socket.assigns.current_scope)
-
-    summary =
-      entries
-      |> Enum.filter(&(&1.kind in ["pending", "lasting", "temporary"]))
-      |> Enum.take(12)
-      |> Enum.map(&(&1.summary || &1.text))
-      |> Enum.uniq()
-      |> Enum.join("\n")
+  defp refresh(socket) do
+    notebook = Notebook.get(socket.assigns.current_scope)
 
     socket
-    |> assign(coach_summary: summary)
-    |> stream(:coach_guidance_entries, entries, reset: true)
+    |> assign(
+      coach_summary: notebook.body |> String.split("\n\n") |> List.first(),
+      coach_notebook_seen: notebook.updated_at,
+      coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
+    )
+    |> stream(:coach_goals, Goals.list(socket.assigns.current_scope), reset: true)
   end
 
   def handle_event("close_coach", _, socket),
@@ -55,97 +48,99 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   def handle_event("coach_details_toggle", _, socket),
     do: {:noreply, assign(socket, coach_details_open?: not socket.assigns.coach_details_open?)}
 
-  def handle_event("coach_guidance_change", %{"coach_guidance" => %{"text" => text}}, socket)
-      when is_binary(text) do
-    {:noreply,
-     assign(socket,
-       coach_guidance_form: to_form(%{"text" => text}, as: :coach_guidance),
-       coach_guidance_status: nil
-     )}
-  end
-
-  def handle_event("coach_guidance_submit", %{"coach_guidance" => %{"text" => text}}, socket)
-      when is_binary(text) do
-    case Guidance.add(socket.assigns.current_scope, text) do
-      {:ok, entry} ->
-        _ = Guidance.start_review(entry)
-
+  def handle_event("coach_message_change", %{"coach_message" => %{"text" => text}}, socket)
+      when is_binary(text),
+      do:
         {:noreply,
-         socket
-         |> assign(:coach_guidance_form, to_form(%{"text" => ""}, as: :coach_guidance))
-         |> assign(:coach_guidance_status, "Saved for your coach.")
-         |> refresh_coach_guidance()}
+         assign(socket, coach_message_form: to_form(%{"text" => text}, as: :coach_message))}
 
-      {:error, :invalid_text} ->
-        {:noreply,
-         socket
-         |> assign(:coach_guidance_form, to_form(%{"text" => text}, as: :coach_guidance))
-         |> assign(:coach_guidance_status, "Enter an instruction of up to 1,000 characters.")}
-    end
-  end
-
-  def handle_event("coach_guidance_remove", %{"id" => raw}, socket) when is_binary(raw) do
-    with {id, ""} <- Integer.parse(raw),
-         :ok <- Guidance.remove(socket.assigns.current_scope, id) do
-      {:noreply,
-       socket
-       |> assign(coach_guidance_edit_id: nil, coach_guidance_status: "Removed from coach memory.")
-       |> refresh_coach_guidance()}
-    else
-      _ -> {:noreply, assign(socket, :coach_guidance_status, "Could not remove that entry.")}
-    end
-  end
-
-  def handle_event("coach_guidance_edit", %{"id" => raw}, socket) when is_binary(raw) do
-    with {id, ""} <- Integer.parse(raw),
-         entry when not is_nil(entry) <-
-           Enum.find(Guidance.list(socket.assigns.current_scope), &(&1.id == id)) do
-      {:noreply,
-       socket
-       |> assign(
-         coach_guidance_edit_id: id,
-         coach_guidance_edit_form: to_form(%{"text" => entry.text}, as: :coach_memory)
-       )
-       |> refresh_coach_guidance()}
-    else
-      _ -> {:noreply, socket}
-    end
-  end
-
-  def handle_event("coach_guidance_edit_change", %{"coach_memory" => params}, socket)
-      when is_map(params) do
-    {:noreply, assign(socket, coach_guidance_edit_form: to_form(params, as: :coach_memory))}
-  end
-
-  def handle_event("coach_guidance_edit_cancel", _, socket) do
-    {:noreply, socket |> assign(coach_guidance_edit_id: nil) |> refresh_coach_guidance()}
-  end
-
-  def handle_event("coach_guidance_edit_save", %{"coach_memory" => %{"text" => text}}, socket)
+  def handle_event("coach_message", %{"coach_message" => %{"text" => text}}, socket)
       when is_binary(text) do
-    case Guidance.update(
-           socket.assigns.current_scope,
-           socket.assigns.coach_guidance_edit_id,
-           text
-         ) do
-      {:ok, entry} ->
-        _ = Guidance.start_review(entry)
+    text = String.trim(text)
 
-        {:noreply,
-         socket
-         |> assign(coach_guidance_edit_id: nil, coach_guidance_status: "Saved.")
-         |> refresh_coach_guidance()}
+    cond do
+      socket.assigns.coach_busy? ->
+        {:noreply, socket}
 
-      _ ->
+      text == "" or String.length(text) > 1000 ->
         {:noreply,
          assign(socket,
-           coach_guidance_status: "Enter info of up to 1,000 characters.",
-           coach_guidance_edit_form: to_form(%{"text" => text}, as: :coach_memory)
+           coach_status: "Enter a message of up to 1,000 characters.",
+           coach_message_form: to_form(%{"text" => text}, as: :coach_message)
          )}
+
+      true ->
+        scope = socket.assigns.current_scope
+
+        {:noreply,
+         socket
+         |> assign(
+           coach_busy?: true,
+           coach_status: nil,
+           coach_message_form: to_form(%{"text" => text}, as: :coach_message)
+         )
+         |> start_async(:coach_reply, fn -> Agent.run(scope, :coach_page, text) end)}
+    end
+  end
+
+  def handle_event("coach_notebook_change", %{"coach_notebook" => %{"text" => text}}, socket)
+      when is_binary(text),
+      do:
+        {:noreply,
+         assign(socket, coach_notebook_form: to_form(%{"text" => text}, as: :coach_notebook))}
+
+  def handle_event("coach_notebook_save", %{"coach_notebook" => %{"text" => text}}, socket)
+      when is_binary(text), do: save_notebook(socket, text)
+
+  def handle_event("coach_notebook_clear", _, socket), do: save_notebook(socket, "")
+
+  def handle_event(event, %{"id" => raw}, socket)
+      when event in ["coach_goal_confirm", "coach_goal_dismiss"] and is_binary(raw) do
+    with {id, ""} <- Integer.parse(raw),
+         {:ok, _} <-
+           if(event == "coach_goal_confirm",
+             do: Goals.confirm(socket.assigns.current_scope, id),
+             else: Goals.dismiss(socket.assigns.current_scope, id)
+           ) do
+      {:noreply, refresh(socket)}
+    else
+      _ -> {:noreply, assign(socket, coach_status: "Goal not available.")}
     end
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp save_notebook(socket, text) do
+    case Notebook.write(socket.assigns.current_scope, text, socket.assigns.coach_notebook_seen) do
+      {:ok, _} ->
+        {:noreply, socket |> assign(coach_status: "Saved.") |> refresh()}
+
+      {:error, :stale_notebook} ->
+        {:noreply,
+         socket
+         |> refresh()
+         |> assign(coach_status: "Updated by your coach; review and save again.")}
+
+      {:error, :too_long} ->
+        {:noreply, assign(socket, coach_status: "Notebook exceeds 4,000 characters.")}
+    end
+  end
+
+  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(
+         coach_busy?: false,
+         coach_reply: reply,
+         coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
+       )
+       |> refresh()}
+
+  def handle_async(:coach_reply, _, socket),
+    do:
+      {:noreply,
+       assign(socket, coach_busy?: false, coach_reply: "Coach unavailable. Try again later.")}
 
   def screen(assigns) do
     ~H"""

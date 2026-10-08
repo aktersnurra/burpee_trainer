@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.DesignSession
+  alias BurpeeTrainer.Coach.LlmCall
   alias BurpeeTrainer.LayoutFixtures
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.HomeLive
@@ -114,7 +114,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
       recommendations: Repo.aggregate(CoachRecommendation, :count),
       sessions: Repo.aggregate(WorkoutSession, :count),
       plans: Repo.aggregate(WorkoutPlan, :count),
-      contexts: Repo.aggregate(DesignSession, :count)
+      contexts: Repo.aggregate(LlmCall, :count)
     }
 
     for prompt <- [String.duplicate("a", 501), String.duplicate("👩‍❤️‍💋‍👨", 200)] do
@@ -128,7 +128,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
                recommendations: Repo.aggregate(CoachRecommendation, :count),
                sessions: Repo.aggregate(WorkoutSession, :count),
                plans: Repo.aggregate(WorkoutPlan, :count),
-               contexts: Repo.aggregate(DesignSession, :count)
+               contexts: Repo.aggregate(LlmCall, :count)
              } == before
     end
   end
@@ -154,10 +154,9 @@ defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
     assert pending.assigns.start_client_session_id == start_token
     assert Repo.aggregate(from(plan in WorkoutPlan, where: plan.user_id == ^user.id), :count) == 0
 
-    assert %DesignSession{source_plan_id: nil, workspace_key: workspace_key} =
-             Repo.one!(from(context in DesignSession, where: context.user_id == ^user.id))
+    assert %LlmCall{purpose: "edit_request", outcome: "inflight"} =
+             Repo.one!(from(c in LlmCall, where: c.user_id == ^user.id))
 
-    assert String.starts_with?(workspace_key, "home-bootstrap:")
     assert has_element?(view, "#home-bootstrap-loading")
     assert has_element?(view, "#home-workout-area[aria-busy='true']")
     refute has_element?(view, "#home-bootstrap-form")
@@ -248,10 +247,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
     assert failed_pending.assigns.bootstrap_prompt == prompt
     assert failed_pending.assigns.bootstrap_form.params["prompt"] == prompt
 
-    assert %DesignSession{id: context_id, source_plan_id: nil, workspace_key: workspace_key} =
-             Repo.one!(from(context in DesignSession, where: context.user_id == ^user.id))
-
-    assert String.starts_with?(workspace_key, "home-bootstrap:")
+    assert Repo.aggregate(from(c in LlmCall, where: c.user_id == ^user.id), :count) == 1
 
     send(
       worker,
@@ -275,8 +271,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapLifecycleTest do
     assert_receive {:provider_waiting, retry_worker, retry_barrier, retry_request}
     assert %Req.Request{} = retry_request
 
-    assert %DesignSession{id: ^context_id, source_plan_id: nil} =
-             Repo.one!(from(context in DesignSession, where: context.user_id == ^user.id))
+    assert Repo.aggregate(from(c in LlmCall, where: c.user_id == ^user.id), :count) == 2
 
     send(retry_worker, {:respond, retry_barrier, provider_body(extracted_request())})
     render_async(view)

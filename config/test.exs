@@ -17,9 +17,6 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
   secret_key_base: "huMiWRpdLrjHA7H+QE14KSdIJwQ8ZdTq8Z/TNM4r/LRTO2ZK3Nqb2j/mi1BkUvGk",
   server: false
 
-# Tests opt into supervised coach network work explicitly.
-config :burpee_trainer, :coach_reconciler, enabled: false
-
 # Draft-authoring tests opt into an in-memory Req plug explicitly.
 config :burpee_trainer, :llm_provider,
   enabled: false,
@@ -55,3 +52,5 @@ config :burpee_trainer, :oidc,
 # `backoff_type` is `stop` — so against an unreachable issuer it would
 # terminate and take the supervision tree with it.
 config :burpee_trainer, :oidc_start_worker, false
+
+config :burpee_trainer, Oban, testing: :manual

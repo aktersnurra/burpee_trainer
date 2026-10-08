@@ -333,7 +333,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     render_patch(view, "/coach?from=home")
 
     view
-    |> form("#home-coach-guidance-form", coach_guidance: %{text: "Keep this unsent"})
+    |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})
     |> render_change()
 
     view |> element("#home-coach-back") |> render_click()

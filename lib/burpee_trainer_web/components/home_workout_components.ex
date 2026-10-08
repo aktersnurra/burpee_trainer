@@ -596,6 +596,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
             </span>
           </div>
+          <p
+            :if={@state.home_selection.rationale}
+            id="home-planner-rationale"
+            class="home-coach-summary-text"
+          >
+            {@state.home_selection.rationale}
+          </p>
           <div class="home-workout-actions" data-expanded={to_string(@state.expanded?)}>
             <button
               id="home-edit-workout"

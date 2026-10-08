@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.Guidance
+  alias BurpeeTrainer.Coach.Notebook
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession, WorkoutVideo}
 
   setup %{conn: conn} do
@@ -96,7 +96,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       assert_patch(view, "/coach?from=history")
 
       view
-      |> form("#home-coach-guidance-form", coach_guidance: %{text: "Keep this unsent"})
+      |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})
       |> render_change()
 
       view |> element("#home-coach-back") |> render_click()
@@ -108,10 +108,10 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
       assert :sys.get_state(view.pid).socket.assigns.filters == filters
 
-      assert :sys.get_state(view.pid).socket.assigns.coach_guidance_form[:text].value ==
+      assert :sys.get_state(view.pid).socket.assigns.coach_message_form[:text].value ==
                "Keep this unsent"
 
-      assert Guidance.list(Scope.for_user(user)) == []
+      assert Notebook.get(Scope.for_user(user)).body == ""
       assert persisted() == before
     end
   end
@@ -356,6 +356,6 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
   defp persisted do
     {Repo.all(WorkoutPlan), Repo.all(WorkoutSession), Repo.all(CoachRecommendation),
-     Repo.all(WorkoutVideo), Repo.all(BurpeeTrainer.Coach.GuidanceEntry)}
+     Repo.all(WorkoutVideo), Repo.all(BurpeeTrainer.Coach.Notebook)}
   end
 end

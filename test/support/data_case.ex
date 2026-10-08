@@ -39,27 +39,12 @@ defmodule BurpeeTrainer.DataCase do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(BurpeeTrainer.Repo, shared: not tags[:async])
 
     on_exit(fn ->
-      # ExUnit has stopped the test and its supervised publishers. Only synchronous
-      # cases own the shared sandbox used by the application subscriber.
-      unless tags[:async], do: drain_coach_memory_tasks()
-
       if Process.alive?(pid) do
         Ecto.Adapters.SQL.Sandbox.stop_owner(pid)
       end
     end)
 
     pid
-  end
-
-  def drain_coach_memory_tasks do
-    _ = :sys.get_state(BurpeeTrainer.Coach.MemorySubscriber)
-
-    for pid <- Task.Supervisor.children(BurpeeTrainer.CoachMemoryTaskSupervisor) do
-      ref = Process.monitor(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 5_000
-    end
-
-    :ok
   end
 
   @doc """

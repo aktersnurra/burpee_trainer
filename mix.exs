@@ -61,6 +61,7 @@ defmodule BurpeeTrainer.MixProject do
        depth: 1},
       # Req is the sole HTTP boundary for LLM provider calls.
       {:req, "~> 0.5"},
+      {:oban, "~> 2.19"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},

@@ -6,12 +6,11 @@ defmodule BurpeeTrainer.Workouts do
 
   import Ecto.Query
 
-  alias BurpeeTrainer.Coach.Context
   alias Ecto.Multi
   alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.Policy
 
-  alias BurpeeTrainer.{CoachReconciler, PlanCompiler, UserTime}
+  alias BurpeeTrainer.{PlanCompiler, UserTime}
 
   alias BurpeeTrainer.PlanCompiler.{ProgramHash, WorkoutDefinition}
 
@@ -388,6 +387,26 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
+  @doc "Select a planner workout and rationale under the existing Home CAS."
+  def select_planned_workout(
+        %Scope{user: %User{} = user},
+        %HomeSelection{} = expected,
+        id,
+        rationale
+      )
+      when is_binary(rationale) and byte_size(rationale) <= 2400 do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, r} <- home_recommendation(user, expected),
+           {:ok, plan} <- selectable_home_plan(user, r, id),
+           :ok <- verify_stored_draft(plan),
+           {:ok, changed} <- write_home_pointer(r, plan.id),
+           {:ok, changed} <-
+             changed |> Ecto.Changeset.change(rationale: rationale) |> Repo.update() do
+        {:ok, HomeSelection.new(changed, plan)}
+      end
+    end)
+  end
+
   @doc "Atomically finalizes and starts the reviewed Home selection."
   @spec start_home_workout(Scope.t(), HomeSelection.t(), Ecto.UUID.t()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t()}
@@ -408,7 +427,10 @@ defmodule BurpeeTrainer.Workouts do
         {:error, %Error{} = error} -> {:error, error}
       end
     end)
-    |> BurpeeTrainer.Workouts.Finalization.deliver()
+    |> case do
+      {:ok, {value, _finalized}} -> {:ok, value}
+      {:error, _} = error -> error
+    end
   end
 
   @spec start_home_video(Scope.t(), HomeSelection.t(), pos_integer(), Ecto.UUID.t()) ::
@@ -632,7 +654,7 @@ defmodule BurpeeTrainer.Workouts do
          ) do
       {:ok, recommendation} ->
         case get_library_plan(scope, draft_id) do
-          {:ok, plan} -> BurpeeTrainer.Workouts.Finalization.notify(plan)
+          {:ok, _plan} -> :ok
           _ -> :ok
         end
 
@@ -799,7 +821,6 @@ defmodule BurpeeTrainer.Workouts do
     do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
 
   @draft_revision_fields [
-    :design_session_id,
     :id,
     :user_id,
     :name,
@@ -1533,7 +1554,12 @@ defmodule BurpeeTrainer.Workouts do
 
   @spec complete_session(Scope.t(), pos_integer(), map(), term()) ::
           {:ok, WorkoutSession.t()} | {:error, Error.t() | Ecto.Changeset.t()}
-  def complete_session(%Scope{user: %User{id: user_id} = user}, session_id, attrs, capture)
+  def complete_session(
+        %Scope{user: %User{id: user_id} = user} = scope,
+        session_id,
+        attrs,
+        capture
+      )
       when is_integer(session_id) and session_id > 0 and is_map(attrs) do
     Repo.immediate_transaction(fn ->
       case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id) do
@@ -1556,7 +1582,7 @@ defmodule BurpeeTrainer.Workouts do
     end)
     |> case do
       {:ok, %WorkoutSession{} = session} ->
-        best_effort_coach_wake(user_id, :completion)
+        :ok = BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(scope)
         {:ok, session}
 
       {:error, %Error{} = error} ->
@@ -1569,18 +1595,6 @@ defmodule BurpeeTrainer.Workouts do
 
   def complete_session(%Scope{}, session_id, _attrs, _capture),
     do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
-
-  defp best_effort_coach_wake(user_id, reason) do
-    try do
-      CoachReconciler.wake(user_id, reason)
-    rescue
-      _error -> :ok
-    catch
-      _kind, _reason -> :ok
-    end
-
-    :ok
-  end
 
   defp persist_completed_session(%User{} = user, changeset, persist)
        when is_function(persist, 1) do
@@ -2576,146 +2590,76 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  @doc "Commits a generated first-use draft and its Home pointer as one lifecycle write."
-  @spec commit_home_bootstrap(
-          Scope.t(),
-          Policy.slot(),
-          map(),
-          String.t(),
-          pos_integer(),
-          Ecto.UUID.t()
-        ) ::
-          {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def commit_home_bootstrap(
-        %Scope{user: %User{} = user} = scope,
-        slot,
-        definition,
-        text,
-        context_id,
-        attempt
-      ) do
+  @doc "Commit a generated first-use draft and its Home pointer atomically."
+  def commit_home_bootstrap(%Scope{user: %User{} = user} = scope, slot, definition, text) do
     immediate_lifecycle_transaction(fn ->
       with :ok <- verified_bootstrap_slot(user, slot),
            :ok <- no_other_started_session(user),
-           :ok <- Context.check_source(scope, context_id, nil),
            {:ok, recommendation} <-
              ensure_recommendation(scope, Map.take(slot, [:slot_key, :slot_date])),
            {:ok, content} <-
              canonical_draft_content(%{definition: definition, request_text: text}),
-           {:ok, draft} <- save_authored_draft(user, nil, content, context_id),
-           {:ok, changed} <- write_home_pointer(recommendation, draft.id),
-           {:ok, _} <-
-             Context.append(scope, context_id, attempt, :outcome, %{
-               "status" => "accepted",
-               "workout_plan_id" => draft.id,
-               "content_hash" => draft.content_hash,
-               "updated_at" => DateTime.to_iso8601(draft.updated_at)
-             }) do
+           {:ok, draft} <- save_authored_draft(user, nil, content),
+           {:ok, changed} <- write_home_pointer(recommendation, draft.id) do
         {:ok, HomeSelection.new(changed, draft)}
       end
     end)
   end
 
-  @spec commit_home_revision(
-          Scope.t(),
-          HomeSelection.t(),
-          map(),
-          String.t(),
-          pos_integer(),
-          Ecto.UUID.t()
-        ) :: {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def commit_home_revision(
-        %Scope{user: %User{} = user} = scope,
-        expected,
-        definition,
-        text,
-        context_id,
-        attempt
-      ) do
+  @doc "Commit authored content against the exact Home selection CAS."
+  def commit_home_revision(%Scope{user: %User{} = user} = scope, expected, definition, text) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
            {:ok, source} <- verify_home_selection(scope, expected),
-           :ok <- Context.check_home_workspace(scope, context_id, expected),
-           {:ok, draft} <-
-             commit_authored_revision(scope, source, definition, text, context_id, attempt),
+           {:ok, content} <-
+             canonical_draft_content(%{definition: definition, request_text: text}),
+           {:ok, draft} <- save_authored_draft(user, source, content),
            {:ok, changed} <- write_home_pointer(r, draft.id) do
         {:ok, HomeSelection.new(changed, draft)}
       end
     end)
   end
 
-  @spec commit_authored_revision(
-          Scope.t(),
-          WorkoutPlan.t() | nil,
-          map(),
-          String.t(),
-          pos_integer(),
-          Ecto.UUID.t()
-        ) :: {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def commit_authored_revision(
-        %Scope{user: %User{} = user} = scope,
-        expected,
-        definition,
-        text,
-        context_id,
-        attempt
-      ) do
+  @doc "Idempotently publish canonical content under an owner-bound approval key."
+  def commit_approved_workout(%Scope{user: %User{} = user}, definition, text, opts)
+      when is_list(opts) do
+    key = Keyword.fetch!(opts, :approval_key)
+
     immediate_lifecycle_transaction(fn ->
-      with {:ok, source} <- current_authoring_source(user, expected),
-           :ok <- Context.check_source(scope, context_id, expected),
-           {:ok, content} <-
-             canonical_draft_content(%{definition: definition, request_text: text}),
-           {:ok, draft} <- save_authored_draft(user, source, content, context_id),
-           {:ok, _} <-
-             Context.append(scope, context_id, attempt, :outcome, %{
-               "status" => "accepted",
-               "workout_plan_id" => draft.id,
-               "content_hash" => draft.content_hash,
-               "updated_at" => DateTime.to_iso8601(draft.updated_at)
-             }) do
-        {:ok, draft}
+      case Repo.get_by(WorkoutPlan, approval_key: key) do
+        %WorkoutPlan{user_id: id, definition_json: ^definition} = plan when id == user.id ->
+          with :ok <- verify_stored_draft(plan), do: {:ok, plan}
+
+        %WorkoutPlan{} ->
+          {:error, Error.new(:design_workspace_changed)}
+
+        nil ->
+          with true <- is_binary(key) and byte_size(key) in 1..200,
+               {:ok, content} <-
+                 canonical_draft_content(%{definition: definition, request_text: text}),
+               {:ok, draft} <-
+                 %WorkoutPlan{user_id: user.id, origin: :user, state: :draft, approval_key: key}
+                 |> WorkoutPlan.new_draft_changeset(content)
+                 |> Repo.insert()
+                 |> normalize_plan_write() do
+            publish_unattached_draft(user, draft.id)
+          else
+            false -> {:error, Error.new(:design_workspace_changed)}
+            {:error, error} -> {:error, error}
+          end
       end
     end)
   end
 
-  @doc "Saves an approved review candidate as a new published workout, without selecting it."
-  @spec commit_approved_workout(Scope.t(), map(), String.t(), pos_integer(), Ecto.UUID.t()) ::
-          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
-  def commit_approved_workout(
-        %Scope{user: %User{} = user} = scope,
-        definition,
-        text,
-        context_id,
-        attempt
-      ) do
-    immediate_lifecycle_transaction(fn ->
-      with {:ok, draft} <-
-             commit_authored_revision(scope, nil, definition, text, context_id, attempt) do
-        publish_unattached_draft(user, draft.id)
-      end
-    end)
-  end
-
-  defp current_authoring_source(_user, nil), do: {:ok, nil}
-
-  defp current_authoring_source(user, expected) do
-    with {:ok, source} <- home_plan(user, expected.id),
-         :ok <- compare_expected_draft_revision(source, %{expected_revision: expected}),
-         :ok <- verify_stored_draft(source) do
-      {:ok, source}
-    end
-  end
-
-  defp save_authored_draft(_user, %{state: :draft} = source, content, context_id) do
+  defp save_authored_draft(_user, %{state: :draft} = source, content) do
     source
     |> WorkoutPlan.replace_draft_changeset(content)
-    |> Ecto.Changeset.put_change(:design_session_id, context_id)
     |> Repo.update()
     |> normalize_plan_write()
   end
 
-  defp save_authored_draft(user, _published_or_nil, content, context_id) do
-    %WorkoutPlan{user_id: user.id, origin: :user, state: :draft, design_session_id: context_id}
+  defp save_authored_draft(user, _published_or_nil, content) do
+    %WorkoutPlan{user_id: user.id, origin: :user, state: :draft}
     |> WorkoutPlan.new_draft_changeset(content)
     |> Repo.insert()
     |> normalize_plan_write()

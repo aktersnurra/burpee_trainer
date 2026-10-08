@@ -7,7 +7,9 @@ defmodule BurpeeTrainer.SchemaMigrationTest do
   @path Path.join(@dir, "20261005000000_coach_first_schema.exs")
 
   setup_all do
-    Code.require_file(@path)
+    unless Code.ensure_loaded?(BurpeeTrainer.Repo.Migrations.CoachFirstSchema),
+      do: Code.require_file(@path)
+
     source = File.read!(@path)
 
     variants =
@@ -400,7 +402,8 @@ defmodule BurpeeTrainer.SchemaMigrationTest do
   end
 
   test "irreversible rollback directs operator to the verified backup" do
-    Code.require_file(@path)
+    unless Code.ensure_loaded?(BurpeeTrainer.Repo.Migrations.CoachFirstSchema),
+      do: Code.require_file(@path)
 
     assert_raise RuntimeError, ~r/irreversible.*restore.*backup/, fn ->
       apply(BurpeeTrainer.Repo.Migrations.CoachFirstSchema, :down, [])
@@ -573,7 +576,8 @@ defmodule BurpeeTrainer.SchemaMigrationTest do
   end
 
   defp migrate!(repo, module \\ BurpeeTrainer.Repo.Migrations.CoachFirstSchema) do
-    Code.require_file(@path)
+    unless Code.ensure_loaded?(BurpeeTrainer.Repo.Migrations.CoachFirstSchema),
+      do: Code.require_file(@path)
 
     Ecto.Migrator.run(repo, [{@version, module}], :up,
       all: true,

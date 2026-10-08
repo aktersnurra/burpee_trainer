@@ -3,7 +3,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Home, CoachReconciler, Repo, Workouts}
+  alias BurpeeTrainer.{Home, Repo, Workouts}
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutSession}
 
@@ -96,7 +96,15 @@ defmodule BurpeeTrainerWeb.HomeLive do
     if generation == socket.assigns.home_day_generation do
       now = socket.assigns.home_now.()
 
-      {:noreply, socket |> refresh_at_boundary(now) |> schedule_home_day()}
+      socket = socket |> refresh_at_boundary(now) |> schedule_home_day()
+
+      if socket.assigns.slot && socket.assigns.slot.home_state == :workout_needed &&
+           (socket.assigns.home_state == :choose or
+              match?({:start, %{plan: %{origin: :built_in}}}, socket.assigns.home_state)) do
+        :ok = BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(socket.assigns.current_scope)
+      end
+
+      {:noreply, socket}
     else
       {:noreply, socket}
     end
@@ -280,13 +288,13 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "close_coach",
              "coach_details_toggle",
-             "coach_guidance_change",
-             "coach_guidance_submit",
-             "coach_guidance_remove",
-             "coach_guidance_edit",
-             "coach_guidance_edit_change",
-             "coach_guidance_edit_cancel",
-             "coach_guidance_edit_save"
+             "coach_message_change",
+             "coach_message",
+             "coach_notebook_change",
+             "coach_notebook_save",
+             "coach_notebook_clear",
+             "coach_goal_confirm",
+             "coach_goal_dismiss"
            ] do
     if socket.assigns.workspace_screen == :coach,
       do: CoachScreen.handle_event(event, params, socket),
@@ -410,7 +418,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   end
 
   def handle_event("retry_recommendation", _params, socket) do
-    :ok = CoachReconciler.wake(socket.assigns.current_scope.user.id, :retry)
+    :ok = BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(socket.assigns.current_scope)
     {:noreply, put_flash(socket, :info, "Looking for another option.")}
   end
 
@@ -468,6 +476,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def session_path(%WorkoutSession{id: id}), do: ~p"/session/#{id}"
 
   @impl true
+  def handle_async(:coach_reply, result, socket),
+    do: CoachScreen.handle_async(:coach_reply, result, socket)
+
   def handle_async({kind, _id} = operation, result, socket)
       when kind in [
              :new_request,

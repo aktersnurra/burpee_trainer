@@ -66,68 +66,55 @@ defmodule BurpeeTrainer.AccountsTest do
     end
   end
 
-  describe "update_timezone/2 reconciliation wake" do
-    test "persists before waking and unchanged provisioned timezones stay write-free" do
+  describe "update_timezone/2" do
+    test "provisioning and changing timezone never enqueue planning or replace first-use bootstrap" do
       user = user_fixture()
-      now = ~U[2026-08-25 02:00:00Z]
-      parent = self()
+      assert {:ok, provisioned} = Accounts.update_timezone(user, "America/Los_Angeles")
+      assert provisioned.timezone_provisioned
+      assert {:ok, updated} = Accounts.update_timezone(provisioned, "Europe/Stockholm")
+      assert updated.timezone == "Europe/Stockholm"
+      assert Repo.aggregate(Oban.Job, :count) == 0
+      scope = BurpeeTrainer.Accounts.Scope.for_user(updated)
 
-      wake = fn user_id, reason ->
-        persisted = Repo.get!(User, user_id)
-        send(parent, {:timezone_wake, user_id, reason, persisted.timezone})
-        :ok
-      end
+      assert {:ok, slot} =
+               BurpeeTrainer.Coach.Policy.required_slot(scope, DateTime.utc_now(:second))
 
-      assert {:ok, updated} =
-               Accounts.update_timezone_at(user, "America/Los_Angeles", now, wake: wake)
-
-      assert updated.timezone == "America/Los_Angeles"
-      assert updated.timezone_provisioned
-      assert_receive {:timezone_wake, user_id, :timezone_changed, "America/Los_Angeles"}
-      assert user_id == user.id
-      previous_updated_at = updated.updated_at
-
-      assert {:ok, same} =
-               Accounts.update_timezone_at(updated, "America/Los_Angeles", now, wake: wake)
-
-      assert same.id == updated.id
-      assert same.updated_at == previous_updated_at
-      refute_receive {:timezone_wake, _, _, _}
+      assert {:ok, :bootstrap} = BurpeeTrainer.Workouts.home_entry_state(scope, slot)
+      assert {:ok, facts} = BurpeeTrainer.Home.facts(scope, DateTime.utc_now(:second))
+      assert BurpeeTrainer.Home.state(facts) == :first_workout
     end
 
-    test "invalid timezone and failed writes send no wake" do
+    test "an unchanged provisioned timezone is write-free" do
       user = user_fixture()
+      assert {:ok, updated} = Accounts.update_timezone(user, "America/Los_Angeles")
       parent = self()
-      wake = fn user_id, reason -> send(parent, {:timezone_wake, user_id, reason}) end
+      handler = "unchanged-timezone-#{Ecto.UUID.generate()}"
 
-      assert {:error, %Ecto.Changeset{}} =
-               Accounts.update_timezone_at(user, "Mars/Olympus_Mons", ~U[2026-08-25 10:00:00Z],
-                 wake: wake
-               )
+      :ok =
+        :telemetry.attach(
+          handler,
+          [:burpee_trainer, :repo, :query],
+          fn _, _, metadata, _ -> send(parent, {:timezone_query, metadata.query}) end,
+          nil
+        )
 
-      refute_receive {:timezone_wake, _, _}
+      on_exit(fn -> :telemetry.detach(handler) end)
+      assert {:ok, same} = Accounts.update_timezone(updated, "America/Los_Angeles")
+      assert same == updated
+      refute_receive {:timezone_query, _}
+    end
+
+    test "invalid timezone and failed writes preserve persisted data" do
+      user = user_fixture()
+      assert {:error, %Ecto.Changeset{}} = Accounts.update_timezone(user, "Mars/Olympus_Mons")
+      assert Repo.reload!(user) == user
       stale_user = %{user | id: user.id + 99_999}
 
       assert_raise Ecto.StaleEntryError, fn ->
-        Accounts.update_timezone_at(stale_user, "Europe/Stockholm", ~U[2026-08-25 10:00:00Z],
-          wake: wake
-        )
+        Accounts.update_timezone(stale_user, "Europe/Stockholm")
       end
 
-      refute_receive {:timezone_wake, _, _}
-    end
-
-    test "wake failure does not undo the committed timezone" do
-      user = user_fixture()
-      wake = fn _user_id, _reason -> raise "wake unavailable" end
-
-      assert {:ok, updated} =
-               Accounts.update_timezone_at(user, "Europe/Stockholm", ~U[2026-08-25 10:00:00Z],
-                 wake: wake
-               )
-
-      assert Repo.get!(User, user.id).timezone == "Europe/Stockholm"
-      assert updated.timezone == "Europe/Stockholm"
+      assert Repo.aggregate(Oban.Job, :count) == 0
     end
   end
 

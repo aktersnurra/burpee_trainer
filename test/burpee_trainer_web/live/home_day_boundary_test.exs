@@ -110,7 +110,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
       Map.take(
         socket.assigns,
         (@workspace_keys -- [:home_selection]) ++
-          [:adjustment_form, :coach_guidance_form, :workout_form]
+          [:adjustment_form, :coach_message_form, :workout_form]
       )
 
     refreshed = refresh(socket, now)
@@ -125,7 +125,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     assert Map.take(
              refreshed.assigns,
              (@workspace_keys -- [:home_selection]) ++
-               [:adjustment_form, :coach_guidance_form, :workout_form]
+               [:adjustment_form, :coach_message_form, :workout_form]
            ) == before
 
     assert present?(refreshed, "#home-action[data-primary-action=start]")
