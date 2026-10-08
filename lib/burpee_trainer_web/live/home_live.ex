@@ -26,6 +26,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       |> assign(
         home_day_timer: nil,
         home_day_generation: 0,
+        home_planning_error: nil,
         editing_source: nil,
         workspace_screen: :home,
         home_focus_return?: false,
@@ -88,6 +89,19 @@ defmodule BurpeeTrainerWeb.HomeLive do
           socket
       end
 
+    socket =
+      if screen == :home,
+        do:
+          assign(
+            socket,
+            :home_insight,
+            BurpeeTrainer.Insights.latest(
+              socket.assigns.current_scope,
+              socket.assigns.home_now.()
+            )
+          ),
+        else: socket
+
     {:noreply, socket}
   end
 
@@ -98,11 +112,14 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
       socket = socket |> refresh_at_boundary(now) |> schedule_home_day()
 
-      if socket.assigns.slot && socket.assigns.slot.home_state == :workout_needed &&
-           (socket.assigns.home_state == :choose or
-              match?({:start, %{plan: %{origin: :built_in}}}, socket.assigns.home_state)) do
-        :ok = BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(socket.assigns.current_scope)
-      end
+      socket =
+        if socket.assigns.slot && socket.assigns.slot.home_state == :workout_needed &&
+             (socket.assigns.home_state == :choose or
+                match?({:start, %{plan: %{origin: :built_in}}}, socket.assigns.home_state)) do
+          enqueue_planner(socket)
+        else
+          socket
+        end
 
       {:noreply, socket}
     else
@@ -418,11 +435,27 @@ defmodule BurpeeTrainerWeb.HomeLive do
   end
 
   def handle_event("retry_recommendation", _params, socket) do
-    :ok = BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(socket.assigns.current_scope)
-    {:noreply, put_flash(socket, :info, "Looking for another option.")}
+    socket = enqueue_planner(socket)
+
+    socket =
+      if is_nil(socket.assigns.home_planning_error),
+        do: put_flash(socket, :info, "Looking for another option."),
+        else: socket
+
+    {:noreply, socket}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp enqueue_planner(socket) do
+    case BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(socket.assigns.current_scope) do
+      :ok ->
+        assign(socket, home_planning_error: nil)
+
+      {:error, _reason} ->
+        assign(socket, home_planning_error: "Planning is unavailable. Try again later.")
+    end
+  end
 
   def start_result(socket, {:ok, session}),
     do: {:noreply, push_navigate(socket, to: session_path(session))}
@@ -446,6 +479,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         socket
         |> assign(
           home_facts: facts,
+          home_insight: BurpeeTrainer.Insights.latest(socket.assigns.current_scope, now),
           home_state: state,
           home_primary_action: BurpeeTrainer.Home.State.primary_action(state),
           slot: facts.slot,
@@ -459,6 +493,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         socket
         |> assign(
           home_facts: nil,
+          home_insight: nil,
           home_state: nil,
           home_primary_action: nil,
           slot: nil,

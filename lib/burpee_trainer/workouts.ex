@@ -1574,7 +1574,17 @@ defmodule BurpeeTrainer.Workouts do
             |> maybe_with_snapshot_deviation(session)
             |> with_derived_session_fields(user_id, user.timezone)
 
-          persist_completed_session(user, changeset, &Repo.update/1)
+          completed = persist_completed_session(user, changeset, &Repo.update/1)
+
+          # Admit both durable jobs before committing the session and goal effects.
+          # Job admission does not perform provider I/O.
+          with :ok <- BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(scope),
+               {:ok, _job} <- BurpeeTrainer.Insights.NarrateJob.enqueue(scope, completed) do
+            completed
+          else
+            {:error, _reason} ->
+              Repo.rollback(Error.new(:completion_jobs_unavailable, %{session_id: session_id}))
+          end
 
         nil ->
           Repo.rollback(Error.new(:session_not_owned, %{session_id: session_id}))
@@ -1582,7 +1592,6 @@ defmodule BurpeeTrainer.Workouts do
     end)
     |> case do
       {:ok, %WorkoutSession{} = session} ->
-        :ok = BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(scope)
         {:ok, session}
 
       {:error, %Error{} = error} ->

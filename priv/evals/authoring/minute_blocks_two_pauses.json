@@ -1,0 +1,20 @@
+{
+  "id": "minute_blocks_two_pauses",
+  "form": {
+    "burpee_type": "six_count",
+    "pacing_style": "unbroken",
+    "reps": 140,
+    "duration": "20:00",
+    "recovery": "required",
+    "pace": 5.0,
+    "sets": "",
+    "rests": "60s at 11:00\n40s at 18:00",
+    "note": "try to make the rests more even; roughly one-minute blocks"
+  },
+  "expected": {
+    "target_reps": 140,
+    "burpee_type": "six_count",
+    "target_duration_sec": 1200,
+    "recovery": "required"
+  }
+}

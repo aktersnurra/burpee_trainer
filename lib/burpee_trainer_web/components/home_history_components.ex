@@ -295,6 +295,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <.session_sheet
         :if={@state.history_selected_session}
         session={@state.history_selected_session}
+        insight={@state.history_selected_insight}
         confirm?={@state.history_confirm_delete?}
         timezone={@state.current_scope.user.timezone}
         return_to={@state.history_session_return_to}
@@ -305,6 +306,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   end
 
   attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
+  attr(:insight, :any, default: nil)
   attr(:confirm?, :boolean, required: true)
   attr(:timezone, :string, required: true)
   attr(:return_to, :string, required: true)
@@ -387,6 +389,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <% else %>
           <h2>{display_name(@session)}</h2>
           <p>{local_completion(@session, @timezone)}</p>
+          <section :if={@insight} id="history-insight" class="mt-4">
+            <h3 id="history-insight-headline">{@insight.headline}</h3>
+            <ul id="history-insight-points" class="mt-2 space-y-2">
+              <li :for={point <- @insight.points["items"]}>{point["text"]}</li>
+            </ul>
+          </section>
           <div id={"home-history-details-#{@session.id}"}>
             <.session_details id={"home-history-sheet-details-#{@session.id}"} session={@session} />
           </div>

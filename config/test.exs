@@ -5,8 +5,22 @@ import Config
 # The MIX_TEST_PARTITION environment variable can be used
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
+# An OS-level override survives Mix config reloads and child VMs, unlike put_env/3.
+test_database =
+  case System.get_env("BURPEE_TRAINER_TEST_DATABASE_PATH") do
+    nil ->
+      Path.expand("../burpee_trainer_test.db", __DIR__)
+
+    path ->
+      if Path.type(path) != :absolute do
+        raise "BURPEE_TRAINER_TEST_DATABASE_PATH must be an absolute path"
+      end
+
+      path
+  end
+
 config :burpee_trainer, BurpeeTrainer.Repo,
-  database: Path.expand("../burpee_trainer_test.db", __DIR__),
+  database: test_database,
   pool_size: 5,
   pool: Ecto.Adapters.SQL.Sandbox
 

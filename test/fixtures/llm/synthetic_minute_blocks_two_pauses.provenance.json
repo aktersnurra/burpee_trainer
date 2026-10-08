@@ -1,0 +1,5 @@
+{
+  "capture_kind": "synthetic_fixture",
+  "source": "Hand-built from the existing LayoutFixtures shape and approved scenario constraints. Not a real provider capture.",
+  "scenario_id": "minute_blocks_two_pauses"
+}

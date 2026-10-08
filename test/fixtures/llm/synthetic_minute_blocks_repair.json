@@ -1,0 +1,30 @@
+[
+  {
+    "choices": [
+      {
+        "message": {
+          "content": "{\"name\": null, \"rationale\": \"Synthetic test layout.\", \"phases\": [{\"sets\": [{\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}], \"rest_weights\": [1, 1, 1, 1, 1, 1, 1, 1, 1]}, {\"sets\": [{\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}], \"rest_weights\": [1, 1, 1, 1, 1]}, {\"sets\": [{\"reps\": 6, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 6, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}], \"rest_weights\": [1]}]}"
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 83,
+      "completion_tokens": 47,
+      "cost": 0.0001
+    }
+  },
+  {
+    "choices": [
+      {
+        "message": {
+          "content": "{\"name\": \"Synthetic minute blocks\", \"rationale\": \"Synthetic test layout.\", \"phases\": [{\"sets\": [{\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}], \"rest_weights\": [1, 1, 1, 1, 1, 1, 1, 1, 1]}, {\"sets\": [{\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 8, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}], \"rest_weights\": [1, 1, 1, 1, 1]}, {\"sets\": [{\"reps\": 6, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}, {\"reps\": 6, \"sec_per_rep\": 5.0, \"sec_per_burpee\": 5.0}], \"rest_weights\": [1]}]}"
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 83,
+      "completion_tokens": 47,
+      "cost": 0.0001
+    }
+  }
+]

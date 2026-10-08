@@ -60,6 +60,9 @@ defmodule BurpeeTrainerWeb.HomeScreen do
       data-home-state={state_tag(@home_state)}
       class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16"
     >
+      <p :if={@home_planning_error} id="home-planning-error" role="status" class="home-local-message">
+        {@home_planning_error}
+      </p>
       <div class="adaptive-home">
         <div id="home-progress-history" class="relative min-h-11">
           <%= if @slot do %>
@@ -133,6 +136,9 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 </a>
               </section>
             <% {state, _results} when state in [:done_today, :week_complete] -> %>
+              <p :if={@home_insight} id="home-insight-headline" class="home-result-meta">
+                {@home_insight.headline}
+              </p>
               <%= if @result_today_session do %>
                 <section id="home-done-today" class="home-result">
                   <p class="home-state-label">Today</p>

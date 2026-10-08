@@ -20,13 +20,9 @@ defmodule BurpeeTrainer.Coach.Tools.SelectWorkout do
              map_size(args) == 2 do
     with {:ok, _} <- Workouts.get_library_plan(scope, id) do
       case run do
-        %{slot: slot} when is_map(slot) ->
-          with {:ok, selection} <- Workouts.ensure_home_selection(scope, slot),
-               {:ok, _} <- Workouts.select_planned_workout(scope, selection, id, rationale) do
-            {:ok, %{"selected" => id}}
-          else
-            _ -> {:error, "selection changed or workout does not fit the slot"}
-          end
+        %{slot: slot, expected_selection: %BurpeeTrainer.Workouts.HomeSelection{}}
+        when is_map(slot) ->
+          {:ok, %{"selected" => id}, %{pending_selection: %{plan_id: id, rationale: rationale}}}
 
         _ ->
           {:error, "planner slot required"}

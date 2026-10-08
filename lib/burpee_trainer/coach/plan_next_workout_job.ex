@@ -9,7 +9,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
       states: [:available, :scheduled, :executing, :retryable]
     ]
 
-  alias BurpeeTrainer.{Accounts, UserTime}
+  alias BurpeeTrainer.{Accounts, UserTime, Repo}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.{Policy, Agent}
   @impl true
@@ -40,6 +40,19 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
   @spec enqueue(Scope.t()) :: :ok | {:error, term()}
   def enqueue(%Scope{} = scope) do
+    Repo.immediate_transaction(fn ->
+      case enqueue_in_transaction(scope) do
+        :ok -> :ok
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, :ok} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp enqueue_in_transaction(scope) do
     with {:ok, slot, at} <- target_slot(scope, DateTime.utc_now(:second)),
          :workout_needed <- slot.home_state,
          {:ok, _} <-

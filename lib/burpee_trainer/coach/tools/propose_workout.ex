@@ -69,17 +69,21 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
                  "Planner",
                  approval_key: run.run_id <> ":" <> Integer.to_string(run.call_index)
                ),
-             {:ok, _} <-
+             {:ok, _, changes} <-
                BurpeeTrainer.Coach.Tools.SelectWorkout.call(
                  scope,
                  %{"plan_id" => plan.id, "rationale" => layout["rationale"] || "Planned workout"},
                  run
                ) do
-          %{"plan_id" => plan.id, "duration_sec" => plan.target_duration_sec}
+          {%{"plan_id" => plan.id, "duration_sec" => plan.target_duration_sec}, changes}
         else
           {:error, reason} -> Repo.rollback(describe(reason))
         end
       end)
+      |> case do
+        {:ok, {result, changes}} -> {:ok, result, changes}
+        {:error, reason} -> {:error, reason}
+      end
     else
       false -> {:error, "reps must be within current or next level"}
       {:error, reason} -> {:error, describe(reason)}

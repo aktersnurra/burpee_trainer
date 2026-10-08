@@ -24,6 +24,7 @@ defmodule BurpeeTrainer.Coach.Agent do
       run_id: Keyword.get_lazy(opts, :run_id, &Ecto.UUID.generate/0),
       surface: surface,
       slot: Keyword.get(opts, :slot),
+      pending_selection: nil,
       notebook_seen: notebook.updated_at,
       proposals: 0,
       call_index: 0
@@ -33,8 +34,11 @@ defmodule BurpeeTrainer.Coach.Agent do
          (not is_binary(input) or String.length(input) > 1000 or byte_size(input) > 8000) do
       {:error, :invalid_input}
     else
-      messages = AgentPrompt.messages(scope, surface, input, notebook, run.slot)
-      loop(scope, messages, tools, run, 0, opts)
+      with {:ok, expected} <- original_selection(scope, run) do
+        run = Map.put(run, :expected_selection, expected)
+        messages = AgentPrompt.messages(scope, surface, input, notebook, run.slot)
+        loop(scope, messages, tools, run, 0, opts)
+      end
     end
   end
 
@@ -63,7 +67,7 @@ defmodule BurpeeTrainer.Coach.Agent do
         {:ok, %{tool_calls: [], content: %{"reply" => reply} = content}}
         when is_binary(reply) and map_size(content) == 1 ->
           if String.length(reply) <= 600,
-            do: {:ok, %{reply: reply}},
+            do: finalize(scope, run, reply),
             else: {:error, :invalid_provider_response}
 
         {:ok, %{tool_calls: [_ | _] = calls_returned}} ->
@@ -100,6 +104,26 @@ defmodule BurpeeTrainer.Coach.Agent do
       end
     end
   end
+
+  defp original_selection(scope, %{surface: :planner, slot: slot}) when is_map(slot),
+    do: BurpeeTrainer.Workouts.ensure_home_selection(scope, slot)
+
+  defp original_selection(_, _), do: {:ok, nil}
+
+  # No provider I/O occurs in the final selection transaction. Owner revisions win.
+  defp finalize(scope, %{pending_selection: %{plan_id: id, rationale: rationale}} = run, reply) do
+    with {:ok, _} <-
+           BurpeeTrainer.Workouts.select_planned_workout(
+             scope,
+             run.expected_selection,
+             id,
+             rationale
+           ) do
+      {:ok, %{reply: reply}}
+    end
+  end
+
+  defp finalize(_, _, reply), do: {:ok, %{reply: reply}}
 
   defp execute(scope, tools, call, run) do
     run = %{run | call_index: run.call_index + 1}

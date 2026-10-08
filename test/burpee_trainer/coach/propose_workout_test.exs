@@ -4,10 +4,11 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
   alias BurpeeTrainer.Coach.{Policy, Tools.ProposeWorkout}
   alias BurpeeTrainer.{Workouts, LayoutFixtures}
 
-  test "fits slot-fixed canonical workout and selects it; invalid arguments have no effects" do
+  test "fits and publishes slot-fixed canonical workout while staging selection; invalid arguments have no effects" do
     scope = scope_fixture()
     {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
-    run = %{slot: slot, run_id: Ecto.UUID.generate(), call_index: 1}
+    {:ok, expected} = Workouts.ensure_home_selection(scope, slot)
+    run = %{slot: slot, run_id: Ecto.UUID.generate(), call_index: 1, expected_selection: expected}
 
     args = %{
       "reps" => 20,
@@ -18,11 +19,14 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
       "layout" => LayoutFixtures.layout([[{10, 5.0, 5.0}, {10, 5.0, 5.0}]])
     }
 
-    assert {:ok, %{"plan_id" => id, "duration_sec" => duration}} =
+    assert {:ok, %{"plan_id" => id, "duration_sec" => duration},
+            %{pending_selection: %{plan_id: id, rationale: rationale}}} =
              ProposeWorkout.call(scope, args, run)
 
     assert duration == slot.duration_sec
-    assert {:ok, %{plan: %{id: ^id}}} = Workouts.ensure_home_selection(scope, slot)
+    assert {:ok, ^expected} = Workouts.ensure_home_selection(scope, slot)
+    assert {:ok, %{id: ^id, state: :published}} = Workouts.get_library_plan(scope, id)
+    assert is_binary(rationale)
     assert {:error, _} = ProposeWorkout.call(scope, Map.put(args, "reps", 300), run)
     assert {:error, _} = ProposeWorkout.call(scope, %{}, run)
   end
