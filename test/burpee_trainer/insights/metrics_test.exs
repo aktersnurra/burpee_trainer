@@ -87,7 +87,7 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
     rows = [
       session(1, ~U[2026-09-22 12:00:00Z], 100, 4800),
       session(2, ~U[2026-09-29 12:00:00Z], 100, 4800),
-      session(3, ~U[2026-10-06 12:00:00Z], 100, 1000)
+      session(3, ~U[2026-10-06 12:00:00Z], 100, 1200)
     ]
 
     goals = [
@@ -111,7 +111,7 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
 
     m = Metrics.compute(rows, goals, ~D[2026-10-07], "Etc/UTC", ~D[2024-01-01])
     assert m["streak.weeks"].value == 2
-    assert m["pace.change_6w.six_count"].value == -38.0
+    assert m["pace.change_6w.six_count"].value == -36.0
     assert m["goal.7.progress_pct"].value == 100
     refute Map.has_key?(m, "goal.8.progress_pct")
 

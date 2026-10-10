@@ -3,8 +3,8 @@ defmodule BurpeeTrainer.Levels do
   Pure functional level derivation. No Ecto, no side effects.
 
   Levels are derived from sessions at read time and never stored.
-  A session qualifies for a landmark when `duration_sec_actual <= 1200`
-  and `burpee_count_actual >= threshold`.
+  A level is N reps in 20 minutes: a session qualifies for a landmark only when it
+  lasted 20 minutes (±10 seconds) and `burpee_count_actual >= threshold`.
 
   A level is *achieved* only when both `:six_count` and `:navy_seal`
   threshold sessions occur within the same ISO calendar week. Doing
@@ -26,6 +26,8 @@ defmodule BurpeeTrainer.Levels do
     %{level: :level_1b, six_count: 50, navy_seal: 20},
     %{level: :level_1a, six_count: 1, navy_seal: 1}
   ]
+
+  @landmark_duration_sec 1_190..1_210
 
   @doc "All valid level atoms, ordered from highest to lowest."
   @spec all_levels() :: [atom]
@@ -149,7 +151,7 @@ defmodule BurpeeTrainer.Levels do
 
   defp qualifies?(%{duration_sec_actual: d, burpee_count_actual: n})
        when is_integer(d) and is_integer(n),
-       do: d <= 1200 and n >= 1
+       do: d in @landmark_duration_sec and n >= 1
 
   defp qualifies?(_), do: false
 end
