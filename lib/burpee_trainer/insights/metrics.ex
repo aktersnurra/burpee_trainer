@@ -3,6 +3,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
   alias BurpeeTrainer.{Levels, UserTime}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.AuthoritativeSession
+  alias BurpeeTrainer.Coach.Policy.Week
 
   @type id :: String.t()
   @type numeric_unit :: :minutes | :reps | :weeks | :seconds | :percent
@@ -19,9 +20,14 @@ defmodule BurpeeTrainer.Insights.Metrics do
     with true <-
            Map.get(target, :user_id) == user.id and AuthoritativeSession.authoritative?(target),
          %DateTime{} = at <- Map.get(target, :completed_at),
-         {:ok, context} <- UserTime.context(user, at) do
+         {:ok, context} <- UserTime.context(user, at),
+         {:ok, signed_up_on} <- UserTime.local_date(user.inserted_at, context.timezone) do
       aggregates = for_scope(scope, sessions, goals, at) |> Map.drop(@session_ids)
-      projected = compute([target], [], context.date, context.timezone) |> Map.take(@session_ids)
+
+      projected =
+        compute([target], [], context.date, context.timezone, signed_up_on)
+        |> Map.take(@session_ids)
+
       {:ok, Map.merge(aggregates, projected)}
     else
       _ -> {:error, :invalid_target}
@@ -33,6 +39,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
   @spec for_scope(Scope.t(), [map()], [map()], DateTime.t()) :: map()
   def for_scope(%Scope{user: user}, sessions, goals, now) do
     {:ok, context} = UserTime.context(user, now)
+    {:ok, signed_up_on} = UserTime.local_date(user.inserted_at, context.timezone)
 
     sessions =
       Enum.filter(
@@ -42,11 +49,12 @@ defmodule BurpeeTrainer.Insights.Metrics do
       )
 
     goals = Enum.filter(goals, &(&1.user_id == user.id))
-    compute(sessions, goals, context.date, context.timezone)
+    compute(sessions, goals, context.date, context.timezone, signed_up_on)
   end
 
-  @spec compute([map()], [map()], Date.t(), String.t()) :: %{String.t() => metric()}
-  def compute(sessions, goals, %Date{} = today, timezone) do
+  @doc "Weekly targets follow `Coach.Policy.Week` for a user who signed up on `signed_up_on`."
+  @spec compute([map()], [map()], Date.t(), String.t(), Date.t()) :: %{String.t() => metric()}
+  def compute(sessions, goals, %Date{} = today, timezone, %Date{} = signed_up_on) do
     {:ok, _} = UserTime.resolve_local(today, ~T[00:00:00], timezone)
 
     rows =
@@ -71,9 +79,14 @@ defmodule BurpeeTrainer.Insights.Metrics do
     base = %{
       "week.minutes" =>
         metric(div(sum(week, :duration_sec_actual), 60), :minutes, "minutes this week"),
-      "week.target_minutes" => metric(80, :minutes, "weekly target"),
+      "week.target_minutes" =>
+        metric(div(Week.new(signed_up_on, start).target_sec, 60), :minutes, "weekly target"),
       "streak.weeks" =>
-        metric(streak(credited, start), :weeks, "completed weeks in a row at target")
+        metric(
+          streak(credited, start, signed_up_on),
+          :weeks,
+          "completed weeks in a row at target"
+        )
     }
 
     per_type =
@@ -192,7 +205,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
       else: base
   end
 
-  defp streak(rows, start) do
+  defp streak(rows, start, signed_up_on) do
     totals =
       Enum.reduce(rows, %{}, fn s, acc ->
         Map.update(
@@ -204,7 +217,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
       end)
 
     Stream.iterate(Date.add(start, -7), &Date.add(&1, -7))
-    |> Enum.take_while(&(Map.get(totals, &1, 0) >= 4800))
+    |> Enum.take_while(&(Map.get(totals, &1, 0) >= Week.new(signed_up_on, &1).target_sec))
     |> length()
   end
 end

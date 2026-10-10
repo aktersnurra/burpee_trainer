@@ -455,11 +455,11 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp week_title(week),
     do:
-      "Week of #{Date.to_iso8601(week.start)}: #{week.minutes} of 80 minutes#{if week.open?, do: ", in progress", else: ""}"
+      "Week of #{Date.to_iso8601(week.start)}: #{week.minutes} of #{week.target_minutes} minutes#{if week.open?, do: ", in progress", else: ""}"
 
   defp completed_week_summary(weeks) do
     completed = Enum.drop(weeks, -1)
-    "#{Enum.count(completed, &(&1.minutes >= 80))} of #{length(completed)} completed weeks"
+    "#{Enum.count(completed, & &1.target?)} of #{length(completed)} completed weeks"
   end
 
   defp current_week_label([]), do: ""

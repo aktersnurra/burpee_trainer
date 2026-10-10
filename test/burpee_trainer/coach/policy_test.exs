@@ -1,5 +1,6 @@
 defmodule BurpeeTrainer.Coach.PolicyTest do
   use BurpeeTrainer.DataCase, async: false
+  use ExUnitProperties
 
   import BurpeeTrainer.Fixtures
   import Ecto.Query
@@ -231,6 +232,86 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     {:ok, parsed} = BurpeeTrainer.PlanCompiler.WorkoutDefinition.new(definition)
     {:ok, program} = PlanCompiler.compile(parsed)
     BurpeeTrainer.PlanCompiler.ProgramHash.canonical_map(program)
+  end
+
+  describe "sign-up week" do
+    # 2026-10-05 is a Monday; 2026-10-09 Friday, 10 Saturday, 11 Sunday.
+    test "is pro-rated to 20 minutes per remaining day with standard slots only" do
+      for {signed_up, target} <- [
+            {~U[2026-10-09 09:00:00Z], 3_600},
+            {~U[2026-10-10 09:00:00Z], 2_400},
+            {~U[2026-10-11 09:00:00Z], 1_200}
+          ] do
+        user = user_fixture() |> provision_timezone("Etc/UTC") |> sign_up_at(signed_up)
+
+        assert {:ok, slot} =
+                 Policy.required_slot(Scope.for_user(user), DateTime.add(signed_up, 3_600))
+
+        assert slot.weekly_target_sec == target
+        assert slot.remaining_sec == target
+        assert slot.strategy == :standard
+        assert slot.duration_sec == 1_200
+      end
+    end
+
+    test "a Saturday sign-up trains 20 minutes on Sunday too, never a catch-up" do
+      user =
+        user_fixture() |> provision_timezone("Etc/UTC") |> sign_up_at(~U[2026-10-10 09:00:00Z])
+
+      complete(user, ~U[2026-10-10 10:00:00Z], 1_200)
+
+      assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2026-10-11 09:00:00Z])
+      assert slot.remaining_sec == 1_200
+      assert slot.strategy == :standard
+      assert slot.duration_sec == 1_200
+    end
+
+    test "is resolved in the user's timezone across a DST change" do
+      # 2026-03-07 10:00 PST is a Saturday; the clocks change on Sunday 2026-03-08.
+      user =
+        user_fixture()
+        |> provision_timezone("America/Los_Angeles")
+        |> sign_up_at(~U[2026-03-07 18:00:00Z])
+
+      assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2026-03-07 20:00:00Z])
+      assert slot.weekly_target_sec == 2_400
+      assert slot.strategy == :standard
+    end
+
+    test "every later week has the full target and weekend catch-up" do
+      user =
+        user_fixture() |> provision_timezone("Etc/UTC") |> sign_up_at(~U[2026-09-01 09:00:00Z])
+
+      assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2026-10-10 09:00:00Z])
+      assert slot.weekly_target_sec == 4_800
+      assert slot.strategy == :catch_up
+      assert slot.duration_sec == 4_800
+    end
+
+    property "slots never exceed the remainder, and the sign-up week has no catch-up" do
+      check all(
+              sign_up_day <- integer(0..400),
+              days_after <- integer(0..20),
+              hour <- integer(0..23),
+              max_runs: 60
+            ) do
+        signed_up = DateTime.add(~U[2025-01-01 08:00:00Z], sign_up_day, :day)
+        now = DateTime.add(signed_up, days_after * 86_400 + hour * 3_600, :second)
+        user = user_fixture() |> provision_timezone("Etc/UTC") |> sign_up_at(signed_up)
+
+        assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
+        assert slot.duration_sec <= slot.remaining_sec
+
+        sign_up_week? =
+          Date.beginning_of_week(DateTime.to_date(signed_up)) ==
+            Date.beginning_of_week(DateTime.to_date(now))
+
+        if sign_up_week? or Date.day_of_week(DateTime.to_date(now)) <= 5 do
+          assert slot.strategy == :standard
+          assert slot.duration_sec <= 1_200
+        end
+      end
+    end
   end
 
   defp provision_timezone(user, timezone) do

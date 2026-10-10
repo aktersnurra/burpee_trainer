@@ -16,6 +16,9 @@ defmodule BurpeeTrainer.Fixtures do
   Build and register a user. Username defaults are uniquified via
   `System.unique_integer/1` so fixtures can be called many times per
   test.
+
+  The user is established: they signed up long ago, so the current week is a regular
+  training week whatever day the suite runs. Use `sign_up_at/2` for a sign-up week.
   """
   def user_fixture(attrs \\ %{}) do
     suffix =
@@ -30,7 +33,16 @@ defmodule BurpeeTrainer.Fixtures do
       })
       |> Accounts.create_user()
 
-    user
+    sign_up_at(user, ~U[2024-01-01 00:00:00Z])
+  end
+
+  @doc "Set when the user signed up, which decides their pro-rated sign-up week."
+  def sign_up_at(%Accounts.User{id: id}, %DateTime{} = signed_up_at) do
+    BurpeeTrainer.Repo.update_all(from(user in Accounts.User, where: user.id == ^id),
+      set: [inserted_at: DateTime.truncate(signed_up_at, :second)]
+    )
+
+    BurpeeTrainer.Repo.get!(Accounts.User, id)
   end
 
   @doc "Build an authorization scope around a persisted fixture user."

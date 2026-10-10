@@ -3,6 +3,7 @@ defmodule BurpeeTrainer.History do
 
   alias BurpeeTrainer.{UserTime, Workouts}
   alias BurpeeTrainer.Coach.AuthoritativeSession
+  alias BurpeeTrainer.Coach.Policy.Week
   alias BurpeeTrainer.Stats.Series
   alias BurpeeTrainer.Workouts.WorkoutSession
 
@@ -46,7 +47,8 @@ defmodule BurpeeTrainer.History do
   @spec weeks([WorkoutSession.t()], map(), DateTime.t(), period()) ::
           {:ok, [map()]} | {:error, :invalid_timezone}
   def weeks(sessions, user, now, period) when period in ["twelve_weeks", "year", "all"] do
-    with {:ok, context} <- UserTime.context(user, now) do
+    with {:ok, context} <- UserTime.context(user, now),
+         {:ok, signed_up_on} <- UserTime.local_date(user.inserted_at, context.timezone) do
       dated =
         for session <- sessions,
             %DateTime{} = at <- [session.completed_at],
@@ -81,13 +83,15 @@ defmodule BurpeeTrainer.History do
         for offset <- (count - 1)..0//-1 do
           date = Date.add(context.week_start, -7 * offset)
           seconds = Map.get(minutes_by_week, date, 0)
+          target_sec = Week.new(signed_up_on, date).target_sec
 
           %{
             start: date,
             seconds: seconds,
             minutes: div(seconds, 60),
             open?: offset == 0,
-            target?: seconds >= 4_800
+            target_minutes: div(target_sec, 60),
+            target?: seconds >= target_sec
           }
         end
 

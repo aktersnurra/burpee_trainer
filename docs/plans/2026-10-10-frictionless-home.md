@@ -44,7 +44,7 @@
 
 **Files:** Create `lib/burpee_trainer/coach/policy/week.ex`; Test `test/burpee_trainer/coach/policy/week_test.exs`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```elixir
 defmodule BurpeeTrainer.Coach.Policy.WeekTest do
@@ -93,8 +93,8 @@ end
 
 Weeks before the sign-up week (negative offsets) are regular: there is no history in them, and the constructor must not special-case them.
 
-- [ ] **Step 2: Run** — `T mix test test/burpee_trainer/coach/policy/week_test.exs` — FAIL (module missing).
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run** — `T mix test test/burpee_trainer/coach/policy/week_test.exs` — FAIL (module missing).
+- [x] **Step 3: Implement**
 
 ```elixir
 defmodule BurpeeTrainer.Coach.Policy.Week do
@@ -128,7 +128,7 @@ defmodule BurpeeTrainer.Coach.Policy.Week do
 end
 ```
 
-- [ ] **Step 4: Run** — PASS. **Commit** — `feat(policy): model the training week as data`
+- [x] **Step 4: Run** — PASS. **Commit** — `feat(policy): model the training week as data`
 
 ---
 
@@ -136,23 +136,23 @@ end
 
 **Files:** `lib/burpee_trainer/coach/policy.ex`, `lib/burpee_trainer/history.ex`, `lib/burpee_trainer/insights/metrics.ex`, `lib/burpee_trainer_web/components/home_history_components.ex`; tests `test/burpee_trainer/coach/policy_test.exs`, metrics tests.
 
-- [ ] **Step 1: Failing tests** in `policy_test.exs` (use `user_fixture/1` with `"timezone"`, then set `inserted_at` with `Repo.update_all` to the sign-up instant; evaluate `Policy.required_slot/2` at a chosen `now`):
+- [x] **Step 1: Failing tests** in `policy_test.exs` (use `user_fixture/1` with `"timezone"`, then set `inserted_at` with `Repo.update_all` to the sign-up instant; evaluate `Policy.required_slot/2` at a chosen `now`):
   - signed up Saturday 2026-10-10 09:00 local, `now` = same day → `weekly_target_sec == 2_400`, `strategy == :standard`, `duration_sec == 1_200`;
   - signed up Friday → target 3_600; Sunday → 1_200;
   - signed up three weeks earlier, `now` Saturday with nothing done → target 4_800, `strategy == :catch_up`, `duration_sec == 4_800` (unchanged behaviour);
   - DST: `America/Los_Angeles`, sign-up Saturday 2026-03-07 (week containing the 2026-03-08 change) → target 2_400.
   - Property: for a generated sign-up date in the past year and a `now` within 0..20 days after it, `slot.duration_sec <= slot.remaining_sec`, and in the sign-up week `slot.strategy == :standard` and `slot.duration_sec <= 1_200`.
-- [ ] **Step 2: Run** — FAIL (target is the constant).
-- [ ] **Step 3: Implement in `Policy.required_slot/2`:**
+- [x] **Step 2: Run** — FAIL (target is the constant).
+- [x] **Step 3: Implement in `Policy.required_slot/2`:**
   - `week = Week.new(UserTime.local_date(user.inserted_at, context.timezone) |> elem(1), context.week_start)` (check `UserTime.local_date/2`'s return shape and use it the way `Insights.Metrics.compute/4` does).
   - Replace `@weekly_target_sec` with `week.target_sec` (remaining, week_complete, `weekly_target_sec:` in the slot map) and `Date.day_of_week(context.date) in [6, 7]` with `Date.day_of_week(context.date) in week.catch_up_days`. Delete `@weekly_target_sec`; change the `@type slot` field to `weekly_target_sec: pos_integer()`.
   - Nothing else in `Policy` changes. In particular no conditional on the week's origin.
-- [ ] **Step 4: Remaining hard-coded targets** (each gets a focused failing test first, then the fix):
+- [x] **Step 4: Remaining hard-coded targets** (each gets a focused failing test first, then the fix):
   - `History` weeks (`target?: seconds >= 4_800`): compute `Week.new(sign_up_date, date).target_sec` per week; `History` already has the user and context.
-  - `HomeHistoryComponents.day_bar_height/1` (`seconds * 100 / 4_800`): scale by the week's `target_sec`, passed in from the week row.
+  - `HomeHistoryComponents.day_bar_height/1` (`seconds * 100 / 4_800`): kept. It is the day chart's fixed 0–40–80 minute axis, not a target. Instead the week tooltip/aria-label and the completed-week count now read each week's `target_minutes` / `target?`.
   - `Insights.Metrics.compute/4`: add a `sign_up_date` argument (`compute/5`); `week.target_minutes` = `div(Week.new(sign_up_date, start).target_sec, 60)`; `streak/2` compares each week's total with that week's `target_sec`. Update `for_scope/4`/`for_session/4` callers to pass `UserTime.local_date(user.inserted_at, tz)`.
-  - `grep -rn "4_800\|4800\|weekly_target\|80, :minutes" lib` must then show only `Week`.
-- [ ] **Step 5: Run** — `T mix test` → 0 failures. **Commit** — `feat(policy): pro-rate the sign-up week without catch-up`
+  - `grep -rn "4_800\|4800\|weekly_target\|80, :minutes" lib` then shows only `Week`, the slot field, the day-chart axis, the absolute minute colour legend and `CatchUpPolicy`'s 80-minute session cap.
+- [x] **Step 5: Run** — `T mix test` → 0 failures. **Commit** — `feat(policy): pro-rate the sign-up week without catch-up`
 
 ---
 

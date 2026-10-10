@@ -6,11 +6,11 @@ defmodule BurpeeTrainer.Coach.Policy do
   alias BurpeeTrainer.Accounts.{Scope, User}
 
   alias BurpeeTrainer.Coach.{AuthoritativeSession, CatchUpPolicy}
+  alias BurpeeTrainer.Coach.Policy.Week
 
   alias BurpeeTrainer.{Repo, UserTime}
   alias BurpeeTrainer.Workouts.{Error, WorkoutSession}
 
-  @weekly_target_sec 4_800
   @standard_duration_sec 1_200
   @catch_up_floor_sec 2_400
   @six_weeks_sec 42 * 24 * 60 * 60
@@ -19,7 +19,7 @@ defmodule BurpeeTrainer.Coach.Policy do
           slot_date: Date.t(),
           local_date: Date.t(),
           week_start: Date.t(),
-          weekly_target_sec: 4_800,
+          weekly_target_sec: pos_integer(),
           completed_sec: non_neg_integer(),
           remaining_sec: non_neg_integer(),
           duration_sec: non_neg_integer(),
@@ -34,7 +34,9 @@ defmodule BurpeeTrainer.Coach.Policy do
   @spec required_slot(Scope.t(), DateTime.t()) :: {:ok, slot()} | {:error, Error.t()}
   def required_slot(%Scope{user: %User{id: user_id} = user}, %DateTime{} = now) do
     with {:ok, context} <- UserTime.context(user, now),
-         {:ok, week_start_utc, week_end_utc} <- UserTime.week_bounds_utc(context) do
+         {:ok, week_start_utc, week_end_utc} <- UserTime.week_bounds_utc(context),
+         {:ok, signed_up_on} <- UserTime.local_date(user.inserted_at, context.timezone) do
+      week = Week.new(signed_up_on, context.week_start)
       sessions = completed_sessions(user_id, now)
 
       week_sessions =
@@ -44,7 +46,7 @@ defmodule BurpeeTrainer.Coach.Policy do
         end)
 
       completed_sec = Enum.reduce(week_sessions, 0, &(&2 + credited_duration(&1)))
-      remaining_sec = max(@weekly_target_sec - completed_sec, 0)
+      remaining_sec = max(week.target_sec - completed_sec, 0)
 
       completed_today? =
         Enum.any?(week_sessions, &(local_date(&1, context.timezone) == context.date))
@@ -52,7 +54,8 @@ defmodule BurpeeTrainer.Coach.Policy do
       burpee_type = required_burpee_type(week_sessions)
 
       weekend_catch_up? =
-        Date.day_of_week(context.date) in [6, 7] and remaining_sec >= @catch_up_floor_sec
+        Date.day_of_week(context.date) in week.catch_up_days and
+          remaining_sec >= @catch_up_floor_sec
 
       duration_sec =
         if weekend_catch_up?, do: remaining_sec, else: min(remaining_sec, @standard_duration_sec)
@@ -62,7 +65,7 @@ defmodule BurpeeTrainer.Coach.Policy do
       home_state =
         cond do
           completed_today? -> :done_today
-          completed_sec >= @weekly_target_sec -> :week_complete
+          completed_sec >= week.target_sec -> :week_complete
           true -> :workout_needed
         end
 
@@ -72,7 +75,7 @@ defmodule BurpeeTrainer.Coach.Policy do
          slot_date: context.date,
          local_date: context.date,
          week_start: context.week_start,
-         weekly_target_sec: @weekly_target_sec,
+         weekly_target_sec: week.target_sec,
          completed_sec: completed_sec,
          remaining_sec: remaining_sec,
          duration_sec: duration_sec,

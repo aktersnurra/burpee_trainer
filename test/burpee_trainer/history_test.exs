@@ -301,6 +301,28 @@ defmodule BurpeeTrainer.HistoryTest do
     assert length(year) >= 52
   end
 
+  test "a sign-up week counts as met at its pro-rated target and starts the streak" do
+    # Signed up Saturday 2026-09-12: that week's target is 40 minutes.
+    user = user_fixture() |> sign_up_at(~U[2026-09-12 08:00:00Z])
+    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+    now = ~U[2026-09-23 12:00:00Z]
+
+    sessions = [
+      session(user, ~U[2026-09-12 12:00:00Z], duration_sec_actual: 2_400),
+      session(user, ~U[2026-09-14 12:00:00Z], duration_sec_actual: 4_800)
+    ]
+
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
+
+    assert [
+             %{start: ~D[2026-09-07], target_minutes: 40, target?: true},
+             %{target_minutes: 80, target?: true},
+             %{open?: true}
+           ] = Enum.take(weeks, -3)
+
+    assert History.streak(weeks) == 2
+  end
+
   defp insert_session(user, at, attrs \\ []) do
     user |> session(at, attrs) |> Repo.insert!()
   end

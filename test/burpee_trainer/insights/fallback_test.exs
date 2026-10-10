@@ -21,7 +21,7 @@ defmodule BurpeeTrainer.Insights.FallbackTest do
         duration_sec_actual: seconds
       }
 
-      metrics = Metrics.compute([session], [], ~D[2026-10-07], "Etc/UTC")
+      metrics = Metrics.compute([session], [], ~D[2026-10-07], "Etc/UTC", ~D[2024-01-01])
       assert {:ok, _} = Validator.validate(Narrator.fallback(metrics), metrics)
     end
   end
