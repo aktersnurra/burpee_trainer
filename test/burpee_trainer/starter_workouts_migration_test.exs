@@ -6,7 +6,7 @@ defmodule BurpeeTrainer.StarterWorkoutsMigrationTest do
 
   @migrations Path.expand("../../priv/repo/migrations", __DIR__)
 
-  test "adds one compiled starter per burpee type beside the single Steady 10 fallback" do
+  test "publishes one compiled level-1A starter per burpee type beside the single Steady 10 fallback" do
     E.with_db(fn repo ->
       Ecto.Migrator.run(repo, E.migrations(@migrations), :up, all: true, log: false)
 
@@ -21,9 +21,16 @@ defmodule BurpeeTrainer.StarterWorkoutsMigrationTest do
 
       assert Enum.map(rows, &Enum.take(&1, 4)) == [
                ["Built-in Steady 10", "six_count", 10, 120],
-               ["Starter Navy Seal", "navy_seal", 40, 1200],
-               ["Starter Six-Count", "six_count", 100, 1200]
+               ["Starter Navy Seal", "navy_seal", 15, 1200],
+               ["Starter Six-Count", "six_count", 40, 1200]
              ]
+
+      # The first starters were above a fresh user's level; they stay, archived.
+      assert repo.query!("""
+             SELECT name, target_reps FROM workout_plans
+             WHERE user_id IS NULL AND origin = 'built_in' AND state = 'archived'
+             ORDER BY name
+             """).rows == [["Starter Navy Seal", 40], ["Starter Six-Count", 100]]
 
       for [name, _type, _reps, _duration, definition, program, hash] <- rows do
         {:ok, compiled} = definition |> Jason.decode!() |> WorkoutDefinition.new()

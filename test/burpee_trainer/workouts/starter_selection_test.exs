@@ -18,6 +18,9 @@ defmodule BurpeeTrainer.Workouts.StarterSelectionTest do
       slot = %{slot | burpee_type: type, slot_key: "starter-#{type}"}
       {:ok, selection} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
       assert %{origin: :built_in, name: ^name, burpee_type: ^type} = selection.plan
+
+      # A fresh user is level 1A, so the starter is too (and the chooser's default filter shows it).
+      assert BurpeeTrainer.Levels.level_for_count(type, selection.plan.target_reps) == :level_1a
     end
   end
 
