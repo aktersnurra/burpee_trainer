@@ -9,7 +9,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
   alias BurpeeTrainer.Coach.{Notebook, WorkoutRequest}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
-  test "foreign prepared approval, selection, archive, guidance, and session mount leave rows unchanged",
+  test "foreign prepared approval, selection, archive, notebook, and session mount leave rows unchanged",
        %{conn: conn} do
     owner = user_fixture()
     attacker = user_fixture()

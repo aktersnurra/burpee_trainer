@@ -21,12 +21,14 @@ The full-flow suite has one file for each user-visible behavior below:
 1. New workout through review, approval, selection, session completion, and History: `test/burpee_trainer_web/flows/new_workout_flow_test.exs`
 2. Editing a variation preserves the source and used session snapshots: `test/burpee_trainer_web/flows/edit_workout_flow_test.exs`
 3. Archiving preserves completed snapshots and selects the Home fallback: `test/burpee_trainer_web/flows/archive_flow_test.exs`
-4. Coach guidance add/edit/delete and a late classification that cannot overwrite an edit: `test/burpee_trainer_web/flows/coach_guidance_flow_test.exs`
+4. Coach-page conversation: a reply, a proposed goal confirmed in place, notebook edits, and a retained message when the provider is unavailable: `test/burpee_trainer_web/flows/coach_conversation_flow_test.exs`
 5. Lost completion acknowledgement retry and reconnect settlement: `test/burpee_trainer_web/flows/offline_completion_flow_test.exs`
-6. Foreign-user and stale-state approval, selection, archive, guidance, and completion attacks rejected without side effects: `test/burpee_trainer_web/flows/ownership_flow_test.exs`
+6. Foreign-user and stale-state approval, selection, archive, notebook, and completion attacks rejected without side effects: `test/burpee_trainer_web/flows/ownership_flow_test.exs`
 7. Video selection from Home through logging and History: `test/burpee_trainer_web/flows/video_workout_flow_test.exs`
 8. Fresh and upstream-shaped databases reach the final schema and preserve the specified data rules: `test/burpee_trainer/schema_migration_test.exs`
 9. A compiled program drives the JavaScript runner and durable session-store finalization end to end: `assets/js/hooks/session_runner_flow_test.mjs`
+10. Session completion schedules the planning job, which selects a workout Home then shows with its rationale: `test/burpee_trainer_web/flows/planned_next_workout_flow_test.exs`
+11. Session completion narrates an insight (validated or fallback) shown on Home and in History: `test/burpee_trainer_web/flows/insight_flow_test.exs`, `test/burpee_trainer_web/flows/insight_presentation_test.exs`
 
 ## Commands
 

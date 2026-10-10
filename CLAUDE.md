@@ -10,23 +10,30 @@
 
 | Module | Responsibility |
 |---|---|
-| `BurpeeTrainer.Accounts` / `BurpeeTrainer.Accounts.User` | Local OIDC-scoped user records and identity resolution |
+| `BurpeeTrainer.Accounts` / `BurpeeTrainer.Accounts.{User, Scope}` | Local OIDC-scoped user records, identity resolution, and the `%Scope{}` every user-facing context function takes |
 | `BurpeeTrainer.Auth.Oidc` | OIDC provider integration |
-| `BurpeeTrainer.Coach` | User-scoped workout authoring, review, and approval |
-| `BurpeeTrainer.Coach.{Context, DesignSession, DesignEntry, Guidance, Memory}` | Durable authoring context, guidance, and coach memory |
-| `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession}` | Deterministic workout selection and policy facts |
-| `BurpeeTrainer.Coach.{Client, WorkoutRequest, WorkoutConfiguration, WorkoutGuidance}` | Validated authoring requests and provider boundary |
-| `BurpeeTrainer.CoachReconciler` / `BurpeeTrainer.CoachSupervisor` | Supervised local recommendation reconciliation |
+| `BurpeeTrainer.Home` / `BurpeeTrainer.Home.{Facts, State}` | Loads Home facts once and derives exactly one Home state (pure, property-tested) |
+| `BurpeeTrainer.History` | Completed-session History queries and results |
+| `BurpeeTrainer.Coach` | User-scoped workout authoring: layout request, fitting, review, and approval by approval key |
+| `BurpeeTrainer.Coach.{RestFitter, WorkoutLayout, WorkoutRequest, WorkoutConfiguration, WorkoutGuidance, AuthoringPrompt}` | LLM layout schema and prompt, confirmed requests, and the pure rest fitter that computes exact rests |
+| `BurpeeTrainer.Coach.{Agent, AgentPrompt, Tool, Tools.*}` | Bounded tool-using coach for the planner and Coach-page surfaces |
+| `BurpeeTrainer.Coach.{Notebook, PlanNextWorkoutJob}` | The coach's bounded memory and the Oban job that plans the next workout |
+| `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`) and the per-call ledger with daily budgets |
+| `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession, Setting}` | Deterministic workout selection, policy facts, and per-user coach settings |
+| `BurpeeTrainer.Insights` / `BurpeeTrainer.Insights.*` | Computed metrics, validated LLM narration with deterministic fallback, and the narration job |
+| `BurpeeTrainer.Evals.*` / `mix burpee_trainer.eval` | Owner-run authoring evals with a mandatory call budget and response recording |
 | `BurpeeTrainer.PlanCompiler` and `BurpeeTrainer.PlanCompiler.*` | Validation and compilation of workout definitions into programs |
-| `BurpeeTrainer.Workouts` and `BurpeeTrainer.Workouts.*` | Workout library, recommendation selection, immutable session snapshots, finalization, and pose capture persistence |
+| `BurpeeTrainer.Workouts` and `BurpeeTrainer.Workouts.*` | Workout library, Home selection, immutable session snapshots, completion, and pose capture persistence |
 | `BurpeeTrainer.Videos` / `BurpeeTrainer.Workouts.WorkoutVideo` | Video workout lookup and session sources |
 | `BurpeeTrainer.Goals`, `BurpeeTrainer.Levels`, `BurpeeTrainer.Milestones`, `BurpeeTrainer.Scoring`, `BurpeeTrainer.Stats.Series` | Progress and scoring domain queries |
 | `BurpeeTrainer.UserTime` | User-local date and time calculations |
-| `BurpeeTrainerWeb.OverviewLive` | Authenticated Home, authoring review, chooser, Coach, and History surface |
+| `BurpeeTrainerWeb.HomeLive` | One LiveView for `/`, `/history`, and `/coach` (live actions `:home`, `:history`, `:coach`) |
+| `BurpeeTrainerWeb.{HomeScreen, HistoryScreen, CoachScreen}` | Screen modules rendered by `HomeLive` |
+| `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |
 | `BurpeeTrainerWeb.SessionLive` / `BurpeeTrainerWeb.VideoLive.Show` | Plan and video session runners |
-| `BurpeeTrainerWeb.HomeHistory` / `BurpeeTrainerWeb.HomeDayBoundary` | Home history presentation and local-day scheduling |
+| `BurpeeTrainerWeb.HomeDayBoundary` | Local-day boundary scheduling |
 | `BurpeeTrainerWeb.Components.*` | Shared layout, Home, History, Coach, workout, and session components |
-| `BurpeeTrainerWeb.Router` | OIDC, authenticated Home/session/video, pose upload, and video stream routes |
+| `BurpeeTrainerWeb.Router` | OIDC, authenticated Home/History/Coach/session/video, pose upload, and video stream routes |
 
 ## Data and authentication boundaries
 
@@ -47,7 +54,7 @@ Property tests remain for `PlanCompiler` and `WorkoutRequest` validation. Provid
 
 ## Precommit
 
-The integration gate, not this docs lane, runs:
+Run before marking work done:
 
 ```bash
 ERL_FLAGS='+S 4:4' MIX_ENV=test mix precommit
