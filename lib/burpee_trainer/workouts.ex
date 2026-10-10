@@ -1503,7 +1503,8 @@ defmodule BurpeeTrainer.Workouts do
   defp admit_completion_jobs(%Scope{} = scope, %WorkoutSession{} = completed) do
     [
       plan_next: BurpeeTrainer.Coach.PlanNextWorkoutJob.admit(scope),
-      narrate: BurpeeTrainer.Insights.NarrateJob.admit(scope, completed)
+      narrate: BurpeeTrainer.Insights.NarrateJob.admit(scope, completed),
+      summary: BurpeeTrainer.Coach.SummaryJob.admit(scope)
     ]
     |> Enum.each(fn
       {_job, :ok} ->

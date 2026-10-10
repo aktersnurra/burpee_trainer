@@ -62,7 +62,8 @@ case arguments do
                     where:
                       job.worker in [
                         "BurpeeTrainer.Coach.PlanNextWorkoutJob",
-                        "BurpeeTrainer.Insights.NarrateJob"
+                        "BurpeeTrainer.Insights.NarrateJob",
+                        "BurpeeTrainer.Coach.SummaryJob"
                       ] and fragment("json_extract(?, '$.user_id')", job.args) == ^user_id
                   )
                 )

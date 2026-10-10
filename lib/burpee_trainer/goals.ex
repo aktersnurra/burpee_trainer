@@ -6,8 +6,10 @@ defmodule BurpeeTrainer.Goals do
   """
 
   import Ecto.Query
+  require Logger
 
   alias BurpeeTrainer.Accounts.{Scope, User}
+  alias BurpeeTrainer.Coach.SummaryJob
   alias BurpeeTrainer.Goals.Goal
   alias BurpeeTrainer.Repo
 
@@ -78,7 +80,7 @@ defmodule BurpeeTrainer.Goals do
   def confirm(%Scope{} = scope, id), do: transition_proposal(scope, id, :active)
   def dismiss(%Scope{} = scope, id), do: transition_proposal(scope, id, :abandoned)
 
-  defp transition_proposal(%Scope{user: %{id: user_id}}, id, status) do
+  defp transition_proposal(%Scope{user: %{id: user_id}} = scope, id, status) do
     Repo.immediate_transaction(fn ->
       case Repo.get_by(Goal, user_id: user_id, id: id, status: :proposed) do
         nil ->
@@ -97,10 +99,27 @@ defmodule BurpeeTrainer.Goals do
           end
 
           case goal |> Goal.status_changeset(status) |> Repo.update() do
-            {:ok, goal} -> goal
-            {:error, changeset} -> Repo.rollback(changeset)
+            {:ok, goal} ->
+              admit_summary(scope, goal)
+              goal
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
           end
       end
     end)
+  end
+
+  # The summary follows goal changes; failing to admit it never undoes the change.
+  defp admit_summary(scope, goal) do
+    case SummaryJob.admit(scope) do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "coach_summary_not_admitted trigger=goal goal_id=#{goal.id} reason=#{inspect(reason)}"
+        )
+    end
   end
 end

@@ -62,12 +62,15 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert has_element?(view, "#home-coach-goal-#{id}[data-status=proposed]")
     view |> element("#home-coach-goal-#{id}-confirm") |> render_click()
     assert has_element?(view, "#home-coach-goal-#{id}[data-status=active]")
+    assert summary_jobs() == 1
+    BurpeeTrainer.Repo.delete_all(Oban.Job)
 
     view
     |> form("#home-coach-notebook-form", coach_notebook: %{text: "Owner note"})
     |> render_submit()
 
     assert BurpeeTrainer.Coach.Notebook.get(scope).body == "Owner note"
+    assert summary_jobs() == 1
   end
 
   test "real provider tool conversation proposes a goal, replies, then confirms in the same screen",
@@ -147,5 +150,14 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     view |> element("#home-coach-goal-#{goal.id}-confirm") |> render_click()
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=active]")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
+  end
+
+  defp summary_jobs do
+    import Ecto.Query
+
+    BurpeeTrainer.Repo.aggregate(
+      from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.SummaryJob"),
+      :count
+    )
   end
 end

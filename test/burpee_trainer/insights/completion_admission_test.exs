@@ -3,10 +3,12 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
   import BurpeeTrainer.Fixtures
   import ExUnit.CaptureLog
   alias BurpeeTrainer.{Repo, Workouts}
-  alias BurpeeTrainer.Coach.PlanNextWorkoutJob
+  alias BurpeeTrainer.Coach.{PlanNextWorkoutJob, SummaryJob}
   alias BurpeeTrainer.Insights.NarrateJob
 
-  for worker <- [PlanNextWorkoutJob, NarrateJob] do
+  @workers [PlanNextWorkoutJob, NarrateJob, SummaryJob]
+
+  for worker <- @workers do
     @worker worker
     test "failed #{@worker} admission still saves the completion and admits the other job" do
       scope = scope_fixture()
@@ -51,10 +53,10 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
       assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :achieved
       assert log =~ "completion_job_not_admitted"
 
-      other = Enum.reject([PlanNextWorkoutJob, NarrateJob], &(&1 == @worker))
+      other = Enum.reject(@workers, &(&1 == @worker))
 
-      assert Enum.map(Repo.all(Oban.Job), & &1.worker) ==
-               Enum.map(other, &Oban.Worker.to_string/1)
+      assert Enum.sort(Enum.map(Repo.all(Oban.Job), & &1.worker)) ==
+               Enum.sort(Enum.map(other, &Oban.Worker.to_string/1))
     end
   end
 

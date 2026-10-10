@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.Coach.SummaryTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.Coach.Summary
 

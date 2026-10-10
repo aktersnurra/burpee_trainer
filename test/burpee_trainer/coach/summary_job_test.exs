@@ -1,0 +1,119 @@
+defmodule BurpeeTrainer.Coach.SummaryJobTest do
+  use BurpeeTrainer.DataCase, async: false
+  use Oban.Testing, repo: BurpeeTrainer.Repo, engine: Oban.Engines.Lite
+  import BurpeeTrainer.Fixtures
+  import Ecto.Query
+  alias BurpeeTrainer.{Goals, Repo}
+  alias BurpeeTrainer.Coach.{LlmCall, Summary, SummaryJob}
+  alias BurpeeTrainer.Coach.Tools.ProposeGoal
+  alias BurpeeTrainer.Insights.Validator
+
+  @config [
+    enabled: true,
+    url: "https://provider.test/v1/chat/completions",
+    api_key: "k",
+    model: "m"
+  ]
+  defp opts, do: [config: @config, req: Req.new(plug: {Req.Test, __MODULE__})]
+
+  defp reply(content) do
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+      assert request["response_format"]["json_schema"]["name"] == "coach_summary"
+
+      Req.Test.json(conn, %{
+        "choices" => [%{"message" => %{"content" => Jason.encode!(content)}}],
+        "usage" => %{"prompt_tokens" => 11, "completion_tokens" => 7, "cost" => 0.001}
+      })
+    end)
+  end
+
+  test "a validated reply is stored as the llm summary and recorded in the ledger" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+    content = %{"text" => "25 reps last session.", "metric_ids" => ["session.reps"]}
+    reply(content)
+
+    assert {:ok, %Summary{source: :llm, text: "25 reps last session."}} =
+             SummaryJob.summarize(scope, opts())
+
+    assert %Summary{metric_ids: ["session.reps"]} = Summary.get(scope)
+    call = Repo.one!(from c in LlmCall, where: c.user_id == ^scope.user.id)
+    assert call.purpose == "summary"
+  end
+
+  test "a fabricated number stores a fallback that is itself validated" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+    reply(%{"text" => "999 reps last session.", "metric_ids" => ["session.reps"]})
+
+    assert {:ok, %Summary{source: :fallback} = stored} = SummaryJob.summarize(scope, opts())
+    assert stored.text =~ "minutes this week"
+  end
+
+  test "a disabled provider stores the fallback without a ledger row" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+
+    assert {:ok, %Summary{source: :fallback}} =
+             SummaryJob.summarize(scope, config: [enabled: false])
+
+    assert llm_call_count(scope) == 0
+  end
+
+  test "without a completed session or an active goal nothing is stored" do
+    scope = scope_fixture()
+    assert :none = SummaryJob.summarize(scope, opts())
+    assert Summary.get(scope) == nil
+    assert llm_call_count(scope) == 0
+  end
+
+  test "the fallback ranks a short last week, then the first goal, then this week" do
+    metrics = %{
+      "week.minutes" => %{value: 0, unit: :minutes, label: "w"},
+      "week.target_minutes" => %{value: 80, unit: :minutes, label: "t"},
+      "last_week.minutes" => %{value: 50, unit: :minutes, label: "lw"},
+      "last_week.target_minutes" => %{value: 80, unit: :minutes, label: "lt"},
+      "goal.9.best_reps" => %{value: 90, unit: :reps, label: "b"},
+      "goal.9.target_reps" => %{value: 160, unit: :reps, label: "g"},
+      "goal.9.days_left" => %{value: 30, unit: :days, label: "d"},
+      "goal.3.best_reps" => %{value: 120, unit: :reps, label: "b"},
+      "goal.3.target_reps" => %{value: 150, unit: :reps, label: "g"},
+      "goal.3.days_left" => %{value: 52, unit: :days, label: "d"}
+    }
+
+    summary = SummaryJob.fallback(metrics)
+
+    assert summary["text"] ==
+             "Last week: 50 of 80 minutes. Best so far 120 of 150 reps with 52 days left."
+
+    assert {:ok, _} = Validator.validate_summary(summary, metrics)
+
+    met = %{metrics | "last_week.minutes" => %{value: 80, unit: :minutes, label: "lw"}}
+    no_goals = Map.reject(met, fn {id, _} -> String.starts_with?(id, "goal.") end)
+    assert SummaryJob.fallback(no_goals)["text"] == "0 of 80 minutes this week."
+    assert {:ok, _} = Validator.validate_summary(SummaryJob.fallback(no_goals), no_goals)
+  end
+
+  test "confirming or dismissing a goal admits a summary" do
+    scope = scope_fixture()
+
+    for transition <- [&Goals.confirm/2, &Goals.dismiss/2] do
+      Repo.delete_all(Oban.Job)
+      {:ok, %{"goal_id" => id}} = ProposeGoal.call(scope, proposal(), %{})
+      assert {:ok, _} = transition.(scope, id)
+      assert [%{args: %{"user_id" => user_id}}] = all_enqueued(worker: SummaryJob)
+      assert user_id == scope.user.id
+    end
+  end
+
+  defp proposal do
+    %{
+      "burpee_type" => "six_count",
+      "burpee_count_target" => 150,
+      "duration_sec_target" => 1200,
+      "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 42))
+    }
+  end
+end

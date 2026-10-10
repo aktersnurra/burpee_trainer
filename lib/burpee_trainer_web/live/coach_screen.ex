@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   @moduledoc "Coach conversation and owner-editable bounded notebook within shared HomeLive."
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
+  require Logger
   alias BurpeeTrainer.Coach.{Notebook, Agent}
   alias BurpeeTrainer.Goals
   alias BurpeeTrainerWeb.HomeCoachComponents
@@ -110,9 +111,21 @@ defmodule BurpeeTrainerWeb.CoachScreen do
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
+  # The summary follows notebook edits; failing to admit it never undoes the save.
+  defp enqueue_summary(scope) do
+    case BurpeeTrainer.Coach.SummaryJob.enqueue(scope) do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("coach_summary_not_admitted trigger=notebook reason=#{inspect(reason)}")
+    end
+  end
+
   defp save_notebook(socket, text) do
     case Notebook.write(socket.assigns.current_scope, text, socket.assigns.coach_notebook_seen) do
       {:ok, _} ->
+        enqueue_summary(socket.assigns.current_scope)
         {:noreply, socket |> assign(coach_status: "Saved.") |> refresh()}
 
       {:error, :stale_notebook} ->

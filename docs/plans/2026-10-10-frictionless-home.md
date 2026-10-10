@@ -248,19 +248,21 @@ end
 
 **Files:** `lib/burpee_trainer/coach/summary_job.ex`, `lib/burpee_trainer/workouts.ex` (`admit_completion_jobs/2`), `lib/burpee_trainer/goals.ex` (`confirm/2`, `dismiss/2`), `lib/burpee_trainer_web/live/coach_screen.ex` (notebook save); tests `test/burpee_trainer/coach/summary_job_test.exs`, `completion_admission_test.exs`
 
-- [ ] **Step 1: Failing tests** (stub the provider like `narrator_test.exs`):
+- [x] **Step 1: Failing tests** (stub the provider like `narrator_test.exs`):
   - valid `{"text","metric_ids"}` → stored `source: "llm"`, ledger row with `purpose: "summary"`;
   - fabricated number → stored fallback (`source: "fallback"`) whose numbers come from metrics;
   - disabled provider → fallback, no ledger row;
   - no completed session and no active goal → no row stored;
   - admission: completing a session admits `SummaryJob` next to planner and narration (and a failed SummaryJob admission still completes the session, extending the existing admission test's worker list); `Goals.confirm/2` and `Goals.dismiss/2` admit it; a successful notebook save from the Coach screen admits it.
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement**
   - `SummaryJob`: `use Oban.Worker, queue: :coach, max_attempts: 1, unique: [keys: [:user_id], period: :infinity, states: :incomplete]`. `admit/1` (no own transaction, never rolls back, like `NarrateJob.admit/2`) and `enqueue/1` (own immediate transaction) for callers outside a transaction.
   - `perform/1`: load user → scope; sessions (`Workouts.list_sessions/1`), active goals; `metrics = Metrics.for_scope(...)`; if no session and no active goal, `:ok` without storing. Messages: one system message ("At most two sentences on progress and trajectory toward the active goals, or toward the next level when no goal is active. Cite metric ids for every number. Use only these metrics: <json>"). `Client.chat/2` with `response_format: {"coach_summary", schema}` (`text` maxLength 280, `metric_ids` array of strings), `ledger: %{scope:, purpose: "summary", run_id: Ecto.UUID.generate()}`. Validate with `validate_summary/2`; on anything else store `fallback(metrics)`.
   - `fallback/1` (public, pure, tested): first active goal → "#{target} reps by #{date}: best so far #{best}. #{days} days left." citing the goal ids; no goal → "#{week} of #{target} minutes this week." citing week ids; a short previous week (Task 9) → "Last week: #{m} of #{t} minutes." citing `last_week.*`.
   - Wire `admit/1` into `Workouts.admit_completion_jobs/2` (log as the existing jobs do). `Goals.confirm/2`/`dismiss/2`: admit inside their transaction, log on failure. Coach screen notebook save: call `SummaryJob.enqueue/1` after `Notebook.write/3` succeeds.
-- [ ] **Step 4: Run** — PASS, then `T mix test`. **Commit** — `feat(coach): generate the progress summary after changes`
+- [x] **Step 4: Run** — PASS, then `T mix test`. **Commit** — `feat(coach): generate the progress summary after changes`
+
+**Done** (`feat(coach): generate the progress summary after changes`). Deviations: uniqueness is `states: [:available, :scheduled]` (the spec's wording) rather than `:incomplete`, so a running job never swallows a newer trigger. `summarize/2` is public like `Narrator.narrate/3` so tests pass the stubbed provider. The fallback ranks one-sentence facts (short last week, first goal's trajectory, this week) and keeps two, with every number a metric value ("Best so far 120 of 150 reps with 52 days left.", no date), so it passes `validate_summary/2`. `scripts/e2e/cleanup.exs` deletes the owner's `SummaryJob` rows too. `summary_test.exs` (Task 7) is now `async: false` like every other coach DataCase test: as a concurrent SQLite writer it starved other async tests past the 2 s busy timeout.
 
 ---
 
