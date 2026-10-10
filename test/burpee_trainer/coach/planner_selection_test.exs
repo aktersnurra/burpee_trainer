@@ -123,15 +123,10 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
 
   defp assert_candidate(:selection, _, _), do: :ok
 
+  # A staged proposal is persisted only when the run completes and selects it.
   defp assert_candidate(:proposal, scope, run_id) do
-    candidate =
-      Repo.get_by!(BurpeeTrainer.Workouts.WorkoutPlan,
-        approval_key: run_id <> ":1",
-        user_id: scope.user.id
-      )
-
-    assert candidate.state == :published
-    assert candidate.target_reps == 10
+    refute Repo.get_by(BurpeeTrainer.Workouts.WorkoutPlan, approval_key: run_id <> ":1")
+    assert Workouts.list_library(scope) |> Enum.all?(&(&1.name != "Staged proposal"))
   end
 
   for stage <- [:first, :final], choice <- [:same, :other] do
@@ -201,9 +196,57 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
              Agent.run(scope, :planner, nil, Keyword.put(opts(slot), :run_id, run_id))
 
     candidate = Repo.get_by!(BurpeeTrainer.Workouts.WorkoutPlan, approval_key: run_id <> ":1")
+    assert candidate.state == :published
+    assert candidate.target_reps == 10
     assert {:ok, after_selection} = Workouts.ensure_home_selection(scope, slot)
     assert after_selection.plan.id == candidate.id
     assert after_selection.home_revision == before.home_revision + 1
+  end
+
+  test "a superseded proposal is never persisted" do
+    {scope, slot, plan, before} = fixture()
+    run_id = Ecto.UUID.generate()
+
+    pid =
+      start_supervised!(
+        {Elixir.Agent, fn -> [proposal_call(plan), selection_call(plan), final("Ready")] end}
+      )
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      Req.Test.json(conn, Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end))
+    end)
+
+    assert {:ok, %{reply: "Ready"}} =
+             Agent.run(scope, :planner, nil, Keyword.put(opts(slot), :run_id, run_id))
+
+    refute Repo.get_by(BurpeeTrainer.Workouts.WorkoutPlan, approval_key: run_id <> ":1")
+    assert {:ok, after_selection} = Workouts.ensure_home_selection(scope, slot)
+    assert after_selection.plan.id == plan.id
+    assert after_selection.home_revision == before.home_revision + 1
+  end
+
+  test "a proposal is not persisted when the owner changed the selection during the run" do
+    {scope, slot, plan, before} = fixture()
+    run_id = Ecto.UUID.generate()
+    pid = start_supervised!({Elixir.Agent, fn -> 0 end})
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      case Elixir.Agent.get_and_update(pid, &{&1, &1 + 1}) do
+        0 ->
+          Req.Test.json(conn, proposal_call(plan))
+
+        _ ->
+          {:ok, _} = Workouts.select_home_workout(scope, before, plan.id)
+          Req.Test.json(conn, final("Ready"))
+      end
+    end)
+
+    assert {:error, %{code: :home_selection_changed}} =
+             Agent.run(scope, :planner, nil, Keyword.put(opts(slot), :run_id, run_id))
+
+    refute Repo.get_by(BurpeeTrainer.Workouts.WorkoutPlan, approval_key: run_id <> ":1")
+    assert {:ok, %{plan: %{id: id}}} = Workouts.ensure_home_selection(scope, slot)
+    assert id == plan.id
   end
 
   test "successful completion commits only the last staged selection" do

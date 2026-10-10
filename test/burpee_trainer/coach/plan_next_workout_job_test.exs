@@ -38,6 +38,68 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJobTest do
     assert before == after_selection
   end
 
+  test "an owner selection made during the run cancels the job so no retry replaces it" do
+    previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
+    previous_req = Req.default_options()
+
+    on_exit(fn ->
+      Application.put_env(:burpee_trainer, :llm_provider, previous_provider)
+      Req.default_options(previous_req)
+    end)
+
+    Application.put_env(:burpee_trainer, :llm_provider,
+      enabled: true,
+      url: "https://provider.test/v1",
+      api_key: "k",
+      model: "m"
+    )
+
+    scope = scope_fixture()
+    {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+    planned = plan_fixture(scope.user, %{target_reps: 30, target_duration_sec: slot.duration_sec})
+    owned = plan_fixture(scope.user, %{target_reps: 20, target_duration_sec: slot.duration_sec})
+    {:ok, before} = Workouts.ensure_home_selection(scope, slot)
+    calls = start_supervised!({Agent, fn -> 0 end})
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      case Agent.get_and_update(calls, &{&1, &1 + 1}) do
+        0 ->
+          {:ok, _} = Workouts.select_home_workout(scope, before, owned.id)
+
+          Req.Test.json(conn, %{
+            "choices" => [
+              %{
+                "message" => %{
+                  "tool_calls" => [
+                    %{
+                      "id" => "select",
+                      "function" => %{
+                        "name" => "select_workout",
+                        "arguments" =>
+                          Jason.encode!(%{"plan_id" => planned.id, "rationale" => "Planned"})
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          })
+
+        _ ->
+          Req.Test.json(conn, %{
+            "choices" => [%{"message" => %{"content" => Jason.encode!(%{"reply" => "Ready."})}}]
+          })
+      end
+    end)
+
+    Req.default_options(plug: {Req.Test, __MODULE__})
+    args = %{"user_id" => scope.user.id, "slot_key" => slot.slot_key}
+
+    assert {:cancel, :home_selection_changed} = perform_job(PlanNextWorkoutJob, args)
+    assert {:ok, after_selection} = Workouts.ensure_home_selection(scope, slot)
+    assert after_selection.plan.id == owned.id
+  end
+
   test "next local boundary is resolved through real DST policy and UTC conversion" do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "America/Los_Angeles")

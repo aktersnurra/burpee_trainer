@@ -3,31 +3,102 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.Coach.{Policy, Tools.ProposeWorkout}
   alias BurpeeTrainer.{Workouts, LayoutFixtures}
+  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
-  test "fits and publishes slot-fixed canonical workout while staging selection; invalid arguments have no effects" do
-    scope = scope_fixture()
-    {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+  defp run(scope, slot) do
     {:ok, expected} = Workouts.ensure_home_selection(scope, slot)
-    run = %{slot: slot, run_id: Ecto.UUID.generate(), call_index: 1, expected_selection: expected}
+    %{slot: slot, run_id: Ecto.UUID.generate(), call_index: 1, expected_selection: expected}
+  end
 
-    args = %{
-      "reps" => 20,
+  defp args(reps, sets) do
+    %{
+      "reps" => reps,
       "pacing_style" => "even",
       "recovery" => "required",
       "timed_rests" => [],
       "requested_pace_sec" => 5.0,
-      "layout" => LayoutFixtures.layout([[{10, 5.0, 5.0}, {10, 5.0, 5.0}]])
+      "layout" => LayoutFixtures.layout([sets])
     }
+  end
 
-    assert {:ok, %{"plan_id" => id, "duration_sec" => duration},
-            %{pending_selection: %{plan_id: id, rationale: rationale}}} =
-             ProposeWorkout.call(scope, args, run)
+  defp six_count_slot(scope, duration_sec) do
+    {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+    %{slot | burpee_type: :six_count, duration_sec: duration_sec}
+  end
+
+  defp completed!(scope, type, reps, completed_at) do
+    Repo.insert!(%WorkoutSession{
+      user_id: scope.user.id,
+      state: :completed,
+      source_kind: :manual,
+      display_name_snapshot: "Logged",
+      workout_type_snapshot: type,
+      burpee_type: type,
+      burpee_count_actual: reps,
+      duration_sec_actual: 1200,
+      completed_at: completed_at,
+      capture_mode: :logged
+    })
+  end
+
+  test "fits a slot-fixed canonical workout and stages it without persisting; invalid arguments have no effects" do
+    scope = scope_fixture()
+    {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+    run = run(scope, slot)
+
+    assert {:ok, %{"duration_sec" => duration},
+            %{
+              pending_selection: %{
+                definition: definition,
+                approval_key: key,
+                rationale: rationale
+              }
+            }} =
+             ProposeWorkout.call(scope, args(20, [{10, 5.0, 5.0}, {10, 5.0, 5.0}]), run)
 
     assert duration == slot.duration_sec
-    assert {:ok, ^expected} = Workouts.ensure_home_selection(scope, slot)
-    assert {:ok, %{id: ^id, state: :published}} = Workouts.get_library_plan(scope, id)
+    assert definition["target_duration_sec"] == slot.duration_sec
+    assert definition["burpee_type"] == Atom.to_string(slot.burpee_type)
+    assert key == run.run_id <> ":1"
     assert is_binary(rationale)
-    assert {:error, _} = ProposeWorkout.call(scope, Map.put(args, "reps", 300), run)
+    refute Repo.get_by(WorkoutPlan, approval_key: key)
+    assert {:ok, selection} = Workouts.ensure_home_selection(scope, slot)
+    assert selection == run.expected_selection
+
+    assert {:error, _} =
+             ProposeWorkout.call(scope, args(300, [{150, 4.0, 4.0}, {150, 4.0, 4.0}]), run)
+
     assert {:error, _} = ProposeWorkout.call(scope, %{}, run)
+  end
+
+  test "an easier workout below the current level is allowed" do
+    scope = scope_fixture(%{"timezone" => "Etc/UTC"})
+    two_days_ago = DateTime.add(DateTime.utc_now(:second), -2, :day)
+    completed!(scope, :six_count, 100, two_days_ago)
+    completed!(scope, :navy_seal, 40, two_days_ago)
+    assert BurpeeTrainer.Levels.current_level(Workouts.list_sessions(scope)) == :level_1c
+
+    slot = six_count_slot(scope, 1200)
+
+    assert {:ok, _, _} =
+             ProposeWorkout.call(
+               scope,
+               args(20, [{10, 5.0, 5.0}, {10, 5.0, 5.0}]),
+               run(scope, slot)
+             )
+  end
+
+  test "a long catch-up slot is held to the level band at a 20-minute-equivalent rate" do
+    scope = scope_fixture()
+    slot = six_count_slot(scope, 2400)
+    run = run(scope, slot)
+
+    # 120 reps in 40 minutes is 60 per 20 minutes: level_1b, the next level up from level_1a.
+    assert {:ok, %{"duration_sec" => 2400}, _} =
+             ProposeWorkout.call(scope, args(120, List.duplicate({10, 5.0, 5.0}, 12)), run)
+
+    # 220 reps in 40 minutes is 110 per 20 minutes: level_1c, two levels up.
+    assert {:error, "reps must not exceed the next level"} =
+             ProposeWorkout.call(scope, args(220, List.duplicate({10, 5.0, 5.0}, 22)), run)
   end
 end

@@ -1,13 +1,18 @@
 defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
   @behaviour BurpeeTrainer.Coach.Tool
   alias BurpeeTrainer.Coach.{Tool, WorkoutRequest, WorkoutLayout, RestFitter}
-  alias BurpeeTrainer.{Levels, Workouts, Repo, PlanCompiler}
+  alias BurpeeTrainer.{Levels, Workouts, PlanCompiler, UserTime}
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
+  alias BurpeeTrainer.Workouts.HomeSelection
+
+  # Level landmarks are counts for a 20-minute session.
+  @landmark_duration_sec 1_200
+
   def name, do: "propose_workout"
 
   def description,
     do:
-      "Fit and publish a workout for the fixed slot type and duration, at current or next level. Phases must equal timed_rests + 1."
+      "Fit a workout for the fixed slot type and duration, at most one level above the current level. It becomes this run's selection and is saved only when the run finishes. Phases must equal timed_rests + 1."
 
   def schema do
     {:ok, request} =
@@ -40,7 +45,11 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
     )
   end
 
-  def call(scope, %{"reps" => reps, "layout" => layout} = args, %{slot: slot} = run)
+  def call(
+        scope,
+        %{"reps" => reps, "layout" => layout} = args,
+        %{slot: slot, expected_selection: %HomeSelection{}} = run
+      )
       when is_integer(reps) and is_map(layout) and is_map(slot) and map_size(args) == 6 do
     attrs =
       args
@@ -51,47 +60,47 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
         "target_duration_sec" => slot.duration_sec
       })
 
-    current = Levels.current_level(Workouts.list_sessions(scope))
-    levels = Enum.reverse(Levels.all_levels())
-    next = Enum.at(levels, min(Enum.find_index(levels, &(&1 == current)) + 1, length(levels) - 1))
-
-    with true <- Levels.level_for_count(slot.burpee_type, reps) in [current, next],
+    with :ok <- within_level_band(scope, slot, reps),
          {:ok, request} <- WorkoutRequest.new(attrs),
          {:ok, canonical} <- RestFitter.fit(request, layout),
          {:ok, definition} <- WorkoutDefinition.new(canonical),
          {:ok, _} <- PlanCompiler.compile(definition),
          :ok <- WorkoutRequest.validate_definition(request, definition) do
-      Repo.immediate_transaction(fn ->
-        with {:ok, plan} <-
-               Workouts.commit_approved_workout(
-                 scope,
-                 WorkoutDefinition.canonical_map(definition),
-                 "Planner",
-                 approval_key: run.run_id <> ":" <> Integer.to_string(run.call_index)
-               ),
-             {:ok, _, changes} <-
-               BurpeeTrainer.Coach.Tools.SelectWorkout.call(
-                 scope,
-                 %{"plan_id" => plan.id, "rationale" => layout["rationale"] || "Planned workout"},
-                 run
-               ) do
-          {%{"plan_id" => plan.id, "duration_sec" => plan.target_duration_sec}, changes}
-        else
-          {:error, reason} -> Repo.rollback(describe(reason))
-        end
-      end)
-      |> case do
-        {:ok, {result, changes}} -> {:ok, result, changes}
-        {:error, reason} -> {:error, reason}
-      end
+      {:ok, %{"duration_sec" => definition.target_duration_sec},
+       %{
+         pending_selection: %{
+           definition: WorkoutDefinition.canonical_map(definition),
+           approval_key: run.run_id <> ":" <> Integer.to_string(run.call_index),
+           rationale: layout["rationale"] || "Planned workout"
+         }
+       }}
     else
-      false -> {:error, "reps must be within current or next level"}
       {:error, reason} -> {:error, describe(reason)}
       {:error, _error, detail} -> {:error, detail}
     end
   end
 
   def call(_, _, _), do: {:error, "invalid workout arguments or missing slot"}
+
+  # Easier sessions below the current level are allowed; only the next level caps the plan.
+  # A longer slot (weekend catch-up) is compared at its 20-minute-equivalent rate.
+  defp within_level_band(scope, slot, reps) do
+    case UserTime.context(scope.user, DateTime.utc_now()) do
+      {:ok, %{date: today}} ->
+        ascending = Enum.reverse(Levels.all_levels())
+        rank = fn level -> Enum.find_index(ascending, &(&1 == level)) end
+        current = Levels.current_level(Workouts.list_sessions(scope), today)
+        rate = div(reps * @landmark_duration_sec, max(slot.duration_sec, @landmark_duration_sec))
+
+        if rank.(Levels.level_for_count(slot.burpee_type, rate)) <= rank.(current) + 1,
+          do: :ok,
+          else: {:error, "reps must not exceed the next level"}
+
+      {:error, _} ->
+        {:error, "owner timezone is unavailable"}
+    end
+  end
+
   defp describe(%{code: code, context: context}), do: "#{code}: #{inspect(context)}"
   defp describe(reason) when is_binary(reason), do: reason
   defp describe(reason), do: RestFitter.describe(reason)

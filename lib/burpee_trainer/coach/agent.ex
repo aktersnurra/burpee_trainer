@@ -111,12 +111,13 @@ defmodule BurpeeTrainer.Coach.Agent do
   defp original_selection(_, _), do: {:ok, nil}
 
   # No provider I/O occurs in the final selection transaction. Owner revisions win.
-  defp finalize(scope, %{pending_selection: %{plan_id: id, rationale: rationale}} = run, reply) do
+  # A staged proposal is persisted here, together with its selection, or not at all.
+  defp finalize(scope, %{pending_selection: %{rationale: rationale} = pending} = run, reply) do
     with {:ok, _} <-
            BurpeeTrainer.Workouts.select_planned_workout(
              scope,
              run.expected_selection,
-             id,
+             planned_target(pending),
              rationale
            ) do
       {:ok, %{reply: reply}}
@@ -124,6 +125,11 @@ defmodule BurpeeTrainer.Coach.Agent do
   end
 
   defp finalize(_, _, reply), do: {:ok, %{reply: reply}}
+
+  defp planned_target(%{plan_id: id}), do: {:plan, id}
+
+  defp planned_target(%{definition: definition, approval_key: key}),
+    do: {:proposal, definition, key}
 
   defp execute(scope, tools, call, run) do
     run = %{run | call_index: run.call_index + 1}

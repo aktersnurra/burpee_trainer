@@ -387,17 +387,28 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  @doc "Select a planner workout and rationale under the existing Home CAS."
+  @doc """
+  Select a planner workout and rationale under the existing Home CAS.
+
+  A `{:proposal, definition, approval_key}` is published in the same transaction, so a
+  proposal is persisted only when its selection lands.
+  """
+  @spec select_planned_workout(
+          Scope.t(),
+          HomeSelection.t(),
+          {:plan, pos_integer()} | {:proposal, map(), String.t()},
+          String.t()
+        ) :: {:ok, HomeSelection.t()} | {:error, Error.t()}
   def select_planned_workout(
         %Scope{user: %User{} = user},
         %HomeSelection{} = expected,
-        id,
+        target,
         rationale
       )
       when is_binary(rationale) and byte_size(rationale) <= 2400 do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
-           {:ok, plan} <- selectable_home_plan(user, r, id),
+           {:ok, plan} <- planned_plan(user, r, target),
            :ok <- verify_stored_draft(plan),
            {:ok, changed} <- write_home_pointer(r, plan.id),
            {:ok, changed} <-
@@ -406,6 +417,11 @@ defmodule BurpeeTrainer.Workouts do
       end
     end)
   end
+
+  defp planned_plan(user, r, {:plan, id}), do: selectable_home_plan(user, r, id)
+
+  defp planned_plan(user, _r, {:proposal, definition, approval_key}),
+    do: approved_workout(user, definition, "Planner", approval_key)
 
   @doc "Atomically finalizes and starts the reviewed Home selection."
   @spec start_home_workout(Scope.t(), HomeSelection.t(), Ecto.UUID.t()) ::
@@ -2633,31 +2649,32 @@ defmodule BurpeeTrainer.Workouts do
   def commit_approved_workout(%Scope{user: %User{} = user}, definition, text, opts)
       when is_list(opts) do
     key = Keyword.fetch!(opts, :approval_key)
+    immediate_lifecycle_transaction(fn -> approved_workout(user, definition, text, key) end)
+  end
 
-    immediate_lifecycle_transaction(fn ->
-      case Repo.get_by(WorkoutPlan, approval_key: key) do
-        %WorkoutPlan{user_id: id, definition_json: ^definition} = plan when id == user.id ->
-          with :ok <- verify_stored_draft(plan), do: {:ok, plan}
+  defp approved_workout(user, definition, text, key) do
+    case Repo.get_by(WorkoutPlan, approval_key: key) do
+      %WorkoutPlan{user_id: id, definition_json: ^definition} = plan when id == user.id ->
+        with :ok <- verify_stored_draft(plan), do: {:ok, plan}
 
-        %WorkoutPlan{} ->
-          {:error, Error.new(:design_workspace_changed)}
+      %WorkoutPlan{} ->
+        {:error, Error.new(:design_workspace_changed)}
 
-        nil ->
-          with true <- is_binary(key) and byte_size(key) in 1..200,
-               {:ok, content} <-
-                 canonical_draft_content(%{definition: definition, request_text: text}),
-               {:ok, draft} <-
-                 %WorkoutPlan{user_id: user.id, origin: :user, state: :draft, approval_key: key}
-                 |> WorkoutPlan.new_draft_changeset(content)
-                 |> Repo.insert()
-                 |> normalize_plan_write() do
-            publish_unattached_draft(user, draft.id)
-          else
-            false -> {:error, Error.new(:design_workspace_changed)}
-            {:error, error} -> {:error, error}
-          end
-      end
-    end)
+      nil ->
+        with true <- is_binary(key) and byte_size(key) in 1..200,
+             {:ok, content} <-
+               canonical_draft_content(%{definition: definition, request_text: text}),
+             {:ok, draft} <-
+               %WorkoutPlan{user_id: user.id, origin: :user, state: :draft, approval_key: key}
+               |> WorkoutPlan.new_draft_changeset(content)
+               |> Repo.insert()
+               |> normalize_plan_write() do
+          publish_unattached_draft(user, draft.id)
+        else
+          false -> {:error, Error.new(:design_workspace_changed)}
+          {:error, error} -> {:error, error}
+        end
+    end
   end
 
   defp save_authored_draft(_user, %{state: :draft} = source, content) do

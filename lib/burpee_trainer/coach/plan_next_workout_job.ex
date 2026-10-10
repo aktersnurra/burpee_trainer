@@ -28,7 +28,9 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
       false ->
         {:cancel, :slot_changed}
 
-      {:error, %{code: code}} when code in [:provider_unavailable, :llm_budget_exhausted] ->
+      # A changed selection means the owner chose during the run; a retry would override them.
+      {:error, %{code: code}}
+      when code in [:provider_unavailable, :llm_budget_exhausted, :home_selection_changed] ->
         {:cancel, code}
 
       {:error, error} ->
