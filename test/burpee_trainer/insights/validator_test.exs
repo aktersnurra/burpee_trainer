@@ -119,4 +119,60 @@ defmodule BurpeeTrainer.Insights.ValidatorTest do
       assert token == Integer.to_string(n)
     end
   end
+
+  describe "validate_summary/2" do
+    @summary_metrics %{
+      "goal.3.best_reps" => %{value: 120, unit: :reps, label: "best"},
+      "goal.3.days_left" => %{value: 52, unit: :days, label: "days"},
+      "session.pace_sec" => %{value: -4.8, unit: :seconds, label: "pace"}
+    }
+
+    defp summary(text, ids \\ ["goal.3.best_reps", "goal.3.days_left"]),
+      do: %{"text" => text, "metric_ids" => ids}
+
+    test "accepts text whose numbers are cited formatted values" do
+      summary = summary("Best so far is 120 reps. 52 days left to reach the goal.")
+      assert {:ok, ^summary} = Validator.validate_summary(summary, @summary_metrics)
+
+      assert {:ok, _} =
+               Validator.validate_summary(
+                 summary("Pace moved -4.8 seconds per rep.", ["session.pace_sec"]),
+                 @summary_metrics
+               )
+    end
+
+    test "rejects unsupported numbers and unknown ids" do
+      assert {:error, {:unsupported_number, "130"}} =
+               Validator.validate_summary(summary("Best so far is 130 reps."), @summary_metrics)
+
+      assert {:error, {:unsupported_number, "52"}} =
+               Validator.validate_summary(
+                 summary("52 days left.", ["goal.3.best_reps"]),
+                 @summary_metrics
+               )
+
+      assert {:error, {:unknown_metric, "goal.9.best_reps"}} =
+               Validator.validate_summary(
+                 summary("Keep going.", ["goal.9.best_reps"]),
+                 @summary_metrics
+               )
+    end
+
+    test "rejects empty, over-long and more-than-two-sentence text" do
+      assert {:error, :invalid_shape} =
+               Validator.validate_summary(summary("  "), @summary_metrics)
+
+      assert {:error, :too_long} =
+               Validator.validate_summary(summary(String.duplicate("a", 281)), @summary_metrics)
+
+      assert {:error, :too_many_sentences} =
+               Validator.validate_summary(
+                 summary("Good week. Keep going! Rest well?"),
+                 @summary_metrics
+               )
+
+      assert {:error, :invalid_shape} =
+               Validator.validate_summary(%{"text" => "Fine."}, @summary_metrics)
+    end
+  end
 end

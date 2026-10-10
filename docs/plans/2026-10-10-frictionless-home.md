@@ -230,15 +230,17 @@ end
 
 **Files:** `lib/burpee_trainer/insights/validator.ex`, `lib/burpee_trainer/coach/summary.ex` (schema + context), migration `20261010000100_create_coach_summaries.exs`; tests `validator_test.exs`, `test/burpee_trainer/coach/summary_test.exs`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
   - `Validator.validate_summary(%{"text" => t, "metric_ids" => ids}, metrics)`: accepts text whose numbers are the formatted values of cited metrics; rejects an unsupported number, an unknown id, text over 280 characters, more than two sentences (count `.`/`!`/`?` terminators followed by space or end), and empty text.
   - `Summary.store(scope, attrs)` upserts one row per user; `Summary.get(scope)` returns it or `nil`; another user's scope never sees it.
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement**
   - Extract the existing private number check in `Validator` into one private function used by both `validate/2` and `validate_summary/2`; do not duplicate the regex.
   - Migration: `coach_summaries` (`user_id` references users `on_delete: :delete_all`, unique; `text` text not null; `metric_ids` text JSON not null; `source` string not null; `timestamps(type: :utc_datetime_usec)`).
   - `Coach.Summary` schema + `get/1`, `store/2` (insert with `on_conflict: {:replace, [:text, :metric_ids, :source, :updated_at]}, conflict_target: :user_id`).
-- [ ] **Step 4: Run** — PASS. **Commit** — `feat(coach): validated summary storage`
+- [x] **Step 4: Run** — PASS. **Commit** — `feat(coach): validated summary storage`
+
+**Done** (`feat(coach): validated summary storage`). `numbers_supported/3` was already a single private check, so `validate_summary/2` reuses it with `known/2` and `length_ok/2`; a sentence ends at `.`/`!`/`?` before whitespace or the end, so decimals never split one. `source` is an `Ecto.Enum` (`:llm | :fallback`) and `metric_ids` an `{:array, :string}` stored as JSON text.
 
 ---
 
