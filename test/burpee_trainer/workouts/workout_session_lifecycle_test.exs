@@ -175,7 +175,9 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       fallback =
         Repo.one!(
           from(candidate in BurpeeTrainer.Workouts.WorkoutPlan,
-            where: candidate.origin == :built_in and candidate.state == :published
+            where:
+              candidate.origin == :built_in and candidate.state == :published and
+                candidate.name == "Built-in Steady 10"
           )
         )
 

@@ -160,19 +160,21 @@ end
 
 **Files:** `priv/repo/migrations/20261010000000_add_starter_workouts.exs`, `lib/burpee_trainer/workouts.ex`; test `test/burpee_trainer/workouts/starter_selection_test.exs`, `test/burpee_trainer/schema_migration_test.exs`
 
-- [ ] **Step 1: Build the definitions with the real compiler.** In `T mix run --no-start`, build `WorkoutDefinition.new/1` maps for:
+- [x] **Step 1: Build the definitions with the real compiler.** In `T mix run --no-start`, build `WorkoutDefinition.new/1` maps for:
   - "Starter Six-Count": six_count, even, 100 reps, 1200 s, 10 work sets of 10 at `sec_per_rep = sec_per_burpee = 5.0`, 9 rests fitted by `Coach.RestFitter.fit/2` with equal weights;
   - "Starter Navy Seal": navy_seal, even, 40 reps, 1200 s, 8 sets of 5 at 8.0 s, fitted the same way.
   Print `WorkoutDefinition.canonical_map/1`, `ProgramHash.canonical_map/1` and `ProgramHash.hash/1` for each. Paste them as module attributes (literal JSON strings, as `@fallback_definition_json` in `20261005000000_coach_first_schema.exs`).
-- [ ] **Step 2: Failing tests**
+- [x] **Step 2: Failing tests**
   - migration test (extend `schema_migration_test.exs`): after migrating, exactly one published built-in named "Starter Six-Count" and one "Starter Navy Seal" exist, `verify_stored_draft`-equivalent: recompiling `definition_json` reproduces `program_json` and `content_hash`; "Built-in Steady 10" still exists exactly once.
   - `starter_selection_test.exs`: a user with no completed sessions → `Workouts.ensure_home_selection(scope, slot)` pins the starter whose `burpee_type == slot.burpee_type`; a user with one completed session and no other selection → "Built-in Steady 10" (unchanged).
-- [ ] **Step 3: Run** — FAIL.
-- [ ] **Step 4: Implement**
+- [x] **Step 3: Run** — FAIL.
+- [x] **Step 4: Implement**
   - Migration `up` inserts both rows with `INSERT ... WHERE NOT EXISTS` on `(user_id IS NULL, name)`; `down` deletes them only if no session or recommendation references them, otherwise raises.
   - `Workouts.built_in_fallback/0` currently takes the lowest-id built-in. Make it select `name = "Built-in Steady 10"` explicitly so the new rows never become the fallback.
   - `initial_home_plan/2`'s fallback branch: `verified_home_fallback(user, slot_burpee_type)` returns the starter for that type when the user has no completed session (`not Repo.exists?(completed session for user)`), else the Steady 10 fallback. Pass the slot's burpee type down from `ensure_home_selection/2` (it receives the slot). This is a data choice between two rows, not a mode: write it as one `starter_or_fallback(user, type)` function with two pattern-matched clauses on the boolean.
-- [ ] **Step 5: Run** — PASS, then `T mix test`. **Commit** — `feat(workouts): add starter workouts for first use`
+- [x] **Step 5: Run** — PASS, then `T mix test`. **Commit** — `feat(workouts): add starter workouts for first use`
+
+**Done** (`feat(workouts): add starter workouts for first use`). Deviations: the migration check lives in `test/burpee_trainer/starter_workouts_migration_test.exs` (the schema test only runs the coach-first migration); `down` is a no-op because `workout_plans_draft_only_delete_trigger` forbids deleting published rows and `up` skips existing starters; at revision 0 the recommendation's Steady 10 placeholder resolves through `starter_or_fallback`, so Home tests for fresh users now expect the starter.
 
 ---
 

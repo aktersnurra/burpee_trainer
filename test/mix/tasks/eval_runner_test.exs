@@ -98,7 +98,13 @@ defmodule BurpeeTrainer.Evals.RunnerTest do
     assert c.failure_reason == "llm_budget_exhausted"
     assert Enum.uniq(Enum.map(result.calls, & &1.run_id)) == [result.run_id]
     assert Enum.uniq(Enum.map(result.calls, & &1.user_id)) == [result.owner.id]
-    assert Repo.aggregate(BurpeeTrainer.Workouts.WorkoutPlan, :count, :id) == 1
+
+    assert BurpeeTrainer.Workouts.WorkoutPlan
+           |> Repo.all()
+           |> Enum.map(& &1.origin)
+           |> Enum.uniq() ==
+             [:built_in]
+
     assert Accounts.get_user(result.owner.id) == nil
   end
 

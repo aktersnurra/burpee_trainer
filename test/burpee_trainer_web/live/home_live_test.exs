@@ -421,7 +421,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     conn: conn,
     user: user
   } do
-    recommendation = recommendation_fixture(user)
+    recommendation_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/")
 
     [client_session_id] =
@@ -451,7 +451,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert {:ok, replayed} =
              Workouts.start_plan(
                Scope.for_user(user),
-               recommendation.selected_workout_plan_id,
+               session.plan_id,
                client_session_id
              )
 

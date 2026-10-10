@@ -159,7 +159,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapTest do
     assert_delivery_rejected(user, id, selected, socket, "Build intervals", true)
   end
 
-  test "returning user mount retains an intentional built-in pin without a provider call", %{
+  test "returning user without a completed session sees the starter, not the placeholder", %{
     conn: _conn
   } do
     user = returning_user()
@@ -176,7 +176,7 @@ defmodule BurpeeTrainerWeb.HomeBootstrapTest do
 
     refute socket.assigns.bootstrap?
     assert socket.assigns.home_selection.recommendation_id == pinned.id
-    assert socket.assigns.home_selection.plan.id == pinned.selected_workout_plan_id
+    assert socket.assigns.home_selection.plan.name == "Starter Six-Count"
     refute_received :unexpected_provider
   end
 

@@ -38,6 +38,9 @@ defmodule BurpeeTrainer.Workouts do
   # a full-length-ish bout (≤ 20 min) of at least this many burpees.
   @pace_pr_min_count 20
   @pace_pr_max_duration 1200
+  # Built-in workouts are identified by name (migrations 20261005000000, 20261010000000).
+  @fallback_name "Built-in Steady 10"
+  @starter_names %{six_count: "Starter Six-Count", navy_seal: "Starter Navy Seal"}
   @pose_chunk_identity_fields [
     :segment,
     :chunk_index,
@@ -167,7 +170,7 @@ defmodule BurpeeTrainer.Workouts do
             {:ok, HomeSelection.new(r, plan)}
 
           {:error, _} ->
-            with {:ok, plan} <- initial_home_plan(user, r),
+            with {:ok, plan} <- initial_home_plan(user, slot.burpee_type, r),
                  {:ok, pinned} <- write_home_pointer(r, plan.id) do
               {:ok, HomeSelection.new(pinned, plan)}
             end
@@ -183,7 +186,7 @@ defmodule BurpeeTrainer.Workouts do
     immediate_lifecycle_transaction(fn ->
       with {:ok, current, recommendation} <- verified_recovery_slot(scope, slot),
            :ok <- no_other_started_session(user),
-           :ok <- missing_ensurable_selection(user, recommendation),
+           :ok <- missing_ensurable_selection(user, current.burpee_type, recommendation),
            {:ok, plan} <- get_library_plan(scope, plan_id),
            :ok <- verify_stored_draft(plan),
            {:ok, recommendation} <-
@@ -213,7 +216,7 @@ defmodule BurpeeTrainer.Workouts do
 
           :new ->
             with :ok <- no_other_started_session(user),
-                 :ok <- missing_ensurable_selection(user, recommendation),
+                 :ok <- missing_ensurable_selection(user, current.burpee_type, recommendation),
                  {:ok, recommendation} <-
                    recovery_recommendation(scope, current, recommendation, {:video, video.id}),
                  {:ok, _changed} <- write_home_pointer(recommendation, nil) do
@@ -256,15 +259,15 @@ defmodule BurpeeTrainer.Workouts do
 
   # Do not broaden normal first-use authorization or recover a slot which the loader
   # could already pin. In particular, a revision-zero pending candidate remains normal.
-  defp missing_ensurable_selection(user, recommendation) do
+  defp missing_ensurable_selection(user, burpee_type, recommendation) do
     # ensure_home_selection first requires the real fallback-backed slot row even
     # when a recommendation already exists. Absence of that fallback is genuine
     # choose eligibility; do not mistake an unpinned selected source for a winner.
     result =
       with {:ok, _fallback} <- built_in_fallback() do
         case recommendation do
-          nil -> verified_home_fallback()
-          %CoachRecommendation{} = r -> initial_home_plan(user, r)
+          nil -> verified_home_fallback(user, burpee_type)
+          %CoachRecommendation{} = r -> initial_home_plan(user, burpee_type, r)
         end
       end
 
@@ -570,28 +573,52 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp verified_home_fallback do
-    with {:ok, plan} <- built_in_fallback(),
+  defp verified_home_fallback(user, burpee_type) do
+    with {:ok, plan} <- starter_or_fallback(user, burpee_type),
          :ok <- verify_stored_draft(plan) do
       {:ok, plan}
     end
   end
 
-  defp initial_home_plan(user, %{home_revision: 0} = r) do
+  # Until the first completed session Home shows the starter for the slot's burpee type.
+  defp starter_or_fallback(%User{id: user_id}, burpee_type),
+    do: built_in_for(completed_session_exists?(user_id), burpee_type)
+
+  defp built_in_for(false = _completed_session?, burpee_type),
+    do: built_in(Map.fetch!(@starter_names, burpee_type))
+
+  defp built_in_for(true = _completed_session?, _burpee_type), do: built_in_fallback()
+
+  defp completed_session_exists?(user_id) do
+    Repo.exists?(
+      from(session in WorkoutSession,
+        where: session.user_id == ^user_id and session.state == :completed
+      )
+    )
+  end
+
+  defp initial_home_plan(user, burpee_type, %{home_revision: 0} = r) do
     case verified_home_plan(user, r.pending_draft_id) do
       {:ok, %{state: :draft} = draft} ->
         {:ok, draft}
 
       _ ->
+        # The fallback is the recommendation's required placeholder, not a choice.
         case verified_home_plan(user, r.selected_workout_plan_id) do
-          {:ok, %{state: :published} = plan} -> {:ok, plan}
-          _ -> verified_home_fallback()
+          {:ok, %{origin: :built_in, name: @fallback_name}} ->
+            verified_home_fallback(user, burpee_type)
+
+          {:ok, %{state: :published} = plan} ->
+            {:ok, plan}
+
+          _ ->
+            verified_home_fallback(user, burpee_type)
         end
     end
   end
 
   # A removed/invalid prior pin must not promote a late unrelated candidate.
-  defp initial_home_plan(_user, _r), do: verified_home_fallback()
+  defp initial_home_plan(user, burpee_type, _r), do: verified_home_fallback(user, burpee_type)
 
   defp selectable_home_plan(user, %{pending_draft_id: id}, id)
        when is_integer(id), do: get_draft(Scope.for_user(user), id)
@@ -1106,16 +1133,17 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp built_in_fallback do
+  defp built_in_fallback, do: built_in(@fallback_name)
+
+  defp built_in(name) do
     case Repo.one(
            from(plan in WorkoutPlan,
              where:
-               is_nil(plan.user_id) and plan.origin == :built_in and plan.state == :published,
-             order_by: [asc: plan.id],
-             limit: 1
+               is_nil(plan.user_id) and plan.origin == :built_in and plan.state == :published and
+                 plan.name == ^name
            )
          ) do
-      %WorkoutPlan{} = fallback -> {:ok, fallback}
+      %WorkoutPlan{} = built_in -> {:ok, built_in}
       nil -> {:error, Error.new(:source_unavailable, %{source: :built_in_fallback})}
     end
   end

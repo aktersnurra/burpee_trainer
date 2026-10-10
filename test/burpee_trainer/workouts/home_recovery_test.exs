@@ -34,8 +34,10 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
 
   test "explicit shared canonical choice works when the fallback row is corrupt", c do
     source = plan_fixture(c.user)
-    # A corrupt lower-ID fallback cannot be repaired or substituted by this command.
-    corrupt = copied_plan(%{source | content_hash: String.duplicate("a", 64)}, nil, :built_in)
+    # A corrupt fallback cannot be repaired or substituted by this command.
+    corrupt =
+      copied_plan(%{steady_fallback() | content_hash: String.duplicate("a", 64)}, nil, :built_in)
+
     shared = copied_plan(source, nil, :built_in)
     assert {:error, _} = Workouts.verify_plan_content(corrupt)
     assert {:ok, facts} = Home.facts(c.scope, DateTime.utc_now(:second))
@@ -142,7 +144,7 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
 
   test "available fallback means this is not choose and must not recover", c do
     plan = plan_fixture(c.user)
-    copied_plan(plan, nil, :built_in)
+    copied_plan(steady_fallback(), nil, :built_in)
     before = rows()
     assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, c.slot, plan.id)
     assert rows() == before
@@ -259,8 +261,7 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     video = video_fixture()
     token = Ecto.UUID.generate()
     assert {:ok, _} = Workouts.start_recovery_home_video(c.scope, c.slot, video.id, token)
-    source = plan_fixture(c.user)
-    copied_plan(source, nil, :built_in)
+    copied_plan(steady_fallback(), nil, :built_in)
     assert {:ok, selected} = Workouts.ensure_home_selection(c.scope, c.slot)
     before = rows()
     assert {:error, _} = Workouts.start_recovery_home_video(c.scope, c.slot, video.id, token)
@@ -415,6 +416,17 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
       )
     )
     |> Enum.each(fn plan -> plan |> WorkoutPlan.archive_changeset(now) |> Repo.update!() end)
+  end
+
+  # The archived fallback row; republishing a copy makes the fallback available again.
+  defp steady_fallback do
+    Repo.one!(
+      from(p in WorkoutPlan,
+        where: is_nil(p.user_id) and p.name == "Built-in Steady 10",
+        order_by: [asc: p.id],
+        limit: 1
+      )
+    )
   end
 
   defp copied_plan(source, owner, origin) do
