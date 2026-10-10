@@ -142,8 +142,6 @@ defmodule BurpeeTrainer.Coach.Client do
       _ ->
         invalid_provider_response()
     end
-  rescue
-    _ in [ArgumentError, Jason.EncodeError, Protocol.UndefinedError] -> provider_unavailable()
   end
 
   defp chat_status(200, _body), do: :ok

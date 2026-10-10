@@ -98,6 +98,18 @@ defmodule BurpeeTrainer.Coach.ClientChatTest do
     assert llm_call_count(scope) == 0
   end
 
+  test "a programming error crashes instead of reporting an unavailable provider" do
+    scope = scope_fixture()
+
+    assert_raise Protocol.UndefinedError, fn ->
+      Client.chat([%{role: "user", content: {:not, :json}}],
+        config: @config,
+        req: Req.new(plug: {Req.Test, __MODULE__}),
+        ledger: %{scope: scope, purpose: "layout", run_id: Ecto.UUID.generate()}
+      )
+    end
+  end
+
   test "invalid output still records supplied billing usage and cannot bypass the cost cap" do
     scope = scope_fixture()
     parent = self()
