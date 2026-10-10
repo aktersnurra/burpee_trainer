@@ -1800,21 +1800,6 @@ defmodule BurpeeTrainer.Workouts do
   defp preload_session_execution_refs(sessions) when is_list(sessions), do: sessions
 
   @doc """
-  Return the newest persisted coach recommendation for a user.
-  """
-  @spec current_coach_recommendation(Scope.t()) :: CoachRecommendation.t() | nil
-  def current_coach_recommendation(%Scope{user: %User{id: user_id}}) do
-    Repo.one(
-      from(recommendation in CoachRecommendation,
-        where: recommendation.user_id == ^user_id,
-        order_by: [desc: recommendation.inserted_at, desc: recommendation.id],
-        limit: 1,
-        preload: [:selected_workout_plan, :selected_workout_video, :pending_draft]
-      )
-    )
-  end
-
-  @doc """
   Return per-ISO-week training minutes for a user, excluding warmup sessions.
   Weeks are Mon–Sun. Result is sorted descending by `week_start`.
   """

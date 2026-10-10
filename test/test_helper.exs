@@ -1,2 +1,2 @@
-ExUnit.start(exclude: [:highs])
+ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(BurpeeTrainer.Repo, :manual)

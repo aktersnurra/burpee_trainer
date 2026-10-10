@@ -69,7 +69,6 @@ defmodule BurpeeTrainer.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:tzdata, "~> 1.1"},
-      {:contex, "~> 0.5"},
       {:remote_ip, "~> 1.2"},
       {:oidcc, "~> 3.9"}
     ]

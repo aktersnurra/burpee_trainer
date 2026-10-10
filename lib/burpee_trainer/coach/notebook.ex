@@ -11,8 +11,6 @@ defmodule BurpeeTrainer.Coach.Notebook do
     timestamps(type: :utc_datetime_usec)
   end
 
-  def max_length, do: @max
-
   @spec get(Scope.t()) :: %{body: String.t(), updated_at: DateTime.t() | nil}
   def get(%Scope{user: %{id: id}}) do
     case Repo.get_by(__MODULE__, user_id: id) do

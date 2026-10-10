@@ -19,7 +19,7 @@
 | `BurpeeTrainer.Coach.{Agent, AgentPrompt, Tool, Tools.*}` | Bounded tool-using coach for the planner and Coach-page surfaces |
 | `BurpeeTrainer.Coach.{Notebook, PlanNextWorkoutJob}` | The coach's bounded memory and the Oban job that plans the next workout |
 | `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`) and the per-call ledger with daily budgets |
-| `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession, Setting}` | Deterministic workout selection, policy facts, and per-user coach settings |
+| `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession}` | Deterministic workout selection and policy facts |
 | `BurpeeTrainer.Insights` / `BurpeeTrainer.Insights.*` | Computed metrics, validated LLM narration with deterministic fallback, and the narration job |
 | `BurpeeTrainer.Evals.*` / `mix burpee_trainer.eval` | Owner-run authoring evals with a mandatory call budget and response recording |
 | `BurpeeTrainer.PlanCompiler` and `BurpeeTrainer.PlanCompiler.*` | Validation and compilation of workout definitions into programs |
