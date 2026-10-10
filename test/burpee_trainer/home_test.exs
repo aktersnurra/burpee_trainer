@@ -20,7 +20,6 @@ defmodule BurpeeTrainer.HomeTest do
     })
 
     assert {:ok, facts} = Home.facts(Scope.for_user(user), DateTime.utc_now(:second))
-    assert facts.history?
     assert {:start, %{plan: %{}}} = Home.state(facts)
   end
 
@@ -30,8 +29,6 @@ defmodule BurpeeTrainer.HomeTest do
 
     assert recommendation_snapshot(user) == []
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
-    assert facts.history?
-    refute facts.owned_plan?
     assert %{recommendation_id: recommendation_id, plan: %{id: plan_id}} = facts.selection
 
     assert [{^recommendation_id, ^plan_id, _home_plan_id, _pending_draft_id, _revision}] =
@@ -46,8 +43,6 @@ defmodule BurpeeTrainer.HomeTest do
 
     assert recommendation_snapshot(user) == []
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
-    refute facts.history?
-    assert facts.owned_plan?
     assert %{recommendation_id: recommendation_id} = facts.selection
 
     assert [{^recommendation_id, _plan_id, _home_plan_id, _pending_draft_id, _revision}] =
@@ -74,10 +69,9 @@ defmodule BurpeeTrainer.HomeTest do
 
     assert {:ok, facts} = Home.facts(Scope.for_user(owner), DateTime.utc_now(:second))
     assert facts.started_session == nil
-    assert facts.selection == nil
-    refute facts.history?
-    refute facts.owned_plan?
-    assert :first_workout = Home.state(facts)
+    assert %{plan: %{user_id: nil, name: "Starter Six-Count"}} = facts.selection
+    refute facts.selection.recommendation_id == selection.recommendation_id
+    assert {:start, _} = Home.state(facts)
   end
 
   test "eligible owner facts and results exclude another user's recommendation, selection, session, and history" do
@@ -109,8 +103,6 @@ defmodule BurpeeTrainer.HomeTest do
       Workouts.start_home_workout(Scope.for_user(other), other_selected, Ecto.UUID.generate())
 
     assert {:ok, facts} = Home.facts(Scope.for_user(owner), @now)
-    assert facts.history?
-    assert facts.owned_plan?
 
     assert %{recommendation_id: recommendation_id, plan: %{id: plan_id} = selected_plan} =
              facts.selection
@@ -144,34 +136,13 @@ defmodule BurpeeTrainer.HomeTest do
     assert Workouts.current_started_session(scope) == nil
   end
 
-  test "authorized first-use shared pin is recognized with recommendation evidence but no owned plan" do
-    user = user_fixture()
-    scope = Scope.for_user(user)
-    now = DateTime.utc_now(:second)
-    current = slot(user, now)
-    built_in = Enum.find(Workouts.list_library(scope), &is_nil(&1.user_id))
-    assert built_in
-    assert {:ok, selected} = Workouts.select_bootstrap_home_workout(scope, current, built_in.id)
-    before = recommendation_snapshot(user)
-
-    assert {:ok, facts} = Home.facts(scope, now)
-    assert facts.history?
-    refute facts.owned_plan?
-    assert facts.selection == selected
-    assert {:start, ^selected} = Home.state(facts)
-    assert recommendation_snapshot(user) == before
-  end
-
-  test "a first-use user does not ensure a selection" do
+  test "a first-use user starts on the starter for the slot" do
     user = user_fixture()
 
     assert recommendation_snapshot(user) == []
     assert {:ok, facts} = Home.facts(Scope.for_user(user), DateTime.utc_now(:second))
-    assert facts.selection == nil
-    refute facts.history?
-    refute facts.owned_plan?
-    assert :first_workout = Home.state(facts)
-    assert recommendation_snapshot(user) == []
+    assert {:start, %{plan: %{name: "Starter Six-Count", origin: :built_in}}} = Home.state(facts)
+    assert [{_id, _fallback, _starter, nil, 1}] = recommendation_snapshot(user)
   end
 
   test "started, done-today, and week-complete guards preserve an existing recommendation" do
@@ -218,7 +189,7 @@ defmodule BurpeeTrainer.HomeTest do
     end
   end
 
-  test "draft and archived plans count as owned evidence while global built-ins do not" do
+  test "draft and archived plans never become the Home selection" do
     user = user_fixture()
     _draft = workout_plan_draft_fixture(user)
     published = plan_fixture(user)
@@ -234,8 +205,6 @@ defmodule BurpeeTrainer.HomeTest do
              )
 
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
-    refute facts.history?
-    assert facts.owned_plan?
     assert %{plan: %{user_id: nil, origin: :built_in}} = facts.selection
     assert {:start, _} = Home.state(facts)
     assert [{_, _, _, _, _}] = recommendation_snapshot(user)
@@ -256,8 +225,6 @@ defmodule BurpeeTrainer.HomeTest do
     end)
 
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
-    assert facts.history?
-    refute facts.owned_plan?
     assert facts.selection == nil
     assert :choose = Home.state(facts)
     assert recommendation_snapshot(user) == []

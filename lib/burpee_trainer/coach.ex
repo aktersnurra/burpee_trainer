@@ -7,7 +7,6 @@ defmodule BurpeeTrainer.Coach do
     Client,
     AuthoringPrompt,
     WorkoutLayout,
-    Policy,
     RestFitter,
     WorkoutGuidance,
     WorkoutRequest
@@ -54,29 +53,6 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  @spec prepare_home_bootstrap(Accounts.Scope.t(), map(), String.t()) ::
-          {:ok, map()} | {:error, Error.t()}
-  @spec prepare_home_bootstrap(Accounts.Scope.t(), map(), String.t(), keyword()) ::
-          {:ok, map()} | {:error, Error.t()}
-  def prepare_home_bootstrap(scope, slot, request, opts \\ [])
-
-  def prepare_home_bootstrap(
-        %Accounts.Scope{user: %Accounts.User{}} = scope,
-        %{slot_key: slot_key} = slot,
-        text,
-        opts
-      )
-      when is_binary(slot_key) and is_binary(text) and is_list(opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(text),
-         :ok <- current_bootstrap_slot(scope, slot) do
-      prepare_request(scope, nil, text, %{kind: :bootstrap, slot: slot}, opts)
-    end
-  end
-
-  def prepare_home_bootstrap(%Accounts.Scope{}, _slot, _text, _opts),
-    do: {:error, Error.new(:invalid_workout_definition)}
-
   @spec prepare_home_revision(Accounts.Scope.t(), map(), String.t()) ::
           {:ok, map()} | {:error, Error.t()}
   @spec prepare_home_revision(Accounts.Scope.t(), map(), String.t(), keyword()) ::
@@ -93,33 +69,6 @@ defmodule BurpeeTrainer.Coach do
       prepare_request(scope, source, text, %{kind: :revision, expected: expected}, opts)
     end
   end
-
-  @spec confirm_home_bootstrap(Accounts.Scope.t(), map()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  @spec confirm_home_bootstrap(Accounts.Scope.t(), map(), keyword()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  def confirm_home_bootstrap(scope, prepared, opts \\ [])
-
-  def confirm_home_bootstrap(
-        %Accounts.Scope{user: %Accounts.User{id: user_id}} = scope,
-        %{
-          user_id: user_id,
-          scope: %{kind: :bootstrap, slot: slot},
-          request: %WorkoutRequest{} = request,
-          text: text
-        },
-        opts
-      )
-      when is_list(opts) do
-    with :ok <- current_bootstrap_slot(scope, slot) do
-      bootstrap_home_draft(scope, slot, text, Keyword.put(opts, :confirmed_request, request))
-    else
-      _ -> {:error, Error.new(:design_workspace_changed)}
-    end
-  end
-
-  def confirm_home_bootstrap(%Accounts.Scope{}, _prepared, _opts),
-    do: {:error, Error.new(:design_workspace_changed)}
 
   @spec confirm_home_revision(Accounts.Scope.t(), map()) ::
           {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
@@ -307,33 +256,6 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  @spec bootstrap_home_draft(Accounts.Scope.t(), map(), String.t(), keyword()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  defp bootstrap_home_draft(user, slot, request, opts)
-
-  defp bootstrap_home_draft(
-         %Accounts.Scope{user: %Accounts.User{}} = scope,
-         %{slot_key: slot_key} = slot,
-         request,
-         opts
-       )
-       when is_binary(slot_key) and is_binary(request) and is_list(opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(request) do
-      author_attempt(scope, nil, text, opts, fn definition ->
-        Workouts.commit_home_bootstrap(
-          scope,
-          slot,
-          definition,
-          text
-        )
-      end)
-    end
-  end
-
-  defp bootstrap_home_draft(%Accounts.Scope{}, _slot, _request, _opts),
-    do: {:error, Error.new(:invalid_workout_definition)}
-
   defp prepare_request(%Accounts.Scope{user: user} = scope, source, text, request_scope, opts) do
     messages = AuthoringPrompt.messages(scope, source, text, @request_extraction_prompt, [])
 
@@ -454,18 +376,6 @@ defmodule BurpeeTrainer.Coach do
     if BurpeeTrainer.Repo.in_transaction?(),
       do: {:error, Error.new(:authoring_transaction_forbidden)},
       else: :ok
-  end
-
-  defp current_bootstrap_slot(scope, slot) do
-    with {:ok, current} <- Policy.required_slot(scope, DateTime.utc_now(:second)),
-         true <- current.slot_key == slot.slot_key and current.slot_date == slot.slot_date,
-         :workout_needed <- current.home_state,
-         {:ok, :bootstrap} <- Workouts.home_entry_state(scope, current),
-         nil <- Workouts.current_started_session(scope) do
-      :ok
-    else
-      _ -> {:error, Error.new(:design_workspace_changed)}
-    end
   end
 
   defp validate_authoring_input(input) when is_binary(input) do

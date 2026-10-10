@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.HomeEnqueueFailureTest do
 
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), "/")
     assert has_element?(view, "[data-home-state=start]")
+    drop_first_plan_job()
 
     Ecto.Adapters.SQL.query!(
       Repo,
@@ -29,6 +30,7 @@ defmodule BurpeeTrainerWeb.HomeEnqueueFailureTest do
     user = user_fixture()
     plan_fixture(user)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), "/")
+    drop_first_plan_job()
 
     Ecto.Adapters.SQL.query!(
       Repo,
@@ -44,4 +46,7 @@ defmodule BurpeeTrainerWeb.HomeEnqueueFailureTest do
     refute has_element?(view, "#home-planning-error")
     assert Repo.aggregate(Oban.Job, :count) == 1
   end
+
+  # Mounting queues the slot's first plan; these cases are about later admissions.
+  defp drop_first_plan_job, do: Repo.delete_all(Oban.Job)
 end

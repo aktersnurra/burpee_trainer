@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Home, Repo, Workouts}
-  alias BurpeeTrainer.Coach.Policy
+  alias BurpeeTrainer.Coach.{PlanNextWorkoutJob, Policy}
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutSession}
 
   alias BurpeeTrainerWeb.{
@@ -42,6 +42,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       |> CoachScreen.initialize()
       |> assign(history_open?: false)
       |> schedule_home_day()
+      |> plan_slot_once()
 
     {:ok, socket}
   end
@@ -80,10 +81,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
           CoachScreen.open(socket, params)
 
         :home when previous != :home ->
-          if socket.assigns.bootstrap? or socket.assigns.home_state == :choose or
-               not is_nil(socket.assigns.home_selection),
-             do: HomeChooser.refresh_alternatives(socket),
-             else: socket
+          if socket.assigns.home_state == :choose or not is_nil(socket.assigns.home_selection),
+            do: HomeChooser.refresh_alternatives(socket),
+            else: socket
 
         :home ->
           socket
@@ -175,7 +175,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
               is_nil(Workouts.current_started_session(a.current_scope)) ->
             updated = initialize_transition_selection(socket, previous_state, fresh_slot, now)
 
-            if updated.assigns.home_selection || updated.assigns.bootstrap?,
+            if updated.assigns.home_selection,
               do: refresh_home_facts(updated, now),
               else: refresh_history_at(updated, now)
 
@@ -193,7 +193,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     a = socket.assigns
 
     if match?(%{home_state: :workout_needed}, a.slot) and is_nil(a.home_selection) and
-         is_nil(a.started_session) and not a.bootstrap? and not a.busy? and
+         is_nil(a.started_session) and not a.busy? and
          is_nil(a.pending_request) and a.authoring_stage == :idle,
        do: HomeWorkspace.assign_workspace(socket),
        else: socket
@@ -212,17 +212,10 @@ defmodule BurpeeTrainerWeb.HomeLive do
         Repo.immediate_transaction(fn ->
           with {:ok, %{home_state: :workout_needed} = fresh_slot} <-
                  Policy.required_slot(a.current_scope, a.home_now.()),
-               nil <- Workouts.current_started_session(a.current_scope),
-               {:ok, entry_state} <- Workouts.home_entry_state(a.current_scope, fresh_slot) do
-            case entry_state do
-              :bootstrap ->
-                {:bootstrap, fresh_slot}
-
-              :existing ->
-                case Workouts.ensure_home_selection(a.current_scope, fresh_slot) do
-                  {:ok, selected} -> {:selected, fresh_slot, selected}
-                  {:error, _} -> Repo.rollback({:home_refresh_unavailable, :missing_selection})
-                end
+               nil <- Workouts.current_started_session(a.current_scope) do
+            case Workouts.ensure_home_selection(a.current_scope, fresh_slot) do
+              {:ok, selected} -> {:selected, fresh_slot, selected}
+              {:error, _} -> Repo.rollback({:home_refresh_unavailable, :missing_selection})
             end
           else
             _ -> Repo.rollback(:home_refresh_unavailable)
@@ -238,18 +231,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
             inspection_rows: Inspection.rows(selected.plan),
             local_error: nil
           )
-          |> HomeChooser.refresh_alternatives()
-
-        {:ok, {:bootstrap, slot}} ->
-          socket
-          |> assign(
-            slot: slot,
-            home_selection: nil,
-            bootstrap?: true,
-            bootstrap_id: nil,
-            local_error: nil
-          )
-          |> HomeAuthoring.bootstrap_form("")
           |> HomeChooser.refresh_alternatives()
 
         {:error, {:home_refresh_unavailable, :missing_selection}} ->
@@ -321,9 +302,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(_event, _params, %{assigns: %{workspace_screen: screen}} = socket)
       when screen != :home, do: {:noreply, socket}
 
-  def handle_event("submit_bootstrap", params, socket),
-    do: HomeAuthoring.handle_event("submit_bootstrap", params, socket)
-
   def handle_event(event, params, %{assigns: %{busy?: true, authoring_stage: stage}} = socket)
       when event in [
              "abort_new_workout",
@@ -355,7 +333,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     HomeChooser.handle_event(event, params, socket)
   end
 
-  def handle_event(event, _params, %{assigns: %{home_selection: nil, bootstrap?: false}} = socket)
+  def handle_event(event, _params, %{assigns: %{home_selection: nil}} = socket)
       when event not in ["resume_recommendation", "retry_recommendation"],
       do: {:noreply, socket}
 
@@ -447,15 +425,22 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
-  defp enqueue_planner(socket) do
-    case BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(socket.assigns.current_scope) do
-      :ok ->
-        assign(socket, home_planning_error: nil)
+  defp enqueue_planner(socket),
+    do: planning_result(socket, PlanNextWorkoutJob.enqueue(socket.assigns.current_scope))
 
-      {:error, _reason} ->
-        assign(socket, home_planning_error: "Planning is unavailable. Try again later.")
-    end
+  # A built-in on Home stands in until the coach has planned the slot; that happens once.
+  defp plan_slot_once(socket) do
+    if connected?(socket) and
+         match?({:start, %{plan: %{origin: :built_in}}}, socket.assigns.home_state),
+       do:
+         planning_result(socket, PlanNextWorkoutJob.enqueue_first(socket.assigns.current_scope)),
+       else: socket
   end
+
+  defp planning_result(socket, :ok), do: assign(socket, home_planning_error: nil)
+
+  defp planning_result(socket, {:error, _reason}),
+    do: assign(socket, home_planning_error: "Planning is unavailable. Try again later.")
 
   def start_result(socket, {:ok, session}),
     do: {:noreply, push_navigate(socket, to: session_path(session))}
@@ -484,8 +469,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
           home_primary_action: BurpeeTrainer.Home.State.primary_action(state),
           slot: facts.slot,
           started_session: facts.started_session,
-          home_error: nil,
-          history_available?: facts.history?
+          home_error: nil
         )
         |> HomeScreen.assign_results(facts.results)
 
@@ -518,8 +502,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when kind in [
              :new_request,
              :new_plan,
-             :home_bootstrap_request,
-             :home_bootstrap,
              :home_revision_request,
              :home_revision
            ] do

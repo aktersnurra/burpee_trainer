@@ -182,18 +182,20 @@ end
 
 **Files:** `lib/burpee_trainer/home.ex`, `home/state.ex`, `lib/burpee_trainer/workouts.ex`, `lib/burpee_trainer/coach.ex`, `lib/burpee_trainer/coach/plan_next_workout_job.ex`, `lib/burpee_trainer_web/live/{home_live,home_authoring,home_chooser,home_screen,home_workspace}.ex`, `components/home_workout_components.ex`; tests under `test/burpee_trainer/home*`, `test/burpee_trainer_web/live/home_*`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
   - `home_test.exs`: a fresh user (no sessions, plans or recommendations) → `Home.facts/2` returns a selection with the starter; `Home.state/1` is `{:start, %{plan: %{name: "Starter Six-Count"}}}` (or Navy Seal per slot type).
   - `state_test.exs`: update the generator (drop `history?`/`owned_plan?`), keep "exactly one primary action" and "started session wins", and add: `primary_action/1` never returns `:describe_first`.
   - LiveView: fresh user `live(conn, ~p"/")` has `[data-home-state=start] [data-primary-action=start]` and no `#home-bootstrap-form`; mounting connected enqueues one `PlanNextWorkoutJob` for the slot; mounting again does not enqueue a second (any state).
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Domain**
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Domain**
   - `Home.facts/2`: when the slot needs a workout and no session is started, always call `ensure_selection` (no `history? or owned_plan?` gate). Remove `history?`/`owned_plan?` from `Home.Facts` if `Home.State` no longer reads them.
   - `Home.State`: delete the `:first_workout` clause, its type member and `primary_action(:first_workout)`. `:choose` remains for a genuinely missing selection.
   - `PlanNextWorkoutJob.enqueue_first/1`: same args, inserted with `unique: [period: :infinity, keys: [:user_id, :slot_key], states: :all]` so a slot is planned automatically at most once. Use it from `HomeLive` mount (connected) when `@home_state` is `{:start, %{plan: %{origin: :built_in}}}`; the day-boundary and retry paths keep `enqueue/1`.
-- [ ] **Step 4: Delete the bootstrap path.** Remove the bootstrap form and alternatives (`HomeWorkoutComponents.bootstrap/1`, its events in `HomeAuthoring`, the `bootstrap?`/`bootstrap_*` assigns in `HomeLive`/`HomeWorkspace`/`HomeChooser`/`HomeScreen`), `Coach.prepare_home_bootstrap/4`, `Coach.confirm_home_bootstrap/3`, `bootstrap_home_draft/4`, and `Workouts.{bootstrap_alternatives/4, select_bootstrap_home_workout/3, start_bootstrap_home_video/4, commit_home_bootstrap/4}` with their private helpers. Then `T mix compile --warnings-as-errors` and delete what the compiler reports unused. Keep `Workouts.home_entry_state/2` only if the `:choose` recovery commands still call it.
-- [ ] **Step 5: Tests of removed code** — delete `home_bootstrap_test.exs`, `home_bootstrap_lifecycle_test.exs`, `home_entry_state_test.exs` cases that exist only for bootstrap, and bootstrap cases in `home_live_state_test.exs`/`workspace_reentry_test.exs`; rewrite (not delete) any case that also guards ownership or stale state so the guard is still covered through the remaining APIs.
-- [ ] **Step 6: Run** — `T mix test` → 0 failures. **Commit** — `feat(home): first use opens on a ready starter workout`
+- [x] **Step 4: Delete the bootstrap path.** Remove the bootstrap form and alternatives (`HomeWorkoutComponents.bootstrap/1`, its events in `HomeAuthoring`, the `bootstrap?`/`bootstrap_*` assigns in `HomeLive`/`HomeWorkspace`/`HomeChooser`/`HomeScreen`), `Coach.prepare_home_bootstrap/4`, `Coach.confirm_home_bootstrap/3`, `bootstrap_home_draft/4`, and `Workouts.{bootstrap_alternatives/4, select_bootstrap_home_workout/3, start_bootstrap_home_video/4, commit_home_bootstrap/4}` with their private helpers. Then `T mix compile --warnings-as-errors` and delete what the compiler reports unused. Keep `Workouts.home_entry_state/2` only if the `:choose` recovery commands still call it.
+- [x] **Step 5: Tests of removed code** — delete `home_bootstrap_test.exs`, `home_bootstrap_lifecycle_test.exs`, `home_entry_state_test.exs` cases that exist only for bootstrap, and bootstrap cases in `home_live_state_test.exs`/`workspace_reentry_test.exs`; rewrite (not delete) any case that also guards ownership or stale state so the guard is still covered through the remaining APIs.
+- [x] **Step 6: Run** — `T mix test` → 0 failures. **Commit** — `feat(home): first use opens on a ready starter workout`
+
+**Done** (`feat(home): first use opens on a ready starter workout`). Deviations: `home_entry_state/2` is deleted too: with no bootstrap state, `:choose` only means no workout could be pinned, so recovery no longer requires a returning user (a fresh user in `:choose` may start a video; another user's plan is still refused). `Home.Facts` drops `history?` as well as `owned_plan?` (History computes its own availability). The returning-user mount guards moved to `home_returning_mount_test.exs`, and the inert-without-selection guards became one `:choose` test there.
 
 ---
 

@@ -200,8 +200,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   />
                 </section>
               <% end %>
-            <% :first_workout -> %>
-              <HomeWorkoutComponents.bootstrap state={assigns} />
             <% {:start, _selection} -> %>
               <HomeWorkoutComponents.workspace state={assigns} />
             <% :choose -> %>

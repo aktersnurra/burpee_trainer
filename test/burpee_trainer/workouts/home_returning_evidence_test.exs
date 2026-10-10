@@ -16,11 +16,8 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
       now = DateTime.utc_now(:second)
       {:ok, slot} = Policy.required_slot(scope, now)
       prior = arrange(scope, slot, @evidence)
-      assert_existing_and_bootstrap_rejected(scope, slot)
       assert_owned_evidence(scope, @evidence)
       assert {:ok, facts} = Home.facts(scope, now)
-      assert facts.owned_plan? == (@evidence != :prior_recommendation)
-      assert facts.history? == @evidence in [:prior_recommendation, :corrupt_draft_pin]
       assert {:start, selection} = Home.state(facts)
       assert selection.plan.user_id == nil
       assert selection.plan.state == :published
@@ -40,18 +37,15 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
       now = DateTime.utc_now(:second)
       {:ok, slot} = Policy.required_slot(scope, now)
       prior = arrange(scope, slot, @evidence)
-      assert_existing_and_bootstrap_rejected(scope, slot)
       archive_fallbacks(now)
       before = rows()
       assert {:ok, facts} = Home.facts(scope, now)
       assert :choose = Home.state(facts)
       assert facts.selection == nil
-      assert facts.owned_plan? == (@evidence != :prior_recommendation)
-      assert facts.history? == @evidence in [:prior_recommendation, :corrupt_draft_pin]
       assert rows() == before
       assert_owned_evidence(scope, @evidence)
-      # New catalog rows respect the immutable archive transition. A corrupt
-      # lower-ID shared fallback keeps the higher-ID canonical choice explicit.
+      # New shared built-ins never become the fallback, so Home stays in choose and the
+      # canonical one is chosen explicitly even beside a corrupt one.
       corrupt_fallback = shared_source(scope, true)
       assert {:error, _} = Workouts.verify_plan_content(corrupt_fallback)
       source = shared_source(scope)
@@ -70,7 +64,6 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
       now = DateTime.utc_now(:second)
       {:ok, slot} = Policy.required_slot(scope, now)
       arrange(scope, slot, @evidence)
-      assert_existing_and_bootstrap_rejected(scope, slot)
       archive_fallbacks(now)
       video = video_fixture()
       assert_owned_evidence(scope, @evidence)
@@ -87,7 +80,6 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
       now = DateTime.utc_now(:second)
       {:ok, slot} = Policy.required_slot(scope, now)
       prior = arrange(scope, slot, @evidence)
-      assert_existing_and_bootstrap_rejected(scope, slot)
       archive_fallbacks(now)
       video = video_fixture()
       before = rows()
@@ -116,35 +108,23 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
     end
   end
 
-  test "fresh and foreign-only evidence remain read-only first use and cannot recover" do
+  test "another user's evidence never lets a fresh user recover with their plan" do
     other = scope_fixture()
     now = DateTime.utc_now(:second)
     {:ok, other_slot} = Policy.required_slot(other, now)
     arrange(other, other_slot, :corrupt_draft_pin)
-    plan_fixture(other.user) |> WorkoutPlan.archive_changeset(now) |> Repo.update!()
-    video = video_fixture()
-    {:ok, _} = Workouts.start_video(other, video.id, Ecto.UUID.generate())
     archive_fallbacks(now)
     source = plan_fixture(other.user)
+    scope = scope_fixture()
+    {:ok, slot} = Policy.required_slot(scope, now)
+    before = rows()
 
-    for _ <- 1..2 do
-      scope = scope_fixture()
-      {:ok, slot} = Policy.required_slot(scope, now)
-      before = rows()
-      assert {:ok, :bootstrap} = Workouts.home_entry_state(scope, slot)
-      assert {:ok, facts} = Home.facts(scope, now)
-      refute facts.history?
-      refute facts.owned_plan?
-      assert facts.selection == nil
-      assert facts.started_session == nil
-      assert :first_workout = Home.state(facts)
-      assert {:error, _} = Workouts.recover_home_workout_selection(scope, slot, source.id)
-
-      assert {:error, _} =
-               Workouts.start_recovery_home_video(scope, slot, video.id, Ecto.UUID.generate())
-
-      assert rows() == before
-    end
+    assert {:ok, facts} = Home.facts(scope, now)
+    assert facts.selection == nil
+    assert facts.started_session == nil
+    assert :choose = Home.state(facts)
+    assert {:error, _} = Workouts.recover_home_workout_selection(scope, slot, source.id)
+    assert rows() == before
   end
 
   test "a valid owned draft pin remains recognized without repair or publication" do
@@ -160,8 +140,6 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
 
     before = rows()
     assert {:ok, facts} = Home.facts(scope, now)
-    assert facts.history?
-    assert facts.owned_plan?
     assert {:start, selected} = Home.state(facts)
     assert selected.plan == draft
     assert selected.home_revision == 4
@@ -212,13 +190,6 @@ defmodule BurpeeTrainer.Workouts.HomeReturningEvidenceTest do
       Map.merge(Map.take(slot, [:slot_key, :slot_date]), %{selected_workout_plan_id: plan_id})
     )
     |> Repo.insert!()
-  end
-
-  defp assert_existing_and_bootstrap_rejected(scope, slot) do
-    assert {:ok, :existing} = Workouts.home_entry_state(scope, slot)
-    before = rows()
-    assert {:error, _} = Workouts.select_bootstrap_home_workout(scope, slot, shared_source_id())
-    assert rows() == before
   end
 
   defp assert_owned_evidence(scope, evidence) do

@@ -3,9 +3,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainer.{Coach, Repo, Workouts}
-  alias BurpeeTrainer.Coach.Policy
-  alias BurpeeTrainer.Workouts.CoachRecommendation
+  alias BurpeeTrainer.{Coach, Workouts}
 
   alias BurpeeTrainerWeb.{
     CreationParameters,
@@ -16,43 +14,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     HomeLive
   }
 
-  def handle_event("submit_bootstrap", %{"home_bootstrap" => %{"prompt" => prompt}}, socket)
-      when is_binary(prompt) do
-    a = socket.assigns
-
-    cond do
-      not a.bootstrap? or a.busy? or not is_nil(a.pending_request) ->
-        {:noreply, socket}
-
-      not valid_bootstrap_prompt?(prompt) ->
-        {:noreply,
-         socket
-         |> assign(local_error: "Enter a request of at most 500 characters.")
-         |> bootstrap_form(prompt)}
-
-      true ->
-        id = make_ref()
-        scope = a.current_scope
-        expected_slot = a.slot
-
-        {:noreply,
-         socket
-         |> assign(
-           busy?: true,
-           bootstrap_id: id,
-           bootstrap_prompt: prompt,
-           bootstrap_slot: expected_slot,
-           local_error: nil
-         )
-         |> bootstrap_form(prompt)
-         |> start_async({:home_bootstrap_request, id}, fn ->
-           Coach.prepare_home_bootstrap(scope, expected_slot, prompt)
-         end)}
-    end
-  end
-
-  # Bootstrap owns only its prompt and catalog controls. Selected-workspace events
-  # cannot act without a persisted selection, including in bootstrap presentation.
+  # Selected-workspace events cannot act without a persisted selection.
 
   def handle_event("change_adjustment", _params, %{assigns: %{home_selection: nil}} = socket),
     do: {:noreply, socket}
@@ -113,7 +75,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     a = socket.assigns
 
     cond do
-      not valid_bootstrap_prompt?(text) ->
+      not valid_instruction?(text) ->
         {:noreply, assign(socket, local_error: "Enter a change of at most 500 characters.")}
 
       verify_edit_selection(socket) != :ok ->
@@ -301,23 +263,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   def handle_event(
         "confirm_workout_request",
         _params,
-        %{assigns: %{pending_request: %{scope: %{kind: :bootstrap}} = prepared, busy?: false}} =
-          socket
-      ) do
-    id = make_ref()
-    scope = socket.assigns.current_scope
-
-    {:noreply,
-     socket
-     |> assign(busy?: true, bootstrap_id: id, local_error: nil)
-     |> start_async({:home_bootstrap, id}, fn ->
-       Coach.confirm_home_bootstrap(scope, prepared)
-     end)}
-  end
-
-  def handle_event(
-        "confirm_workout_request",
-        _params,
         %{assigns: %{pending_request: %{scope: %{kind: :revision}} = prepared, busy?: false}} =
           socket
       ) do
@@ -336,7 +281,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     {:noreply,
      socket
      |> assign(pending_request: nil, local_error: nil)
-     |> bootstrap_form(socket.assigns.bootstrap_prompt)
      |> adjustment_form(socket.assigns.instruction)}
   end
 
@@ -466,73 +410,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   def handle_async({kind, _}, _, socket) when kind in [:new_request, :new_plan],
     do: {:noreply, socket}
-
-  def handle_async(
-        {:home_bootstrap_request, id},
-        {:ok, {:ok, prepared}},
-        %{assigns: %{bootstrap_id: id, bootstrap?: true}} = socket
-      ) do
-    a = socket.assigns
-
-    with {:ok, current_slot} <- Policy.required_slot(a.current_scope, a.home_now.()),
-         true <- current_slot.slot_key == a.bootstrap_slot.slot_key,
-         true <- current_slot.slot_date == a.bootstrap_slot.slot_date,
-         :workout_needed <- current_slot.home_state,
-         nil <- Workouts.current_started_session(a.current_scope) do
-      {:noreply,
-       assign(socket,
-         busy?: false,
-         bootstrap_id: nil,
-         pending_request: prepared,
-         local_error: nil
-       )}
-    else
-      _ -> {:noreply, bootstrap_delivery_failure(socket)}
-    end
-  end
-
-  def handle_async(
-        {:home_bootstrap_request, id},
-        _result,
-        %{assigns: %{bootstrap_id: id}} = socket
-      ),
-      do: {:noreply, bootstrap_delivery_failure(socket)}
-
-  def handle_async({:home_bootstrap_request, _id}, _result, socket), do: {:noreply, socket}
-
-  def handle_async(
-        {:home_bootstrap, id},
-        {:ok, {:ok, selected}},
-        %{assigns: %{bootstrap_id: id}} = socket
-      ) do
-    a = socket.assigns
-
-    with {:ok, _plan} <- Workouts.verify_home_selection(a.current_scope, selected),
-         {:ok, current_slot} <- Policy.required_slot(a.current_scope, a.home_now.()),
-         %CoachRecommendation{} = recommendation <-
-           Repo.get_by(CoachRecommendation,
-             id: selected.recommendation_id,
-             user_id: a.current_scope.user.id
-           ),
-         true <- recommendation.slot_key == a.bootstrap_slot.slot_key,
-         true <- recommendation.slot_date == a.bootstrap_slot.slot_date,
-         true <- recommendation.slot_key == current_slot.slot_key,
-         true <- recommendation.slot_date == current_slot.slot_date,
-         :workout_needed <- current_slot.home_state,
-         nil <- Workouts.current_started_session(a.current_scope) do
-      {:noreply,
-       socket
-       |> assign(busy?: false, bootstrap_id: nil, bootstrap?: false, bootstrap_slot: nil)
-       |> HomeWorkspace.show_selection(selected, true)}
-    else
-      _ -> {:noreply, bootstrap_delivery_failure(socket)}
-    end
-  end
-
-  def handle_async({:home_bootstrap, id}, _result, %{assigns: %{bootstrap_id: id}} = socket),
-    do: {:noreply, bootstrap_delivery_failure(socket)}
-
-  def handle_async({:home_bootstrap, _id}, _result, socket), do: {:noreply, socket}
 
   def handle_async(
         {:home_revision_request, id},
@@ -728,25 +605,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     })
   end
 
-  def bootstrap_form(socket, prompt),
-    do: assign(socket, bootstrap_form: to_form(%{"prompt" => prompt}, as: :home_bootstrap))
-
-  defp valid_bootstrap_prompt?(prompt),
+  defp valid_instruction?(prompt),
     do: String.trim(prompt) != "" and String.length(prompt) <= 500 and byte_size(prompt) <= 4_000
-
-  defp bootstrap_delivery_failure(socket) do
-    socket
-    |> assign(
-      busy?: false,
-      bootstrap_id: nil,
-      bootstrap?: true,
-      bootstrap_slot: nil,
-      pending_request: nil,
-      local_error: "Couldn’t prepare that workout. Please try again."
-    )
-    |> bootstrap_form(socket.assigns.bootstrap_prompt)
-    |> HomeChooser.refresh_alternatives()
-  end
 
   def adjustment_form(socket, text),
     do:

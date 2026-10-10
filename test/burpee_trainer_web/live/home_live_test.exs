@@ -787,121 +787,14 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
-  test "first-use extraction waits for confirmation before planning and Back restores the request",
-       %{
-         conn: conn,
-         user: user
-       } do
-    extraction = %{
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "recovery" => "optional",
-      "timed_rests" => [],
-      "requested_pace_sec" => nil
-    }
-
-    layout = single_set_layout("Confirmed first workout", "Ten reps over two minutes.")
-
-    counter =
-      fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
-
-    {:ok, view, _} = live(conn, ~p"/")
-
-    view
-    |> form("#home-bootstrap-form", home_bootstrap: %{prompt: "Ten reps in two minutes"})
-    |> render_submit()
-
-    render_async(view)
-    assert has_element?(view, "#home-request-confirmation #home-request-reps", "10")
-    refute has_element?(view, "#home-bootstrap-form")
-    assert Agent.get(counter, & &1.calls) == ["workout_request"]
-
-    assert Repo.aggregate(
-             from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
-             :count
-           ) == 0
-
-    view |> element("#home-request-back") |> render_click()
-    assert has_element?(view, "#home-bootstrap-form")
-    refute has_element?(view, "#home-request-confirmation")
-
-    view
-    |> form("#home-bootstrap-form", home_bootstrap: %{prompt: "Ten reps in two minutes"})
-    |> render_submit()
-
-    render_async(view)
-    view |> element("#home-request-confirm") |> render_click()
-    render_async(view)
-
-    assert has_element?(view, "#home-ready-recommendation")
-
-    assert Agent.get(counter, & &1.calls) ==
-             ["workout_request", "workout_request", "workout_layout"]
-  end
-
-  test "failed confirmed phased planning restores the first-use request without publishing", %{
-    conn: conn,
-    user: user
-  } do
-    extraction = %{
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "recovery" => "required",
-      "timed_rests" => [],
-      "requested_pace_sec" => nil
-    }
-
-    counter =
-      fake_authoring_provider(%{
-        "workout_request" => extraction,
-        "workout_layout" => %{}
-      })
-
-    {:ok, view, _} = live(conn, ~p"/")
-
-    view
-    |> form("#home-bootstrap-form", home_bootstrap: %{prompt: "Ten reps with rest"})
-    |> render_submit()
-
-    render_async(view)
-    view |> element("#home-request-confirm") |> render_click()
-    render_async(view)
-
-    assert has_element?(view, "#home-bootstrap-form")
-    assert has_element?(view, "#home-bootstrap-error", "Please try again")
-    refute has_element?(view, "#home-request-confirmation")
-
-    assert Agent.get(counter, & &1.calls) ==
-             ["workout_request", "workout_layout", "workout_layout"]
-
-    assert Repo.aggregate(
-             from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
-             :count
-           ) == 0
-  end
-
-  test "fresh mount shows bootstrap and a persisted selection remains stable", %{
+  test "fresh mount shows the starter and its selection stays stable across reloads", %{
     conn: conn,
     user: user
   } do
     {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-bootstrap-form")
-    view |> element("#home-tab-videos") |> render_click()
-
-    empty_text =
-      view
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-alternatives-empty")
-      |> LazyHTML.text()
-      |> String.trim()
-
-    assert empty_text == "No matching videos. Try another request or browse Workouts."
+    assert has_element?(view, "#home-workout-area")
     {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
+    assert selected.plan.name == "Starter Six-Count"
     {:ok, reloaded, _} = live(conn, ~p"/")
     assert has_element?(reloaded, "#home-workout-area")
     {:ok, same} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))

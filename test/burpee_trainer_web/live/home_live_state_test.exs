@@ -35,17 +35,10 @@ defmodule BurpeeTrainerWeb.HomeLiveStateTest do
     assert Repo.reload!(started) == started
   end
 
-  test "first workout renders exactly the existing prompt's primary submit" do
+  test "first use renders the starter's Start as the one primary action" do
     socket = mount_home(user_fixture())
-
-    assert_primary(
-      render_home(socket),
-      "first_workout",
-      "describe_first",
-      "home-bootstrap-submit"
-    )
-
-    assert socket.assigns.bootstrap?
+    assert_primary(render_home(socket), "start", "start", "home-action")
+    assert socket.assigns.home_selection.plan.name == "Starter Six-Count"
   end
 
   test "choose is reachable through legitimate missing fallback and opens chooser" do

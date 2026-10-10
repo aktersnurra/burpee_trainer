@@ -6,7 +6,6 @@ defmodule BurpeeTrainer.Home.State do
   @type t ::
           {:resume, map()}
           | {:start, map()}
-          | :first_workout
           | :choose
           | {:done_today, map()}
           | {:week_complete, map()}
@@ -21,13 +20,11 @@ defmodule BurpeeTrainer.Home.State do
     do: {:week_complete, results}
 
   def derive(%Facts{selection: %{} = selection}), do: {:start, selection}
-  def derive(%Facts{history?: false, owned_plan?: false}), do: :first_workout
   def derive(%Facts{}), do: :choose
 
-  @spec primary_action(t()) :: :resume | :start | :describe_first | :choose | :insights
+  @spec primary_action(t()) :: :resume | :start | :choose | :insights
   def primary_action({:resume, _}), do: :resume
   def primary_action({:start, _}), do: :start
-  def primary_action(:first_workout), do: :describe_first
   def primary_action(:choose), do: :choose
   def primary_action({state, _}) when state in [:done_today, :week_complete], do: :insights
 end

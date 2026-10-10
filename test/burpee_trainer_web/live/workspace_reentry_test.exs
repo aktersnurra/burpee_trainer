@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Notebook
-  alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -92,67 +92,6 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{started.id}")
   end
 
-  test "first-use bootstrap actually replays its selectable plan list", %{conn: conn, user: user} do
-    {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-bootstrap-form")
-
-    [row | _] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-alternatives > .home-alternative-row")
-      |> LazyHTML.attribute("id")
-
-    before = workspace(view)
-
-    for via <- [:history, :coach] do
-      roundtrip(view, via)
-      assert has_element?(view, "#home-bootstrap-alternatives ##{row}-select")
-      assert workspace(view) == before
-      assert Repo.aggregate(CoachRecommendation, :count) == 0
-      assert Workouts.list_sessions(Scope.for_user(user)) == []
-      assert Notebook.get(Scope.for_user(user)).body == ""
-    end
-
-    view |> element("##{row}-select") |> render_click()
-    refute has_element?(view, "#home-bootstrap-form")
-    assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id
-    assert has_element?(view, "#home-title-action")
-  end
-
-  test "bootstrap video rows survive Coach and History then start the exact video", %{
-    conn: conn,
-    user: user
-  } do
-    video = video_fixture(%{burpee_count: 10, duration_sec: 120})
-    {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-tab-videos") |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-bootstrap-alternatives #home-alternative-video-#{video.id}-select"
-           )
-
-    before = workspace(view)
-
-    for via <- [:history, :coach] do
-      roundtrip(view, via)
-
-      assert has_element?(
-               view,
-               "#home-bootstrap-alternatives #home-alternative-video-#{video.id}-select"
-             )
-
-      assert workspace(view) == before
-      assert Repo.aggregate(CoachRecommendation, :count) == 0
-      assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    end
-
-    view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
-    started = Workouts.current_started_session(Scope.for_user(user))
-    assert started.workout_video_id == video.id
-    assert_redirect(view, ~p"/videos/#{video.id}/session/#{started.id}")
-  end
-
   test "deleting today's completion restores an existing user's immediately startable fallback",
        %{conn: conn, user: user} do
     plan_fixture(user)
@@ -162,7 +101,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert :sys.get_state(view.pid).socket.assigns.home_selection == nil
     delete_completion(view, saved)
     close_history(view)
-    refute has_element?(view, "#retry-recommendation-button, #home-bootstrap-form")
+    refute has_element?(view, "#retry-recommendation-button")
     selected = :sys.get_state(view.pid).socket.assigns.home_selection
     assert selected.plan.id
     assert {:ok, _} = Workouts.verify_home_selection(Scope.for_user(user), selected)
@@ -173,7 +112,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert_redirect(view, ~p"/session/#{started.id}")
   end
 
-  test "deleting the only first-use completion restores the bootstrap primary form", %{
+  test "deleting the only completion restores the first-use starter", %{
     conn: conn,
     user: user
   } do
@@ -182,11 +121,9 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert has_element?(view, "#home-done-today")
     delete_completion(view, saved)
     close_history(view)
-    assert has_element?(view, "#home-bootstrap-form")
-    refute has_element?(view, "#retry-recommendation-button, #home-title-action")
-    assert :sys.get_state(view.pid).socket.assigns.bootstrap?
-    assert :sys.get_state(view.pid).socket.assigns.home_selection == nil
-    assert Repo.aggregate(CoachRecommendation, :count) == 0
+    refute has_element?(view, "#retry-recommendation-button")
+    assert has_element?(view, "#home-action[aria-label='Start workout']:not([disabled])")
+    assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.name == "Starter Six-Count"
     assert Workouts.list_sessions(Scope.for_user(user)) == []
   end
 
@@ -294,9 +231,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       :pending_request,
       :busy?,
       :update_id,
-      :creation_key,
-      :bootstrap_id,
-      :bootstrap_prompt
+      :creation_key
     ])
   end
 

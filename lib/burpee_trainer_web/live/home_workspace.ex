@@ -28,10 +28,6 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         pending_request: nil,
         busy?: false,
         update_id: nil,
-        bootstrap?: false,
-        bootstrap_id: nil,
-        bootstrap_prompt: "",
-        bootstrap_slot: nil,
         local_error: nil,
         expanded_groups: MapSet.new(),
         inspection_rows: [],
@@ -41,12 +37,6 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
       |> stream(:alternatives, [], dom_id: &"home-alternative-#{&1.id}")
 
     case socket.assigns.home_state do
-      :first_workout ->
-        socket
-        |> assign(bootstrap?: true)
-        |> HomeAuthoring.bootstrap_form("")
-        |> HomeChooser.refresh_alternatives()
-
       {:start, selected} ->
         show_selection(socket, selected, false)
 
@@ -72,8 +62,7 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
       ) do
     assign(socket,
       home_selection: selected,
-      inspection_rows: Inspection.rows(selected.plan),
-      bootstrap?: false
+      inspection_rows: Inspection.rows(selected.plan)
     )
   end
 
@@ -92,8 +81,6 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
       instruction: "",
       pending_request: nil,
       local_error: nil,
-      bootstrap?: false,
-      bootstrap_slot: nil,
       expanded_groups: MapSet.new(),
       alternatives_open?: false,
       chooser_open?: false,

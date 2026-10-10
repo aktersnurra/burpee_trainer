@@ -61,24 +61,20 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     end
   end
 
-  test "first use without history or owned published evidence cannot recover", c do
+  test "a fresh user in choose recovers with a video but never another user's plan", c do
     fresh = scope_fixture()
     {:ok, slot} = Policy.required_slot(fresh, DateTime.utc_now(:second))
     plan = plan_fixture(c.user)
+    video = video_fixture()
     before = rows()
     assert {:error, _} = Workouts.recover_home_workout_selection(fresh, slot, plan.id)
+    assert rows() == before
 
-    assert {:error, _} =
-             Workouts.start_recovery_home_video(
-               fresh,
-               slot,
-               video_fixture().id,
-               Ecto.UUID.generate()
-             )
+    assert {:ok, session} =
+             Workouts.start_recovery_home_video(fresh, slot, video.id, Ecto.UUID.generate())
 
-    # Video fixture insertion is catalog setup, not a recovery effect.
-    assert Repo.all(CoachRecommendation) == elem(before, 0)
-    assert Repo.all(WorkoutSession) == elem(before, 2)
+    assert session.user_id == fresh.user.id
+    assert session.workout_video_id == video.id
   end
 
   test "owned published plan alone is sufficient choose evidence", c do

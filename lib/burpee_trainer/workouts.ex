@@ -68,78 +68,6 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
-  @type home_entry_state :: :bootstrap | :existing
-
-  @doc "Classifies whether a workout-needed Home slot has any persisted user evidence."
-  @spec home_entry_state(Scope.t(), Policy.slot()) ::
-          {:ok, home_entry_state()} | {:error, Error.t()}
-  def home_entry_state(
-        %Scope{user: %User{id: user_id}},
-        %{slot_key: slot_key, slot_date: %Date{}, home_state: :workout_needed}
-      )
-      when is_binary(slot_key) and slot_key != "" do
-    try do
-      evidence? =
-        Enum.any?([
-          current_recommendation_exists?(user_id, slot_key),
-          historical_recommendation_exists?(user_id),
-          owned_plan_exists?(user_id),
-          session_exists?(user_id)
-        ])
-
-      {:ok, if(evidence?, do: :existing, else: :bootstrap)}
-    rescue
-      _error -> {:error, Error.new(:home_entry_state_unavailable)}
-    end
-  end
-
-  def home_entry_state(%Scope{}, _slot),
-    do: {:error, Error.new(:invalid_recommendation_selection)}
-
-  # The slot and all evidence are re-read in lifecycle transactions; a presentation-time
-  # bootstrap classification is never sufficient to authorize a first-use write.
-  defp verified_bootstrap_slot(
-         user,
-         %{slot_key: slot_key, slot_date: %Date{} = slot_date, home_state: :workout_needed}
-       )
-       when is_binary(slot_key) and slot_key != "" do
-    with {:ok, current} <- Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second)),
-         true <-
-           current.slot_key == slot_key and current.slot_date == slot_date and
-             current.home_state == :workout_needed,
-         {:ok, :bootstrap} <- home_entry_state(Scope.for_user(user), current) do
-      :ok
-    else
-      {:error, %Error{} = error} -> {:error, error}
-      _ -> {:error, Error.new(:home_selection_changed)}
-    end
-  end
-
-  defp verified_bootstrap_slot(_user, _slot),
-    do: {:error, Error.new(:invalid_recommendation_selection)}
-
-  defp current_recommendation_exists?(user_id, slot_key) do
-    Repo.exists?(
-      from(recommendation in CoachRecommendation,
-        where: recommendation.user_id == ^user_id and recommendation.slot_key == ^slot_key
-      )
-    )
-  end
-
-  defp historical_recommendation_exists?(user_id) do
-    Repo.exists?(
-      from(recommendation in CoachRecommendation, where: recommendation.user_id == ^user_id)
-    )
-  end
-
-  defp owned_plan_exists?(user_id) do
-    Repo.exists?(from(plan in WorkoutPlan, where: plan.user_id == ^user_id))
-  end
-
-  defp session_exists?(user_id) do
-    Repo.exists?(from(session in WorkoutSession, where: session.user_id == ^user_id))
-  end
-
   @doc "Reads a verified owned slot pointer without repairing or creating it."
   @spec current_home_selection(Scope.t(), Policy.slot()) :: HomeSelection.t() | nil
   def current_home_selection(
@@ -233,8 +161,7 @@ defmodule BurpeeTrainer.Workouts do
   def start_recovery_home_video(%Scope{}, _slot, _video_id, _token),
     do: {:error, Error.new(:source_unavailable)}
 
-  # Reuse the existing first-use evidence classification inside the current-slot
-  # transaction, with no valid Home pointer. Home.facts observes the same owned evidence.
+  # The current slot, re-read inside the transaction, must still lack a valid Home pointer.
   # The immediate transaction prevents a concurrent command from replacing the winner.
   defp verified_recovery_slot(
          %Scope{user: %User{id: user_id}} = scope,
@@ -245,7 +172,6 @@ defmodule BurpeeTrainer.Workouts do
          true <-
            current.slot_key == key and current.slot_date == date and
              current.home_state == :workout_needed,
-         {:ok, :existing} <- home_entry_state(scope, current),
          nil <- current_home_selection(scope, current) do
       {:ok, current,
        Repo.get_by(CoachRecommendation, user_id: user_id, slot_key: key, slot_date: date)}
@@ -304,78 +230,6 @@ defmodule BurpeeTrainer.Workouts do
       {:error, _changeset} -> {:error, Error.new(:home_selection_changed)}
     end
   end
-
-  @doc "Lists filtered first-use alternatives without creating a recommendation."
-  @spec bootstrap_alternatives(Scope.t(), Policy.slot(), map(), :workouts | :videos) :: [map()]
-  def bootstrap_alternatives(%Scope{user: %User{} = user} = scope, slot, filters, :workouts) do
-    with :ok <- verified_bootstrap_slot(user, slot) do
-      BurpeeTrainer.Coach.Catalog.order_plans(
-        list_library(scope),
-        [],
-        slot,
-        BurpeeTrainer.Levels.current_level([])
-      )
-      |> BurpeeTrainer.Coach.Catalog.filter(filters, &BurpeeTrainer.Coach.Catalog.plan_level/1)
-    else
-      _ -> []
-    end
-  end
-
-  def bootstrap_alternatives(%Scope{user: %User{} = user}, slot, filters, :videos) do
-    with :ok <- verified_bootstrap_slot(user, slot) do
-      BurpeeTrainer.Videos.list_home_videos()
-      |> BurpeeTrainer.Coach.Catalog.order_videos()
-      |> BurpeeTrainer.Coach.Catalog.filter(filters, &BurpeeTrainer.Coach.Catalog.video_level/1)
-    else
-      _ -> []
-    end
-  end
-
-  @doc "Pins a first-use Home plan atomically."
-  @spec select_bootstrap_home_workout(Scope.t(), Policy.slot(), pos_integer()) ::
-          {:ok, HomeSelection.t()} | {:error, Error.t()}
-  def select_bootstrap_home_workout(%Scope{user: %User{} = user} = scope, slot, plan_id) do
-    immediate_lifecycle_transaction(fn ->
-      with :ok <- verified_bootstrap_slot(user, slot),
-           :ok <- no_other_started_session(user),
-           {:ok, plan} <- get_library_plan(scope, plan_id),
-           :ok <- verify_stored_draft(plan),
-           {:ok, recommendation} <-
-             ensure_recommendation(scope, Map.take(slot, [:slot_key, :slot_date])),
-           {:ok, changed} <- write_home_pointer(recommendation, plan.id) do
-        {:ok, HomeSelection.new(changed, plan)}
-      end
-    end)
-  end
-
-  @doc "Starts a first-use Home video, preserving exact-token replay semantics."
-  @spec start_bootstrap_home_video(Scope.t(), Policy.slot(), pos_integer(), Ecto.UUID.t()) ::
-          {:ok, WorkoutSession.t()} | {:error, Error.t()}
-  def start_bootstrap_home_video(%Scope{user: %User{} = user}, slot, video_id, token) do
-    with {:ok, video} <- get_available_video_for_start(video_id),
-         {:ok, _snapshot, hash} <- canonical_video_snapshot(video) do
-      immediate_lifecycle_transaction(fn ->
-        with :ok <- valid_start_token(token) do
-          case existing_start(user.id, token, :video, video.id, hash) do
-            {:existing, session} -> {:ok, session}
-            replay -> bootstrap_video_start(user, slot, video, token, replay)
-          end
-        end
-      end)
-    end
-  end
-
-  defp bootstrap_video_start(user, slot, video, token, :new) do
-    with :ok <- verified_bootstrap_slot(user, slot),
-         :ok <- no_other_started_session(user),
-         {:ok, _recommendation} <-
-           ensure_recommendation(Scope.for_user(user), Map.take(slot, [:slot_key, :slot_date])) do
-      start_video(Scope.for_user(user), video.id, token)
-    end
-  end
-
-  defp bootstrap_video_start(_user, _slot, _video, _token, {:error, %Error{} = error}),
-    do: {:error, error}
 
   @doc "Changes the Home pointer only if the reviewed selection is still current."
   @spec select_home_workout(Scope.t(), HomeSelection.t(), pos_integer()) ::
@@ -2645,22 +2499,6 @@ defmodule BurpeeTrainer.Workouts do
       hour in 17..20 -> "evening"
       true -> "night"
     end
-  end
-
-  @doc "Commit a generated first-use draft and its Home pointer atomically."
-  def commit_home_bootstrap(%Scope{user: %User{} = user} = scope, slot, definition, text) do
-    immediate_lifecycle_transaction(fn ->
-      with :ok <- verified_bootstrap_slot(user, slot),
-           :ok <- no_other_started_session(user),
-           {:ok, recommendation} <-
-             ensure_recommendation(scope, Map.take(slot, [:slot_key, :slot_date])),
-           {:ok, content} <-
-             canonical_draft_content(%{definition: definition, request_text: text}),
-           {:ok, draft} <- save_authored_draft(user, nil, content),
-           {:ok, changed} <- write_home_pointer(recommendation, draft.id) do
-        {:ok, HomeSelection.new(changed, draft)}
-      end
-    end)
   end
 
   @doc "Commit authored content against the exact Home selection CAS."

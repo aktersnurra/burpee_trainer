@@ -135,9 +135,6 @@ defmodule BurpeeTrainerWeb.HomeChooser do
         "plan" ->
           result =
             cond do
-              a.bootstrap? ->
-                Workouts.select_bootstrap_home_workout(a.current_scope, a.slot, id)
-
               a.home_state == :choose and is_nil(a.home_selection) ->
                 Workouts.recover_home_workout_selection(a.current_scope, a.slot, id)
 
@@ -153,14 +150,6 @@ defmodule BurpeeTrainerWeb.HomeChooser do
         "video" ->
           result =
             cond do
-              a.bootstrap? ->
-                Workouts.start_bootstrap_home_video(
-                  a.current_scope,
-                  a.slot,
-                  id,
-                  a.start_client_session_id
-                )
-
               a.home_state == :choose and is_nil(a.home_selection) ->
                 Workouts.start_recovery_home_video(
                   a.current_scope,
@@ -209,18 +198,6 @@ defmodule BurpeeTrainerWeb.HomeChooser do
           |> Catalog.filter(a.filters, &Catalog.video_level/1)
           |> Enum.map(&alternative_item/1)
       end
-
-    socket
-    |> assign(alternatives_empty?: items == [])
-    |> stream(:alternatives, items, reset: true)
-  end
-
-  def refresh_alternatives(%{assigns: %{bootstrap?: true}} = socket) do
-    a = socket.assigns
-
-    items =
-      Workouts.bootstrap_alternatives(a.current_scope, a.slot, a.filters, a.active_tab)
-      |> Enum.map(&alternative_item/1)
 
     socket
     |> assign(alternatives_empty?: items == [])

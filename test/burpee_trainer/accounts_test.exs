@@ -67,7 +67,7 @@ defmodule BurpeeTrainer.AccountsTest do
   end
 
   describe "update_timezone/2" do
-    test "provisioning and changing timezone never enqueue planning or replace first-use bootstrap" do
+    test "provisioning and changing timezone never enqueue planning or replace the first-use starter" do
       user = user_fixture()
       assert {:ok, provisioned} = Accounts.update_timezone(user, "America/Los_Angeles")
       assert provisioned.timezone_provisioned
@@ -79,9 +79,11 @@ defmodule BurpeeTrainer.AccountsTest do
       assert {:ok, slot} =
                BurpeeTrainer.Coach.Policy.required_slot(scope, DateTime.utc_now(:second))
 
-      assert {:ok, :bootstrap} = BurpeeTrainer.Workouts.home_entry_state(scope, slot)
+      assert slot.home_state == :workout_needed
       assert {:ok, facts} = BurpeeTrainer.Home.facts(scope, DateTime.utc_now(:second))
-      assert BurpeeTrainer.Home.state(facts) == :first_workout
+
+      assert {:start, %{plan: %{name: "Starter Six-Count"}}} = BurpeeTrainer.Home.state(facts)
+      assert Repo.aggregate(Oban.Job, :count) == 0
     end
 
     test "an unchanged provisioned timezone is write-free" do
