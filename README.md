@@ -98,7 +98,7 @@ mix assets.build
 MIX_ENV=test mix precommit
 ```
 
-`mix precommit` compiles with warnings treated as errors, checks for unused dependencies and formatting, and runs ExUnit. The deletion-first migration rehearsal and authenticated browser procedure are documented in `TESTING.md` and `docs/testing/workout-session-e2e.md`.
+`mix precommit` compiles with warnings treated as errors, checks for unused dependencies and formatting, and runs ExUnit. Rehearse the schema migration against a copy of production with `scripts/migrations/rehearse_coach_first.exs`; the test policy and the authenticated browser procedure are in `docs/testing.md` and `docs/guides/workout-session-e2e.md`.
 
 ## Production configuration
 
@@ -161,6 +161,7 @@ priv/repo/migrations/           Ecto migrations
 config/                         Compile-time and runtime environment configuration
 scripts/                        Repository-owned asset and development helpers
 test/                           ExUnit, LiveView, and domain tests
+docs/                           Specs, plans in progress, guides, UI and testing rules
 ```
 
 Deployment infrastructure is deliberately not part of this tree; the deployment machine supplies it through the private infra symlink described above.

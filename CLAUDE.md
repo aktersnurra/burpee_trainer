@@ -39,18 +39,31 @@
 
 - A completed session keeps an immutable program or video snapshot; later edits or archival do not rewrite History.
 - Authoring proposals are reviewed before approval. Selection is distinct from approval.
-- Auth is OIDC-only. `Accounts.resolve_oidc_identity/2` resolves a subject first, adopts an unlinked matching username, and rejects a username bound to another subject. See `docs/oidc-setup.md`.
+- Auth is OIDC-only. `Accounts.resolve_oidc_identity/2` resolves a subject first, adopts an unlinked matching username, and rejects a username bound to another subject. Setup is in `README.md` (Sign in).
 - SQLite has no array column type; persisted collections use JSON text where the schema requires it.
 
 ## UI rules
 
-See `UI.md` for the full visual specification. Use the application palette and existing Phoenix components; do not add inline scripts to HEEx templates.
+See `docs/ui.md` for the visual system. Use the application palette and existing Phoenix components; do not add inline scripts to HEEx templates.
 
 ## Testing policy
 
 Keep a test only when it would fail on a real user-visible regression, data-integrity or ownership violation, or pure-core invariant. Delete styling-, copy-, CSS-, or markup-only assertions, private/internal call-shape checks, mocked forwarding behavior, removed-code coverage, and full-flow duplicates without a distinct failure mode. Keep accessibility contracts even when they use markup or styling assertions: roles, ARIA labels and screen-reader behavior, keyboard operation, reduced-motion behavior, and 44px target-size coverage are user-visible regression protection.
 
-Property tests remain for `PlanCompiler` and `WorkoutRequest` validation. Provider-dependent tests use the local recorded-response plug and never make paid calls. The core-flow suite is documented in `TESTING.md`.
+Property tests remain for `PlanCompiler` and `WorkoutRequest` validation. Provider-dependent tests use the local recorded-response plug and never make paid calls. The core-flow suite is documented in `docs/testing.md`.
+
+## Documentation
+
+Committed documentation lives in `docs/` (index: `docs/README.md`):
+
+- `docs/specs/` — dated design specs, `YYYY-MM-DD-<topic>-design.md`. New specs go here.
+- `docs/plans/` — implementation plans in progress, `YYYY-MM-DD-<topic>.md`. Delete a plan
+  once it is complete; version control keeps it.
+- `docs/guides/` — runbooks and checklists.
+- `docs/ui.md` (visual system) and `docs/testing.md` (test policy and core flows).
+
+Local notes, reviews, evidence and scratch documents go in the git-ignored `.docs/`. Delete
+a spec when the code it describes is removed.
 
 ## Precommit
 

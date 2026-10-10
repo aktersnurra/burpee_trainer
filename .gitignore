@@ -71,7 +71,8 @@ trace_*.jsonl
 
 /.superpowers/
 
-/docs/
+# Local, uncommitted notes, evidence and reviews. Committed documentation lives in docs/.
+/.docs/
 edit_mock.png
 
 # Symlink to nuc-setup deploy script
