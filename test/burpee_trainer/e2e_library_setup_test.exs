@@ -644,7 +644,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
             "user_stats",
             "coach_notebooks",
             "llm_calls",
-            "coach_settings",
+            "coach_summaries",
             "goals",
             "pose_capture_runs"
           ] ->
