@@ -203,10 +203,12 @@ end
 
 **Files:** `lib/burpee_trainer_web/components/home_workout_components.ex` (New form), `lib/burpee_trainer_web/live/home_workout_request.ex`; test in `test/burpee_trainer_web/flows/new_workout_flow_test.exs`
 
-- [ ] **Step 1: Failing test** — open New, fill `home_workout[note]` with "slow and steady" alongside the structured fields, submit with a stubbed layout response, and assert the provider request body's messages contain "slow and steady" (read it in the `Req.Test` stub) and the review renders.
-- [ ] **Step 2: Run** — FAIL (no note input rendered).
-- [ ] **Step 3: Implement** — render a textarea for `home_workout[note]` labelled "Note", placeholder "Anything the fields don't cover", after "Extended rests", `maxlength="300"` matching `validate_length(:note, max: 300)`. `HomeWorkoutRequest.instruction/1` already sends it.
-- [ ] **Step 4: Run** — PASS. **Commit** — `feat(home): add a note to the New workout form`
+- [x] **Step 1: Failing test** — open New, fill `home_workout[note]` with "slow and steady" alongside the structured fields, submit with a stubbed layout response, and assert the provider request body's messages contain "slow and steady" (read it in the `Req.Test` stub) and the review renders.
+- [x] **Step 2: Run** — FAIL (no note input rendered).
+- [x] **Step 3: Implement** — render a textarea for `home_workout[note]` labelled "Note", placeholder "Anything the fields don't cover", after "Extended rests", `maxlength="300"` matching `validate_length(:note, max: 300)`. `HomeWorkoutRequest.instruction/1` already sends it.
+- [x] **Step 4: Run** — PASS. **Commit** — `feat(home): add a note to the New workout form`
+
+**Done** (`feat(home): add a note to the New workout form`). The test reads the provider request through `TestAuthoringProviderPlug`, which now also records request bodies.
 
 ---
 

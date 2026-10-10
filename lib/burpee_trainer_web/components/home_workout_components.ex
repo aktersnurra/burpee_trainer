@@ -284,6 +284,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         disabled={@locked}
         class="home-authoring-input"
       />
+      <.input
+        field={@form[:note]}
+        type="textarea"
+        rows="2"
+        label="Note"
+        placeholder="Anything the fields don't cover"
+        maxlength="300"
+        disabled={@locked}
+        class="home-authoring-input"
+      />
       <p id="home-request-timing" class="home-budget-detail">
         Timing ±{WorkoutRequest.timing_tolerance_sec()}s · reps and pauses exact.
       </p>

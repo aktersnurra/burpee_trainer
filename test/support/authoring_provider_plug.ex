@@ -14,7 +14,8 @@ defmodule BurpeeTrainer.TestAuthoringProviderPlug do
 
     response =
       Agent.get_and_update(opts[:counter], fn %{responses: responses, calls: calls} = state ->
-        {Map.fetch!(responses, schema), %{state | calls: calls ++ [schema]}}
+        state = Map.update(%{state | calls: calls ++ [schema]}, :bodies, [body], &(&1 ++ [body]))
+        {Map.fetch!(responses, schema), state}
       end)
 
     content = Jason.encode!(response)

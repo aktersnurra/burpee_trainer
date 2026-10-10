@@ -178,6 +178,38 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     }
   end
 
+  test "the New form's note reaches the coach alongside the structured fields", %{view: view} do
+    counter =
+      fake_authoring_provider(%{
+        "workout_layout" => layout([[{10, 12.0, 12.0}]], "Noted new workout")
+      })
+
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-new-form textarea[name='home_workout[note]'][maxlength='300']"
+           )
+
+    view |> element("#home-pill-pacing_style-even") |> render_click()
+
+    view
+    |> form("#home-new-form",
+      home_workout: %{reps: 10, duration: "2:00", note: "slow and steady"}
+    )
+    |> render_submit()
+
+    render_async(view)
+    assert has_element?(view, "#home-new-form[data-stage=review]")
+    assert [body] = Agent.get(counter, & &1.bodies)
+
+    assert body
+           |> Jason.decode!()
+           |> Map.fetch!("messages")
+           |> Enum.any?(&(&1["content"] =~ "slow and steady"))
+  end
+
   defp fake_authoring_provider(responses) do
     original = Application.fetch_env!(:burpee_trainer, :llm_provider)
     on_exit(fn -> Application.put_env(:burpee_trainer, :llm_provider, original) end)
