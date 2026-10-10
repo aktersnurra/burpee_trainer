@@ -10,7 +10,6 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   def initialize(socket) do
     socket
     |> assign(
-      coach_return_to: ~p"/",
       coach_open?: false,
       coach_details_open?: false,
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
@@ -22,29 +21,22 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> refresh()
   end
 
-  def open(socket, params) do
-    socket
-    |> assign(
-      coach_open?: true,
-      coach_return_to: if(params["from"] == "history", do: ~p"/history", else: ~p"/")
-    )
-    |> refresh()
-  end
+  def open(socket), do: socket |> assign(coach_open?: true) |> refresh()
 
   defp refresh(socket) do
     notebook = Notebook.get(socket.assigns.current_scope)
 
     socket
     |> assign(
-      coach_summary: notebook.body |> String.split("\n\n") |> List.first(),
       coach_notebook_seen: notebook.updated_at,
       coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
     )
     |> stream(:coach_goals, Goals.list(socket.assigns.current_scope), reset: true)
   end
 
+  # Coach is reached only from History, so leaving it always returns there.
   def handle_event("close_coach", _, socket),
-    do: {:noreply, push_patch(socket, to: socket.assigns.coach_return_to)}
+    do: {:noreply, push_patch(socket, to: ~p"/history")}
 
   def handle_event("coach_details_toggle", _, socket),
     do: {:noreply, assign(socket, coach_details_open?: not socket.assigns.coach_details_open?)}

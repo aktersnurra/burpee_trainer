@@ -195,7 +195,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     |> render_change()
 
     view |> element("#home-history-toggle") |> render_click()
-    view |> element("#history-coach-open") |> render_click()
+    render_patch(view, ~p"/coach")
     view |> element("#home-coach-back") |> render_click()
     assert_patch(view, "/history")
     view |> element("#home-history-close") |> render_click()

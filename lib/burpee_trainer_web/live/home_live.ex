@@ -30,7 +30,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
         editing_source: nil,
         workspace_screen: :home,
         home_focus_return?: false,
-        home_coach_focus_return?: false,
         history_focus_return?: false,
         review_inspection_rows: []
       )
@@ -52,24 +51,16 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_params(%{"history" => "1"}, _uri, socket),
     do: {:noreply, push_patch(socket, to: ~p"/history")}
 
-  def handle_params(params, _uri, socket) do
+  def handle_params(_params, _uri, socket) do
     screen = socket.assigns[:live_action] || :home
     previous = socket.assigns.workspace_screen
-
-    coach_entry? =
-      previous == :coach and screen == :home and is_nil(socket.assigns.started_session) and
-        match?(
-          %{home_state: state} when state in [:done_today, :week_complete],
-          socket.assigns.slot
-        )
 
     socket =
       assign(socket,
         workspace_screen: screen,
         history_open?: screen == :history,
         coach_open?: screen == :coach,
-        home_focus_return?: screen == :home and previous != :home and not coach_entry?,
-        home_coach_focus_return?: coach_entry?,
+        home_focus_return?: screen == :home and previous != :home,
         history_focus_return?: screen == :history and previous == :coach
       )
 
@@ -79,7 +70,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
           HistoryScreen.open(socket)
 
         :coach ->
-          CoachScreen.open(socket, params)
+          CoachScreen.open(socket)
 
         :home when previous != :home ->
           if socket.assigns.home_state == :choose or not is_nil(socket.assigns.home_selection),

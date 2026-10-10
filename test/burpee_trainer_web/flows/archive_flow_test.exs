@@ -330,13 +330,14 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
     {:ok, pinned} = Workouts.select_home_workout(Scope.for_user(user), selected, original.id)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
-    render_patch(view, "/coach?from=home")
+    render_patch(view, ~p"/coach")
 
     view
     |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})
     |> render_change()
 
     view |> element("#home-coach-back") |> render_click()
+    view |> element("#home-history-close") |> render_click()
     view |> element("#home-summary") |> render_click()
     initial = :sys.get_state(view.pid).socket.assigns
     assert initial.home_selection == pinned

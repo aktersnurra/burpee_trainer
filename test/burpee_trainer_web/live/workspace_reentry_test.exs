@@ -241,8 +241,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert_patch(view, "/history")
 
     if via == :coach do
-      view |> element("#history-coach-open") |> render_click()
-      assert_patch(view, "/coach?from=history")
+      render_patch(view, ~p"/coach")
 
       view
       |> form("#home-coach-message-form", coach_message: %{text: "Unsent"})
@@ -250,7 +249,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
       view |> element("#home-coach-back") |> render_click()
       assert_patch(view, "/history")
-      view |> element("#history-coach-open") |> render_click()
+      render_patch(view, ~p"/coach")
       assert has_element?(view, "#home-coach-message-text", "Unsent")
       view |> element("#home-coach-back") |> render_click()
       assert_patch(view, "/history")

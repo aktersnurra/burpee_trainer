@@ -92,8 +92,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       view |> element("#home-history-toggle") |> render_click()
       assert_patch(view, "/history")
       assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
-      view |> element("#history-coach-open") |> render_click()
-      assert_patch(view, "/coach?from=history")
+      render_patch(view, ~p"/coach")
 
       view
       |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})

@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
 
-  alias BurpeeTrainer.{History, Workouts}
+  alias BurpeeTrainer.{Goals, History, Workouts}
   alias BurpeeTrainerWeb.HomeHistoryComponents
 
   def initialize(socket) do
@@ -32,7 +32,8 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_summary: History.summary([]),
       history_loaded_ids: [],
       history_loaded_count: 0,
-      history_available?: false
+      history_available?: false,
+      history_goals: []
     )
     |> stream_configure(:history_sessions, dom_id: &"home-history-session-#{&1.id}")
     |> stream(:history_sessions, [])
@@ -278,6 +279,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       socket
       |> assign(
         history_available?: history_available?,
+        history_goals: Enum.filter(Goals.list(a.current_scope), &(&1.status == :active)),
         history_weeks: weeks,
         history_week_start: selected_week,
         history_week_days: days,

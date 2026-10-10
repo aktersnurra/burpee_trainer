@@ -60,6 +60,18 @@ defmodule BurpeeTrainer.Fixtures do
     )
   end
 
+  @doc "Store a current coach summary for the user (written now, so it needs no refresh)."
+  def summary_fixture(user, text \\ "Steady progress toward the goal.") do
+    {:ok, summary} =
+      BurpeeTrainer.Coach.Summary.store(BurpeeTrainer.Accounts.Scope.for_user(user), %{
+        text: text,
+        metric_ids: [],
+        source: :llm
+      })
+
+    summary
+  end
+
   @doc "Build a valid published workout through the compiler-backed persistence path."
   def plan_fixture(user, attrs \\ %{}) do
     attrs = stringify_keys(attrs)

@@ -34,8 +34,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-empty")
     refute has_element?(view, "#history-coach-area, #home-coach-message-form")
-    view |> element("#history-coach-open") |> render_click()
-    assert_patch(view, "/coach?from=history")
+    render_patch(view, ~p"/coach")
     assert view.pid == pid
     refute has_element?(view, "#home-history")
     assert has_element?(view, "#home-coach-panel")
@@ -48,7 +47,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert_patch(view, "/history")
     assert has_element?(view, "#home-history")
     refute has_element?(view, "#home-coach-panel")
-    view |> element("#history-coach-open") |> render_click()
+    render_patch(view, ~p"/coach")
     assert has_element?(view, "#home-coach-message-text", "Build toward 50 reps")
     assert Notebook.get(Scope.for_user(user)).body == ""
     view |> element("#home-coach-back") |> render_click()
@@ -64,8 +63,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     user: user
   } do
     {:ok, history, _} = live(conn, ~p"/history")
-    history |> element("#history-coach-open") |> render_click()
-    assert_patch(history, "/coach?from=history")
+    render_patch(history, ~p"/coach")
     view = history
     view |> form("#home-coach-message-form", coach_message: %{text: "  "}) |> render_submit()
     assert has_element?(view, "#home-coach-status[role=status]", "Enter a message")

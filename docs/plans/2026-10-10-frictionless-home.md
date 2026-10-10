@@ -288,14 +288,16 @@ The loading state itself renders in Task 10's History header (the app's loader, 
 
 **Files:** `lib/burpee_trainer_web/components/{home_history_components,home_coach_components}.ex`, `lib/burpee_trainer_web/live/{history_screen,coach_screen,home_live}.ex`, `router.ex` unchanged; tests `test/burpee_trainer_web/flows/coach_conversation_flow_test.exs`, a new `test/burpee_trainer_web/flows/history_summary_flow_test.exs`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
   - History with a stored summary: `#history-header` shows level, `N / target min` for this week, active goals, then `a#history-coach-summary[href="/coach"]` containing the summary text; clicking it patches to `/coach` in the same LiveView process; Coach's back control patches to `/history`.
   - No stored summary (fresh user) → no `#history-coach-summary`, and no other link to `/coach` anywhere on History or Home.
   - `/coach?from=home` behaves exactly like `/coach` (param ignored, back goes to History).
   - Coach screen order: `#coach-summary`, `#coach-goals` (Confirm/Dismiss for proposed), `#coach-message-form` with a `label[for]` "Tell the coach" above a full-width textarea and the submit below, `#coach-reply`, `details#coach-notebook` (closed by default) with Save and Clear inside. Busy state text "Sending to the coach".
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement** — move the coach entry out of `HomeCoachComponents.entry/1` into the History header as the summary link; delete the `from` handling (`?from=history|home`) from `CoachScreen`/`HomeLive` so back always patches to `/history`; restructure `HomeCoachComponents.panel/1` in the order above (keep element ids that existing ownership/flow tests use where the element survives: `#home-coach-notebook-form`, `#home-coach-message-form`). Load `Summary.get/1` in the History and Coach screen loaders.
-- [ ] **Step 4: Run** — `T mix test test/burpee_trainer_web` → PASS. **Commit** — `feat(history): coach summary heads History and opens Coach`
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement** — move the coach entry out of `HomeCoachComponents.entry/1` into the History header as the summary link; delete the `from` handling (`?from=history|home`) from `CoachScreen`/`HomeLive` so back always patches to `/history`; restructure `HomeCoachComponents.panel/1` in the order above (keep element ids that existing ownership/flow tests use where the element survives: `#home-coach-notebook-form`, `#home-coach-message-form`). Load `Summary.get/1` in the History and Coach screen loaders.
+- [x] **Step 4: Run** — `T mix test test/burpee_trainer_web` → PASS. **Commit** — `feat(history): coach summary heads History and opens Coach`
+
+**Done** (`feat(history): coach summary heads History and opens Coach`). Deviations: Coach element ids keep their `home-coach-` prefix (`#home-coach-summary`, `#home-coach-goals`, `#home-coach-reply`, `#home-coach-notebook`) so surviving elements keep the ids existing tests use. The summary line shows whenever there is a summary or one is loading (the loader sits inside the link, labelled "Updating your summary"). Tests that only exercise Coach behaviour patch to `/coach` directly, since a summary (and so the link) needs something to report; the entry itself is covered by `history_summary_flow_test.exs`. Three `coach_workspace_test` cases that asserted `?from=` referrers and Home's coach entry were superseded and removed. New classes (`history-header*`, `history-coach-summary`, `coach-summary-*`, `coach-message-form`) get their styling in Task 11.
 
 ---
 

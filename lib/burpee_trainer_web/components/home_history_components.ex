@@ -24,8 +24,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             phx-mounted={
               JS.focus(
                 to:
-                  if(Map.get(@state, :history_focus_return?, false),
-                    do: "#history-coach-open",
+                  if(Map.get(@state, :history_focus_return?, false) and summary_line?(@state),
+                    do: "#history-coach-summary",
                     else: "#home-history-heading"
                   )
               )
@@ -35,13 +35,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             History
           </h1>
         </div>
+        <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>
           <div id="home-history-status" class="home-history-status">
             <p>
               <strong id="home-history-streak">{@state.history_streak}</strong> week streak
             </p>
-            <p>{level_label(@state.current_level)} <span>current level</span></p>
           </div>
           <div role="group" aria-label="History period" class="home-history-periods">
             <button
@@ -290,7 +290,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             Load more sessions
           </button>
         </section>
-        <BurpeeTrainerWeb.HomeCoachComponents.entry id="history-coach-open" />
       </div>
       <.session_sheet
         :if={@state.history_selected_session}
@@ -478,10 +477,52 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     "#{first_label}–#{last_label}"
   end
 
-  defp level_label(:graduated), do: "Graduated"
+  attr(:state, :map, required: true)
 
-  defp level_label(level),
-    do: level |> Atom.to_string() |> String.replace_prefix("level_", "") |> String.upcase()
+  # Level, this week and goals at a glance, then the coach summary: the only way into Coach.
+  defp history_header(assigns) do
+    ~H"""
+    <header id="history-header" class="history-header">
+      <p class="history-header-facts">
+        <span id="history-level">{level_heading(@state.current_level)}</span>
+        <span :if={@state.slot} id="history-week-minutes">
+          · {div(@state.slot.completed_sec, 60)} / {div(@state.slot.weekly_target_sec, 60)} min this week
+        </span>
+      </p>
+      <p :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
+        {Enum.map_join(@state.history_goals, " · ", &goal_line/1)}
+      </p>
+      <.link
+        :if={summary_line?(@state)}
+        id="history-coach-summary"
+        patch={~p"/coach"}
+        class="history-coach-summary"
+      >
+        <BurpeeTrainerWeb.HomeCoachComponents.summary_body
+          summary={@state.progress_summary}
+          loading?={@state.progress_summary_loading?}
+        />
+      </.link>
+    </header>
+    """
+  end
+
+  defp summary_line?(state),
+    do:
+      Map.get(state, :progress_summary_loading?, false) or
+        not is_nil(Map.get(state, :progress_summary))
+
+  defp goal_line(goal),
+    do:
+      "#{if(goal.burpee_type == :six_count, do: "Six-count", else: "Navy seal")} " <>
+        "#{goal.burpee_count_target} reps in #{div(goal.duration_sec_target, 60)} min by #{goal.date_target}"
+
+  defp level_heading(:graduated), do: "Graduated"
+
+  defp level_heading(level),
+    do:
+      "Level " <>
+        (level |> Atom.to_string() |> String.replace_prefix("level_", "") |> String.upcase())
 
   attr(:id, :string, required: true)
   attr(:label, :string, required: true)

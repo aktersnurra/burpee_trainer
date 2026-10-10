@@ -2,7 +2,7 @@ defmodule BurpeeTrainerWeb.HomeScreen do
   @moduledoc "Home.State-driven card presentation and result field projection."
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainerWeb.{Fmt, HomeWorkoutComponents, HomeCoachComponents}
+  alias BurpeeTrainerWeb.{Fmt, HomeWorkoutComponents}
 
   def assign_results(socket, results) do
     case results do
@@ -170,10 +170,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   >
                     Today total · {Fmt.duration_sec(@result_actual_seconds)} · {@result_today_reps} reps
                   </p>
-                  <HomeCoachComponents.entry
-                    id="home-result-coach"
-                    return_focus?={@home_coach_focus_return?}
-                  />
                 </section>
               <% else %>
                 <section
@@ -194,10 +190,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                     {Fmt.duration_sec(@slot.completed_sec)} · {@result_reps.six_count +
                       @result_reps.navy_seal} reps
                   </p>
-                  <HomeCoachComponents.entry
-                    id="home-result-coach"
-                    return_focus?={@home_coach_focus_return?}
-                  />
                 </section>
               <% end %>
             <% {:start, _selection} -> %>
