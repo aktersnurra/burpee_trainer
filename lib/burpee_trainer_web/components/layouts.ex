@@ -110,7 +110,10 @@ defmodule BurpeeTrainerWeb.Layouts do
     """
   end
 
+  # Home, History and Coach are one surface: same background, padding and column.
   defp session_surface_page?(:home), do: true
+  defp session_surface_page?(:history), do: true
+  defp session_surface_page?(:coach), do: true
   defp session_surface_page?(:session), do: true
   defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false

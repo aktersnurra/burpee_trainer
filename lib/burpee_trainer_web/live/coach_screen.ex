@@ -150,7 +150,9 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   def screen(assigns) do
     ~H"""
     <main id="coach-page" class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16">
-      <HomeCoachComponents.panel state={assigns} />
+      <div class="adaptive-home">
+        <HomeCoachComponents.panel state={assigns} />
+      </div>
     </main>
     """
   end

@@ -367,17 +367,19 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       phx-window-keydown={if(is_nil(@history_selected_session), do: "close_history")}
       phx-key="Escape"
     >
-      <button
-        id="home-history-close"
-        type="button"
-        class="home-state-action min-h-11 min-w-11"
-        phx-click="close_history"
-        aria-label="Back to Home"
-        inert={not is_nil(@history_selected_session)}
-      >
-        <.icon name="hero-arrow-left" class="size-5" />
-      </button>
-      <HomeHistoryComponents.panel state={assigns} />
+      <div class="adaptive-home">
+        <button
+          id="home-history-close"
+          type="button"
+          class="home-state-action min-h-11 min-w-11"
+          phx-click="close_history"
+          aria-label="Back to Home"
+          inert={not is_nil(@history_selected_session)}
+        >
+          <.icon name="hero-arrow-left" class="size-5" />
+        </button>
+        <HomeHistoryComponents.panel state={assigns} />
+      </div>
     </main>
     """
   end

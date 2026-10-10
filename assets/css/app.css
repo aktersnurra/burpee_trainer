@@ -109,14 +109,14 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* Keep the document chrome/background aligned with the selected app theme. */
+/* One page background on every screen: the theme's base-100. */
 :root {
   color-scheme: light;
-  background: #F3EEE8;
+  background: var(--color-base-100);
 }
 
 body {
-  background: #F3EEE8;
+  background: var(--color-base-100);
 }
 
 [data-theme="dark"] {
@@ -131,22 +131,22 @@ body {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: light;
-    background: #F3EEE8;
+    background: var(--color-base-100);
   }
 
   html:not([data-theme]) body {
-    background: #F3EEE8;
+    background: var(--color-base-100);
   }
 }
 
 #burpee-session,
 .session-surface {
-  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --session-bg: #F3EEE8;
+  font-family: var(--font-sans);
+  --session-bg: var(--color-base-100);
   --session-surface: #FAF8F3;
   --session-surface-alt: #EFECE4;
   --session-ink: #20201D;
-  --session-active-bg: #F3EEE8;
+  --session-active-bg: var(--color-base-100);
   --session-active-ink: #20201D;
   --session-active-muted: #706C64;
   --session-muted: #706C64;
@@ -534,7 +534,7 @@ body {
 }
 
 #count {
-  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
   font-stretch: normal;
   font-weight: 500;
 }
@@ -596,17 +596,14 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Idle/review panels are editorial; the runner's timing colors and layers remain untouched. */
 #burpee-session {
-  --session-bg: #f6f4ef;
+  --session-bg: var(--color-base-100);
   --session-ink: #262722;
   --session-muted: #686b65;
   --session-border: #d6d7d0;
-  font-family: Arial, "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans);
 }
 #burpee-session [data-session-panel]:not(#session-runner-client) {
   background: var(--session-bg);
-}
-#burpee-session :is(#session-capture-choice, #session-camera-status, #session-camera-setup, #session-warmup-choice, #session-workout-ready) {
-  --session-bg: #fbfaf8;
 }
 #burpee-session .session-preflight-chrome {
   position: absolute;
@@ -650,7 +647,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 #burpee-session [data-session-panel]:not(#session-runner-client) h1,
 #burpee-session #camera-status-error h2,
 #burpee-session #camera-setup-ready h2 {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans);
   font-weight: 400;
   letter-spacing: -.045em;
 }
