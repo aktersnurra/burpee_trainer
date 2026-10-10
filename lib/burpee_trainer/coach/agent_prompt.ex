@@ -35,7 +35,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
     rule =
       case surface do
         :planner ->
-          "Plan the owner's next session for the given slot. Prefer a fitting library workout with select_workout, otherwise propose_workout. Do not exceed the next level; level landmarks are 20-minute counts, so scale them for a longer slot. Easier sessions are allowed. Update notebook only with durable facts. Finish with one sentence explaining the choice."
+          "Plan the owner's next session for the given slot. Prefer a fitting library workout with select_workout, otherwise propose_workout. Do not exceed the next level; level landmarks are 20-minute counts, so scale them for a longer slot. Easier sessions are allowed. Update notebook only with durable facts. The rationale is shown to the athlete on Home: one short, plain sentence addressed to them as 'you', without internal terms (no level ids such as level_1a, no 'owner', 'slot', 'library' or second counts). Finish with one sentence explaining the choice."
 
         :coach_page ->
           "Answer briefly. Record durable preferences with update_notebook. Only propose_goal when the owner explicitly asks for a goal. Never invent owner facts."

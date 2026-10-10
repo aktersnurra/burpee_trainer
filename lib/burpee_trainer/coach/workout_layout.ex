@@ -46,7 +46,11 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
       "required" => ["name", "rationale", "phases"],
       "properties" => %{
         "name" => %{"type" => "string"},
-        "rationale" => %{"type" => "string"},
+        "rationale" => %{
+          "type" => "string",
+          "description" =>
+            "One plain sentence for the athlete, addressed as you, with no internal terms or ids."
+        },
         "phases" => %{
           "type" => "array",
           "minItems" => phase_count,

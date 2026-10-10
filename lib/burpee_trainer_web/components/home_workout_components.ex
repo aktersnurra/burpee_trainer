@@ -607,7 +607,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             </span>
           </div>
           <p
-            :if={@state.home_selection.rationale}
+            :if={athlete_words?(@state.home_selection.rationale)}
             id="home-planner-rationale"
             class="home-coach-summary-text"
           >
@@ -1177,4 +1177,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp level_label(level),
     do: level |> Atom.to_string() |> String.replace_prefix("level_", "") |> String.upcase()
+
+  # The planner's reason is shown to the athlete; text carrying machine identifiers such as
+  # `level_1a` or `six_count` is the planner's working note, not words for them.
+  defp athlete_words?(text) when is_binary(text),
+    do: String.trim(text) != "" and not Regex.match?(~r/\b[a-z]+_[a-z0-9_]+\b/, text)
+
+  defp athlete_words?(_text), do: false
 end
