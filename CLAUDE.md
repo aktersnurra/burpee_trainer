@@ -17,13 +17,15 @@
 | `BurpeeTrainer.Coach` | User-scoped workout authoring: layout request, fitting, review, and approval by approval key |
 | `BurpeeTrainer.Coach.{RestFitter, WorkoutLayout, WorkoutRequest, WorkoutConfiguration, WorkoutGuidance, AuthoringPrompt}` | LLM layout schema and prompt, confirmed requests, and the pure rest fitter that computes exact rests |
 | `BurpeeTrainer.Coach.{Agent, AgentPrompt, Tool, Tools.*}` | Bounded tool-using coach for the planner and Coach-page surfaces |
-| `BurpeeTrainer.Coach.{Notebook, PlanNextWorkoutJob}` | The coach's bounded memory and the Oban job that plans the next workout |
+| `BurpeeTrainer.Coach.{Notebook, PlanNextWorkoutJob}` | The coach's bounded memory and the Oban job that plans the next workout (also once on a slot's first open) |
+| `BurpeeTrainer.Coach.{Summary, SummaryJob}` | The owner's two-sentence progress summary (validated against metrics, deterministic fallback) and the job that refreshes it after a completion, goal change or notebook save, and when the app opens with a summary from an earlier week |
 | `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`) and the per-call ledger with daily budgets |
 | `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession}` | Deterministic workout selection and policy facts |
+| `BurpeeTrainer.Coach.Policy.Week` | A training week as data: its target and catch-up days (the sign-up week is pro-rated with no catch-up); every weekly target reads it |
 | `BurpeeTrainer.Insights` / `BurpeeTrainer.Insights.*` | Computed metrics, validated LLM narration with deterministic fallback, and the narration job |
 | `BurpeeTrainer.Evals.*` / `mix burpee_trainer.eval` | Owner-run authoring evals with a mandatory call budget and response recording |
 | `BurpeeTrainer.PlanCompiler` and `BurpeeTrainer.PlanCompiler.*` | Validation and compilation of workout definitions into programs |
-| `BurpeeTrainer.Workouts` and `BurpeeTrainer.Workouts.*` | Workout library, Home selection, immutable session snapshots, completion, and pose capture persistence |
+| `BurpeeTrainer.Workouts` and `BurpeeTrainer.Workouts.*` | Workout library, Home selection (a starter until the first completed session, then the Steady 10 fallback), immutable session snapshots, completion, and pose capture persistence |
 | `BurpeeTrainer.Videos` / `BurpeeTrainer.Workouts.WorkoutVideo` | Video workout lookup and session sources |
 | `BurpeeTrainer.Goals`, `BurpeeTrainer.Levels`, `BurpeeTrainer.Milestones`, `BurpeeTrainer.Scoring`, `BurpeeTrainer.Stats.Series` | Progress and scoring domain queries |
 | `BurpeeTrainer.UserTime` | User-local date and time calculations |

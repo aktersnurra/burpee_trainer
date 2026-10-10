@@ -1,5 +1,7 @@
 # Adaptive Home: approved pre-workout design
 
+> **Superseded in part** by `2026-10-10-frictionless-home-design.md`: first use opens on a starter workout; the `:first_workout` state and the free-text bootstrap prompt are removed.
+
 Status: pre-workout interaction and visual direction approved on 2026-09-09. Follow-on scope revised on 2026-09-12: retain the original adaptive state machine and inline interactions, not separate Library/Create page redesigns. See [the inline state-machine plan revision](../plans/2026-09-12-adaptive-home-inline-revision.md) for current scope, gaps and sequencing. This is a product/design specification, not a claim that the production app implements it.
 
 ## Scope and authority

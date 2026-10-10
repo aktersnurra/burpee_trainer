@@ -88,7 +88,7 @@ error:    #A55643
 
 Font stack: `Geist, ui-sans-serif, system-ui, -apple-system, sans-serif`
 
-Geist is the app font. Keep the type system restrained: most text uses 400 / 500 / 600 weights, with large headings using careful negative tracking.
+Geist is the only typeface: no serif or Arial declarations anywhere, including headings, the chooser and session panels. Use `var(--font-sans)` rather than repeating the stack; headings change size and weight, never family. Keep the type system restrained: most text uses 400 / 500 / 600 weights, with large headings using careful negative tracking.
 
 | Role                  | Size   | Weight | Color              |
 |-----------------------|--------|--------|--------------------|
@@ -125,20 +125,26 @@ Component gap inside card: 16px
 There is no navigation bar. The app opens on the one thing the owner needs now, and each
 screen leads to the next in context:
 
-- **Home** (`/`) shows today's state: the ready workout with Start, or the day's insight
-  once trained. The week strip opens History. Design:
+- **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
+  first use, never an empty prompt), or the day's insight once trained. The week strip
+  opens History. Home has no coach entry. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
   `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **History** (`/history`) leads with level, this week's minutes, goals and the coach
-  summary; the summary opens Coach. Design: `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **Coach** (`/coach`) holds the summary, goals, the message box and the notebook; back
-  returns to History.
+- **History** (`/history`) leads with level, this week's minutes against its target,
+  active goals and the coach summary. The summary is the only way into Coach; while it is
+  refreshing it shows the app's loader labelled "Updating your summary", and with nothing
+  to summarize it is absent. Design: `docs/specs/2026-10-10-frictionless-home-design.md`.
+- **Coach** (`/coach`) reads top to bottom: the summary (plain text), goals, "Tell the
+  coach" with Send below, the reply, and the notebook collapsed under "What the coach
+  knows". Back and Escape return to History.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
   session and camera specs that follow it.
 
 Every screen uses the `--color-base-100` page background, Geist, and Home's centred
-column.
+column: Home, History and Coach render in the same `.adaptive-home` container on the
+layout's session surface, so the background, gutters and width never change between
+them. Sheets and the chooser use `--color-base-200`. Never hard-code a page background.
 
 ---
 

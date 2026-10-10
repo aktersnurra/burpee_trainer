@@ -1,5 +1,7 @@
 # Legacy cull and test policy
 
+> **Superseded in part** by `2026-10-10-frictionless-home-design.md`: first use opens on a starter workout; the `:first_workout` state and the free-text bootstrap prompt are removed.
+
 ## Status
 
 Approved by the owner in conversation on 2026-10-05. First sub-project of

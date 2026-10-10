@@ -1,5 +1,7 @@
 # Home state machine and scoped authorization
 
+> **Superseded in part** by `2026-10-10-frictionless-home-design.md`: first use opens on a starter workout; the `:first_workout` state and the free-text bootstrap prompt are removed.
+
 ## Status
 
 Sub-project 3 of `2026-10-05-coach-first-architecture-design.md`, written 2026-10-05.

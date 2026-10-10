@@ -319,10 +319,12 @@ The loading state itself renders in Task 10's History header (the app's loader, 
 
 **Files:** `docs/ui.md`, `CLAUDE.md`, `docs/testing.md`
 
-- [ ] `docs/ui.md`: the navigation-bar section was already replaced by "Navigation and screens" in the docs restructure; check it still matches the shipped Home, History and Coach, and document the page background and Geist-only rule there.
-- [ ] `CLAUDE.md` module map: add `Coach.Policy.Week`, `Coach.Summary`, `Coach.SummaryJob`, `Coach.WeekCloseJob`; remove anything Task 4 deleted.
-- [ ] `docs/testing.md`: add the history summary flow and the first-use start flow to the core flow list.
-- [ ] **Commit** — `docs: frictionless Home, summary and visual rules`
+- [x] `docs/ui.md`: the navigation-bar section was already replaced by "Navigation and screens" in the docs restructure; check it still matches the shipped Home, History and Coach, and document the page background and Geist-only rule there.
+- [x] `CLAUDE.md` module map: add `Coach.Policy.Week`, `Coach.Summary`, `Coach.SummaryJob`, `Coach.WeekCloseJob`; remove anything Task 4 deleted.
+- [x] `docs/testing.md`: add the history summary flow and the first-use start flow to the core flow list.
+- [x] **Commit** — `docs: frictionless Home, summary and visual rules`
+
+**Done** (`docs: frictionless Home, summary and visual rules`). `Coach.WeekCloseJob` is not in the module map: Task 9 replaced it with refresh on open before it shipped. Three older specs that describe the removed first-use prompt carry a "superseded in part" note pointing here.
 
 ---
 
