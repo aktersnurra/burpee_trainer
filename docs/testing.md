@@ -30,7 +30,7 @@ The full-flow suite has one file for each user-visible behavior below:
 10. Session completion schedules the planning job, which selects a workout Home then shows with its rationale: `test/burpee_trainer_web/flows/planned_next_workout_flow_test.exs`
 11. Session completion narrates an insight (validated or fallback) shown on Home and in History: `test/burpee_trainer_web/flows/insight_flow_test.exs`, `test/burpee_trainer_web/flows/insight_presentation_test.exs`
 12. A fresh user opens on a ready starter workout with Start as the one action, and the slot is planned at most once: `test/burpee_trainer_web/live/home_first_use_test.exs`
-13. The coach summary heads History and is the only way into Coach and back; a summary from an earlier week shows the loader until the refresh arrives; with nothing to summarize there is no route to Coach: `test/burpee_trainer_web/flows/history_summary_flow_test.exs`
+13. The coach summary heads History and is the only way into Coach and back; a summary from an earlier week shows the loader until the refresh arrives; with nothing to summarize the line invites the owner to the coach instead: `test/burpee_trainer_web/flows/history_summary_flow_test.exs`
 
 ## Commands
 

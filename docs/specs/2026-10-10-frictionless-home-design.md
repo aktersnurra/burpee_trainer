@@ -109,7 +109,9 @@ owner arrives, and the owner never has to describe a workout just to get started
   metrics (for example "150 reps by 1 Dec: best so far 120. 52 days left.").
 - Stored in `coach_summaries` (`user_id` unique, `text`, `metric_ids` JSON, `source`
   `llm | fallback`, `updated_at`). History reads the stored row and never calls the
-  provider. With no completed session and no goal, the summary line is absent.
+  provider. With no completed session and no goal there is no summary; the same line
+  then reads "Tell the coach what you're training for", so a new owner can still reach
+  Coach.
 
 ### 4. Coach screen
 

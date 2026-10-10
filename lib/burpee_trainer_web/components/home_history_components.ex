@@ -24,7 +24,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             phx-mounted={
               JS.focus(
                 to:
-                  if(Map.get(@state, :history_focus_return?, false) and summary_line?(@state),
+                  if(Map.get(@state, :history_focus_return?, false),
                     do: "#history-coach-summary",
                     else: "#home-history-heading"
                   )
@@ -479,7 +479,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   attr(:state, :map, required: true)
 
-  # Level, this week and goals at a glance, then the coach summary: the only way into Coach.
+  # Level, this week and goals at a glance, then the coach summary (or, with nothing to
+  # summarize yet, an invitation): the only way into Coach.
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
@@ -492,16 +493,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <p :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
         {Enum.map_join(@state.history_goals, " · ", &goal_line/1)}
       </p>
-      <.link
-        :if={summary_line?(@state)}
-        id="history-coach-summary"
-        patch={~p"/coach"}
-        class="history-coach-summary"
-      >
+      <.link id="history-coach-summary" patch={~p"/coach"} class="history-coach-summary">
         <BurpeeTrainerWeb.HomeCoachComponents.summary_body
+          :if={summary_line?(@state)}
           summary={@state.progress_summary}
           loading?={@state.progress_summary_loading?}
         />
+        <span :if={not summary_line?(@state)} class="coach-summary-invitation">
+          Tell the coach what you're training for
+        </span>
       </.link>
     </header>
     """

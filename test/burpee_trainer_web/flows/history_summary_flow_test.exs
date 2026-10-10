@@ -47,12 +47,23 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert focus_target(view, "#home-history-heading") == "#history-coach-summary"
   end
 
-  test "with nothing to summarize there is no route to Coach", %{conn: conn} do
-    for path <- [~p"/", ~p"/history"] do
-      {:ok, view, _} = live(conn, path)
-      refute has_element?(view, "#history-coach-summary")
-      refute has_element?(view, "a[href^='/coach']")
-    end
+  test "with nothing to summarize, History invites the owner to the coach and Home does not", %{
+    conn: conn
+  } do
+    {:ok, home, _} = live(conn, ~p"/")
+    refute has_element?(home, "a[href^='/coach']")
+
+    {:ok, view, _} = live(conn, ~p"/history")
+
+    assert has_element?(
+             view,
+             "a#history-coach-summary[href='/coach']",
+             "Tell the coach what you're training for"
+           )
+
+    view |> element("#history-coach-summary") |> render_click()
+    assert_patch(view, "/coach")
+    refute has_element?(view, "#home-coach-summary", "Tell the coach what you're training for")
   end
 
   test "a refreshing summary shows the loader inside the link until the new one arrives", %{

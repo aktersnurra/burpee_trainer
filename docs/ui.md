@@ -133,7 +133,7 @@ screen leads to the next in context:
 - **History** (`/history`) leads with level, this week's minutes against its target,
   active goals and the coach summary. The summary is the only way into Coach; while it is
   refreshing it shows the app's loader labelled "Updating your summary", and with nothing
-  to summarize it is absent. Design: `docs/specs/2026-10-10-frictionless-home-design.md`.
+  to summarize it reads "Tell the coach what you're training for". Design: `docs/specs/2026-10-10-frictionless-home-design.md`.
 - **Coach** (`/coach`) reads top to bottom: the summary (plain text), goals, "Tell the
   coach" with Send below, the reply, and the notebook collapsed under "What the coach
   knows". Back and Escape return to History.
