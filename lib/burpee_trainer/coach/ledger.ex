@@ -4,14 +4,6 @@ defmodule BurpeeTrainer.Coach.Ledger do
   alias BurpeeTrainer.{Repo, Accounts.Scope}
   alias BurpeeTrainer.Coach.LlmCall
 
-  @spec calls_today(Scope.t()) :: non_neg_integer()
-  def calls_today(%Scope{} = scope), do: Repo.aggregate(window(scope), :count)
-
-  @spec check_budget(Scope.t(), non_neg_integer()) :: :ok | {:error, :llm_budget_exhausted}
-  def check_budget(%Scope{} = scope, cap \\ 40) do
-    if calls_today(scope) < cap, do: :ok, else: {:error, :llm_budget_exhausted}
-  end
-
   @doc "Admit one call before transport. Optional run_cap counts every owned run reservation, not just successful calls. Caller caps may tighten, never relax application daily policy."
   @spec reserve(Scope.t(), map(), keyword()) ::
           {:ok, LlmCall.t()} | {:error, :llm_budget_exhausted}
@@ -73,24 +65,7 @@ defmodule BurpeeTrainer.Coach.Ledger do
     if count == 1, do: :ok, else: {:error, :not_found}
   end
 
-  @spec record(Scope.t(), map()) :: :ok
-  def record(%Scope{user: %{id: id}}, attrs) do
-    %LlmCall{user_id: id, inserted_at: DateTime.utc_now()}
-    |> Ecto.Changeset.cast(attrs, [
-      :purpose,
-      :run_id,
-      :model,
-      :prompt_tokens,
-      :completion_tokens,
-      :cost_usd,
-      :outcome,
-      :duration_ms
-    ])
-    |> Ecto.Changeset.validate_required([:purpose, :run_id, :model, :outcome, :duration_ms])
-    |> Repo.insert!()
-
-    :ok
-  end
+  defp calls_today(scope), do: Repo.aggregate(window(scope), :count)
 
   defp owned(%Scope{user: %{id: id}}), do: from(c in LlmCall, where: c.user_id == ^id)
 

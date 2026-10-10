@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Coach.ClientChatTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.Coach.{Client, Ledger}
+  alias BurpeeTrainer.Coach.Client
 
   @config [
     enabled: true,
@@ -49,7 +49,7 @@ defmodule BurpeeTrainer.Coach.ClientChatTest do
                ledger: %{scope: scope, purpose: "plan_next", run_id: Ecto.UUID.generate()}
              )
 
-    assert Ledger.calls_today(scope) == 1
+    assert llm_call_count(scope) == 1
   end
 
   test "strict JSON and invalid duplicate keys are distinguished" do
@@ -75,7 +75,7 @@ defmodule BurpeeTrainer.Coach.ClientChatTest do
     end)
 
     assert {:error, %{code: :invalid_provider_response}} = Client.chat([], opts)
-    assert Ledger.calls_today(scope) == 2
+    assert llm_call_count(scope) == 2
   end
 
   test "a disabled provider makes no call and records no ledger row" do

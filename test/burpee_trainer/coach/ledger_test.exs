@@ -7,11 +7,11 @@ defmodule BurpeeTrainer.Coach.LedgerTest do
     scope = scope_fixture()
     attrs = %{purpose: "plan_next", run_id: Ecto.UUID.generate(), model: "m"}
     assert {:ok, call} = Ledger.reserve(scope, attrs, daily_cap: 1)
-    assert Ledger.calls_today(scope) == 1
+    assert llm_call_count(scope) == 1
     assert {:error, :llm_budget_exhausted} = Ledger.reserve(scope, attrs, daily_cap: 1)
     assert {:ok, _} = Ledger.reserve(scope_fixture(), attrs, daily_cap: 1)
     assert :ok = Ledger.finish(scope, call.id, %{outcome: "ok", duration_ms: 2, cost_usd: 0.25})
-    assert Ledger.calls_today(scope) == 1
+    assert llm_call_count(scope) == 1
 
     assert {:error, :not_found} =
              Ledger.finish(scope_fixture(), call.id, %{outcome: "ok", duration_ms: 2})

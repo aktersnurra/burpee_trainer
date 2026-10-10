@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Evals.ReplayLayoutTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.Coach.{Client, Ledger, RestFitter, WorkoutLayout, WorkoutRequest}
+  alias BurpeeTrainer.Coach.{Client, RestFitter, WorkoutLayout, WorkoutRequest}
   alias BurpeeTrainer.Evals.Scenarios
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
 
@@ -28,7 +28,7 @@ defmodule BurpeeTrainer.Evals.ReplayLayoutTest do
                ledger: %{scope: scope, purpose: "layout", run_id: Ecto.UUID.generate()}
              )
 
-    assert Ledger.calls_today(scope) == 1
+    assert llm_call_count(scope) == 1
     assert {:ok, canonical} = RestFitter.fit(request, layout)
     assert {:ok, definition} = WorkoutDefinition.new(canonical)
     assert :ok = WorkoutRequest.validate_definition(request, definition)

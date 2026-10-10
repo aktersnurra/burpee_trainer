@@ -13,13 +13,11 @@ defmodule BurpeeTrainer.Evals.OwnerTest do
         send(self(), {:eval_identity, scope.user.id, scope.user.username})
         assert scope.user.username =~ "eval-"
 
-        assert :ok =
-                 Ledger.record(scope, %{
+        assert {:ok, _call} =
+                 Ledger.reserve(scope, %{
                    purpose: "layout",
                    run_id: Ecto.UUID.generate(),
-                   model: "m",
-                   outcome: "ok",
-                   duration_ms: 1
+                   model: "m"
                  })
 
         raise "boom"

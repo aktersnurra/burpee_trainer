@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Insights.NarratorTest do
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Insights, Repo}
   alias BurpeeTrainer.Insights.Narrator
-  alias BurpeeTrainer.Coach.{Ledger, LlmCall}
+  alias BurpeeTrainer.Coach.LlmCall
   import Ecto.Query
 
   @config [
@@ -43,7 +43,7 @@ defmodule BurpeeTrainer.Insights.NarratorTest do
     assert insight.points["items"] == content["points"]
     assert {:ok, replay} = Narrator.narrate(scope, session, opts())
     assert replay.id == insight.id
-    assert Ledger.calls_today(scope) == 1
+    assert llm_call_count(scope) == 1
     call = Repo.one!(from c in LlmCall, where: c.user_id == ^scope.user.id)
     assert call.purpose == "insight"
     assert call.prompt_tokens == 11
@@ -83,7 +83,7 @@ defmodule BurpeeTrainer.Insights.NarratorTest do
              Narrator.narrate(scope, session, Keyword.put(opts(), :budget, daily_cap: 0))
 
     refute_received :unexpected_transport
-    assert Ledger.calls_today(scope) == 0
+    assert llm_call_count(scope) == 0
   end
 
   test "empty provider headline falls back instead of failing persistence" do
@@ -163,7 +163,7 @@ defmodule BurpeeTrainer.Insights.NarratorTest do
     scope = scope_fixture()
     session = free_form_session_fixture(scope_fixture().user)
     assert {:error, :session_not_owned} = Narrator.narrate(scope, session, opts())
-    assert Ledger.calls_today(scope) == 0
+    assert llm_call_count(scope) == 0
     assert Insights.for_session(scope, session.id) == nil
   end
 end
