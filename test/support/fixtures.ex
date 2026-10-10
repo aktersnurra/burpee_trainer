@@ -40,6 +40,14 @@ defmodule BurpeeTrainer.Fixtures do
     |> BurpeeTrainer.Accounts.Scope.for_user()
   end
 
+  @doc "Count the LLM calls recorded for a scope's user."
+  def llm_call_count(%BurpeeTrainer.Accounts.Scope{user: %{id: user_id}}) do
+    BurpeeTrainer.Repo.aggregate(
+      from(call in BurpeeTrainer.Coach.LlmCall, where: call.user_id == ^user_id),
+      :count
+    )
+  end
+
   @doc "Build a valid published workout through the compiler-backed persistence path."
   def plan_fixture(user, attrs \\ %{}) do
     attrs = stringify_keys(attrs)

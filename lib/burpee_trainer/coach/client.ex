@@ -36,39 +36,48 @@ defmodule BurpeeTrainer.Coach.Client do
     model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
     attrs = %{purpose: ledger.purpose, run_id: ledger.run_id, model: model}
 
-    case BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
+    # A disabled provider makes no call, so it neither records nor spends budget.
+    with true <- is_list(config) and require_enabled(config) == :ok,
+         {:ok, call} <-
+           BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
+      record_chat(ledger, call, messages, opts, config)
+    else
+      false ->
+        provider_unavailable()
+
       {:error, :llm_budget_exhausted} ->
         {:error, Error.new(:llm_budget_exhausted)}
-
-      {:ok, call} ->
-        started = System.monotonic_time(:millisecond)
-
-        {result, error_usage} =
-          case chat_request(messages, opts, config) do
-            {:error, error, usage} -> {{:error, error}, usage}
-            result -> {result, %{}}
-          end
-
-        {outcome, usage} =
-          case result do
-            {:ok, %{tool_calls: [_ | _], usage: usage}} -> {"tool_calls", usage}
-            {:ok, %{usage: usage}} -> {"ok", usage}
-            {:error, %{code: :provider_timeout}} -> {"timeout", error_usage}
-            {:error, %{code: :invalid_provider_response}} -> {"invalid_response", error_usage}
-            {:error, _} -> {"provider_error", error_usage}
-          end
-
-        :ok =
-          BurpeeTrainer.Coach.Ledger.finish(ledger.scope, call.id, %{
-            outcome: outcome,
-            prompt_tokens: token_usage(usage["prompt_tokens"]),
-            completion_tokens: token_usage(usage["completion_tokens"]),
-            cost_usd: cost_usage(usage["cost"]),
-            duration_ms: System.monotonic_time(:millisecond) - started
-          })
-
-        result
     end
+  end
+
+  defp record_chat(ledger, call, messages, opts, config) do
+    started = System.monotonic_time(:millisecond)
+
+    {result, error_usage} =
+      case chat_request(messages, opts, config) do
+        {:error, error, usage} -> {{:error, error}, usage}
+        result -> {result, %{}}
+      end
+
+    {outcome, usage} =
+      case result do
+        {:ok, %{tool_calls: [_ | _], usage: usage}} -> {"tool_calls", usage}
+        {:ok, %{usage: usage}} -> {"ok", usage}
+        {:error, %{code: :provider_timeout}} -> {"timeout", error_usage}
+        {:error, %{code: :invalid_provider_response}} -> {"invalid_response", error_usage}
+        {:error, _} -> {"provider_error", error_usage}
+      end
+
+    :ok =
+      BurpeeTrainer.Coach.Ledger.finish(ledger.scope, call.id, %{
+        outcome: outcome,
+        prompt_tokens: token_usage(usage["prompt_tokens"]),
+        completion_tokens: token_usage(usage["completion_tokens"]),
+        cost_usd: cost_usage(usage["cost"]),
+        duration_ms: System.monotonic_time(:millisecond) - started
+      })
+
+    result
   end
 
   defp token_usage(value) when is_integer(value) and value >= 0, do: value

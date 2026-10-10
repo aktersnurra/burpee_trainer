@@ -78,6 +78,26 @@ defmodule BurpeeTrainer.Coach.ClientChatTest do
     assert Ledger.calls_today(scope) == 2
   end
 
+  test "a disabled provider makes no call and records no ledger row" do
+    scope = scope_fixture()
+    parent = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      send(parent, :transport)
+      Req.Test.json(conn, %{})
+    end)
+
+    assert {:error, %{code: :provider_unavailable}} =
+             Client.chat([],
+               config: Keyword.put(@config, :enabled, false),
+               req: Req.new(plug: {Req.Test, __MODULE__}),
+               ledger: %{scope: scope, purpose: "plan_next", run_id: Ecto.UUID.generate()}
+             )
+
+    refute_received :transport
+    assert llm_call_count(scope) == 0
+  end
+
   test "invalid output still records supplied billing usage and cannot bypass the cost cap" do
     scope = scope_fixture()
     parent = self()
