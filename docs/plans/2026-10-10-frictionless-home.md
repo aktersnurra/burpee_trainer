@@ -216,11 +216,13 @@ end
 
 **Files:** `lib/burpee_trainer/insights/metrics.ex`; test `test/burpee_trainer/insights/metrics_test.exs`
 
-- [ ] **Step 1: Failing tests** (pure, with fixed dates):
+- [x] **Step 1: Failing tests** (pure, with fixed dates):
   - an active goal (150 six-count in 1200 s by 2026-12-01) and sessions with best 120 → `goal.<id>.best_reps` 120, `goal.<id>.target_reps` 150, `goal.<id>.days_left` = days from `today` to `date_target` (never negative), plus existing `progress_pct`;
   - `today` = Monday 2026-10-12, previous week 50 minutes, regular week → `last_week.minutes` 50, `last_week.target_minutes` 80; sign-up previous week (Saturday sign-up) → `last_week.target_minutes` 40;
   - property: `last_week.minutes` equals the sum of the previous week's credited durations (div 60).
-- [ ] **Step 2: Run** — FAIL. **Step 3: Implement** in `compute/5` next to the existing goal and week metrics, using `Week.new(sign_up_date, previous_start)`. **Step 4: Run** — PASS. **Commit** — `feat(insights): goal trajectory and last-week metrics`
+- [x] **Step 2: Run** — FAIL. **Step 3: Implement** in `compute/5` next to the existing goal and week metrics, using `Week.new(sign_up_date, previous_start)`. **Step 4: Run** — PASS. **Commit** — `feat(insights): goal trajectory and last-week metrics`
+
+**Done** (`feat(insights): goal trajectory and last-week metrics`). Addition: `last_week.*` is omitted when last week precedes the sign-up week (it was never a training week, and "0 of 80" would invite a false shortfall); `days_left` uses a new `:days` unit.
 
 ---
 

@@ -6,7 +6,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
   alias BurpeeTrainer.Coach.Policy.Week
 
   @type id :: String.t()
-  @type numeric_unit :: :minutes | :reps | :weeks | :seconds | :percent
+  @type numeric_unit :: :minutes | :reps | :weeks | :seconds | :percent | :days
   # Levels are existing domain categories, not fabricated numeric ordinals.
   @type metric ::
           %{value: number(), unit: numeric_unit(), label: String.t()}
@@ -141,18 +141,34 @@ defmodule BurpeeTrainer.Insights.Metrics do
             |> Enum.map(& &1.burpee_count_actual)
             |> Enum.max(fn -> 0 end)
 
-          Map.put(
-            acc,
-            "goal.#{g.id}.progress_pct",
-            metric(
-              min(100, div(best * 100, g.burpee_count_target)),
-              :percent,
-              "progress toward goal"
-            )
-          )
+          Map.merge(acc, %{
+            "goal.#{g.id}.progress_pct" =>
+              metric(
+                min(100, div(best * 100, g.burpee_count_target)),
+                :percent,
+                "progress toward goal"
+              ),
+            "goal.#{g.id}.best_reps" => metric(best, :reps, "best reps within goal time"),
+            "goal.#{g.id}.target_reps" => metric(g.burpee_count_target, :reps, "goal reps"),
+            "goal.#{g.id}.days_left" =>
+              metric(max(0, Date.diff(g.date_target, today)), :days, "days until goal date")
+          })
       end
 
-    base |> Map.merge(per_type) |> Map.merge(latest_metrics(latest)) |> Map.merge(goal_metrics)
+    previous_start = Date.add(start, -7)
+
+    last_week =
+      last_week_metrics(
+        Date.compare(previous_start, Date.beginning_of_week(signed_up_on)) != :lt,
+        between(credited, previous_start, Date.add(start, -1)),
+        Week.new(signed_up_on, previous_start)
+      )
+
+    base
+    |> Map.merge(per_type)
+    |> Map.merge(latest_metrics(latest))
+    |> Map.merge(goal_metrics)
+    |> Map.merge(last_week)
   end
 
   @spec format(metric()) :: String.t()
@@ -181,6 +197,17 @@ defmodule BurpeeTrainer.Insights.Metrics do
         Enum.sum(Enum.map(rows, &(&1.duration_sec_actual / &1.burpee_count_actual))) /
           length(rows)
   end
+
+  # A week before the sign-up week was never a training week, so it has no last-week facts.
+  defp last_week_metrics(true = _trained?, rows, %Week{target_sec: target_sec}) do
+    %{
+      "last_week.minutes" =>
+        metric(div(sum(rows, :duration_sec_actual), 60), :minutes, "minutes last week"),
+      "last_week.target_minutes" => metric(div(target_sec, 60), :minutes, "last week's target")
+    }
+  end
+
+  defp last_week_metrics(false = _trained?, _rows, _week), do: %{}
 
   defp latest_metrics(nil), do: %{}
 

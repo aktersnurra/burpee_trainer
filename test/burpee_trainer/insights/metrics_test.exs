@@ -96,14 +96,16 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
         status: :active,
         burpee_type: :six_count,
         burpee_count_target: 80,
-        duration_sec_target: 1200
+        duration_sec_target: 1200,
+        date_target: ~D[2026-12-01]
       },
       %{
         id: 8,
         status: :abandoned,
         burpee_type: :six_count,
         burpee_count_target: 80,
-        duration_sec_target: 1200
+        duration_sec_target: 1200,
+        date_target: ~D[2026-12-01]
       }
     ]
 
@@ -193,5 +195,78 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
 
     m = Metrics.compute(rows, [], ~D[2026-10-07], "Etc/UTC", ~D[2026-09-26])
     assert m["streak.weeks"].value == 2
+  end
+
+  test "an active goal reports its best, target and days left, never negative" do
+    goal = %{
+      id: 3,
+      status: :active,
+      burpee_type: :six_count,
+      burpee_count_target: 150,
+      duration_sec_target: 1200,
+      date_target: ~D[2026-12-01]
+    }
+
+    rows = [
+      session(1, ~U[2026-10-01 12:00:00Z], 120, 1200),
+      session(2, ~U[2026-10-02 12:00:00Z], 140, 1500),
+      session(3, ~U[2026-10-03 12:00:00Z], 90, 1100)
+    ]
+
+    m = Metrics.compute(rows, [goal], ~D[2026-10-10], "Etc/UTC", ~D[2024-01-01])
+
+    assert m["goal.3.best_reps"] == %{
+             value: 120,
+             unit: :reps,
+             label: "best reps within goal time"
+           }
+
+    assert m["goal.3.target_reps"].value == 150
+    assert m["goal.3.days_left"] == %{value: 52, unit: :days, label: "days until goal date"}
+    assert m["goal.3.progress_pct"].value == 80
+
+    m = Metrics.compute(rows, [goal], ~D[2026-12-05], "Etc/UTC", ~D[2024-01-01])
+    assert m["goal.3.days_left"].value == 0
+  end
+
+  test "last week reports its minutes against that week's own target" do
+    rows = [
+      session(1, ~U[2026-10-06 12:00:00Z], 50, 1_800),
+      session(2, ~U[2026-10-09 12:00:00Z], 50, 1_200),
+      session(3, ~U[2026-10-12 08:00:00Z], 50, 1_200)
+    ]
+
+    m = Metrics.compute(rows, [], ~D[2026-10-12], "Etc/UTC", ~D[2024-01-01])
+    assert m["last_week.minutes"] == %{value: 50, unit: :minutes, label: "minutes last week"}
+    assert m["last_week.target_minutes"].value == 80
+
+    # Signed up Saturday 2026-10-10: last week was the pro-rated sign-up week.
+    m = Metrics.compute(rows, [], ~D[2026-10-12], "Etc/UTC", ~D[2026-10-10])
+    assert m["last_week.target_minutes"].value == 40
+  end
+
+  test "a user in their sign-up week has no last week" do
+    m = Metrics.compute([], [], ~D[2026-10-10], "Etc/UTC", ~D[2026-10-07])
+    refute Map.has_key?(m, "last_week.minutes")
+    refute Map.has_key?(m, "last_week.target_minutes")
+  end
+
+  property "last week's minutes are its credited seconds summed before rounding" do
+    check all(
+            previous <- list_of(integer(0..3600), max_length: 10),
+            current <- list_of(integer(0..3600), max_length: 5)
+          ) do
+      rows =
+        Enum.map(Enum.with_index(previous), fn {d, i} ->
+          session(i, DateTime.add(~U[2026-10-05 06:00:00Z], i * 3_600 * 12), 10, d)
+        end) ++
+          Enum.map(Enum.with_index(current), fn {d, i} ->
+            session(100 + i, ~U[2026-10-12 06:00:00Z], 10, d)
+          end) ++
+          [%{session(200, ~U[2026-10-08 06:00:00Z], 10, 3_600) | tags: "warmup"}]
+
+      m = Metrics.compute(rows, [], ~D[2026-10-13], "Etc/UTC", ~D[2024-01-01])
+      assert m["last_week.minutes"].value == div(Enum.sum(previous), 60)
+    end
   end
 end
