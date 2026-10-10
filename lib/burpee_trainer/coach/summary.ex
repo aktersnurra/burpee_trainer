@@ -13,6 +13,18 @@ defmodule BurpeeTrainer.Coach.Summary do
     timestamps(type: :utc_datetime_usec)
   end
 
+  @doc "The owner's topic; subscribers receive `{:coach_summary, t() | nil}` after a refresh."
+  @spec topic(Scope.t()) :: String.t()
+  def topic(%Scope{user: %{id: id}}), do: "coach_summary:#{id}"
+
+  @spec subscribe(Scope.t()) :: :ok | {:error, term()}
+  def subscribe(%Scope{} = scope),
+    do: Phoenix.PubSub.subscribe(BurpeeTrainer.PubSub, topic(scope))
+
+  @spec broadcast(Scope.t(), t() | nil) :: :ok | {:error, term()}
+  def broadcast(%Scope{} = scope, summary),
+    do: Phoenix.PubSub.broadcast(BurpeeTrainer.PubSub, topic(scope), {:coach_summary, summary})
+
   @spec get(Scope.t()) :: t() | nil
   def get(%Scope{user: %{id: id}}), do: Repo.get_by(__MODULE__, user_id: id)
 

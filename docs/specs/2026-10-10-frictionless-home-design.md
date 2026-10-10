@@ -62,7 +62,7 @@ owner arrives, and the owner never has to describe a workout just to get started
   rule changes only from `Date.day_of_week(date) in [6, 7]` to
   `Date.day_of_week(date) in week.catch_up_days`, and from the `@weekly_target_sec`
   constant to `week.target_sec`. The `Week` is the single source for slot duration and
-  strategy, week-complete, Home's week strip, week close, and the `week.target_minutes`
+  strategy, week-complete, Home's week strip, and the `week.target_minutes`
   / `last_week.target_minutes` metrics (which today hard-code 80).
 - On first open the planner job is enqueued for the slot, as after a completed session.
   When it finishes, its selection replaces the starter on the next Home render. Home
@@ -89,15 +89,15 @@ owner arrives, and the owner never has to describe a workout just to get started
   - a session completes (next to the planner and narration jobs);
   - a goal is confirmed or dismissed;
   - the notebook is saved from the Coach screen;
-  - a week closes short of the target: the owner's local week ended with fewer completed
-    minutes than that week's target (80, or the pro-rated sign-up-week target). The
-    summary then reflects the shortfall even when the owner has not trained since.
-- **Week close.** An hourly Oban cron job, `Coach.WeekCloseJob`, finds users whose local
-  week ended within the last hour (Monday 00:00 in their timezone, so DST and timezones
-  are respected) and whose completed minutes for that week are below that week's target. It admits one
-  `SummaryJob` per user per closed week, unique on `(user_id, week_start)`. The closed
-  week's numbers reach the model as metrics `last_week.minutes` and
-  `last_week.target_minutes`, so the shortfall is stated from computed values.
+  - the app is opened and the stored summary is stale (see below).
+- **Refresh on open.** A summary is *current* when it was written during the owner's
+  current local week, *stale* when it was written before that week (or never, for an
+  owner with a completed session or an active goal), and *absent* when the owner has
+  neither. A connected open of the app with a stale summary admits one `SummaryJob` and
+  shows the summary line's loading state until the job broadcasts the stored result,
+  which replaces it in place. So the first open of a new week states last week's outcome,
+  including a shortfall, from the `last_week.minutes` and `last_week.target_minutes`
+  metrics. No cron: owners who stop opening the app cost no provider calls.
 - The job computes metrics with `Insights.Metrics` plus per-goal trajectory metrics
   (`goal.<id>.best_reps`, `goal.<id>.target_reps`, `goal.<id>.days_left`, and the
   existing `goal.<id>.progress_pct`, `pace.change_6w.<type>`, `streak.weeks`,
@@ -155,11 +155,11 @@ One centred column, top to bottom:
 - Summary: validator rejects unsupported numbers and unknown ids; fallback stored on
   provider failure; job admitted on completion, goal confirm/dismiss and notebook save;
   completion still succeeds when admission fails.
-- Week close: a user whose local week just ended under its target gets exactly one summary
-  job (repeat sweeps in the same hour are no-ops); a user who met the target (including a
-  pro-rated sign-up week), or whose
-  week has not ended in their timezone, gets none; the fallback text states the
-  shortfall from `last_week.*` metrics.
+- Refresh on open: a summary from an earlier local week (or none, with a completed
+  session) admits one job and shows the loading state until the broadcast replaces it; a
+  summary from the current week admits nothing; an owner with nothing to report sees no
+  line and no loading state; the fallback text states a shortfall from `last_week.*`
+  metrics.
 - Full flows: fresh user → Start → complete → History shows the summary → tap → Coach →
   back to History. New form with a note authors a workout (existing flow, form-only).
 - Visual contract (kept by the test policy only where it is behaviour): Coach is reachable

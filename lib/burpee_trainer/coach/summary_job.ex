@@ -10,7 +10,9 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
     max_attempts: 1,
     unique: [keys: [:user_id], period: :infinity, states: [:available, :scheduled]]
 
-  alias BurpeeTrainer.{Accounts, Goals, Repo, Workouts}
+  require Logger
+
+  alias BurpeeTrainer.{Accounts, Goals, Repo, UserTime, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.{Client, Summary}
   alias BurpeeTrainer.Insights.{Metrics, Validator}
@@ -43,7 +45,11 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   def perform(%Oban.Job{args: %{"user_id" => user_id}}) when is_integer(user_id) do
     case Accounts.get_user(user_id) do
       %Accounts.User{} = user ->
-        case summarize(Scope.for_user(user)) do
+        scope = Scope.for_user(user)
+        result = summarize(scope)
+        Summary.broadcast(scope, Summary.get(scope))
+
+        case result do
           {:ok, _summary} -> :ok
           :none -> :ok
           {:error, reason} -> {:error, reason}
@@ -56,16 +62,74 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
 
   def perform(%Oban.Job{}), do: {:cancel, :invalid_args}
 
+  @type status :: :absent | :current | :stale
+
+  @doc """
+  How the stored summary stands at `now`: `:absent` with nothing to report, `:current`
+  when written during the owner's current local week, `:stale` otherwise.
+  """
+  @spec status(Scope.t(), DateTime.t()) :: {status(), Summary.t() | nil}
+  def status(%Scope{user: user} = scope, %DateTime{} = now) do
+    {sessions, goals} = inputs(scope)
+
+    with {:ok, context} <- UserTime.context(user, now),
+         {:ok, week_start_utc, _week_end_utc} <- UserTime.week_bounds_utc(context) do
+      summary = Summary.get(scope)
+      {freshness(sessions, goals, summary, week_start_utc), summary}
+    else
+      _invalid_timezone -> {:absent, nil}
+    end
+    |> shown()
+  end
+
+  @doc "Opening the app refreshes a stale summary; `:refreshing` once a job is admitted."
+  @spec on_open(Scope.t(), DateTime.t()) :: {status() | :refreshing, Summary.t() | nil}
+  def on_open(%Scope{} = scope, %DateTime{} = now),
+    do: scope |> status(now) |> refresh(scope)
+
+  defp freshness([] = _sessions, [] = _goals, _summary, _week_start_utc), do: :absent
+  defp freshness(_sessions, _goals, nil = _summary, _week_start_utc), do: :stale
+
+  defp freshness(_sessions, _goals, %Summary{updated_at: written_at}, week_start_utc),
+    do: written_in_week(DateTime.compare(written_at, week_start_utc))
+
+  defp written_in_week(:lt), do: :stale
+  defp written_in_week(_at_or_after_week_start), do: :current
+
+  defp shown({:absent, _summary}), do: {:absent, nil}
+  defp shown(status), do: status
+
+  defp refresh({:stale, summary}, scope) do
+    case enqueue(scope) do
+      {:ok, _job} ->
+        {:refreshing, summary}
+
+      {:error, reason} ->
+        Logger.warning(
+          "coach_summary_not_admitted trigger=open user_id=#{scope.user.id} reason=#{inspect(reason)}"
+        )
+
+        {:stale, summary}
+    end
+  end
+
+  defp refresh(status, _scope), do: status
+
   @doc "Stores a validated summary, or the metric fallback; `:none` with nothing to report."
   @spec summarize(Scope.t(), keyword()) :: {:ok, Summary.t()} | :none | {:error, term()}
   def summarize(%Scope{} = scope, opts \\ []) do
+    {sessions, goals} = inputs(scope)
+    generate(scope, sessions, goals, opts)
+  end
+
+  defp inputs(scope) do
     goals =
       for type <- [:six_count, :navy_seal],
           goal = Goals.get_active_goal(scope, type),
           not is_nil(goal),
           do: goal
 
-    generate(scope, Workouts.list_sessions(scope), goals, opts)
+    {Workouts.list_sessions(scope), goals}
   end
 
   defp generate(_scope, [] = _sessions, [] = _goals, _opts), do: :none

@@ -108,6 +108,50 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     end
   end
 
+  describe "on_open/2" do
+    test "nothing to report is absent and admits nothing" do
+      scope = scope_fixture()
+      assert {:absent, nil} = SummaryJob.on_open(scope, DateTime.utc_now())
+      assert all_enqueued(worker: SummaryJob) == []
+    end
+
+    test "a summary written this local week is current and admits nothing" do
+      scope = scope_fixture()
+      free_form_session_fixture(scope.user)
+      {:ok, stored} = Summary.store(scope, %{text: "Fresh.", metric_ids: [], source: :llm})
+      assert {:current, %Summary{id: id}} = SummaryJob.on_open(scope, DateTime.utc_now())
+      assert id == stored.id
+      assert all_enqueued(worker: SummaryJob) == []
+    end
+
+    test "a summary from an earlier week, or none with a session, is refreshed by one job" do
+      scope = scope_fixture()
+      free_form_session_fixture(scope.user)
+      assert {:refreshing, nil} = SummaryJob.on_open(scope, DateTime.utc_now())
+
+      {:ok, _} = Summary.store(scope, %{text: "Old.", metric_ids: [], source: :llm})
+      age_summary(scope, 8)
+      assert {:stale, %Summary{text: "Old."}} = SummaryJob.status(scope, DateTime.utc_now())
+      assert {:refreshing, %Summary{text: "Old."}} = SummaryJob.on_open(scope, DateTime.utc_now())
+      assert [%{args: %{"user_id" => user_id}}] = all_enqueued(worker: SummaryJob)
+      assert user_id == scope.user.id
+    end
+  end
+
+  test "performing the job broadcasts the stored summary to the owner" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+    :ok = Summary.subscribe(scope)
+    assert :ok = perform_job(SummaryJob, %{user_id: scope.user.id})
+    assert_receive {:coach_summary, %Summary{source: :fallback}}
+  end
+
+  defp age_summary(scope, days) do
+    Repo.update_all(from(s in Summary, where: s.user_id == ^scope.user.id),
+      set: [updated_at: DateTime.add(DateTime.utc_now(), -days, :day)]
+    )
+  end
+
   defp proposal do
     %{
       "burpee_type" => "six_count",

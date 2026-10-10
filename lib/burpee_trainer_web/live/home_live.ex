@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Home, Repo, Workouts}
-  alias BurpeeTrainer.Coach.{PlanNextWorkoutJob, Policy}
+  alias BurpeeTrainer.Coach.{PlanNextWorkoutJob, Policy, Summary, SummaryJob}
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutSession}
 
   alias BurpeeTrainerWeb.{
@@ -43,6 +43,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       |> assign(history_open?: false)
       |> schedule_home_day()
       |> plan_slot_once()
+      |> assign_progress_summary()
 
     {:ok, socket}
   end
@@ -106,6 +107,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
   end
 
   @impl true
+  def handle_info({:coach_summary, summary}, socket),
+    do: {:noreply, assign(socket, progress_summary: summary, progress_summary_loading?: false)}
+
   def handle_info({:home_day_boundary, generation}, socket) do
     if generation == socket.assigns.home_day_generation do
       now = socket.assigns.home_now.()
@@ -435,6 +439,22 @@ defmodule BurpeeTrainerWeb.HomeLive do
        do:
          planning_result(socket, PlanNextWorkoutJob.enqueue_first(socket.assigns.current_scope)),
        else: socket
+  end
+
+  # Opening the app refreshes a summary from an earlier week; the job's broadcast ends loading.
+  defp assign_progress_summary(socket) do
+    scope = socket.assigns.current_scope
+    now = socket.assigns.home_now.()
+
+    {status, summary} =
+      if connected?(socket) do
+        Summary.subscribe(scope)
+        SummaryJob.on_open(scope, now)
+      else
+        SummaryJob.status(scope, now)
+      end
+
+    assign(socket, progress_summary: summary, progress_summary_loading?: status == :refreshing)
   end
 
   defp planning_result(socket, :ok), do: assign(socket, home_planning_error: nil)

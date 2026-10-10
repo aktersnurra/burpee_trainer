@@ -266,19 +266,21 @@ end
 
 ---
 
-### Task 9: Week close
+### Task 9: Refresh the summary on open
 
-**Files:** `lib/burpee_trainer/coach/week_close_job.ex`, `config/config.exs` (Oban plugins), `config/test.exs` unchanged (`testing: :manual` disables plugins); test `test/burpee_trainer/coach/week_close_job_test.exs`
+Replaces the hourly week-close cron (owner decision): a stale summary is refreshed when the owner opens the app, so inactive owners cost no provider calls.
 
-- [ ] **Step 1: Failing tests** — the time-dependent decision lives in `WeekCloseJob.sweep(now)`, which `perform/1` calls with `DateTime.utc_now()`; tests call `sweep/1` with fixed instants (no test-only arguments in job args). Cases:
-  - Europe/Stockholm user, `now` = Monday 00:30 local, previous week 50 of 80 minutes → one `SummaryJob` admitted with the closed week's start in its args;
-  - same with 80 minutes → none; same user at Sunday 23:30 local → none;
-  - `America/Los_Angeles` user evaluated at the same UTC instant → not due until their own Monday 00:00;
-  - two sweeps in the same hour → still one `SummaryJob` (unique on `user_id` + `week_start`);
-  - sign-up-week user who met the pro-rated 40 minutes → none.
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement** — `WeekCloseJob` (`queue: :coach`, `max_attempts: 1`); `sweep(now)`: for each user, `UserTime.context(user, now)`; due when the local time is in `[Monday 00:00, Monday 01:00)`; the closed week is `Date.add(context.week_start, -7)`; its target is `Week.new(sign_up_date, closed_start).target_sec`; credited seconds from the same query `Policy` uses (reuse, don't duplicate: expose `Policy.credited_seconds(scope, week_start_utc, week_end_utc)` if needed). Admit `SummaryJob.new(%{"user_id" => id, "week_start" => iso})` with `unique: [keys: [:user_id, :week_start], period: :infinity, states: :all]`. Config: `plugins: [{Oban.Plugins.Cron, crontab: [{"0 * * * *", BurpeeTrainer.Coach.WeekCloseJob}]}]`.
-- [ ] **Step 4: Run** — PASS. **Commit** — `feat(coach): refresh the summary when a week closes short`
+**Files:** `lib/burpee_trainer/coach/summary.ex` (topic), `lib/burpee_trainer/coach/summary_job.ex` (`on_open/2`, broadcast), `lib/burpee_trainer_web/live/home_live.ex`; tests `summary_job_test.exs`, `test/burpee_trainer_web/live/summary_refresh_test.exs`
+
+- [x] **Step 1: Failing tests**
+  - `SummaryJob.on_open(scope, now)`: nothing to report → `{:absent, nil}` and no job; stored summary written in the current local week → `{:current, summary}` and no job; summary written before the current local week, or none with a completed session → `status/2` says `:stale`, and `on_open/2` admits one job and says `{:refreshing, summary_or_nil}` (a failed admission is logged and stays `:stale`, so no loading state waits on a job that does not exist).
+  - `perform/1` broadcasts `{:coach_summary, summary_or_nil}` on the owner's topic after summarizing.
+  - LiveView: a connected open with a stale summary assigns `progress_summary_loading?: true` and the stored `progress_summary` (named apart from the notebook-derived `coach_summary`, which Task 10 removes); the broadcast clears loading and assigns the new summary; a current summary opens with loading false and admits nothing.
+- [x] **Step 2: Run** — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS, then `T mix test`. **Commit** — `feat(coach): refresh a stale summary when the app opens`
+
+The loading state itself renders in Task 10's History header (the app's loader, labelled "Updating your summary").
+
+**Done** (`feat(coach): refresh a stale summary when the app opens`).
 
 ---
 
