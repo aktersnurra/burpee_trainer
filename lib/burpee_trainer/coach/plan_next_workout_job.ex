@@ -43,7 +43,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
   @spec enqueue(Scope.t()) :: :ok | {:error, term()}
   def enqueue(%Scope{} = scope) do
     Repo.immediate_transaction(fn ->
-      case enqueue_in_transaction(scope) do
+      case admit(scope) do
         :ok -> :ok
         {:error, reason} -> Repo.rollback(reason)
       end
@@ -54,7 +54,9 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
     end
   end
 
-  defp enqueue_in_transaction(scope) do
+  @doc "Admits the job inside the caller's transaction; a failure never rolls it back."
+  @spec admit(Scope.t()) :: :ok | {:error, term()}
+  def admit(%Scope{} = scope) do
     with {:ok, slot, at} <- target_slot(scope, DateTime.utc_now(:second)),
          :workout_needed <- slot.home_state,
          {:ok, _} <-

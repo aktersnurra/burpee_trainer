@@ -9,14 +9,18 @@ defmodule BurpeeTrainer.Insights.NarrateJob do
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Insights.Narrator
 
-  def enqueue(%Scope{user: user}, %{id: id, user_id: user_id}) when user.id == user_id do
+  def enqueue(%Scope{} = scope, session) do
     Repo.immediate_transaction(fn ->
-      case %{"user_id" => user.id, "session_id" => id} |> new() |> Oban.insert() do
+      case admit(scope, session) do
         {:ok, job} -> job
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
   end
+
+  @doc "Admits the job inside the caller's transaction; a failure never rolls it back."
+  def admit(%Scope{user: user}, %{id: id, user_id: user_id}) when user.id == user_id,
+    do: %{"user_id" => user.id, "session_id" => id} |> new() |> Oban.insert()
 
   @impl true
   def perform(%Oban.Job{args: %{"user_id" => user_id, "session_id" => session_id}}) do

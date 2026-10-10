@@ -5,6 +5,7 @@ defmodule BurpeeTrainer.Workouts do
   """
 
   import Ecto.Query
+  require Logger
 
   alias Ecto.Multi
   alias BurpeeTrainer.Accounts.{Scope, User}
@@ -1592,15 +1593,8 @@ defmodule BurpeeTrainer.Workouts do
 
           completed = persist_completed_session(user, changeset, &Repo.update/1)
 
-          # Admit both durable jobs before committing the session and goal effects.
-          # Job admission does not perform provider I/O.
-          with :ok <- BurpeeTrainer.Coach.PlanNextWorkoutJob.enqueue(scope),
-               {:ok, _job} <- BurpeeTrainer.Insights.NarrateJob.enqueue(scope, completed) do
-            completed
-          else
-            {:error, _reason} ->
-              Repo.rollback(Error.new(:completion_jobs_unavailable, %{session_id: session_id}))
-          end
+          admit_completion_jobs(scope, completed)
+          completed
 
         nil ->
           Repo.rollback(Error.new(:session_not_owned, %{session_id: session_id}))
@@ -1620,6 +1614,31 @@ defmodule BurpeeTrainer.Workouts do
 
   def complete_session(%Scope{}, session_id, _attrs, _capture),
     do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
+
+  # Follow-up jobs are admitted atomically with the completion when possible, but a saved
+  # workout never depends on them: without a job Home keeps its fallback selection and
+  # the session has no insight. Admission performs no provider I/O.
+  defp admit_completion_jobs(%Scope{} = scope, %WorkoutSession{} = completed) do
+    [
+      plan_next: BurpeeTrainer.Coach.PlanNextWorkoutJob.admit(scope),
+      narrate: BurpeeTrainer.Insights.NarrateJob.admit(scope, completed)
+    ]
+    |> Enum.each(fn
+      {_job, :ok} ->
+        :ok
+
+      {_job, {:ok, _}} ->
+        :ok
+
+      {job, {:error, reason}} ->
+        Logger.warning(
+          "completion_job_not_admitted job=#{job} session_id=#{completed.id} reason=#{inspect(admission_reason(reason))}"
+        )
+    end)
+  end
+
+  defp admission_reason(%Ecto.Changeset{errors: errors}), do: errors
+  defp admission_reason(reason), do: reason
 
   defp persist_completed_session(%User{} = user, changeset, persist)
        when is_function(persist, 1) do

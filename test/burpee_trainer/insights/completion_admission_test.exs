@@ -1,13 +1,14 @@
 defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
+  import ExUnit.CaptureLog
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Coach.PlanNextWorkoutJob
   alias BurpeeTrainer.Insights.NarrateJob
 
   for worker <- [PlanNextWorkoutJob, NarrateJob] do
     @worker worker
-    test "failed #{@worker} admission rolls back completion, goal and BOTH jobs, allowing real retry" do
+    test "failed #{@worker} admission still saves the completion and admits the other job" do
       scope = scope_fixture()
 
       goal =
@@ -31,32 +32,29 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
         []
       )
 
-      assert {:error, %{code: :completion_jobs_unavailable}} =
-               Workouts.complete_session(
-                 scope,
-                 started.id,
-                 %{burpee_count_actual: 30, duration_sec_actual: 1200},
-                 :timed
-               )
+      log =
+        capture_log(fn ->
+          assert {:ok, session} =
+                   Workouts.complete_session(
+                     scope,
+                     started.id,
+                     %{burpee_count_actual: 30, duration_sec_actual: 1200},
+                     :timed
+                   )
 
-      assert Workouts.get_session(scope, started.id).state == :started
-      assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :active
-      assert Repo.aggregate(Oban.Job, :count) == 0
-      Ecto.Adapters.SQL.query!(Repo, "DROP TRIGGER refuse_owned_admission", [])
+          send(self(), {:completed, session})
+        end)
 
-      assert {:ok, session} =
-               Workouts.complete_session(
-                 scope,
-                 started.id,
-                 %{burpee_count_actual: 30, duration_sec_actual: 1200},
-                 :timed
-               )
-
+      assert_received {:completed, session}
       assert session.state == :completed
+      assert Workouts.get_session(scope, started.id).state == :completed
       assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :achieved
+      assert log =~ "completion_job_not_admitted"
 
-      assert Enum.sort(Enum.map(Repo.all(Oban.Job), & &1.worker)) ==
-               Enum.sort(Enum.map([PlanNextWorkoutJob, NarrateJob], &Oban.Worker.to_string/1))
+      other = Enum.reject([PlanNextWorkoutJob, NarrateJob], &(&1 == @worker))
+
+      assert Enum.map(Repo.all(Oban.Job), & &1.worker) ==
+               Enum.map(other, &Oban.Worker.to_string/1)
     end
   end
 
