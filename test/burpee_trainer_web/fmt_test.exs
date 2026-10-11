@@ -12,4 +12,9 @@ defmodule BurpeeTrainerWeb.FmtTest do
 
     assert Fmt.goal(goal) == "Navy SEAL · 60 reps in 20 min by 2026-12-01"
   end
+
+  test "a week reads as its dates, Monday to Sunday" do
+    assert Fmt.week(~D[2026-09-07]) == "7–13 Sep"
+    assert Fmt.week(~D[2026-09-28]) == "28 Sep – 4 Oct"
+  end
 end

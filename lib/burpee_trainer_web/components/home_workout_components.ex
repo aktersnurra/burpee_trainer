@@ -965,7 +965,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <span id="home-week-duration">
           {div(@slot.completed_sec, 60)} / {div(@slot.weekly_target_sec, 60)} min
         </span>
-        <span id="home-week-number">Week {iso_week(@slot.week_start)}</span>
+        <span id="home-week-dates">{BurpeeTrainerWeb.Fmt.week(@slot.week_start)}</span>
       </div>
       <div
         id="home-week-track"
@@ -1165,7 +1165,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   defp duration_label(nil), do: "Duration unknown"
   defp duration_label(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
   defp duration_label(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} s"
-  defp iso_week(date), do: date |> Date.to_erl() |> :calendar.iso_week_number() |> elem(1)
   defp progress_percent(%{weekly_target_sec: 0}), do: "0"
 
   defp progress_percent(slot),

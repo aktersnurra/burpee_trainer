@@ -59,4 +59,17 @@ defmodule BurpeeTrainerWeb.Fmt do
         date_target: date
       }),
       do: "#{burpee_type(type)} · #{reps} reps in #{div(sec, 60)} min by #{date}"
+
+  @doc "A training week by its dates, Monday to Sunday: \"7–13 Sep\", \"28 Sep – 4 Oct\"."
+  @spec week(Date.t()) :: String.t()
+  def week(%Date{} = monday) do
+    sunday = Date.add(monday, 6)
+    week(monday, sunday, monday.month == sunday.month)
+  end
+
+  defp week(monday, sunday, true = _same_month?),
+    do: "#{monday.day}–#{sunday.day} #{Calendar.strftime(sunday, "%b")}"
+
+  defp week(monday, sunday, false),
+    do: "#{Calendar.strftime(monday, "%-d %b")} – #{Calendar.strftime(sunday, "%-d %b")}"
 end

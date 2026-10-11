@@ -18,6 +18,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
         )
         |> LazyHTML.from_fragment()
 
+      assert html |> LazyHTML.query("#home-week-dates") |> LazyHTML.text() =~ "7–13 Sep"
       progress = LazyHTML.query(html, "[role=progressbar]")
       assert LazyHTML.attribute(progress, "aria-valuenow") == [expected_now]
       assert LazyHTML.attribute(progress, "aria-valuemax") == [to_string(target)]
