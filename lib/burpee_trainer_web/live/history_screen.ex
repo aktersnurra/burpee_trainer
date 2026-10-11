@@ -5,7 +5,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
   import Phoenix.LiveView
 
   alias BurpeeTrainer.{Goals, History, Workouts}
-  alias BurpeeTrainerWeb.HomeHistoryComponents
+  alias BurpeeTrainerWeb.{HomeHistoryComponents, HomeWorkoutComponents}
 
   def initialize(socket) do
     socket
@@ -368,16 +368,20 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       phx-key="Escape"
     >
       <div class="adaptive-home">
-        <button
-          id="home-history-close"
-          type="button"
-          class="screen-back"
-          phx-click="close_history"
-          aria-label="Back to Home"
-          inert={not is_nil(@history_selected_session)}
-        >
-          <.icon name="hero-arrow-left" class="size-5" />
-        </button>
+        <%!-- The week's progress stays on top of every screen; here it leads back Home. --%>
+        <div id="history-progress" class="relative min-h-11">
+          <HomeWorkoutComponents.week_progress :if={@slot} slot={@slot} />
+          <button
+            id="home-history-close"
+            type="button"
+            class="absolute inset-0 min-h-11 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+            phx-click="close_history"
+            aria-label="Back to Home"
+            inert={not is_nil(@history_selected_session)}
+          >
+            <span class="sr-only">Back to Home</span>
+          </button>
+        </div>
         <HomeHistoryComponents.panel state={assigns} />
       </div>
     </main>

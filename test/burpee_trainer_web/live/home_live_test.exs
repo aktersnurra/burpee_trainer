@@ -96,8 +96,10 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-history-status, #home-history-weekly")
     refute has_element?(view, "#home-history-period-twelve_weeks, .home-history-sessions-heading")
 
-    assert has_element?(view, "#home-history-close[aria-label='Back to Home']")
-    refute has_element?(view, "#home-state-content, #home-week-track")
+    # The week's progress stays on top; on History it is the way back Home.
+    assert has_element?(view, "#history-progress #home-week-track")
+    assert has_element?(view, "#history-progress #home-history-close[aria-label='Back to Home']")
+    refute has_element?(view, "#home-state-content")
     view = home_route(conn, view)
     assert has_element?(view, "#home-history-toggle[href='/history'][aria-label='Open History']")
 
@@ -123,8 +125,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view = history_route(conn, view)
     assert has_element?(view, "#home-history")
     assert has_element?(view, "#home-history-empty")
-    refute has_element?(view, "#home-state-content, #home-week-track")
-    assert has_element?(view, "#home-history-close[aria-label='Back to Home']")
+    refute has_element?(view, "#home-state-content")
+    assert has_element?(view, "#history-progress #home-history-close[aria-label='Back to Home']")
 
     view = home_route(conn, view)
     assert view.pid == pid
@@ -963,7 +965,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            |> Enum.count() == 1
 
     assert LazyHTML.query(html, "#home-history-empty") |> Enum.count() == 1
-    assert LazyHTML.query(html, "#home-state-content, #home-week-track") |> Enum.empty?()
+    assert LazyHTML.query(html, "#home-state-content") |> Enum.empty?()
 
     for event <- ["submit_home_action", "select_alternative", "toggle_summary", "start_collapsed"] do
       assert {:noreply, ^opened} = HomeLive.handle_event(event, %{}, opened)
@@ -1217,7 +1219,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       assert [["focus", %{"to" => "#home-history-heading"}]] = Jason.decode!(commands)
       assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
       assert has_element?(view, "#home-history-close[phx-click=close_history]")
-      refute has_element?(view, "#home-state-content, #home-week-track, #home-coach-panel")
+      refute has_element?(view, "#home-state-content, #home-coach-panel")
       view = home_route(conn, view)
       refute has_element?(view, "#home-history")
       assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
@@ -1271,7 +1273,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       {:noreply, opened} = workspace_screen(state, :history)
       assert LazyHTML.query(render_home(opened), "#home-history-heading") |> Enum.count() == 1
 
-      assert LazyHTML.query(render_home(opened), "#home-state-content, #home-week-track")
+      assert LazyHTML.query(render_home(opened), "#home-state-content")
              |> Enum.empty?()
 
       assert opened.assigns.history_loaded_count == 2
@@ -1620,7 +1622,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   defp history_route(_conn, view) do
     view |> element("#home-history-toggle") |> render_click()
     assert_patch(view, "/history")
-    refute has_element?(view, "#home-state-content, #home-week-track")
+    refute has_element?(view, "#home-state-content")
     assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
     view
   end

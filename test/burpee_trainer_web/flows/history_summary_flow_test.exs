@@ -24,7 +24,9 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/history")
     header = text(view, "#history-header")
     assert header =~ "Level 1A"
-    assert header =~ "25 / 80 min"
+    # The week's minutes live in the progress row above, not again in the header.
+    refute header =~ "min this week"
+    assert has_element?(view, "#history-progress #home-week-duration", "25 / 80 min")
     assert header =~ "150 reps in 20 min"
 
     assert has_element?(

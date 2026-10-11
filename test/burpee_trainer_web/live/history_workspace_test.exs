@@ -187,7 +187,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
 
     {:ok, view, _html} = live(conn, ~p"/history")
     assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
-    refute has_element?(view, "#home-state-content, #home-week-track, #home-coach-panel")
+    refute has_element?(view, "#home-state-content, #home-coach-panel")
     assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
     assert {:error, {:live_redirect, %{to: "/history"}}} = live(conn, ~p"/?history=1")
     {:ok, legacy, _} = live(conn, ~p"/")

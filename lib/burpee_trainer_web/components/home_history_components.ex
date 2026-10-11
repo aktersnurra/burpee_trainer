@@ -486,9 +486,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     <header id="history-header" class="history-header">
       <p class="history-header-facts">
         <span id="history-level">{Fmt.level(@state.current_level)}</span>
-        <span :if={@state.slot} id="history-week-minutes">
-          · {div(@state.slot.completed_sec, 60)} / {div(@state.slot.weekly_target_sec, 60)} min this week
-        </span>
       </p>
       <p :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
         {Enum.map_join(@state.history_goals, " · ", &Fmt.goal/1)}
