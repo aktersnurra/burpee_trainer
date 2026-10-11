@@ -207,7 +207,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#home-new-review-inspection #home-inspection")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "40s")
-    assert has_element?(view, "#home-new-review-pauses", "60s at 11:00")
+    assert has_element?(view, "#home-new-review-pauses", "Pauses: 60s at 11:00")
     assert has_element?(view, "#home-new-review-pauses", "40s at 18:00")
     assert has_element?(view, "#home_workout_rests[disabled]", "60s at 11:00")
     assert has_element?(view, "#home_workout_rests[disabled]", "40s at 18:00")

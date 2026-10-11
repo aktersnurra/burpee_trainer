@@ -355,11 +355,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           id="home-new-review-pauses"
           class="home-local-message"
         >
-          {Enum.map_join(
-            @candidate.request.timed_rests,
-            " · ",
-            &"#{&1.duration_sec}s at #{elapsed_clock(round(&1.start_sec))}"
-          )}
+          {pauses_label(@candidate.request.timed_rests)}
         </p>
       </section>
     </.form>
@@ -491,7 +487,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           phx-mounted={JS.focus(to: "#home-request-confirm")}
           aria-label="Proposed variation"
         >
-          <h2 class="home-review-heading">{@state.pending_request.definition["name"]}</h2>
+          <h2 id="home-edit-review-name" class="home-review-name">
+            {@state.pending_request.definition["name"]}
+          </h2>
           <dl class="home-review-values">
             <div>
               <dt>Reps</dt>
@@ -511,11 +509,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             id="home-edit-review-pauses"
             class="home-local-message"
           >
-            {Enum.map_join(
-              @state.pending_request.request.timed_rests,
-              " · ",
-              &"#{&1.duration_sec}s at #{elapsed_clock(round(&1.start_sec))}"
-            )}
+            {pauses_label(@state.pending_request.request.timed_rests)}
           </p>
           <div class="home-review-actions">
             <button
@@ -585,7 +579,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             id="home-authoring-source"
             class="home-authoring-source"
           >
-            {@state.editing_source.name} · {duration_label(@state.editing_source.target_duration_sec)} · {@state.editing_source.target_reps} reps
+            {source_prefix(@state.authoring_stage)}{@state.editing_source.name} · {duration_label(
+              @state.editing_source.target_duration_sec
+            )} · {@state.editing_source.target_reps} reps
           </p>
           <%!-- Not rendered while authoring, so Cancel mounts it again and focus lands after the patch. --%>
           <div
@@ -1183,6 +1179,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp authoring_new?(state),
     do: is_nil(state.editing_source) and state.authoring_stage in [:new, :review, :editing]
+
+  defp source_prefix(:review), do: "From "
+  defp source_prefix(_stage), do: ""
+
+  defp pauses_label([_one] = rests), do: "Pause: " <> pause_times(rests)
+  defp pauses_label(rests), do: "Pauses: " <> pause_times(rests)
+
+  defp pause_times(rests),
+    do:
+      Enum.map_join(rests, " · ", &"#{&1.duration_sec}s at #{elapsed_clock(round(&1.start_sec))}")
 
   defp authoring_heading(:review), do: "Review"
   defp authoring_heading(:editing), do: "Edit workout"

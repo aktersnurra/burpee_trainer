@@ -255,6 +255,9 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review-reps", "150")
     refute has_element?(view, "#home-edit-review-sets, .home-edit-structure")
     assert has_element?(view, "#home-edit-review #home-inspection table")
+    # Review names the result as a subheading, under the workout it comes from.
+    assert has_element?(view, "#home-authoring-source", "From 140 rep favourite")
+    assert has_element?(view, "#home-edit-review h2.home-review-name")
     assert has_element?(view, "#home-edit-review #home-request-abort", "Cancel")
     assert has_element?(view, "#home-edit-review #home-request-edit", "Edit")
 
