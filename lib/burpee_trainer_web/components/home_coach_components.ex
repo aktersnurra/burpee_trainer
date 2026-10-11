@@ -115,6 +115,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       <details id="home-coach-notebook" class="history-coach-memory" open={@state.coach_details_open?}>
         <summary id="home-coach-notebook-toggle" phx-click="coach_details_toggle">
           What the coach knows
+          <.icon name="hero-chevron-down" class="history-coach-memory-chevron size-4" />
         </summary>
         <.form
           for={@state.coach_notebook_form}

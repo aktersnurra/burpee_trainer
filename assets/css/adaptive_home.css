@@ -897,6 +897,10 @@
 .history-coach-memory { margin-top: 32px; }
 .history-coach-memory summary { display: flex; align-items: center; min-height: 44px; border-top: 1px solid var(--home-line); color: var(--home-muted); font-size: 13px; cursor: pointer; }
 .history-coach-memory summary:hover { color: #24231e; }
+.history-coach-memory summary { justify-content: space-between; list-style: none; }
+.history-coach-memory summary::-webkit-details-marker { display: none; }
+.history-coach-memory-chevron { transition: transform 200ms ease; }
+.history-coach-memory[open] .history-coach-memory-chevron { transform: rotate(180deg); }
 .history-coach-entry { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 13px 0; border-top: 1px solid var(--home-line); font-size: 14px; }
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
 .history-header { margin-top: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--home-line); }

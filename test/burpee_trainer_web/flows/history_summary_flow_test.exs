@@ -123,6 +123,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              "What the coach knows"
            )
 
+    assert has_element?(view, "#home-coach-notebook-toggle .history-coach-memory-chevron")
     assert has_element?(view, "#home-coach-notebook #home-coach-notebook-save")
     assert has_element?(view, "#home-coach-notebook #home-coach-notebook-clear")
 
