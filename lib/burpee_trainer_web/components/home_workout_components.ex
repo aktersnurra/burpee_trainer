@@ -228,6 +228,34 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         disabled={@locked}
         class="home-authoring-input"
       />
+      <div
+        id="home-workout-budget"
+        class="home-budget"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <%= case @budget do %>
+          <% {:ok, %{work_us: work, recovery_us: recovery}} -> %>
+            <span>Movement <strong>{budget_clock(work)}</strong></span>
+            <span>Recovery <strong>{budget_clock(recovery)}</strong></span>
+          <% {:ok, :unknown_pace} -> %>
+            <span>The coach chooses the pace</span>
+          <% _ -> %>
+            <span>Check reps, pace and duration</span>
+        <% end %>
+        <p class="home-budget-detail">
+          Timing ±{WorkoutRequest.timing_tolerance_sec()}s · reps and pauses exact.
+        </p>
+        <p :if={@allocation} id="home-workout-allocation" class="home-budget-detail">
+          Allocated {budget_clock(@allocation.recovery_us)} · unallocated {budget_clock(
+            @allocation.unallocated_us
+          )}
+          <span :if={@allocation.overrun_us > 0}>
+            · +{budget_clock(@allocation.overrun_us)} schedule time
+          </span>
+        </p>
+      </div>
       <.input
         field={@form[:pace]}
         type="number"
@@ -250,31 +278,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         disabled={@locked}
         class="home-authoring-input"
       />
-      <div
-        id="home-workout-budget"
-        class="home-budget"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <%= case @budget do %>
-          <% {:ok, %{work_us: work, recovery_us: recovery}} -> %>
-            <span>Movement <strong>{budget_clock(work)}</strong></span>
-            <span>Recovery <strong>{budget_clock(recovery)}</strong></span>
-          <% {:ok, :unknown_pace} -> %>
-            <span>Work / recovery</span><span>Coach chooses pace</span>
-          <% _ -> %>
-            <span>Work / recovery</span><span>Check reps, pace and duration</span>
-        <% end %>
-        <p :if={@allocation} id="home-workout-allocation" class="home-budget-detail">
-          Allocated {budget_clock(@allocation.recovery_us)} · unallocated {budget_clock(
-            @allocation.unallocated_us
-          )}
-          <span :if={@allocation.overrun_us > 0}>
-            · +{budget_clock(@allocation.overrun_us)} schedule time
-          </span>
-        </p>
-      </div>
       <.input
         field={@form[:rests]}
         type="textarea"
@@ -295,9 +298,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         disabled={@locked}
         class="home-authoring-input"
       />
-      <p id="home-request-timing" class="home-budget-detail">
-        Timing ±{WorkoutRequest.timing_tolerance_sec()}s · reps and pauses exact.
-      </p>
       <p :if={@busy} id="home-update-loading" role="status" class="home-budget-detail">
         {if(@locked, do: "Saving…", else: "Preparing and validating…")}
       </p>

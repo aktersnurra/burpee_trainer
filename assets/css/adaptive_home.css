@@ -983,7 +983,9 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 #home-new-form .home-selection-pill { min-height: 44px; padding: 8px 12px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 13px/1.2 var(--font-sans); color: var(--home-muted); transition: background 160ms ease, border-color 160ms ease; }
 #home-new-form .home-selection-pill[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
 #home-new-form .home-selection-pill:disabled { opacity: 1; }
-.home-budget { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 18px 0; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+/* Work and recovery is computed, not typed: a caption under Duration, not a row. */
+.home-authoring-form .fieldset:has(#home_workout_duration) { border-bottom: 0; }
+.home-budget { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 0 12px; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .home-budget strong { margin-left: 6px; color: #262722; font-weight: 400; }
 .home-budget-detail { color: var(--home-muted); font-size: 12px; line-height: 1.5; }
 .home-budget > .home-budget-detail { flex-basis: 100%; }

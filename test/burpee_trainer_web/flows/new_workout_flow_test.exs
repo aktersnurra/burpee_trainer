@@ -55,6 +55,25 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     end
   end
 
+  test "the computed work and recovery is a caption under Duration, with the timing rule", %{
+    view: view
+  } do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+
+    ids =
+      render(view)
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(
+        "#home-new-form input:not([type=hidden]), #home-new-form textarea, #home-workout-budget"
+      )
+      |> LazyHTML.attribute("id")
+
+    assert Enum.take(ids, 3) == ["home-new-reps", "home_workout_duration", "home-workout-budget"]
+    assert has_element?(view, "#home-workout-budget", "Timing ±10s")
+    refute has_element?(view, "#home-request-timing")
+  end
+
   test "the selected pill follows every switch", %{view: view} do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()
