@@ -131,7 +131,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     assert has_element?(view, "h1#home-authoring-heading", "Edit workout")
     assert has_element?(view, "#home-authoring-source", selected.plan.name)
-    assert has_element?(view, "#home-workout-hero[hidden]")
+    refute has_element?(view, "#home-workout-hero")
 
     # The instruction is a New-form field: a visible label above it, an example inside it.
     assert has_element?(view, "#home-edit-form.home-authoring-form textarea.home-authoring-input")
@@ -148,7 +148,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")
-    refute has_element?(view, "#home-workout-hero[hidden]")
+    # The workout mounts again and takes focus once the patch has landed.
+    assert hero_focus_target(view) == "#home-summary"
   end
 
   @tag hold_edit_plan: true
@@ -308,5 +309,17 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   defp selected_slot(user) do
     {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
+  end
+
+  defp hero_focus_target(view) do
+    [commands] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#home-workout-hero")
+      |> LazyHTML.attribute("phx-mounted")
+
+    [["focus", %{"to" => target}]] = Jason.decode!(commands)
+    target
   end
 end

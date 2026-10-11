@@ -26,7 +26,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     view |> element("#home-new-workout") |> render_click()
 
     assert has_element?(view, "h1#home-authoring-heading", "New workout")
-    assert has_element?(view, "#home-workout-hero[hidden]")
+    refute has_element?(view, "#home-workout-hero")
     refute has_element?(view, "#home-new-form h2")
 
     assert has_element?(view, "#home-request-abort", "Cancel")
@@ -34,7 +34,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")
-    refute has_element?(view, "#home-workout-hero[hidden]")
+    # The workout mounts again and takes focus once the patch has landed.
+    assert hero_focus_target(view) == "#home-summary"
   end
 
   test "New fields name their units beside the value", %{view: view} do
@@ -320,5 +321,17 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
   defp selected_slot(user) do
     {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
+  end
+
+  defp hero_focus_target(view) do
+    [commands] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#home-workout-hero")
+      |> LazyHTML.attribute("phx-mounted")
+
+    [["focus", %{"to" => target}]] = Jason.decode!(commands)
+    target
   end
 end

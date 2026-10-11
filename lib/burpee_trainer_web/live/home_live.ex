@@ -30,6 +30,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         editing_source: nil,
         workspace_screen: :home,
         home_focus_return?: false,
+        authoring_returned?: false,
         history_focus_return?: false,
         review_inspection_rows: []
       )

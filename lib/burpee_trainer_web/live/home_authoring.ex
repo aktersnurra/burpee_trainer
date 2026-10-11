@@ -36,6 +36,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
            socket
            |> assign(
              authoring_stage: :editing,
+             authoring_returned?: false,
              editing_source: source,
              workout_parameters: params,
              creation_key: "variation:#{Ecto.UUID.generate()}",
@@ -113,6 +114,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        socket
        |> assign(
          authoring_stage: :new,
+         authoring_returned?: false,
          editing_source: nil,
          workout_parameters: params,
          creation_key: "creator:#{Ecto.UUID.generate()}",
@@ -130,7 +132,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     {:noreply,
      socket
      |> discard_preparation()
-     |> assign(authoring_stage: :idle, created_plan: nil, local_error: nil)}
+     |> assign(
+       authoring_stage: :idle,
+       created_plan: nil,
+       local_error: nil,
+       authoring_returned?: true
+     )}
   end
 
   def handle_event("change_new_workout", %{"home_workout" => attrs}, socket) do

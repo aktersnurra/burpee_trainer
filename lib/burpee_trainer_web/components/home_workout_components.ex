@@ -301,11 +301,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <button
           id="home-request-abort"
           type="button"
-          phx-click={
-            JS.push("abort_new_workout")
-            |> JS.remove_attribute("hidden", to: "#home-workout-hero")
-            |> JS.focus(to: "#home-summary")
-          }
+          phx-click="abort_new_workout"
           class="home-text-action"
           aria-label="Cancel new workout"
           disabled={@busy && @locked}
@@ -442,11 +438,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           type="button"
           class="home-text-action"
           aria-label="Cancel edit"
-          phx-click={
-            JS.push("abort_new_workout")
-            |> JS.remove_attribute("hidden", to: "#home-workout-hero")
-            |> JS.focus(to: "#home-summary")
-          }
+          phx-click="abort_new_workout"
         >
           Cancel
         </button>
@@ -478,11 +470,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-abort"
               class="home-text-action"
               aria-label="Cancel edit"
-              phx-click={
-                JS.push("abort_new_workout")
-                |> JS.remove_attribute("hidden", to: "#home-workout-hero")
-                |> JS.focus(to: "#home-summary")
-              }
+              phx-click="abort_new_workout"
             >
               Cancel
             </button>
@@ -535,11 +523,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-abort"
               class="home-text-action"
               aria-label="Cancel edit"
-              phx-click={
-                JS.push("abort_new_workout")
-                |> JS.remove_attribute("hidden", to: "#home-workout-hero")
-                |> JS.focus(to: "#home-summary")
-              }
+              phx-click="abort_new_workout"
             >
               Cancel
             </button>
@@ -603,7 +587,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           >
             {@state.editing_source.name} · {duration_label(@state.editing_source.target_duration_sec)} · {@state.editing_source.target_reps} reps
           </p>
-          <div id="home-workout-hero" hidden={authoring?(@state)}>
+          <%!-- Not rendered while authoring, so Cancel mounts it again and focus lands after the patch. --%>
+          <div
+            :if={not authoring?(@state)}
+            id="home-workout-hero"
+            phx-mounted={@state.authoring_returned? && JS.focus(to: "#home-summary")}
+          >
             <p class="home-eyebrow">Today’s workout</p>
             <div class="home-hero">
               <div class="home-hero-main">

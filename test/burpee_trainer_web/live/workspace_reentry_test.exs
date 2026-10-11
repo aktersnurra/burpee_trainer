@@ -44,7 +44,9 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
     assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
-    assert has_element?(view, "#home-title-action")
+    # New still holds the screen, and its working form survives the choice.
+    assert has_element?(view, "#home-new-form")
+    refute has_element?(view, "#home-title-action")
   end
 
   test "the real Switch control reopens plan choices without needing a tab or filter refresh", %{

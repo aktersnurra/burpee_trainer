@@ -866,8 +866,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-new-workout") |> render_click()
     view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
     assert has_element?(view, "#home-adjustment-error")
+    view |> element("#home-request-abort") |> render_click()
+    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
   end
 
   test "blank submit starts despite prior Update label and old events cannot mutate", %{
