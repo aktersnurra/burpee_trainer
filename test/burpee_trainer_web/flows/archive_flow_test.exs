@@ -336,7 +336,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})
     |> render_change()
 
-    view |> element("#home-coach-back") |> render_click()
+    view |> element("#history-coach-summary") |> render_click()
     view |> element("#home-history-close") |> render_click()
     view |> element("#home-summary") |> render_click()
     initial = :sys.get_state(view.pid).socket.assigns

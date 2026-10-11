@@ -130,13 +130,15 @@ screen leads to the next in context:
   opens History. Home has no coach entry. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
   `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **History** (`/history`) leads with level, this week's minutes against its target,
-  active goals and the coach summary. The summary is the only way into Coach; while it is
-  refreshing it shows the app's loader labelled "Updating your summary", and with nothing
-  to summarize it reads "Tell the coach what you're training for". Design: `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **Coach** (`/coach`) reads top to bottom: the summary (plain text), goals, "Tell the
-  coach" with Send below, the reply, and the notebook collapsed under "What the coach
-  knows". Back and Escape return to History.
+- **History** (`/history`) keeps the week strip on top, which leads back Home, then leads
+  with level, active goals and the coach summary. The summary is the only way into Coach;
+  while it is refreshing it shows the app's loader labelled "Updating your summary", and
+  with nothing to summarize it reads "Tell the coach what you're training for". Design:
+  `docs/specs/2026-10-10-frictionless-home-design.md`.
+- **Coach** opens inside History, under the summary, like the workout card on Home; there
+  is no separate Coach screen. `/coach` is History with Coach open. It reads top to bottom:
+  goals, "Tell the coach" with Send below, the reply, and the notebook collapsed under
+  "What the coach knows". The summary and Escape close it.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
   session and camera specs that follow it.

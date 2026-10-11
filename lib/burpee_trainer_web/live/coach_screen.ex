@@ -4,7 +4,6 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   import Phoenix.LiveView
   alias BurpeeTrainer.Coach.{Notebook, Agent}
   alias BurpeeTrainer.Goals
-  alias BurpeeTrainerWeb.HomeCoachComponents
 
   def initialize(socket) do
     socket
@@ -133,14 +132,4 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     do:
       {:noreply,
        assign(socket, coach_busy?: false, coach_reply: "Coach unavailable. Try again later.")}
-
-  def screen(assigns) do
-    ~H"""
-    <main id="coach-page" class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16">
-      <div class="adaptive-home">
-        <HomeCoachComponents.panel state={assigns} />
-      </div>
-    </main>
-    """
-  end
 end

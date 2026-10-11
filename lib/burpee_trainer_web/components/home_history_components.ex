@@ -490,7 +490,14 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <p :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
         {Enum.map_join(@state.history_goals, " · ", &Fmt.goal/1)}
       </p>
-      <.link id="history-coach-summary" patch={~p"/coach"} class="history-coach-summary">
+      <%!-- Coach opens here, under its summary, like the workout card on Home: /coach is History with Coach open. --%>
+      <.link
+        id="history-coach-summary"
+        patch={if(coach_open?(@state), do: ~p"/history", else: ~p"/coach")}
+        class="history-coach-summary"
+        aria-expanded={to_string(coach_open?(@state))}
+        aria-controls="home-coach-panel"
+      >
         <BurpeeTrainerWeb.HomeCoachComponents.summary_body
           :if={summary_line?(@state)}
           summary={@state.progress_summary}
@@ -499,11 +506,14 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <span :if={not summary_line?(@state)} class="coach-summary-invitation">
           Tell the coach what you're training for
         </span>
-        <.icon name="hero-arrow-right" class="history-coach-summary-arrow size-4" />
+        <.icon name="hero-chevron-down" class="history-coach-summary-arrow size-4" />
       </.link>
+      <BurpeeTrainerWeb.HomeCoachComponents.panel :if={coach_open?(@state)} state={@state} />
     </header>
     """
   end
+
+  defp coach_open?(state), do: Map.get(state, :coach_open?, false)
 
   defp summary_line?(state),
     do:

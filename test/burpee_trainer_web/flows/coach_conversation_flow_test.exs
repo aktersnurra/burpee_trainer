@@ -20,13 +20,13 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     |> form("#home-coach-message-form", coach_message: %{text: "UNSENT morning preference"})
     |> render_change()
 
-    view |> element("#home-coach-back") |> render_click()
+    view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/history")
     render_patch(view, ~p"/")
     render_patch(view, ~p"/coach")
     assert view.pid == pid
     assert has_element?(view, "#home-coach-message-text", "UNSENT morning preference")
-    view |> element("#home-coach-back") |> render_click()
+    view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/history")
     render_patch(view, ~p"/coach")
     assert has_element?(view, "#home-coach-message-text", "UNSENT morning preference")

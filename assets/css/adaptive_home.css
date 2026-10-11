@@ -878,7 +878,7 @@
 .home-history-session-summary small { display: block; margin-top: 3px; color: var(--home-muted); font-size: 12px; }
 .home-history-session-reps, .home-history-session-time { font-size: 13px; }
 #home-done-today { border-bottom: 0; }
-.home-coach-panel { width: 100%; max-width: 640px; margin: 0 auto; }
+.home-coach-panel { width: 100%; max-width: 640px; margin: 8px auto 0; }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
 .screen-heading { margin: 16px 0 0; font: 600 28px/1.2 var(--font-sans); letter-spacing: -0.02em; }
 /* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
@@ -912,6 +912,8 @@
 .history-coach-summary:hover :is(.coach-summary-text, .coach-summary-invitation) { text-decoration: underline; text-underline-offset: 3px; }
 .coach-summary-invitation { color: #262722; }
 .history-coach-summary-arrow { margin-left: 6px; vertical-align: -2px; color: var(--home-muted); }
+.history-coach-summary-arrow { transition: transform 200ms ease; }
+.history-coach-summary[aria-expanded="true"] .history-coach-summary-arrow { transform: rotate(180deg); }
 .history-coach-summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 .coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: 14px; }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }

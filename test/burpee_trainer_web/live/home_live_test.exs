@@ -36,21 +36,20 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#history-coach-area, #home-coach-message-form")
     render_patch(view, ~p"/coach")
     assert view.pid == pid
-    refute has_element?(view, "#home-history")
-    assert has_element?(view, "#home-coach-panel")
+    assert has_element?(view, "#home-history #home-coach-panel")
 
     view
     |> form("#home-coach-message-form", coach_message: %{text: "Build toward 50 reps"})
     |> render_change()
 
-    view |> element("#home-coach-back") |> render_click()
+    view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/history")
     assert has_element?(view, "#home-history")
     refute has_element?(view, "#home-coach-panel")
     render_patch(view, ~p"/coach")
     assert has_element?(view, "#home-coach-message-text", "Build toward 50 reps")
     assert Notebook.get(Scope.for_user(user)).body == ""
-    view |> element("#home-coach-back") |> render_click()
+    view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/history")
     view = home_route(conn, view)
     assert view.pid == pid

@@ -33,21 +33,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       aria-label="Coach"
       phx-window-keydown="close_coach"
       phx-key="Escape"
-      phx-mounted={JS.focus(to: "#home-coach-heading")}
     >
-      <button
-        id="home-coach-back"
-        type="button"
-        class="screen-back"
-        aria-label="Back to History"
-        phx-click="close_coach"
-      >
-        <.icon name="hero-arrow-left" class="size-5" />
-      </button>
-      <h1 id="home-coach-heading" tabindex="-1" class="screen-heading">Coach</h1>
-      <p id="home-coach-summary" class="home-coach-summary-text">
-        <.summary_body summary={@state.progress_summary} loading?={@state.progress_summary_loading?} />
-      </p>
       <div id="home-coach-goals" phx-update="stream">
         <div
           :for={{dom_id, goal} <- @state.streams.coach_goals}
