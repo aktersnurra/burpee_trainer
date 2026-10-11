@@ -34,6 +34,19 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     refute has_element?(view, "#home-workout-hero[hidden]")
   end
 
+  test "New fields name their units beside the value", %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+
+    for {id, unit} <- [
+          {"home-new-reps", "reps"},
+          {"home_workout_duration", "min"},
+          {"home_workout_pace", "s"}
+        ] do
+      assert has_element?(view, "label[for=#{id}] .input-unit", unit)
+    end
+  end
+
   test "the selected pill follows every switch", %{view: view} do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()

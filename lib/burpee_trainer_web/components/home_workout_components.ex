@@ -213,6 +213,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         id="home-new-reps"
         type="number"
         label="Total reps"
+        unit="reps"
         min="1"
         max="100000"
         disabled={@locked}
@@ -222,6 +223,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         field={@form[:duration]}
         type="text"
         label="Duration"
+        unit="min"
         placeholder="20:00"
         disabled={@locked}
         class="home-authoring-input"
@@ -232,6 +234,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         step="any"
         min="0.000001"
         label="Active seconds / rep"
+        unit="s"
         placeholder={
           if(@candidate && is_nil(@form[:pace].value), do: "Varies by set", else: "Coach chooses")
         }

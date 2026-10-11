@@ -212,6 +212,7 @@ defmodule BurpeeTrainerWeb.CoreComponents do
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
   attr :class, :any, default: nil, doc: "the input class to use over defaults"
   attr :error_class, :any, default: nil, doc: "the input error class to use over defaults"
+  attr :unit, :string, default: nil, doc: "a unit shown after the value, such as reps"
 
   attr :rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
@@ -325,6 +326,7 @@ defmodule BurpeeTrainerWeb.CoreComponents do
           ]}
           {@rest}
         />
+        <span :if={@unit} class="input-unit">{@unit}</span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
