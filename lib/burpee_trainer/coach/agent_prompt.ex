@@ -1,7 +1,28 @@
 defmodule BurpeeTrainer.Coach.AgentPrompt do
   @moduledoc "Bounded scoped facts shared by conversation, planning, and authoring."
-  alias BurpeeTrainer.Coach.{Notebook, Tools, Policy}
+  alias BurpeeTrainer.Coach.{Notebook, Tools, Policy, Voice}
   alias BurpeeTrainer.{Levels, Workouts}
+
+  @planner_task """
+  Plan the athlete's next session. Prefer a saved or built-in workout that fits, with \
+  select_workout; otherwise design one with propose_workout. Never go above the level after \
+  their current one; easier sessions are fine. For a session longer than 20 minutes, compare \
+  its reps per 20 minutes with the landmarks. Save only lasting facts to the notebook. The \
+  rationale appears under the workout: one sentence in the voice above on why this session \
+  suits them now. Finish with one sentence explaining your choice.
+  """
+
+  @coach_page_task "Answer briefly. Record durable preferences with update_notebook. Only propose_goal when the owner explicitly asks for a goal. Never invent owner facts."
+
+  @context_glossary """
+  The context that follows is JSON. notebook: what you have saved about the athlete. goals: \
+  their active and proposed goals. current_level: the level they hold now. landmarks: the \
+  reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
+  sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \
+  slot: the session to plan, with its burpee_type and duration_sec; strategy catch_up means \
+  a longer weekend session that makes up missed minutes; completed_sec, remaining_sec and \
+  weekly_target_sec describe this week's training time.
+  """
 
   def context(scope, slot \\ nil) do
     {:ok, goals} = Tools.Goals.call(scope, %{}, %{})
@@ -34,11 +55,8 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
 
     rule =
       case surface do
-        :planner ->
-          "Plan the owner's next session for the given slot. Prefer a fitting library workout with select_workout, otherwise propose_workout. Do not exceed the next level; level landmarks are 20-minute counts, so scale them for a longer slot. Easier sessions are allowed. Update notebook only with durable facts. The rationale is shown to the athlete on Home: one short, plain sentence addressed to them as 'you', without internal terms (no level ids such as level_1a, no 'owner', 'slot', 'library' or second counts). Finish with one sentence explaining the choice."
-
-        :coach_page ->
-          "Answer briefly. Record durable preferences with update_notebook. Only propose_goal when the owner explicitly asks for a goal. Never invent owner facts."
+        :planner -> Voice.text() <> "\n" <> @planner_task <> "\n" <> @context_glossary
+        :coach_page -> @coach_page_task
       end
 
     messages = [
