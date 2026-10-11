@@ -622,7 +622,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               inert={!@state.expanded?}
               disabled={@state.authoring_stage != :idle}
             >
-              <.icon name="hero-pencil" class="size-5" />
+              <.icon name="hero-pencil" class="size-6" />
+              <span class="home-action-label">Edit</span>
             </button>
             <button
               id="home-title-action"
@@ -638,6 +639,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               disabled={@state.authoring_stage != :idle}
             >
               <.icon name="hero-arrows-right-left" class="size-6" />
+              <span class="home-action-label">Switch</span>
             </button>
             <button
               id="home-action"
@@ -663,6 +665,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               disabled={@state.authoring_stage != :idle}
             >
               <.icon name="hero-plus" class="size-6" />
+              <span class="home-action-label">New</span>
             </button>
           </div>
           <div id="home-expansion" class="home-expansion" data-open={to_string(@state.expanded?)}>
@@ -900,6 +903,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           class="home-icon-button home-expanded-action"
         >
           <.icon name="hero-arrows-right-left" class="size-6" />
+          <span class="home-action-label">Switch</span>
         </button>
       </div>
       <.chooser state={@state} />

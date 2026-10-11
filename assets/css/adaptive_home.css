@@ -929,11 +929,16 @@
 #home-ready-recommendation .home-hero-main { display: block; }
 #home-ready-recommendation .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
 #home-ready-recommendation .home-eyebrow { display: none; }
-.home-workout-actions { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); max-width: 330px; margin: 26px auto 18px; align-items: center; }
-.home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 1; }
-.home-workout-actions #home-title-action { grid-column: 2; grid-row: 1; }
-.home-workout-actions #home-action { grid-column: 3; grid-row: 1; }
-.home-workout-actions #home-new-workout { grid-column: 4; grid-row: 1; }
+/* Start stays put in the centre; Edit, Switch and New open as a labelled row beneath it.
+   The row takes no space while closed. */
+.home-workout-actions { display: grid; grid-template-columns: repeat(3, 72px); grid-template-rows: auto 0px; justify-content: center; margin: 26px auto 18px; align-items: start; }
+.home-workout-actions[data-expanded="true"] { grid-template-rows: auto auto; }
+.home-workout-actions #home-action { grid-column: 1 / -1; grid-row: 1; }
+.home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
+.home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
+.home-workout-actions #home-new-workout { grid-column: 3; grid-row: 2; }
+.home-workout-actions .home-expanded-action { width: 100%; height: auto; min-height: 44px; margin-top: 10px; gap: 4px; padding: 6px 0; }
+.home-action-label { font-size: 12px; line-height: 1.2; color: var(--home-muted); }
 .home-icon-button { display: grid; place-items: center; width: 48px; height: 48px; margin: auto; padding: 10px; background: transparent; border: 0; color: #262722; }
 .home-icon-button:hover { opacity: .65; }
 .home-workout-actions .home-expanded-action { opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity 240ms ease, transform 380ms cubic-bezier(.22,1,.36,1), visibility 0s linear 240ms; }
