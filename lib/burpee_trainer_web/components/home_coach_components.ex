@@ -132,14 +132,18 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             maxlength="4000"
             class="coach-guidance-input"
           />
-          <button id="home-coach-notebook-save" type="submit" class="home-state-action">
+          <button
+            id="home-coach-notebook-save"
+            type="submit"
+            class="home-state-action min-h-11 min-w-11 mr-4"
+          >
             Save
           </button>
           <button
             id="home-coach-notebook-clear"
             type="button"
             phx-click="coach_notebook_clear"
-            class="home-state-action"
+            class="home-state-action min-h-11 min-w-11"
           >
             Clear
           </button>
