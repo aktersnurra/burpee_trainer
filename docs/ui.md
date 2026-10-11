@@ -2,7 +2,7 @@
 
 > Single source of truth for all visual and interaction decisions.
 > Read this before touching any template or CSS.
-> Design directive: quiet, warm, tasteful. Light Quiet stone is the default; optional dark mode is warm charcoal. Typography, whitespace, and thin rules carry the interface. Muted clay replaces saturated blue as the rare accent.
+> Design directive: quiet, warm, tasteful. Light Quiet stone is the only theme; there is no dark mode. Typography, whitespace, and thin rules carry the interface. Muted clay replaces saturated blue as the rare accent.
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
 - **Hierarchy through scale and weight**, not color and decoration.
-- **Warm light by default.** Quiet stone carries the app; optional dark mode shifts to warm charcoal rather than cool blue-gray.
+- **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
 - **No shadows, no gradients.** Flat surfaces separated by subtle borders and opacity.
 - **Generous whitespace.** Breathing room is a feature, not waste.
@@ -154,4 +154,4 @@ them. Sheets and the chooser use `--color-base-200`. Never hard-code a page back
 - No heavy dashboard treatment on Home
 - No new font family beyond the existing Geist setup
 - No animation beyond ring pulse and progress transitions
-- No mandatory dark-first experience — light Quiet stone is default, with optional warm charcoal dark mode
+- No dark mode — light Quiet stone is the only theme

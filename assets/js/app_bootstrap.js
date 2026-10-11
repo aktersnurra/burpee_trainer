@@ -18,64 +18,6 @@ import {
 import { openSessionStore } from "./hooks/session_store.mjs";
 
 export function startApp(PoseTracker) {
-	const themeStorage = {
-		get() {
-			try {
-				return window.localStorage.getItem("phx:theme");
-			} catch (_error) {
-				return null;
-			}
-		},
-		set(theme) {
-			try {
-				window.localStorage.setItem("phx:theme", theme);
-			} catch (_error) {
-				// Ignore unavailable storage so LiveView boot can continue.
-			}
-		},
-		remove() {
-			try {
-				window.localStorage.removeItem("phx:theme");
-			} catch (_error) {
-				// Ignore unavailable storage so LiveView boot can continue.
-			}
-		},
-	};
-
-	const setTheme = (theme) => {
-		if (theme === "system") {
-			themeStorage.remove();
-			document.documentElement.removeAttribute("data-theme");
-		} else {
-			themeStorage.set(theme);
-			document.documentElement.setAttribute("data-theme", theme);
-		}
-	};
-
-	if (!document.documentElement.hasAttribute("data-theme")) {
-		setTheme(themeStorage.get() || "system");
-	}
-
-	window.addEventListener("storage", (event) => {
-		if (event.key === "phx:theme") {
-			setTheme(event.newValue || "system");
-		}
-	});
-
-	window.addEventListener("phx:set-theme", (event) => {
-		setTheme(event.target.dataset.phxTheme);
-	});
-
-	window.addEventListener("phx:toggle-theme", () => {
-		const storedTheme = themeStorage.get();
-		const currentTheme =
-			storedTheme ||
-			(window.matchMedia("(prefers-color-scheme: dark)").matches
-				? "dark"
-				: "light");
-		setTheme(currentTheme === "dark" ? "light" : "dark");
-	});
-
 	const csrfToken = document
 		.querySelector("meta[name='csrf-token']")
 		.getAttribute("content");

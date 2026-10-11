@@ -139,15 +139,12 @@ Expected behavior:
 - No new `pose_capture_run` is created.
 - Saved session has `capture_mode == :timed`.
 
-## 7. Theme/count-in visual check
-
-Run one session in light mode and one in dark mode.
+## 7. Count-in visual check
 
 During count-in before a set starts, verify:
 
-- The session background matches the selected theme.
-- The header/count-in label does not invert to the opposite theme.
-- The bottom nav/theme controls do not float over the session UI.
+- The session background is the app's light background.
+- The header/count-in label stays legible against it.
 
 ## 8. Final automated checks
 
