@@ -963,9 +963,9 @@
 .home-authoring-form .fieldset > label { flex: 1; }
 .home-authoring-form .fieldset label { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; }
 .home-authoring-form .label { padding: 0; color: var(--home-muted); font-size: 13px; }
-.home-authoring-form .fieldset label:has(.input-unit) { grid-template-columns: 1fr 1.4fr auto; }
+.home-authoring-form .fieldset label:has(.input-unit):not(:has(input:placeholder-shown)) { grid-template-columns: 1fr 1.4fr auto; }
 .home-authoring-form .input-unit { color: var(--home-muted); font-size: 13px; }
-.home-authoring-form label:has(input:placeholder-shown) .input-unit { visibility: hidden; }
+.home-authoring-form label:has(input:placeholder-shown) .input-unit { display: none; }
 .home-authoring-input { display: block; width: 100%; min-width: 0; min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: #1d1d1b; font: 400 16px/1.5 var(--font-sans); text-align: right; box-shadow: none; }
 /* Pauses and Note stack: label above, a full-width field that grows with its text. */
 textarea.home-authoring-input { text-align: left; resize: none; field-sizing: content; min-height: 1.5em; }
