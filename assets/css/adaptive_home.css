@@ -958,14 +958,18 @@
 .home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
 .home-review-actions .home-icon-button { margin: 0; }
 #home-request-timing { color: var(--home-muted); font-size: 12px; }
-.home-authoring-form .fieldset { padding: 14px 0; margin: 0; border-bottom: 1px solid var(--home-line); font: inherit; }
+/* Every row of the New form: label left, value right, one height and one value size. */
+.home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--home-line); font: inherit; display: flex; align-items: center; }
+.home-authoring-form .fieldset > label { flex: 1; }
 .home-authoring-form .fieldset label { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; }
 .home-authoring-form .label { padding: 0; color: var(--home-muted); font-size: 13px; }
 .home-authoring-input { display: block; width: 100%; min-width: 0; min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: #1d1d1b; font: 400 16px/1.5 var(--font-sans); text-align: right; box-shadow: none; }
 textarea.home-authoring-input { text-align: left; resize: vertical; }
+.home-authoring-input::placeholder { color: var(--home-muted); opacity: 1; }
 .home-authoring-form input[type="hidden"] { display: none; }
 #home-new-form .home-authoring-input:disabled { opacity: 1; color: #1d1d1b; -webkit-text-fill-color: #1d1d1b; }
-.home-pill-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--home-line); }
+.home-pill-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; min-height: 60px; padding: 8px 0; border-bottom: 1px solid var(--home-line); }
+.home-pill-row:first-of-type { border-top: 1px solid var(--home-line); }
 .home-pill-label { color: var(--home-muted); font-size: 13px; }
 .home-pill-options { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; }
 #home-new-form .home-selection-pill { min-height: 44px; padding: 8px 12px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 13px/1.2 var(--font-sans); color: var(--home-muted); transition: background 160ms ease, border-color 160ms ease; }
