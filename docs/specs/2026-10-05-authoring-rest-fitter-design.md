@@ -1,5 +1,7 @@
 # Authoring pipeline: LLM layout + deterministic rest fitter
 
+> **Superseded in part** (2026-10-11): the New form has no Sets or Pauses fields; the athlete says them in the note, the coach reads them into `set_reps` and `timed_rests` (`Coach.prepare_new_request/4`), and Review shows them before saving.
+
 ## Status
 
 Direction approved by the owner on 2026-10-05 (sub-project 2 of

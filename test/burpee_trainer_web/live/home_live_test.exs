@@ -116,7 +116,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
 
     view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
+    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
 
     {:ok, before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     pid = view.pid
@@ -131,7 +131,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-history")
     assert has_element?(view, "#home-expansion[data-open=true]")
     assert has_element?(view, "#home-new-form")
-    assert :sys.get_state(view.pid).socket.assigns.workout_form[:sets].value == "20x6"
+    assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
 
     assert {:ok, ^before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -864,7 +864,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
 
     view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
+    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
     assert has_element?(view, "#home-adjustment-error")
     view |> element("#home-request-abort") |> render_click()

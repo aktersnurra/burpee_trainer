@@ -15,13 +15,11 @@ defmodule BurpeeTrainer.Evals.ScenariosTest do
       assert is_binary(instruction)
     end
 
+    # Pauses are said in the note, as on Home; the coach reads them when the eval runs.
     [scenario] = Scenarios.load!("authoring", "minute_blocks_two_pauses")
-    assert {:ok, %{request: request}} = Scenarios.prepare(scenario)
-
-    assert request.timed_rests == [
-             %{start_sec: 660, duration_sec: 60},
-             %{start_sec: 1080, duration_sec: 40}
-           ]
+    assert {:ok, %{request: request, note: note}} = Scenarios.prepare(scenario)
+    assert request.timed_rests == []
+    assert note =~ "11:00" and note =~ "18:00"
   end
 
   test "invalid form and unknown scenario fail without authoring" do

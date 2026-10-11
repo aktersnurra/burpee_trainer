@@ -91,7 +91,7 @@ defmodule BurpeeTrainer.Coach.NewRequestTest do
       "set_reps" => [30, 30]
     })
 
-    assert {:error, %BurpeeTrainer.Workouts.Error{}} =
+    assert {:error, %BurpeeTrainer.Workouts.Error{code: :note_does_not_fit}} =
              Coach.prepare_new_request(scope_fixture(), fields(), "Two sets of 30", opts())
   end
 end

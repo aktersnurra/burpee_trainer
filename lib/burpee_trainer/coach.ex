@@ -144,6 +144,10 @@ defmodule BurpeeTrainer.Coach do
       |> WorkoutRequest.to_map()
       |> Map.merge(Map.take(response, ~w[set_reps timed_rests recovery]))
       |> WorkoutRequest.new()
+      |> case do
+        {:ok, request} -> {:ok, request}
+        {:error, _} -> {:error, Error.new(:note_does_not_fit)}
+      end
     else
       {:error, error} -> {:error, error}
       _ -> {:error, Error.new(:invalid_provider_response)}

@@ -61,13 +61,39 @@ defmodule BurpeeTrainer.Evals.RunnerTest do
     assert File.exists?(result.output_path)
   end
 
-  test "cap four is shared over the whole run; real approval preview leaves ledger intact", %{
+  test "cap six is shared over the whole run; real approval preview leaves ledger intact", %{
     opts: opts
   } do
     responses =
       File.read!("test/fixtures/llm/synthetic_minute_blocks_repair.json") |> Jason.decode!()
 
-    counter = start_supervised!({Agent, fn -> responses ++ responses end})
+    # The coach reads the scenario note's pauses before the layout, as Home does.
+    extraction = %{
+      "choices" => [
+        %{
+          "message" => %{
+            "content" =>
+              Jason.encode!(%{
+                "burpee_type" => "six_count",
+                "target_reps" => 140,
+                "target_duration_sec" => 1200,
+                "pacing_style" => "unbroken",
+                "recovery" => "required",
+                "timed_rests" => [
+                  %{"start_sec" => 660, "duration_sec" => 60},
+                  %{"start_sec" => 1080, "duration_sec" => 40}
+                ],
+                "requested_pace_sec" => 5.0,
+                "set_reps" => []
+              })
+          }
+        }
+      ],
+      "usage" => %{"prompt_tokens" => 20, "completion_tokens" => 10, "cost" => 0.0001}
+    }
+
+    counter =
+      start_supervised!({Agent, fn -> [extraction | responses] ++ [extraction | responses] end})
 
     Req.Test.stub(__MODULE__, fn conn ->
       refute Repo.in_transaction?()
@@ -79,7 +105,7 @@ defmodule BurpeeTrainer.Evals.RunnerTest do
 
     result =
       Runner.run(
-        %{suite: "authoring", max_calls: 4, only: nil, record: false},
+        %{suite: "authoring", max_calls: 6, only: nil, record: false},
         Keyword.put(opts, :scenarios, [
           scenario,
           Map.put(scenario, "id", "second"),
@@ -87,11 +113,11 @@ defmodule BurpeeTrainer.Evals.RunnerTest do
         ])
       )
 
-    assert result.total.calls == 4
+    assert result.total.calls == 6
     assert result.total.repairs_succeeded == 2
-    assert result.total.prompt_tokens == 332
-    assert result.total.completion_tokens == 188
-    assert_in_delta result.total.cost_usd, 0.0004, 0.0000001
+    assert result.total.prompt_tokens == 372
+    assert result.total.completion_tokens == 208
+    assert_in_delta result.total.cost_usd, 0.0006, 0.0000001
     assert [a, b, c] = result.scenarios
     assert a.approval_validated and b.approval_validated
     assert a.publication_rolled_back and b.publication_rolled_back

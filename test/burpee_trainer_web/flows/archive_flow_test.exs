@@ -348,7 +348,11 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
 
     assert MapSet.size(:sys.get_state(view.pid).socket.assigns.expanded_groups) == 1
     view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{reps: 140, sets: "20x7"}) |> render_change()
+
+    view
+    |> form("#home-new-form", home_workout: %{reps: 140, note: "20 sets of 7"})
+    |> render_change()
+
     view |> element("#home-request-abort") |> render_click()
 
     instruction = "Change to 120 reps in 20 minutes, in two sets at 5 seconds active pace"

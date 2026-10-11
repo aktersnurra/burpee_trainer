@@ -48,6 +48,30 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
 
         extracting? = is_nil(constraints)
 
+        # A New note is read against the entered fields; the note's words decide the sets.
+        fixed =
+          Enum.find_value(body["messages"], fn message ->
+            case Jason.decode(message["content"]) do
+              {:ok, %{"scope" => "fixed_fields", "request" => attrs}} -> attrs
+              _ -> nil
+            end
+          end)
+
+        note_sets =
+          cond do
+            Enum.any?(body["messages"], &String.contains?(&1["content"], "5x8, 5x7, 5x(7,6)")) ->
+              List.duplicate(8, 5) ++
+                List.duplicate(7, 5) ++ List.flatten(List.duplicate([7, 6], 5))
+
+            Enum.any?(body["messages"], &String.contains?(&1["content"], "two sets of 30")) ->
+              [30, 30]
+
+            true ->
+              []
+          end
+
+        constraints = if fixed, do: Map.put(fixed, "set_reps", note_sets), else: constraints
+
         constraints =
           constraints ||
             %{
@@ -69,7 +93,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
             }
 
         constraints =
-          if extracting?,
+          if extracting? and is_nil(fixed),
             do:
               Map.put(
                 constraints,
@@ -220,7 +244,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     ids = field_ids(view)
 
     view
-    |> form("#home-new-form", home_workout: %{reps: 140, pace: "5", sets: "", duration: "20:00"})
+    |> form("#home-new-form", home_workout: %{reps: 140, pace: "5", duration: "20:00"})
     |> render_change()
 
     assert has_element?(view, "#home-workout-budget", "11:40")
@@ -237,7 +261,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     view |> element("#home-request-edit") |> render_click()
     assert field_ids(view) == ids
     refute has_element?(view, "#home-request-confirm")
-    view |> form("#home-new-form", home_workout: %{reps: 130, sets: ""}) |> render_change()
+    view |> form("#home-new-form", home_workout: %{reps: 130}) |> render_change()
     assert has_element?(view, "#home-workout-budget", "10:50")
     refute_received {:provider_request, _}
     view |> element("#home-request-abort") |> render_click()
@@ -247,15 +271,19 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 
-  test "malformed rests and contradictory patterns are local errors", %{view: view} do
+  test "a note whose sets do not add up to the reps is explained before any plan", %{view: view} do
     open_new(view)
-    view |> form("#home-new-form", home_workout: %{rests: "not a rest"}) |> render_submit()
-    assert has_element?(view, "#home-new-form")
-    assert has_element?(view, "#home-new-form", "Use 60s at 11:00")
-    refute_received {:provider_request, _}
-    view |> form("#home-new-form", home_workout: %{rests: "", sets: "5x8"}) |> render_submit()
-    assert has_element?(view, "#home-new-form", "Pattern contains 40 reps")
-    refute_received {:provider_request, _}
+    count = Repo.aggregate(WorkoutPlan, :count)
+
+    view
+    |> form("#home-new-form", home_workout: %{reps: 140, note: "two sets of 30"})
+    |> render_submit()
+
+    render_async(view)
+    assert_receive {:provider_request, %{"messages" => _}}
+    assert has_element?(view, "#home-new-form", "doesn't add up")
+    refute has_element?(view, "#home-request-confirm")
+    assert Repo.aggregate(WorkoutPlan, :count) == count
   end
 
   test "a returned pattern mismatch is explained before any save", %{view: view} do
@@ -263,12 +291,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     count = Repo.aggregate(WorkoutPlan, :count)
 
     view
-    |> form("#home-new-form", home_workout: %{reps: 140, pace: 5, sets: "5x8,5x7,5x(7,6)"})
+    |> form("#home-new-form", home_workout: %{reps: 140, pace: 5, note: "5x8, 5x7, 5x(7,6)"})
     |> render_submit()
 
     render_async(view)
-    assert_receive {:provider_request, _}
-    assert_receive {:provider_request, _}
+    # Reading the note, the layout and its one correction.
+    for _call <- 1..3, do: assert_receive({:provider_request, _})
     assert has_element?(view, "#home-adjustment-error", "ordered set pattern")
     assert has_element?(view, "#home-new-form", "Returned 2 sets; expected 20")
     refute has_element?(view, "#home-request-confirm")

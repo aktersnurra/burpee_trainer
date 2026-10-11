@@ -2,7 +2,7 @@ defmodule Mix.Tasks.BurpeeTrainer.EvalTest do
   use BurpeeTrainer.DataCase, async: false
   alias BurpeeTrainer.{Accounts, LayoutFixtures, Repo}
 
-  test "actual Mix task runs original suite under cap four with real repair and unknown usage preserved" do
+  test "actual Mix task runs original suite under cap five with real repair and unknown usage preserved" do
     old_config = Application.get_env(:burpee_trainer, :llm_provider)
     old_req = Req.default_options()
 
@@ -27,9 +27,34 @@ defmodule Mix.Tasks.BurpeeTrainer.EvalTest do
       %{"choices" => [%{"message" => %{"content" => Jason.encode!(layout)}}]}
     end
 
+    # The coach reads the scenario note's pauses before the layout, as Home does.
+    extraction = %{
+      "choices" => [
+        %{
+          "message" => %{
+            "content" =>
+              Jason.encode!(%{
+                "burpee_type" => "six_count",
+                "target_reps" => 140,
+                "target_duration_sec" => 1200,
+                "pacing_style" => "unbroken",
+                "recovery" => "required",
+                "timed_rests" => [
+                  %{"start_sec" => 660, "duration_sec" => 60},
+                  %{"start_sec" => 1080, "duration_sec" => 40}
+                ],
+                "requested_pace_sec" => 5.0,
+                "set_reps" => []
+              })
+          }
+        }
+      ],
+      "usage" => %{"prompt_tokens" => 20, "completion_tokens" => 10, "cost" => 0.0001}
+    }
+
     responses =
       [plain.(LayoutFixtures.layout([List.duplicate({30, 5.0, 5.0}, 4)]))] ++
-        repair ++ [plain.(LayoutFixtures.layout([[{80, 15.0, 15.0}]]))]
+        [extraction] ++ repair ++ [plain.(LayoutFixtures.layout([[{80, 15.0, 15.0}]]))]
 
     counter = start_supervised!({Agent, fn -> responses end})
 
@@ -40,20 +65,20 @@ defmodule Mix.Tasks.BurpeeTrainer.EvalTest do
     end)
 
     before = Path.wildcard(".e2e-artifacts/evals/*.json")
-    assert :ok = Mix.Tasks.BurpeeTrainer.Eval.run(["--suite", "authoring", "--max-calls", "4"])
+    assert :ok = Mix.Tasks.BurpeeTrainer.Eval.run(["--suite", "authoring", "--max-calls", "5"])
 
     [output] =
       (Path.wildcard(".e2e-artifacts/evals/*.json") -- before)
       |> Enum.reject(&String.ends_with?(&1, ".owner.json"))
 
     result = output |> File.read!() |> Jason.decode!()
-    assert result["total"]["calls"] == 4
+    assert result["total"]["calls"] == 5
     assert result["total"]["successes"] == 3
     assert result["total"]["repairs_succeeded"] == 1
     assert result["total"]["prompt_tokens"] == nil
     assert result["total"]["completion_tokens"] == nil
-    assert result["total"]["known_prompt_tokens"] == 166
-    assert result["total"]["known_completion_tokens"] == 94
+    assert result["total"]["known_prompt_tokens"] == 186
+    assert result["total"]["known_completion_tokens"] == 104
     assert result["total"]["cost_usd"] == nil
     assert result["total"]["unknown_cost_calls"] == 2
     assert result["total"]["missing_prompt_usage_calls"] == 2

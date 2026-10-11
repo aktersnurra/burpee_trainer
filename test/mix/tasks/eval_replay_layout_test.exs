@@ -8,6 +8,17 @@ defmodule BurpeeTrainer.Evals.ReplayLayoutTest do
   test "explicit synthetic replay passes actual Client ledger, real form request, fitter and compiler" do
     [scenario] = Scenarios.load!("authoring", "minute_blocks_two_pauses")
     assert {:ok, %{request: request}} = Scenarios.prepare(scenario)
+
+    # The pauses the coach reads from the scenario's note.
+    {:ok, request} =
+      request
+      |> WorkoutRequest.to_map()
+      |> Map.put("timed_rests", [
+        %{"start_sec" => 660, "duration_sec" => 60},
+        %{"start_sec" => 1080, "duration_sec" => 40}
+      ])
+      |> WorkoutRequest.new()
+
     scope = scope_fixture()
 
     BurpeeTrainer.ReplayProvider.stub(

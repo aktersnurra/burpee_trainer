@@ -12,6 +12,18 @@ defmodule BurpeeTrainer.Evals.ApprovalPreviewTest do
     [scenario] = Scenarios.load!("authoring", "minute_blocks_two_pauses")
     {:ok, input} = Scenarios.prepare(scenario)
 
+    # The pauses the coach reads from the scenario's note.
+    {:ok, request} =
+      input.request
+      |> BurpeeTrainer.Coach.WorkoutRequest.to_map()
+      |> Map.put("timed_rests", [
+        %{"start_sec" => 660, "duration_sec" => 60},
+        %{"start_sec" => 1080, "duration_sec" => 40}
+      ])
+      |> BurpeeTrainer.Coach.WorkoutRequest.new()
+
+    input = %{input | request: request}
+
     BurpeeTrainer.ReplayProvider.stub(
       __MODULE__,
       "test/fixtures/llm/synthetic_minute_blocks_two_pauses.json"

@@ -514,18 +514,23 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        when code in [:provider_unavailable, :provider_timeout, :invalid_provider_response],
        do: {"Coach unavailable. Try again later; your current workout is unchanged.", nil, nil}
 
+  defp review_failure(%{code: :note_does_not_fit}),
+    do:
+      {"Your note doesn't add up with the reps and duration above. Change one, then Review again; your current workout is unchanged.",
+       :note, "This doesn't add up with the reps and duration above."}
+
   defp review_failure(%{
          context: %{field: :set_reps, actual_count: actual, expected_count: expected}
        }) do
     {"The returned plan changed your ordered set pattern. Edit or Review again; your current workout is unchanged.",
-     :sets, "Returned #{actual} sets; expected #{expected}. The ordered rep sequence must match."}
+     :note, "Returned #{actual} sets; expected #{expected}. The ordered rep sequence must match."}
   end
 
   defp review_failure(%{
          context: %{field: :timed_rests, start_sec: start, duration_sec: duration}
        }) do
     {"The returned plan missed #{duration}s at #{CreationParameters.duration_label(start)}. Try a different time or shorter pause, then Review again; your current workout is unchanged.",
-     :rests, "Returned plan did not meet this total pause."}
+     :note, "Returned plan did not meet this total pause."}
   end
 
   defp review_failure(%{context: %{field: :requested_pace_sec}}),
@@ -535,7 +540,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   defp review_failure(_),
     do:
-      {"The returned plan did not meet your constraints. Check the set pattern and total pauses, then Review again; your current workout is unchanged.",
+      {"The returned plan did not meet your constraints. Check the sets and pauses you asked for, then Review again; your current workout is unchanged.",
        nil, nil}
 
   def discard_preparation(socket) do
@@ -586,7 +591,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        |> workout_form(params, %{})
        |> assign(busy?: true, update_id: id, instruction: text)
        |> start_async({:new_request, id}, fn ->
-         Coach.prepare_plan(scope, text, request, workspace_key: key, edit_source: source)
+         with {:ok, request} <- Coach.prepare_new_request(scope, request, params.note || "") do
+           Coach.prepare_plan(scope, text, request, workspace_key: key, edit_source: source)
+         end
        end)}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -597,7 +604,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
          assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
 
       _ ->
-        {:noreply, assign(socket, local_error: "Check the set pattern and total pauses.")}
+        {:noreply, assign(socket, local_error: "Check the reps, duration and pace.")}
     end
   end
 

@@ -50,13 +50,13 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
       assert has_element?(view, "label[for=#{id}] .input-unit", unit)
     end
 
-    for {id, label} <- [
-          {"home_workout_pace", "Pace"},
-          {"home_workout_sets", "Sets"},
-          {"home_workout_rests", "Pauses"}
-        ] do
+    for {id, label} <- [{"home_workout_pace", "Pace"}, {"home_workout_note", "Anything else"}] do
       assert view |> element("label[for=#{id}] .label") |> render() =~ ">#{label}<"
     end
+
+    # Sets and pauses are said in plain words in the note; there is no syntax to learn.
+    refute has_element?(view, "#home_workout_sets, #home_workout_rests")
+    assert has_element?(view, "#home_workout_note[placeholder^='e.g.']")
   end
 
   test "the computed work and recovery is a caption under Duration, with the timing rule", %{
@@ -179,6 +179,19 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     counter =
       fake_authoring_provider(%{
+        "workout_request" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 140,
+          "target_duration_sec" => 1200,
+          "pacing_style" => "unbroken",
+          "recovery" => "required",
+          "timed_rests" => [
+            %{"start_sec" => 660, "duration_sec" => 60},
+            %{"start_sec" => 1080, "duration_sec" => 40}
+          ],
+          "requested_pace_sec" => 5.0,
+          "set_reps" => []
+        },
         "workout_layout" =>
           layout(
             [List.duplicate(eight, 10), List.duplicate(eight, 6), [six, six]],
@@ -196,21 +209,20 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
         reps: 140,
         duration: "20:00",
         pace: "5.0",
-        rests: "60s at 11:00\n40s at 18:00"
+        note: "A minute's break at 11:00 and 40 seconds at 18:00"
       }
     )
     |> render_submit()
 
     render_async(view)
-    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
+    assert Agent.get(counter, & &1.calls) == ["workout_request", "workout_layout"]
     assert has_element?(view, "#home-new-form[data-stage=review]")
     assert has_element?(view, "#home-new-review-inspection #home-inspection")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "40s")
     assert has_element?(view, "#home-new-review-pauses", "Pauses: 60s at 11:00")
     assert has_element?(view, "#home-new-review-pauses", "40s at 18:00")
-    assert has_element?(view, "#home_workout_rests[disabled]", "60s at 11:00")
-    assert has_element?(view, "#home_workout_rests[disabled]", "40s at 18:00")
+    assert has_element?(view, "#home_workout_note[disabled]", "40 seconds at 18:00")
 
     first_group =
       view
@@ -234,7 +246,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     assert {660_000_000, 60_000_000} in WorkoutRequest.rest_timeline(definition.events)
     assert {1_080_000_000, 40_000_000} in WorkoutRequest.rest_timeline(definition.events)
-    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
+    assert Agent.get(counter, & &1.calls) == ["workout_request", "workout_layout"]
 
     assert {:ok, unchanged} =
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
@@ -262,6 +274,16 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
   test "the New form's note reaches the coach alongside the structured fields", %{view: view} do
     counter =
       fake_authoring_provider(%{
+        "workout_request" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 10,
+          "target_duration_sec" => 120,
+          "pacing_style" => "even",
+          "recovery" => "optional",
+          "timed_rests" => [],
+          "requested_pace_sec" => nil,
+          "set_reps" => []
+        },
         "workout_layout" => layout([[{10, 12.0, 12.0}]], "Noted new workout")
       })
 
@@ -283,12 +305,15 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     render_async(view)
     assert has_element?(view, "#home-new-form[data-stage=review]")
-    assert [body] = Agent.get(counter, & &1.bodies)
+    # The coach reads the note for sets and pauses, then plans with it.
+    assert [extraction, layout] = Agent.get(counter, & &1.bodies)
 
-    assert body
-           |> Jason.decode!()
-           |> Map.fetch!("messages")
-           |> Enum.any?(&(&1["content"] =~ "slow and steady"))
+    for body <- [extraction, layout] do
+      assert body
+             |> Jason.decode!()
+             |> Map.fetch!("messages")
+             |> Enum.any?(&(&1["content"] =~ "slow and steady"))
+    end
   end
 
   defp fake_authoring_provider(responses) do

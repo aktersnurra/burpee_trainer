@@ -33,13 +33,17 @@ defmodule BurpeeTrainer.Evals.Runner do
 
               outcome =
                 with {:ok, input} <- Scenarios.prepare(scenario),
+                     call_opts = [
+                       req: request,
+                       config: config,
+                       run_id: run_id,
+                       budget: [run_cap: cap]
+                     ],
+                     # As on Home: the note's sets and pauses are read before the layout.
+                     {:ok, confirmed} <-
+                       Coach.prepare_new_request(scope, input.request, input.note, call_opts),
                      {:ok, prepared} <-
-                       Coach.prepare_plan(scope, input.instruction, input.request,
-                         req: request,
-                         config: config,
-                         run_id: run_id,
-                         budget: [run_cap: cap]
-                       ),
+                       Coach.prepare_plan(scope, input.instruction, confirmed, call_opts),
                      {:ok, facts} <- ApprovalPreview.validate(scope, prepared),
                      do: {:ok, facts}
 

@@ -7,8 +7,6 @@
     "duration": "20:00",
     "recovery": "optional",
     "pace": null,
-    "sets": "",
-    "rests": "",
     "note": ""
   },
   "expected": {

@@ -14,8 +14,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
     field :note, :string, default: ""
     field :recovery, :string, default: "optional"
     field :pace, :float
-    field :sets, :string, default: ""
-    field :rests, :string, default: ""
   end
 
   @type t :: %__MODULE__{}
@@ -29,12 +27,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
         _ -> nil
       end
 
-    sets =
-      work
-      |> Enum.map(& &1["reps"])
-      |> Enum.chunk_by(& &1)
-      |> Enum.map_join(",", fn reps -> "#{length(reps)}x#{hd(reps)}" end)
-
     seconds = round(definition["target_duration_sec"])
 
     %__MODULE__{
@@ -43,8 +35,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
       reps: definition["target_reps"],
       duration:
         "#{div(seconds, 60)}:#{String.pad_leading(Integer.to_string(rem(seconds, 60)), 2, "0")}",
-      pace: pace,
-      sets: sets
+      pace: pace
     }
   end
 
@@ -58,9 +49,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
       :duration,
       :note,
       :recovery,
-      :pace,
-      :sets,
-      :rests
+      :pace
     ])
     |> validate_required([:burpee_type, :pacing_style, :reps, :duration, :recovery])
     |> validate_inclusion(:burpee_type, ~w(six_count navy_seal))
@@ -69,8 +58,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
     |> validate_number(:reps, greater_than: 0, less_than_or_equal_to: 100_000)
     |> validate_number(:pace, greater_than: 0, less_than_or_equal_to: 86_400)
     |> validate_length(:note, max: 300)
-    |> validate_length(:sets, max: 300)
-    |> validate_length(:rests, max: 300)
     |> preflight()
   end
 
@@ -78,25 +65,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
 
   defp preflight(changeset) do
     params = apply_changes(changeset)
-
-    changeset =
-      case WorkoutConfiguration.parse_sets(params.sets) do
-        {:ok, []} ->
-          changeset
-
-        {:ok, sets} ->
-          if Enum.sum(sets) == params.reps,
-            do: changeset,
-            else:
-              add_error(
-                changeset,
-                :sets,
-                "Pattern contains #{Enum.sum(sets)} reps; total is #{params.reps}"
-              )
-
-        _ ->
-          add_error(changeset, :sets, "Use 5x8, 5x7, 5x(7,6)")
-      end
 
     changeset =
       case CreationParameters.duration_seconds(params.duration) do
@@ -110,52 +78,24 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
           add_error(changeset, :duration, "Use minutes:seconds (0:01–1440:00)")
       end
 
-    changeset =
-      case request(params) do
-        {:ok, _} ->
-          changeset
-
-        {:error, :invalid_rests} ->
-          add_error(
-            changeset,
-            :rests,
-            "Use 60s at 11:00; pauses must not overlap or exceed the duration"
-          )
-
-        _ ->
-          if changeset.valid?,
-            do: add_error(changeset, :rests, "Check pause times, duration and recovery"),
-            else: changeset
-      end
-
     if String.length(instruction(params)) <= 500 and byte_size(instruction(params)) <= 4_000,
       do: changeset,
-      else: add_error(changeset, :sets, "Combined request is too long")
+      else: add_error(changeset, :note, "Combined request is too long")
   end
 
-  @spec request(t(), WorkoutRequest.t() | nil) :: {:ok, WorkoutRequest.t()} | {:error, term()}
-  def request(params, extracted \\ nil) do
-    with {:ok, seconds} <- CreationParameters.duration_seconds(params.duration),
-         {:ok, sets} <- WorkoutConfiguration.parse_sets(params.sets),
-         {:ok, rests} <- WorkoutConfiguration.parse_rests(params.rests) do
-      base =
-        if extracted,
-          do: WorkoutRequest.to_map(extracted),
-          else: %{
-            "recovery" => params.recovery,
-            "timed_rests" => rests,
-            "requested_pace_sec" => params.pace
-          }
-
-      WorkoutRequest.new(
-        Map.merge(base, %{
-          "burpee_type" => params.burpee_type,
-          "pacing_style" => params.pacing_style,
-          "target_reps" => params.reps,
-          "target_duration_sec" => seconds,
-          "set_reps" => sets
-        })
-      )
+  @doc "The request the fields make; sets and pauses come from the note, read by the coach."
+  @spec request(t()) :: {:ok, WorkoutRequest.t()} | {:error, term()}
+  def request(params) do
+    with {:ok, seconds} <- CreationParameters.duration_seconds(params.duration) do
+      WorkoutRequest.new(%{
+        "burpee_type" => params.burpee_type,
+        "pacing_style" => params.pacing_style,
+        "target_reps" => params.reps,
+        "target_duration_sec" => seconds,
+        "recovery" => params.recovery,
+        "timed_rests" => [],
+        "requested_pace_sec" => params.pace
+      })
     end
   end
 
@@ -174,27 +114,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
         reps: request.target_reps,
         duration: CreationParameters.duration_label(request.target_duration_sec),
         recovery: request.recovery,
-        pace: request.requested_pace_sec,
-        sets:
-          if(String.trim(previous.sets || "") == "",
-            do:
-              request.set_reps
-              |> Enum.chunk_by(& &1)
-              |> Enum.map_join(", ", &"#{length(&1)}x#{hd(&1)}"),
-            else: previous.sets
-          ),
-        rests:
-          Enum.map_join(
-            request.timed_rests,
-            "\n",
-            &"#{&1.duration_sec}s at #{CreationParameters.duration_label(&1.start_sec)}"
-          )
+        pace: request.requested_pace_sec
     }
   end
 
   @spec instruction(t()) :: String.t()
   def instruction(params) do
-    "New workout. Type: #{params.burpee_type}; style: #{params.pacing_style}; reps: #{params.reps}; duration: #{params.duration}; active pace: #{if(params.pace, do: "#{params.pace}s per rep", else: "coach chooses")}; sets: #{params.sets || "coach chooses"}; total pauses: #{params.rests || "coach chooses"}. " <>
+    "New workout. Type: #{params.burpee_type}; style: #{params.pacing_style}; reps: #{params.reps}; duration: #{params.duration}; active pace: #{if(params.pace, do: "#{params.pace}s per rep", else: "coach chooses")}. " <>
       String.trim(params.note || "")
   end
 end

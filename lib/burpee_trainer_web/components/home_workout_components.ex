@@ -266,30 +266,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         class="home-authoring-input"
       />
       <.input
-        field={@form[:sets]}
-        type="text"
-        label="Sets"
-        placeholder="5x8, 5x7, 5x(7,6)"
-        maxlength="300"
-        disabled={@locked}
-        class="home-authoring-input"
-      />
-      <.input
-        field={@form[:rests]}
-        type="textarea"
-        rows="1"
-        label="Pauses"
-        placeholder={if(@locked, do: "No fixed pauses", else: "60s at 11:00")}
-        maxlength="300"
-        disabled={@locked}
-        class="home-authoring-input"
-      />
-      <.input
         field={@form[:note]}
         type="textarea"
         rows="1"
-        label="Note"
-        placeholder="Anything the fields don't cover"
+        label="Anything else"
+        placeholder="e.g. two sets of 25, a minute's break at 10:00"
         maxlength="300"
         disabled={@locked}
         class="home-authoring-input"

@@ -17,7 +17,12 @@ defmodule BurpeeTrainer.Evals.Scenarios do
 
     with {:ok, params} <- Ecto.Changeset.apply_action(changeset, :insert),
          {:ok, request} <- HomeWorkoutRequest.request(params) do
-      {:ok, %{request: request, instruction: HomeWorkoutRequest.instruction(params)}}
+      {:ok,
+       %{
+         request: request,
+         instruction: HomeWorkoutRequest.instruction(params),
+         note: params.note || ""
+       }}
     else
       _ -> {:error, :invalid_form}
     end

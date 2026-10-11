@@ -23,7 +23,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
+    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
     render_click(view, "filter", %{"kind" => "type", "filter" => "navy_seal"})
     render_click(view, "open_chooser")
     assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
@@ -35,7 +35,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       roundtrip(view, via)
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
       assert workspace(view) == before
-      assert :sys.get_state(view.pid).socket.assigns.workout_form[:sets].value == "20x6"
+      assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
       assert has_element?(view, "#home-expansion[data-open=true]")
       assert Repo.all(WorkoutPlan) == rows
       assert Workouts.list_sessions(Scope.for_user(user)) == sessions
@@ -137,7 +137,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{sets: "20x6"}) |> render_change()
+    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
     before = workspace(view)
     plans = Repo.all(WorkoutPlan)
     saved = complete(user)
@@ -145,7 +145,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     close_history(view)
     assert workspace(view) == before
     assert has_element?(view, "#home-new-form")
-    assert :sys.get_state(view.pid).socket.assigns.workout_form[:sets].value == "20x6"
+    assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
     assert Repo.all(WorkoutPlan) == plans
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end

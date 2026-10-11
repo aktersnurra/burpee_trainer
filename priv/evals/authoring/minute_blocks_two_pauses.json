@@ -7,9 +7,7 @@
     "duration": "20:00",
     "recovery": "required",
     "pace": 5.0,
-    "sets": "",
-    "rests": "60s at 11:00\n40s at 18:00",
-    "note": "try to make the rests more even; roughly one-minute blocks"
+    "note": "A 60 second pause at 11:00 and a 40 second pause at 18:00; try to make the rests more even; roughly one-minute blocks"
   },
   "expected": {
     "target_reps": 140,
