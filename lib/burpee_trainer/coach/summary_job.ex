@@ -46,13 +46,16 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
     case Accounts.get_user(user_id) do
       %Accounts.User{} = user ->
         scope = Scope.for_user(user)
-        result = summarize(scope)
-        Summary.broadcast(scope, Summary.get(scope))
 
-        case result do
-          {:ok, _summary} -> :ok
-          :none -> :ok
-          {:error, reason} -> {:error, reason}
+        # Home shows a loader until it hears from this job, so it hears even when it raises.
+        try do
+          case summarize(scope) do
+            {:ok, _summary} -> :ok
+            :none -> :ok
+            {:error, reason} -> {:error, reason}
+          end
+        after
+          Summary.broadcast(scope, Summary.get(scope))
         end
 
       nil ->

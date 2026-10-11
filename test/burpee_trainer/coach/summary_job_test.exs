@@ -146,6 +146,20 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert_receive {:coach_summary, %Summary{source: :fallback}}
   end
 
+  test "a job that raises still broadcasts, so Home's loader never waits forever" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+    {:ok, _} = Summary.store(scope, %{text: "Old.", metric_ids: [], source: :llm})
+
+    Repo.update_all(from(u in BurpeeTrainer.Accounts.User, where: u.id == ^scope.user.id),
+      set: [timezone: "Not/A_Zone"]
+    )
+
+    :ok = Summary.subscribe(scope)
+    assert_raise MatchError, fn -> perform_job(SummaryJob, %{user_id: scope.user.id}) end
+    assert_receive {:coach_summary, %Summary{text: "Old."}}
+  end
+
   defp age_summary(scope, days) do
     Repo.update_all(from(s in Summary, where: s.user_id == ^scope.user.id),
       set: [updated_at: DateTime.add(DateTime.utc_now(), -days, :day)]
