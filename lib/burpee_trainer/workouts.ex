@@ -435,15 +435,17 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   # Until the first completed session Home shows the starter for the slot's burpee type.
-  defp starter_or_fallback(%User{id: user_id}, burpee_type),
-    do: built_in_for(completed_session_exists?(user_id), burpee_type)
+  defp starter_or_fallback(%User{} = user, burpee_type),
+    do: built_in_for(completed_session?(Scope.for_user(user)), burpee_type)
 
   defp built_in_for(false = _completed_session?, burpee_type),
     do: built_in(Map.fetch!(@starter_names, burpee_type))
 
   defp built_in_for(true = _completed_session?, _burpee_type), do: built_in_fallback()
 
-  defp completed_session_exists?(user_id) do
+  @doc "Whether the owner has completed at least one session."
+  @spec completed_session?(Scope.t()) :: boolean()
+  def completed_session?(%Scope{user: %User{id: user_id}}) do
     Repo.exists?(
       from(session in WorkoutSession,
         where: session.user_id == ^user_id and session.state == :completed

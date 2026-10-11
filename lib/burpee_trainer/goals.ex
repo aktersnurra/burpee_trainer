@@ -28,6 +28,12 @@ defmodule BurpeeTrainer.Goals do
     )
   end
 
+  @doc "Whether the owner has an active goal of any burpee type."
+  @spec any_active?(Scope.t()) :: boolean()
+  def any_active?(%Scope{user: %User{id: user_id}}),
+    do:
+      Repo.exists?(from goal in Goal, where: goal.user_id == ^user_id and goal.status == :active)
+
   @doc """
   Transition a goal to `:achieved`.
   """

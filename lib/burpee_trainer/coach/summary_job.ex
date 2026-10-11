@@ -73,12 +73,12 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   """
   @spec status(Scope.t(), DateTime.t()) :: {status(), Summary.t() | nil}
   def status(%Scope{user: user} = scope, %DateTime{} = now) do
-    {sessions, goals} = inputs(scope)
+    reportable? = Workouts.completed_session?(scope) or Goals.any_active?(scope)
 
     with {:ok, context} <- UserTime.context(user, now),
          {:ok, week_start_utc, _week_end_utc} <- UserTime.week_bounds_utc(context) do
       summary = Summary.get(scope)
-      {freshness(sessions, goals, summary, week_start_utc), summary}
+      {freshness(reportable?, summary, week_start_utc), summary}
     else
       _invalid_timezone -> {:absent, nil}
     end
@@ -90,10 +90,10 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   def on_open(%Scope{} = scope, %DateTime{} = now),
     do: scope |> status(now) |> refresh(scope)
 
-  defp freshness([] = _sessions, [] = _goals, _summary, _week_start_utc), do: :absent
-  defp freshness(_sessions, _goals, nil = _summary, _week_start_utc), do: :stale
+  defp freshness(false = _reportable?, _summary, _week_start_utc), do: :absent
+  defp freshness(true, nil = _summary, _week_start_utc), do: :stale
 
-  defp freshness(_sessions, _goals, %Summary{updated_at: written_at}, week_start_utc),
+  defp freshness(true, %Summary{updated_at: written_at}, week_start_utc),
     do: written_in_week(DateTime.compare(written_at, week_start_utc))
 
   defp written_in_week(:lt), do: :stale
