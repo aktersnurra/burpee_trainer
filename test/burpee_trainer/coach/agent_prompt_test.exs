@@ -13,6 +13,7 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     for key <- @glossary, do: assert(rule.content =~ key)
     assert rule.content =~ "reps per 20 minutes"
     assert rule.content =~ "What the coach knows"
+    assert rule.content =~ "why, not what"
     refute rule.content =~ "scale them for a longer slot"
     assert Map.has_key?(Jason.decode!(context.content), "recent_sessions")
   end

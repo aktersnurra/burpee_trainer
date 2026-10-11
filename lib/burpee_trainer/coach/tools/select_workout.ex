@@ -10,7 +10,11 @@ defmodule BurpeeTrainer.Coach.Tools.SelectWorkout do
       Tool.object(
         %{
           "plan_id" => %{"type" => "integer", "minimum" => 1},
-          "rationale" => %{"type" => "string", "maxLength" => Rationale.max_length()}
+          "rationale" => %{
+            "type" => "string",
+            "maxLength" => Rationale.max_length(),
+            "description" => Rationale.description()
+          }
         },
         ["plan_id", "rationale"]
       )

@@ -8,6 +8,12 @@ defmodule BurpeeTrainer.Coach.Rationale do
 
   @max_length 280
 
+  @description "One plain sentence to the athlete on why this workout suits them now: why, not what, since its name, reps and minutes are shown beside it. No internal terms or ids."
+
+  @doc "How the rationale is described to the model in every tool schema."
+  @spec description() :: String.t()
+  def description, do: @description
+
   @spec max_length() :: pos_integer()
   def max_length, do: @max_length
 

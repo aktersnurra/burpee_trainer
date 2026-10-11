@@ -9,7 +9,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   their current one; easier sessions are fine. For a session longer than 20 minutes, compare \
   its reps per 20 minutes with the landmarks. Save only lasting facts to the notebook. The \
   rationale appears under the workout: one sentence in the voice above on why this session \
-  suits them now. Finish with one sentence explaining your choice.
+  suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
   """
 
   @coach_page_task """

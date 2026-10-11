@@ -52,8 +52,7 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
         },
         "rationale" => %{
           "type" => "string",
-          "description" =>
-            "One plain sentence for the athlete, addressed as you, with no internal terms or ids."
+          "description" => BurpeeTrainer.Coach.Rationale.description()
         },
         "phases" => %{
           "type" => "array",

@@ -33,6 +33,10 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     assert BurpeeTrainer.Coach.Notebook.get(scope).body == ""
   end
 
+  test "select_workout asks for the reason, not a restatement of the workout" do
+    assert SelectWorkout.schema()["properties"]["rationale"]["description"] =~ "why, not what"
+  end
+
   test "goal proposal and confirmation are scoped" do
     scope = scope_fixture()
 
