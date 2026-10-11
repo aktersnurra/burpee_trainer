@@ -967,7 +967,9 @@
 .home-authoring-form .input-unit { color: var(--home-muted); font-size: 13px; }
 .home-authoring-form label:has(input:placeholder-shown) .input-unit { visibility: hidden; }
 .home-authoring-input { display: block; width: 100%; min-width: 0; min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: #1d1d1b; font: 400 16px/1.5 var(--font-sans); text-align: right; box-shadow: none; }
-textarea.home-authoring-input { text-align: left; resize: vertical; }
+/* Pauses and Note stack: label above, a full-width field that grows with its text. */
+textarea.home-authoring-input { text-align: left; resize: none; field-sizing: content; min-height: 1.5em; }
+.home-authoring-form .fieldset label:has(textarea) { grid-template-columns: 1fr; gap: 4px; }
 .home-authoring-input::placeholder { color: var(--home-muted); opacity: 1; }
 /* The focused field underlines its row instead of drawing a box past the column edge. */
 #home-new-form .home-authoring-input:focus-visible { outline: none; }

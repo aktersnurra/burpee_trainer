@@ -278,7 +278,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <.input
         field={@form[:rests]}
         type="textarea"
-        rows="2"
+        rows="1"
         label="Pauses"
         placeholder={if(@locked, do: "No fixed pauses", else: "60s at 11:00")}
         maxlength="300"
@@ -288,7 +288,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <.input
         field={@form[:note]}
         type="textarea"
-        rows="2"
+        rows="1"
         label="Note"
         placeholder="Anything the fields don't cover"
         maxlength="300"
