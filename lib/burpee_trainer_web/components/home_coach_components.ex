@@ -56,10 +56,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           class="history-coach-entry"
         >
           <p>
-            {if(goal.burpee_type == :six_count, do: "Six-count", else: "Navy seal")} · {goal.burpee_count_target} reps in {div(
-              goal.duration_sec_target,
-              60
-            )} minutes by {goal.date_target} · {goal.status}
+            {BurpeeTrainerWeb.Fmt.goal(goal)} · {goal.status}
           </p>
           <button
             :if={goal.status == :proposed}

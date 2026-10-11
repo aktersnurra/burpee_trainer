@@ -239,7 +239,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-title-action") |> render_click()
     view |> element("#home-filter-toggle") |> render_click()
 
-    assert has_element?(view, "#home-current-level", "1A is your current level.")
+    assert has_element?(view, "#home-current-level", "Level 1A is your current level.")
 
     assert has_element?(
              view,

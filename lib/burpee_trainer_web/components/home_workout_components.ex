@@ -846,7 +846,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             </button>
           </div>
           <p id="home-current-level">
-            {level_label(@state.current_level)} is your current level.
+            {BurpeeTrainerWeb.Fmt.level(@state.current_level)} is your current level.
           </p>
         </div>
         <p
@@ -1173,8 +1173,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   defp progress_percent(slot),
     do: number(min(100, max(0, slot.completed_sec * 100 / slot.weekly_target_sec)))
 
-  defp level_label(:graduated), do: "Graduated"
-
+  # Filter chips use the short form: "1A", "Graduated".
   defp level_label(level),
-    do: level |> Atom.to_string() |> String.replace_prefix("level_", "") |> String.upcase()
+    do: level |> BurpeeTrainerWeb.Fmt.level() |> String.replace_prefix("Level ", "")
 end

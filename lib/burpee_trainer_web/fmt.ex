@@ -49,4 +49,14 @@ defmodule BurpeeTrainerWeb.Fmt do
   def level(:level_1b), do: "Level 1B"
   def level(:level_1a), do: "Level 1A"
   def level(_), do: "—"
+
+  @doc "One line for a goal, the same on History and Coach."
+  @spec goal(map()) :: String.t()
+  def goal(%{
+        burpee_type: type,
+        burpee_count_target: reps,
+        duration_sec_target: sec,
+        date_target: date
+      }),
+      do: "#{burpee_type(type)} · #{reps} reps in #{div(sec, 60)} min by #{date}"
 end
