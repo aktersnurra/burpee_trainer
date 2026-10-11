@@ -94,11 +94,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           :if={@editable}
           id="home-request-abort"
           type="button"
-          phx-click={
-            JS.push("abort_new_workout")
-            |> JS.remove_attribute("hidden", to: "#home-workout-hero")
-            |> JS.focus(to: "#home-summary")
-          }
+          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
           class="home-icon-button"
           aria-label="Abort review"
           title="Abort"
