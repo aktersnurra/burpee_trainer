@@ -15,4 +15,16 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     refute rule.content =~ "scale them for a longer slot"
     assert Map.has_key?(Jason.decode!(context.content), "recent_sessions")
   end
+
+  test "the coach page speaks in the voice, briefly, and ends with the athlete's message" do
+    scope = scope_fixture()
+
+    [rule, _context, message] =
+      AgentPrompt.messages(scope, :coach_page, "How am I doing?", %{body: ""}, nil)
+
+    assert String.starts_with?(rule.content, Voice.text())
+    for key <- @glossary, do: assert(rule.content =~ key)
+    assert rule.content =~ "at most three sentences"
+    assert message == %{role: "user", content: "How am I doing?"}
+  end
 end

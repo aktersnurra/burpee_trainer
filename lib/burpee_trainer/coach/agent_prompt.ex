@@ -12,14 +12,18 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   suits them now. Finish with one sentence explaining your choice.
   """
 
-  @coach_page_task "Answer briefly. Record durable preferences with update_notebook. Only propose_goal when the owner explicitly asks for a goal. Never invent owner facts."
+  @coach_page_task """
+  Answer what the athlete asked in at most three sentences. Save lasting preferences and \
+  facts they tell you with update_notebook. Use propose_goal only when they ask for a goal; \
+  they confirm it themselves.
+  """
 
   @context_glossary """
   The context that follows is JSON. notebook: what you have saved about the athlete. goals: \
   their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \
-  slot: the session to plan, with its burpee_type and duration_sec; strategy catch_up means \
+  slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   a longer weekend session that makes up missed minutes; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time.
   """
@@ -56,7 +60,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
     rule =
       case surface do
         :planner -> Voice.text() <> "\n" <> @planner_task <> "\n" <> @context_glossary
-        :coach_page -> @coach_page_task
+        :coach_page -> Voice.text() <> "\n" <> @coach_page_task <> "\n" <> @context_glossary
       end
 
     messages = [
