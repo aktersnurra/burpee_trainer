@@ -14,7 +14,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
 
   alias BurpeeTrainer.{Accounts, Goals, Repo, UserTime, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Client, Summary}
+  alias BurpeeTrainer.Coach.{Client, Summary, Voice}
   alias BurpeeTrainer.Insights.{Metrics, Validator}
 
   @schema %{
@@ -144,7 +144,9 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
       %{
         role: "system",
         content:
-          "At most two sentences on progress and trajectory toward the active goals, or toward the next level when no goal is active. Cite metric ids for every number. Use only these metrics: " <>
+          Voice.text() <>
+            "\n" <>
+            "Write at most two sentences on how the athlete is progressing toward their active goals, or toward the next level when they have none. It heads their History, so lead with what matters most this week. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
             Jason.encode!(metrics)
       }
     ]

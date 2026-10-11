@@ -43,6 +43,24 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert call.purpose == "summary"
   end
 
+  test "the summary prompt speaks in the voice and aims at goals, or the next level" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+    test_pid = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:messages, Jason.decode!(body)["messages"]})
+      Req.Test.json(conn, %{"choices" => [%{"message" => %{"content" => "{}"}}]})
+    end)
+
+    SummaryJob.summarize(scope, opts())
+    assert_receive {:messages, [%{"role" => "system", "content" => prompt}]}
+    assert String.starts_with?(prompt, BurpeeTrainer.Coach.Voice.text())
+    assert prompt =~ "next level"
+    assert prompt =~ "metric_ids"
+  end
+
   test "a fabricated number stores a fallback that is itself validated" do
     scope = scope_fixture()
     free_form_session_fixture(scope.user)
