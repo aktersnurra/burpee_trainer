@@ -51,6 +51,24 @@ defmodule BurpeeTrainer.Insights.NarratorTest do
     assert call.outcome == "ok"
   end
 
+  test "the insight prompt speaks in the voice about the latest session" do
+    scope = scope_fixture()
+    session = free_form_session_fixture(scope.user)
+    test_pid = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:messages, Jason.decode!(body)["messages"]})
+      Req.Test.json(conn, %{"choices" => [%{"message" => %{"content" => "{}"}}]})
+    end)
+
+    Narrator.narrate(scope, session, opts())
+    assert_receive {:messages, [%{"role" => "system", "content" => prompt}]}
+    assert String.starts_with?(prompt, BurpeeTrainer.Coach.Voice.text())
+    assert prompt =~ "No numbers in the headline"
+    assert prompt =~ "metric_ids"
+  end
+
   test "fabrication and provider disabled produce validated deterministic fallback" do
     scope = scope_fixture()
     first = free_form_session_fixture(scope.user)

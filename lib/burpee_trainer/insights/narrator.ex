@@ -2,7 +2,7 @@ defmodule BurpeeTrainer.Insights.Narrator do
   @moduledoc "Short completed-session narration grounded exclusively in computed metrics."
   alias BurpeeTrainer.{Goals, Insights, UserTime, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{AuthoritativeSession, Client}
+  alias BurpeeTrainer.Coach.{AuthoritativeSession, Client, Voice}
   alias BurpeeTrainer.Insights.{Metrics, Validator}
   alias BurpeeTrainer.Workouts.WorkoutSession
 
@@ -64,7 +64,9 @@ defmodule BurpeeTrainer.Insights.Narrator do
       %{
         role: "system",
         content:
-          "Write one short encouraging factual insight about the latest session. Use only these computed metrics. Cite metric IDs for every number. No numbers in the headline. Categorical levels may be quoted exactly, but never authorize numeric claims. Metrics: " <>
+          Voice.text() <>
+            "\n" <>
+            "Write one insight about the session they just finished: a short headline and up to three points, shown right after the session. Say what went well or what changed, plainly. No numbers in the headline. Every number in a point must be a value from the metrics below, and list each metric id you used in metric_ids. A level metric may be named, but it never supports a number. Metrics: " <>
             Jason.encode!(metrics)
       }
     ]
