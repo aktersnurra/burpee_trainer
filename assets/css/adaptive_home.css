@@ -904,7 +904,8 @@
 .history-header-goals { margin-top: 4px; color: var(--home-muted); font-size: 14px; }
 .history-coach-summary { display: block; margin-top: 14px; color: #262722; font-size: 17px; line-height: 1.6; text-decoration: none; }
 .history-coach-summary:hover :is(.coach-summary-text, .coach-summary-invitation) { text-decoration: underline; text-underline-offset: 3px; }
-.coach-summary-invitation { color: var(--home-muted); }
+.coach-summary-invitation { color: #262722; }
+.history-coach-summary-arrow { margin-left: 6px; vertical-align: -2px; color: var(--home-muted); }
 .history-coach-summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 .coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: 14px; }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }

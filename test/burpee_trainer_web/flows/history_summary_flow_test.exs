@@ -61,6 +61,9 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              "Tell the coach what you're training for"
            )
 
+    # It reads as a way in, not a caption.
+    assert has_element?(view, "#history-coach-summary .history-coach-summary-arrow")
+
     view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/coach")
     refute has_element?(view, "#home-coach-summary", "Tell the coach what you're training for")

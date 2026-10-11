@@ -502,6 +502,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <span :if={not summary_line?(@state)} class="coach-summary-invitation">
           Tell the coach what you're training for
         </span>
+        <.icon name="hero-arrow-right" class="history-coach-summary-arrow size-4" />
       </.link>
     </header>
     """
