@@ -96,7 +96,10 @@ defmodule BurpeeTrainer.AccountsTest do
         :telemetry.attach(
           handler,
           [:burpee_trainer, :repo, :query],
-          fn _, _, metadata, _ -> send(parent, {:timezone_query, metadata.query}) end,
+          # Telemetry handlers are global and run in the querying process: count only ours.
+          fn _, _, metadata, _ ->
+            if self() == parent, do: send(parent, {:timezone_query, metadata.query})
+          end,
           nil
         )
 
