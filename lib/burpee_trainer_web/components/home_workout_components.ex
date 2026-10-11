@@ -202,7 +202,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             class="home-selection-pill"
             phx-click="choose_workout_value"
             phx-value-field={field}
-            phx-value-value={value}
+            value={value}
             aria-pressed={to_string(@form[field].value == value)}
             disabled={@locked}
           >

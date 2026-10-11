@@ -20,6 +20,29 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     %{conn: conn, view: view, user: user, selected: selected}
   end
 
+  test "the selected pill follows every switch", %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+
+    # LiveView's client sends a clicked button's own value as "value", over phx-value-value,
+    # so each pill must carry its value or the browser sends "".
+    for field <- ~w[burpee_type pacing_style],
+        value <- ~w[six_count navy_seal even unbroken],
+        has_element?(view, "#home-pill-#{field}-#{value}") do
+      assert has_element?(view, "#home-pill-#{field}-#{value}[value=#{value}]")
+    end
+
+    for type <- ~w[navy_seal six_count navy_seal six_count] do
+      view |> element("#home-pill-burpee_type-#{type}") |> render_click()
+      assert has_element?(view, "#home-pill-burpee_type-#{type}[aria-pressed=true]")
+
+      assert has_element?(
+               view,
+               "#home-new-form input[type=hidden][name='home_workout[burpee_type]'][value=#{type}]"
+             )
+    end
+  end
+
   test "New reviews without a plan, approval publishes unselected, then Start completes into History",
        %{
          view: view,
