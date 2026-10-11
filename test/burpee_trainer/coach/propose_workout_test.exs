@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.Coach.{Policy, Tools.ProposeWorkout}
+  alias BurpeeTrainer.Coach.{Policy, Tools.ProposeWorkout, Tools.SelectWorkout}
   alias BurpeeTrainer.{Workouts, LayoutFixtures}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
@@ -69,6 +69,37 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
              ProposeWorkout.call(scope, args(300, [{150, 4.0, 4.0}, {150, 4.0, 4.0}]), run)
 
     assert {:error, _} = ProposeWorkout.call(scope, %{}, run)
+  end
+
+  test "both planner tools refuse a rationale that is not a short sentence for the athlete" do
+    scope = scope_fixture()
+    {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+    run = run(scope, slot)
+    plan_id = run.expected_selection.plan.id
+
+    for rationale <- [
+          "   ",
+          String.duplicate("Steady work today. ", 40),
+          "You are at level_1a, so this stays easy."
+        ] do
+      proposal =
+        put_in(args(20, [{10, 5.0, 5.0}, {10, 5.0, 5.0}]), ["layout", "rationale"], rationale)
+
+      assert {:error, message} = ProposeWorkout.call(scope, proposal, run)
+      assert message =~ "rationale"
+
+      assert {:error, message} =
+               SelectWorkout.call(scope, %{"plan_id" => plan_id, "rationale" => rationale}, run)
+
+      assert message =~ "rationale"
+    end
+
+    assert {:ok, _, %{pending_selection: %{rationale: "An easy twenty minutes."}}} =
+             SelectWorkout.call(
+               scope,
+               %{"plan_id" => plan_id, "rationale" => "An easy twenty minutes."},
+               run
+             )
   end
 
   test "an easier workout below the current level is allowed" do

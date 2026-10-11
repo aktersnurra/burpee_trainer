@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
   @behaviour BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Coach.{Tool, WorkoutRequest, WorkoutLayout, RestFitter}
+  alias BurpeeTrainer.Coach.{Rationale, Tool, WorkoutRequest, WorkoutLayout, RestFitter}
   alias BurpeeTrainer.{Levels, Workouts, PlanCompiler, UserTime}
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.HomeSelection
@@ -60,9 +60,10 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
         "target_duration_sec" => slot.duration_sec
       })
 
-    with :ok <- within_level_band(scope, slot, reps),
+    with {:ok, rationale} <- Rationale.validate(layout["rationale"]),
+         :ok <- within_level_band(scope, slot, reps),
          {:ok, request} <- WorkoutRequest.new(attrs),
-         {:ok, canonical} <- RestFitter.fit(request, layout),
+         {:ok, canonical} <- RestFitter.fit(request, %{layout | "rationale" => rationale}),
          {:ok, definition} <- WorkoutDefinition.new(canonical),
          {:ok, _} <- PlanCompiler.compile(definition),
          :ok <- WorkoutRequest.validate_definition(request, definition) do
@@ -71,7 +72,7 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
          pending_selection: %{
            definition: WorkoutDefinition.canonical_map(definition),
            approval_key: run.run_id <> ":" <> Integer.to_string(run.call_index),
-           rationale: layout["rationale"] || "Planned workout"
+           rationale: rationale
          }
        }}
     else

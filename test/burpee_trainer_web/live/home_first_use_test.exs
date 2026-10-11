@@ -46,26 +46,18 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
              1
   end
 
-  test "Home shows the planner's reason only when it reads as words for the athlete", %{
-    conn: conn,
-    user: user
-  } do
+  test "Home shows the planner's reason under the workout", %{conn: conn, user: user} do
     {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     {:ok, selection} = BurpeeTrainer.Workouts.ensure_home_selection(Scope.for_user(user), slot)
 
-    for {rationale, shown?} <- [
-          {"Owner is at level_1a; one continuous set fills the 1200 sec slot.", false},
-          {"An easy twenty minutes to find your rhythm.", true}
-        ] do
-      Repo.update_all(
-        from(r in BurpeeTrainer.Workouts.CoachRecommendation,
-          where: r.id == ^selection.recommendation_id
-        ),
-        set: [rationale: rationale]
-      )
+    Repo.update_all(
+      from(r in BurpeeTrainer.Workouts.CoachRecommendation,
+        where: r.id == ^selection.recommendation_id
+      ),
+      set: [rationale: "An easy twenty minutes to find your rhythm."]
+    )
 
-      {:ok, view, _html} = live(conn, ~p"/")
-      assert has_element?(view, "#home-planner-rationale") == shown?
-    end
+    {:ok, view, _html} = live(conn, ~p"/")
+    assert has_element?(view, "#home-planner-rationale", "An easy twenty minutes")
   end
 end
