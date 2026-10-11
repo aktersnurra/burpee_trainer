@@ -38,7 +38,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       <button
         id="home-coach-back"
         type="button"
-        class="home-state-action min-h-11 min-w-11"
+        class="screen-back"
         aria-label="Back to History"
         phx-click="close_coach"
       >

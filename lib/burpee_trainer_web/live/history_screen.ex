@@ -371,7 +371,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
         <button
           id="home-history-close"
           type="button"
-          class="home-state-action min-h-11 min-w-11"
+          class="screen-back"
           phx-click="close_history"
           aria-label="Back to Home"
           inert={not is_nil(@history_selected_session)}

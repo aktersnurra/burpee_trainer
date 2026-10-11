@@ -878,7 +878,9 @@
 .home-history-session-summary small { display: block; margin-top: 3px; color: var(--home-muted); font-size: 12px; }
 .home-history-session-reps, .home-history-session-time { font-size: 13px; }
 #home-done-today { border-bottom: 0; }
-.home-coach-panel { width: 100%; max-width: 640px; margin: 40px auto 0; }
+.home-coach-panel { width: 100%; max-width: 640px; margin: 0 auto; }
+/* History and Coach start where Home's top row does, so Back never moves between screens. */
+.screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
 .home-coach-summary-text { margin-top: 18px; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
 #home-coach-goals { margin-top: 28px; }
 .coach-message-form { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }
