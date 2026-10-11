@@ -41,4 +41,26 @@ defmodule BurpeeTrainer.StarterWorkoutsMigrationTest do
       end
     end)
   end
+
+  test "Home finds built-ins by name, so at most one published built-in carries each name" do
+    E.with_db(fn repo ->
+      Ecto.Migrator.run(repo, E.migrations(@migrations), :up, all: true, log: false)
+
+      duplicate = """
+      INSERT INTO workout_plans (
+        user_id, name, origin, state, request_text, definition_json, program_json,
+        content_hash, burpee_type, target_reps, target_duration_sec,
+        published_at, archived_at, inserted_at, updated_at
+      )
+      SELECT user_id, name, origin, state, request_text, definition_json, program_json,
+             content_hash, burpee_type, target_reps, target_duration_sec,
+             published_at, archived_at, inserted_at, updated_at
+      FROM workout_plans
+      WHERE user_id IS NULL AND origin = 'built_in' AND state = 'published'
+        AND name = 'Built-in Steady 10'
+      """
+
+      assert_raise Exqlite.Error, ~r/UNIQUE constraint failed/, fn -> repo.query!(duplicate) end
+    end)
+  end
 end
