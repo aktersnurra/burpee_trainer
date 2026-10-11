@@ -966,6 +966,9 @@
 .home-authoring-input { display: block; width: 100%; min-width: 0; min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: #1d1d1b; font: 400 16px/1.5 var(--font-sans); text-align: right; box-shadow: none; }
 textarea.home-authoring-input { text-align: left; resize: vertical; }
 .home-authoring-input::placeholder { color: var(--home-muted); opacity: 1; }
+/* The focused field underlines its row instead of drawing a box past the column edge. */
+#home-new-form .home-authoring-input:focus-visible { outline: none; }
+#home-new-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
 .home-authoring-form input[type="hidden"] { display: none; }
 #home-new-form .home-authoring-input:disabled { opacity: 1; color: #1d1d1b; -webkit-text-fill-color: #1d1d1b; }
 .home-pill-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; min-height: 60px; padding: 8px 0; border-bottom: 1px solid var(--home-line); }
