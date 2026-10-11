@@ -257,8 +257,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         type="number"
         step="any"
         min="0.000001"
-        label="Seconds per rep"
-        unit="s"
+        label="Pace"
+        unit="s per rep"
         placeholder={
           if(@candidate && is_nil(@form[:pace].value), do: "Varies by set", else: "Coach chooses")
         }

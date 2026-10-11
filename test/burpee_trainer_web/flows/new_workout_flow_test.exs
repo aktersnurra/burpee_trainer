@@ -44,13 +44,13 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     for {id, unit} <- [
           {"home-new-reps", "reps"},
           {"home_workout_duration", "min"},
-          {"home_workout_pace", "s"}
+          {"home_workout_pace", "s per rep"}
         ] do
       assert has_element?(view, "label[for=#{id}] .input-unit", unit)
     end
 
     for {id, label} <- [
-          {"home_workout_pace", "Seconds per rep"},
+          {"home_workout_pace", "Pace"},
           {"home_workout_sets", "Sets"},
           {"home_workout_rests", "Pauses"}
         ] do
