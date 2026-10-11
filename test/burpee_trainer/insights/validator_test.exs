@@ -174,5 +174,19 @@ defmodule BurpeeTrainer.Insights.ValidatorTest do
       assert {:error, :invalid_shape} =
                Validator.validate_summary(%{"text" => "Fine."}, @summary_metrics)
     end
+
+    test "a sentence starts with a capital or a number, whether or not the last one ends" do
+      assert {:error, :too_many_sentences} =
+               Validator.validate_summary(
+                 summary("Good week. Keep going! Rest well"),
+                 @summary_metrics
+               )
+
+      assert {:ok, _} =
+               Validator.validate_summary(
+                 summary("Best so far is 120 reps, approx. half unbroken. 52 days left."),
+                 @summary_metrics
+               )
+    end
   end
 end

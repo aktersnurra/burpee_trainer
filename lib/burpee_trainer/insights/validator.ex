@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Insights.Validator do
   alias BurpeeTrainer.Insights.Metrics
   # Consume the entire numeric token: never accept a substring of a sign,
   # grouped number, Unicode digit sequence, fraction or scientific notation.
-  @sentence_end ~r/[.!?](?=\s|$)/u
+  @sentence_break ~r/[.!?]\s+(?=[\p{Lu}\p{N}])/u
   @number ~r/[+−-]?(?:\p{N}+(?:[,\.]\p{N}+)*|\.\p{N}+)(?:[eE][+−-]?\p{N}+)?/u
 
   @spec validate(term(), map()) :: {:ok, map()} | {:error, term()}
@@ -55,9 +55,10 @@ defmodule BurpeeTrainer.Insights.Validator do
     end
   end
 
-  # A sentence ends at ".", "!" or "?" followed by whitespace or the end, so "4.8" is one token.
+  # A new sentence follows ".", "!" or "?" and whitespace, and starts with a capital or a
+  # number: "4.8" and "approx. half" stay inside one, and an unterminated last one counts.
   defp sentences_ok(text, max) do
-    if length(Regex.scan(@sentence_end, text)) <= max,
+    if length(Regex.split(@sentence_break, String.trim(text))) <= max,
       do: :ok,
       else: {:error, :too_many_sentences}
   end
