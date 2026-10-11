@@ -209,10 +209,10 @@
   width: 30%;
   padding-left: 8px;
 }
-#home-inspection[data-cadence="true"] :is(th, td):first-child {
+#home-inspection[data-move="true"] :is(th, td):first-child {
   width: 24%;
 }
-#home-inspection[data-cadence="true"] :is(th, td):nth-child(n + 3) {
+#home-inspection[data-move="true"] :is(th, td):nth-child(n + 3) {
   width: 22%;
 }
 #home-inspection td > span {

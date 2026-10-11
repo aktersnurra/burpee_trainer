@@ -52,38 +52,48 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
     assert LazyHTML.attribute(region, "aria-label") != []
 
     assert LazyHTML.query(html, "caption.sr-only") |> LazyHTML.text() =~
-             "Pace is prescribed active seconds"
-
-    assert html
-           |> LazyHTML.query(".home-prescription-cadence")
-           |> LazyHTML.text()
-           |> String.contains?("5s")
+             "Every is the seconds from the start of one rep to the next"
   end
 
-  defp inspection_rows do
+  test "one column says how often a rep starts; Move appears only when it differs" do
+    same = inspection(inspection_rows())
+    assert headers(same) == ["Sets", "Reps", "Every", "Rest"]
+    assert same |> LazyHTML.query(".home-prescription-every") |> LazyHTML.text() =~ "5s"
+
+    padded = inspection(inspection_rows(6_000_000))
+    assert headers(padded) == ["Sets", "Reps", "Every", "Move", "Rest"]
+    assert padded |> LazyHTML.query(".home-prescription-every") |> LazyHTML.text() =~ "6s"
+    assert padded |> LazyHTML.query(".home-prescription-move") |> LazyHTML.text() =~ "5s"
+  end
+
+  defp headers(html),
+    do: html |> LazyHTML.query("thead th") |> Enum.map(&LazyHTML.text/1)
+
+  defp inspection_rows(sec_per_rep_us \\ 5_000_000) do
+    events = [work(2, sec_per_rep_us), work(2, sec_per_rep_us)]
+
     Inspection.rows(%WorkoutPlan{
       id: "accessibility",
       updated_at: ~U[2026-09-10 00:00:00Z],
-      definition_json: %{"events" => [work(2), work(2)]},
-      program_json: %{"events" => [work(2), work(2)]}
+      definition_json: %{"events" => events},
+      program_json: %{"events" => events}
     })
   end
 
-  defp work(reps) do
+  defp work(reps, sec_per_rep_us) do
     %{
       "kind" => "work",
       "reps" => reps,
-      "sec_per_rep_us" => 5_000_000,
+      "sec_per_rep_us" => sec_per_rep_us,
       "sec_per_burpee_us" => 5_000_000,
-      "duration_sec" => reps * 5
+      "duration_sec" => reps * sec_per_rep_us / 1_000_000
     }
   end
 
   defp inspection(rows, expanded \\ MapSet.new()) do
     render_component(&HomeWorkoutComponents.inspection/1,
       rows: rows,
-      expanded: expanded,
-      pacing_style: "even"
+      expanded: expanded
     )
     |> LazyHTML.from_fragment()
   end

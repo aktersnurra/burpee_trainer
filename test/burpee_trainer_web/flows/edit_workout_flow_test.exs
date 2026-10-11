@@ -228,7 +228,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     refute has_element?(view, "#home-edit-review-sets, .home-edit-structure")
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
-    assert has_element?(view, "#home-edit-review .home-prescription-pace", "5s")
+    assert has_element?(view, "#home-edit-review .home-prescription-every", "5s")
     assert has_element?(view, "#home-edit-review .home-prescription-rest", "450s")
     refute has_element?(view, "#home-update-loading")
     assert Repo.aggregate(WorkoutPlan, :count) == count

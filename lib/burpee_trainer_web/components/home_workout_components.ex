@@ -356,7 +356,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <.inspection
           rows={@review_inspection_rows}
           expanded={@expanded_groups}
-          pacing_style={@candidate.definition["pacing_style"]}
         />
         <p
           :if={@candidate.request.timed_rests != []}
@@ -513,7 +512,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <.inspection
             rows={@state.review_inspection_rows}
             expanded={@state.expanded_groups}
-            pacing_style={@state.pending_request.definition["pacing_style"]}
           />
           <p
             :if={@state.pending_request.request.timed_rests != []}
@@ -678,7 +676,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 :if={@state.authoring_stage == :idle}
                 rows={@state.inspection_rows}
                 expanded={@state.expanded_groups}
-                pacing_style={@state.home_selection.plan.definition_json["pacing_style"]}
               />
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
                 <.request_confirmation
@@ -984,33 +981,31 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   attr(:rows, :list, required: true)
   attr(:expanded, :any, required: true)
 
-  attr(:pacing_style, :string, default: "even")
-
   def inspection(assigns) do
-    assigns = assign(assigns, :show_cadence?, show_cadence?(assigns.rows, assigns.pacing_style))
+    assigns = assign(assigns, :show_move?, show_move?(assigns.rows))
 
     ~H"""
     <div
       id="home-inspection"
-      data-cadence={to_string(@show_cadence?)}
+      data-move={to_string(@show_move?)}
       role="region"
       tabindex="0"
       aria-label="Workout structure. Scroll horizontally if needed to read exact timings."
     >
       <table>
         <caption class="sr-only">
-          Exact workout structure. Pace is prescribed active seconds per burpee, not measured performance.
-          Cadence is prescribed seconds from one rep start to the next.
+          Exact workout structure. Every is the seconds from the start of one rep to the next.
+          Move, shown only when it differs, is the active seconds per burpee.
           Rest is the total pause after the last burpee finishes until the next set starts,
-          including the final cadence gap and any explicit recovery; a dash means no recovery.
+          including the final gap and any explicit recovery; a dash means no recovery.
           Repeats preserve the ordered sets, not authoring blocks.
         </caption>
         <thead>
           <tr>
             <th scope="col">Sets</th>
             <th scope="col">Reps</th>
-            <th scope="col">Pace</th>
-            <th :if={@show_cadence?} scope="col">Cadence</th>
+            <th scope="col">Every</th>
+            <th :if={@show_move?} scope="col">Move</th>
             <th scope="col">Rest</th>
           </tr>
         </thead>
@@ -1047,7 +1042,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 </span>
                 <span :if={row.count == 1}>{row_label(row)}</span>
               </th>
-              <.prescription units={visible_units} show_cadence?={@show_cadence?} />
+              <.prescription units={visible_units} show_move?={@show_move?} />
             </tr>
           </tbody>
           <tbody
@@ -1058,7 +1053,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           >
             <tr :for={unit <- Enum.drop(row.units, 1)} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
               <th scope="row">Set {set_number(@rows, unit)}</th>
-              <.prescription units={[unit]} show_cadence?={@show_cadence?} />
+              <.prescription units={[unit]} show_move?={@show_move?} />
             </tr>
           </tbody>
         <% end %>
@@ -1068,18 +1063,18 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   end
 
   attr(:units, :list, required: true)
-  attr(:show_cadence?, :boolean, required: true)
+  attr(:show_move?, :boolean, required: true)
 
   defp prescription(assigns) do
     ~H"""
     <td class="home-prescription-reps">
       <span :for={unit <- @units}>{work_value(unit, "reps")}</span>
     </td>
-    <td class="home-prescription-pace">
-      <span :for={unit <- @units}>{pace(unit)}</span>
-    </td>
-    <td :if={@show_cadence?} class="home-prescription-cadence">
+    <td class="home-prescription-every">
       <span :for={unit <- @units}>{cadence(unit)}</span>
+    </td>
+    <td :if={@show_move?} class="home-prescription-move">
+      <span :for={unit <- @units}>{pace(unit)}</span>
     </td>
     <td class="home-prescription-rest">
       <span :for={unit <- @units}>{recovery(unit)}</span>
@@ -1091,7 +1086,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp prescription_label(unit),
     do:
-      "#{work_value(unit, "reps")} reps · #{pace(unit)} pace · #{cadence(unit)} cadence · " <>
+      "#{work_value(unit, "reps")} reps · one every #{cadence(unit)} · #{pace(unit)} move · " <>
         recovery_label(unit)
 
   defp recovery_label(unit),
@@ -1128,14 +1123,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   defp pace(unit),
     do: if(work(unit), do: scaled(work(unit)["sec_per_burpee_us"], 1_000_000) <> "s", else: "—")
 
-  # Style is a label, not a validator of timings. Never hide unequal actual values.
-  defp show_cadence?(rows, style) do
-    style != "unbroken" or
-      Enum.any?(rows, fn row ->
-        Enum.any?(row.events, fn event ->
-          event["kind"] == "work" and event["sec_per_rep_us"] != event["sec_per_burpee_us"]
-        end)
+  # Move is only news when a rep's movement is shorter than the gap to the next one.
+  defp show_move?(rows) do
+    Enum.any?(rows, fn row ->
+      Enum.any?(row.events, fn event ->
+        event["kind"] == "work" and event["sec_per_rep_us"] != event["sec_per_burpee_us"]
       end)
+    end)
   end
 
   defp row_label(%{trailing?: true}), do: "Final recovery"
