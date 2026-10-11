@@ -23,5 +23,7 @@ defmodule BurpeeTrainer.Coach.WorkoutLayoutTest do
     assert schema["properties"]["phases"]["maxItems"] == 3
     assert schema["required"] == ["name", "rationale", "phases"]
     refute Map.has_key?(schema["properties"], "events")
+    # The name is the workout's title on Home, with reps and minutes shown beneath it.
+    assert schema["properties"]["name"]["description"] =~ "not its reps, minutes or level"
   end
 end

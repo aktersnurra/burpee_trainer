@@ -94,6 +94,12 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
       assert message =~ "rationale"
     end
 
+    named =
+      put_in(args(20, [{10, 5.0, 5.0}, {10, 5.0, 5.0}]), ["layout", "name"], "level_1a steady")
+
+    assert {:error, message} = ProposeWorkout.call(scope, named, run)
+    assert message =~ "name"
+
     assert {:ok, _, %{pending_selection: %{rationale: "An easy twenty minutes."}}} =
              SelectWorkout.call(
                scope,

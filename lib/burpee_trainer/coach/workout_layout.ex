@@ -45,7 +45,11 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
       "additionalProperties" => false,
       "required" => ["name", "rationale", "phases"],
       "properties" => %{
-        "name" => %{"type" => "string"},
+        "name" => %{
+          "type" => "string",
+          "description" =>
+            "The workout's title for the athlete: two to four plain words, not its reps, minutes or level, which are shown beside it."
+        },
         "rationale" => %{
           "type" => "string",
           "description" =>

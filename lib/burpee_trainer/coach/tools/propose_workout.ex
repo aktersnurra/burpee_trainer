@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
   @behaviour BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Coach.{Rationale, Tool, WorkoutRequest, WorkoutLayout, RestFitter}
+  alias BurpeeTrainer.Coach.{Rationale, Tool, Voice, WorkoutRequest, WorkoutLayout, RestFitter}
   alias BurpeeTrainer.{Levels, Workouts, PlanCompiler, UserTime}
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.HomeSelection
@@ -60,7 +60,8 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
         "target_duration_sec" => slot.duration_sec
       })
 
-    with {:ok, rationale} <- Rationale.validate(layout["rationale"]),
+    with :ok <- plain_name(layout["name"]),
+         {:ok, rationale} <- Rationale.validate(layout["rationale"]),
          :ok <- within_level_band(scope, slot, reps),
          {:ok, request} <- WorkoutRequest.new(attrs),
          {:ok, canonical} <- RestFitter.fit(request, %{layout | "rationale" => rationale}),
@@ -101,6 +102,15 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
         {:error, "owner timezone is unavailable"}
     end
   end
+
+  defp plain_name(name) when is_binary(name) do
+    case Voice.internal_id(name) do
+      nil -> :ok
+      id -> {:error, "name is shown to the athlete; write #{id} in plain words"}
+    end
+  end
+
+  defp plain_name(_name), do: :ok
 
   defp describe(%{code: code, context: context}), do: "#{code}: #{inspect(context)}"
   defp describe(reason) when is_binary(reason), do: reason
