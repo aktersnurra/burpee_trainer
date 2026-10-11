@@ -44,7 +44,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       >
         <.icon name="hero-arrow-left" class="size-5" />
       </button>
-      <h1 id="home-coach-heading" tabindex="-1" class="home-state-heading">Coach</h1>
+      <h1 id="home-coach-heading" tabindex="-1" class="screen-heading">Coach</h1>
       <p id="home-coach-summary" class="home-coach-summary-text">
         <.summary_body summary={@state.progress_summary} loading?={@state.progress_summary_loading?} />
       </p>

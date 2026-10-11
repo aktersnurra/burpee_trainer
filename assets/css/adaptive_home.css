@@ -774,8 +774,8 @@
 .home-resume-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 5px; font-variant-numeric: tabular-nums; }
 .home-resume-action { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; border-bottom: 1px solid #262722; font-size: 14px; }
 .home-resume-action:hover { color: #55534c; }
-.home-history { max-width: 100%; margin: 22px auto 0; overflow: visible; }
-.home-history-header .home-state-heading { font: 500 13px/1.4 var(--font-sans); letter-spacing: .01em; color: var(--home-muted); }
+.home-history { max-width: 100%; margin: 0 auto; overflow: visible; }
+
 .home-history-status { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-top: 14px; }
 .home-history-status p:first-child { white-space: nowrap; font-size: 14px; }
 .home-history-status p:first-child strong { font: 400 54px/1 var(--font-sans); letter-spacing: -.06em; }
@@ -880,6 +880,7 @@
 #home-done-today { border-bottom: 0; }
 .home-coach-panel { width: 100%; max-width: 640px; margin: 0 auto; }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
+.screen-heading { margin: 16px 0 0; font: 500 28px/1.2 var(--font-sans); letter-spacing: -.5px; }
 .screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
 .home-coach-summary-text { margin-top: 18px; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
 #home-coach-goals { margin-top: 28px; }

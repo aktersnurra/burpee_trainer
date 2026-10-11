@@ -30,7 +30,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                   )
               )
             }
-            class="home-state-heading"
+            class="screen-heading"
           >
             History
           </h1>
