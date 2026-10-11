@@ -78,6 +78,20 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     refute has_element?(view, "#home-request-timing")
   end
 
+  test "today's workout fades out as New comes in, and back in on Cancel", %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    hero = view |> element("#home-workout-hero") |> render()
+    assert hero =~ ~s(phx-remove=)
+    assert hero =~ "home-leave"
+
+    view |> element("#home-new-workout") |> render_click()
+    assert has_element?(view, "#home-authoring-heading.home-enter")
+    assert has_element?(view, "#home-new-form.home-enter")
+
+    view |> element("#home-request-abort") |> render_click()
+    assert view |> element("#home-workout-hero") |> render() =~ "home-enter"
+  end
+
   test "the selected pill follows every switch", %{view: view} do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()

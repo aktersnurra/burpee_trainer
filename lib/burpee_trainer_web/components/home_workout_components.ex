@@ -172,7 +172,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       phx-mounted={JS.focus(to: "#home-new-reps")}
       phx-submit="review_new_workout"
       phx-change="change_new_workout"
-      class="home-authoring-form"
+      class="home-authoring-form home-enter"
     >
       <.input field={@form[:burpee_type]} type="hidden" />
       <.input field={@form[:pacing_style]} type="hidden" />
@@ -425,7 +425,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <.form
           for={@state.adjustment_form}
           id="home-edit-form"
-          class="home-current-edit home-authoring-form"
+          class="home-current-edit home-authoring-form home-enter"
           phx-submit="review_current_edit"
           phx-change="change_current_edit"
           aria-busy={to_string(@state.busy?)}
@@ -552,13 +552,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <span class="sr-only">Updating workout</span>
           </div>
         <% else %>
-          <h1 :if={authoring?(@state)} id="home-authoring-heading" class="screen-heading">
+          <h1 :if={authoring?(@state)} id="home-authoring-heading" class="screen-heading home-enter">
             {authoring_heading(@state.authoring_stage)}
           </h1>
           <p
             :if={authoring?(@state) and @state.editing_source}
             id="home-authoring-source"
-            class="home-authoring-source"
+            class="home-authoring-source home-enter"
           >
             {source_prefix(@state.authoring_stage)}{@state.editing_source.name} · {duration_label(
               @state.editing_source.target_duration_sec
@@ -568,7 +568,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <div
             :if={not authoring?(@state)}
             id="home-workout-hero"
+            class={@state.authoring_returned? && "home-enter"}
             phx-mounted={@state.authoring_returned? && JS.focus(to: "#home-summary")}
+            phx-remove={JS.transition({"home-leave", "home-leave-from", "home-leave-to"}, time: 180)}
           >
             <p class="home-eyebrow">Today’s workout</p>
             <div class="home-hero">
