@@ -956,7 +956,7 @@
 .home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
 .home-review-actions .home-icon-button { margin: 0; }
 /* New form actions are words: a quiet Cancel or Edit, and one filled primary action. */
-#home-new-form .home-review-actions { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
+.home-review-actions:has(.home-text-action, .home-primary-action) { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
 .home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 15px/1 var(--font-sans); }
 .home-text-action { background: transparent; border: 0; color: var(--home-muted); }
 .home-text-action:hover { color: #262722; }

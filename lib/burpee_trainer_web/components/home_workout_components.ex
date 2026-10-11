@@ -440,15 +440,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <button
           id="home-request-abort"
           type="button"
-          class="home-icon-button"
-          aria-label="Abort edit"
+          class="home-text-action"
+          aria-label="Cancel edit"
           phx-click={
             JS.push("abort_new_workout")
             |> JS.remove_attribute("hidden", to: "#home-workout-hero")
             |> JS.focus(to: "#home-summary")
           }
         >
-          <.icon name="hero-x-mark" class="size-5" />
+          Cancel
         </button>
       </div>
     <% else %>
@@ -476,23 +476,23 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <button
               type="button"
               id="home-request-abort"
-              class="home-icon-button"
-              aria-label="Abort edit"
+              class="home-text-action"
+              aria-label="Cancel edit"
               phx-click={
                 JS.push("abort_new_workout")
                 |> JS.remove_attribute("hidden", to: "#home-workout-hero")
                 |> JS.focus(to: "#home-summary")
               }
             >
-              <.icon name="hero-x-mark" class="size-5" />
+              Cancel
             </button>
             <button
               type="submit"
               id="home-edit-send"
-              class="home-icon-button"
+              class="home-primary-action"
               aria-label="Review variation"
             >
-              <.icon name="hero-arrow-up" class="size-5" />
+              Review
             </button>
           </div>
         </.form>
@@ -533,33 +533,33 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <button
               type="button"
               id="home-request-abort"
-              class="home-icon-button"
-              aria-label="Abort edit"
+              class="home-text-action"
+              aria-label="Cancel edit"
               phx-click={
                 JS.push("abort_new_workout")
                 |> JS.remove_attribute("hidden", to: "#home-workout-hero")
                 |> JS.focus(to: "#home-summary")
               }
             >
-              <.icon name="hero-x-mark" class="size-5" />
+              Cancel
             </button>
             <button
               type="button"
               id="home-request-edit"
-              class="home-icon-button"
+              class="home-text-action"
               aria-label="Change instruction"
               phx-click="edit_workout_request"
             >
-              <.icon name="hero-pencil" class="size-5" />
+              Edit
             </button>
             <button
               type="button"
               id="home-request-confirm"
-              class="home-icon-button"
-              aria-label="Approve variation"
+              class="home-primary-action"
+              aria-label="Approve and save variation"
               phx-click="confirm_workout_request"
             >
-              <.icon name="hero-check" class="size-5" />
+              Save
             </button>
           </div>
         </section>

@@ -143,6 +143,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
            )
 
     assert has_element?(view, "#home-edit-instruction[placeholder^='e.g.']")
+    assert has_element?(view, "#home-edit-form #home-request-abort", "Cancel")
+    assert has_element?(view, "#home-edit-send.home-primary-action", "Review")
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")
@@ -252,6 +254,15 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review-reps", "150")
     refute has_element?(view, "#home-edit-review-sets, .home-edit-structure")
     assert has_element?(view, "#home-edit-review #home-inspection table")
+    assert has_element?(view, "#home-edit-review #home-request-abort", "Cancel")
+    assert has_element?(view, "#home-edit-review #home-request-edit", "Edit")
+
+    assert has_element?(
+             view,
+             "#home-edit-review #home-request-confirm.home-primary-action",
+             "Save"
+           )
+
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
     assert has_element?(view, "#home-edit-review .home-prescription-every", "5s")
     assert has_element?(view, "#home-edit-review .home-prescription-rest", "450s")
