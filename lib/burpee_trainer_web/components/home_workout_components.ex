@@ -456,7 +456,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <.form
           for={@state.adjustment_form}
           id="home-edit-form"
-          class="home-current-edit"
+          class="home-current-edit home-authoring-form"
           phx-submit="review_current_edit"
           phx-change="change_current_edit"
           aria-busy={to_string(@state.busy?)}
@@ -467,10 +467,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             id="home-edit-instruction"
             type="textarea"
             label="What do you want to change?"
-            placeholder="What do you want to change?"
-            rows="2"
+            placeholder="e.g. two sets of 25, a minute's rest between"
+            rows="1"
             maxlength="500"
-            class="coach-guidance-input"
+            class="home-authoring-input"
           />
           <div class="home-review-actions">
             <button

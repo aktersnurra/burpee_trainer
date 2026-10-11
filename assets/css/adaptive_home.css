@@ -914,9 +914,6 @@
 .history-coach-summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 .coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: 14px; }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }
-.home-current-edit { margin-top: 24px; border-top: 1px solid var(--home-line); padding-top: 18px; }
-.home-current-edit .fieldset { margin: 0; padding: 0; }
-.home-current-edit .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .home-edit-structure summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--home-muted); font-size: 13px; }
 .home-edit-structure ol { font-size: 13px; line-height: 1.8; color: var(--home-muted); }
 .adaptive-home .history-coach-memory summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
@@ -981,8 +978,8 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-authoring-form .fieldset label:has(textarea) { grid-template-columns: 1fr; gap: 4px; }
 .home-authoring-input::placeholder { color: var(--home-muted); opacity: 1; }
 /* The focused field underlines its row instead of drawing a box past the column edge. */
-#home-new-form .home-authoring-input:focus-visible { outline: none; }
-#home-new-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
+.home-authoring-form .home-authoring-input:focus-visible { outline: none; }
+.home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
 .home-authoring-form input[type="hidden"] { display: none; }
 #home-new-form .home-authoring-input:disabled { opacity: 1; color: #1d1d1b; -webkit-text-fill-color: #1d1d1b; }
 .home-pill-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; min-height: 60px; padding: 8px 0; border-bottom: 1px solid var(--home-line); }

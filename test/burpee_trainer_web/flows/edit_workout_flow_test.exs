@@ -133,6 +133,17 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-authoring-source", selected.plan.name)
     assert has_element?(view, "#home-workout-hero[hidden]")
 
+    # The instruction is a New-form field: a visible label above it, an example inside it.
+    assert has_element?(view, "#home-edit-form.home-authoring-form textarea.home-authoring-input")
+
+    assert has_element?(
+             view,
+             "label[for=home-edit-instruction] .label",
+             "What do you want to change?"
+           )
+
+    assert has_element?(view, "#home-edit-instruction[placeholder^='e.g.']")
+
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")
     refute has_element?(view, "#home-workout-hero[hidden]")
@@ -201,7 +212,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     refute_received {:provider_request, _}
     view |> element("#home-edit-workout") |> render_click()
-    assert has_element?(view, "#home-edit-instruction[placeholder='What do you want to change?']")
+    assert has_element?(view, "#home-edit-instruction")
     instruction = "Increase to 150 reps, keep 20 minutes, 5 seconds active pace and two sets."
 
     view
