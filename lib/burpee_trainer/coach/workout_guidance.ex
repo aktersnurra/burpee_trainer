@@ -2,6 +2,7 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
   @moduledoc "Shared, level-aware training guidance for structured workout proposals."
 
   alias BurpeeTrainer.{Levels, UserTime, Workouts}
+  alias BurpeeTrainer.Coach.Voice
 
   # General movement references, not measured individual capacity:
   # https://busydadtraining.com/6-count-burpee/
@@ -37,7 +38,11 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
   burpee type and duration; do not extrapolate a short session's density to a long one. A
   six-count burpee is roughly 4-5 s of active movement and a Navy Seal roughly 8 s; these are
   defaults when no pace is requested, not measurements of this user. Never infer medical
-  conditions. If the targets cannot be met, say so in the rationale instead of inventing a plan.
+  conditions.
+
+  The rationale is one sentence for the athlete in the voice above. If the targets cannot be
+  met as asked, design the closest workout that can be met and
+  say in the rationale what you changed and why.
   """
 
   @spec system_prompt(BurpeeTrainer.Accounts.Scope.t()) :: String.t()
@@ -70,7 +75,9 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
         }
       end)
 
-    @training_rules <>
+    Voice.text() <>
+      "\n" <>
+      @training_rules <>
       "\nReturn only the layout JSON.\n" <>
       Jason.encode!(%{
         current_level:
