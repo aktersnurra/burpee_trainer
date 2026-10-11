@@ -20,6 +20,20 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     %{conn: conn, view: view, user: user, selected: selected}
   end
 
+  test "New takes the workout's place under one heading, and abort brings the workout back",
+       %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+
+    assert has_element?(view, "h1#home-authoring-heading", "New workout")
+    assert has_element?(view, "#home-workout-hero[hidden]")
+    refute has_element?(view, "#home-new-form h2")
+
+    view |> element("#home-request-abort") |> render_click()
+    refute has_element?(view, "#home-authoring-heading")
+    refute has_element?(view, "#home-workout-hero[hidden]")
+  end
+
   test "the selected pill follows every switch", %{view: view} do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()

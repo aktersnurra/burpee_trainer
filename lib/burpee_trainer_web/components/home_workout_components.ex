@@ -94,7 +94,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           :if={@editable}
           id="home-request-abort"
           type="button"
-          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+          phx-click={
+            JS.push("abort_new_workout")
+            |> JS.remove_attribute("hidden", to: "#home-workout-hero")
+            |> JS.focus(to: "#home-summary")
+          }
           class="home-icon-button"
           aria-label="Abort review"
           title="Abort"
@@ -174,12 +178,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       phx-change="change_new_workout"
       class="home-authoring-form"
     >
-      <h2 class="home-review-heading">
-        {if(@locked,
-          do: "Review",
-          else: if(@stage == :editing, do: "Edit workout", else: "New workout")
-        )}
-      </h2>
       <.input field={@form[:burpee_type]} type="hidden" />
       <.input field={@form[:pacing_style]} type="hidden" />
       <div
@@ -304,7 +302,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <button
           id="home-request-abort"
           type="button"
-          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+          phx-click={
+            JS.push("abort_new_workout")
+            |> JS.remove_attribute("hidden", to: "#home-workout-hero")
+            |> JS.focus(to: "#home-summary")
+          }
           class="home-icon-button"
           aria-label="Abort new workout"
           title="Abort"
@@ -584,89 +586,94 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <span class="sr-only">Updating workout</span>
           </div>
         <% else %>
-          <p class="home-eyebrow">Today’s workout</p>
-          <div class="home-hero">
-            <div class="home-hero-main">
-              <h1>
-                <button
-                  id="home-summary"
-                  type="button"
-                  phx-click="toggle_summary"
-                  class={["home-summary", @state.expanded? && "home-summary-expanded"]}
-                  aria-expanded={to_string(@state.expanded?)}
-                  aria-controls="home-expansion-content"
-                >
-                  <span class="home-workout-name">{@state.home_selection.plan.name}</span>
-                </button>
-              </h1>
+          <h1 :if={authoring_new?(@state)} id="home-authoring-heading" class="screen-heading">
+            {authoring_heading(@state.authoring_stage)}
+          </h1>
+          <div id="home-workout-hero" hidden={authoring_new?(@state)}>
+            <p class="home-eyebrow">Today’s workout</p>
+            <div class="home-hero">
+              <div class="home-hero-main">
+                <h1>
+                  <button
+                    id="home-summary"
+                    type="button"
+                    phx-click="toggle_summary"
+                    class={["home-summary", @state.expanded? && "home-summary-expanded"]}
+                    aria-expanded={to_string(@state.expanded?)}
+                    aria-controls="home-expansion-content"
+                  >
+                    <span class="home-workout-name">{@state.home_selection.plan.name}</span>
+                  </button>
+                </h1>
+              </div>
+              <span class="home-workout-totals">
+                {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
+              </span>
             </div>
-            <span class="home-workout-totals">
-              {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
-            </span>
-          </div>
-          <p
-            :if={@state.home_selection.rationale}
-            id="home-planner-rationale"
-            class="home-coach-summary-text"
-          >
-            {@state.home_selection.rationale}
-          </p>
-          <div class="home-workout-actions" data-expanded={to_string(@state.expanded?)}>
-            <button
-              id="home-edit-workout"
-              type="button"
-              phx-click="edit_current_workout"
-              aria-label="Edit current workout"
-              title="Edit workout"
-              class="home-icon-button home-expanded-action"
-              inert={!@state.expanded?}
-              disabled={@state.authoring_stage != :idle}
+            <p
+              :if={@state.home_selection.rationale}
+              id="home-planner-rationale"
+              class="home-coach-summary-text"
             >
-              <.icon name="hero-pencil" class="size-6" />
-              <span class="home-action-label">Edit</span>
-            </button>
-            <button
-              id="home-title-action"
-              type="button"
-              phx-click={open_chooser()}
-              aria-label="Switch workout"
-              title="Switch workout"
-              aria-haspopup="dialog"
-              aria-expanded={to_string(@state.chooser_open?)}
-              aria-controls="home-alternatives-panel"
-              class="home-icon-button home-expanded-action"
-              inert={!@state.expanded?}
-              disabled={@state.authoring_stage != :idle}
-            >
-              <.icon name="hero-arrows-right-left" class="size-6" />
-              <span class="home-action-label">Switch</span>
-            </button>
-            <button
-              id="home-action"
-              data-primary-action="start"
-              type="button"
-              phx-click="start_workout"
-              phx-value-client_session_id={@state.start_client_session_id}
-              aria-label="Start workout"
-              title="Start workout"
-              class="home-icon-button"
-              disabled={@state.authoring_stage != :idle}
-            >
-              <.icon name="hero-play" class="size-6" />
-            </button>
-            <button
-              id="home-new-workout"
-              type="button"
-              phx-click={JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
-              aria-label="New workout"
-              title="New workout"
-              class="home-icon-button home-expanded-action"
-              inert={!@state.expanded?}
-              disabled={@state.authoring_stage != :idle}
-            >
-              <.icon name="hero-plus" class="size-6" />
-              <span class="home-action-label">New</span>
-            </button>
+              {@state.home_selection.rationale}
+            </p>
+            <div class="home-workout-actions" data-expanded={to_string(@state.expanded?)}>
+              <button
+                id="home-edit-workout"
+                type="button"
+                phx-click="edit_current_workout"
+                aria-label="Edit current workout"
+                title="Edit workout"
+                class="home-icon-button home-expanded-action"
+                inert={!@state.expanded?}
+                disabled={@state.authoring_stage != :idle}
+              >
+                <.icon name="hero-pencil" class="size-6" />
+                <span class="home-action-label">Edit</span>
+              </button>
+              <button
+                id="home-title-action"
+                type="button"
+                phx-click={open_chooser()}
+                aria-label="Switch workout"
+                title="Switch workout"
+                aria-haspopup="dialog"
+                aria-expanded={to_string(@state.chooser_open?)}
+                aria-controls="home-alternatives-panel"
+                class="home-icon-button home-expanded-action"
+                inert={!@state.expanded?}
+                disabled={@state.authoring_stage != :idle}
+              >
+                <.icon name="hero-arrows-right-left" class="size-6" />
+                <span class="home-action-label">Switch</span>
+              </button>
+              <button
+                id="home-action"
+                data-primary-action="start"
+                type="button"
+                phx-click="start_workout"
+                phx-value-client_session_id={@state.start_client_session_id}
+                aria-label="Start workout"
+                title="Start workout"
+                class="home-icon-button"
+                disabled={@state.authoring_stage != :idle}
+              >
+                <.icon name="hero-play" class="size-6" />
+              </button>
+              <button
+                id="home-new-workout"
+                type="button"
+                phx-click={JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
+                aria-label="New workout"
+                title="New workout"
+                class="home-icon-button home-expanded-action"
+                inert={!@state.expanded?}
+                disabled={@state.authoring_stage != :idle}
+              >
+                <.icon name="hero-plus" class="size-6" />
+                <span class="home-action-label">New</span>
+              </button>
+            </div>
           </div>
           <div id="home-expansion" class="home-expansion" data-open={to_string(@state.expanded?)}>
             <section
@@ -686,10 +693,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   request={@state.pending_request.request}
                 />
                 <.authoring_form
-                  :if={
-                    is_nil(@state.editing_source) and
-                      @state.authoring_stage in [:new, :review, :editing]
-                  }
+                  :if={authoring_new?(@state)}
                   form={@state.workout_form}
                   stage={@state.authoring_stage}
                   candidate={@state.pending_request}
@@ -1171,6 +1175,14 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do: number(min(100, max(0, slot.completed_sec * 100 / slot.weekly_target_sec)))
 
   # Filter chips use the short form: "1A", "Graduated".
+  # New (and its review) replaces today's workout on screen under one heading.
+  defp authoring_new?(state),
+    do: is_nil(state.editing_source) and state.authoring_stage in [:new, :review, :editing]
+
+  defp authoring_heading(:review), do: "Review"
+  defp authoring_heading(:editing), do: "Edit workout"
+  defp authoring_heading(:new), do: "New workout"
+
   defp level_label(level),
     do: level |> BurpeeTrainerWeb.Fmt.level() |> String.replace_prefix("Level ", "")
 end
