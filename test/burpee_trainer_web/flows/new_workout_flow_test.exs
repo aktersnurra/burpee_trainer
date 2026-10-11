@@ -45,6 +45,14 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
         ] do
       assert has_element?(view, "label[for=#{id}] .input-unit", unit)
     end
+
+    for {id, label} <- [
+          {"home_workout_pace", "Seconds per rep"},
+          {"home_workout_sets", "Sets"},
+          {"home_workout_rests", "Pauses"}
+        ] do
+      assert view |> element("label[for=#{id}] .label") |> render() =~ ">#{label}<"
+    end
   end
 
   test "the selected pill follows every switch", %{view: view} do

@@ -233,7 +233,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         type="number"
         step="any"
         min="0.000001"
-        label="Active seconds / rep"
+        label="Seconds per rep"
         unit="s"
         placeholder={
           if(@candidate && is_nil(@form[:pace].value), do: "Varies by set", else: "Coach chooses")
@@ -244,7 +244,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <.input
         field={@form[:sets]}
         type="text"
-        label="Set configuration"
+        label="Sets"
         placeholder="5x8, 5x7, 5x(7,6)"
         maxlength="300"
         disabled={@locked}
@@ -279,7 +279,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         field={@form[:rests]}
         type="textarea"
         rows="2"
-        label="Extended rests · total pauses"
+        label="Pauses"
         placeholder={if(@locked, do: "No fixed pauses", else: "60s at 11:00")}
         maxlength="300"
         disabled={@locked}
