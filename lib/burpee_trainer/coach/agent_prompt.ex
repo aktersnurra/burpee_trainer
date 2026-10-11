@@ -19,7 +19,8 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   """
 
   @context_glossary """
-  The context that follows is JSON. notebook: what you have saved about the athlete. goals: \
+  The context that follows is JSON. notebook: what you have saved about the athlete; they \
+  read it under What the coach knows, so write it in the voice above. goals: \
   their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \

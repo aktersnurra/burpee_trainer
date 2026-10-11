@@ -4,6 +4,8 @@ defmodule BurpeeTrainer.Coach.Rationale do
   else with an error the model can act on, so nothing unfit for the athlete is stored.
   """
 
+  alias BurpeeTrainer.Coach.Voice
+
   @max_length 280
 
   @spec max_length() :: pos_integer()
@@ -20,8 +22,8 @@ defmodule BurpeeTrainer.Coach.Rationale do
       String.length(trimmed) > @max_length ->
         {:error, "rationale must be at most #{@max_length} characters"}
 
-      Regex.match?(~r/\b[a-z]+_[a-z0-9_]+\b/, trimmed) ->
-        {:error, "rationale must not contain internal ids such as level_1a"}
+      id = Voice.internal_id(trimmed) ->
+        {:error, "rationale must not contain internal ids such as #{id}"}
 
       true ->
         {:ok, trimmed}

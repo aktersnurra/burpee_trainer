@@ -20,4 +20,15 @@ defmodule BurpeeTrainer.Coach.Voice do
     (#{Levels.window_days(:graduated)} days for Graduated).
     """
   end
+
+  @internal_id ~r/\b[a-z]+_[a-z0-9_]+\b/
+
+  @doc "The first internal id (such as `level_1a`) in text the athlete will read, if any."
+  @spec internal_id(String.t()) :: String.t() | nil
+  def internal_id(text) when is_binary(text) do
+    case Regex.run(@internal_id, text) do
+      [id] -> id
+      nil -> nil
+    end
+  end
 end

@@ -21,6 +21,18 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     assert {:error, _} = UpdateNotebook.call(scope, %{"text" => 12}, %{})
   end
 
+  test "the athlete reads the notebook, so the coach may not write internal ids into it" do
+    scope = scope_fixture()
+
+    assert {:error, message} =
+             UpdateNotebook.call(scope, %{"text" => "Current level: level_1a."}, %{
+               notebook_seen: nil
+             })
+
+    assert message =~ "level_1a"
+    assert BurpeeTrainer.Coach.Notebook.get(scope).body == ""
+  end
+
   test "goal proposal and confirmation are scoped" do
     scope = scope_fixture()
 
