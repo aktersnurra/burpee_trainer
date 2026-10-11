@@ -29,6 +29,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#home-workout-hero[hidden]")
     refute has_element?(view, "#home-new-form h2")
 
+    assert has_element?(view, "#home-request-abort", "Cancel")
+    assert has_element?(view, "#home-new-review.home-primary-action", "Review")
+
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")
     refute has_element?(view, "#home-workout-hero[hidden]")

@@ -306,47 +306,43 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             |> JS.remove_attribute("hidden", to: "#home-workout-hero")
             |> JS.focus(to: "#home-summary")
           }
-          class="home-icon-button"
-          aria-label="Abort new workout"
-          title="Abort"
+          class="home-text-action"
+          aria-label="Cancel new workout"
           disabled={@busy && @locked}
         >
-          <.icon name="hero-x-mark" class="size-5" />
+          Cancel
         </button>
         <button
           :if={@locked}
           id="home-request-edit"
           type="button"
           phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-new-reps")}
-          class="home-icon-button"
+          class="home-text-action"
           aria-label="Edit workout"
-          title="Edit"
           disabled={@busy}
         >
-          <.icon name="hero-pencil-square" class="size-5" />
+          Edit
         </button>
         <button
           :if={@locked}
           id="home-request-confirm"
           type="button"
           phx-click="confirm_workout_request"
-          class="home-icon-button"
+          class="home-primary-action"
           aria-label="Approve and save workout"
-          title="Approve"
           disabled={@busy || is_nil(@candidate)}
         >
-          <.icon name="hero-check" class="size-5" />
+          Save
         </button>
         <button
           :if={!@locked}
           id="home-new-review"
           type="submit"
-          class="home-icon-button"
+          class="home-primary-action"
           aria-label="Review workout"
-          title="Review"
           disabled={@busy}
         >
-          <.icon name="hero-arrow-right" class="size-5" />
+          Review
         </button>
       </div>
       <section
