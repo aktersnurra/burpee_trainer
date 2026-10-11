@@ -69,7 +69,8 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     |> render_submit()
 
     assert BurpeeTrainer.Coach.Notebook.get(scope).body == "Owner note"
-    assert summary_jobs() == 1
+    # The summary is computed from metrics, not the notebook.
+    assert summary_jobs() == 0
   end
 
   test "real provider tool conversation proposes a goal, replies, then confirms in the same screen",

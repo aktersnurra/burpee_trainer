@@ -96,16 +96,18 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert {:ok, _} = Validator.validate_summary(SummaryJob.fallback(no_goals), no_goals)
   end
 
-  test "confirming or dismissing a goal admits a summary" do
+  test "confirming a goal admits a summary; dismissing a proposal changes no input and does not" do
     scope = scope_fixture()
 
-    for transition <- [&Goals.confirm/2, &Goals.dismiss/2] do
-      Repo.delete_all(Oban.Job)
-      {:ok, %{"goal_id" => id}} = ProposeGoal.call(scope, proposal(), %{})
-      assert {:ok, _} = transition.(scope, id)
-      assert [%{args: %{"user_id" => user_id}}] = all_enqueued(worker: SummaryJob)
-      assert user_id == scope.user.id
-    end
+    {:ok, %{"goal_id" => id}} = ProposeGoal.call(scope, proposal(), %{})
+    assert {:ok, _} = Goals.confirm(scope, id)
+    assert [%{args: %{"user_id" => user_id}}] = all_enqueued(worker: SummaryJob)
+    assert user_id == scope.user.id
+
+    Repo.delete_all(Oban.Job)
+    {:ok, %{"goal_id" => id}} = ProposeGoal.call(scope, proposal(), %{})
+    assert {:ok, _} = Goals.dismiss(scope, id)
+    assert all_enqueued(worker: SummaryJob) == []
   end
 
   describe "on_open/2" do

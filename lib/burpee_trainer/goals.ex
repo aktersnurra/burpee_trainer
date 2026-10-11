@@ -100,7 +100,7 @@ defmodule BurpeeTrainer.Goals do
 
           case goal |> Goal.status_changeset(status) |> Repo.update() do
             {:ok, goal} ->
-              admit_summary(scope, goal)
+              admit_summary(scope, goal.status, goal)
               goal
 
             {:error, changeset} ->
@@ -110,8 +110,11 @@ defmodule BurpeeTrainer.Goals do
     end)
   end
 
-  # The summary follows goal changes; failing to admit it never undoes the change.
-  defp admit_summary(scope, goal) do
+  # The summary follows the active goals; a dismissed proposal changes none of them.
+  # Failing to admit it never undoes the change.
+  defp admit_summary(_scope, :abandoned, _goal), do: :ok
+
+  defp admit_summary(scope, :active, goal) do
     case SummaryJob.admit(scope) do
       {:ok, _job} ->
         :ok
