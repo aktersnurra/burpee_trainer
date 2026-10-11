@@ -98,6 +98,58 @@ defmodule BurpeeTrainer.Coach do
   def confirm_home_revision(%Accounts.Scope{}, _prepared, _opts),
     do: {:error, Error.new(:design_workspace_changed)}
 
+  @doc """
+  Reads the New form's note into exact sets, fixed pauses and recovery. The fields the
+  owner entered stay as entered; a blank note asks the coach nothing.
+  """
+  @spec prepare_new_request(Accounts.Scope.t(), WorkoutRequest.t(), String.t(), keyword()) ::
+          {:ok, WorkoutRequest.t()} | {:error, Error.t()}
+  def prepare_new_request(
+        %Accounts.Scope{} = scope,
+        %WorkoutRequest{} = request,
+        note,
+        opts \\ []
+      )
+      when is_binary(note),
+      do: new_request(scope, request, String.trim(note), opts)
+
+  defp new_request(_scope, request, "" = _note, _opts), do: {:ok, request}
+
+  defp new_request(scope, request, note, opts) do
+    fixed = %{
+      role: "user",
+      content:
+        Jason.encode!(%{
+          scope: "fixed_fields",
+          request: WorkoutRequest.to_map(request),
+          rule:
+            "These fields are fixed. From the instruction take only set_reps, timed_rests and recovery."
+        })
+    }
+
+    messages = AuthoringPrompt.messages(scope, nil, note, @request_extraction_prompt, [fixed])
+
+    with :ok <- outside_authoring_transaction(),
+         {:ok, %{content: %{} = response, tool_calls: []}} <-
+           Client.chat(
+             messages,
+             chat_opts(
+               scope,
+               opts,
+               "new_request",
+               {"workout_request", WorkoutRequest.json_schema()}
+             )
+           ) do
+      request
+      |> WorkoutRequest.to_map()
+      |> Map.merge(Map.take(response, ~w[set_reps timed_rests recovery]))
+      |> WorkoutRequest.new()
+    else
+      {:error, error} -> {:error, error}
+      _ -> {:error, Error.new(:invalid_provider_response)}
+    end
+  end
+
   @doc "Compile and audit a review candidate without creating a WorkoutPlan."
   @spec prepare_plan(Accounts.Scope.t(), String.t(), WorkoutRequest.t()) ::
           {:ok, map()} | {:error, Error.t()}

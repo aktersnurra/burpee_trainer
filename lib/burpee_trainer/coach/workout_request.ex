@@ -100,8 +100,15 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
     %{
       type: "object",
       additionalProperties: false,
-      required: @fields,
+      required: @fields ++ ["set_reps"],
       properties: %{
+        set_reps: %{
+          type: "array",
+          maxItems: 5_000,
+          items: %{type: "integer", minimum: 1},
+          description:
+            "Reps of each set in order when the user states them, summing to target_reps; empty otherwise."
+        },
         burpee_type: %{type: "string", enum: ~w[six_count navy_seal]},
         target_reps: %{type: "integer", minimum: 1, maximum: @max_reps},
         target_duration_sec: %{type: "integer", minimum: 1, maximum: @max_duration_sec},
