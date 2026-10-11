@@ -883,6 +883,7 @@
 .screen-heading { margin: 16px 0 0; font: 600 28px/1.2 var(--font-sans); letter-spacing: -0.02em; }
 /* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
 .screen-heading:focus { outline: none; }
+.home-authoring-source { margin-top: 6px; color: var(--home-muted); font-size: 14px; line-height: 1.4; }
 .screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
 .home-coach-summary-text { margin-top: 18px; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
 #home-coach-goals { margin-top: 28px; }

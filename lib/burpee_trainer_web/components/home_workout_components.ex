@@ -442,7 +442,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           type="button"
           class="home-icon-button"
           aria-label="Abort edit"
-          phx-click="abort_new_workout"
+          phx-click={
+            JS.push("abort_new_workout")
+            |> JS.remove_attribute("hidden", to: "#home-workout-hero")
+            |> JS.focus(to: "#home-summary")
+          }
         >
           <.icon name="hero-x-mark" class="size-5" />
         </button>
@@ -474,7 +478,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-abort"
               class="home-icon-button"
               aria-label="Abort edit"
-              phx-click="abort_new_workout"
+              phx-click={
+                JS.push("abort_new_workout")
+                |> JS.remove_attribute("hidden", to: "#home-workout-hero")
+                |> JS.focus(to: "#home-summary")
+              }
             >
               <.icon name="hero-x-mark" class="size-5" />
             </button>
@@ -527,7 +535,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-abort"
               class="home-icon-button"
               aria-label="Abort edit"
-              phx-click="abort_new_workout"
+              phx-click={
+                JS.push("abort_new_workout")
+                |> JS.remove_attribute("hidden", to: "#home-workout-hero")
+                |> JS.focus(to: "#home-summary")
+              }
             >
               <.icon name="hero-x-mark" class="size-5" />
             </button>
@@ -581,10 +593,17 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <span class="sr-only">Updating workout</span>
           </div>
         <% else %>
-          <h1 :if={authoring_new?(@state)} id="home-authoring-heading" class="screen-heading">
+          <h1 :if={authoring?(@state)} id="home-authoring-heading" class="screen-heading">
             {authoring_heading(@state.authoring_stage)}
           </h1>
-          <div id="home-workout-hero" hidden={authoring_new?(@state)}>
+          <p
+            :if={authoring?(@state) and @state.editing_source}
+            id="home-authoring-source"
+            class="home-authoring-source"
+          >
+            {@state.editing_source.name} · {duration_label(@state.editing_source.target_duration_sec)} · {@state.editing_source.target_reps} reps
+          </p>
+          <div id="home-workout-hero" hidden={authoring?(@state)}>
             <p class="home-eyebrow">Today’s workout</p>
             <div class="home-hero">
               <div class="home-hero-main">
@@ -1170,7 +1189,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do: number(min(100, max(0, slot.completed_sec * 100 / slot.weekly_target_sec)))
 
   # Filter chips use the short form: "1A", "Graduated".
-  # New (and its review) replaces today's workout on screen under one heading.
+  # New and Edit (and their review) replace today's workout on screen under one heading.
+  defp authoring?(state), do: state.authoring_stage in [:new, :review, :editing]
+
   defp authoring_new?(state),
     do: is_nil(state.editing_source) and state.authoring_stage in [:new, :review, :editing]
 

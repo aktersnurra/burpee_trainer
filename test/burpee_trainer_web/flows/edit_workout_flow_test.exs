@@ -124,6 +124,20 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     %{view: view, user: user, selected: selected}
   end
 
+  test "Edit replaces the workout under one heading that still names it, and abort restores it",
+       %{view: view, selected: selected} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-edit-workout") |> render_click()
+
+    assert has_element?(view, "h1#home-authoring-heading", "Edit workout")
+    assert has_element?(view, "#home-authoring-source", selected.plan.name)
+    assert has_element?(view, "#home-workout-hero[hidden]")
+
+    view |> element("#home-request-abort") |> render_click()
+    refute has_element?(view, "#home-authoring-heading")
+    refute has_element?(view, "#home-workout-hero[hidden]")
+  end
+
   @tag hold_edit_plan: true
   test "Edit reviews and saves a new variation while the original and a used session stay unchanged",
        %{conn: conn, user: user} do
