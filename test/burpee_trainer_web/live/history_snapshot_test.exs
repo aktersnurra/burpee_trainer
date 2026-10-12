@@ -47,9 +47,10 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
            )
 
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet", "Jan 2, 2025")
+    # The app's date style: day before month, the year only when it is not this one.
+    assert has_element?(view, "#home-history-sheet", "Thu 2 Jan 2025")
     assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='38']")
-    assert has_element?(view, "#home-history-sheet-details-#{session.id}", "Reps · 40")
+    assert has_element?(view, "#home-history-sheet-details-#{session.id}", "of 40")
 
     [persisted] = Workouts.list_sessions(BurpeeTrainer.Accounts.Scope.for_user(user))
     assert persisted.completed_at == ~U[2025-01-02 03:04:05Z]
@@ -94,7 +95,18 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
 
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
     assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='27']")
-    assert has_element?(view, "#home-history-sheet-details-#{session.id}", "Reps · —")
+    # Only what was planned gets an "of": duration was, reps were not.
+    refute has_element?(
+             view,
+             "#home-history-sheet-details-#{session.id} [data-actual-reps]",
+             "of"
+           )
+
+    assert has_element?(
+             view,
+             "#home-history-sheet-details-#{session.id} [data-actual-duration-sec]",
+             "of 15:00"
+           )
 
     persisted = Repo.get!(WorkoutSession, session.id)
     assert persisted.video_snapshot["count"] == nil

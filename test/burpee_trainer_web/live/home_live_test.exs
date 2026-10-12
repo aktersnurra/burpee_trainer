@@ -589,7 +589,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     refute has_element?(view, "#home-history-week-count, .home-history-week-key")
     assert has_element?(view, "#home-history-day-#{Date.to_iso8601(day)}")
-    assert has_element?(view, "#home-history-week-detail", "20 min trained")
+    assert has_element?(view, "#home-history-week-detail strong", "20")
 
     assert has_element?(
              view,

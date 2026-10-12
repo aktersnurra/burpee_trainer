@@ -39,7 +39,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>
           <div id="home-history-status" class="home-history-status">
-            <p class="home-history-streak-line">
+            <p :if={@state.history_streak > 0} class="home-history-streak-line">
               <strong id="home-history-streak">{@state.history_streak}</strong>
               <span>week streak</span>
             </p>
@@ -70,26 +70,52 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           <section id="home-history-weekly" aria-label="Minutes each week">
             <div class="home-history-week-heading">
               <h2>Minutes each week</h2>
-              <button
-                :if={@state.history_week_start == nil and @state.history_weeks != []}
-                id="home-history-week-mode"
-                type="button"
-                class="home-text-action"
-                phx-click="history_week"
-                phx-value-start={Date.to_iso8601(List.last(@state.history_weeks).start)}
+              <%!-- A view switch reads like the period tabs: both views, the current one underlined. --%>
+              <div
+                :if={@state.history_weeks != []}
+                class="home-history-view-switch"
+                role="group"
+                aria-label="Minutes view"
               >
-                Days
-              </button>
-              <button
-                :if={@state.history_week_start}
-                id="home-history-week-mode"
-                type="button"
-                class="home-text-action"
-                phx-mounted={JS.focus(to: "#home-history-week-mode")}
-                phx-click={JS.push("history_week_back")}
-              >
-                Weeks
-              </button>
+                <button
+                  :if={is_nil(@state.history_week_start)}
+                  type="button"
+                  class="home-history-period"
+                  aria-pressed="true"
+                >
+                  Weeks
+                </button>
+                <button
+                  :if={@state.history_week_start}
+                  id="home-history-week-mode"
+                  type="button"
+                  class="home-history-period"
+                  aria-pressed="false"
+                  phx-mounted={JS.focus(to: "#home-history-week-mode")}
+                  phx-click={JS.push("history_week_back")}
+                >
+                  Weeks
+                </button>
+                <button
+                  :if={is_nil(@state.history_week_start)}
+                  id="home-history-week-mode"
+                  type="button"
+                  class="home-history-period"
+                  aria-pressed="false"
+                  phx-click="history_week"
+                  phx-value-start={Date.to_iso8601(List.last(@state.history_weeks).start)}
+                >
+                  Days
+                </button>
+                <button
+                  :if={@state.history_week_start}
+                  type="button"
+                  class="home-history-period"
+                  aria-pressed="true"
+                >
+                  Days
+                </button>
+              </div>
             </div>
             <p
               :if={is_nil(@state.history_week_start) and completed_week_summary(@state.history_weeks)}
@@ -99,12 +125,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               {completed_week_summary(@state.history_weeks)}
             </p>
             <%= if @state.history_week_start do %>
-              <p id="home-history-week-detail">
-                {week_date_range(@state.history_week_start)} · {week_duration(
-                  @state.history_weeks,
-                  @state.history_week_start
-                )} trained
-              </p>
+              <div
+                id="home-history-week-detail"
+                class="home-history-status home-history-trend-readout"
+              >
+                <p class="home-history-streak-line">
+                  <strong>{week_minutes(@state.history_weeks, @state.history_week_start)}</strong>
+                  <span>min, {Fmt.week(@state.history_week_start)}</span>
+                </p>
+              </div>
               <div
                 id="home-history-daily"
                 role="group"
@@ -138,7 +167,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                   </div>
                 </div>
               </div>
-              <p id="home-history-day-note">Minutes by day</p>
             <% end %>
             <div
               :if={is_nil(@state.history_week_start)}
@@ -170,12 +198,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 </span>
               </div>
             </div>
-            <p
-              :if={is_nil(@state.history_week_start) and length(@state.history_weeks) > 12}
-              class="home-history-week-oldest"
-            >
-              {oldest_week_label(@state.history_weeks)}
-            </p>
           </section>
           <.trend_chart
             points={@state.history_points}
@@ -213,18 +235,22 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         >
           <div class="home-history-trend-heading">
             <h2>Reps per 20 minutes</h2>
-            <button
-              id="home-history-density-back"
-              type="button"
-              class="home-text-action"
-              phx-mounted={
-                @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
-              }
-              phx-click="history_density_mode"
-              phx-value-mode="chart"
-            >
-              Chart
-            </button>
+            <div class="home-history-view-switch" role="group" aria-label="Reps view">
+              <button
+                id="home-history-density-back"
+                type="button"
+                class="home-history-period"
+                aria-pressed="false"
+                phx-mounted={
+                  @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
+                }
+                phx-click="history_density_mode"
+                phx-value-mode="chart"
+              >
+                Chart
+              </button>
+              <button type="button" class="home-history-period" aria-pressed="true">Sessions</button>
+            </div>
           </div>
           <h3
             :if={is_nil(@state.history_error) and @state.history_available?}
@@ -243,9 +269,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             tabindex="0"
             class="home-history-table-region"
           >
-            <div class="home-history-session-columns" aria-hidden="true">
-              <span>Workout</span><span>Reps</span><span>Time</span>
-            </div>
             <table id="home-history-table" class="home-history-table">
               <caption class="sr-only">Saved sessions; actual reps and duration</caption>
               <thead class="sr-only">
@@ -422,13 +445,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp day_bar_height(seconds) when seconds > 0, do: min(max(seconds * 100 / 4_800, 1), 100)
   defp day_bar_height(_seconds), do: 0
 
-  defp week_duration(weeks, date) do
-    seconds = weeks |> Enum.find(&(&1.start == date)) |> Map.fetch!(:seconds)
-
-    if rem(seconds, 60) == 0,
-      do: "#{div(seconds, 60)} min",
-      else: "#{div(seconds, 60)} min #{rem(seconds, 60)} sec"
-  end
+  defp week_minutes(weeks, date),
+    do: weeks |> Enum.find(&(&1.start == date)) |> Map.fetch!(:seconds) |> div(60)
 
   defp weekly_rows(weeks),
     do: weeks |> Enum.reverse() |> Enum.chunk_every(12) |> Enum.map(&Enum.reverse/1)
@@ -454,17 +472,19 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     end
   end
 
+  defp readout(series) do
+    case Enum.flat_map(series, & &1.points) do
+      [] ->
+        nil
+
+      points ->
+        latest = Enum.max_by(points, & &1.completed_at, DateTime)
+        %{latest: latest.density, best: points |> Enum.map(& &1.density) |> Enum.max()}
+    end
+  end
+
   # "Level 1A" reads "1A" beside the word level.
   defp level_short(level), do: level |> Fmt.level() |> String.replace_prefix("Level ", "")
-
-  defp oldest_week_label([week | _]), do: "#{week_date_range(week.start)} · oldest shown"
-
-  defp week_date_range(start) do
-    last = Date.add(start, 6)
-    first_label = Calendar.strftime(start, "%b %-d")
-    last_label = Calendar.strftime(last, if(start.month == last.month, do: "%-d", else: "%b %-d"))
-    "#{first_label}–#{last_label}"
-  end
 
   attr(:state, :map, required: true)
 
@@ -573,6 +593,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       )
       |> assign(:axis_min, axis_min)
       |> assign(:axis_max, axis_max)
+      |> assign(:readout, readout(series))
 
     ~H"""
     <figure
@@ -586,21 +607,40 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <figcaption id="home-history-trend-label">
         <span class="home-history-trend-heading">
           <span class="font-semibold">Reps per 20 minutes</span>
-          <button
-            id="home-history-density-sessions"
-            type="button"
-            class="home-text-action"
-            phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
-            phx-click="history_density_mode"
-            phx-value-mode="sessions"
-          >
-            Sessions
-          </button>
+          <span class="home-history-view-switch" role="group" aria-label="Reps view">
+            <button type="button" class="home-history-period" aria-pressed="true">Chart</button>
+            <button
+              id="home-history-density-sessions"
+              type="button"
+              class="home-history-period"
+              aria-pressed="false"
+              phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
+              phx-click="history_density_mode"
+              phx-value-mode="sessions"
+            >
+              Sessions
+            </button>
+          </span>
         </span>
       </figcaption>
       <%= if @empty? or Enum.all?(@series, &(&1.points == [])) do %>
         <p class="home-history-trend-empty">No measured sessions in this period.</p>
       <% else %>
+        <%!-- The numbers lead, so one workout already says something; the line shows the trend. --%>
+        <div class="home-history-status home-history-trend-readout">
+          <p id="home-history-trend-latest" class="home-history-streak-line">
+            <strong>{@readout.latest}</strong>
+            <span>latest</span>
+          </p>
+          <p
+            :if={@readout.best != @readout.latest}
+            id="home-history-trend-best"
+            class="home-history-streak-line"
+          >
+            <strong>{@readout.best}</strong>
+            <span>best</span>
+          </p>
+        </div>
         <div
           id="home-history-trend-plot"
           class="home-history-plot"
@@ -720,28 +760,25 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     assigns = assign(assigns, density: History.points([assigns.session]))
 
     ~H"""
-    <dl id={@id} class="home-history-comparison">
-      <div>
-        <dt>Actual</dt>
-        <dd data-actual-reps={@session.burpee_count_actual}>
-          Reps · {@session.burpee_count_actual || "—"}
-        </dd>
-        <dd data-actual-duration-sec={@session.duration_sec_actual}>
-          Duration · {Fmt.duration_sec(@session.duration_sec_actual)}
-        </dd>
-      </div>
-      <div>
-        <dt>Planned</dt>
-        <dd>Reps · {@session.burpee_count_planned || "—"}</dd>
-        <dd>Duration · {Fmt.duration_sec(@session.duration_sec_planned)}</dd>
-      </div>
-    </dl>
-    <p class="home-history-density">
-      {case @density do
-        [point] -> "Density #{point.density} reps / 20 min"
-        [] -> "Density unavailable"
-      end}
-    </p>
+    <%!-- What was done leads, as numbers; the plan only appears as "of …" when there was one. --%>
+    <div id={@id} class="home-history-status home-history-comparison">
+      <p class="home-history-streak-line" data-actual-reps={@session.burpee_count_actual}>
+        <strong>{@session.burpee_count_actual || "—"}</strong>
+        <span>
+          reps{if @session.burpee_count_planned, do: " of #{@session.burpee_count_planned}"}
+        </span>
+      </p>
+      <p class="home-history-streak-line" data-actual-duration-sec={@session.duration_sec_actual}>
+        <strong>{Fmt.duration_sec(@session.duration_sec_actual)}</strong>
+        <span :if={@session.duration_sec_planned}>
+          of {Fmt.duration_sec(@session.duration_sec_planned)}
+        </span>
+      </p>
+      <p :for={point <- @density} class="home-history-streak-line">
+        <strong>{point.density}</strong>
+        <span>per 20 min</span>
+      </p>
+    </div>
     """
   end
 
@@ -805,10 +842,16 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp local_completion(%{completed_at: %DateTime{} = completed_at}, timezone) do
     case DateTime.shift_zone(completed_at, timezone) do
-      {:ok, local_datetime} -> Calendar.strftime(local_datetime, "%b %-d, %Y at %-I:%M %p")
+      {:ok, local_datetime} -> local_completion_label(local_datetime)
       {:error, _reason} -> "Completion date and time unavailable"
     end
   end
 
   defp local_completion(_session, _timezone), do: "Completion date and time unavailable"
+
+  # "Sun 11 Oct, 10:00", with the year only when it is not this one.
+  defp local_completion_label(%DateTime{} = local) do
+    year = if local.year == Date.utc_today().year, do: "", else: " %Y"
+    Calendar.strftime(local, "%a %-d %b#{year}, %H:%M")
+  end
 end

@@ -98,7 +98,9 @@ Home, Progress and Coach use three sizes, as tokens in `assets/css/adaptive_home
 | `--text-body`    | 16px | what you read and tap: summaries, section headings (600), buttons (500) |
 | `--text-small`   | 13px | labels, captions, goals, dates, chart scales (muted)          |
 
-Home's workout title and result heading are the only larger display sizes.
+`--text-title` (34px, 600) is reserved for Home's one title: today's workout or the result.
+Numbers that summarise something (streak, level, latest and best density, a session's reps
+and time) are a display-size number with a body word beside it on one baseline.
 
 Letter-spacing: `-0.02em` on headings/large numbers. `0.06em` on badge text (uppercase).
 

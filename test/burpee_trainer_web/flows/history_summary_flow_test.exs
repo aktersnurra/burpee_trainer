@@ -57,6 +57,19 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#history-coach-summary[aria-expanded=false]")
   end
 
+  test "the density chart leads with the latest and best numbers", %{conn: conn, user: user} do
+    free_form_session_fixture(user, %{
+      duration_sec_actual: 1_200,
+      burpee_count_actual: 140,
+      completed_at: DateTime.add(DateTime.utc_now(:second), -3, :day)
+    })
+
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 120})
+    {:ok, view, _} = live(conn, ~p"/progress")
+    assert has_element?(view, "#home-history-trend-latest strong", "120")
+    assert has_element?(view, "#home-history-trend-best strong", "140")
+  end
+
   test "the page is Progress, and old History links land on it", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/progress")
     assert has_element?(view, "#home-history-heading", "Progress")
@@ -71,7 +84,9 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/progress")
     refute has_element?(view, "#home-history-week-count")
     refute has_element?(view, ".home-history-week-current, .home-history-week-key")
-    assert has_element?(view, "#home-history-streak", "0")
+    # No streak yet is not a failure to show: the stat appears from the first full week.
+    refute has_element?(view, "#home-history-streak")
+    assert has_element?(view, "#history-level", "1A")
   end
 
   test "with nothing to summarize, History invites the owner to the coach and Home does not", %{
