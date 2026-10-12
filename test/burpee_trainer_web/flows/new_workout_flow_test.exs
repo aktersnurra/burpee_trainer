@@ -74,7 +74,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
       |> LazyHTML.attribute("id")
 
     assert Enum.take(ids, 3) == ["home-new-reps", "home_workout_duration", "home-workout-budget"]
-    assert has_element?(view, "#home-workout-budget", "Timing ±10s")
+    refute has_element?(view, "#home-workout-budget", "Timing")
     refute has_element?(view, "#home-request-timing")
   end
 

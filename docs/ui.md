@@ -127,6 +127,19 @@ Component gap inside card: 16px
   track, chart grid). Spacing separates everything else.
 - Meta never joins unlike things with middle dots; each goal is its own line.
 
+## 4a2. Actions
+
+- One filled pill per view for the primary action, named with a verb (Start, Save, Send).
+- Every other action is a quiet word (Edit, Switch, New, Cancel, Close, Delete).
+- Views of the same data switch like the period tabs, in words. No bare icons.
+- A chevron only means "opens here".
+
+## 4a3. Words
+
+Every visible word earns its place. No eyebrow labels ("Today", "This week"), no captions
+restating a heading, no legends for a single series, no field labels where a placeholder
+names the field (keep the label for screen readers).
+
 ## 4b. Motion
 
 Two durations and two curves, as tokens: `--motion-quick` (180ms) for fades, folds and
@@ -148,13 +161,13 @@ screen leads to the next in context:
 - **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads back Home, then leads
   with level, active goals and the coach summary. The summary is the only way into Coach;
   while it is refreshing it shows the app's loader labelled "Updating your summary", and
-  with nothing to summarize it reads "Tell the coach what you're training for". Design:
+  with nothing to summarize it reads "Set a goal with the coach". Design:
   `docs/specs/2026-10-10-frictionless-home-design.md`.
 - **Coach** opens inside Progress, under the summary, like the workout card on Home; there
   is no separate Coach screen. `/coach` is Progress with Coach open. It reads top to bottom:
-  goals waiting for Confirm or Dismiss (active ones read in the header), "Tell the coach"
-  with Send as an arrow inside the field once there is text, the reply, and the notebook
-  collapsed under "What the coach knows". The summary and Coach share one paper surface
+  goals waiting for Confirm or Dismiss (active ones read in the header), a field whose placeholder
+  reads "Message the coach" with the Send pill inside it once there is text, the reply, and
+  the notebook collapsed under "Coach's notes". The summary and Coach share one paper surface
   (`--color-base-200`); Coach unfolds inside it. The summary and Escape close it.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the

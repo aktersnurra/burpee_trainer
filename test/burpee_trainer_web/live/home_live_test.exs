@@ -472,8 +472,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-result-actual-seconds[data-duration-sec='4800']", "1:20:00")
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-trend")
-    assert has_element?(view, "#home-history-six-count")
-    refute has_element?(view, "#home-history-navy-seal")
+    # One workout type needs no legend; the line speaks for itself.
+    refute has_element?(view, ".home-history-legend")
     assert has_element?(view, "#home-history-period-twelve_weeks[aria-pressed=true]")
     view |> element("#home-history-point-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-details-#{saved.id} [data-actual-reps='20']")
@@ -1477,7 +1477,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       )
 
     {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-done-today .home-state-label", "Today")
+    refute has_element?(view, "#home-done-today .home-state-label")
     assert has_element?(view, "#home-done-today h1", "Evening sets")
     refute has_element?(view, "#home-done-today h1", "Workout saved")
     assert has_element?(view, "#home-today-session-meta", "15:00 · 7 reps")

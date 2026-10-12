@@ -69,16 +69,16 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         id="home-coach-message-form"
         phx-submit="coach_message"
         phx-change="coach_message_change"
-        class="coach-message-form home-authoring-form"
+        class="coach-message-form home-authoring-form coach-quiet-label"
       >
         <.input
           field={@state.coach_message_form[:text]}
           id="home-coach-message-text"
           type="textarea"
-          label="Tell the coach"
+          label="Message the coach"
           rows="1"
           maxlength="1000"
-          placeholder="A goal, a niggle, what you'd like next"
+          placeholder="Message the coach"
           class="home-authoring-input"
           disabled={@state.coach_busy?}
         />
@@ -99,21 +99,20 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       <p id="home-coach-status" role="status" class="coach-guidance-status">{@state.coach_status}</p>
       <details id="home-coach-notebook" class="history-coach-memory" open={@state.coach_details_open?}>
         <summary id="home-coach-notebook-toggle" phx-click="coach_details_toggle">
-          What the coach knows
-          <.icon name="hero-chevron-down" class="history-coach-memory-chevron size-4" />
+          Coach's notes <.icon name="hero-chevron-down" class="history-coach-memory-chevron size-4" />
         </summary>
         <.form
           for={@state.coach_notebook_form}
           id="home-coach-notebook-form"
           phx-submit="coach_notebook_save"
           phx-change="coach_notebook_change"
-          class="home-authoring-form"
+          class="home-authoring-form coach-quiet-label"
         >
           <.input
             field={@state.coach_notebook_form[:text]}
             id="home-coach-notebook-text"
             type="textarea"
-            label="Coach notebook"
+            label="Coach's notes"
             rows="1"
             maxlength="4000"
             class="home-authoring-input"

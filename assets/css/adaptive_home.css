@@ -560,12 +560,6 @@
 .home-history-trend {
   padding: 1rem;
 }
-.home-history-trend-subtitle {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--home-muted);
-  font-size: 0.8125rem;
-}
 .home-history-legend {
   display: flex;
   flex-wrap: wrap;
@@ -790,18 +784,16 @@
 .home-resume-action:hover { color: #55534c; }
 .home-history { max-width: 100%; margin: 0 auto; overflow: visible; }
 
-.home-history-status { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-top: 14px; }
-.home-history-status p:first-child { white-space: nowrap; font-size: var(--text-body); }
-.home-history-status p:first-child strong { font: 600 var(--text-display)/1 var(--font-sans); letter-spacing: -.02em; }
+.home-history-streak-line { white-space: nowrap; }
+.home-history-streak-line strong { font: 600 var(--text-display)/1 var(--font-sans); letter-spacing: -.02em; }
 .home-history-periods { display: flex; gap: 26px; padding: 0; margin-top: 20px; border: 0; border-radius: 0; }
-.home-history-period { border-radius: 0; min-height: 33px; padding: 0 0 12px; font-weight: 400; }
+.home-history-period { border-radius: 0; min-height: 33px; padding: 0 0 12px; font-weight: 400; font-size: var(--text-body); }
 .home-history-period[aria-pressed='true'] { background: transparent; color: #262722; border-bottom: 1.5px solid #262722; }
 #home-history-weekly { margin-top: 24px; }
 #home-history-weekly h2, .home-history-sessions-heading { font-size: var(--text-body); font-weight: 600; }
 .home-history-week-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; gap: 12px; }
 .home-history-week-count { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
-.home-history-week-current { margin-top: 15px; text-align: right; color: var(--home-muted); font-size: var(--text-small); }
-.home-history-week-oldest, .home-history-week-key { color: var(--home-muted); font-size: var(--text-small); }
+.home-history-week-oldest { color: var(--home-muted); font-size: var(--text-small); }
 .home-history-week-grid { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 0; }
 .home-history-week-row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; }
 .home-history-week-cell { aspect-ratio: 1; border-radius: 2px; }
@@ -813,19 +805,11 @@
 .home-history-tone-60 { background: #568b9a; }
 .home-history-tone-80 { background: #245b70; }
 .home-history-week-oldest { margin-top: 9px; }
-/* The key is one small scale, 0 to 80 min, under the grid's right edge. */
-.home-history-week-key { display: flex; justify-content: flex-end; align-items: center; gap: 3px; margin-top: 14px; font-variant-numeric: tabular-nums; }
-.home-history-week-key span { margin-inline: 5px; }
-.home-history-week-key span:last-child { margin-right: 0; }
-.home-history-week-key i { display: block; width: 10px; height: 10px; border-radius: 2px; }
-.home-history-week-key .home-history-tone-0 { border: 1px solid #d8ddd9; }
 .home-history-trend { margin-top: 36px; padding: 0; border: 0; background: transparent; }
 .home-history-trend-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
-.home-history-trend-subtitle { margin-top: 3px; font-size: var(--text-small); }
 .home-history-plot { display: grid; grid-template-columns: 29px minmax(0, 1fr); gap: 10px; margin-top: 20px; padding: 0; }
 .home-history-trend-axis { display: flex; height: 105px; flex-direction: column; justify-content: space-between; color: var(--home-muted); font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
 .home-history-plot-area { height: 105px; border-left: 0; background: linear-gradient(to bottom, var(--home-line) 0 1px, transparent 1px 50%, var(--home-line) 50% calc(50% + 1px), transparent calc(50% + 1px)); }
-.home-history-trend-caption { display: flex; justify-content: space-between; margin: 8px 0 0 39px; color: var(--home-muted); font-size: var(--text-small); }
 .home-history-svg { color: #245b70; }
 .home-history-point span { width: 8px; height: 8px; border: 1.5px solid #245b70; border-radius: 0; background: var(--home-surface); }
 .home-history-point-navy-seal span { border-color: #568b9a; }
@@ -925,7 +909,7 @@
 .coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-guidance-status:empty { display: none; }
 .history-coach-memory { margin-top: 32px; }
-.history-coach-memory summary { display: flex; align-items: center; min-height: 44px; color: var(--home-muted); font-size: var(--text-small); cursor: pointer; }
+.history-coach-memory summary { display: flex; align-items: center; min-height: 44px; color: var(--home-muted); font-size: var(--text-body); cursor: pointer; }
 .history-coach-memory summary:hover { color: #24231e; }
 .history-coach-memory summary { justify-content: space-between; list-style: none; }
 .history-coach-memory summary::-webkit-details-marker { display: none; }
@@ -935,8 +919,7 @@
 .history-coach-entry p { flex: 1; }
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
 .history-header { margin-top: 8px; }
-.history-header-facts { color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.history-header-goals { margin: 2px 0 0; padding: 0; list-style: none; color: var(--home-muted); font-size: var(--text-small); line-height: 1.6; }
+.history-header-goals { margin: 12px 0 0; padding: 0; list-style: none; color: #262722; font-size: var(--text-body); line-height: 1.6; }
 /* The coach summary is the top row of one paper surface; Coach unfolds inside it. */
 .history-coach { margin-top: 20px; padding: 0 16px; border-radius: 10px; background: var(--color-base-200); }
 .history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
@@ -1035,7 +1018,8 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 }
 
 /* The streak: its number at display size and its words on the same baseline. */
-.home-history-status { margin-top: 32px; }
+/* Streak and level: two numbers side by side, each with its word on the same baseline. */
+.home-history-status { display: flex; gap: 40px; margin-top: 32px; }
 .home-history-streak-line { display: flex; align-items: baseline; gap: 8px; }
 .home-history-streak-line span { color: var(--home-muted); font-size: var(--text-body); }
 /* Coach's Send is the primary pill inside the field row, shown once there is something to send. */
@@ -1056,3 +1040,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
 :is(.home-history-week-heading, .home-history-trend-heading, .home-chooser-header, .home-history-sheet-actions) .home-text-action { margin-right: -20px; }
 .home-history-sheet-actions .home-text-action:first-child { margin-left: -20px; }
+/* Coach's fields are named by their placeholder; the label stays for screen readers only. */
+.coach-quiet-label .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#home-workout-budget:empty, #home-workout-budget:not(:has(*)) { display: none; }

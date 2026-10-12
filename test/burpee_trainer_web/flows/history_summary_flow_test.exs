@@ -23,7 +23,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     {:ok, view, _} = live(conn, ~p"/progress")
     header = text(view, "#history-header")
-    assert header =~ "Level 1A"
+    assert has_element?(view, "#history-level", "1A")
     # The week's minutes live in the progress row above, not again in the header.
     refute header =~ "min this week"
     assert has_element?(view, "#history-progress #home-week-duration", "25 / 80 min")
@@ -70,7 +70,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     free_form_session_fixture(user, %{duration_sec_actual: 1_500})
     {:ok, view, _} = live(conn, ~p"/progress")
     refute has_element?(view, "#home-history-week-count")
-    assert has_element?(view, ".home-history-week-current", "This week")
+    refute has_element?(view, ".home-history-week-current, .home-history-week-key")
     assert has_element?(view, "#home-history-streak", "0")
   end
 
@@ -85,7 +85,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(
              view,
              "a#history-coach-summary[href='/coach']",
-             "Tell the coach what you're training for"
+             "Set a goal with the coach"
            )
 
     # It reads as a way in, not a caption.
@@ -143,7 +143,14 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
       end
 
     assert positions == Enum.sort(positions)
-    assert has_element?(view, "label[for='home-coach-message-text']", "Tell the coach")
+    # The field is named by its placeholder; the label is for screen readers only.
+    assert has_element?(
+             view,
+             ".coach-quiet-label label[for='home-coach-message-text']",
+             "Message the coach"
+           )
+
+    assert has_element?(view, "#home-coach-message-text[placeholder='Message the coach']")
     # Coach's fields and actions are the New form's: underlined rows and one filled action.
     assert has_element?(view, "#home-coach-message-form.home-authoring-form")
     assert has_element?(view, "#home-coach-message-text.home-authoring-input")
@@ -160,7 +167,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(
              view,
              "details#home-coach-notebook:not([open]) summary",
-             "What the coach knows"
+             "Coach's notes"
            )
 
     assert has_element?(view, "#home-coach-notebook-toggle .history-coach-memory-chevron")

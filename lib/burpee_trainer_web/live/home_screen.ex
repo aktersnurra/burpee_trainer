@@ -140,7 +140,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
               </p>
               <%= if @result_today_session do %>
                 <section id="home-done-today" class="home-result">
-                  <p class="home-state-label">Today</p>
                   <h1 class="home-state-heading">
                     {@result_today_session.display_name_snapshot ||
                       Fmt.burpee_type(@result_today_session.burpee_type)}
@@ -175,9 +174,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   id="home-week-complete"
                   class="home-result"
                 >
-                  <p class="home-state-label">
-                    This week
-                  </p>
                   <h1 class="home-state-heading">
                     Training target complete
                   </h1>

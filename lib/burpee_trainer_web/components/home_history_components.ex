@@ -43,6 +43,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               <strong id="home-history-streak">{@state.history_streak}</strong>
               <span>week streak</span>
             </p>
+            <p class="home-history-streak-line">
+              <strong id="history-level">{level_short(@state.current_level)}</strong>
+              <span>level</span>
+            </p>
           </div>
           <div role="group" aria-label="Period" class="home-history-periods">
             <button
@@ -63,9 +67,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               {label}
             </button>
           </div>
-          <section id="home-history-weekly" aria-label="Weekly training">
+          <section id="home-history-weekly" aria-label="Minutes each week">
             <div class="home-history-week-heading">
-              <h2>Weekly training</h2>
+              <h2>Minutes each week</h2>
               <button
                 :if={@state.history_week_start == nil and @state.history_weeks != []}
                 id="home-history-week-mode"
@@ -93,9 +97,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               class="home-history-week-count"
             >
               {completed_week_summary(@state.history_weeks)}
-            </p>
-            <p :if={is_nil(@state.history_week_start)} class="home-history-week-current">
-              {current_week_label(@state.history_weeks)}
             </p>
             <%= if @state.history_week_start do %>
               <p id="home-history-week-detail">
@@ -175,19 +176,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             >
               {oldest_week_label(@state.history_weeks)}
             </p>
-            <div
-              :if={is_nil(@state.history_week_start)}
-              class="home-history-week-key"
-              aria-label="Minutes per week: 0, 20, 40, 60, 80 or more"
-            >
-              <span>0</span>
-              <i class="home-history-tone-0"></i>
-              <i class="home-history-tone-20"></i>
-              <i class="home-history-tone-40"></i>
-              <i class="home-history-tone-60"></i>
-              <i class="home-history-tone-80"></i>
-              <span>80 min</span>
-            </div>
           </section>
           <.trend_chart
             points={@state.history_points}
@@ -224,7 +212,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           class="home-history-sessions-panel"
         >
           <div class="home-history-trend-heading">
-            <h2>Training density</h2>
+            <h2>Reps per 20 minutes</h2>
             <button
               id="home-history-density-back"
               type="button"
@@ -466,9 +454,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     end
   end
 
-  # The dates are already in the progress row above; the label only marks the open cell.
-  defp current_week_label([]), do: ""
-  defp current_week_label(_weeks), do: "This week"
+  # "Level 1A" reads "1A" beside the word level.
+  defp level_short(level), do: level |> Fmt.level() |> String.replace_prefix("Level ", "")
 
   defp oldest_week_label([week | _]), do: "#{week_date_range(week.start)} · oldest shown"
 
@@ -486,9 +473,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
-      <p class="history-header-facts">
-        <span id="history-level">{Fmt.level(@state.current_level)}</span>
-      </p>
       <ul :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
         <li :for={goal <- @state.history_goals}>{Fmt.goal(goal)}</li>
       </ul>
@@ -509,7 +493,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             loading?={@state.progress_summary_loading?}
           />
           <span :if={not summary_line?(@state)} class="coach-summary-invitation">
-            Tell the coach what you're training for
+            Set a goal with the coach
           </span>
           <.icon name="hero-chevron-down" class="history-coach-summary-arrow size-4" />
         </.link>
@@ -581,13 +565,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         ceil(Enum.max(densities, fn -> 0 end) / 20) * 20
       )
 
-    start_label =
-      case assigns.period do
-        "all" -> "First session"
-        "year" -> "1 year ago"
-        _ -> "12 weeks ago"
-      end
-
     assigns =
       assigns
       |> assign(
@@ -596,7 +573,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       )
       |> assign(:axis_min, axis_min)
       |> assign(:axis_max, axis_max)
-      |> assign(:start_label, start_label)
 
     ~H"""
     <figure
@@ -609,7 +585,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     >
       <figcaption id="home-history-trend-label">
         <span class="home-history-trend-heading">
-          <span class="font-semibold">Training density</span>
+          <span class="font-semibold">Reps per 20 minutes</span>
           <button
             id="home-history-density-sessions"
             type="button"
@@ -621,7 +597,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             Sessions
           </button>
         </span>
-        <span class="home-history-trend-subtitle">Reps / 20 min</span>
       </figcaption>
       <%= if @empty? or Enum.all?(@series, &(&1.points == [])) do %>
         <p class="home-history-trend-empty">No measured sessions in this period.</p>
@@ -684,11 +659,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             <% end %>
           </div>
         </div>
-        <div id="home-history-trend-caption" class="home-history-trend-caption">
-          <span>{@start_label}</span>
-          <span>Now</span>
-        </div>
-        <div class="home-history-legend" aria-label="Workout types">
+        <%!-- Names the lines only when there are two to tell apart. --%>
+        <div
+          :if={Enum.count(@series, &(&1.points != [])) > 1}
+          class="home-history-legend"
+          aria-label="Workout types"
+        >
           <span :for={series <- @series} :if={series.points != []} id={series.dom_id}>
             {series.label}
           </span>

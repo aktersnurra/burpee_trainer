@@ -1,6 +1,5 @@
 defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   use BurpeeTrainerWeb, :html
-  alias BurpeeTrainer.Coach.WorkoutRequest
   alias BurpeeTrainerWeb.CreationParameters
 
   # LiveView holds the reply's patch until a running transition ends, so New and Edit
@@ -65,12 +64,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </dd>
         </div>
       </dl>
-      <p id="home-request-timing" class="mt-4 text-xs leading-relaxed text-stone-600">
-        Timing ±{WorkoutRequest.timing_tolerance_sec()}s · reps and rests exact.
-        <span class="sr-only">
-          Total time and timed-rest starts may vary by up to {WorkoutRequest.timing_tolerance_sec()} seconds; the saved duration reflects the actual plan.
-        </span>
-      </p>
       <p id="home-request-recovery" class="mt-4 text-sm text-stone-700">
         <%= case @request.recovery do %>
           <% "required" -> %>
@@ -234,21 +227,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <span>Movement <strong>{budget_clock(work)}</strong></span>
             <span>Recovery <strong>{budget_clock(recovery)}</strong></span>
           <% {:ok, :unknown_pace} -> %>
-            <span>The coach chooses the pace</span>
+            <%!-- Pace already reads "Coach chooses"; saying it twice is noise. --%>
           <% _ -> %>
             <span>Check reps, pace and duration</span>
         <% end %>
-        <p class="home-budget-detail">
-          Timing ±{WorkoutRequest.timing_tolerance_sec()}s · reps and pauses exact.
-        </p>
-        <p :if={@allocation} id="home-workout-allocation" class="home-budget-detail">
-          Allocated {budget_clock(@allocation.recovery_us)} · unallocated {budget_clock(
-            @allocation.unallocated_us
-          )}
-          <span :if={@allocation.overrun_us > 0}>
-            · +{budget_clock(@allocation.overrun_us)} schedule time
-          </span>
-        </p>
       </div>
       <.input
         field={@form[:pace]}
@@ -1095,7 +1077,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       end
 
     total_us = tail_us + explicit_ms * 1_000
-    if total_us == 0, do: "—", else: scaled(total_us, 1_000_000) <> "s"
+    # Whole seconds: timing is planned to ±10s, so decimals here are noise.
+    if total_us == 0, do: "—", else: "#{round(total_us / 1_000_000)}s"
   end
 
   defp pace(unit),
