@@ -21,7 +21,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     free_form_session_fixture(user, %{duration_sec_actual: 1_500})
     summary_fixture(user, "Best so far 25 of 150 reps.")
 
-    {:ok, view, _} = live(conn, ~p"/history")
+    {:ok, view, _} = live(conn, ~p"/progress")
     header = text(view, "#history-header")
     assert header =~ "Level 1A"
     # The week's minutes live in the progress row above, not again in the header.
@@ -52,9 +52,15 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#home-coach-goals [data-status=active]")
 
     view |> element("#history-coach-summary") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     refute has_element?(view, "#home-coach-panel")
     assert has_element?(view, "#history-coach-summary[aria-expanded=false]")
+  end
+
+  test "the page is Progress, and old History links land on it", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/progress")
+    assert has_element?(view, "#home-history-heading", "Progress")
+    assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, "/history")
   end
 
   test "the week grid names weeks that hit the target, and none when none have", %{
@@ -62,7 +68,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     user: user
   } do
     free_form_session_fixture(user, %{duration_sec_actual: 1_500})
-    {:ok, view, _} = live(conn, ~p"/history")
+    {:ok, view, _} = live(conn, ~p"/progress")
     refute has_element?(view, "#home-history-week-count")
     assert has_element?(view, ".home-history-week-current", "This week")
     assert has_element?(view, "#home-history-streak", "0")
@@ -74,7 +80,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, home, _} = live(conn, ~p"/")
     refute has_element?(home, "a[href^='/coach']")
 
-    {:ok, view, _} = live(conn, ~p"/history")
+    {:ok, view, _} = live(conn, ~p"/progress")
 
     assert has_element?(
              view,
@@ -101,7 +107,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
       set: [updated_at: DateTime.add(DateTime.utc_now(), -8, :day)]
     )
 
-    {:ok, view, _} = live(conn, ~p"/history")
+    {:ok, view, _} = live(conn, ~p"/progress")
     assert has_element?(view, "#history-coach-summary [role=status]", "Updating your summary")
     assert has_element?(view, "#history-coach-summary img.coach-summary-loader")
 
@@ -116,7 +122,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
       {:ok, view, _} = live(conn, path)
       assert has_element?(view, "#history-page #home-coach-panel")
       view |> element("#home-coach-panel") |> render_keydown(%{"key" => "Escape"})
-      assert_patch(view, "/history")
+      assert_patch(view, "/progress")
       assert focus_target(view, "#home-history-heading") == "#history-coach-summary"
     end
   end

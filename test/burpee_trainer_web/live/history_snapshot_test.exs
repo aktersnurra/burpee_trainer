@@ -37,7 +37,7 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
         completed_at: ~U[2025-01-02 03:04:05Z]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/history")
+    {:ok, view, _html} = live(conn, ~p"/progress")
     view |> element("#home-history-period-all") |> render_click()
 
     assert has_element?(
@@ -83,7 +83,7 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
         completed_at: ~U[2025-02-03 04:05:06Z]
       })
 
-    {:ok, view, _html} = live(conn, ~p"/history")
+    {:ok, view, _html} = live(conn, ~p"/progress")
     view |> element("#home-history-period-all") |> render_click()
 
     assert has_element?(

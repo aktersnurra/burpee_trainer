@@ -32,7 +32,7 @@ defmodule BurpeeTrainerWeb.CoachWorkspaceTest do
                ]
 
         assert LazyHTML.attribute(node, "href") == [
-                 if(String.contains?(id, "history"), do: "/history", else: "/")
+                 if(String.contains?(id, "history"), do: "/progress", else: "/")
                ]
       end
     end

@@ -59,7 +59,8 @@ defmodule BurpeeTrainerWeb.Router do
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
       live("/", HomeLive, :home)
-      live("/history", HomeLive, :history)
+      live("/progress", HomeLive, :history)
+      live("/history", HomeLive, :history_moved)
       live("/coach", HomeLive, :coach)
       live("/session/:session_id", SessionLive, :show)
       live("/videos/:video_id/session/:session_id", VideoLive.Show, :session)

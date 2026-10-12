@@ -24,7 +24,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
       }
       |> BurpeeTrainer.Repo.insert!()
 
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/history")
+    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
 
     [style] =
       render(view)
@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     home_clock = :sys.get_state(view.pid).socket.assigns.home_snapshot_now
     route_clock = DateTime.add(now, 7 * 86_400)
     set_clock(view, route_clock)
-    render_patch(view, ~p"/history")
+    render_patch(view, ~p"/progress")
     assert_history_geometry(view, saved, route_clock, home_clock)
 
     period_clock = DateTime.add(now, 14 * 86_400)
@@ -128,7 +128,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
       }
       |> BurpeeTrainer.Repo.insert!()
 
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/history")
+    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
     view |> element("#home-history-density-sessions") |> render_click()
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-sheet[role=dialog][aria-modal=true][phx-key=Escape]")
@@ -165,7 +165,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
 
   test "malformed and unrelated route events are read-only", %{conn: conn} do
     user = user_fixture()
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/history")
+    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
 
     for {event, params} <- [
           {"history_period", %{}},
@@ -185,15 +185,15 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     user = user_fixture()
     conn = init_test_session(conn, %{user_id: user.id})
 
-    {:ok, view, _html} = live(conn, ~p"/history")
+    {:ok, view, _html} = live(conn, ~p"/progress")
     assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
     refute has_element?(view, "#home-state-content, #home-coach-panel")
     assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
-    assert {:error, {:live_redirect, %{to: "/history"}}} = live(conn, ~p"/?history=1")
+    assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, ~p"/?history=1")
     {:ok, legacy, _} = live(conn, ~p"/")
     pid = legacy.pid
     render_patch(legacy, ~p"/?history=1")
-    assert_patch(legacy, "/history")
+    assert_patch(legacy, "/progress")
     assert legacy.pid == pid
     assert has_element?(legacy, "#home-history-heading")
 

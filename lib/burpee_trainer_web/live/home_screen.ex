@@ -73,9 +73,9 @@ defmodule BurpeeTrainerWeb.HomeScreen do
           <.link
             id="home-history-toggle"
             data-primary-action={@home_primary_action == :insights && "insights"}
-            patch={~p"/history"}
+            patch={~p"/progress"}
             class="absolute inset-0 min-h-11 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
-            aria-label="Open History"
+            aria-label="Open Progress"
             phx-mounted={@home_focus_return? && Phoenix.LiveView.JS.focus(to: "#home-history-toggle")}
           >
             <span class="sr-only">View training history</span>

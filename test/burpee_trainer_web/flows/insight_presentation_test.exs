@@ -37,7 +37,7 @@ defmodule BurpeeTrainerWeb.InsightPresentationTest do
            )
 
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
     assert has_element?(view, "#history-insight-points li", "25 reps last session.")
     assert view.pid == pid
@@ -62,7 +62,7 @@ defmodule BurpeeTrainerWeb.InsightPresentationTest do
              )
 
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     view |> element("#home-history-close") |> render_click()
     assert_patch(view, "/")
     assert has_element?(view, "#home-insight-headline", "Session saved")

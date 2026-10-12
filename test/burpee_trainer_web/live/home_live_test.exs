@@ -43,14 +43,14 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     |> render_change()
 
     view |> element("#history-coach-summary") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     assert has_element?(view, "#home-history")
     refute has_element?(view, "#home-coach-panel")
     render_patch(view, ~p"/coach")
     assert has_element?(view, "#home-coach-message-text", "Build toward 50 reps")
     assert Notebook.get(Scope.for_user(user)).body == ""
     view |> element("#history-coach-summary") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     view = home_route(conn, view)
     assert view.pid == pid
     assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
@@ -61,7 +61,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     conn: conn,
     user: user
   } do
-    {:ok, history, _} = live(conn, ~p"/history")
+    {:ok, history, _} = live(conn, ~p"/progress")
     render_patch(history, ~p"/coach")
     view = history
     view |> form("#home-coach-message-form", coach_message: %{text: "  "}) |> render_submit()
@@ -88,7 +88,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   test "empty History opens from weekly progress without showing a dashboard", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#home-week-track")
-    assert has_element?(view, "#home-history-toggle[href='/history']")
+    assert has_element?(view, "#home-history-toggle[href='/progress']")
 
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-empty")
@@ -100,10 +100,14 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#history-progress #home-history-close[aria-label='Back to Home']")
     refute has_element?(view, "#home-state-content")
     view = home_route(conn, view)
-    assert has_element?(view, "#home-history-toggle[href='/history'][aria-label='Open History']")
 
-    assert {:error, {:live_redirect, %{to: "/history"}}} = live(conn, ~p"/?history=1")
-    {:ok, linked_view, _} = live(conn, ~p"/history")
+    assert has_element?(
+             view,
+             "#home-history-toggle[href='/progress'][aria-label='Open Progress']"
+           )
+
+    assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, ~p"/?history=1")
+    {:ok, linked_view, _} = live(conn, ~p"/progress")
     assert has_element?(linked_view, "#home-history-empty")
   end
 
@@ -1207,7 +1211,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     # Inspect real client commands as well as server patch handling: no retired overlay DOM.
     for _cycle <- 1..3 do
-      assert has_element?(view, "#home-history-toggle[href='/history'][data-phx-link=patch]")
+      assert has_element?(view, "#home-history-toggle[href='/progress'][data-phx-link=patch]")
       view = history_route(conn, view)
       assert view.pid == before.root_pid
       html = render(view) |> LazyHTML.from_fragment()
@@ -1230,7 +1234,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
         |> LazyHTML.attribute("phx-mounted")
 
       assert [["focus", %{"to" => "#home-history-toggle"}]] = Jason.decode!(commands)
-      assert has_element?(view, "#home-history-toggle[aria-label='Open History']")
+      assert has_element?(view, "#home-history-toggle[aria-label='Open Progress']")
       after_close = :sys.get_state(view.pid).socket
       assert_workspace_unchanged(before, after_close)
       assert after_close.redirected == nil
@@ -1620,7 +1624,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
   defp history_route(_conn, view) do
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     refute has_element?(view, "#home-state-content")
     assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
     view
@@ -1658,10 +1662,10 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     label =
       if LazyHTML.query(html, "#home-history") |> Enum.empty?(),
-        do: "Open History",
+        do: "Open Progress",
         else: "Close History"
 
-    assert LazyHTML.query(html, "#home-history-toggle[href='/history'][aria-label='#{label}']")
+    assert LazyHTML.query(html, "#home-history-toggle[href='/progress'][aria-label='#{label}']")
            |> Enum.count() == 1
 
     assert LazyHTML.query(

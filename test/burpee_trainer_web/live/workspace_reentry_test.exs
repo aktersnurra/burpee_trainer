@@ -240,7 +240,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   defp roundtrip(view, via) do
     pid = view.pid
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
 
     if via == :coach do
       render_patch(view, ~p"/coach")
@@ -250,11 +250,11 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       |> render_change()
 
       view |> element("#history-coach-summary") |> render_click()
-      assert_patch(view, "/history")
+      assert_patch(view, "/progress")
       render_patch(view, ~p"/coach")
       assert has_element?(view, "#home-coach-message-text", "Unsent")
       view |> element("#history-coach-summary") |> render_click()
-      assert_patch(view, "/history")
+      assert_patch(view, "/progress")
     end
 
     close_history(view)
@@ -269,7 +269,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   defp delete_completion(view, saved) do
     pid = view.pid
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     view |> element("#home-history-delete") |> render_click()
     view |> element("#home-history-delete-confirm") |> render_click()

@@ -32,7 +32,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             }
             class="screen-heading"
           >
-            History
+            Progress
           </h1>
         </div>
         <.history_header state={@state} />
@@ -44,7 +44,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               <span>week streak</span>
             </p>
           </div>
-          <div role="group" aria-label="History period" class="home-history-periods">
+          <div role="group" aria-label="Period" class="home-history-periods">
             <button
               :for={
                 {label, value} <- [
@@ -500,7 +500,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <div id="history-coach" class="history-coach">
         <.link
           id="history-coach-summary"
-          patch={if(coach_open?(@state), do: ~p"/history", else: ~p"/coach")}
+          patch={if(coach_open?(@state), do: ~p"/progress", else: ~p"/coach")}
           class="history-coach-summary"
           aria-expanded={to_string(coach_open?(@state))}
           aria-controls="home-coach-panel"

@@ -37,7 +37,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
 
   # Coach is reached only from History, so leaving it always returns there.
   def handle_event("close_coach", _, socket),
-    do: {:noreply, push_patch(socket, to: ~p"/history")}
+    do: {:noreply, push_patch(socket, to: ~p"/progress")}
 
   def handle_event("coach_details_toggle", _, socket),
     do: {:noreply, assign(socket, coach_details_open?: not socket.assigns.coach_details_open?)}

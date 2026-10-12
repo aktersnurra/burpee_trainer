@@ -27,7 +27,7 @@ defmodule BurpeeTrainerWeb.SummaryRefreshTest do
       set: [updated_at: DateTime.add(DateTime.utc_now(), -8, :day)]
     )
 
-    {:ok, view, _html} = live(conn, ~p"/history")
+    {:ok, view, _html} = live(conn, ~p"/progress")
 
     assert %{progress_summary_loading?: true, progress_summary: %Summary{text: "Old."}} =
              assigns(view)
@@ -46,7 +46,7 @@ defmodule BurpeeTrainerWeb.SummaryRefreshTest do
     scope: scope
   } do
     {:ok, _} = Summary.store(scope, %{text: "Current.", metric_ids: [], source: :llm})
-    {:ok, view, _html} = live(conn, ~p"/history")
+    {:ok, view, _html} = live(conn, ~p"/progress")
 
     assert %{progress_summary_loading?: false, progress_summary: %Summary{text: "Current."}} =
              assigns(view)

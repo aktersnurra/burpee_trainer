@@ -146,7 +146,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         content:
           Voice.text() <>
             "\n" <>
-            "Write at most two sentences on how the athlete is progressing toward their active goals, or toward the next level when they have none. It heads their History, so lead with what matters most this week. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
+            "Write at most two sentences on how the athlete is progressing toward their active goals, or toward the next level when they have none. It heads their Progress page, so lead with what matters most this week. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
             Jason.encode!(metrics)
       }
     ]

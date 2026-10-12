@@ -79,7 +79,7 @@ defmodule BurpeeTrainerWeb.Flows.InsightFlowTest do
       assert has_element?(home, "[data-home-state=done_today] #home-insight-headline", @headline)
       pid = home.pid
       home |> element("#home-history-toggle") |> render_click()
-      assert_patch(home, "/history")
+      assert_patch(home, "/progress")
       home |> element("#home-history-inspect-#{started.id}") |> render_click()
       assert has_element?(home, "#history-insight-points li", "4 reps last session.")
       assert home.pid == pid

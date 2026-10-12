@@ -90,7 +90,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
     for _ <- 1..2 do
       view |> element("#home-history-toggle") |> render_click()
-      assert_patch(view, "/history")
+      assert_patch(view, "/progress")
       assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
       render_patch(view, ~p"/coach")
 
@@ -99,7 +99,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       |> render_change()
 
       view |> element("#history-coach-summary") |> render_click()
-      assert_patch(view, "/history")
+      assert_patch(view, "/progress")
       view |> element("#home-history-close") |> render_click()
       assert_patch(view, "/")
       assert view.pid == pid
@@ -245,7 +245,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     assert stable_assigns(view).filters != before_assigns.filters
     view |> element("#home-filter-reset") |> render_click()
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
     view |> element("#home-history-close") |> render_click()
     assert_patch(view, "/")
     view |> element("#home-alternatives-panel") |> render_keydown(%{"key" => "Escape"})

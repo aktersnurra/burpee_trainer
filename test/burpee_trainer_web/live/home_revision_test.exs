@@ -171,7 +171,7 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
     view |> element("#home-request-confirm") |> render_click()
     assert_receive {:provider_waiting, planner}
     view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/history")
+    assert_patch(view, "/progress")
 
     send(
       planner,

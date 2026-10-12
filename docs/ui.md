@@ -90,7 +90,7 @@ Font stack: `Geist, ui-sans-serif, system-ui, -apple-system, sans-serif`
 
 Geist is the only typeface: no serif or Arial declarations anywhere, including headings, the chooser and session panels. Use `var(--font-sans)` rather than repeating the stack; headings change size and weight, never family. Keep the type system restrained: most text uses 400 / 500 / 600 weights, with large headings using careful negative tracking.
 
-Home, History and Coach use three sizes, as tokens in `assets/css/adaptive_home.css`:
+Home, Progress and Coach use three sizes, as tokens in `assets/css/adaptive_home.css`:
 
 | Token            | Size | Roles                                                         |
 |------------------|------|---------------------------------------------------------------|
@@ -142,16 +142,16 @@ screen leads to the next in context:
 
 - **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
   first use, never an empty prompt), or the day's insight once trained. The week strip
-  opens History. Home has no coach entry. Design:
+  opens Progress. Home has no coach entry. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
   `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **History** (`/history`) keeps the week strip on top, which leads back Home, then leads
+- **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads back Home, then leads
   with level, active goals and the coach summary. The summary is the only way into Coach;
   while it is refreshing it shows the app's loader labelled "Updating your summary", and
   with nothing to summarize it reads "Tell the coach what you're training for". Design:
   `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **Coach** opens inside History, under the summary, like the workout card on Home; there
-  is no separate Coach screen. `/coach` is History with Coach open. It reads top to bottom:
+- **Coach** opens inside Progress, under the summary, like the workout card on Home; there
+  is no separate Coach screen. `/coach` is Progress with Coach open. It reads top to bottom:
   goals waiting for Confirm or Dismiss (active ones read in the header), "Tell the coach"
   with Send as an arrow inside the field once there is text, the reply, and the notebook
   collapsed under "What the coach knows". The summary and Coach share one paper surface
@@ -161,7 +161,7 @@ screen leads to the next in context:
   session and camera specs that follow it.
 
 Every screen uses the `--color-base-100` page background, Geist, and Home's centred
-column: Home, History and Coach render in the same `.adaptive-home` container on the
+column: Home, Progress and Coach render in the same `.adaptive-home` container on the
 layout's session surface, so the background, gutters and width never change between
 them. Sheets and the chooser use `--color-base-200`. Never hard-code a page background.
 

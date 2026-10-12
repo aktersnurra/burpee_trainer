@@ -46,9 +46,9 @@ defmodule BurpeeTrainerWeb.Layouts do
 
         <.nav_icon
           id="desktop-history-nav"
-          navigate={~p"/history"}
+          navigate={~p"/progress"}
           patch?={@current_page in [:home, :history, :coach]}
-          title="History"
+          title="Progress"
           active={false}
           session_nav?={@session_surface_page?}
         >
@@ -77,10 +77,10 @@ defmodule BurpeeTrainerWeb.Layouts do
 
         <.bottom_tab
           id="mobile-history-nav"
-          navigate={~p"/history"}
+          navigate={~p"/progress"}
           patch?={@current_page in [:home, :history, :coach]}
           active={false}
-          label="History"
+          label="Progress"
           session_nav?={@session_surface_page?}
         >
           <.icon name="hero-chart-bar" />

@@ -298,7 +298,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       {:error, _} ->
         socket
         |> assign(
-          history_error: "History is unavailable. Reload Home to try again.",
+          history_error: "Progress is unavailable. Reload Home to try again.",
           history_session_return_to: "#home-history-heading",
           history_cursor: nil,
           history_has_more?: false,
