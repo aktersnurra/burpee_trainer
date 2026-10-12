@@ -78,11 +78,13 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     refute has_element?(view, "#home-request-timing")
   end
 
-  test "today's workout fades out as New comes in, and back in on Cancel", %{view: view} do
+  test "today's workout fades out before New comes in, and back in on Cancel", %{view: view} do
     view |> element("#home-summary") |> render_click()
     hero = view |> element("#home-workout-hero") |> render()
-    assert hero =~ ~s(phx-remove=)
-    assert hero =~ "home-leave"
+    # The fade runs on the click, so the form waits for it instead of landing beside it.
+    refute hero =~ ~s(phx-remove=)
+    assert view |> element("#home-new-workout") |> render() =~ "home-leaving"
+    assert view |> element("#home-edit-workout") |> render() =~ "home-leaving"
 
     view |> element("#home-new-workout") |> render_click()
     assert has_element?(view, "#home-authoring-heading.home-enter")

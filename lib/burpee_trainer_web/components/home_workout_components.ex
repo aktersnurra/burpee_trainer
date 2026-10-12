@@ -3,6 +3,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   alias BurpeeTrainer.Coach.WorkoutRequest
   alias BurpeeTrainerWeb.CreationParameters
 
+  # LiveView holds the reply's patch until a running transition ends, so New and Edit
+  # arrive after today's workout has faded instead of beside it.
+  defp leave_hero do
+    JS.transition("home-leaving", to: "#home-workout-hero", time: 180)
+  end
+
   defp open_chooser do
     JS.set_attribute({"inert", ""},
       to: "#home-summary, .home-workout-actions, #home-expansion-content"
@@ -570,7 +576,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             id="home-workout-hero"
             class={@state.authoring_returned? && "home-enter"}
             phx-mounted={@state.authoring_returned? && JS.focus(to: "#home-summary")}
-            phx-remove={JS.transition({"home-leave", "home-leave-from", "home-leave-to"}, time: 180)}
           >
             <p class="home-eyebrow">Today’s workout</p>
             <div class="home-hero">
@@ -603,7 +608,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               <button
                 id="home-edit-workout"
                 type="button"
-                phx-click="edit_current_workout"
+                phx-click={leave_hero() |> JS.push("edit_current_workout")}
                 aria-label="Edit current workout"
                 title="Edit workout"
                 class="home-icon-button home-expanded-action"
@@ -645,7 +650,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               <button
                 id="home-new-workout"
                 type="button"
-                phx-click={JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
+                phx-click={leave_hero() |> JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
                 aria-label="New workout"
                 title="New workout"
                 class="home-icon-button home-expanded-action"
