@@ -61,17 +61,18 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     assert has_element?(view, "#home-planner-rationale", "An easy twenty minutes")
   end
 
-  test "the actions beside Start say what they do", %{conn: conn} do
+  test "Start is the one filled action and the others are quiet words", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
+    assert has_element?(view, "#home-action.home-primary-action", "Start")
 
     for {id, label} <- [
           {"home-edit-workout", "Edit"},
           {"home-title-action", "Switch"},
           {"home-new-workout", "New"}
         ] do
-      assert has_element?(view, "##{id} .home-action-label", label)
+      assert has_element?(view, "##{id}.home-text-action", label)
     end
 
-    refute has_element?(view, "#home-action .home-action-label")
+    refute has_element?(view, "#home-ready-recommendation .hero-play, .home-action-label")
   end
 end

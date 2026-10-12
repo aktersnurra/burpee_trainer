@@ -127,7 +127,7 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
     assert has_element?(view, "#home-workout-area[aria-busy='false']")
     assert has_element?(view, "#home-alternatives")
     assert :sys.get_state(view.pid).socket.assigns.instruction == "Less rest"
-    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
+    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
     assert has_element?(view, "#home-adjustment-error")
     {:ok, after_failure} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     assert after_failure.plan.content_hash == shown.plan.content_hash
@@ -185,7 +185,7 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
     view |> element("#home-history-close") |> render_click()
     assert_patch(view, "/")
     assert has_element?(view, "#home-summary", "Revised in Home")
-    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
+    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
     assert has_element?(view, "#home-expansion[data-open='true']")
     {:ok, revised} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
     assert revised.home_revision == shown.home_revision + 1
@@ -265,7 +265,7 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
     assert_patch(view, "/")
     assert has_element?(view, "#home-summary", shown.plan.name)
     assert :sys.get_state(view.pid).socket.assigns.instruction == "Rename this workout"
-    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play")
+    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
     assert has_element?(view, "#home-adjustment-error")
     assert Repo.all(WorkoutPlan) == plans_before
     assert Repo.reload!(stale) == stale

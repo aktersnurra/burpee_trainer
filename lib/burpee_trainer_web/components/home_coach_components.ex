@@ -86,12 +86,10 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         <button
           id="home-coach-message-send"
           type="submit"
-          class="coach-send"
-          aria-label="Send"
-          title="Send"
+          class="home-primary-action coach-send"
           disabled={@state.coach_busy?}
         >
-          <.icon name="hero-arrow-up" class="size-4" />
+          Send
         </button>
       </.form>
       <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-guidance-status">

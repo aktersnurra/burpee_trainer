@@ -97,7 +97,7 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
 
     {:ok, home, _html} = live(conn, ~p"/")
 
-    assert has_element?(home, "#home-action[aria-label='Start workout'] .hero-play")
+    assert has_element?(home, "#home-action[aria-label='Start workout']", "Start")
     home |> element("#home-summary") |> render_click()
 
     home |> element("#home-action") |> render_click()

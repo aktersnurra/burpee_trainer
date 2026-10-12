@@ -101,43 +101,35 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           id="home-request-abort"
           type="button"
           phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-          class="home-icon-button"
-          aria-label="Abort review"
-          title="Abort"
+          class="home-text-action"
         >
-          <.icon name="hero-x-mark" class="size-5" />
+          Cancel
         </button>
         <button
           :if={@editable}
           id="home-request-edit"
           type="button"
           phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-review-reps")}
-          class="home-icon-button"
-          aria-label="Update interpretation"
-          title="Update"
+          class="home-text-action"
         >
-          <.icon name="hero-pencil-square" class="size-5" />
+          Edit
         </button>
         <button
           id="home-request-confirm"
           type="button"
           phx-click="confirm_workout_request"
-          class="home-icon-button"
-          aria-label="Approve and plan"
-          title="Approve"
+          class="home-primary-action"
         >
-          <.icon name="hero-check" class="size-5" />
+          Approve
         </button>
         <button
           :if={!@editable}
           id="home-request-back"
           type="button"
           phx-click="back_to_workout_request"
-          class="home-icon-button"
-          aria-label="Back to request"
-          title="Back"
+          class="home-text-action"
         >
-          <.icon name="hero-pencil-square" class="size-5" />
+          Edit
         </button>
       </div>
     </section>
@@ -611,12 +603,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 phx-click={leave_hero() |> JS.push("edit_current_workout")}
                 aria-label="Edit current workout"
                 title="Edit workout"
-                class="home-icon-button home-expanded-action"
+                class="home-text-action home-expanded-action"
                 inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
-                <.icon name="hero-pencil" class="size-6" />
-                <span class="home-action-label">Edit</span>
+                Edit
               </button>
               <button
                 id="home-title-action"
@@ -627,12 +618,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 aria-haspopup="dialog"
                 aria-expanded={to_string(@state.chooser_open?)}
                 aria-controls="home-alternatives-panel"
-                class="home-icon-button home-expanded-action"
+                class="home-text-action home-expanded-action"
                 inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
-                <.icon name="hero-arrows-right-left" class="size-6" />
-                <span class="home-action-label">Switch</span>
+                Switch
               </button>
               <button
                 id="home-action"
@@ -642,10 +632,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 phx-value-client_session_id={@state.start_client_session_id}
                 aria-label="Start workout"
                 title="Start workout"
-                class="home-icon-button"
+                class="home-primary-action"
                 disabled={@state.authoring_stage != :idle}
               >
-                <.icon name="hero-play" class="size-6" />
+                Start
               </button>
               <button
                 id="home-new-workout"
@@ -653,12 +643,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 phx-click={leave_hero() |> JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
                 aria-label="New workout"
                 title="New workout"
-                class="home-icon-button home-expanded-action"
+                class="home-text-action home-expanded-action"
                 inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
-                <.icon name="hero-plus" class="size-6" />
-                <span class="home-action-label">New</span>
+                New
               </button>
             </div>
           </div>
@@ -706,18 +695,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     <button
                       id="home-new-dismiss"
                       phx-click="abort_new_workout"
-                      class="home-icon-button"
-                      aria-label="Return to current workout"
+                      class="home-text-action"
                     >
-                      <.icon name="hero-x-mark" class="size-5" />
+                      Keep current
                     </button>
                     <button
                       id="home-new-select"
                       phx-click="select_created_workout"
-                      class="home-icon-button"
-                      aria-label="Select new workout"
+                      class="home-primary-action"
                     >
-                      <.icon name="hero-check" class="size-5" />
+                      Use this workout
                     </button>
                   </div>
                 </section>
@@ -757,10 +744,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <button
             id="home-chooser-close"
             type="button"
-            aria-label="Close chooser"
+            class="home-text-action"
             phx-click={close_chooser()}
           >
-            <.icon name="hero-x-mark" class="size-5" />
+            Close
           </button>
         </header>
         <p
@@ -791,16 +778,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </div>
           <button
             id="home-filter-toggle"
-            aria-label="Filter"
-            title="Filter"
+            class="home-text-action"
             type="button"
             phx-click="toggle_filters"
             aria-expanded={to_string(@state.filters_open?)}
             aria-controls="home-filters"
           >
-            <span aria-hidden="true">
-              <.icon name="hero-adjustments-horizontal" class="size-5" />
-            </span>
+            Filter
           </button>
         </div>
         <div :if={@state.filters_open?} id="home-filters">
@@ -891,10 +875,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           aria-haspopup="dialog"
           aria-expanded={to_string(@state.chooser_open?)}
           aria-controls="home-alternatives-panel"
-          class="home-icon-button home-expanded-action"
+          class="home-primary-action"
         >
-          <.icon name="hero-arrows-right-left" class="size-6" />
-          <span class="home-action-label">Switch</span>
+          Choose a workout
         </button>
       </div>
       <.chooser state={@state} />
@@ -935,13 +918,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         :if={Map.get(@item, :owned?, false)}
         id={"home-delete-workout-#{@item.source_id}"}
         type="button"
-        class="home-icon-button"
-        aria-label={"Delete workout #{@item.name}"}
+        class="home-text-action"
+        aria-label={"Delete #{@item.name}"}
         data-confirm="Delete this workout? Past sessions will be kept."
         phx-click="delete_workout"
         phx-value-id={@item.source_id}
       >
-        <.icon name="hero-trash" class="size-5" />
+        Delete
       </button>
     </div>
     """

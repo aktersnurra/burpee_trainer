@@ -118,10 +118,9 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   type="button"
                   phx-click="resume_recommendation"
                   phx-value-session-id={@started_session.id}
-                  class="home-resume-action min-h-11 focus-visible:outline-2 focus-visible:outline-offset-4"
+                  class="home-primary-action"
                 >
-                  <span id="home-resume-action-label">Resume workout</span>
-                  <.icon name="hero-arrow-right" class="size-4" />
+                  <span id="home-resume-action-label">Resume</span>
                 </button>
               </section>
             <% nil -> %>

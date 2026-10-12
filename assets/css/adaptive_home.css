@@ -799,8 +799,6 @@
 #home-history-weekly { margin-top: 24px; }
 #home-history-weekly h2, .home-history-sessions-heading { font-size: var(--text-body); font-weight: 600; }
 .home-history-week-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; gap: 12px; }
-#home-history-week-mode, #home-history-density-sessions { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--home-muted); }
-#home-history-week-mode:hover, #home-history-density-sessions:hover { background: #efefeb; color: #262722; }
 .home-history-week-count { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
 .home-history-week-current { margin-top: 15px; text-align: right; color: var(--home-muted); font-size: var(--text-small); }
 .home-history-week-oldest, .home-history-week-key { color: var(--home-muted); font-size: var(--text-small); }
@@ -965,22 +963,19 @@
 #home-ready-recommendation .home-hero { padding: 0; border: 0; text-align: center; }
 #home-ready-recommendation .home-workout-name { font: 600 34px/1.2 var(--font-sans); letter-spacing: -.9px; }
 #home-ready-recommendation .home-workout-totals { font-size: 18px; }
-.home-workout-actions[data-expanded] .home-icon-button:disabled { opacity: .35; cursor: default; }
 #home-ready-recommendation .home-hero-main { display: block; }
 #home-ready-recommendation .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
 #home-ready-recommendation .home-eyebrow { display: none; }
-/* Start stays put in the centre; Edit, Switch and New open as a labelled row beneath it.
-   The row takes no space while closed. */
-.home-workout-actions { display: grid; grid-template-columns: repeat(3, 72px); grid-template-rows: auto 0px; justify-content: center; margin: 26px auto 18px; align-items: start; }
+/* Start is the one filled action in the centre; Edit, Switch and New open as quiet words
+   beneath it. The row takes no space while closed. */
+.home-workout-actions { display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto 0px; justify-content: center; justify-items: center; column-gap: 4px; margin: 26px auto 18px; align-items: start; }
 .home-workout-actions[data-expanded="true"] { grid-template-rows: auto auto; }
 .home-workout-actions #home-action { grid-column: 1 / -1; grid-row: 1; }
 .home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
 .home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
 .home-workout-actions #home-new-workout { grid-column: 3; grid-row: 2; }
-.home-workout-actions .home-expanded-action { width: 100%; height: auto; min-height: 44px; margin-top: 10px; gap: 4px; padding: 6px 0; }
-.home-action-label { font-size: 12px; line-height: 1.2; color: var(--home-muted); }
-.home-icon-button { display: grid; place-items: center; width: 48px; height: 48px; margin: auto; padding: 10px; background: transparent; border: 0; color: #262722; }
-.home-icon-button:hover { opacity: .65; }
+.home-workout-actions #home-action { padding-inline: 36px; }
+.home-workout-actions .home-expanded-action { margin-top: 12px; padding-inline: 14px; }
 .home-workout-actions .home-expanded-action { opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity var(--motion-quick) ease, transform var(--motion-settle) var(--ease-out), visibility 0s linear var(--motion-quick); }
 .home-workout-actions[data-expanded="true"] .home-expanded-action { opacity: 1; visibility: visible; transform: translateY(0); transition: opacity var(--motion-settle) ease var(--motion-stagger), transform var(--motion-settle) var(--ease-out) var(--motion-stagger), visibility 0s; }
 #home-ready-recommendation .home-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
@@ -991,7 +986,6 @@
 .home-review-values dt { color: var(--home-muted); }
 .home-review-values dd { margin: 0; font-weight: 400; text-align: right; }
 .home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
-.home-review-actions .home-icon-button { margin: 0; }
 /* New form actions are words: a quiet Cancel or Edit, and one filled primary action. */
 .home-review-actions:has(.home-text-action, .home-primary-action) { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
 .home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
@@ -1044,13 +1038,11 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-history-status { margin-top: 32px; }
 .home-history-streak-line { display: flex; align-items: baseline; gap: 8px; }
 .home-history-streak-line span { color: var(--home-muted); font-size: var(--text-body); }
-/* Coach's Send is an arrow inside the field that shows once there is something to send. */
+/* Coach's Send is the primary pill inside the field row, shown once there is something to send. */
 .coach-message-form { position: relative; }
-#home-coach-message-text { padding-right: 44px; }
-.coach-send { position: absolute; right: 0; bottom: 14px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; background: #262722; color: var(--color-base-100); transition: opacity var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out), visibility 0s; }
-.coach-send:hover { opacity: .85; }
-.coach-send:disabled { opacity: .4; cursor: default; }
-.coach-message-form:has(textarea:placeholder-shown) .coach-send { opacity: 0; visibility: hidden; transform: scale(.85); transition: opacity var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out), visibility 0s linear var(--motion-quick); }
+#home-coach-message-text { padding-right: 88px; }
+.coach-send { position: absolute; right: 0; bottom: 10px; min-height: 36px; padding: 0 16px; transition: opacity var(--motion-quick) ease, visibility 0s; }
+.coach-message-form:has(textarea:placeholder-shown) .coach-send { opacity: 0; visibility: hidden; transition: opacity var(--motion-quick) ease, visibility 0s linear var(--motion-quick); }
 .coach-send:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
 /* The progress row keeps the column's edges on wide screens, on Home and History alike. */
 @media (min-width: 601px) { #history-progress, #home-progress-history { max-width: 640px; margin-inline: auto; } }
@@ -1060,3 +1052,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .login-note { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
 .login-action { display: inline-flex; align-items: center; margin-top: 28px; text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .coach-send { transition: none; } }
+
+/* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
+:is(.home-history-week-heading, .home-history-trend-heading, .home-chooser-header, .home-history-sheet-actions) .home-text-action { margin-right: -20px; }
+.home-history-sheet-actions .home-text-action:first-child { margin-left: -20px; }

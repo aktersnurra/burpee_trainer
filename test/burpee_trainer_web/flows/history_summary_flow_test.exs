@@ -147,10 +147,11 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # Coach's fields and actions are the New form's: underlined rows and one filled action.
     assert has_element?(view, "#home-coach-message-form.home-authoring-form")
     assert has_element?(view, "#home-coach-message-text.home-authoring-input")
-    # Send is an arrow inside the field, not a row of its own.
+    # Send is the primary pill inside the field row, not a row of its own.
     assert has_element?(
              view,
-             "#home-coach-message-form .fieldset + #home-coach-message-send.coach-send[aria-label=Send]"
+             "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action",
+             "Send"
            )
 
     assert has_element?(view, "#home-coach-notebook-save.home-primary-action")

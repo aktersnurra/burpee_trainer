@@ -70,23 +70,21 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 :if={@state.history_week_start == nil and @state.history_weeks != []}
                 id="home-history-week-mode"
                 type="button"
-                aria-label="Show daily minutes"
-                title="Show daily minutes"
+                class="home-text-action"
                 phx-click="history_week"
                 phx-value-start={Date.to_iso8601(List.last(@state.history_weeks).start)}
               >
-                <.icon name="hero-chart-bar" class="size-5" />
+                Days
               </button>
               <button
                 :if={@state.history_week_start}
                 id="home-history-week-mode"
                 type="button"
-                aria-label="Back to weekly grid"
-                title="Back to weekly grid"
+                class="home-text-action"
                 phx-mounted={JS.focus(to: "#home-history-week-mode")}
                 phx-click={JS.push("history_week_back")}
               >
-                <.icon name="hero-squares-2x2" class="size-5" />
+                Weeks
               </button>
             </div>
             <p
@@ -230,15 +228,14 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             <button
               id="home-history-density-back"
               type="button"
-              aria-label="Show density graph"
-              title="Show density graph"
+              class="home-text-action"
               phx-mounted={
                 @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
               }
               phx-click="history_density_mode"
               phx-value-mode="chart"
             >
-              <.icon name="hero-presentation-chart-line" class="size-5" />
+              Chart
             </button>
           </div>
           <h3
@@ -356,25 +353,25 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             :if={not @confirm?}
             id="home-history-delete"
             type="button"
-            aria-label="Delete saved session"
+            class="home-text-action"
             phx-click="history_confirm_delete"
           >
-            <.icon name="hero-trash" class="size-5" />
+            Delete
           </button>
           <button
             id="home-history-sheet-close"
             type="button"
-            aria-label="Close session details"
+            class="home-text-action"
             phx-click={close_session_sheet(@return_to)}
           >
-            <.icon name="hero-x-mark" class="size-5" />
+            Close
           </button>
         </div>
         <p :if={@error} id="home-history-sheet-error" role="status">{@error}</p>
         <%= if @confirm? do %>
           <h2>Delete this session?</h2>
           <p>
-            This removes the session from History and updates your weekly progress. This cannot be undone.
+            This removes the session from Progress and updates your weekly progress. This cannot be undone.
           </p>
           <div class="home-history-sheet-actions">
             <button id="home-history-delete-cancel" type="button" phx-click="history_cancel_delete">
@@ -616,13 +613,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           <button
             id="home-history-density-sessions"
             type="button"
-            aria-label="Show sessions"
-            title="Show sessions"
+            class="home-text-action"
             phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
             phx-click="history_density_mode"
             phx-value-mode="sessions"
           >
-            <.icon name="hero-list-bullet" class="size-5" />
+            Sessions
           </button>
         </span>
         <span class="home-history-trend-subtitle">Reps / 20 min</span>
