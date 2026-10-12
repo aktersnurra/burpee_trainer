@@ -497,6 +497,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         class="history-coach-summary"
         aria-expanded={to_string(coach_open?(@state))}
         aria-controls="home-coach-panel"
+        phx-click={coach_open?(@state) && fold_coach()}
       >
         <BurpeeTrainerWeb.HomeCoachComponents.summary_body
           :if={summary_line?(@state)}
@@ -508,9 +509,19 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         </span>
         <.icon name="hero-chevron-down" class="history-coach-summary-arrow size-4" />
       </.link>
-      <BurpeeTrainerWeb.HomeCoachComponents.panel :if={coach_open?(@state)} state={@state} />
+      <div :if={coach_open?(@state)} id="history-coach-expansion" class="history-coach-expansion">
+        <div class="history-coach-expansion-content">
+          <BurpeeTrainerWeb.HomeCoachComponents.panel state={@state} />
+        </div>
+      </div>
     </header>
     """
+  end
+
+  # LiveView holds the patch's reply until a running transition ends, so Coach folds away
+  # before it is removed and History below slides up instead of snapping.
+  defp fold_coach do
+    JS.transition("history-coach-closing", to: "#history-coach-expansion", time: 240)
   end
 
   defp coach_open?(state), do: Map.get(state, :coach_open?, false)

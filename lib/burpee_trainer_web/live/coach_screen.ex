@@ -21,15 +21,18 @@ defmodule BurpeeTrainerWeb.CoachScreen do
 
   def open(socket), do: socket |> assign(coach_open?: true) |> refresh()
 
+  # Coach lists only goals waiting on the owner; active ones read in History's header above it.
   defp refresh(socket) do
     notebook = Notebook.get(socket.assigns.current_scope)
+    goals = Goals.list(socket.assigns.current_scope)
 
     socket
     |> assign(
       coach_notebook_seen: notebook.updated_at,
-      coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
+      coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook),
+      history_goals: Enum.filter(goals, &(&1.status == :active))
     )
-    |> stream(:coach_goals, Goals.list(socket.assigns.current_scope), reset: true)
+    |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end
 
   # Coach is reached only from History, so leaving it always returns there.

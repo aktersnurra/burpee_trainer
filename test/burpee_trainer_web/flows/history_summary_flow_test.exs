@@ -44,6 +44,11 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#history-page #history-header #home-coach-panel")
     assert has_element?(view, "#history-coach-summary[aria-expanded=true]", "Best so far")
     refute has_element?(view, "#home-coach-back, #home-coach-heading, #home-coach-summary")
+    # Coach unfolds under its summary and folds away before History closes it.
+    assert has_element?(view, "#history-coach-expansion #home-coach-panel")
+    assert view |> element("#history-coach-summary") |> render() =~ "history-coach-closing"
+    # The active goal reads once, in the header, not again in Coach's list.
+    refute has_element?(view, "#home-coach-goals [data-status=active]")
 
     view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/history")
@@ -121,6 +126,12 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     assert positions == Enum.sort(positions)
     assert has_element?(view, "label[for='home-coach-message-text']", "Tell the coach")
+    # Coach's fields and actions are the New form's: underlined rows and one filled action.
+    assert has_element?(view, "#home-coach-message-form.home-authoring-form")
+    assert has_element?(view, "#home-coach-message-text.home-authoring-input")
+    assert has_element?(view, "#home-coach-message-send.home-primary-action")
+    assert has_element?(view, "#home-coach-notebook-save.home-primary-action")
+    assert has_element?(view, "#home-coach-notebook-clear.home-text-action")
 
     assert has_element?(
              view,

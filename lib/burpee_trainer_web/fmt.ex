@@ -50,15 +50,24 @@ defmodule BurpeeTrainerWeb.Fmt do
   def level(:level_1a), do: "Level 1A"
   def level(_), do: "—"
 
-  @doc "One line for a goal, the same on History and Coach."
-  @spec goal(map()) :: String.t()
-  def goal(%{
-        burpee_type: type,
-        burpee_count_target: reps,
-        duration_sec_target: sec,
-        date_target: date
-      }),
-      do: "#{burpee_type(type)} · #{reps} reps in #{div(sec, 60)} min by #{date}"
+  @doc "One line for a goal, the same on History and Coach: \"… by 9 Nov\", with the year only when it is not `today`'s."
+  @spec goal(map(), Date.t()) :: String.t()
+  def goal(
+        %{
+          burpee_type: type,
+          burpee_count_target: reps,
+          duration_sec_target: sec,
+          date_target: date
+        },
+        today \\ Date.utc_today()
+      ),
+      do:
+        "#{burpee_type(type)} · #{reps} reps in #{div(sec, 60)} min by #{goal_date(date, today)}"
+
+  defp goal_date(%Date{year: year} = date, %Date{year: year}),
+    do: Calendar.strftime(date, "%-d %b")
+
+  defp goal_date(%Date{} = date, _today), do: Calendar.strftime(date, "%-d %b %Y")
 
   @doc "A training week by its dates, Monday to Sunday: \"7–13 Sep\", \"28 Sep – 4 Oct\"."
   @spec week(Date.t()) :: String.t()

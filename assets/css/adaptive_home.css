@@ -898,12 +898,16 @@
 .screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
 .home-coach-summary-text { margin-top: 18px; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
 #home-coach-goals { margin-top: 28px; }
-.coach-message-form { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }
-.coach-message-form .fieldset { margin: 0; padding: 0; }
-.coach-message-form .label { color: var(--home-muted); font-size: 13px; }
-.adaptive-home .coach-guidance-input { display: block; width: 100%; min-height: 96px; padding: 12px 14px; border: 1px solid var(--home-line); border-radius: 5px; background: transparent; box-shadow: none; color: #24231e; font: 400 16px/1.5 var(--font-sans); resize: vertical; }
-.adaptive-home .coach-guidance-input:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
-.coach-message-form #home-coach-message-send { align-self: flex-end; padding: 10px 20px; border: 1px solid #262722; border-radius: 4px; }
+/* Coach's message is a New form row: the label above an underlined field that grows with its text. */
+.home-authoring-form.coach-message-form { margin-top: 8px; }
+/* Coach unfolds under its summary, and folds away before it is removed. */
+@keyframes history-coach-unfold { from { grid-template-rows: 0fr; opacity: 0; } }
+.history-coach-expansion { display: grid; grid-template-rows: 1fr; animation: history-coach-unfold 380ms cubic-bezier(.22,1,.36,1) backwards; transition: grid-template-rows 220ms cubic-bezier(.4,0,.2,1), opacity 160ms ease-in; }
+.history-coach-expansion-content { min-height: 0; overflow: hidden; margin-inline: -5px; padding-inline: 5px; }
+/* Folded stays folded until History's reply removes it, however long that takes. */
+.history-coach-expansion.history-coach-closing,
+.history-coach-summary.phx-click-loading + .history-coach-expansion { grid-template-rows: 0fr; opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .history-coach-expansion { animation: none; transition: none; } }
 .coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: 13px; }
 .coach-guidance-status:empty { display: none; }
 .history-coach-memory { margin-top: 32px; }
@@ -913,7 +917,8 @@
 .history-coach-memory summary::-webkit-details-marker { display: none; }
 .history-coach-memory-chevron { transition: transform 200ms ease; }
 .history-coach-memory[open] .history-coach-memory-chevron { transform: rotate(180deg); }
-.history-coach-entry { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 13px 0; border-top: 1px solid var(--home-line); font-size: 14px; }
+.history-coach-entry { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--home-line); font-size: 14px; }
+.history-coach-entry p { flex: 1; }
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
 .history-header { margin-top: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--home-line); }
 .history-header-facts { color: var(--home-muted); font-size: 14px; font-variant-numeric: tabular-nums; }

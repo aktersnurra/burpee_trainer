@@ -41,28 +41,26 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           data-status={goal.status}
           class="history-coach-entry"
         >
-          <p>
-            {BurpeeTrainerWeb.Fmt.goal(goal)} · {goal.status}
-          </p>
-          <button
-            :if={goal.status == :proposed}
-            id={"home-coach-goal-#{goal.id}-confirm"}
-            type="button"
-            phx-click="coach_goal_confirm"
-            phx-value-id={goal.id}
-            class="home-state-action"
-          >
-            Confirm
-          </button>
+          <p>{BurpeeTrainerWeb.Fmt.goal(goal)}</p>
           <button
             :if={goal.status == :proposed}
             id={"home-coach-goal-#{goal.id}-dismiss"}
             type="button"
             phx-click="coach_goal_dismiss"
             phx-value-id={goal.id}
-            class="home-state-action"
+            class="home-text-action"
           >
             Dismiss
+          </button>
+          <button
+            :if={goal.status == :proposed}
+            id={"home-coach-goal-#{goal.id}-confirm"}
+            type="button"
+            phx-click="coach_goal_confirm"
+            phx-value-id={goal.id}
+            class="home-primary-action"
+          >
+            Confirm
           </button>
         </div>
       </div>
@@ -71,27 +69,29 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         id="home-coach-message-form"
         phx-submit="coach_message"
         phx-change="coach_message_change"
-        class="coach-message-form"
+        class="coach-message-form home-authoring-form"
       >
         <.input
           field={@state.coach_message_form[:text]}
           id="home-coach-message-text"
           type="textarea"
           label="Tell the coach"
-          rows="3"
+          rows="1"
           maxlength="1000"
           placeholder="A goal, a niggle, what you'd like next"
-          class="coach-guidance-input"
+          class="home-authoring-input"
           disabled={@state.coach_busy?}
         />
-        <button
-          id="home-coach-message-send"
-          type="submit"
-          class="home-action"
-          disabled={@state.coach_busy?}
-        >
-          Send
-        </button>
+        <div class="home-review-actions">
+          <button
+            id="home-coach-message-send"
+            type="submit"
+            class="home-primary-action"
+            disabled={@state.coach_busy?}
+          >
+            Send
+          </button>
+        </div>
       </.form>
       <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-guidance-status">
         Sending to the coach
@@ -108,31 +108,30 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           id="home-coach-notebook-form"
           phx-submit="coach_notebook_save"
           phx-change="coach_notebook_change"
+          class="home-authoring-form"
         >
           <.input
             field={@state.coach_notebook_form[:text]}
             id="home-coach-notebook-text"
             type="textarea"
             label="Coach notebook"
-            rows="4"
+            rows="1"
             maxlength="4000"
-            class="coach-guidance-input"
+            class="home-authoring-input"
           />
-          <button
-            id="home-coach-notebook-save"
-            type="submit"
-            class="home-state-action min-h-11 min-w-11 mr-4"
-          >
-            Save
-          </button>
-          <button
-            id="home-coach-notebook-clear"
-            type="button"
-            phx-click="coach_notebook_clear"
-            class="home-state-action min-h-11 min-w-11"
-          >
-            Clear
-          </button>
+          <div class="home-review-actions">
+            <button
+              id="home-coach-notebook-clear"
+              type="button"
+              phx-click="coach_notebook_clear"
+              class="home-text-action"
+            >
+              Clear
+            </button>
+            <button id="home-coach-notebook-save" type="submit" class="home-primary-action">
+              Save
+            </button>
+          </div>
         </.form>
       </details>
     </section>
