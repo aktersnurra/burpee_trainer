@@ -27,7 +27,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # The week's minutes live in the progress row above, not again in the header.
     refute header =~ "min this week"
     assert has_element?(view, "#history-progress #home-week-duration", "25 / 80 min")
-    assert header =~ "150 reps in 20 min"
+    # Each goal is its own line, so two never run together.
+    assert has_element?(view, "#history-goals li", "150 six-count burpees in 20 min")
 
     assert has_element?(
              view,
@@ -54,6 +55,17 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert_patch(view, "/history")
     refute has_element?(view, "#home-coach-panel")
     assert has_element?(view, "#history-coach-summary[aria-expanded=false]")
+  end
+
+  test "the week grid names weeks that hit the target, and none when none have", %{
+    conn: conn,
+    user: user
+  } do
+    free_form_session_fixture(user, %{duration_sec_actual: 1_500})
+    {:ok, view, _} = live(conn, ~p"/history")
+    refute has_element?(view, "#home-history-week-count")
+    assert has_element?(view, ".home-history-week-current", "This week")
+    assert has_element?(view, "#home-history-streak", "0")
   end
 
   test "with nothing to summarize, History invites the owner to the coach and Home does not", %{
@@ -129,7 +141,12 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # Coach's fields and actions are the New form's: underlined rows and one filled action.
     assert has_element?(view, "#home-coach-message-form.home-authoring-form")
     assert has_element?(view, "#home-coach-message-text.home-authoring-input")
-    assert has_element?(view, "#home-coach-message-send.home-primary-action")
+    # Send is an arrow inside the field, not a row of its own.
+    assert has_element?(
+             view,
+             "#home-coach-message-form .fieldset + #home-coach-message-send.coach-send[aria-label=Send]"
+           )
+
     assert has_element?(view, "#home-coach-notebook-save.home-primary-action")
     assert has_element?(view, "#home-coach-notebook-clear.home-text-action")
 

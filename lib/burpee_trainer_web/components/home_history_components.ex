@@ -39,8 +39,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>
           <div id="home-history-status" class="home-history-status">
-            <p>
-              <strong id="home-history-streak">{@state.history_streak}</strong> week streak
+            <p class="home-history-streak-line">
+              <strong id="home-history-streak">{@state.history_streak}</strong>
+              <span>week streak</span>
             </p>
           </div>
           <div role="group" aria-label="History period" class="home-history-periods">
@@ -89,7 +90,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               </button>
             </div>
             <p
-              :if={is_nil(@state.history_week_start)}
+              :if={is_nil(@state.history_week_start) and completed_week_summary(@state.history_weeks)}
               id="home-history-week-count"
               class="home-history-week-count"
             >
@@ -181,11 +182,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               class="home-history-week-key"
               aria-label="Minutes per week: 0, 20, 40, 60, 80 or more"
             >
-              <span><i class="home-history-tone-0"></i>0</span>
-              <span><i class="home-history-tone-20"></i>20</span>
-              <span><i class="home-history-tone-40"></i>40</span>
-              <span><i class="home-history-tone-60"></i>60</span>
-              <span><i class="home-history-tone-80"></i>80 min</span>
+              <span>0</span>
+              <i class="home-history-tone-0"></i>
+              <i class="home-history-tone-20"></i>
+              <i class="home-history-tone-40"></i>
+              <i class="home-history-tone-60"></i>
+              <i class="home-history-tone-80"></i>
+              <span>80 min</span>
             </div>
           </section>
           <.trend_chart
@@ -456,17 +459,19 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     do:
       "Week of #{Date.to_iso8601(week.start)}: #{week.minutes} of #{week.target_minutes} minutes#{if week.open?, do: ", in progress", else: ""}"
 
+  # Counts the weeks that reached 80 minutes; with none yet it says nothing rather than "0 of 11".
   defp completed_week_summary(weeks) do
     completed = Enum.drop(weeks, -1)
-    "#{Enum.count(completed, & &1.target?)} of #{length(completed)} completed weeks"
+
+    case Enum.count(completed, & &1.target?) do
+      0 -> nil
+      hit -> "#{hit} of the last #{length(completed)} weeks at 80 min"
+    end
   end
 
+  # The dates are already in the progress row above; the label only marks the open cell.
   defp current_week_label([]), do: ""
-
-  defp current_week_label(weeks) do
-    week = List.last(weeks)
-    "#{week_date_range(week.start)} · this week"
-  end
+  defp current_week_label(_weeks), do: "This week"
 
   defp oldest_week_label([week | _]), do: "#{week_date_range(week.start)} · oldest shown"
 
@@ -487,31 +492,34 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <p class="history-header-facts">
         <span id="history-level">{Fmt.level(@state.current_level)}</span>
       </p>
-      <p :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
-        {Enum.map_join(@state.history_goals, " · ", &Fmt.goal/1)}
-      </p>
-      <%!-- Coach opens here, under its summary, like the workout card on Home: /coach is History with Coach open. --%>
-      <.link
-        id="history-coach-summary"
-        patch={if(coach_open?(@state), do: ~p"/history", else: ~p"/coach")}
-        class="history-coach-summary"
-        aria-expanded={to_string(coach_open?(@state))}
-        aria-controls="home-coach-panel"
-        phx-click={coach_open?(@state) && fold_coach()}
-      >
-        <BurpeeTrainerWeb.HomeCoachComponents.summary_body
-          :if={summary_line?(@state)}
-          summary={@state.progress_summary}
-          loading?={@state.progress_summary_loading?}
-        />
-        <span :if={not summary_line?(@state)} class="coach-summary-invitation">
-          Tell the coach what you're training for
-        </span>
-        <.icon name="hero-chevron-down" class="history-coach-summary-arrow size-4" />
-      </.link>
-      <div :if={coach_open?(@state)} id="history-coach-expansion" class="history-coach-expansion">
-        <div class="history-coach-expansion-content">
-          <BurpeeTrainerWeb.HomeCoachComponents.panel state={@state} />
+      <ul :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
+        <li :for={goal <- @state.history_goals}>{Fmt.goal(goal)}</li>
+      </ul>
+      <%!-- Coach opens here, under its summary, like the workout card on Home: /coach is History with Coach open.
+           The summary and Coach share one paper surface, so the summary reads as something that opens. --%>
+      <div id="history-coach" class="history-coach">
+        <.link
+          id="history-coach-summary"
+          patch={if(coach_open?(@state), do: ~p"/history", else: ~p"/coach")}
+          class="history-coach-summary"
+          aria-expanded={to_string(coach_open?(@state))}
+          aria-controls="home-coach-panel"
+          phx-click={coach_open?(@state) && fold_coach()}
+        >
+          <BurpeeTrainerWeb.HomeCoachComponents.summary_body
+            :if={summary_line?(@state)}
+            summary={@state.progress_summary}
+            loading?={@state.progress_summary_loading?}
+          />
+          <span :if={not summary_line?(@state)} class="coach-summary-invitation">
+            Tell the coach what you're training for
+          </span>
+          <.icon name="hero-chevron-down" class="history-coach-summary-arrow size-4" />
+        </.link>
+        <div :if={coach_open?(@state)} id="history-coach-expansion" class="history-coach-expansion">
+          <div class="history-coach-expansion-content">
+            <BurpeeTrainerWeb.HomeCoachComponents.panel state={@state} />
+          </div>
         </div>
       </div>
     </header>
@@ -521,7 +529,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   # LiveView holds the patch's reply until a running transition ends, so Coach folds away
   # before it is removed and History below slides up instead of snapping.
   defp fold_coach do
-    JS.transition("history-coach-closing", to: "#history-coach-expansion", time: 240)
+    JS.transition("history-coach-closing", to: "#history-coach-expansion", time: 200)
   end
 
   defp coach_open?(state), do: Map.get(state, :coach_open?, false)

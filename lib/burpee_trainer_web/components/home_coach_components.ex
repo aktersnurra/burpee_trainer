@@ -82,16 +82,17 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           class="home-authoring-input"
           disabled={@state.coach_busy?}
         />
-        <div class="home-review-actions">
-          <button
-            id="home-coach-message-send"
-            type="submit"
-            class="home-primary-action"
-            disabled={@state.coach_busy?}
-          >
-            Send
-          </button>
-        </div>
+        <%!-- Send sits inside the field and shows once there is something to send. --%>
+        <button
+          id="home-coach-message-send"
+          type="submit"
+          class="coach-send"
+          aria-label="Send"
+          title="Send"
+          disabled={@state.coach_busy?}
+        >
+          <.icon name="hero-arrow-up" class="size-4" />
+        </button>
       </.form>
       <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-guidance-status">
         Sending to the coach

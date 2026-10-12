@@ -90,15 +90,15 @@ Font stack: `Geist, ui-sans-serif, system-ui, -apple-system, sans-serif`
 
 Geist is the only typeface: no serif or Arial declarations anywhere, including headings, the chooser and session panels. Use `var(--font-sans)` rather than repeating the stack; headings change size and weight, never family. Keep the type system restrained: most text uses 400 / 500 / 600 weights, with large headings using careful negative tracking.
 
-| Role                  | Size   | Weight | Color              |
-|-----------------------|--------|--------|--------------------|
-| Page heading          | 28px   | 600    | base-content       |
-| Section heading       | 13px   | 500    | base-content/70    |
-| Body                  | 14px   | 400    | base-content       |
-| Stat number (large)   | 32px   | 600    | base-content       |
-| Stat number (medium)  | 20px   | 500    | base-content       |
-| Label / caption       | 12px   | 400    | base-content/40    |
-| Badge text            | 11px   | 500    | varies             |
+Home, History and Coach use three sizes, as tokens in `assets/css/adaptive_home.css`:
+
+| Token            | Size | Roles                                                         |
+|------------------|------|---------------------------------------------------------------|
+| `--text-display` | 28px | page heading (600), the one big number on a screen (600)      |
+| `--text-body`    | 16px | what you read and tap: summaries, section headings (600), buttons (500) |
+| `--text-small`   | 13px | labels, captions, goals, dates, chart scales (muted)          |
+
+Home's workout title and result heading are the only larger display sizes.
 
 Letter-spacing: `-0.02em` on headings/large numbers. `0.06em` on badge text (uppercase).
 
@@ -120,6 +120,21 @@ Component gap inside card: 16px
 
 ---
 
+## 4a. Lines and edges
+
+- One column edge per screen: the progress row, header and content share the 640px column.
+- A line marks an input (the underlined field row), a chosen tab, or data (the progress
+  track, chart grid). Spacing separates everything else.
+- Meta never joins unlike things with middle dots; each goal is its own line.
+
+## 4b. Motion
+
+Two durations and two curves, as tokens: `--motion-quick` (180ms) for fades, folds and
+hovers; `--motion-settle` (360ms) for things that arrive or open; `--motion-stagger`
+(80ms) between related arrivals. `--ease-out` for arrivals, `--ease-in-out` for folds.
+Leaving runs on the action and LiveView holds the patch until it ends, so the new content
+arrives in place instead of beside the old. Reduced motion turns it all off.
+
 ## 5. Navigation and screens
 
 There is no navigation bar. The app opens on the one thing the owner needs now, and each
@@ -137,8 +152,10 @@ screen leads to the next in context:
   `docs/specs/2026-10-10-frictionless-home-design.md`.
 - **Coach** opens inside History, under the summary, like the workout card on Home; there
   is no separate Coach screen. `/coach` is History with Coach open. It reads top to bottom:
-  goals, "Tell the coach" with Send below, the reply, and the notebook collapsed under
-  "What the coach knows". The summary and Escape close it.
+  goals waiting for Confirm or Dismiss (active ones read in the header), "Tell the coach"
+  with Send as an arrow inside the field once there is text, the reply, and the notebook
+  collapsed under "What the coach knows". The summary and Coach share one paper surface
+  (`--color-base-200`); Coach unfolds inside it. The summary and Escape close it.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
   session and camera specs that follow it.
@@ -155,5 +172,5 @@ them. Sheets and the chooser use `--color-base-200`. Never hard-code a page back
 - No navigation bar or tab bar
 - No heavy dashboard treatment on Home
 - No new font family beyond the existing Geist setup
-- No animation beyond ring pulse and progress transitions
+- No decorative animation: motion only answers an action (see 4b)
 - No dark mode — light Quiet stone is the only theme

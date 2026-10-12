@@ -62,7 +62,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     view |> element("#home-coach-goal-#{id}-confirm") |> render_click()
     # A confirmed goal leaves Coach's list for the header above it, so it reads once.
     refute has_element?(view, "#home-coach-goal-#{id}")
-    assert has_element?(view, "#history-goals", "150 reps in 20 min")
+    assert has_element?(view, "#history-goals li", "150 six-count burpees in 20 min")
     assert summary_jobs() == 1
     BurpeeTrainer.Repo.delete_all(Oban.Job)
 
@@ -151,7 +151,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=proposed]")
     view |> element("#home-coach-goal-#{goal.id}-confirm") |> render_click()
     refute has_element?(view, "#home-coach-goal-#{goal.id}")
-    assert has_element?(view, "#history-goals", "150 reps in 20 min")
+    assert has_element?(view, "#history-goals li", "150 six-count burpees in 20 min")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
   end
 

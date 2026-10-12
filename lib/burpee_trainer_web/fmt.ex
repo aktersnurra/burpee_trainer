@@ -50,7 +50,7 @@ defmodule BurpeeTrainerWeb.Fmt do
   def level(:level_1a), do: "Level 1A"
   def level(_), do: "—"
 
-  @doc "One line for a goal, the same on History and Coach: \"… by 9 Nov\", with the year only when it is not `today`'s."
+  @doc "One line for a goal, the same on History and Coach: \"150 six-count burpees in 20 min by 9 Nov\", with the year only when it is not `today`'s."
   @spec goal(map(), Date.t()) :: String.t()
   def goal(
         %{
@@ -62,7 +62,10 @@ defmodule BurpeeTrainerWeb.Fmt do
         today \\ Date.utc_today()
       ),
       do:
-        "#{burpee_type(type)} · #{reps} reps in #{div(sec, 60)} min by #{goal_date(date, today)}"
+        "#{reps} #{goal_burpee(type)} burpees in #{div(sec, 60)} min by #{goal_date(date, today)}"
+
+  defp goal_burpee(type) when type in [:six_count, "six_count"], do: "six-count"
+  defp goal_burpee(type), do: burpee_type(type)
 
   defp goal_date(%Date{year: year} = date, %Date{year: year}),
     do: Calendar.strftime(date, "%-d %b")
