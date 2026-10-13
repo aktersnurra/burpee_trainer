@@ -33,7 +33,8 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_loaded_ids: [],
       history_loaded_count: 0,
       history_available?: false,
-      history_goals: []
+      history_headline: %{headline: %{kind: :none}, others: []},
+      history_next_dismissed?: false
     )
     |> stream_configure(:history_sessions, dom_id: &"home-history-session-#{&1.id}")
     |> stream(:history_sessions, [])
@@ -218,6 +219,31 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
     end
   end
 
+  def handle_event("progress_set_goal", _, socket) do
+    a = socket.assigns
+
+    with %{next: next} <- a.history_headline.headline,
+         {:ok, %{"goal_id" => id}} <-
+           BurpeeTrainer.Coach.Tools.ProposeGoal.call(
+             a.current_scope,
+             %{
+               "burpee_type" => Atom.to_string(next.burpee_type),
+               "burpee_count_target" => next.burpee_count_target,
+               "duration_sec_target" => next.duration_sec_target,
+               "date_target" => Date.to_iso8601(next.date_target)
+             },
+             %{}
+           ),
+         {:ok, _goal} <- Goals.confirm(a.current_scope, id) do
+      {:noreply, load_history(socket, false)}
+    else
+      _ -> {:noreply, assign(socket, history_next_dismissed?: true)}
+    end
+  end
+
+  def handle_event("progress_not_now", _, socket),
+    do: {:noreply, assign(socket, history_next_dismissed?: true)}
+
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   defp load_history(socket, reset?, now \\ nil, retain_loaded? \\ false) do
@@ -273,6 +299,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
 
       history_available? = available_sessions != []
       {:ok, weeks} = History.weeks(all_sessions, a.current_scope.user, now, a.history_period)
+      weeks = from_first_trained_week(weeks)
       {:ok, all_weeks} = History.weeks(all_sessions, a.current_scope.user, now, "all")
 
       selected_week =
@@ -291,7 +318,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       socket
       |> assign(
         history_available?: history_available?,
-        history_goals: Goals.gauges(a.current_scope, all_sessions, now),
+        history_headline: headline(a.current_scope, all_sessions, now),
         history_weeks: weeks,
         history_week_start: selected_week,
         history_week_days: days,
@@ -368,6 +395,31 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       end)
     else
       stream(socket, :history_sessions, rows, reset: true)
+    end
+  end
+
+  # The grid starts at the first week with training, never a row of empty weeks; this
+  # week stays, as it is the one in progress.
+  defp from_first_trained_week([]), do: []
+
+  defp from_first_trained_week(weeks) do
+    {earlier, [current]} = Enum.split(weeks, -1)
+    Enum.drop_while(earlier, &(&1.seconds == 0)) ++ [current]
+  end
+
+  @doc "What leads Progress for `scope` at `now`; nothing when the owner's calendar is unknown."
+  def headline(scope, sessions, now) do
+    case BurpeeTrainer.UserTime.context(scope.user, now) do
+      {:ok, context} ->
+        BurpeeTrainer.ProgressHeadline.pick(
+          Goals.list(scope),
+          sessions,
+          context.date,
+          context.timezone
+        )
+
+      {:error, _reason} ->
+        %{headline: %{kind: :none}, others: []}
     end
   end
 

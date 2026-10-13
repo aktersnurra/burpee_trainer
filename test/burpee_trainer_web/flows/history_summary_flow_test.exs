@@ -27,8 +27,9 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # The week's minutes live in the progress row above, not again in the header.
     refute header =~ "min this week"
     assert has_element?(view, "#history-progress #home-week-duration", "25 / 80 min")
-    # Each goal is its own line, so two never run together.
-    assert has_element?(view, "#history-goals li", "150 six-count burpees in 20 min")
+    # The goal leads Progress as its headline.
+    assert has_element?(view, "#progress-headline", "Six-count in 20 min")
+    assert has_element?(view, "#progress-headline .progress-headline-of", "150")
 
     assert has_element?(
              view,
@@ -57,20 +58,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#history-coach-summary[aria-expanded=false]")
   end
 
-  test "the density chart leads with the latest and best numbers", %{conn: conn, user: user} do
-    free_form_session_fixture(user, %{
-      duration_sec_actual: 1_200,
-      burpee_count_actual: 140,
-      completed_at: DateTime.add(DateTime.utc_now(:second), -3, :day)
-    })
-
-    free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 120})
-    {:ok, view, _} = live(conn, ~p"/progress")
-    assert has_element?(view, "#home-history-trend-latest strong", "120")
-    assert has_element?(view, "#home-history-trend-best strong", "140")
-  end
-
-  test "each goal is an instrument: a meter at your best, the numbers, and days left", %{
+  test "the nearest goal leads as the headline; others follow as quiet rows", %{
     conn: conn,
     user: user
   } do
@@ -80,21 +68,67 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
       date_target: Date.to_iso8601(Date.add(Date.utc_today(), 27))
     })
 
+    goal_fixture(user, %{
+      burpee_type: "navy_seal",
+      burpee_count_target: 60,
+      duration_sec_target: 1200,
+      date_target: Date.to_iso8601(Date.add(Date.utc_today(), 89))
+    })
+
     free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 140})
     # Longer than the goal's time, so it does not count toward it.
     free_form_session_fixture(user, %{duration_sec_actual: 1_500, burpee_count_actual: 149})
 
     {:ok, view, _} = live(conn, ~p"/progress")
-    gauge = "#history-goals li"
-    assert has_element?(view, gauge, "150 six-count burpees in 20 min")
 
     assert has_element?(
              view,
-             "#{gauge} [role=meter][aria-valuenow='140'][aria-valuemax='150']"
+             "#progress-headline[data-kind=goal] .progress-headline-number",
+             "140"
            )
 
-    assert has_element?(view, "#{gauge} .history-goal-best", "140")
-    assert has_element?(view, "#{gauge} .history-goal-left", "27 days left")
+    assert has_element?(
+             view,
+             "#progress-headline [role=meter][aria-valuenow='140'][aria-valuemax='150']"
+           )
+
+    assert has_element?(view, "#progress-goals li", "60 Navy SEAL burpees in 20 min")
+    assert has_element?(view, "#history-level", "Level 1A")
+  end
+
+  test "with no goal, the best leads and the next goal is one tap away", %{conn: conn, user: user} do
+    for reps <- [110, 130, 120],
+        do:
+          free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: reps})
+
+    {:ok, view, _} = live(conn, ~p"/progress")
+
+    assert has_element?(
+             view,
+             "#progress-headline[data-kind=best]",
+             "Your best six-count in 20 min"
+           )
+
+    assert has_element?(view, "#progress-next-goal", "Next: 150 six-count burpees in 20 min")
+    view |> element("#progress-set-goal") |> render_click()
+    assert has_element?(view, "#progress-headline[data-kind=goal] .progress-headline-of", "150")
+
+    assert [%{status: :active, burpee_count_target: 150}] =
+             BurpeeTrainer.Goals.list(Scope.for_user(user))
+  end
+
+  test "after the first workout, its result is the starting point", %{conn: conn, user: user} do
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 110})
+    {:ok, view, _} = live(conn, ~p"/progress")
+
+    assert has_element?(
+             view,
+             "#progress-headline[data-kind=first] .progress-headline-number",
+             "110"
+           )
+
+    assert has_element?(view, "#progress-headline", "That's your starting point.")
+    refute has_element?(view, "#progress-next-goal")
   end
 
   test "the page is Progress, and old History links land on it", %{conn: conn} do
@@ -111,9 +145,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/progress")
     refute has_element?(view, "#home-history-week-count")
     refute has_element?(view, ".home-history-week-current, .home-history-week-key")
-    # No streak yet is not a failure to show: the stat appears from the first full week.
-    refute has_element?(view, "#home-history-streak")
-    assert has_element?(view, "#history-level", "1A")
+    assert has_element?(view, "#history-level", "Level 1A")
   end
 
   test "with nothing to summarize, History invites the owner to the coach and Home does not", %{

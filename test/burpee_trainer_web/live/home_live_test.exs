@@ -606,10 +606,11 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
 
+    # Only this week has training, so the grid is this week alone, not a row of empty weeks.
     assert render(view)
            |> LazyHTML.from_fragment()
            |> LazyHTML.query("#home-history-weekly .home-history-week-cell")
-           |> Enum.count() == 12
+           |> Enum.count() == 1
 
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
@@ -1102,7 +1103,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     previous_year = complete_history(user, ~U[2025-08-01 12:00:00Z], 1200)
     socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
     {:noreply, recent_view} = workspace_screen(socket, :history)
-    assert length(recent_view.assigns.history_weeks) == 12
+    # The grid starts at the first week with training: only this week in the last 12.
+    assert length(recent_view.assigns.history_weeks) == 1
     assert recent_view.assigns.history_summary.sessions == 1
     assert recent.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
     refute previous_year.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
@@ -1110,7 +1112,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:noreply, year_view} =
       HomeLive.handle_event("history_period", %{"period" => "year"}, recent_view)
 
-    assert length(year_view.assigns.history_weeks) == 52
+    assert length(year_view.assigns.history_weeks) == 1
     assert year_view.assigns.history_summary.sessions == 1
 
     {:noreply, all_view} =

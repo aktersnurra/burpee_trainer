@@ -146,7 +146,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         content:
           Voice.text() <>
             "\n" <>
-            "Write at most two sentences on how the athlete is progressing toward their active goals, or toward the next level when they have none. It heads their Progress page, so lead with what matters most this week. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
+            "Write at most two sentences telling the athlete what to do next to reach their active goal, or the next level when they have none. It sits under a headline that already shows their best and their target, above their weekly record, so do not restate those numbers; use a number only when it says something the page does not. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
             Jason.encode!(metrics)
       }
     ]
@@ -159,36 +159,37 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         ledger: %{scope: scope, purpose: "summary", run_id: Ecto.UUID.generate()}
       )
 
-    {summary, source} =
-      with {:ok, %{content: content, tool_calls: []}} <- Client.chat(messages, chat_opts),
-           {:ok, validated} <- Validator.validate_summary(content, metrics) do
-        {validated, :llm}
-      else
-        _ -> {fallback(metrics), :fallback}
-      end
-
-    Summary.store(scope, %{
-      text: summary["text"],
-      metric_ids: summary["metric_ids"],
-      source: source
-    })
+    with {:ok, %{content: content, tool_calls: []}} <- Client.chat(messages, chat_opts),
+         {:ok, validated} <- Validator.validate_summary(content, metrics) do
+      store(scope, validated, :llm)
+    else
+      _ ->
+        case fallback(metrics) do
+          nil -> :none
+          summary -> store(scope, summary, :fallback)
+        end
+    end
   end
 
-  @doc """
-  Deterministic summary from the same metrics, in priority order: a short last week, the
-  first goal's trajectory, this week. At most two sentences, every number a metric value.
-  """
-  @spec fallback(map()) :: %{String.t() => term()}
-  def fallback(metrics) do
-    sentences =
-      [shortfall(metrics), goal_trajectory(metrics), this_week(metrics)]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.take(2)
+  defp store(scope, summary, source),
+    do:
+      Summary.store(scope, %{
+        text: summary["text"],
+        metric_ids: summary["metric_ids"],
+        source: source
+      })
 
-    %{
-      "text" => Enum.map_join(sentences, " ", &elem(&1, 0)),
-      "metric_ids" => Enum.flat_map(sentences, &elem(&1, 1))
-    }
+  @doc """
+  Deterministic summary from the same metrics: only a short last week, the one figure the
+  Progress page does not already show (its headline has the goal, its record the week).
+  `nil` when there is nothing to add.
+  """
+  @spec fallback(map()) :: %{String.t() => term()} | nil
+  def fallback(metrics) do
+    case shortfall(metrics) do
+      nil -> nil
+      {text, ids} -> %{"text" => text, "metric_ids" => ids}
+    end
   end
 
   defp shortfall(%{
@@ -201,34 +202,4 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
           ["last_week.minutes", "last_week.target_minutes"]}
 
   defp shortfall(_metrics), do: nil
-
-  defp goal_trajectory(metrics) do
-    metrics
-    |> Map.keys()
-    |> Enum.flat_map(&goal_id/1)
-    |> Enum.min(fn -> nil end)
-    |> goal_sentence(metrics)
-  end
-
-  defp goal_id(key) do
-    case Regex.run(~r/^goal\.(\d+)\.days_left$/, key) do
-      [_, id] -> [String.to_integer(id)]
-      nil -> []
-    end
-  end
-
-  defp goal_sentence(nil, _metrics), do: nil
-
-  defp goal_sentence(id, metrics) do
-    ids = ["goal.#{id}.best_reps", "goal.#{id}.target_reps", "goal.#{id}.days_left"]
-    [best, target, days] = Enum.map(ids, &Metrics.format(Map.fetch!(metrics, &1)))
-    {"Best so far #{best} of #{target} reps with #{days} days left.", ids}
-  end
-
-  defp this_week(%{"week.minutes" => done, "week.target_minutes" => goal}),
-    do:
-      {"#{Metrics.format(done)} of #{Metrics.format(goal)} minutes this week.",
-       ["week.minutes", "week.target_minutes"]}
-
-  defp this_week(_metrics), do: nil
 end

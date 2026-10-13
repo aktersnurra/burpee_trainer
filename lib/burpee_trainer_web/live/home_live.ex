@@ -261,11 +261,14 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "history_week_back",
              "history_session",
              "history_close_session",
+             "progress_set_goal",
+             "progress_not_now",
              "history_confirm_delete",
              "history_cancel_delete",
              "history_delete_session"
            ] do
-    if socket.assigns.workspace_screen == :history do
+    # /coach is Progress with the coach open, so Progress's events work there too.
+    if socket.assigns.workspace_screen in [:history, :coach] do
       {:noreply, updated} = HistoryScreen.handle_event(event, params, socket)
 
       updated =

@@ -59,6 +59,9 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert String.starts_with?(prompt, BurpeeTrainer.Coach.Voice.text())
     assert prompt =~ "next level"
     assert prompt =~ "metric_ids"
+    # It sits under the headline, so it says what to do rather than restating the numbers.
+    assert prompt =~ "what to do next"
+    assert prompt =~ "do not restate"
   end
 
   test "a fabricated number stores a fallback that is itself validated" do
@@ -66,8 +69,10 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     free_form_session_fixture(scope.user)
     reply(%{"text" => "999 reps last session.", "metric_ids" => ["session.reps"]})
 
+    # The fallback reports only a short last week; it never restates the goal or this week.
     assert {:ok, %Summary{source: :fallback} = stored} = SummaryJob.summarize(scope, opts())
-    assert stored.text =~ "minutes this week"
+    assert stored.text =~ "Last week:"
+    refute stored.text =~ "this week"
   end
 
   test "a disabled provider stores the fallback without a ledger row" do
@@ -87,7 +92,7 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert llm_call_count(scope) == 0
   end
 
-  test "the fallback ranks a short last week, then the first goal, then this week" do
+  test "the fallback reports only a short last week: the headline shows the goal and the week" do
     metrics = %{
       "week.minutes" => %{value: 0, unit: :minutes, label: "w"},
       "week.target_minutes" => %{value: 80, unit: :minutes, label: "t"},
@@ -103,15 +108,11 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
 
     summary = SummaryJob.fallback(metrics)
 
-    assert summary["text"] ==
-             "Last week: 50 of 80 minutes. Best so far 120 of 150 reps with 52 days left."
-
+    assert summary["text"] == "Last week: 50 of 80 minutes."
     assert {:ok, _} = Validator.validate_summary(summary, metrics)
 
     met = %{metrics | "last_week.minutes" => %{value: 80, unit: :minutes, label: "lw"}}
-    no_goals = Map.reject(met, fn {id, _} -> String.starts_with?(id, "goal.") end)
-    assert SummaryJob.fallback(no_goals)["text"] == "0 of 80 minutes this week."
-    assert {:ok, _} = Validator.validate_summary(SummaryJob.fallback(no_goals), no_goals)
+    assert SummaryJob.fallback(met) == nil
   end
 
   test "confirming a goal admits a summary; dismissing a proposal changes no input and does not" do

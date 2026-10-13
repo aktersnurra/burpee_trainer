@@ -75,31 +75,6 @@ defmodule BurpeeTrainer.Goals do
     }
   end
 
-  @doc """
-  Active goals as instruments: each with the best reps toward it (the same figure the
-  coach's summary uses) and the days left, in the owner's calendar at `now`. An owner whose
-  calendar cannot be resolved gets none.
-  """
-  @spec gauges(Scope.t(), [map()], DateTime.t()) :: [
-          %{goal: Goal.t(), best: non_neg_integer(), days_left: non_neg_integer()}
-        ]
-  def gauges(%Scope{user: user} = scope, sessions, now) do
-    case BurpeeTrainer.UserTime.context(user, now) do
-      {:ok, context} ->
-        for goal <- list(scope), goal.status == :active do
-          %{
-            goal: goal,
-            best: BurpeeTrainer.Insights.Metrics.goal_best(sessions, goal),
-            days_left: max(0, Date.diff(goal.date_target, context.date))
-          }
-        end
-
-      # Without the owner's calendar there are no honest days left, so no instruments.
-      {:error, _reason} ->
-        []
-    end
-  end
-
   def list(%Scope{user: %{id: id}}),
     do:
       Repo.all(

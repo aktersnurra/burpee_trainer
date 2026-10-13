@@ -33,6 +33,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           >
             Progress
           </h1>
+          <span :if={Map.get(@state, :history_available?, false)} id="history-level">
+            {Fmt.level(@state.current_level)}
+          </span>
         </div>
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
@@ -408,26 +411,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     end
   end
 
-  defp readout(series) do
-    case Enum.flat_map(series, & &1.points) do
-      [] ->
-        nil
-
-      points ->
-        latest = Enum.max_by(points, & &1.completed_at, DateTime)
-        %{latest: latest.density, best: points |> Enum.map(& &1.density) |> Enum.max()}
-    end
-  end
-
   defp goal_percent(%{best: best, goal: %{burpee_count_target: target}}),
     do: min(100, div(best * 100, target))
-
-  defp days_left(0), do: "Due today"
-  defp days_left(1), do: "1 day left"
-  defp days_left(days), do: "#{days} days left"
-
-  # "Level 1A" reads "1A" beside the word level.
-  defp level_short(level), do: level |> Fmt.level() |> String.replace_prefix("Level ", "")
 
   attr(:state, :map, required: true)
 
@@ -436,49 +421,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
-      <%!-- Status first, like a cockpit's top row: where you stand, then where you're heading. --%>
-      <div
-        :if={Map.get(@state, :history_available?, false)}
-        id="home-history-status"
-        class="home-history-status"
-      >
-        <p class="home-history-streak-line">
-          <strong id="history-level">{level_short(@state.current_level)}</strong>
-          <span>level</span>
-        </p>
-        <p :if={Map.get(@state, :history_streak, 0) > 0} class="home-history-streak-line">
-          <strong id="home-history-streak">{@state.history_streak}</strong>
-          <span>week streak</span>
-        </p>
-      </div>
-      <%!-- Each goal is an instrument: what, by when, a meter at your best, and the numbers. --%>
-      <ul :if={@state.history_goals != []} id="history-goals" class="history-goals">
-        <li :for={gauge <- @state.history_goals} class="history-goal">
-          <p class="history-goal-head">
-            <span class="history-goal-title">{Fmt.goal_title(gauge.goal)}</span>
-            <span class="history-goal-by">{Fmt.goal_by(gauge.goal)}</span>
-          </p>
-          <div
-            class="history-goal-meter"
-            role="meter"
-            aria-label={"Best so far toward #{Fmt.goal_title(gauge.goal)}"}
-            aria-valuemin="0"
-            aria-valuemax={gauge.goal.burpee_count_target}
-            aria-valuenow={min(gauge.best, gauge.goal.burpee_count_target)}
-          >
-            <span style={"width: #{goal_percent(gauge)}%"}></span>
-          </div>
-          <p class="history-goal-foot">
-            <span>
-              <strong class="history-goal-best">{gauge.best}</strong>
-              <span>/ {gauge.goal.burpee_count_target}</span>
-            </span>
-            <span class="history-goal-left">{days_left(gauge.days_left)}</span>
-          </p>
-        </li>
-      </ul>
-      <%!-- Coach opens here, under its summary, like the workout card on Home: /coach is History with Coach open.
-           The summary and Coach share one paper surface, so the summary reads as something that opens. --%>
+      <.headline
+        headline={@state.history_headline.headline}
+        dismissed?={Map.get(@state, :history_next_dismissed?, false)}
+      />
+      <%!-- The coach's line says what to do next; tapping it opens the coach in place.
+           /coach is Progress with the coach open. --%>
       <div id="history-coach" class="history-coach">
         <.link
           id="history-coach-summary"
@@ -494,9 +442,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             loading?={@state.progress_summary_loading?}
           />
           <span :if={not summary_line?(@state)} class="coach-summary-invitation">
-            Set a goal with the coach
+            {if(@state.history_headline.headline.kind == :goal,
+              do: "Ask the coach about this week",
+              else: "Set a goal with the coach"
+            )}
           </span>
-          <.icon name="hero-chevron-down" class="history-coach-summary-arrow size-4" />
+          <.icon name="hero-chevron-right" class="history-coach-summary-arrow size-4" />
         </.link>
         <div :if={coach_open?(@state)} id="history-coach-expansion" class="history-coach-expansion">
           <div class="history-coach-expansion-content">
@@ -504,8 +455,116 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           </div>
         </div>
       </div>
+      <%!-- Other goals follow the headline as quiet rows: what, by when, your best. --%>
+      <ul :if={@state.history_headline.others != []} id="progress-goals" class="progress-goals">
+        <li :for={row <- @state.history_headline.others} id={"progress-goal-#{row.goal.id}"}>
+          <span>{Fmt.goal_title(row.goal)} {Fmt.goal_by(row.goal)}</span>
+          <span class="progress-goal-best">{row.best}</span>
+        </li>
+      </ul>
     </header>
     """
+  end
+
+  attr(:headline, :map, required: true)
+  attr(:dismissed?, :boolean, default: false)
+
+  # One number leads Progress: the goal you're closest to, a goal just reached, your best,
+  # or your first result. See docs/specs/2026-10-13-progress-headline-design.md.
+  defp headline(%{headline: %{kind: :none}} = assigns), do: ~H""
+
+  defp headline(assigns) do
+    ~H"""
+    <section id="progress-headline" class="progress-headline" data-kind={@headline.kind}>
+      <p class="progress-headline-number">
+        {headline_number(@headline)}<span
+          :if={@headline.kind == :goal}
+          class="progress-headline-of"
+        > / {@headline.goal.burpee_count_target}</span>
+      </p>
+      <p class={["progress-headline-label", @headline.kind == :reached && "progress-headline-done"]}>
+        {headline_label(@headline)}
+      </p>
+      <div
+        :if={@headline.kind in [:goal, :reached]}
+        class={["progress-headline-meter", @headline.kind == :reached && "progress-headline-met"]}
+        role="meter"
+        aria-label={"Best toward #{Fmt.goal_title(@headline.goal)}"}
+        aria-valuemin="0"
+        aria-valuemax={@headline.goal.burpee_count_target}
+        aria-valuenow={min(@headline.best, @headline.goal.burpee_count_target)}
+      >
+        <span style={"width: #{goal_percent(@headline)}%"}></span>
+      </div>
+      <p :if={@headline.kind == :first} class="progress-headline-note">
+        That's your starting point. Two more sessions and the coach suggests a goal that fits.
+      </p>
+      <div
+        :if={@headline.kind in [:reached, :best] and not @dismissed?}
+        id="progress-next-goal"
+        class="progress-next-goal"
+      >
+        <p>Next: {Fmt.goal_title(@headline.next)} {Fmt.goal_by(@headline.next)}.</p>
+        <div class="home-review-actions">
+          <button
+            id="progress-set-goal"
+            type="button"
+            class="home-primary-action"
+            phx-click="progress_set_goal"
+          >
+            Set this goal
+          </button>
+          <button
+            :if={@headline.kind == :reached}
+            id="progress-not-now"
+            type="button"
+            class="home-text-action"
+            phx-click="progress_not_now"
+          >
+            Not now
+          </button>
+          <.link
+            :if={@headline.kind == :best}
+            id="progress-choose-goal"
+            patch={~p"/coach"}
+            class="home-text-action"
+          >
+            Choose my own
+          </.link>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  defp headline_number(%{kind: :first, reps: reps}), do: reps
+  defp headline_number(%{best: best}), do: best
+
+  defp headline_label(%{kind: :goal, goal: goal}),
+    do:
+      "#{type_sentence(goal.burpee_type)} in #{div(goal.duration_sec_target, 60)} min, #{Fmt.goal_by(goal)}"
+
+  defp headline_label(%{kind: :reached, goal: goal, reached_on: on}),
+    do:
+      "#{type_sentence(goal.burpee_type)} in #{div(goal.duration_sec_target, 60)} min. Goal reached #{Calendar.strftime(on, "%-d %b")}#{early(goal.date_target, on)}."
+
+  defp headline_label(%{kind: :best, burpee_type: type}),
+    do: "Your best #{String.downcase(type_sentence(type))} in 20 min"
+
+  defp headline_label(%{kind: :first, burpee_type: type}),
+    do: "#{type_sentence(type)} in your first workout"
+
+  defp type_sentence(:six_count), do: "Six-count"
+  defp type_sentence(:navy_seal), do: "Navy SEAL"
+
+  defp early(target, on) do
+    case Date.diff(target, on) do
+      days when days <= 0 -> ""
+      1 -> ", a day early"
+      days when days < 7 -> ", #{days} days early"
+      days when days < 14 -> ", a week early"
+      days -> ", #{div(days, 7)} weeks early"
+    end
   end
 
   # LiveView holds the patch's reply until a running transition ends, so Coach folds away
@@ -574,7 +633,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       )
       |> assign(:axis_min, axis_min)
       |> assign(:axis_max, axis_max)
-      |> assign(:readout, readout(series))
 
     ~H"""
     <figure
@@ -607,21 +665,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <%= if @empty? or Enum.all?(@series, &(&1.points == [])) do %>
         <p class="home-history-trend-empty">No measured sessions in this period.</p>
       <% else %>
-        <%!-- The numbers lead, so one workout already says something; the line shows the trend. --%>
-        <div class="home-history-status home-history-trend-readout">
-          <p id="home-history-trend-latest" class="home-history-streak-line">
-            <strong>{@readout.latest}</strong>
-            <span>latest</span>
-          </p>
-          <p
-            :if={@readout.best != @readout.latest}
-            id="home-history-trend-best"
-            class="home-history-streak-line"
-          >
-            <strong>{@readout.best}</strong>
-            <span>best</span>
-          </p>
-        </div>
         <div
           id="home-history-trend-plot"
           class="home-history-plot"
@@ -759,7 +802,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       >
         <strong>{@session.burpee_count_actual || "—"}</strong>
         <span>
-          reps{if @session.burpee_count_planned, do: " of #{@session.burpee_count_planned}"}
+          reps of {@session.burpee_count_planned}
         </span>
       </p>
       <p

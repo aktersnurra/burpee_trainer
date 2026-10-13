@@ -30,8 +30,8 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> assign(
       coach_notebook_seen: notebook.updated_at,
       coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook),
-      history_goals:
-        Goals.gauges(
+      history_headline:
+        BurpeeTrainerWeb.HistoryScreen.headline(
           socket.assigns.current_scope,
           BurpeeTrainer.Workouts.list_sessions(socket.assigns.current_scope),
           DateTime.utc_now()
