@@ -52,10 +52,11 @@ Each active goal is one instrument instead of a sentence:
 [██████████████████░░░░░]   120 / 150     27 days left
 ```
 
-- The bar fills to the best 20-minute reps for that burpee type in the goal's window
-  (the same density the chart plots), capped at the target.
-- "120 / 150" leads as numbers; days left is the only other words.
-- With no measured session yet the bar is empty and reads "no 20-minute set yet".
+- The bar fills to the best reps toward the goal: the most in one session of its type
+  within its time, warmups excluded. It is the same figure the coach's summary reports
+  (`Insights.Metrics.goal_best/2`), so the meter and the coach never disagree.
+- "120 / 150" leads as numbers; days left ("27 days left", "Due today") is the only
+  other words. With nothing that counts yet it reads "0 / 150" over an empty bar.
 
 The coach summary, weeks and density follow as today. The coach area itself is redesigned
 separately in the coach presence spec.

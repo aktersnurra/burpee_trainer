@@ -279,7 +279,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       socket
       |> assign(
         history_available?: history_available?,
-        history_goals: Enum.filter(Goals.list(a.current_scope), &(&1.status == :active)),
+        history_goals: Goals.gauges(a.current_scope, all_sessions, now),
         history_weeks: weeks,
         history_week_start: selected_week,
         history_week_days: days,

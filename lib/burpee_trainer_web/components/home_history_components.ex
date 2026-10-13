@@ -483,6 +483,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     end
   end
 
+  defp goal_percent(%{best: best, goal: %{burpee_count_target: target}}),
+    do: min(100, div(best * 100, target))
+
+  defp days_left(0), do: "Due today"
+  defp days_left(1), do: "1 day left"
+  defp days_left(days), do: "#{days} days left"
+
   # "Level 1A" reads "1A" beside the word level.
   defp level_short(level), do: level |> Fmt.level() |> String.replace_prefix("Level ", "")
 
@@ -493,8 +500,31 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
-      <ul :if={@state.history_goals != []} id="history-goals" class="history-header-goals">
-        <li :for={goal <- @state.history_goals}>{Fmt.goal(goal)}</li>
+      <%!-- Each goal is an instrument: what, by when, a meter at your best, and the numbers. --%>
+      <ul :if={@state.history_goals != []} id="history-goals" class="history-goals">
+        <li :for={gauge <- @state.history_goals} class="history-goal">
+          <p class="history-goal-head">
+            <span class="history-goal-title">{Fmt.goal_title(gauge.goal)}</span>
+            <span class="history-goal-by">{Fmt.goal_by(gauge.goal)}</span>
+          </p>
+          <div
+            class="history-goal-meter"
+            role="meter"
+            aria-label={"Best so far toward #{Fmt.goal_title(gauge.goal)}"}
+            aria-valuemin="0"
+            aria-valuemax={gauge.goal.burpee_count_target}
+            aria-valuenow={min(gauge.best, gauge.goal.burpee_count_target)}
+          >
+            <span style={"width: #{goal_percent(gauge)}%"}></span>
+          </div>
+          <p class="history-goal-foot">
+            <span>
+              <strong class="history-goal-best">{gauge.best}</strong>
+              <span>/ {gauge.goal.burpee_count_target}</span>
+            </span>
+            <span class="history-goal-left">{days_left(gauge.days_left)}</span>
+          </p>
+        </li>
       </ul>
       <%!-- Coach opens here, under its summary, like the workout card on Home: /coach is History with Coach open.
            The summary and Coach share one paper surface, so the summary reads as something that opens. --%>

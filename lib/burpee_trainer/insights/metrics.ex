@@ -132,14 +132,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
     goal_metrics =
       for g <- goals, g.status == :active, g.burpee_count_target > 0, reduce: %{} do
         acc ->
-          best =
-            credited
-            |> Enum.filter(
-              &(&1.burpee_type == g.burpee_type and
-                  &1.duration_sec_actual <= g.duration_sec_target)
-            )
-            |> Enum.map(& &1.burpee_count_actual)
-            |> Enum.max(fn -> 0 end)
+          best = goal_best(credited, g)
 
           Map.merge(acc, %{
             "goal.#{g.id}.progress_pct" =>
@@ -169,6 +162,20 @@ defmodule BurpeeTrainer.Insights.Metrics do
     |> Map.merge(latest_metrics(latest))
     |> Map.merge(goal_metrics)
     |> Map.merge(last_week)
+  end
+
+  @doc "Best reps toward `goal`: the most in one session of its type within its time, warmups excluded."
+  @spec goal_best([map()], map()) :: non_neg_integer()
+  def goal_best(sessions, goal) do
+    sessions
+    |> Enum.reject(&(Map.get(&1, :tags) == "warmup"))
+    |> Enum.filter(
+      &(&1.burpee_type == goal.burpee_type and is_integer(&1.duration_sec_actual) and
+          is_integer(&1.burpee_count_actual) and
+          &1.duration_sec_actual <= goal.duration_sec_target)
+    )
+    |> Enum.map(& &1.burpee_count_actual)
+    |> Enum.max(fn -> 0 end)
   end
 
   @spec format(metric()) :: String.t()

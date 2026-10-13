@@ -30,7 +30,12 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> assign(
       coach_notebook_seen: notebook.updated_at,
       coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook),
-      history_goals: Enum.filter(goals, &(&1.status == :active))
+      history_goals:
+        Goals.gauges(
+          socket.assigns.current_scope,
+          BurpeeTrainer.Workouts.list_sessions(socket.assigns.current_scope),
+          DateTime.utc_now()
+        )
     )
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end

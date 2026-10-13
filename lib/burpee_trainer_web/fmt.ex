@@ -67,6 +67,15 @@ defmodule BurpeeTrainerWeb.Fmt do
   defp goal_burpee(type) when type in [:six_count, "six_count"], do: "six-count"
   defp goal_burpee(type), do: burpee_type(type)
 
+  @doc "A goal's what, without its date: \"150 six-count burpees in 20 min\"."
+  @spec goal_title(map()) :: String.t()
+  def goal_title(%{burpee_type: type, burpee_count_target: reps, duration_sec_target: sec}),
+    do: "#{reps} #{goal_burpee(type)} burpees in #{div(sec, 60)} min"
+
+  @doc "A goal's date: \"by 9 Nov\", with the year only when it is not `today`'s."
+  @spec goal_by(map(), Date.t()) :: String.t()
+  def goal_by(%{date_target: date}, today \\ Date.utc_today()), do: "by #{goal_date(date, today)}"
+
   defp goal_date(%Date{year: year} = date, %Date{year: year}),
     do: Calendar.strftime(date, "%-d %b")
 

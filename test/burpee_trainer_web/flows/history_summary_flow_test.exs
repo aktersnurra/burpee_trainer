@@ -70,6 +70,33 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#home-history-trend-best strong", "140")
   end
 
+  test "each goal is an instrument: a meter at your best, the numbers, and days left", %{
+    conn: conn,
+    user: user
+  } do
+    goal_fixture(user, %{
+      burpee_count_target: 150,
+      duration_sec_target: 1200,
+      date_target: Date.to_iso8601(Date.add(Date.utc_today(), 27))
+    })
+
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 140})
+    # Longer than the goal's time, so it does not count toward it.
+    free_form_session_fixture(user, %{duration_sec_actual: 1_500, burpee_count_actual: 149})
+
+    {:ok, view, _} = live(conn, ~p"/progress")
+    gauge = "#history-goals li"
+    assert has_element?(view, gauge, "150 six-count burpees in 20 min")
+
+    assert has_element?(
+             view,
+             "#{gauge} [role=meter][aria-valuenow='140'][aria-valuemax='150']"
+           )
+
+    assert has_element?(view, "#{gauge} .history-goal-best", "140")
+    assert has_element?(view, "#{gauge} .history-goal-left", "27 days left")
+  end
+
   test "the page is Progress, and old History links land on it", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/progress")
     assert has_element?(view, "#home-history-heading", "Progress")
