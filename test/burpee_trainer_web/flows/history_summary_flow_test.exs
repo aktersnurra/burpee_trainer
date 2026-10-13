@@ -201,7 +201,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     end
   end
 
-  test "Coach reads top to bottom under its summary: goals, message, reply, notebook", %{
+  test "Coach reads top to bottom under its line: message, reply, waiting goals, notebook", %{
     conn: conn,
     user: user
   } do
@@ -211,7 +211,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     positions =
       for id <-
-            ~w[history-coach-summary home-coach-goals home-coach-message-form home-coach-reply home-coach-notebook] do
+            ~w[history-coach-summary home-coach-message-form home-coach-reply home-coach-goals home-coach-notebook] do
         {index, _} = :binary.match(html, ~s(id="#{id}"))
         index
       end
@@ -241,7 +241,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(
              view,
              "details#home-coach-notebook:not([open]) summary",
-             "Coach's notes"
+             "What the coach knows about you"
            )
 
     assert has_element?(view, "#home-coach-notebook-toggle .history-coach-memory-chevron")

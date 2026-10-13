@@ -44,6 +44,15 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert has_element?(view, "#home-coach-reply", "Coach unavailable")
   end
 
+  test "a one-tap reply sends its words to the coach", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/coach")
+    view |> element("#home-coach-quick-harder") |> render_click()
+    render_async(view)
+    # No provider in tests: the send happened and the coach says it is unavailable.
+    assert has_element?(view, "#home-coach-reply", "Coach unavailable")
+    assert has_element?(view, "#home-coach-notebook-toggle", "What the coach knows about you")
+  end
+
   test "goal confirmation and notebook edit use scoped effects", %{conn: conn, scope: scope} do
     assert {:ok, %{"goal_id" => id}} =
              BurpeeTrainer.Coach.Tools.ProposeGoal.call(
@@ -145,7 +154,11 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     |> render_submit()
 
     render_async(view)
-    assert has_element?(view, "#home-coach-reply", "Goal proposed.")
+    # The exchange stays: your message and the reply, after a reload too.
+    assert has_element?(view, "#home-coach-exchange", "Set a goal of 150 reps in 20 minutes")
+    assert has_element?(view, "#home-coach-exchange", "Goal proposed.")
+    {:ok, reloaded, _} = live(conn, ~p"/coach")
+    assert has_element?(reloaded, "#home-coach-exchange", "Goal proposed.")
     assert [goal] = BurpeeTrainer.Goals.list(scope)
     assert goal.status == :proposed
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=proposed]")

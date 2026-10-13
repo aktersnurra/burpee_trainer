@@ -1028,3 +1028,10 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .progress-goals li { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid #dcd8d0; color: var(--home-muted); font-size: var(--text-body); }
 .progress-goal-best { color: #262722; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .progress-headline-meter span { transition: none; } }
+/* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
+.history-header .home-coach-panel { margin-top: 16px; }
+.coach-exchange { display: grid; gap: 10px; padding-left: 16px; border-left: 2px solid #dcd8d0; font-size: var(--text-body); line-height: 1.5; }
+.coach-exchange-you { color: var(--home-muted); }
+.coach-quick-replies { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.coach-quick-replies .home-selection-pill { min-height: 40px; padding: 0 14px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; color: #262722; font: 400 var(--text-body)/1.2 var(--font-sans); }
+.coach-quick-replies .home-selection-pill:disabled { opacity: .45; }

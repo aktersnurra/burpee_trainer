@@ -34,35 +34,28 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       phx-window-keydown="close_coach"
       phx-key="Escape"
     >
-      <div id="home-coach-goals" phx-update="stream">
-        <div
-          :for={{dom_id, goal} <- @state.streams.coach_goals}
-          id={dom_id}
-          data-status={goal.status}
-          class="history-coach-entry"
+      <%!-- The last exchange, kept across reloads: what you said, then what the coach said. --%>
+      <div :if={@state.coach_exchange} id="home-coach-exchange" class="coach-exchange">
+        <p class="coach-exchange-you">{@state.coach_exchange.message}</p>
+        <p>{@state.coach_exchange.reply}</p>
+      </div>
+      <div class="coach-quick-replies" role="group" aria-label="Quick replies">
+        <button
+          :for={
+            {id, text} <- [
+              {"harder", "Make the next one harder"},
+              {"easier", "Make the next one easier"}
+            ]
+          }
+          id={"home-coach-quick-#{id}"}
+          type="button"
+          class="home-selection-pill"
+          phx-click="coach_quick_reply"
+          phx-value-text={text}
+          disabled={@state.coach_busy?}
         >
-          <p>{BurpeeTrainerWeb.Fmt.goal(goal)}</p>
-          <button
-            :if={goal.status == :proposed}
-            id={"home-coach-goal-#{goal.id}-dismiss"}
-            type="button"
-            phx-click="coach_goal_dismiss"
-            phx-value-id={goal.id}
-            class="home-text-action"
-          >
-            Dismiss
-          </button>
-          <button
-            :if={goal.status == :proposed}
-            id={"home-coach-goal-#{goal.id}-confirm"}
-            type="button"
-            phx-click="coach_goal_confirm"
-            phx-value-id={goal.id}
-            class="home-primary-action"
-          >
-            Confirm
-          </button>
-        </div>
+          {text}
+        </button>
       </div>
       <.form
         for={@state.coach_message_form}
@@ -97,9 +90,40 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       </p>
       <p id="home-coach-reply" role="status" class="coach-guidance-status">{@state.coach_reply}</p>
       <p id="home-coach-status" role="status" class="coach-guidance-status">{@state.coach_status}</p>
+      <div id="home-coach-goals" phx-update="stream">
+        <div
+          :for={{dom_id, goal} <- @state.streams.coach_goals}
+          id={dom_id}
+          data-status={goal.status}
+          class="history-coach-entry"
+        >
+          <p>{BurpeeTrainerWeb.Fmt.goal(goal)}</p>
+          <button
+            :if={goal.status == :proposed}
+            id={"home-coach-goal-#{goal.id}-dismiss"}
+            type="button"
+            phx-click="coach_goal_dismiss"
+            phx-value-id={goal.id}
+            class="home-text-action"
+          >
+            Dismiss
+          </button>
+          <button
+            :if={goal.status == :proposed}
+            id={"home-coach-goal-#{goal.id}-confirm"}
+            type="button"
+            phx-click="coach_goal_confirm"
+            phx-value-id={goal.id}
+            class="home-primary-action"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
       <details id="home-coach-notebook" class="history-coach-memory" open={@state.coach_details_open?}>
         <summary id="home-coach-notebook-toggle" phx-click="coach_details_toggle">
-          Coach's notes <.icon name="hero-chevron-down" class="history-coach-memory-chevron size-4" />
+          What the coach knows about you
+          <.icon name="hero-chevron-down" class="history-coach-memory-chevron size-4" />
         </summary>
         <.form
           for={@state.coach_notebook_form}

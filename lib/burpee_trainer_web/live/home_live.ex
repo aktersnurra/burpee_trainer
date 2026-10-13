@@ -291,6 +291,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_details_toggle",
              "coach_message_change",
              "coach_message",
+             "coach_quick_reply",
              "coach_notebook_change",
              "coach_notebook_save",
              "coach_notebook_clear",

@@ -2,7 +2,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   @moduledoc "Coach conversation and owner-editable bounded notebook within shared HomeLive."
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainer.Coach.{Notebook, Agent}
+  alias BurpeeTrainer.Coach.{Agent, Exchange, Notebook}
   alias BurpeeTrainer.Goals
 
   def initialize(socket) do
@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
       coach_busy?: false,
       coach_reply: nil,
+      coach_pending_message: nil,
       coach_status: nil
     )
     |> stream_configure(:coach_goals, dom_id: &"home-coach-goal-#{&1.id}")
@@ -28,6 +29,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
 
     socket
     |> assign(
+      coach_exchange: Exchange.latest(socket.assigns.current_scope),
       coach_notebook_seen: notebook.updated_at,
       coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook),
       history_headline:
@@ -76,11 +78,16 @@ defmodule BurpeeTrainerWeb.CoachScreen do
          |> assign(
            coach_busy?: true,
            coach_status: nil,
+           coach_pending_message: text,
            coach_message_form: to_form(%{"text" => text}, as: :coach_message)
          )
          |> start_async(:coach_reply, fn -> Agent.run(scope, :coach_page, text) end)}
     end
   end
+
+  # A one-tap reply sends its words as a message.
+  def handle_event("coach_quick_reply", %{"text" => text}, socket) when is_binary(text),
+    do: handle_event("coach_message", %{"coach_message" => %{"text" => text}}, socket)
 
   def handle_event("coach_notebook_change", %{"coach_notebook" => %{"text" => text}}, socket)
       when is_binary(text),
@@ -125,16 +132,21 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     end
   end
 
-  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket),
-    do:
-      {:noreply,
-       socket
-       |> assign(
-         coach_busy?: false,
-         coach_reply: reply,
-         coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
-       )
-       |> refresh()}
+  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket) do
+    # The exchange is kept so it is still there after a reload; failing to keep it loses
+    # nothing the owner sees now.
+    Exchange.record(socket.assigns.current_scope, socket.assigns.coach_pending_message, reply)
+
+    {:noreply,
+     socket
+     |> assign(
+       coach_busy?: false,
+       # The reply reads in the exchange; this line is for failures only.
+       coach_reply: nil,
+       coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
+     )
+     |> refresh()}
+  end
 
   def handle_async(:coach_reply, _, socket),
     do:
