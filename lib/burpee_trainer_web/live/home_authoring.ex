@@ -136,7 +136,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        authoring_stage: :idle,
        created_plan: nil,
        local_error: nil,
-       authoring_returned?: true
+       # Only New takes the workout away; Edit keeps it in view, so nothing returns.
+       authoring_returned?: is_nil(socket.assigns.editing_source)
      )}
   end
 

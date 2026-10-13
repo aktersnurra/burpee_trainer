@@ -84,7 +84,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     # The fade runs on the click, so the form waits for it instead of landing beside it.
     refute hero =~ ~s(phx-remove=)
     assert view |> element("#home-new-workout") |> render() =~ "home-leaving"
-    assert view |> element("#home-edit-workout") |> render() =~ "home-leaving"
+    # Edit keeps the workout in view, so it does not fade it.
+    refute view |> element("#home-edit-workout") |> render() =~ "home-leaving"
 
     view |> element("#home-new-workout") |> render_click()
     assert has_element?(view, "#home-authoring-heading.home-enter")

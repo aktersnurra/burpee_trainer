@@ -395,7 +395,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           type="button"
           class="home-text-action"
           aria-label="Cancel edit"
-          phx-click="abort_new_workout"
+          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
         >
           Cancel
         </button>
@@ -427,7 +427,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-abort"
               class="home-text-action"
               aria-label="Cancel edit"
-              phx-click="abort_new_workout"
+              phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
             >
               Cancel
             </button>
@@ -448,21 +448,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           phx-mounted={JS.focus(to: "#home-request-confirm")}
           aria-label="Proposed variation"
         >
-          <h2 id="home-edit-review-name" class="home-review-name">
-            {@state.pending_request.definition["name"]}
-          </h2>
-          <dl class="home-review-values">
-            <div>
-              <dt>Reps</dt>
-              <dd id="home-edit-review-reps">{@state.pending_request.request.target_reps}</dd>
-            </div>
-            <div>
-              <dt>Duration</dt>
-              <dd>{duration_label(@state.pending_request.request.target_duration_sec)}</dd>
-            </div>
-          </dl>
           <.inspection
             rows={@state.review_inspection_rows}
+            compare={@state.inspection_rows}
             expanded={@state.expanded_groups}
           />
           <p
@@ -478,7 +466,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-request-abort"
               class="home-text-action"
               aria-label="Cancel edit"
-              phx-click="abort_new_workout"
+              phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
             >
               Cancel
             </button>
@@ -532,21 +520,18 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <span class="sr-only">Updating workout</span>
           </div>
         <% else %>
-          <h1 :if={authoring?(@state)} id="home-authoring-heading" class="screen-heading home-enter">
+          <%!-- New takes the workout title's place, at the title's size, in the same column. --%>
+          <h1
+            :if={authoring_new?(@state)}
+            id="home-authoring-heading"
+            class="home-authoring-title home-enter"
+          >
             {authoring_heading(@state.authoring_stage)}
           </h1>
-          <p
-            :if={authoring?(@state) and @state.editing_source}
-            id="home-authoring-source"
-            class="home-authoring-source home-enter"
-          >
-            {source_prefix(@state.authoring_stage)}{@state.editing_source.name} · {duration_label(
-              @state.editing_source.target_duration_sec
-            )} · {@state.editing_source.target_reps} reps
-          </p>
-          <%!-- Not rendered while authoring, so Cancel mounts it again and focus lands after the patch. --%>
+          <%!-- Not rendered while New is open, so Cancel mounts it again and focus lands after the
+               patch. Edit keeps it in view: the field opens under the table. --%>
           <div
-            :if={not authoring?(@state)}
+            :if={not authoring_new?(@state)}
             id="home-workout-hero"
             class={@state.authoring_returned? && "home-enter"}
             phx-mounted={@state.authoring_returned? && JS.focus(to: "#home-summary")}
@@ -559,30 +544,50 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     id="home-summary"
                     type="button"
                     phx-click="toggle_summary"
+                    inert={@state.authoring_stage != :idle}
                     class={["home-summary", @state.expanded? && "home-summary-expanded"]}
                     aria-expanded={to_string(@state.expanded?)}
                     aria-controls="home-expansion-content"
                   >
-                    <span class="home-workout-name">{@state.home_selection.plan.name}</span>
+                    <span class="home-workout-name">
+                      <.changed
+                        value={hero_name(@state)}
+                        was={@state.home_selection.plan.name}
+                      />
+                    </span>
                   </button>
                 </h1>
               </div>
               <span class="home-workout-totals">
-                {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
+                <.changed
+                  value={duration_label(hero_totals(@state).target_duration_sec)}
+                  was={duration_label(@state.home_selection.plan.target_duration_sec)}
+                /> ·
+                <span id={edit_review?(@state) && "home-edit-review-reps"}>
+                  <.changed
+                    value={"#{hero_totals(@state).target_reps}"}
+                    was={"#{@state.home_selection.plan.target_reps}"}
+                  />
+                </span>
+                reps
               </span>
             </div>
             <p
-              :if={@state.home_selection.rationale}
+              :if={@state.home_selection.rationale && @state.authoring_stage == :idle}
               id="home-planner-rationale"
               class="home-coach-summary-text"
             >
               {@state.home_selection.rationale}
             </p>
-            <div class="home-workout-actions" data-expanded={to_string(@state.expanded?)}>
+            <div
+              :if={@state.authoring_stage == :idle}
+              class="home-workout-actions"
+              data-expanded={to_string(@state.expanded?)}
+            >
               <button
                 id="home-edit-workout"
                 type="button"
-                phx-click={leave_hero() |> JS.push("edit_current_workout")}
+                phx-click="edit_current_workout"
                 aria-label="Edit current workout"
                 title="Edit workout"
                 class="home-text-action home-expanded-action"
@@ -641,7 +646,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               aria-hidden={to_string(!@state.expanded?)}
             >
               <.inspection
-                :if={@state.authoring_stage == :idle}
+                :if={
+                  @state.authoring_stage == :idle or
+                    (@state.editing_source && @state.authoring_stage == :editing)
+                }
                 rows={@state.inspection_rows}
                 expanded={@state.expanded_groups}
               />
@@ -941,8 +949,30 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   attr(:rows, :list, required: true)
   attr(:expanded, :any, required: true)
 
+  attr(:compare, :list,
+    default: nil,
+    doc: "rows of the current workout; changed cells are marked"
+  )
+
   def inspection(assigns) do
-    assigns = assign(assigns, :show_move?, show_move?(assigns.rows))
+    show_move? = show_move?(assigns.rows)
+
+    changes =
+      case assigns.compare do
+        nil ->
+          %{}
+
+        compare ->
+          was = Enum.map(compare, &row_signature(&1, show_move?))
+
+          assigns.rows
+          |> Enum.with_index()
+          |> Map.new(fn {row, index} ->
+            {row.id, changed_cells(row_signature(row, show_move?), Enum.at(was, index))}
+          end)
+      end
+
+    assigns = assign(assigns, show_move?: show_move?, changes: changes)
 
     ~H"""
     <div
@@ -978,7 +1008,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id={"#{row.id}-event-#{hd(hd(row.units).paired).index}"}
               class={row.count > 1 && "home-group-row relative"}
             >
-              <th scope="row">
+              <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
                 <button
                   :if={row.count > 1}
                   id={"#{row.id}-toggle"}
@@ -1002,7 +1032,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 </span>
                 <span :if={row.count == 1}>{row_label(row)}</span>
               </th>
-              <.prescription units={visible_units} show_move?={@show_move?} />
+              <.prescription
+                units={visible_units}
+                show_move?={@show_move?}
+                changed={Map.get(@changes, row.id, MapSet.new())}
+              />
             </tr>
           </tbody>
           <tbody
@@ -1024,22 +1058,72 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   attr(:units, :list, required: true)
   attr(:show_move?, :boolean, required: true)
+  attr(:changed, :any, default: MapSet.new())
 
   defp prescription(assigns) do
     ~H"""
-    <td class="home-prescription-reps">
+    <td class={["home-prescription-reps", MapSet.member?(@changed, :reps) && "home-changed"]}>
       <span :for={unit <- @units}>{work_value(unit, "reps")}</span>
     </td>
-    <td class="home-prescription-every">
+    <td class={["home-prescription-every", MapSet.member?(@changed, :every) && "home-changed"]}>
       <span :for={unit <- @units}>{cadence(unit)}</span>
     </td>
-    <td :if={@show_move?} class="home-prescription-move">
+    <td
+      :if={@show_move?}
+      class={["home-prescription-move", MapSet.member?(@changed, :move) && "home-changed"]}
+    >
       <span :for={unit <- @units}>{pace(unit)}</span>
     </td>
-    <td class="home-prescription-rest">
+    <td class={["home-prescription-rest", MapSet.member?(@changed, :rest) && "home-changed"]}>
       <span :for={unit <- @units}>{recovery(unit)}</span>
     </td>
     """
+  end
+
+  # What a row shows when collapsed, cell by cell, so Review can mark what Edit changed.
+  defp row_signature(row, show_move?) do
+    units = shared_units(row)
+
+    %{
+      label: if(row.count > 1, do: "#{row.count}", else: row_label(row)),
+      reps: Enum.map(units, &work_value(&1, "reps")),
+      every: Enum.map(units, &cadence/1),
+      move: if(show_move?, do: Enum.map(units, &pace/1), else: []),
+      rest: Enum.map(units, &recovery/1)
+    }
+  end
+
+  defp changed_cells(_now, nil), do: MapSet.new([:label, :reps, :every, :move, :rest])
+
+  defp changed_cells(now, was),
+    do: now |> Map.keys() |> Enum.reject(&(now[&1] == was[&1])) |> MapSet.new()
+
+  defp changed?(changes, row_id, cell),
+    do: changes |> Map.get(row_id, MapSet.new()) |> MapSet.member?(cell)
+
+  attr(:value, :string, required: true)
+  attr(:was, :string, required: true)
+
+  # A value Review changed reads marked; an unchanged one reads plain.
+  defp changed(assigns) do
+    ~H"""
+    <mark :if={@value != @was} class="home-changed">{@value}</mark><span :if={@value == @was}>{@value}</span>
+    """
+  end
+
+  defp edit_review?(state),
+    do: not is_nil(state.editing_source) and state.authoring_stage == :review
+
+  defp hero_name(state) do
+    if edit_review?(state),
+      do: state.pending_request.definition["name"],
+      else: state.home_selection.plan.name
+  end
+
+  defp hero_totals(state) do
+    if edit_review?(state),
+      do: state.pending_request.request,
+      else: state.home_selection.plan
   end
 
   defp shared_units(row), do: Enum.take(row.units, div(length(row.units), row.count))
@@ -1129,13 +1213,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   # Filter chips use the short form: "1A", "Graduated".
   # New and Edit (and their review) replace today's workout on screen under one heading.
-  defp authoring?(state), do: state.authoring_stage in [:new, :review, :editing]
-
   defp authoring_new?(state),
     do: is_nil(state.editing_source) and state.authoring_stage in [:new, :review, :editing]
-
-  defp source_prefix(:review), do: "From "
-  defp source_prefix(_stage), do: ""
 
   defp pauses_label([_one] = rests), do: "Pause: " <> pause_times(rests)
   defp pauses_label(rests), do: "Pauses: " <> pause_times(rests)

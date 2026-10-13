@@ -1035,3 +1035,12 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* The workout you have now reads heavier in the list, so you can see what you would swap. */
 .home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
+/* New's title takes the workout title's place: centred, at the title size. */
+.home-authoring-title { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-align: center; text-wrap: balance; }
+/* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
+.adaptive-home mark.home-changed { background: transparent; color: inherit; }
+.adaptive-home .home-changed { font-weight: 600; color: #262722; text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+.adaptive-home td.home-changed, .adaptive-home th.home-changed { text-decoration: none; }
+.adaptive-home td.home-changed span, .adaptive-home th.home-changed > span { text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+/* New's title lands exactly where the open workout's title was. */
+#home-ready-recommendation[data-expanded="true"]:has(#home-authoring-heading) { margin-top: 56px; }

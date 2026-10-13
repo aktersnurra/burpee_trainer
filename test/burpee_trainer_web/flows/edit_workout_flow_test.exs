@@ -124,14 +124,20 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     %{view: view, user: user, selected: selected}
   end
 
-  test "Edit replaces the workout under one heading that still names it, and abort restores it",
+  test "Edit keeps the workout and its table in view and opens one field under the table",
        %{view: view, selected: selected} do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-edit-workout") |> render_click()
 
-    assert has_element?(view, "h1#home-authoring-heading", "Edit workout")
-    assert has_element?(view, "#home-authoring-source", selected.plan.name)
-    refute has_element?(view, "#home-workout-hero")
+    # Nothing is replaced: the workout, its totals and its table stay; only the actions give way.
+    refute has_element?(view, "#home-authoring-heading")
+    assert has_element?(view, "#home-workout-hero .home-workout-name", selected.plan.name)
+    assert has_element?(view, "#home-inspection table")
+    refute has_element?(view, ".home-workout-actions")
+    html = render(view)
+    {table, _} = :binary.match(html, ~s(id="home-inspection"))
+    {field, _} = :binary.match(html, ~s(id="home-edit-form"))
+    assert table < field
 
     # The instruction is a New-form field: a visible label above it, an example inside it.
     assert has_element?(view, "#home-edit-form.home-authoring-form textarea.home-authoring-input")
@@ -147,9 +153,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-send.home-primary-action", "Review")
 
     view |> element("#home-request-abort") |> render_click()
-    refute has_element?(view, "#home-authoring-heading")
-    # The workout mounts again and takes focus once the patch has landed.
-    assert hero_focus_target(view) == "#home-summary"
+    refute has_element?(view, "#home-edit-form")
+    assert has_element?(view, ".home-workout-actions #home-edit-workout")
   end
 
   @tag hold_edit_plan: true
@@ -252,12 +257,17 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     assert source["definition"]["target_reps"] == 140
     refute has_element?(view, "#home-new-form")
-    assert has_element?(view, "#home-edit-review-reps", "150")
+    # Review redraws the workout in place: the proposed totals in the hero, changes marked.
+    assert has_element?(
+             view,
+             "#home-workout-hero #home-edit-review-reps mark.home-changed",
+             "150"
+           )
+
     refute has_element?(view, "#home-edit-review-sets, .home-edit-structure")
     assert has_element?(view, "#home-edit-review #home-inspection table")
-    # Review names the result as a subheading, under the workout it comes from.
-    assert has_element?(view, "#home-authoring-source", "From 140 rep favourite")
-    assert has_element?(view, "#home-edit-review h2.home-review-name")
+    assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
+    refute has_element?(view, "#home-authoring-source, #home-edit-review h2")
     assert has_element?(view, "#home-edit-review #home-request-abort", "Cancel")
     assert has_element?(view, "#home-edit-review #home-request-edit", "Edit")
 
@@ -312,17 +322,5 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   defp selected_slot(user) do
     {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     slot
-  end
-
-  defp hero_focus_target(view) do
-    [commands] =
-      view
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-workout-hero")
-      |> LazyHTML.attribute("phx-mounted")
-
-    [["focus", %{"to" => target}]] = Jason.decode!(commands)
-    target
   end
 end
