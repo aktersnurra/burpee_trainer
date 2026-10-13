@@ -66,6 +66,22 @@ defmodule BurpeeTrainer.ProgressHeadlineTest do
              ProgressHeadline.pick([far, near], sessions, @today, @tz)
   end
 
+  test "a rising goal carries its course; a goal without enough weeks does not" do
+    rising =
+      for {weeks_ago, reps} <- [{3, 100}, {2, 110}, {1, 120}, {0, 130}],
+          do:
+            session(reps,
+              completed_at:
+                DateTime.new!(Date.add(@today, -7 * weeks_ago), ~T[08:00:00], "Etc/UTC")
+            )
+
+    assert %{headline: %{kind: :goal, course: %{on_course?: true}}} =
+             ProgressHeadline.pick([goal([])], rising, @today, @tz)
+
+    assert %{headline: %{kind: :goal, course: nil}} =
+             ProgressHeadline.pick([goal([])], [session(130)], @today, @tz)
+  end
+
   test "a goal reached in the last week leads, with how early, and the next goal" do
     reached = goal(status: :achieved, updated_at: ~U[2026-11-02 18:00:00Z])
     sessions = [session(152, completed_at: ~U[2026-11-02 17:00:00Z])]

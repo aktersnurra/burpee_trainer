@@ -485,8 +485,29 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <p class={["progress-headline-label", @headline.kind == :reached && "progress-headline-done"]}>
         {headline_label(@headline)}
       </p>
+      <%!-- With an honest course, a small chart says when the target comes; else a bar. --%>
+      <figure
+        :if={@headline.kind == :goal and @headline.course}
+        id="progress-course"
+        class="progress-course"
+      >
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          <line x1="0" y1="2" x2="100" y2="2" class="progress-course-target" />
+          <polyline points={course_line(@headline)} class="progress-course-done" />
+          <polyline points={course_projection(@headline)} class="progress-course-ahead" />
+        </svg>
+        <figcaption class="progress-course-caption">
+          <span>{Calendar.strftime(hd(@headline.course.weeks).start, "%-d %b")}</span>
+          <span class={@headline.course.on_course? && "progress-course-on"}>
+            {if(@headline.course.on_course?, do: "On course for ", else: "At this pace, ")}{Calendar.strftime(
+              @headline.course.projected_on,
+              "%-d %b"
+            )}
+          </span>
+        </figcaption>
+      </figure>
       <div
-        :if={@headline.kind in [:goal, :reached]}
+        :if={@headline.kind == :reached or (@headline.kind == :goal and is_nil(@headline.course))}
         class={["progress-headline-meter", @headline.kind == :reached && "progress-headline-met"]}
         role="meter"
         aria-label={"Best toward #{Fmt.goal_title(@headline.goal)}"}
@@ -535,6 +556,30 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       </div>
     </section>
     """
+  end
+
+  # The course chart: x runs from the first counted week to the projected week, y from a
+  # little under the lowest weekly best up to the target (drawn at the top, y = 2).
+  defp course_line(%{course: course} = headline),
+    do: course.weeks |> Enum.map(&course_xy(headline, &1.start, &1.best)) |> Enum.join(" ")
+
+  defp course_projection(%{course: course, goal: goal} = headline) do
+    last = List.last(course.weeks)
+
+    [
+      course_xy(headline, last.start, last.best),
+      course_xy(headline, course.projected_on, goal.burpee_count_target)
+    ]
+    |> Enum.join(" ")
+  end
+
+  defp course_xy(%{course: course, goal: goal}, date, value) do
+    from = hd(course.weeks).start
+    span = max(Date.diff(course.projected_on, from), 1)
+    low = (course.weeks |> Enum.map(& &1.best) |> Enum.min()) * 0.9
+    x = Date.diff(date, from) / span * 100
+    y = 2 + (goal.burpee_count_target - value) / max(goal.burpee_count_target - low, 1) * 36
+    "#{Float.round(x * 1.0, 2)},#{Float.round(y * 1.0, 2)}"
   end
 
   defp headline_number(%{kind: :first, reps: reps}), do: reps

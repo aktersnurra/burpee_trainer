@@ -163,17 +163,16 @@ screen leads to the next in context:
   opens Progress. Home has no coach entry. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
   `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads back Home, then leads
-  with level, active goals and the coach summary. The summary is the only way into Coach;
-  while it is refreshing it shows the app's loader labelled "Updating your summary", and
-  with nothing to summarize it reads "Set a goal with the coach". Design:
-  `docs/specs/2026-10-10-frictionless-home-design.md`.
-- **Coach** opens inside Progress, under the summary, like the workout card on Home; there
-  is no separate Coach screen. `/coach` is Progress with Coach open. It reads top to bottom:
-  goals waiting for Confirm or Dismiss (active ones read in the header), a field whose placeholder
-  reads "Message the coach" with the Send pill inside it once there is text, the reply, and
-  the notebook collapsed under "Coach's notes". The summary and Coach share one paper surface
-  (`--color-base-200`); Coach unfolds inside it. The summary and Escape close it.
+- **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads
+  back Home, then leads with one headline: the nearest goal as "best / target" (with its
+  course when honest), a goal just reached, your best, or your first result. One coach
+  line says what to do and opens the coach in place; other goals follow as quiet rows,
+  then the weekly record. Design: `docs/specs/2026-10-13-progress-headline-design.md`.
+- **Coach** opens in place under its line on Progress; there is no separate Coach screen.
+  `/coach` is Progress with Coach open. It reads top to bottom: the last exchange (kept
+  across reloads), one-tap replies, "Message the coach" with the Send pill once there is
+  text, goals waiting for Confirm or Dismiss, and "What the coach knows about you"
+  collapsed. The coach line and Escape close it.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
   session and camera specs that follow it.

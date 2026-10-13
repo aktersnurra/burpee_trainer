@@ -8,12 +8,13 @@ defmodule BurpeeTrainer.ProgressHeadline do
     4. one or two measured sessions: the first as a starting point (`:first`);
     5. nothing measured (`:none`).
 
+  An active goal carries its course (`GoalCourse.project/4`) when one is honest to show.
   Other active goals follow the headline as quiet rows (`others`). Best reps toward a
   goal are `Insights.Metrics.goal_best/2`, the figure the coach's summary uses.
   """
 
+  alias BurpeeTrainer.{GoalCourse, History, NextGoal}
   alias BurpeeTrainer.Insights.Metrics
-  alias BurpeeTrainer.NextGoal
 
   @reached_days 7
   @best_after 3
@@ -30,9 +31,17 @@ defmodule BurpeeTrainer.ProgressHeadline do
       |> Enum.map(&%{goal: &1, best: Metrics.goal_best(sessions, &1)})
 
     case {reached(goals, sessions, today, timezone), active} do
-      {%{} = reached, _active} -> %{headline: reached, others: active}
-      {nil, [lead | others]} -> %{headline: Map.put(lead, :kind, :goal), others: others}
-      {nil, []} -> %{headline: without_goal(measured, sessions, today), others: []}
+      {%{} = reached, _active} ->
+        %{headline: reached, others: active}
+
+      {nil, [lead | others]} ->
+        %{
+          headline: Map.merge(lead, %{kind: :goal, course: course(lead.goal, measured, today)}),
+          others: others
+        }
+
+      {nil, []} ->
+        %{headline: without_goal(measured, sessions, today), others: []}
     end
   end
 
@@ -74,6 +83,13 @@ defmodule BurpeeTrainer.ProgressHeadline do
       Metrics.goal_best(sessions, %{burpee_type: type, duration_sec_target: @duration_sec})
 
     %{kind: :best, burpee_type: type, best: best, next: NextGoal.for_best(type, best, today)}
+  end
+
+  defp course(goal, measured, today) do
+    measured
+    |> Enum.filter(&(&1.burpee_type == goal.burpee_type))
+    |> History.points()
+    |> GoalCourse.project(goal.burpee_count_target, goal.date_target, today)
   end
 
   defp measured?(session),

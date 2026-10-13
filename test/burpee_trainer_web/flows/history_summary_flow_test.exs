@@ -96,6 +96,29 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#history-level", "Level 1A")
   end
 
+  test "a goal on a rising line shows when it will be reached", %{conn: conn, user: user} do
+    goal_fixture(user, %{
+      burpee_count_target: 150,
+      duration_sec_target: 1200,
+      date_target: Date.to_iso8601(Date.add(Date.utc_today(), 60))
+    })
+
+    for {weeks_ago, reps} <- [{3, 100}, {2, 110}, {1, 120}, {0, 130}] do
+      completed_at =
+        DateTime.add(DateTime.utc_now(:second), -7 * weeks_ago * 86_400 - 60, :second)
+
+      free_form_session_fixture(user, %{
+        duration_sec_actual: 1_200,
+        burpee_count_actual: reps,
+        completed_at: completed_at
+      })
+    end
+
+    {:ok, view, _} = live(conn, ~p"/progress")
+    assert has_element?(view, "#progress-course .progress-course-on", "On course for")
+    refute has_element?(view, "#progress-headline .progress-headline-meter")
+  end
+
   test "with no goal, the best leads and the next goal is one tap away", %{conn: conn, user: user} do
     for reps <- [110, 130, 120],
         do:
