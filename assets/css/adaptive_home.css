@@ -1024,3 +1024,14 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* View switches sit at the heading's right edge and look like the period tabs. */
 .home-history-view-switch { display: flex; gap: 20px; }
 .home-history-view-switch .home-history-period { min-height: 44px; padding-bottom: 6px; font-weight: 400; }
+/* Switch opens in place: the list takes the set table's spot under the workout, which stays
+   above it, inactive, as context. No backdrop, nothing covers the page. */
+#home-chooser-backdrop { display: none; }
+#home-alternatives-panel:not([hidden]) { position: static; inset: auto; z-index: auto; width: auto; max-height: none; overflow: visible; margin-top: 24px; padding: 0; border-radius: 0; background: transparent; transform: none; }
+.adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: none; }
+.home-workout-actions[inert] { opacity: .45; transition: opacity var(--motion-quick) ease; }
+#home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
+#home-alternatives-panel:not([hidden]) { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+/* The workout you have now reads heavier in the list, so you can see what you would swap. */
+.home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
