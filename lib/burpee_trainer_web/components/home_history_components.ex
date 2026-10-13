@@ -15,7 +15,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <div
         id="home-history-body"
         class="home-history-body"
-        inert={not is_nil(@state.history_selected_session)}
       >
         <div class="home-history-header">
           <h1
@@ -38,16 +37,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>
-          <div id="home-history-status" class="home-history-status">
-            <p :if={@state.history_streak > 0} class="home-history-streak-line">
-              <strong id="home-history-streak">{@state.history_streak}</strong>
-              <span>week streak</span>
-            </p>
-            <p class="home-history-streak-line">
-              <strong id="history-level">{level_short(@state.current_level)}</strong>
-              <span>level</span>
-            </p>
-          </div>
           <div role="group" aria-label="Period" class="home-history-periods">
             <button
               :for={
@@ -284,7 +273,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                   id={id}
                   session={session}
                   timezone={@state.current_scope.user.timezone}
-                  expanded?={MapSet.member?(@state.history_expanded, session.id)}
+                  expanded?={@state.history_selected_id == session.id}
+                  insight={@state.history_selected_insight}
+                  confirm?={@state.history_confirm_delete?}
                 />
               </tbody>
             </table>
@@ -302,15 +293,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           </button>
         </section>
       </div>
-      <.session_sheet
-        :if={@state.history_selected_session}
-        session={@state.history_selected_session}
-        insight={@state.history_selected_insight}
-        confirm?={@state.history_confirm_delete?}
-        timezone={@state.current_scope.user.timezone}
-        return_to={@state.history_session_return_to}
-        error={@state.history_error}
-      />
     </section>
     """
   end
@@ -318,11 +300,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
   attr(:insight, :any, default: nil)
   attr(:confirm?, :boolean, required: true)
-  attr(:timezone, :string, required: true)
-  attr(:return_to, :string, required: true)
-  attr(:error, :string, default: nil)
-
-  def session_sheet(assigns) do
+  # A session opens in place under its row: what the coach saw, the numbers, then Delete.
+  def session_detail(assigns) do
     tags =
       (assigns.session.tags || "")
       |> String.split(",", trim: true)
@@ -333,110 +312,67 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
     ~H"""
     <div
-      id="home-history-sheet-backdrop"
-      class="home-history-sheet-backdrop"
-      phx-click={close_session_sheet(@return_to)}
-    >
-    </div>
-    <section
       id="home-history-sheet"
-      class="home-history-sheet"
-      role="dialog"
-      aria-modal="true"
+      class="home-history-detail home-enter"
+      role="region"
       aria-label="Session details"
-      phx-window-keydown={
-        if(@confirm?, do: "history_cancel_delete", else: close_session_sheet(@return_to))
-      }
-      phx-key="Escape"
-      phx-remove={
-        @confirm? &&
-          JS.remove_attribute("inert", to: "#home-history-body")
-          |> JS.remove_attribute("inert", to: "#home-history-close")
-          |> JS.focus(to: "#home-history-heading")
-      }
     >
-      <.focus_wrap
-        id="home-history-sheet-focus"
-        phx-mounted={JS.focus(to: "#home-history-sheet-close")}
+      <section :if={@insight} id="history-insight">
+        <h3 id="history-insight-headline">{@insight.headline}</h3>
+        <ul id="history-insight-points">
+          <li :for={point <- @insight.points["items"]}>{point["text"]}</li>
+        </ul>
+      </section>
+      <div id={"home-history-details-#{@session.id}"}>
+        <.session_details id={"home-history-sheet-details-#{@session.id}"} session={@session} />
+      </div>
+      <div
+        :if={@tags != []}
+        id="home-history-sheet-tags"
+        class="home-history-sheet-tags"
+        aria-label="Session tags"
       >
-        <div class="home-history-sheet-actions">
+        <span :for={tag <- @tags}>{tag |> String.replace("_", " ") |> String.capitalize()}</span>
+      </div>
+      <p :if={String.trim(@session.note_post || "") != ""} id="home-history-sheet-note">
+        {String.trim(@session.note_post)}
+      </p>
+      <div :if={not @confirm?} class="home-review-actions">
+        <button
+          id="home-history-delete"
+          type="button"
+          class="home-text-action"
+          phx-click="history_confirm_delete"
+        >
+          Delete
+        </button>
+      </div>
+      <div :if={@confirm?} class="home-history-delete-ask">
+        <p>Delete this session? It comes off your week and your charts.</p>
+        <div class="home-review-actions">
           <button
-            :if={not @confirm?}
-            id="home-history-delete"
+            id="home-history-delete-cancel"
             type="button"
             class="home-text-action"
-            phx-click="history_confirm_delete"
+            phx-click="history_cancel_delete"
+          >
+            Cancel
+          </button>
+          <button
+            id="home-history-delete-confirm"
+            type="button"
+            class="home-primary-action home-danger-action"
+            phx-click="history_delete_session"
           >
             Delete
           </button>
-          <button
-            id="home-history-sheet-close"
-            type="button"
-            class="home-text-action"
-            phx-click={close_session_sheet(@return_to)}
-          >
-            Close
-          </button>
         </div>
-        <p :if={@error} id="home-history-sheet-error" role="status">{@error}</p>
-        <%= if @confirm? do %>
-          <h2>Delete this session?</h2>
-          <p>
-            This removes the session from Progress and updates your weekly progress. This cannot be undone.
-          </p>
-          <div class="home-history-sheet-actions">
-            <button id="home-history-delete-cancel" type="button" phx-click="history_cancel_delete">
-              Cancel
-            </button>
-            <button
-              id="home-history-delete-confirm"
-              type="button"
-              phx-click="history_delete_session"
-            >
-              Delete session
-            </button>
-          </div>
-        <% else %>
-          <h2>{display_name(@session)}</h2>
-          <p>{local_completion(@session, @timezone)}</p>
-          <section :if={@insight} id="history-insight" class="mt-4">
-            <h3 id="history-insight-headline">{@insight.headline}</h3>
-            <ul id="history-insight-points" class="mt-2 space-y-2">
-              <li :for={point <- @insight.points["items"]}>{point["text"]}</li>
-            </ul>
-          </section>
-          <div id={"home-history-details-#{@session.id}"}>
-            <.session_details id={"home-history-sheet-details-#{@session.id}"} session={@session} />
-          </div>
-          <div
-            :if={@tags != []}
-            id="home-history-sheet-tags"
-            class="home-history-sheet-tags"
-            aria-label="Session tags"
-          >
-            <span :for={tag <- @tags}>{tag |> String.replace("_", " ") |> String.capitalize()}</span>
-          </div>
-          <p :if={String.trim(@session.note_post || "") != ""} id="home-history-sheet-note">
-            {String.trim(@session.note_post)}
-          </p>
-        <% end %>
-      </.focus_wrap>
-    </section>
+      </div>
+    </div>
     """
   end
 
-  defp open_session_sheet do
-    JS.set_attribute({"inert", ""}, to: "#home-history-body")
-    |> JS.set_attribute({"inert", ""}, to: "#home-history-close")
-    |> JS.push("history_session")
-  end
-
-  defp close_session_sheet(return_to) do
-    JS.remove_attribute("inert", to: "#home-history-body")
-    |> JS.remove_attribute("inert", to: "#home-history-close")
-    |> JS.focus(to: return_to)
-    |> JS.push("history_close_session")
-  end
+  defp open_session, do: JS.push("history_session")
 
   defp day_duration(seconds) when seconds < 60, do: "#{seconds} sec"
   defp day_duration(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
@@ -500,6 +436,21 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
+      <%!-- Status first, like a cockpit's top row: where you stand, then where you're heading. --%>
+      <div
+        :if={Map.get(@state, :history_available?, false)}
+        id="home-history-status"
+        class="home-history-status"
+      >
+        <p class="home-history-streak-line">
+          <strong id="history-level">{level_short(@state.current_level)}</strong>
+          <span>level</span>
+        </p>
+        <p :if={Map.get(@state, :history_streak, 0) > 0} class="home-history-streak-line">
+          <strong id="home-history-streak">{@state.history_streak}</strong>
+          <span>week streak</span>
+        </p>
+      </div>
       <%!-- Each goal is an instrument: what, by when, a meter at your best, and the numbers. --%>
       <ul :if={@state.history_goals != []} id="history-goals" class="history-goals">
         <li :for={gauge <- @state.history_goals} class="history-goal">
@@ -714,7 +665,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 id={"home-history-point-#{point.id}"}
                 phx-remove={removed_target_focus("home-history-point-#{point.id}")}
                 type="button"
-                phx-click={open_session_sheet()}
+                phx-click={open_session()}
                 phx-value-id={point.id}
                 phx-value-source="point"
                 aria-label={"#{series.label}, #{DateTime.to_iso8601(point.completed_at)}, #{point.actual_reps} actual reps, #{point.actual_duration_sec} seconds actual duration, density #{point.density} reps per 20 min"}
@@ -748,6 +699,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
   attr(:expanded?, :boolean, required: true)
   attr(:timezone, :string, required: true)
+  attr(:insight, :any, default: nil)
+  attr(:confirm?, :boolean, default: false)
 
   def session_row(assigns) do
     assigns =
@@ -763,7 +716,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           id={"home-history-inspect-#{@session.id}"}
           type="button"
           class="home-history-session-toggle"
-          phx-click={open_session_sheet()}
+          phx-click={open_session()}
           phx-value-id={@session.id}
           phx-value-source="row"
           aria-controls={"home-history-details-#{@session.id}"}
@@ -778,6 +731,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             {Fmt.duration_sec(@session.duration_sec_actual)}
           </span>
         </button>
+        <.session_detail
+          :if={@expanded?}
+          session={@session}
+          insight={@insight}
+          confirm?={@confirm?}
+        />
       </td>
     </tr>
     """
@@ -790,19 +749,26 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     assigns = assign(assigns, density: History.points([assigns.session]))
 
     ~H"""
-    <%!-- What was done leads, as numbers; the plan only appears as "of …" when there was one. --%>
+    <%!-- The row already shows reps and time; details add only the plan they're measured
+         against, when there was one, and the reps per 20 minutes. --%>
     <div id={@id} class="home-history-status home-history-comparison">
-      <p class="home-history-streak-line" data-actual-reps={@session.burpee_count_actual}>
+      <p
+        :if={@session.burpee_count_planned}
+        class="home-history-streak-line"
+        data-actual-reps={@session.burpee_count_actual}
+      >
         <strong>{@session.burpee_count_actual || "—"}</strong>
         <span>
           reps{if @session.burpee_count_planned, do: " of #{@session.burpee_count_planned}"}
         </span>
       </p>
-      <p class="home-history-streak-line" data-actual-duration-sec={@session.duration_sec_actual}>
+      <p
+        :if={@session.duration_sec_planned}
+        class="home-history-streak-line"
+        data-actual-duration-sec={@session.duration_sec_actual}
+      >
         <strong>{Fmt.duration_sec(@session.duration_sec_actual)}</strong>
-        <span :if={@session.duration_sec_planned}>
-          of {Fmt.duration_sec(@session.duration_sec_planned)}
-        </span>
+        <span>of {Fmt.duration_sec(@session.duration_sec_planned)}</span>
       </p>
       <p :for={point <- @density} class="home-history-streak-line">
         <strong>{point.density}</strong>

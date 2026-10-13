@@ -58,7 +58,7 @@ defmodule BurpeeTrainerWeb.CreationParameters do
       if(note == "", do: "", else: "\nNote: #{note}")
   end
 
-  def type_label("six_count"), do: "6-count"
+  def type_label("six_count"), do: "Six-count"
   def type_label("navy_seal"), do: "Navy SEAL"
   def pacing_label("unbroken"), do: "Unbroken"
   def pacing_label("even"), do: "Even"

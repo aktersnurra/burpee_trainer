@@ -135,9 +135,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 </a>
               </section>
             <% {state, _results} when state in [:done_today, :week_complete] -> %>
-              <p :if={@home_insight} id="home-insight-headline" class="home-result-meta">
-                {@home_insight.headline}
-              </p>
               <%= if @result_today_session do %>
                 <section id="home-done-today" class="home-result">
                   <h1 class="home-state-heading">
@@ -187,6 +184,17 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   </p>
                 </section>
               <% end %>
+              <%!-- The coach's line follows the result, the way it follows the workout before. --%>
+              <p :if={@home_insight} id="home-insight-headline" class="home-result-insight">
+                {@home_insight.headline}
+              </p>
+              <p
+                :if={is_nil(@home_insight) and @result_today_session}
+                id="home-done-status"
+                class="home-result-insight home-result-status"
+              >
+                Done for today.
+              </p>
             <% {:start, _selection} -> %>
               <HomeWorkoutComponents.workspace state={assigns} />
             <% :choose -> %>

@@ -52,6 +52,8 @@ defmodule BurpeeTrainerWeb.InsightPresentationTest do
     {:ok, view, _} = live(conn, ~p"/")
     pid = view.pid
     refute has_element?(view, "#home-insight-headline")
+    # Without the coach's line the day still says it is done.
+    assert has_element?(view, "#home-done-status", "Done for today.")
 
     assert {:ok, _} =
              Insights.store(

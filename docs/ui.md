@@ -135,6 +135,9 @@ Component gap inside card: 16px
 - Every other action is a quiet word (Edit, Switch, New, Cancel, Close, Delete).
 - Views of the same data switch like the period tabs, in words. No bare icons.
 - A chevron only means "opens here".
+- Every pick (burpee type, set style, filters, levels) is the same rounded choice; the
+  chosen one is filled light. A destructive decision is the filled pill in the error colour.
+- The burpee types are always "Six-count" and "Navy SEAL" (lowercase "six-count" mid-sentence).
 
 ## 4a3. Words
 

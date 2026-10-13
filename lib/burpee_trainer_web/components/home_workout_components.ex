@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <div class="rounded-lg bg-stone-100 p-3">
           <dt class="text-stone-500">Movement</dt>
           <dd id="home-request-movement" class="mt-1 font-semibold text-stone-900">
-            {if(@request.burpee_type == "six_count", do: "Six-count", else: "Navy Seal")}
+            {if(@request.burpee_type == "six_count", do: "Six-count", else: "Navy SEAL")}
           </dd>
         </div>
         <div class="rounded-lg bg-stone-100 p-3">
@@ -170,7 +170,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <div
         :for={
           {field, label, choices} <- [
-            {:burpee_type, "Burpee type", [{"Six-count", "six_count"}, {"Navy Seal", "navy_seal"}]},
+            {:burpee_type, "Burpee type", [{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]},
             {:pacing_style, "Set style", [{"Even", "even"}, {"Unbroken", "unbroken"}]}
           ]
         }
@@ -810,7 +810,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               {level_label(level)}
             </button>
           </div>
-          <p id="home-current-level">
+          <p id="home-current-level" class="sr-only">
             {BurpeeTrainerWeb.Fmt.level(@state.current_level)} is your current level.
           </p>
         </div>

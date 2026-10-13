@@ -290,65 +290,13 @@
   padding: 10px;
   color: #817b70;
 }
-#home-filter-toggle[aria-expanded="true"] {
-  color: #25231e;
-  box-shadow: inset 0 -1px 0 currentColor;
-}
-#home-filters {
-  padding: 20px 0 14px;
-  border-bottom: 1px solid #d8d3c9;
-}
-#home-filters [role="group"] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-#home-filters [aria-label="Workout type"] {
-  gap: 20px;
-}
-#home-filters [aria-label="Workout type"] button {
-  font-size: var(--text-body);
-  min-height: 40px;
-  color: #9a9386;
-  border-bottom: 1px solid transparent;
-}
-#home-filters [aria-label="Workout type"] [aria-pressed="true"] {
-  color: #292721;
-  border-bottom-color: #696254;
-}
-.home-filter-level-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 14px;
-  color: #847c6f;
-  font-size: var(--text-body);
-}
-#home-filter-reset {
-  font-size: var(--text-body);
-  min-height: 36px;
-  padding: 4px 0 4px 12px;
-}
-#home-filters [aria-label="Catalog level"] button {
-  min-width: 42px;
-  height: 42px;
-  padding: 0 4px;
-  text-align: center;
-  border: 1px solid transparent;
-  color: #aaa294;
-  font-size: var(--text-body);
-  border-radius: 2px;
-}
-#home-filters [aria-label="Catalog level"] [aria-pressed="true"] {
-  border-color: #b5ad9f;
-  color: #292721;
-  background: #ebe7de;
-}
-#home-current-level {
-  font-size: var(--text-small);
-  color: #8a8172;
-  margin-top: 10px;
-}
+#home-filter-toggle[aria-expanded="true"] { color: #262722; }
+/* Filters are the same rounded choices as New's: one shape for every pick in the app. */
+#home-filters { display: grid; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--home-line); }
+#home-filters [role="group"] { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-filter-level-heading { display: flex; align-items: center; justify-content: space-between; color: var(--home-muted); font-size: var(--text-body); }
+#home-filter-reset { min-height: 44px; padding: 0 0 0 12px; color: var(--home-muted); font-size: var(--text-body); }
+#home-filter-reset:hover { color: #262722; }
 #home-alternatives-toolbar {
   display: flex;
   align-items: center;
@@ -725,8 +673,8 @@
 .home-action { position: static; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; }
 .home-action-icon-update, #home-adjustment-form[data-has-instruction="true"] .home-action-icon-start { display: none; }
 #home-adjustment-form[data-has-instruction="true"] .home-action-icon-update { display: block; }
-#home-chooser-backdrop, .home-history-sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: #24252255; }
-#home-alternatives-panel:not([hidden]), .home-history-sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; width: min(580px, 100%); max-height: min(78svh, 740px); overflow-y: auto; padding: 20px clamp(24px, 5vw, 38px) 42px; border-radius: 16px 16px 0 0; background: var(--color-base-200); transform: translateX(-50%); }
+#home-chooser-backdrop { position: fixed; inset: 0; z-index: 40; background: #24252255; }
+#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; left: 50%; bottom: 0; width: min(580px, 100%); max-height: min(78svh, 740px); overflow-y: auto; padding: 20px clamp(24px, 5vw, 38px) 42px; border-radius: 16px 16px 0 0; background: var(--color-base-200); transform: translateX(-50%); }
 @media (min-width: 601px) {
   .adaptive-home {
     max-width: 1040px;
@@ -734,7 +682,7 @@
   }
   #home-ready-recommendation, .home-result, #home-history, #home-coach-panel { max-width: 640px; }
   #home-chooser-backdrop { position: fixed; border-radius: 0; }
-  #home-alternatives-panel:not([hidden]), .home-history-sheet {
+  #home-alternatives-panel:not([hidden]) {
     position: fixed;
     top: 50%;
     right: auto;
@@ -746,9 +694,9 @@
     transform: translate(-50%, -50%);
   }
 }
-.home-chooser-header, .home-history-sheet-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.home-chooser-header h2, .home-history-sheet h2 { font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -.02em; }
-.home-chooser-header button, .home-history-sheet-actions button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+.home-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.home-chooser-header h2 { font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -.02em; }
+.home-chooser-header button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .home-loading-animation { width: 142px; height: 142px; border: 0; border-radius: 0; animation: none; object-fit: contain; }
 .home-state-heading { font: 400 var(--text-title)/1.12 var(--font-sans); letter-spacing: -.9px; }
 .home-resume .home-state-heading { font-size: var(--text-title); }
@@ -794,15 +742,11 @@
 .home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
 .home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
-.home-history-sheet p { margin: 12px 0 23px; color: var(--home-muted); }
 .home-history-sheet-tags { display: flex; flex-wrap: wrap; gap:7px; margin-top:18px; }
 .home-history-sheet-tags span { padding:5px 8px; border:1px solid var(--home-line); border-radius:3px; color:var(--home-muted); font-size: var(--text-small); }
-#home-history-sheet-note { font-size: var(--text-small); line-height:1.5; }
-.home-history-sheet-actions { justify-content: flex-end; margin-bottom: 12px; }
-#home-history-delete-confirm { color: #8b3939; }
+#home-history-sheet-note { margin-top: 12px; font-size: var(--text-body); line-height: 1.5; }
 @media (max-width: 600px) { .adaptive-home { padding-inline: 30px; } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } .home-loading-animation { display: none; } }
-.home-history-sheet-backdrop { cursor: pointer; }
 /* Measured local-day detail keeps the same 80-minute visual ceiling as weekly cells. */
 .home-history-week-cell { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform var(--motion-quick) ease; }
 .home-history-week-cell:hover { transform: translateY(-2px); }
@@ -821,7 +765,6 @@
 .home-history-legend #home-history-navy-seal::before { background: transparent; border-top-color: #568b9a; border-radius: 0; }
 @media (prefers-reduced-motion: reduce) { .home-history-week-cell { transition: none; } }
 #home-history-empty { margin-top: 24px; }
-.home-history > .home-history-sheet-backdrop, .home-history > .home-history-sheet { margin-top: 0; }
 .home-history-day-bar { position: relative; }
 .home-history-day-value { position: absolute; bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--home-muted); font-size: var(--text-small); white-space: nowrap; }
 /* The approved density view swaps its chart and session list in the same place. */
@@ -969,8 +912,8 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-pill-row:first-of-type { border-top: 1px solid var(--home-line); }
 .home-pill-label { color: var(--home-muted); font-size: var(--text-body); }
 .home-pill-options { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; }
-#home-new-form .home-selection-pill { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
-#home-new-form .home-selection-pill[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
+#home-new-form .home-selection-pill, #home-filters [role="group"] button { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
+#home-new-form .home-selection-pill[aria-pressed="true"], #home-filters [role="group"] button[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
 #home-new-form .home-selection-pill:disabled { opacity: 1; }
 /* Work and recovery is computed, not typed: a caption under Duration, not a row. */
 /* Duration and its Movement/Recovery caption read as one row; with no caption, Duration keeps its own line. */
@@ -981,7 +924,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-budget > .home-budget-detail { flex-basis: 100%; }
 .home-rest-alternative { margin-top: 14px; font-size: var(--text-small); line-height: 1.7; }
 #home-new-form .home-alternative-choice { min-height: 44px; margin-top: 8px; padding: 8px 0; background: transparent; border: 0; border-bottom: 1px solid var(--home-line); color: #262722; font-size: var(--text-small); }
-@media (prefers-reduced-motion: reduce) { #home-new-form .home-selection-pill { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #home-new-form .home-selection-pill, #home-filters [role="group"] button { transition: none; } }
 .adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"], .home-workout-actions .home-expanded-action, .home-workout-actions[data-expanded="true"] .home-expanded-action { transition: none; }
@@ -1008,8 +951,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 @media (prefers-reduced-motion: reduce) { .coach-send { transition: none; } }
 
 /* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
-:is(.home-chooser-header, .home-history-sheet-actions) .home-text-action { margin-right: -20px; padding-inline: 20px; }
-.home-history-sheet-actions .home-text-action:first-child { margin-left: -20px; }
+.home-chooser-header .home-text-action { margin-right: -20px; padding-inline: 20px; }
 /* Coach's fields are named by their placeholder; the label stays for screen readers only. */
 .coach-quiet-label .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #home-workout-budget:empty, #home-workout-budget:not(:has(*)) { display: none; }
@@ -1053,3 +995,29 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .history-goal-foot { margin-top: 8px; }
 .history-goal-best { color: #262722; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .history-goal-meter span { transition: none; } }
+/* The status row opens the page under its heading; the period tabs then open the record. */
+.history-header > .home-history-status { margin-top: 12px; }
+.home-history-periods { margin-top: 36px; }
+/* A finished day reads like the workout did: centred in Home's column, at the hero's height. */
+#home-done-today, #home-week-complete { max-width: 354px; margin: clamp(120px, calc(39svh - 110px), 280px) auto 0; padding: 0; border: 0; text-align: center; }
+#home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
+.home-result-insight { max-width: 354px; margin: 20px auto 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-align: center; }
+/* Progress groups breathe evenly: status, goals, coach. */
+.history-header > .home-history-status { margin-top: 16px; }
+.history-header > .history-goals { margin-top: 28px; }
+.history-header > .history-coach { margin-top: 28px; }
+.home-result-status { color: var(--home-muted); }
+/* A destructive decision is still the one filled action, in the error colour. */
+.home-danger-action { background: #a55643; border-color: #a55643; color: var(--color-base-100); }
+/* A session opens under its own row: the coach's read, the numbers, then a quiet Delete. */
+.home-history-detail { padding: 4px 0 16px; }
+.home-history-detail #history-insight { margin-top: 4px; }
+.home-history-detail #history-insight-headline { font: 500 var(--text-body)/1.5 var(--font-sans); color: #262722; }
+.home-history-detail #history-insight-points { margin: 6px 0 0; padding: 0; list-style: none; color: var(--home-muted); font-size: var(--text-body); line-height: 1.5; }
+.home-history-detail .home-history-comparison { margin-top: 12px; }
+.home-history-detail .home-review-actions { justify-content: flex-start; margin-top: 8px; }
+.home-history-detail .home-review-actions .home-text-action:first-child { margin-left: -20px; }
+.home-history-delete-ask { margin-top: 12px; }
+.home-history-delete-ask p { color: #262722; font-size: var(--text-body); }
+.home-history-delete-ask .home-review-actions { justify-content: flex-end; }
+.home-history-delete-ask .home-review-actions .home-text-action:first-child { margin-left: 0; }

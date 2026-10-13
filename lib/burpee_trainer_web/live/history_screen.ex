@@ -142,7 +142,9 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
              do: "#home-history-point-#{id}",
              else: "#home-history-inspect-#{id}"
            ),
-         history_confirm_delete?: false
+         history_confirm_delete?: false,
+         # A point on the chart opens its session in place, in the list.
+         history_show_sessions?: a.history_show_sessions? or params["source"] == "point"
        )
        |> restream_history_rows(nil, a.history_loaded_ids)}
     else
@@ -164,14 +166,23 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
      |> restream_history_rows(nil, a.history_loaded_ids)}
   end
 
+  # The detail lives in a stream row, so a change to it re-inserts the rows.
   def handle_event("history_confirm_delete", _, socket) do
     if socket.assigns.history_selected_id,
-      do: {:noreply, assign(socket, history_confirm_delete?: true)},
+      do:
+        {:noreply,
+         socket
+         |> assign(history_confirm_delete?: true)
+         |> restream_history_rows(nil, socket.assigns.history_loaded_ids)},
       else: {:noreply, socket}
   end
 
   def handle_event("history_cancel_delete", _, socket),
-    do: {:noreply, assign(socket, history_confirm_delete?: false)}
+    do:
+      {:noreply,
+       socket
+       |> assign(history_confirm_delete?: false)
+       |> restream_history_rows(nil, socket.assigns.history_loaded_ids)}
 
   def handle_event("history_delete_session", _, socket) do
     a = socket.assigns
@@ -202,7 +213,8 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
          assign(socket,
            history_error: "Couldn’t delete this session. Reload Home to try again.",
            history_session_return_to: "#home-history-heading"
-         )}
+         )
+         |> restream_history_rows(nil, socket.assigns.history_loaded_ids)}
     end
   end
 
@@ -364,7 +376,13 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
     <main
       id="history-page"
       class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16"
-      phx-window-keydown={if(is_nil(@history_selected_session), do: "close_history")}
+      phx-window-keydown={
+        cond do
+          is_nil(@history_selected_session) -> "close_history"
+          @history_confirm_delete? -> "history_cancel_delete"
+          true -> "history_close_session"
+        end
+      }
       phx-key="Escape"
     >
       <div class="adaptive-home">
@@ -377,7 +395,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
             class="absolute inset-0 min-h-11 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
             phx-click="close_history"
             aria-label="Back to Home"
-            inert={not is_nil(@history_selected_session)}
           >
             <span class="sr-only">Back to Home</span>
           </button>

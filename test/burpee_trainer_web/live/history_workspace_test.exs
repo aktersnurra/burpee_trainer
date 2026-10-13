@@ -109,7 +109,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     assert_in_delta String.to_float(left), max(4.0, min(96.0, expected)), 0.000001
   end
 
-  test "session-sheet Escape cancels confirmation then restores real focus without closing History",
+  test "a session opens in place; Escape cancels its confirmation, then closes it, then Progress",
        %{conn: conn} do
     user = user_fixture()
 
@@ -131,32 +131,20 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
     view |> element("#home-history-density-sessions") |> render_click()
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet[role=dialog][aria-modal=true][phx-key=Escape]")
-    refute has_element?(view, "#history-page[phx-window-keydown]")
-    assert has_element?(view, "#home-history-close[inert]")
+    # It opens under its own row; nothing covers or locks the page.
+    assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
+
+    refute has_element?(
+             view,
+             "[role=dialog], #home-history-body[inert], #home-history-close[inert]"
+           )
+
     view |> element("#home-history-delete") |> render_click()
-    view |> element("#home-history-sheet") |> render_keydown(%{"key" => "Escape"})
+    view |> element("#history-page") |> render_keydown(%{"key" => "Escape"})
     refute has_element?(view, "#home-history-delete-confirm")
     assert has_element?(view, "#home-history-sheet")
-
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-sheet")
-      |> LazyHTML.attribute("phx-window-keydown")
-
-    return_to = "#home-history-inspect-#{saved.id}"
-
-    assert [
-             ["remove_attr", %{"attr" => "inert", "to" => "#home-history-body"}],
-             ["remove_attr", %{"attr" => "inert", "to" => "#home-history-close"}],
-             ["focus", %{"to" => ^return_to}],
-             ["push", %{"event" => "history_close_session"}]
-           ] = Jason.decode!(commands)
-
-    view |> element("#home-history-sheet") |> render_keydown(%{"key" => "Escape"})
-    refute has_element?(view, "#home-history-sheet, #home-history-close[inert]")
-    assert has_element?(view, "#home-history-heading")
+    view |> element("#history-page") |> render_keydown(%{"key" => "Escape"})
+    refute has_element?(view, "#home-history-sheet")
     assert BurpeeTrainer.Repo.reload!(saved) == saved
     view |> element("#history-page") |> render_keydown(%{"key" => "Escape"})
     assert_patch(view, "/")

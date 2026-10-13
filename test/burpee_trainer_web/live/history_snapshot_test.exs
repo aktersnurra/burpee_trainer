@@ -48,7 +48,7 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
 
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
     # The app's date style: day before month, the year only when it is not this one.
-    assert has_element?(view, "#home-history-sheet", "Thu 2 Jan 2025")
+    assert has_element?(view, "#home-history-inspect-#{session.id}", "Thu 2 Jan 2025")
     assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='38']")
     assert has_element?(view, "#home-history-sheet-details-#{session.id}", "of 40")
 
@@ -94,13 +94,8 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
            )
 
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='27']")
-    # Only what was planned gets an "of": duration was, reps were not.
-    refute has_element?(
-             view,
-             "#home-history-sheet-details-#{session.id} [data-actual-reps]",
-             "of"
-           )
+    # Only what was planned is compared: duration was, reps were not, so reps stay in the row.
+    refute has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps]")
 
     assert has_element?(
              view,

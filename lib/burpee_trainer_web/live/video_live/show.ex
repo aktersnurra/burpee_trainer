@@ -405,7 +405,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     """
   end
 
-  defp burpee_label(:six_count), do: "6-Count"
+  defp burpee_label(:six_count), do: "Six-count"
   defp burpee_label(:navy_seal), do: "Navy SEAL"
 
   defp format_duration(seconds) do

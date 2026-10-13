@@ -475,12 +475,24 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     # One workout type needs no legend; the line speaks for itself.
     refute has_element?(view, ".home-history-legend")
     assert has_element?(view, "#home-history-period-twelve_weeks[aria-pressed=true]")
+    # A point opens its session in place in the list: the row has the numbers.
     view |> element("#home-history-point-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-details-#{saved.id} [data-actual-reps='20']")
 
     assert has_element?(
              view,
-             "#home-history-details-#{saved.id} [data-actual-duration-sec='4800']"
+             "#home-history-session-#{saved.id} #home-history-details-#{saved.id}"
+           )
+
+    assert has_element?(
+             view,
+             "#home-history-inspect-#{saved.id} .home-history-session-reps",
+             "20"
+           )
+
+    assert has_element?(
+             view,
+             "#home-history-inspect-#{saved.id} .home-history-session-time",
+             "1:20:00"
            )
 
     assert Repo.reload!(saved) == saved
@@ -505,7 +517,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-history-sessions-panel[hidden]")
   end
 
-  test "session sheet closes and reopens on first click while restoring row focus", %{
+  test "a session opens and closes in place under its row, on one tap each", %{
     conn: conn,
     user: user
   } do
@@ -513,29 +525,16 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet")
-    assert has_element?(view, "#home-history-close[inert]")
-    assert has_element?(view, "#home-history-body[inert]")
-
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-sheet-close")
-      |> LazyHTML.attribute("phx-click")
-
-    assert Enum.any?(Jason.decode!(commands), fn [op, args] ->
-             op == "focus" and args["to"] == "#home-history-inspect-#{saved.id}"
-           end)
-
-    view |> element("#home-history-sheet-close") |> render_click()
+    assert has_element?(view, "#home-history-inspect-#{saved.id}[aria-expanded=true]")
+    assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
+    refute has_element?(view, "#home-history-body[inert], #home-history-close[inert]")
+    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     refute has_element?(view, "#home-history-sheet")
-    refute has_element?(view, "#home-history-close[inert]")
-    refute has_element?(view, "#home-history-body[inert]")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-sheet")
   end
 
-  test "failed deletion keeps the sheet and progress isolated until it closes", %{
+  test "failed deletion says so in place and the session can still close", %{
     conn: conn,
     user: user
   } do
@@ -546,23 +545,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-history-delete") |> render_click()
     Repo.delete!(saved)
     view |> element("#home-history-delete-confirm") |> render_click()
-    assert has_element?(view, "#home-history-sheet-error[role=status]")
-    assert has_element?(view, "#home-history-sheet")
-    assert has_element?(view, "#home-history-body[inert]")
-    assert has_element?(view, "#home-history-close[inert]")
-
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-sheet-close")
-      |> LazyHTML.attribute("phx-click")
-
-    assert Enum.any?(Jason.decode!(commands), fn [op, args] ->
-             op == "focus" and args["to"] == "#home-history-heading"
-           end)
-
-    view |> element("#home-history-sheet-close") |> render_click()
-    refute has_element?(view, "#home-history-close[inert]")
+    # The session is gone, so its row is too; Progress says so at the top.
+    assert has_element?(view, "#home-history-error[role=status]", "Couldn’t delete this session")
+    refute has_element?(view, "#home-history-delete-confirm")
   end
 
   test "a weekly cell opens actual day minutes and returns to the grid", %{conn: conn, user: user} do
@@ -627,23 +612,12 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            |> Enum.count() == 12
 
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet[role=dialog]")
+    assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
     view |> element("#home-history-delete") |> render_click()
-    assert has_element?(view, "#home-history-delete-confirm")
+    assert has_element?(view, "#home-history-delete-confirm.home-danger-action", "Delete")
     view |> element("#home-history-delete-cancel") |> render_click()
     assert Repo.reload!(saved) == saved
     view |> element("#home-history-delete") |> render_click()
-
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-sheet")
-      |> LazyHTML.attribute("phx-remove")
-
-    assert Enum.any?(Jason.decode!(commands), fn [op, args] ->
-             op == "focus" and args["to"] == "#home-history-heading"
-           end)
-
     view |> element("#home-history-delete-confirm") |> render_click()
     refute has_element?(view, "#home-history-close[inert]")
     refute has_element?(view, "#home-history-body[inert]")
@@ -1703,11 +1677,10 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-history-density-sessions") |> render_click()
 
     view |> element("#home-history-inspect-#{tagged.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet[role=dialog][aria-modal=true]")
+    assert has_element?(view, "#home-history-session-#{tagged.id} #home-history-sheet")
     assert has_element?(view, "#home-history-sheet-tags", "Heat")
     assert has_element?(view, "#home-history-sheet-tags", "Low energy")
     assert has_element?(view, "#home-history-sheet-note", "Kept going")
-    view |> element("#home-history-sheet-close") |> render_click()
 
     view |> element("#home-history-inspect-#{plain.id}") |> render_click()
     refute has_element?(view, "#home-history-sheet-tags")
