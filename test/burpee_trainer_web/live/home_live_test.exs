@@ -552,7 +552,10 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-history-daily[aria-label='Daily training minutes']")
     refute has_element?(view, "#home-history-week-grid")
 
-    assert has_element?(view, "#home-history-week-mode[phx-mounted]", "Weeks")
+    assert has_element?(
+             view,
+             "#home-history-week-mode[phx-mounted][aria-label='Show weeks'] .hero-squares-2x2"
+           )
 
     refute has_element?(view, "#home-history-week-count, .home-history-week-key")
     assert has_element?(view, "#home-history-day-#{Date.to_iso8601(day)}")

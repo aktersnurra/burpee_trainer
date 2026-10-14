@@ -83,32 +83,20 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           >
             <div class="home-history-trend-heading">
               <h2>Reps per 20 minutes</h2>
-              <div class="home-history-view-switch" role="group" aria-label="Reps view">
-                <button
-                  id="home-history-density-back"
-                  type="button"
-                  class="home-history-period home-icon-action"
-                  aria-pressed="false"
-                  aria-label="Chart"
-                  title="Chart"
-                  phx-mounted={
-                    @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
-                  }
-                  phx-click="history_density_mode"
-                  phx-value-mode="chart"
-                >
-                  <.icon name="hero-chart-bar" class="size-5" />
-                </button>
-                <button
-                  type="button"
-                  class="home-history-period home-icon-action"
-                  aria-pressed="true"
-                  aria-label="Sessions"
-                  title="Sessions"
-                >
-                  <.icon name="hero-list-bullet" class="size-5" />
-                </button>
-              </div>
+              <button
+                id="home-history-density-back"
+                type="button"
+                class="home-history-switch home-icon-action"
+                aria-label="Show chart"
+                title="Chart"
+                phx-mounted={
+                  @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
+                }
+                phx-click="history_density_mode"
+                phx-value-mode="chart"
+              >
+                <.icon name="hero-chart-bar" class="size-5" />
+              </button>
             </div>
             <h3
               :if={is_nil(@state.history_error) and @state.history_available?}
@@ -164,52 +152,31 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           <section id="home-history-weekly" aria-label="Minutes each week">
             <div class="home-history-week-heading">
               <h2>Minutes each week</h2>
-              <%!-- A view switch reads like the period tabs: both views, the current one underlined. --%>
-              <div
-                :if={@state.history_weeks != []}
-                class="home-history-view-switch"
-                role="group"
-                aria-label="Minutes view"
+              <%!-- One icon switches the view: it shows the view it leads to. --%>
+              <button
+                :if={@state.history_weeks != [] and is_nil(@state.history_week_start)}
+                id="home-history-week-mode"
+                type="button"
+                class="home-history-switch home-icon-action"
+                phx-click="history_week"
+                phx-value-start={Date.to_iso8601(List.last(@state.history_weeks).start)}
+                aria-label="Show days"
+                title="Days"
               >
-                <button
-                  :if={is_nil(@state.history_week_start)}
-                  type="button"
-                  class="home-history-period"
-                  aria-pressed="true"
-                >
-                  Weeks
-                </button>
-                <button
-                  :if={@state.history_week_start}
-                  id="home-history-week-mode"
-                  type="button"
-                  class="home-history-period"
-                  aria-pressed="false"
-                  phx-mounted={JS.focus(to: "#home-history-week-mode")}
-                  phx-click={JS.push("history_week_back")}
-                >
-                  Weeks
-                </button>
-                <button
-                  :if={is_nil(@state.history_week_start)}
-                  id="home-history-week-mode"
-                  type="button"
-                  class="home-history-period"
-                  aria-pressed="false"
-                  phx-click="history_week"
-                  phx-value-start={Date.to_iso8601(List.last(@state.history_weeks).start)}
-                >
-                  Days
-                </button>
-                <button
-                  :if={@state.history_week_start}
-                  type="button"
-                  class="home-history-period"
-                  aria-pressed="true"
-                >
-                  Days
-                </button>
-              </div>
+                <.icon name="hero-calendar-days" class="size-5" />
+              </button>
+              <button
+                :if={@state.history_week_start}
+                id="home-history-week-mode"
+                type="button"
+                class="home-history-switch home-icon-action"
+                phx-mounted={JS.focus(to: "#home-history-week-mode")}
+                phx-click={JS.push("history_week_back")}
+                aria-label="Show weeks"
+                title="Weeks"
+              >
+                <.icon name="hero-squares-2x2" class="size-5" />
+              </button>
             </div>
             <p
               :if={is_nil(@state.history_week_start) and completed_week_summary(@state.history_weeks)}
@@ -508,30 +475,19 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <figcaption id="home-history-trend-label">
         <span class="home-history-trend-heading">
           <span class="font-semibold">Reps per 20 minutes</span>
-          <span class="home-history-view-switch" role="group" aria-label="Reps view">
-            <button
-              type="button"
-              class="home-history-period home-icon-action"
-              aria-pressed="true"
-              aria-label="Chart"
-              title="Chart"
-            >
-              <.icon name="hero-chart-bar" class="size-5" />
-            </button>
-            <button
-              id="home-history-density-sessions"
-              type="button"
-              class="home-history-period"
-              aria-pressed="false"
-              phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
-              phx-click="history_density_mode"
-              phx-value-mode="sessions"
-              aria-label="Sessions"
-              title="Sessions"
-            >
-              <.icon name="hero-list-bullet" class="size-5" />
-            </button>
-          </span>
+          <%!-- One icon switches the view: it shows the view it leads to. --%>
+          <button
+            id="home-history-density-sessions"
+            type="button"
+            class="home-history-switch home-icon-action"
+            phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
+            phx-click="history_density_mode"
+            phx-value-mode="sessions"
+            aria-label="Show sessions"
+            title="Sessions"
+          >
+            <.icon name="hero-list-bullet" class="size-5" />
+          </button>
         </span>
       </figcaption>
       <%= if @empty? or Enum.all?(@series, &(&1.points == [])) do %>

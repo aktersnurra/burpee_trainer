@@ -137,10 +137,10 @@ Component gap inside card: 16px
   and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
   switches, plus adds or sets, trash deletes or clears, x-mark dismisses, check confirms,
   chevron-down loads more.
-- Words stay only where an icon would be ambiguous: period tabs ("12 weeks"), Weeks and
-  Days, Start.
-- Views of the same data switch like the period tabs, as an icon pair (chart-bar for the
-  chart, list-bullet for the sessions), the current one underlined.
+- Words stay only where an icon would be ambiguous: period tabs ("12 weeks"), Start.
+- A view switch is one icon at the end of its heading showing the view it leads to, and
+  it turns into the other when tapped: list-bullet shows the sessions, chart-bar the
+  chart; calendar-days shows a week's days, squares-2x2 the weeks.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".

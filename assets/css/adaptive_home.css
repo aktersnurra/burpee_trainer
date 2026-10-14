@@ -953,8 +953,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* A session's numbers sit like the streak pair: what was done, then "of" the plan. */
 .home-history-comparison { flex-wrap: wrap; gap: 12px 32px; margin-top: 20px; }
 /* View switches sit at the heading's right edge and look like the period tabs. */
-.home-history-view-switch { display: flex; gap: 20px; }
-.home-history-view-switch .home-history-period { min-height: 44px; padding-bottom: 6px; font-weight: 400; }
 /* Switch opens in place: the list takes the set table's spot under the workout, which stays
    above it, inactive, as context. No backdrop, nothing covers the page. */
 #home-chooser-backdrop { display: none; }
@@ -1060,7 +1058,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .adaptive-home .home-primary-action.home-icon-action { width: 44px; }
 .adaptive-home .coach-send { display: inline-flex; align-items: center; justify-content: center; width: 36px; padding: 0; }
 .adaptive-home .home-workout-actions .home-expanded-action { padding-inline: 10px; }
-.adaptive-home .home-history-view-switch .home-icon-action { min-width: 40px; }
 .adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 /* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
 .home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--home-line); }
@@ -1097,3 +1094,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* What the coach noted or forgot: a quiet line between exchanges. */
 .coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
 .coach-memory .size-4 { flex: none; margin-top: 2px; }
+/* A view switch is one icon showing the view it leads to; it sits at the heading's end. */
+.adaptive-home .home-history-switch { min-height: 44px; margin-right: -10px; border: 0; background: transparent; color: var(--home-muted); }
+.adaptive-home .home-history-switch:hover { color: #262722; }
+.home-history-switch:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; border-radius: 8px; }
