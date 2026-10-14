@@ -284,7 +284,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "coach_toggle",
-             "coach_details_toggle",
+             "coach_flip",
              "coach_message_change",
              "coach_message",
              "coach_quick_reply",

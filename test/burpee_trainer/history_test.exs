@@ -280,7 +280,7 @@ defmodule BurpeeTrainer.HistoryTest do
     assert List.last(weeks).minutes == 1
   end
 
-  test "weekly grid credits authoritative minutes and excludes open week from streak" do
+  test "weekly grid credits authoritative minutes; the open week counts once it is met" do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
     now = ~U[2026-09-23 12:00:00Z]
@@ -295,7 +295,7 @@ defmodule BurpeeTrainer.HistoryTest do
     assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
     assert length(weeks) == 12
     assert Enum.map(Enum.take(weeks, -3), & &1.minutes) == [80, 80, 83]
-    assert History.streak(weeks) == 2
+    assert History.streak(weeks) == 3
     assert List.last(weeks).open?
     assert {:ok, year} = History.weeks(sessions, user, now, "year")
     assert length(year) >= 52

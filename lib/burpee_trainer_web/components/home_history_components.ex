@@ -31,6 +31,17 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
             <span id="history-level">{Fmt.level(@state.current_level)}</span>
           </h1>
+          <%!-- Weeks in a row at 80 minutes; nothing while there is no run. --%>
+          <span
+            :if={Map.get(@state, :history_streak, 0) > 0}
+            id="history-streak"
+            class="history-streak"
+            title={"#{@state.history_streak} #{if(@state.history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
+            aria-label={"#{@state.history_streak} #{if(@state.history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
+          >
+            <.icon name="hero-fire" class="size-5" />
+            <span aria-hidden="true">{@state.history_streak}</span>
+          </span>
         </div>
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>

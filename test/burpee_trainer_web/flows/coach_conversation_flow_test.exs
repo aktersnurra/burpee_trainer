@@ -92,7 +92,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     render_async(view)
     # No provider in tests: the send happened and the coach says it is unavailable.
     assert has_element?(view, "#home-coach-reply", "Coach unavailable")
-    assert has_element?(view, "#home-coach-notebook-toggle", "What the coach knows about you")
+    assert has_element?(view, "#home-coach-notebook h2", "What the coach knows about you")
   end
 
   test "goal confirmation and notebook edit use scoped effects", %{conn: conn, scope: scope} do

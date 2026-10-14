@@ -169,15 +169,17 @@ screen leads to the next in context:
 
 - **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
   first use, never an empty prompt), or once trained, the day's result. The result's title
-  opens it like the workout's: the coach's report on the week, this week's conversation,
-  replies the coach predicts you'll send, "Message the coach", goals waiting for Confirm
-  or Dismiss, and "What the coach knows about you". The coach speaks only once the day is
-  done; `/coach` lands on Home. The week strip opens Progress. Design:
+  opens it like the workout's onto the coach card: on the front, this week's sessions
+  done and left, the coach's word on the rest of the week, the conversation, predicted
+  replies, "Message the coach" and waiting goals; turned over (the book), what the coach
+  knows about you. The coach speaks only once the day is done; `/coach` lands on Home. The week strip opens Progress. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
   `docs/specs/2026-10-10-frictionless-home-design.md` and
-  `docs/specs/2026-10-14-coach-on-home-design.md`.
+  `docs/specs/2026-10-14-coach-on-home-design.md` and
+  `docs/specs/2026-10-14-coach-card-design.md`.
 - **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads
-  back Home, then the coach's look back over recent weeks, then a gauge per burpee type
+  back Home, then your level as its title with the streak (a flame and the weeks in a row
+  at the target) opposite, then the coach's look back over recent weeks, then a gauge per burpee type
   side by side (best against goal, its course, or the next goal to set), then one chart
   with both types on their own axes and the weekly record. Design:
   `docs/specs/2026-10-14-coach-on-home-design.md`.

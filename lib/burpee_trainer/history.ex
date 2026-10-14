@@ -131,12 +131,14 @@ defmodule BurpeeTrainer.History do
       else: 0
   end
 
+  @doc """
+  Weeks in a row at their target, back from the latest closed week. The week in progress
+  counts once it is met and never breaks the run while it is not.
+  """
   def streak(weeks) do
-    weeks
-    |> Enum.reject(& &1.open?)
-    |> Enum.reverse()
-    |> Enum.take_while(& &1.target?)
-    |> length()
+    {open, closed} = Enum.split_with(weeks, & &1.open?)
+    run = closed |> Enum.reverse() |> Enum.take_while(& &1.target?) |> length()
+    run + Enum.count(open, & &1.target?)
   end
 
   @spec points([WorkoutSession.t()]) :: [point()]

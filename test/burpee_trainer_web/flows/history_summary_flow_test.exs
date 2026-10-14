@@ -125,6 +125,22 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#progress-set-goal-six_count")
   end
 
+  test "the streak counts weeks in a row at the target, this one once it is met", %{
+    conn: conn,
+    user: user
+  } do
+    {:ok, view, _} = live(conn, ~p"/progress")
+    refute has_element?(view, "#history-streak")
+
+    free_form_session_fixture(user, %{duration_sec_actual: 4_800})
+    {:ok, view, _} = live(conn, ~p"/progress")
+
+    assert has_element?(
+             view,
+             "#history-streak[aria-label='1 week in a row at the weekly target'] .hero-fire"
+           )
+  end
+
   test "the page is Progress, and old History links land on it", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/progress")
     # Progress is titled by your level; it is still named Progress for screen readers.
@@ -171,7 +187,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#history-coach-summary [role=status]")
   end
 
-  test "Coach reads top to bottom: note, message, reply, waiting goals, notebook", %{
+  test "the coach card: this week, note, message, reply and goals in front; notes behind", %{
     conn: conn,
     user: user
   } do
@@ -182,7 +198,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     positions =
       for id <-
-            ~w[home-coach-note home-coach-message-form home-coach-reply home-coach-goals home-coach-notebook] do
+            ~w[home-coach-week home-coach-note home-coach-message-form home-coach-reply home-coach-goals home-coach-notebook] do
         {index, _} = :binary.match(html, ~s(id="#{id}"))
         index
       end
@@ -208,15 +224,25 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#home-coach-notebook-save.home-primary-action")
     assert has_element?(view, "#home-coach-notebook-clear.home-text-action")
 
+    # The week's window: today's session done, the rest of the 80 minutes left.
     assert has_element?(
              view,
-             "details#home-coach-notebook:not([open]) summary",
-             "What the coach knows about you"
+             "#home-coach-front #home-coach-week [data-status=done]",
+             "Six-count"
            )
 
-    assert has_element?(view, "#home-coach-notebook-toggle .history-coach-memory-chevron")
-    assert has_element?(view, "#home-coach-notebook #home-coach-notebook-save")
-    assert has_element?(view, "#home-coach-notebook #home-coach-notebook-clear")
+    assert has_element?(view, "#home-coach-front #home-coach-week [data-status=left]")
+    # The notes are on the back of the card, turned over with the book and back again.
+    assert has_element?(view, "#home-coach-panel[data-flipped=false] #home-coach-notebook[inert]")
+
+    view
+    |> element("#home-coach-flip[aria-label='What the coach knows about you']")
+    |> render_click()
+
+    assert has_element?(view, "#home-coach-panel[data-flipped=true] #home-coach-front[inert]")
+    refute has_element?(view, "#home-coach-notebook[inert]")
+    view |> element("#home-coach-unflip") |> render_click()
+    assert has_element?(view, "#home-coach-panel[data-flipped=false]")
 
     busy =
       render_component(&HomeCoachComponents.panel/1,

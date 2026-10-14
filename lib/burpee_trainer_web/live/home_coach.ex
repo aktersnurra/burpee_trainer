@@ -11,7 +11,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def initialize(socket) do
     socket
     |> assign(
-      coach_details_open?: false,
+      coach_flipped?: false,
       coach_expanded?: false,
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
       coach_busy?: false,
@@ -31,6 +31,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
     socket
     |> assign(
       coach_thread: this_week(socket.assigns.current_scope),
+      coach_week: week_window(socket.assigns.current_scope, socket.assigns[:slot]),
       coach_notebook_seen: notebook.updated_at,
       coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
     )
@@ -41,8 +42,9 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def handle_event("coach_toggle", _, socket),
     do: {:noreply, assign(socket, coach_expanded?: not socket.assigns.coach_expanded?)}
 
-  def handle_event("coach_details_toggle", _, socket),
-    do: {:noreply, assign(socket, coach_details_open?: not socket.assigns.coach_details_open?)}
+  # The card turns over to what the coach knows about you, and back.
+  def handle_event("coach_flip", _, socket),
+    do: {:noreply, assign(socket, coach_flipped?: not socket.assigns.coach_flipped?)}
 
   def handle_event("coach_message_change", %{"coach_message" => %{"text" => text}}, socket)
       when is_binary(text),
@@ -115,18 +117,30 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # This week's conversation; it starts over with the week, as the report does.
-  defp this_week(scope) do
+  defp this_week(scope), do: Exchange.since(scope, week_start_utc(scope))
+
+  # What is done this week and what is left of its target, for the card's front.
+  defp week_window(_scope, nil), do: []
+
+  defp week_window(scope, slot) do
+    since = week_start_utc(scope)
+
+    scope
+    |> BurpeeTrainer.Workouts.list_sessions()
+    |> Enum.filter(&(&1.state == :completed and match?(%DateTime{}, &1.completed_at)))
+    |> Enum.filter(&(DateTime.compare(&1.completed_at, since) != :lt))
+    |> BurpeeTrainer.WeekWindow.lay_out(slot.weekly_target_sec)
+  end
+
+  defp week_start_utc(scope) do
     now = DateTime.utc_now()
 
-    since =
-      with {:ok, context} <- UserTime.context(scope.user, now),
-           {:ok, week_start, _week_end} <- UserTime.week_bounds_utc(context) do
-        week_start
-      else
-        _ -> DateTime.add(now, -7, :day)
-      end
-
-    Exchange.since(scope, since)
+    with {:ok, context} <- UserTime.context(scope.user, now),
+         {:ok, week_start, _week_end} <- UserTime.week_bounds_utc(context) do
+      week_start
+    else
+      _ -> DateTime.add(now, -7, :day)
+    end
   end
 
   defp save_notebook(socket, text) do
