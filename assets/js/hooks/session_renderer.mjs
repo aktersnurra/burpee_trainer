@@ -328,7 +328,6 @@ export class SessionRenderer {
 		const countProvenance =
 			completion.burpeeCountProvenance ??
 			(hasActualReps ? "manual" : "unresolved");
-		const scheduledRepsDone = completion.scheduledRepsDone ?? 0;
 		const countSource = this.root.querySelector("#session-count-source");
 		if (actualReps) {
 			actualReps.textContent = hasActualReps
@@ -341,14 +340,11 @@ export class SessionRenderer {
 			duration.textContent = this.formatTime(completion.durationSecActual);
 		if (repsInput)
 			repsInput.value = hasActualReps ? String(completion.burpeeCountActual) : "";
+		// Only a camera count needs saying; otherwise the reps field below is the count.
 		if (countSource) {
-			countSource.textContent =
-				countProvenance === "camera_confirmed"
-					? "Camera-confirmed reps"
-					: countProvenance === "manual"
-						? "Manually entered reps"
-						: `Pace progress: ${scheduledRepsDone} of ${completion.burpeeCountPlanned}. Enter actual reps below.`;
-			countSource.hidden = false;
+			const cameraCounted = countProvenance === "camera_confirmed";
+			countSource.textContent = cameraCounted ? "Counted by camera" : "";
+			countSource.hidden = !cameraCounted;
 		}
 		if (durationInput) durationInput.value = String(completion.durationSecActual);
 		if (noteInput) noteInput.value = completion.notePost || "";

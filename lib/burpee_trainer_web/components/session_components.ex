@@ -405,12 +405,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           >
             0
           </p>
-          <p class="qs-tabular mt-4 text-sm text-[var(--session-muted)]">
-            of <span id="session-planned-reps" class="font-medium text-[var(--session-ink)]">0</span>
-            planned
+          <%!-- What was planned and how long it took, in one line under the count. --%>
+          <p class="qs-tabular mt-4 text-lg text-[var(--session-muted)]">
+            of <span id="session-planned-reps">0</span>
+            · <span id="session-actual-duration">0:00</span>
           </p>
-          <p id="session-count-source" class="mt-3 text-xs text-[var(--session-muted)]" hidden></p>
-          <p id="session-actual-duration" class="qs-tabular mt-4 text-2xl font-normal">0:00</p>
+          <p id="session-count-source" class="mt-2 text-sm text-[var(--session-muted)]" hidden></p>
         </section>
 
         <div
@@ -486,7 +486,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               navigate={~p"/"}
               aria-label="Leave and resume later"
               title="Leave and resume later"
-              class="inline-flex size-14 items-center justify-center rounded-md text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
+              class="inline-flex size-14 items-center justify-center rounded-full text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
             >
               <.icon name="hero-arrow-left" class="size-6" />
             </.link>
@@ -495,7 +495,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               type="submit"
               aria-label="Save session"
               title="Save session"
-              class="inline-flex size-14 items-center justify-center rounded-md bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
+              class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
             >
               <span id="session-save-icon-ready" aria-hidden="true">
                 <.icon name="hero-check" class="size-6" />
