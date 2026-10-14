@@ -125,8 +125,10 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           type="submit"
           class="home-primary-action coach-send"
           disabled={@state.coach_busy?}
+          aria-label="Send"
+          title="Send"
         >
-          Send
+          <.icon name="hero-arrow-up" class="size-5" />
         </button>
       </.form>
       <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-guidance-status">
@@ -148,9 +150,11 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             type="button"
             phx-click="coach_goal_dismiss"
             phx-value-id={goal.id}
-            class="home-text-action"
+            class="home-text-action home-icon-action"
+            aria-label="Dismiss goal"
+            title="Dismiss"
           >
-            Dismiss
+            <.icon name="hero-x-mark" class="size-5" />
           </button>
           <button
             :if={goal.status == :proposed}
@@ -158,9 +162,11 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             type="button"
             phx-click="coach_goal_confirm"
             phx-value-id={goal.id}
-            class="home-primary-action"
+            class="home-primary-action home-icon-action"
+            aria-label="Confirm goal"
+            title="Confirm"
           >
-            Confirm
+            <.icon name="hero-check" class="size-5" />
           </button>
         </div>
       </div>
@@ -190,12 +196,20 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
               id="home-coach-notebook-clear"
               type="button"
               phx-click="coach_notebook_clear"
-              class="home-text-action"
+              class="home-text-action home-icon-action"
+              aria-label="Clear notes"
+              title="Clear"
             >
-              Clear
+              <.icon name="hero-trash" class="size-5" />
             </button>
-            <button id="home-coach-notebook-save" type="submit" class="home-primary-action">
-              Save
+            <button
+              id="home-coach-notebook-save"
+              type="submit"
+              class="home-primary-action home-icon-action"
+              aria-label="Save notes"
+              title="Save"
+            >
+              <.icon name="hero-check" class="size-5" />
             </button>
           </div>
         </.form>

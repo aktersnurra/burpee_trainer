@@ -594,7 +594,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
-                Edit
+                <.icon name="hero-pencil-square" class="size-5" />
               </button>
               <button
                 id="home-title-action"
@@ -609,7 +609,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
-                Switch
+                <.icon name="hero-arrows-right-left" class="size-5" />
               </button>
               <button
                 id="home-action"
@@ -634,7 +634,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
-                New
+                <.icon name="hero-plus" class="size-5" />
               </button>
             </div>
           </div>

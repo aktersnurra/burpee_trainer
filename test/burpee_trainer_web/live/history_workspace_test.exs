@@ -109,7 +109,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     assert_in_delta String.to_float(left), max(4.0, min(96.0, expected)), 0.000001
   end
 
-  test "a session opens in place; Escape cancels its confirmation, then closes it, then Progress",
+  test "Escape lets go of an armed trash, then of the session, then leaves Progress",
        %{conn: conn} do
     user = user_fixture()
 
@@ -131,20 +131,21 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
     view |> element("#home-history-density-sessions") |> render_click()
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    # It opens under its own row; nothing covers or locks the page.
-    assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
+    trash = "#home-history-delete-#{saved.id}"
+    # Its trash shows in its row; nothing covers or locks the page.
+    assert has_element?(view, trash)
 
     refute has_element?(
              view,
              "[role=dialog], #home-history-body[inert], #home-history-close[inert]"
            )
 
-    view |> element("#home-history-delete") |> render_click()
+    view |> element(trash) |> render_click()
     view |> element("#history-page") |> render_keydown(%{"key" => "Escape"})
-    refute has_element?(view, "#home-history-delete-confirm")
-    assert has_element?(view, "#home-history-sheet")
+    refute has_element?(view, "#{trash}.home-history-session-delete-armed")
+    assert has_element?(view, trash)
     view |> element("#history-page") |> render_keydown(%{"key" => "Escape"})
-    refute has_element?(view, "#home-history-sheet")
+    refute has_element?(view, trash)
     assert BurpeeTrainer.Repo.reload!(saved) == saved
     view |> element("#history-page") |> render_keydown(%{"key" => "Escape"})
     assert_patch(view, "/")

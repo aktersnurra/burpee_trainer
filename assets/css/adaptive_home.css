@@ -1022,7 +1022,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-history-delete-ask .home-review-actions .home-text-action:first-child { margin-left: 0; }
 /* Progress leads with one headline: the number at 64px, one line saying what, a thin bar. */
 .home-history-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-#history-level { color: var(--home-muted); font-size: var(--text-body); white-space: nowrap; }
+#history-level { color: inherit; font: inherit; white-space: nowrap; }
 #progress-choose-goal { display: inline-flex; align-items: center; text-decoration: none; }
 /* The coach's line: plain text and a chevron, no panel. */
 /* Other goals: one quiet row each under a hairline. */
@@ -1055,3 +1055,27 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .coach-thread { display: grid; gap: 20px; margin: 0; padding: 0; list-style: none; }
 @media (prefers-reduced-motion: reduce) { #home-done-today, #home-week-complete, #home-done-expansion, #home-done-expansion[data-open="true"] { transition: none; } }
 #home-done-today .home-workout-name, #home-week-complete .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
+/* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
+.adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
+.adaptive-home .home-primary-action.home-icon-action { width: 44px; }
+.adaptive-home .coach-send { display: inline-flex; align-items: center; justify-content: center; width: 36px; padding: 0; }
+.adaptive-home .home-workout-actions .home-expanded-action { padding-inline: 10px; }
+.adaptive-home .home-history-view-switch .home-icon-action { min-width: 40px; }
+.adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+/* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
+.home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--home-line); }
+.adaptive-home .home-history-sessions-panel .home-history-session-toggle { flex: 1; min-width: 0; border-bottom: 0; text-align: left; }
+.adaptive-home .home-history-session-name { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+.home-history-session-name::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
+.home-history-session-name.progress-key-navy-seal::before { border-top-style: dashed; }
+.adaptive-home .home-history-session-name { color: #262722; }
+.home-history-session-name.progress-key-six-count::before { border-color: var(--series-six-count); }
+.home-history-session-name.progress-key-navy-seal::before { border-color: var(--series-navy-seal); }
+.adaptive-home .home-history-session-summary small { padding-left: 20px; }
+.home-history-session-tag::before { content: " · "; }
+.home-history-session-selected .home-history-session-toggle { color: #262722; }
+.home-history-session-delete { margin-left: 4px; color: var(--home-muted); background: transparent; border: 0; animation: home-fade-in var(--motion-quick) ease; }
+.home-history-session-delete-armed { color: #a55643; }
+@keyframes home-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--home-muted); background: transparent; }
+@media (prefers-reduced-motion: reduce) { .home-history-session-delete { animation: none; } }

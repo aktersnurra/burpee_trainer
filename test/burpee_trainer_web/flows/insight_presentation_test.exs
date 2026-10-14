@@ -38,8 +38,9 @@ defmodule BurpeeTrainerWeb.InsightPresentationTest do
 
     view |> element("#home-history-toggle") |> render_click()
     assert_patch(view, "/progress")
+    # Sessions are single rows on Progress; the insight reads on Home only.
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
-    assert has_element?(view, "#history-insight-points li", "25 reps last session.")
+    refute has_element?(view, "#history-insight-points")
     assert view.pid == pid
   end
 

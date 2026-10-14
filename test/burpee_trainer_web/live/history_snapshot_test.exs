@@ -49,8 +49,12 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
     view |> element("#home-history-inspect-#{session.id}") |> render_click()
     # The app's date style: day before month, the year only when it is not this one.
     assert has_element?(view, "#home-history-inspect-#{session.id}", "Thu 2 Jan 2025")
-    assert has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps='38']")
-    assert has_element?(view, "#home-history-sheet-details-#{session.id}", "of 40")
+    # The row carries the actual reps; sessions no longer open onto the plan.
+    assert has_element?(
+             view,
+             "#home-history-inspect-#{session.id} .home-history-session-reps",
+             "38"
+           )
 
     [persisted] = Workouts.list_sessions(BurpeeTrainer.Accounts.Scope.for_user(user))
     assert persisted.completed_at == ~U[2025-01-02 03:04:05Z]
@@ -93,14 +97,16 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
              "Uncounted follow-along"
            )
 
-    view |> element("#home-history-inspect-#{session.id}") |> render_click()
-    # Only what was planned is compared: duration was, reps were not, so reps stay in the row.
-    refute has_element?(view, "#home-history-sheet-details-#{session.id} [data-actual-reps]")
+    assert has_element?(
+             view,
+             "#home-history-inspect-#{session.id} .home-history-session-reps",
+             "27"
+           )
 
     assert has_element?(
              view,
-             "#home-history-sheet-details-#{session.id} [data-actual-duration-sec]",
-             "of 15:00"
+             "#home-history-inspect-#{session.id} .home-history-session-time",
+             "15:12"
            )
 
     persisted = Repo.get!(WorkoutSession, session.id)

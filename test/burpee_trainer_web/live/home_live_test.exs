@@ -323,7 +323,11 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-chooser-close") |> render_click()
     view |> element("#home-summary") |> render_click()
 
-    assert has_element?(view, "#home-title-action[aria-label='Switch workout']", "Switch")
+    assert has_element?(
+             view,
+             "#home-title-action[aria-label='Switch workout'] .hero-arrows-right-left"
+           )
+
     assert has_element?(view, "#home-action[type=button][aria-label='Start workout']", "Start")
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
@@ -453,13 +457,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     # One workout type needs no legend; the line speaks for itself.
     refute has_element?(view, ".home-history-legend")
     assert has_element?(view, "#home-history-period-twelve_weeks[aria-pressed=true]")
-    # A point opens its session in place in the list: the row has the numbers.
+    # A point selects its session in the list: the row has the numbers.
     view |> element("#home-history-point-#{saved.id}") |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-history-session-#{saved.id} #home-history-details-#{saved.id}"
-           )
+    assert has_element?(view, "#home-history-inspect-#{saved.id}[aria-pressed=true]")
 
     assert has_element?(
              view,
@@ -495,21 +495,25 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-history-sessions-panel[hidden]")
   end
 
-  test "a session opens and closes in place under its row, on one tap each", %{
+  test "a tapped session shows its trash; tapping again hides it; nothing opens", %{
     conn: conn,
     user: user
   } do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
+    refute has_element?(view, "#home-history-delete-#{saved.id}")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-inspect-#{saved.id}[aria-expanded=true]")
-    assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
-    refute has_element?(view, "#home-history-body[inert], #home-history-close[inert]")
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    assert has_element?(view, "#home-history-inspect-#{saved.id}[aria-pressed=true]")
+
+    assert has_element?(
+             view,
+             "#home-history-delete-#{saved.id}[aria-label='Delete session'] .hero-trash"
+           )
+
     refute has_element?(view, "#home-history-sheet")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-sheet")
+    refute has_element?(view, "#home-history-delete-#{saved.id}")
   end
 
   test "failed deletion says so in place and the session can still close", %{
@@ -520,12 +524,12 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    view |> element("#home-history-delete") |> render_click()
+    view |> element("#home-history-delete-#{saved.id}") |> render_click()
     Repo.delete!(saved)
-    view |> element("#home-history-delete-confirm") |> render_click()
+    view |> element("#home-history-delete-#{saved.id}") |> render_click()
     # The session is gone, so its row is too; Progress says so at the top.
     assert has_element?(view, "#home-history-error[role=status]", "Couldn’t delete this session")
-    refute has_element?(view, "#home-history-delete-confirm")
+    refute has_element?(view, "#home-history-delete-#{saved.id}")
   end
 
   test "a weekly cell opens actual day minutes and returns to the grid", %{conn: conn, user: user} do
@@ -590,14 +594,22 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            |> LazyHTML.query("#home-history-weekly .home-history-week-cell")
            |> Enum.count() == 1
 
+    trash = "#home-history-delete-#{saved.id}"
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-session-#{saved.id} #home-history-sheet")
-    view |> element("#home-history-delete") |> render_click()
-    assert has_element?(view, "#home-history-delete-confirm.home-danger-action", "Delete")
-    view |> element("#home-history-delete-cancel") |> render_click()
+    # The first tap on the trash arms it; tapping the row again lets go of it.
+    view |> element(trash) |> render_click()
+
+    assert has_element?(
+             view,
+             "#{trash}.home-history-session-delete-armed[aria-label='Confirm delete session']"
+           )
+
+    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     assert Repo.reload!(saved) == saved
-    view |> element("#home-history-delete") |> render_click()
-    view |> element("#home-history-delete-confirm") |> render_click()
+    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    refute has_element?(view, "#{trash}.home-history-session-delete-armed")
+    view |> element(trash) |> render_click()
+    view |> element(trash) |> render_click()
     refute has_element?(view, "#home-history-close[inert]")
     refute has_element?(view, "#home-history-body[inert]")
     assert Repo.get(WorkoutSession, saved.id) == nil
@@ -1283,11 +1295,15 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     cursor = :sys.get_state(view.pid).socket.assigns.history_cursor
     view |> element("#home-history-point-#{oldest.id}") |> render_click()
     assert :sys.get_state(view.pid).socket.assigns.history_cursor == cursor
-    assert has_element?(view, "#home-history-details-#{oldest.id}")
+    assert has_element?(view, "#home-history-inspect-#{oldest.id}[aria-pressed=true]")
     view |> element("#home-history-point-#{newest.id}") |> render_click()
 
     for expected_count <- [11, 12] do
-      assert has_element?(view, "#home-history-more[phx-disable-with='Loading sessions…']")
+      assert has_element?(
+               view,
+               "#home-history-more[aria-label='Load more sessions'] .hero-chevron-down"
+             )
+
       view |> element("#home-history-more") |> render_click()
 
       ids =
@@ -1305,14 +1321,14 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
       assert ids == expected
       assert length(ids) == expected_count
-      assert has_element?(view, "#home-history-details-#{newest.id}")
+      assert has_element?(view, "#home-history-inspect-#{newest.id}[aria-pressed=true]")
     end
 
     refute has_element?(view, "#home-history-more")
     refute has_element?(view, "#home-history-pagination-terminal")
     view |> element("#home-history-inspect-#{oldest.id}") |> render_click()
-    refute has_element?(view, "#home-history-details-#{oldest.id}")
-    refute has_element?(view, "#home-history-details-#{newest.id}")
+    refute has_element?(view, "#home-history-inspect-#{oldest.id}[aria-pressed=true]")
+    refute has_element?(view, "#home-history-inspect-#{newest.id}[aria-pressed=true]")
     for saved <- sessions, do: assert(Repo.reload!(saved) == saved)
   end
 
@@ -1334,7 +1350,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     future = complete_history(user, DateTime.add(now, 3600), 1200)
     {:ok, view, _} = live(conn, ~p"/")
     render_click(view, "history_session", %{"id" => to_string(owned.id)})
-    refute has_element?(view, "#home-history, #home-history-sheet")
+    refute has_element?(view, "#home-history")
     assert Repo.reload!(owned) == owned
     view = history_route(conn, view)
     before = :sys.get_state(view.pid).socket.assigns
@@ -1639,32 +1655,27 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Map.take(before.assigns, keys) == Map.take(after_socket.assigns, keys)
   end
 
-  test "History sheet displays only feedback persisted on the selected session", %{
-    conn: conn,
-    user: user
-  } do
+  test "a session's row carries its tags", %{conn: conn, user: user} do
     completed_at = DateTime.utc_now(:second)
-
-    tagged =
-      complete_history(user, completed_at, 1_200,
-        tags: "heat, low_energy",
-        note_post: "Kept going"
-      )
-
+    tagged = complete_history(user, completed_at, 1_200, tags: "heat, low_energy")
     plain = complete_history(user, DateTime.add(completed_at, -1, :second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
     view |> element("#home-history-density-sessions") |> render_click()
 
-    view |> element("#home-history-inspect-#{tagged.id}") |> render_click()
-    assert has_element?(view, "#home-history-session-#{tagged.id} #home-history-sheet")
-    assert has_element?(view, "#home-history-sheet-tags", "Heat")
-    assert has_element?(view, "#home-history-sheet-tags", "Low energy")
-    assert has_element?(view, "#home-history-sheet-note", "Kept going")
+    assert has_element?(
+             view,
+             "#home-history-inspect-#{tagged.id} .home-history-session-tag",
+             "Heat"
+           )
 
-    view |> element("#home-history-inspect-#{plain.id}") |> render_click()
-    refute has_element?(view, "#home-history-sheet-tags")
-    refute has_element?(view, "#home-history-sheet-note")
+    assert has_element?(
+             view,
+             "#home-history-inspect-#{tagged.id} .home-history-session-tag",
+             "Low energy"
+           )
+
+    refute has_element?(view, "#home-history-inspect-#{plain.id} .home-history-session-tag")
   end
 
   defp complete_history(user, completed_at, duration_sec, attrs \\ []) do

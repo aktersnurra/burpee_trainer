@@ -263,8 +263,9 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     view |> element("#home-history-toggle") |> render_click()
     assert_patch(view, "/progress")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    view |> element("#home-history-delete") |> render_click()
-    view |> element("#home-history-delete-confirm") |> render_click()
+    # The first tap on the trash arms it; the second deletes.
+    view |> element("#home-history-delete-#{saved.id}") |> render_click()
+    view |> element("#home-history-delete-#{saved.id}") |> render_click()
     assert Repo.get(WorkoutSession, saved.id) == nil
     assert view.pid == pid
   end

@@ -131,10 +131,19 @@ Component gap inside card: 16px
 
 ## 4a2. Actions
 
-- One filled pill per view for the primary action, named with a verb (Start, Save, Send).
-- Every other action is a quiet word (Edit, Switch, New, Cancel, Close, Delete).
-- Views of the same data switch like the period tabs, in words. No bare icons.
-- A chevron only means "opens here".
+- One filled pill per view for the primary action. Start keeps its word; a filled action
+  inside a field or row is an icon (Send is an arrow up, Confirm and Save a check).
+- Every other action is a quiet icon from one set (heroicons), each with an `aria-label`
+  and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
+  switches, plus adds or sets, trash deletes or clears, x-mark dismisses, check confirms,
+  chevron-down loads more.
+- Words stay only where an icon would be ambiguous: period tabs ("12 weeks"), Weeks and
+  Days, Start.
+- Views of the same data switch like the period tabs, as an icon pair (chart-bar for the
+  chart, list-bullet for the sessions), the current one underlined.
+- Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
+  (error colour), the second deletes. Tapping the row again or Escape lets go.
+- A chevron only means "opens here" or, pointing down at the end of a list, "more".
 - Every pick (burpee type, set style, filters, levels) is the same rounded choice; the
   chosen one is filled light. A destructive decision is the filled pill in the error colour.
 - The burpee types are always "Six-count" and "Navy SEAL" (lowercase "six-count" mid-sentence).

@@ -3,7 +3,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   use BurpeeTrainerWeb, :html
 
-  alias BurpeeTrainer.History
   alias BurpeeTrainerWeb.Fmt
   alias Phoenix.LiveView.JS
 
@@ -26,12 +25,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             tabindex="-1"
             phx-mounted={JS.focus(to: "#home-history-heading")}
             class="screen-heading"
+            aria-label={"Progress, #{Fmt.level(@state.current_level)}"}
           >
-            Progress
+            <%!-- Progress is titled by where you stand: your level. --%>
+
+            <span id="history-level">{Fmt.level(@state.current_level)}</span>
           </h1>
-          <span :if={Map.get(@state, :history_available?, false)} id="history-level">
-            {Fmt.level(@state.current_level)}
-          </span>
         </div>
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
@@ -77,18 +76,26 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 <button
                   id="home-history-density-back"
                   type="button"
-                  class="home-history-period"
+                  class="home-history-period home-icon-action"
                   aria-pressed="false"
+                  aria-label="Chart"
+                  title="Chart"
                   phx-mounted={
                     @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
                   }
                   phx-click="history_density_mode"
                   phx-value-mode="chart"
                 >
-                  Chart
+                  <.icon name="hero-chart-bar" class="size-5" />
                 </button>
-                <button type="button" class="home-history-period" aria-pressed="true">
-                  Sessions
+                <button
+                  type="button"
+                  class="home-history-period home-icon-action"
+                  aria-pressed="true"
+                  aria-label="Sessions"
+                  title="Sessions"
+                >
+                  <.icon name="hero-list-bullet" class="size-5" />
                 </button>
               </div>
             </div>
@@ -125,7 +132,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                     session={session}
                     timezone={@state.current_scope.user.timezone}
                     expanded?={@state.history_selected_id == session.id}
-                    insight={@state.history_selected_insight}
                     confirm?={@state.history_confirm_delete?}
                   />
                 </tbody>
@@ -136,11 +142,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               id="home-history-more"
               phx-remove={removed_target_focus("home-history-more")}
               type="button"
-              class="home-history-more"
+              class="home-history-more home-icon-action"
               phx-click="history_more"
-              phx-disable-with="Loading sessions…"
+              aria-label="Load more sessions"
+              title="More sessions"
             >
-              Load more sessions
+              <.icon name="hero-chevron-down" class="size-5" />
             </button>
           </section>
           <section id="home-history-weekly" aria-label="Minutes each week">
@@ -299,81 +306,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     """
   end
 
-  attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
-  attr(:insight, :any, default: nil)
-  attr(:confirm?, :boolean, required: true)
-  # A session opens in place under its row: what the coach saw, the numbers, then Delete.
-  def session_detail(assigns) do
-    tags =
-      (assigns.session.tags || "")
-      |> String.split(",", trim: true)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
-
-    assigns = assign(assigns, :tags, tags)
-
-    ~H"""
-    <div
-      id="home-history-sheet"
-      class="home-history-detail home-enter"
-      role="region"
-      aria-label="Session details"
-    >
-      <section :if={@insight} id="history-insight">
-        <h3 id="history-insight-headline">{@insight.headline}</h3>
-        <ul id="history-insight-points">
-          <li :for={point <- @insight.points["items"]}>{point["text"]}</li>
-        </ul>
-      </section>
-      <div id={"home-history-details-#{@session.id}"}>
-        <.session_details id={"home-history-sheet-details-#{@session.id}"} session={@session} />
-      </div>
-      <div
-        :if={@tags != []}
-        id="home-history-sheet-tags"
-        class="home-history-sheet-tags"
-        aria-label="Session tags"
-      >
-        <span :for={tag <- @tags}>{tag |> String.replace("_", " ") |> String.capitalize()}</span>
-      </div>
-      <p :if={String.trim(@session.note_post || "") != ""} id="home-history-sheet-note">
-        {String.trim(@session.note_post)}
-      </p>
-      <div :if={not @confirm?} class="home-review-actions">
-        <button
-          id="home-history-delete"
-          type="button"
-          class="home-text-action"
-          phx-click="history_confirm_delete"
-        >
-          Delete
-        </button>
-      </div>
-      <div :if={@confirm?} class="home-history-delete-ask">
-        <p>Delete this session? It comes off your week and your charts.</p>
-        <div class="home-review-actions">
-          <button
-            id="home-history-delete-cancel"
-            type="button"
-            class="home-text-action"
-            phx-click="history_cancel_delete"
-          >
-            Cancel
-          </button>
-          <button
-            id="home-history-delete-confirm"
-            type="button"
-            class="home-primary-action home-danger-action"
-            phx-click="history_delete_session"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
   defp open_session, do: JS.push("history_session")
 
   defp day_duration(seconds) when seconds < 60, do: "#{seconds} sec"
@@ -470,7 +402,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         phx-value-type={@gauge.burpee_type}
         aria-label={"Set goal: #{Fmt.goal_title(@gauge.next)} #{Fmt.goal_by(@gauge.next)}"}
       >
-        Set {@gauge.next.burpee_count_target} {Fmt.goal_by(@gauge.next)}
+        <.icon name="hero-plus" class="size-4" />
+        <span>{@gauge.next.burpee_count_target} {Fmt.goal_by(@gauge.next)}</span>
       </button>
     </section>
     """
@@ -565,7 +498,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <span class="home-history-trend-heading">
           <span class="font-semibold">Reps per 20 minutes</span>
           <span class="home-history-view-switch" role="group" aria-label="Reps view">
-            <button type="button" class="home-history-period" aria-pressed="true">Chart</button>
+            <button
+              type="button"
+              class="home-history-period home-icon-action"
+              aria-pressed="true"
+              aria-label="Chart"
+              title="Chart"
+            >
+              <.icon name="hero-chart-bar" class="size-5" />
+            </button>
             <button
               id="home-history-density-sessions"
               type="button"
@@ -574,8 +515,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
               phx-click="history_density_mode"
               phx-value-mode="sessions"
+              aria-label="Sessions"
+              title="Sessions"
             >
-              Sessions
+              <.icon name="hero-list-bullet" class="size-5" />
             </button>
           </span>
         </span>
@@ -668,84 +611,81 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
   attr(:expanded?, :boolean, required: true)
   attr(:timezone, :string, required: true)
-  attr(:insight, :any, default: nil)
   attr(:confirm?, :boolean, default: false)
 
+  # One row per session: its type in the chart's colour, when, its tags, reps and time.
+  # Tapping a row selects it and shows its trash icon; the first tap on the icon arms it,
+  # the second deletes.
   def session_row(assigns) do
     assigns =
       assign(assigns,
         display_name: display_name(assigns.session),
-        completion: local_completion(assigns.session, assigns.timezone)
+        completion: local_completion(assigns.session, assigns.timezone),
+        tags: tags(assigns.session)
       )
 
     ~H"""
-    <tr id={@id} phx-remove={removed_target_focus(@id)} class="home-history-session-card">
+    <tr
+      id={@id}
+      phx-remove={removed_target_focus(@id)}
+      class={["home-history-session-card", @expanded? && "home-history-session-selected"]}
+    >
       <td colspan="3">
-        <button
-          id={"home-history-inspect-#{@session.id}"}
-          type="button"
-          class="home-history-session-toggle"
-          phx-click={open_session()}
-          phx-value-id={@session.id}
-          phx-value-source="row"
-          aria-controls={"home-history-details-#{@session.id}"}
-          aria-expanded={to_string(@expanded?)}
-        >
-          <span class="home-history-session-summary">
-            <span class="home-history-session-name">{@display_name}</span>
-            <small>{@completion}</small>
-          </span>
-          <span class="home-history-session-reps">{@session.burpee_count_actual || "—"}</span>
-          <span class="home-history-session-time">
-            {Fmt.duration_sec(@session.duration_sec_actual)}
-          </span>
-        </button>
-        <.session_detail
-          :if={@expanded?}
-          session={@session}
-          insight={@insight}
-          confirm?={@confirm?}
-        />
+        <div class="home-history-session-line">
+          <button
+            id={"home-history-inspect-#{@session.id}"}
+            type="button"
+            class="home-history-session-toggle"
+            phx-click={open_session()}
+            phx-value-id={@session.id}
+            phx-value-source="row"
+            aria-pressed={to_string(@expanded?)}
+          >
+            <span class="home-history-session-summary">
+              <span class={[
+                "home-history-session-name",
+                "progress-key-#{series_class(@session.burpee_type)}"
+              ]}>
+                {@display_name}
+              </span>
+              <small>
+                {@completion}<span :for={tag <- @tags} class="home-history-session-tag">{tag}</span>
+              </small>
+            </span>
+            <span class="home-history-session-reps">{@session.burpee_count_actual || "—"}</span>
+            <span class="home-history-session-time">
+              {Fmt.duration_sec(@session.duration_sec_actual)}
+            </span>
+          </button>
+          <button
+            :if={@expanded?}
+            id={"home-history-delete-#{@session.id}"}
+            type="button"
+            class={[
+              "home-icon-action home-history-session-delete",
+              @confirm? && "home-history-session-delete-armed"
+            ]}
+            phx-click={if(@confirm?, do: "history_delete_session", else: "history_confirm_delete")}
+            aria-label={if(@confirm?, do: "Confirm delete session", else: "Delete session")}
+            title={if(@confirm?, do: "Tap again to delete", else: "Delete")}
+          >
+            <.icon name="hero-trash" class="size-5" />
+          </button>
+        </div>
       </td>
     </tr>
     """
   end
 
-  attr(:id, :string, required: true)
-  attr(:session, BurpeeTrainer.Workouts.WorkoutSession, required: true)
+  defp tags(%{tags: tags}) when is_binary(tags),
+    do:
+      tags
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.map(&(&1 |> String.replace("_", " ") |> String.capitalize()))
 
-  def session_details(assigns) do
-    assigns = assign(assigns, density: History.points([assigns.session]))
-
-    ~H"""
-    <%!-- The row already shows reps and time; details add only the plan they're measured
-         against, when there was one, and the reps per 20 minutes. --%>
-    <div id={@id} class="home-history-status home-history-comparison">
-      <p
-        :if={@session.burpee_count_planned}
-        class="home-history-streak-line"
-        data-actual-reps={@session.burpee_count_actual}
-      >
-        <strong>{@session.burpee_count_actual || "—"}</strong>
-        <span>
-          reps of {@session.burpee_count_planned}
-        </span>
-      </p>
-      <p
-        :if={@session.duration_sec_planned}
-        class="home-history-streak-line"
-        data-actual-duration-sec={@session.duration_sec_actual}
-      >
-        <strong>{Fmt.duration_sec(@session.duration_sec_actual)}</strong>
-        <span>of {Fmt.duration_sec(@session.duration_sec_planned)}</span>
-      </p>
-      <p :for={point <- @density} class="home-history-streak-line">
-        <strong>{point.density}</strong>
-        <span>per 20 min</span>
-      </p>
-    </div>
-    """
-  end
+  defp tags(_session), do: []
 
   defp plot_series(series, scales, period_start, now) do
     all =
@@ -838,9 +778,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       )
 
   defp display_name(%{display_name_snapshot: name}) when is_binary(name) and name != "", do: name
+
+  defp display_name(%{burpee_type: type}) when type in [:six_count, :navy_seal],
+    do: type_sentence(type)
+
   defp display_name(%{source_kind: :video}), do: "Video workout"
-  defp display_name(%{source_kind: :plan}), do: "Workout"
-  defp display_name(_), do: "Manual workout"
+  defp display_name(_), do: "Workout"
 
   defp local_completion(%{completed_at: %DateTime{} = completed_at}, timezone) do
     case DateTime.shift_zone(completed_at, timezone) do

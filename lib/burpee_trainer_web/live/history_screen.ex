@@ -21,7 +21,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_session_return_to: "#home-history-heading",
       history_selected_id: nil,
       history_selected_session: nil,
-      history_selected_insight: nil,
       history_confirm_delete?: false,
       history_error: nil,
       history_cursor: nil,
@@ -135,8 +134,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
          history_loaded_ids: ids,
          history_selected_id: if(selected?, do: id),
          history_selected_session: if(selected?, do: session),
-         history_selected_insight:
-           if(selected?, do: BurpeeTrainer.Insights.for_session(a.current_scope, id)),
          history_session_return_to:
            if(params["source"] == "point",
              do: "#home-history-point-#{id}",

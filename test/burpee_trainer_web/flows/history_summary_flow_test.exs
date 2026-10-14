@@ -102,7 +102,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/progress")
 
     assert has_element?(view, "#progress-gauge-six_count[data-kind=best]", "Best in 20 min")
-    assert has_element?(view, "#progress-set-goal-six_count", "Set 150 by")
+    assert has_element?(view, "#progress-set-goal-six_count .hero-plus")
+    assert has_element?(view, "#progress-set-goal-six_count", "150 by")
     view |> element("#progress-set-goal-six_count") |> render_click()
     assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150 by")
 
@@ -126,7 +127,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
   test "the page is Progress, and old History links land on it", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/progress")
-    assert has_element?(view, "#home-history-heading", "Progress")
+    # Progress is titled by your level; it is still named Progress for screen readers.
+    assert has_element?(view, "#home-history-heading[aria-label^='Progress, Level']", "Level")
     assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, "/history")
   end
 
@@ -197,11 +199,10 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # Coach's fields and actions are the New form's: underlined rows and one filled action.
     assert has_element?(view, "#home-coach-message-form.home-authoring-form")
     assert has_element?(view, "#home-coach-message-text.home-authoring-input")
-    # Send is the primary pill inside the field row, not a row of its own.
+    # Send is the primary pill inside the field row, an arrow, not a row of its own.
     assert has_element?(
              view,
-             "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action",
-             "Send"
+             "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action[aria-label=Send] .hero-arrow-up"
            )
 
     assert has_element?(view, "#home-coach-notebook-save.home-primary-action")
