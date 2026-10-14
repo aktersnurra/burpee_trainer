@@ -699,10 +699,6 @@
 .home-chooser-header button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .home-loading-animation { width: 142px; height: 142px; border: 0; border-radius: 0; animation: none; object-fit: contain; }
 .home-state-heading { font: 400 var(--text-title)/1.12 var(--font-sans); letter-spacing: -.9px; }
-.home-resume .home-state-heading { font-size: var(--text-title); }
-.home-resume-style, .home-resume-meta { color: var(--home-muted); font-size: var(--text-small); }
-.home-resume-style { margin-top: 15px; }
-.home-resume-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 5px; font-variant-numeric: tabular-nums; }
 .home-resume-action { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; border-bottom: 1px solid #262722; font-size: var(--text-body); }
 .home-resume-action:hover { color: #55534c; }
 .home-history { max-width: 100%; margin: 0 auto; overflow: visible; }
@@ -1098,3 +1094,9 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .adaptive-home .home-history-switch { min-height: 44px; margin-right: -10px; border: 0; background: transparent; color: var(--home-muted); }
 .adaptive-home .home-history-switch:hover { color: #262722; }
 .home-history-switch:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; border-radius: 8px; }
+/* A workout in progress sits where the workout and the result do, centred like them. */
+#home-ready-recommendation.home-resume { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
+.home-resume .home-state-heading { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
+.home-resume .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+.home-resume .home-result-status { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
+.home-resume #resume-recommended-workout { margin: 26px auto 0; padding-inline: 36px; }

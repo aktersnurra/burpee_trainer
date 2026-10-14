@@ -5,7 +5,7 @@ import HomePendingSession from "./home_pending_session.mjs";
 function mount(loadDraft) {
   const label = { textContent: "In progress" };
   const action = { innerHTML: "", querySelector: () => null };
-  const actionLabel = { textContent: "Resume workout" };
+  const actionLabel = { textContent: "Resume" };
   const el = {
     dataset: { sessionId: "23", contentHash: "plan-hash" },
     querySelector(selector) {
@@ -33,7 +33,7 @@ test("a workout without a completion draft stays in progress", async () => {
   const { hook, label, actionLabel } = mount(async () => null);
   await hook.pendingRead;
   assert.equal(label.textContent, "In progress");
-  assert.equal(actionLabel.textContent, "Resume workout");
+  assert.equal(actionLabel.textContent, "Resume");
 });
 
 test("a destroyed Home hook ignores a late draft read", async () => {

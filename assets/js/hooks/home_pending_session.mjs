@@ -28,7 +28,7 @@ const HomePendingSession = {
           : "In progress";
         this.el.querySelector("#home-resume-action-label").textContent = draft
           ? "Review & save"
-          : "Resume workout";
+          : "Resume";
       })
       .catch(() => undefined);
   },

@@ -50,6 +50,18 @@ defmodule BurpeeTrainerWeb.HomeScreen do
   defp mood_label(1), do: "Good"
   defp mood_label(_), do: nil
 
+  # What the started workout is, on one line: type, style, reps, time.
+  defp resume_meta(session) do
+    [
+      Fmt.burpee_type(session.burpee_type),
+      session.style_name,
+      session.burpee_count_planned && "#{session.burpee_count_planned} reps",
+      session.duration_sec_planned && Fmt.duration_sec(session.duration_sec_planned)
+    ]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
+  end
+
   defp state_tag({state, _}), do: state
   defp state_tag(state), do: state
 
@@ -110,27 +122,14 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 data-session-id={@started_session.id}
                 data-content-hash={@started_session.content_hash}
               >
-                <p id="home-session-state" class="home-eyebrow">In progress</p>
-                <div class="home-hero">
-                  <h1 class="home-state-heading">
-                    {@started_session.display_name_snapshot ||
-                      Fmt.burpee_type(@started_session.burpee_type)}
-                  </h1>
-                  <p class="home-resume-style">
-                    {Fmt.burpee_type(@started_session.burpee_type)}
-                    <span :if={@started_session.style_name}>
-                      · {@started_session.style_name}
-                    </span>
-                  </p>
-                  <p class="home-resume-meta">
-                    <span :if={@started_session.burpee_count_planned}>
-                      {@started_session.burpee_count_planned} reps
-                    </span>
-                    <span :if={@started_session.duration_sec_planned}>
-                      {Fmt.duration_sec(@started_session.duration_sec_planned)} planned
-                    </span>
-                  </p>
-                </div>
+                <%!-- Laid out like the workout and the result: title, one line of what it is,
+                     its state, then the one action. --%>
+                <h1 class="home-state-heading">
+                  {@started_session.display_name_snapshot ||
+                    Fmt.burpee_type(@started_session.burpee_type)}
+                </h1>
+                <p class="home-result-meta home-resume-meta">{resume_meta(@started_session)}</p>
+                <p id="home-session-state" class="home-result-status">In progress</p>
                 <button
                   id="resume-recommended-workout"
                   data-primary-action="resume"
