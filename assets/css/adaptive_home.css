@@ -15,10 +15,10 @@
   --ease-in-out: cubic-bezier(.4, 0, .2, 1);
 }
 /* Home, History and Coach share one page: no nested gutters, the theme background. */
-.session-surface:has(> :is(#home-page, #history-page, #coach-page, #login-page) .adaptive-home) {
+.session-surface:has(> :is(#home-page, #history-page, #login-page) .adaptive-home) {
   padding: 0;
 }
-:is(#home-page, #history-page, #coach-page, #login-page):has(.adaptive-home) {
+:is(#home-page, #history-page, #login-page):has(.adaptive-home) {
   max-width: none;
   padding: 0;
 }
@@ -789,7 +789,7 @@
 .home-history-session-summary small { display: block; margin-top: 3px; color: var(--home-muted); font-size: var(--text-small); }
 .home-history-session-reps, .home-history-session-time { font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 #home-done-today { border-bottom: 0; }
-.home-coach-panel { width: 100%; max-width: 640px; margin: 8px auto 0; }
+.home-coach-panel { width: 100%; max-width: 640px; margin: 40px auto 0; padding-top: 32px; border-top: 1px solid var(--home-line); text-align: left; }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
 .screen-heading { margin: 16px 0 0; font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -0.02em; }
 /* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
@@ -825,12 +825,6 @@
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
 .history-header { margin-top: 8px; }
 .history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
-.coach-summary-invitation { color: #262722; }
-.history-coach-summary-arrow { flex: none; margin-top: 4px; color: var(--home-muted); }
-.history-coach-summary:hover .history-coach-summary-arrow { color: #262722; }
-.history-coach-summary-arrow { transition: transform var(--motion-quick) ease; }
-.history-coach-summary[aria-expanded="true"] .history-coach-summary-arrow { transform: rotate(90deg); }
-.history-coach-summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; border-radius: 6px; }
 .coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }
 .home-edit-structure summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--home-muted); font-size: var(--text-small); }
@@ -931,7 +925,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .coach-message-form:has(textarea:placeholder-shown) .coach-send { opacity: 0; visibility: hidden; transition: opacity var(--motion-quick) ease, visibility 0s linear var(--motion-quick); }
 .coach-send:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
 /* The progress row keeps the column's edges on wide screens, on Home and History alike. */
-@media (min-width: 601px) { #history-progress, #home-progress-history, #coach-progress, #coach-page .home-history-header { max-width: 640px; margin-inline: auto; } }
+@media (min-width: 601px) { #history-progress, #home-progress-history { max-width: 640px; margin-inline: auto; } }
 /* Sign in sits where Home's workout does, with the app's one primary button. */
 .login { max-width: 354px; margin: clamp(120px, calc(39svh - 110px), 280px) auto 0; text-align: center; }
 .login .screen-heading { margin: 0; }
@@ -977,7 +971,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* The status row opens the page under its heading; the period tabs then open the record. */
 .home-history-periods { margin-top: 36px; }
 /* A finished day reads like the workout did: centred in Home's column, at the hero's height. */
-#home-done-today, #home-week-complete { max-width: 354px; margin: clamp(120px, calc(39svh - 110px), 280px) auto 0; padding: 0; border: 0; text-align: center; }
+#home-done-today, #home-week-complete { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 #home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
 .home-result-insight { max-width: 354px; margin: 20px auto 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-align: center; }
 /* Progress groups breathe evenly: status, goals, coach. */
@@ -1014,7 +1008,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 #progress-choose-goal { display: inline-flex; align-items: center; text-decoration: none; }
 /* The coach's line: plain text and a chevron, no panel. */
 .history-header .history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 28px; padding: 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
-.history-header .history-coach-summary-arrow { flex: none; margin-top: 4px; color: var(--home-muted); }
 /* Other goals: one quiet row each under a hairline. */
 .progress-goals { margin: 32px 0 0; padding: 0; list-style: none; }
 .progress-goals li { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid #dcd8d0; color: var(--home-muted); font-size: var(--text-body); }
@@ -1035,8 +1028,5 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .progress-course-caption { display: flex; justify-content: space-between; margin-top: 8px; color: var(--home-muted); font-size: var(--text-body); }
 .progress-course-on { color: #262722; }
 /* Coach is its own screen: the note leads, then the last exchange, the replies, the field. */
-.coach-progress-link { color: var(--home-muted); font-size: var(--text-body); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
-.coach-progress-link:hover { color: #262722; }
-#coach-page .home-coach-panel { max-width: 640px; margin: 24px auto 0; }
 .coach-note { margin: 0 0 24px; color: #262722; font-size: var(--text-body); line-height: 1.6; }
 .coach-note .coach-summary-text { font-size: inherit; }

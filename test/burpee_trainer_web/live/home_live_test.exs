@@ -17,53 +17,27 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "Coach is a separate view and an unsent message survives switching to Analytics", %{
+  test "the coach speaks on Home once today is done, and old Coach links land there", %{
     conn: conn,
     user: user
   } do
     {:ok, view, _} = live(conn, ~p"/")
-
-    refute has_element?(
-             view,
-             "#home-coach-message-form, #home-coach-toggle, .home-view-nav, #home-result-coach"
-           )
-
-    render_click(view, "open_coach", %{})
     refute has_element?(view, "#home-coach-panel")
-    pid = view.pid
-    view = history_route(conn, view)
-    assert has_element?(view, "#home-history-empty")
-    refute has_element?(view, "#history-coach-area, #home-coach-message-form")
-    render_patch(view, ~p"/coach")
-    assert view.pid == pid
-    assert has_element?(view, "#coach-page #home-coach-panel")
+    assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/coach")
 
-    view
-    |> form("#home-coach-message-form", coach_message: %{text: "Build toward 50 reps"})
-    |> render_change()
-
-    view |> element("#coach-progress-link") |> render_click()
-    assert_patch(view, "/progress")
-    assert has_element?(view, "#home-history")
-    refute has_element?(view, "#home-coach-panel")
-    render_patch(view, ~p"/coach")
-    assert has_element?(view, "#home-coach-message-text", "Build toward 50 reps")
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+    {:ok, view, _} = live(conn, ~p"/")
+    assert has_element?(view, "#home-done-today ~ #home-coach-panel")
+    assert has_element?(view, "#home-coach-message-form")
     assert Notebook.get(Scope.for_user(user)).body == ""
-    view |> element("#coach-progress-link") |> render_click()
-    assert_patch(view, "/progress")
-    view = home_route(conn, view)
-    assert view.pid == pid
-    assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
-    refute has_element?(view, "#home-coach-panel")
   end
 
   test "invalid guidance remains editable and can be corrected and saved", %{
     conn: conn,
     user: user
   } do
-    {:ok, history, _} = live(conn, ~p"/progress")
-    render_patch(history, ~p"/coach")
-    view = history
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+    {:ok, view, _} = live(conn, ~p"/")
     view |> form("#home-coach-message-form", coach_message: %{text: "  "}) |> render_submit()
     assert has_element?(view, "#home-coach-status[role=status]", "Enter a message")
     assert Notebook.get(Scope.for_user(user)).body == ""

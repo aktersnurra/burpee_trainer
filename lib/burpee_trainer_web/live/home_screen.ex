@@ -195,6 +195,8 @@ defmodule BurpeeTrainerWeb.HomeScreen do
               >
                 Done for today.
               </p>
+              <%!-- Done is when there is something to talk about, so the coach speaks here. --%>
+              <BurpeeTrainerWeb.HomeCoachComponents.panel state={assigns} />
             <% {:start, _selection} -> %>
               <HomeWorkoutComponents.workspace state={assigns} />
             <% :choose -> %>

@@ -243,21 +243,13 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert_patch(view, "/progress")
 
     if via == :coach do
+      # An old Coach link lands on Home.
       render_patch(view, ~p"/coach")
-
-      view
-      |> form("#home-coach-message-form", coach_message: %{text: "Unsent"})
-      |> render_change()
-
-      view |> element("#coach-progress-link") |> render_click()
-      assert_patch(view, "/progress")
-      render_patch(view, ~p"/coach")
-      assert has_element?(view, "#home-coach-message-text", "Unsent")
-      view |> element("#coach-progress-link") |> render_click()
-      assert_patch(view, "/progress")
+      assert_patch(view, "/")
+    else
+      close_history(view)
     end
 
-    close_history(view)
     assert view.pid == pid
   end
 

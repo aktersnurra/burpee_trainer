@@ -12,7 +12,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     HomeAuthoring,
     HomeChooser,
     HomeWorkspace,
-    CoachScreen,
+    HomeCoach,
     HistoryScreen,
     HomeDayBoundary
   }
@@ -31,7 +31,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
         workspace_screen: :home,
         home_focus_return?: false,
         authoring_returned?: false,
-        history_focus_return?: false,
         review_inspection_rows: []
       )
       |> stream_configure(:result_sessions, dom_id: &"home-result-session-#{&1.id}")
@@ -39,7 +38,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       |> assign_home()
       |> HomeWorkspace.assign_workspace()
       |> HistoryScreen.initialize()
-      |> CoachScreen.initialize()
+      |> HomeCoach.initialize()
       |> assign(history_open?: false)
       |> schedule_home_day()
       |> plan_slot_once()
@@ -56,6 +55,10 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_params(_params, _uri, %{assigns: %{live_action: :history_moved}} = socket),
     do: {:noreply, push_patch(socket, to: ~p"/progress", replace: true)}
 
+  # The coach speaks on Home now; old Coach links land there.
+  def handle_params(_params, _uri, %{assigns: %{live_action: :coach_moved}} = socket),
+    do: {:noreply, push_patch(socket, to: ~p"/", replace: true)}
+
   def handle_params(_params, _uri, socket) do
     screen = socket.assigns[:live_action] || :home
     previous = socket.assigns.workspace_screen
@@ -64,18 +67,13 @@ defmodule BurpeeTrainerWeb.HomeLive do
       assign(socket,
         workspace_screen: screen,
         history_open?: screen == :history,
-        coach_open?: screen == :coach,
-        home_focus_return?: screen == :home and previous != :home,
-        history_focus_return?: screen == :history and previous == :coach
+        home_focus_return?: screen == :home and previous != :home
       )
 
     socket =
       case screen do
         :history ->
           HistoryScreen.open(socket)
-
-        :coach ->
-          CoachScreen.open(socket)
 
         :home when previous != :home ->
           if socket.assigns.home_state == :choose or not is_nil(socket.assigns.home_selection),
@@ -286,7 +284,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   def handle_event(event, params, socket)
       when event in [
-             "close_coach",
              "coach_details_toggle",
              "coach_message_change",
              "coach_message",
@@ -297,8 +294,8 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_goal_confirm",
              "coach_goal_dismiss"
            ] do
-    if socket.assigns.workspace_screen == :coach,
-      do: CoachScreen.handle_event(event, params, socket),
+    if socket.assigns.workspace_screen == :home,
+      do: HomeCoach.handle_event(event, params, socket),
       else: {:noreply, socket}
   end
 
@@ -515,7 +512,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   @impl true
   def handle_async(:coach_reply, result, socket),
-    do: CoachScreen.handle_async(:coach_reply, result, socket)
+    do: HomeCoach.handle_async(:coach_reply, result, socket)
 
   def handle_async({kind, _id} = operation, result, socket)
       when kind in [
@@ -541,8 +538,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
       <%= case @workspace_screen do %>
         <% :history -> %>
           <HistoryScreen.screen {assigns} />
-        <% :coach -> %>
-          <CoachScreen.screen {assigns} />
         <% :home -> %>
           <HomeScreen.screen {assigns} />
       <% end %>

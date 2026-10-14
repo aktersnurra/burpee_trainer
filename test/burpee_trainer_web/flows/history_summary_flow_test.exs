@@ -16,7 +16,10 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     %{conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "the summary heads History and is the way into Coach and back", %{conn: conn, user: user} do
+  test "the coach's line reads on Progress; talking to the coach is on Home", %{
+    conn: conn,
+    user: user
+  } do
     goal_fixture(user, %{burpee_count_target: 150, duration_sec_target: 1200})
     free_form_session_fixture(user, %{duration_sec_actual: 1_500})
     summary_fixture(user, "Best so far 25 of 150 reps.")
@@ -31,27 +34,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#progress-headline", "Six-count in 20 min")
     assert has_element?(view, "#progress-headline .progress-headline-of", "150")
 
-    assert has_element?(
-             view,
-             "#history-header a#history-coach-summary[href='/coach']",
-             "Best so far"
-           )
-
-    pid = view.pid
-
-    # The coach line leads to Coach's own screen, which speaks first with the same note.
-    view |> element("#history-coach-summary") |> render_click()
-    assert_patch(view, "/coach")
-    assert view.pid == pid
-    assert has_element?(view, "#coach-page h1#home-coach-heading", "Coach")
-    assert has_element?(view, "#coach-page #home-coach-note", "Best so far")
-    refute has_element?(view, "#history-page, #progress-headline")
-    # The active goal leads Progress; Coach lists only goals waiting on you.
-    refute has_element?(view, "#home-coach-goals [data-status=active]")
-
-    view |> element("#coach-progress-link") |> render_click()
-    assert_patch(view, "/progress")
-    refute has_element?(view, "#home-coach-panel")
+    assert has_element?(view, "#history-header p#history-coach-summary", "Best so far")
+    refute has_element?(view, "#home-coach-panel, a[href^='/coach']")
   end
 
   test "the nearest goal leads as the headline; others follow as quiet rows", %{
@@ -167,29 +151,14 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#history-level", "Level 1A")
   end
 
-  test "with nothing to summarize, History invites the owner to the coach and Home does not", %{
-    conn: conn
-  } do
+  test "with nothing to summarize, neither Progress nor Home shows the coach", %{conn: conn} do
     {:ok, home, _} = live(conn, ~p"/")
-    refute has_element?(home, "a[href^='/coach']")
-
+    refute has_element?(home, "#home-coach-panel")
     {:ok, view, _} = live(conn, ~p"/progress")
-
-    assert has_element?(
-             view,
-             "a#history-coach-summary[href='/coach']",
-             "Set a goal with the coach"
-           )
-
-    # It reads as a way in, not a caption.
-    assert has_element?(view, "#history-coach-summary .history-coach-summary-arrow")
-
-    view |> element("#history-coach-summary") |> render_click()
-    assert_patch(view, "/coach")
-    assert has_element?(view, "#home-coach-panel")
+    refute has_element?(view, "#history-coach-summary")
   end
 
-  test "a refreshing summary shows the loader inside the link until the new one arrives", %{
+  test "a refreshing summary shows the loader in the coach's line until the new one arrives", %{
     conn: conn,
     user: user
   } do
@@ -210,22 +179,13 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#history-coach-summary [role=status]")
   end
 
-  test "a Coach link opens Coach's own screen, and Escape returns to Progress", %{conn: conn} do
-    for path <- ["/coach", "/coach?from=home", "/coach?from=//evil.example"] do
-      {:ok, view, _} = live(conn, path)
-      assert has_element?(view, "#coach-page #home-coach-panel")
-      view |> element("#coach-page") |> render_keydown(%{"key" => "Escape"})
-      assert_patch(view, "/progress")
-      assert focus_target(view, "#home-history-heading") == "#history-coach-summary"
-    end
-  end
-
   test "Coach reads top to bottom: note, message, reply, waiting goals, notebook", %{
     conn: conn,
     user: user
   } do
     summary_fixture(user)
-    {:ok, view, _} = live(conn, ~p"/coach")
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+    {:ok, view, _} = live(conn, ~p"/")
     html = render(view)
 
     positions =
@@ -278,16 +238,4 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
   defp text(view, selector),
     do:
       view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> LazyHTML.text()
-
-  defp focus_target(view, selector) do
-    [commands] =
-      view
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(selector)
-      |> LazyHTML.attribute("phx-mounted")
-
-    [["focus", %{"to" => target}]] = Jason.decode!(commands)
-    target
-  end
 end

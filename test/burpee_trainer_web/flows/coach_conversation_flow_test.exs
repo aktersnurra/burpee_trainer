@@ -7,33 +7,31 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
   setup %{conn: conn} do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+    # The coach speaks on Home once today's training is done.
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
     %{conn: init_test_session(conn, %{user_id: user.id}), scope: Scope.for_user(user)}
   end
 
-  test "actual unsent message survives Coach Home History patches in the same process", %{
-    conn: conn
-  } do
-    {:ok, view, _} = live(conn, ~p"/coach")
+  test "an unsent message survives a visit to Progress in the same process", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/")
     pid = view.pid
+    assert has_element?(view, "#home-done-today ~ #home-coach-panel")
 
     view
     |> form("#home-coach-message-form", coach_message: %{text: "UNSENT morning preference"})
     |> render_change()
 
-    view |> element("#coach-progress-link") |> render_click()
+    view |> element("#home-history-toggle") |> render_click()
     assert_patch(view, "/progress")
-    render_patch(view, ~p"/")
-    render_patch(view, ~p"/coach")
+    refute has_element?(view, "#home-coach-panel")
+    view |> element("#home-history-close") |> render_click()
+    assert_patch(view, "/")
     assert view.pid == pid
-    assert has_element?(view, "#home-coach-message-text", "UNSENT morning preference")
-    view |> element("#coach-progress-link") |> render_click()
-    assert_patch(view, "/progress")
-    render_patch(view, ~p"/coach")
     assert has_element?(view, "#home-coach-message-text", "UNSENT morning preference")
   end
 
   test "disabled provider retains submitted text and reports unavailability", %{conn: conn} do
-    {:ok, view, _} = live(conn, ~p"/coach")
+    {:ok, view, _} = live(conn, ~p"/")
 
     view
     |> form("#home-coach-message-form", coach_message: %{text: "Please note mornings"})
@@ -45,9 +43,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
   end
 
   test "the pills are what the coach expects you to say next", %{conn: conn, scope: scope} do
-    # The coach's note shows once there is something to report on.
-    free_form_session_fixture(scope.user)
-
     {:ok, _} =
       BurpeeTrainer.Coach.Summary.store(scope, %{
         text: "Protect Thursday.",
@@ -56,7 +51,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
         suggestions: ["Why Thursday?"]
       })
 
-    {:ok, view, _} = live(conn, ~p"/coach")
+    {:ok, view, _} = live(conn, ~p"/")
     # Before any exchange, the note's suggestions.
     assert has_element?(view, ".coach-quick-replies button", "Why Thursday?")
 
@@ -65,14 +60,14 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
         "Move it to Friday"
       ])
 
-    {:ok, view, _} = live(conn, ~p"/coach")
+    {:ok, view, _} = live(conn, ~p"/")
     # After an exchange, the reply's suggestions.
     assert has_element?(view, ".coach-quick-replies button", "Move it to Friday")
     refute has_element?(view, ".coach-quick-replies button", "Why Thursday?")
   end
 
   test "a one-tap reply sends its words to the coach", %{conn: conn} do
-    {:ok, view, _} = live(conn, ~p"/coach")
+    {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-coach-quick-harder") |> render_click()
     render_async(view)
     # No provider in tests: the send happened and the coach says it is unavailable.
@@ -93,7 +88,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
                %{}
              )
 
-    {:ok, view, _} = live(conn, ~p"/coach")
+    {:ok, view, _} = live(conn, ~p"/")
     assert has_element?(view, "#home-coach-goal-#{id}[data-status=proposed]")
     view |> element("#home-coach-goal-#{id}-confirm") |> render_click()
     # A confirmed goal leaves Coach's list for the header above it, so it reads once.
@@ -101,7 +96,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     # A confirmed goal leads Progress.
     render_patch(view, ~p"/progress")
     assert has_element?(view, "#progress-headline .progress-headline-of", "150")
-    render_patch(view, ~p"/coach")
+    render_patch(view, ~p"/")
     assert summary_jobs() == 1
     BurpeeTrainer.Repo.delete_all(Oban.Job)
 
@@ -174,7 +169,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     end)
 
     Req.default_options(plug: {Req.Test, __MODULE__})
-    {:ok, view, _} = live(conn, ~p"/coach")
+    {:ok, view, _} = live(conn, ~p"/")
     Req.Test.allow(__MODULE__, self(), view.pid)
 
     view
@@ -187,7 +182,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     # The exchange stays: your message and the reply, after a reload too.
     assert has_element?(view, "#home-coach-exchange", "Set a goal of 150 reps in 20 minutes")
     assert has_element?(view, "#home-coach-exchange", "Goal proposed.")
-    {:ok, reloaded, _} = live(conn, ~p"/coach")
+    {:ok, reloaded, _} = live(conn, ~p"/")
     assert has_element?(reloaded, "#home-coach-exchange", "Goal proposed.")
     assert [goal] = BurpeeTrainer.Goals.list(scope)
     assert goal.status == :proposed
@@ -197,7 +192,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     # A confirmed goal leads Progress.
     render_patch(view, ~p"/progress")
     assert has_element?(view, "#progress-headline .progress-headline-of", "150")
-    render_patch(view, ~p"/coach")
+    render_patch(view, ~p"/")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
   end
 

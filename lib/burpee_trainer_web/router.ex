@@ -61,7 +61,7 @@ defmodule BurpeeTrainerWeb.Router do
       live("/", HomeLive, :home)
       live("/progress", HomeLive, :history)
       live("/history", HomeLive, :history_moved)
-      live("/coach", HomeLive, :coach)
+      live("/coach", HomeLive, :coach_moved)
       live("/session/:session_id", SessionLive, :show)
       live("/videos/:video_id/session/:session_id", VideoLive.Show, :session)
     end

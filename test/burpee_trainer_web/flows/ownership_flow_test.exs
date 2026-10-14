@@ -47,13 +47,9 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     {:ok, entry} = Notebook.write(Scope.for_user(owner), "Owner notes", nil)
     coach_plans_before = Repo.all(WorkoutPlan)
     pid = view.pid
-    render_patch(view, ~p"/coach")
+    # The coach shows on Home once the day is done; its events are scoped either way.
+    render_submit(view, "coach_notebook_save", %{"coach_notebook" => %{"text" => "Attacker notes"}})
     assert view.pid == pid
-    assert has_element?(view, "#home-coach-panel")
-
-    view
-    |> form("#home-coach-notebook-form", coach_notebook: %{text: "Attacker notes"})
-    |> render_submit()
 
     assert Notebook.get(Scope.for_user(owner)).body == entry.body
     assert Notebook.get(Scope.for_user(attacker)).body == "Attacker notes"

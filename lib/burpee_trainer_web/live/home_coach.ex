@@ -1,5 +1,8 @@
-defmodule BurpeeTrainerWeb.CoachScreen do
-  @moduledoc "Coach conversation and owner-editable bounded notebook within shared HomeLive."
+defmodule BurpeeTrainerWeb.HomeCoach do
+  @moduledoc """
+  The coach on Home: once today's training is done, its note, the conversation and the
+  owner-editable bounded notebook sit under the result.
+  """
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
   alias BurpeeTrainer.Coach.{Agent, Exchange, Notebook}
@@ -8,7 +11,6 @@ defmodule BurpeeTrainerWeb.CoachScreen do
   def initialize(socket) do
     socket
     |> assign(
-      coach_open?: false,
       coach_details_open?: false,
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
       coach_busy?: false,
@@ -20,9 +22,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> refresh()
   end
 
-  def open(socket), do: socket |> assign(coach_open?: true) |> refresh()
-
-  # Coach lists only goals waiting on the owner; active ones read in History's header above it.
+  # Coach lists only goals waiting on the owner; active ones read on Progress.
   defp refresh(socket) do
     notebook = Notebook.get(socket.assigns.current_scope)
     goals = Goals.list(socket.assigns.current_scope)
@@ -31,20 +31,10 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> assign(
       coach_exchange: Exchange.latest(socket.assigns.current_scope),
       coach_notebook_seen: notebook.updated_at,
-      coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook),
-      history_headline:
-        BurpeeTrainerWeb.HistoryScreen.headline(
-          socket.assigns.current_scope,
-          BurpeeTrainer.Workouts.list_sessions(socket.assigns.current_scope),
-          DateTime.utc_now()
-        )
+      coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
     )
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end
-
-  # Coach is reached from Progress's coach line, so leaving it returns there.
-  def handle_event("close_coach", _, socket),
-    do: {:noreply, push_patch(socket, to: ~p"/progress")}
 
   def handle_event("coach_details_toggle", _, socket),
     do: {:noreply, assign(socket, coach_details_open?: not socket.assigns.coach_details_open?)}
@@ -130,46 +120,6 @@ defmodule BurpeeTrainerWeb.CoachScreen do
       {:error, :too_long} ->
         {:noreply, assign(socket, coach_status: "Notebook exceeds 4,000 characters.")}
     end
-  end
-
-  def screen(assigns) do
-    ~H"""
-    <main
-      id="coach-page"
-      class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16"
-      phx-window-keydown="close_coach"
-      phx-key="Escape"
-    >
-      <div class="adaptive-home">
-        <%!-- The week's progress stays on top of every screen; here too it leads back Home. --%>
-        <div id="coach-progress" class="relative min-h-11">
-          <BurpeeTrainerWeb.HomeWorkoutComponents.week_progress :if={@slot} slot={@slot} />
-          <.link
-            id="coach-home"
-            patch={~p"/"}
-            class="absolute inset-0 min-h-11 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
-            aria-label="Back to Home"
-          >
-            <span class="sr-only">Back to Home</span>
-          </.link>
-        </div>
-        <div class="home-history-header">
-          <h1
-            id="home-coach-heading"
-            tabindex="-1"
-            phx-mounted={JS.focus(to: "#home-coach-heading")}
-            class="screen-heading"
-          >
-            Coach
-          </h1>
-          <.link id="coach-progress-link" patch={~p"/progress"} class="coach-progress-link">
-            Progress
-          </.link>
-        </div>
-        <BurpeeTrainerWeb.HomeCoachComponents.panel state={assigns} />
-      </div>
-    </main>
-    """
   end
 
   def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply} = result}}, socket) do

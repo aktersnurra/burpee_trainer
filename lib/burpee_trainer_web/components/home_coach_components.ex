@@ -1,5 +1,5 @@
 defmodule BurpeeTrainerWeb.HomeCoachComponents do
-  @moduledoc "The coach summary and the Coach screen, reached only from History."
+  @moduledoc "The coach summary, and the coach on Home once today's training is done."
 
   use BurpeeTrainerWeb, :html
 

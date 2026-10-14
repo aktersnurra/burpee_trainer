@@ -20,15 +20,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           <h1
             id="home-history-heading"
             tabindex="-1"
-            phx-mounted={
-              JS.focus(
-                to:
-                  if(Map.get(@state, :history_focus_return?, false),
-                    do: "#history-coach-summary",
-                    else: "#home-history-heading"
-                  )
-              )
-            }
+            phx-mounted={JS.focus(to: "#home-history-heading")}
             class="screen-heading"
           >
             Progress
@@ -425,21 +417,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         headline={@state.history_headline.headline}
         dismissed?={Map.get(@state, :history_next_dismissed?, false)}
       />
-      <%!-- The coach's line says what to do next; tapping it opens the coach's own screen. --%>
-      <.link id="history-coach-summary" patch={~p"/coach"} class="history-coach-summary">
+      <%!-- The coach's line; you talk to the coach on Home once the day is done. --%>
+      <p :if={summary_line?(@state)} id="history-coach-summary" class="history-coach-summary">
         <BurpeeTrainerWeb.HomeCoachComponents.summary_body
-          :if={summary_line?(@state)}
           summary={@state.progress_summary}
           loading?={@state.progress_summary_loading?}
         />
-        <span :if={not summary_line?(@state)} class="coach-summary-invitation">
-          {if(@state.history_headline.headline.kind == :goal,
-            do: "Ask the coach about this week",
-            else: "Set a goal with the coach"
-          )}
-        </span>
-        <.icon name="hero-chevron-right" class="history-coach-summary-arrow size-4" />
-      </.link>
+      </p>
       <%!-- Other goals follow the headline as quiet rows: what, by when, your best. --%>
       <ul :if={@state.history_headline.others != []} id="progress-goals" class="progress-goals">
         <li :for={row <- @state.history_headline.others} id={"progress-goal-#{row.goal.id}"}>
@@ -529,14 +513,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           >
             Not now
           </button>
-          <.link
-            :if={@headline.kind == :best}
-            id="progress-choose-goal"
-            patch={~p"/coach"}
-            class="home-text-action"
-          >
-            Choose my own
-          </.link>
         </div>
       </div>
     </section>

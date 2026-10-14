@@ -79,7 +79,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     assert persisted() == before
   end
 
-  test "choose catalog streams replay across all three actions with filters and unsent Coach text",
+  test "choose catalog streams replay across all three actions with filters",
        %{view: view, user: user, plan: plan} do
     before = persisted()
     pid = view.pid
@@ -92,23 +92,12 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       view |> element("#home-history-toggle") |> render_click()
       assert_patch(view, "/progress")
       assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
-      render_patch(view, ~p"/coach")
-
-      view
-      |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})
-      |> render_change()
-
-      view |> element("#coach-progress-link") |> render_click()
-      assert_patch(view, "/progress")
       view |> element("#home-history-close") |> render_click()
       assert_patch(view, "/")
       assert view.pid == pid
       assert has_element?(view, "#home-page[data-home-state=choose]")
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
       assert :sys.get_state(view.pid).socket.assigns.filters == filters
-
-      assert :sys.get_state(view.pid).socket.assigns.coach_message_form[:text].value ==
-               "Keep this unsent"
 
       assert Notebook.get(Scope.for_user(user)).body == ""
       assert persisted() == before
