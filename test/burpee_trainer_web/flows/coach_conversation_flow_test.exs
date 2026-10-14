@@ -15,7 +15,11 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
   test "an unsent message survives a visit to Progress in the same process", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
     pid = view.pid
-    assert has_element?(view, "#home-done-today ~ #home-coach-panel")
+
+    assert has_element?(
+             view,
+             "#home-done-today[data-expanded=false] ~ #home-done-expansion #home-coach-panel"
+           )
 
     view
     |> form("#home-coach-message-form", coach_message: %{text: "UNSENT morning preference"})
@@ -64,6 +68,22 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     # After an exchange, the reply's suggestions.
     assert has_element?(view, ".coach-quick-replies button", "Move it to Friday")
     refute has_element?(view, ".coach-quick-replies button", "Why Thursday?")
+  end
+
+  test "the week's conversation reads in order, oldest first",
+       %{conn: conn, scope: scope} do
+    {:ok, first} = BurpeeTrainer.Coach.Exchange.record(scope, "Can Thursday be mornings?", "Yes.")
+    {:ok, second} = BurpeeTrainer.Coach.Exchange.record(scope, "Make it shorter", "15 minutes.")
+    {:ok, view, _} = live(conn, ~p"/")
+
+    html = render(view)
+    {a, _} = :binary.match(html, "home-coach-exchange-#{first.id}")
+    {b, _} = :binary.match(html, "home-coach-exchange-#{second.id}")
+    assert a < b
+
+    assert :sys.get_state(view.pid).socket.assigns.coach_thread
+           |> Enum.map(&{&1.message, &1.reply}) ==
+             [{"Can Thursday be mornings?", "Yes."}, {"Make it shorter", "15 minutes."}]
   end
 
   test "a one-tap reply sends its words to the coach", %{conn: conn} do
@@ -180,10 +200,15 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
 
     render_async(view)
     # The exchange stays: your message and the reply, after a reload too.
-    assert has_element?(view, "#home-coach-exchange", "Set a goal of 150 reps in 20 minutes")
-    assert has_element?(view, "#home-coach-exchange", "Goal proposed.")
+    assert has_element?(
+             view,
+             "#home-coach-thread .coach-exchange",
+             "Set a goal of 150 reps in 20 minutes"
+           )
+
+    assert has_element?(view, "#home-coach-thread .coach-exchange", "Goal proposed.")
     {:ok, reloaded, _} = live(conn, ~p"/")
-    assert has_element?(reloaded, "#home-coach-exchange", "Goal proposed.")
+    assert has_element?(reloaded, "#home-coach-thread .coach-exchange", "Goal proposed.")
     assert [goal] = BurpeeTrainer.Goals.list(scope)
     assert goal.status == :proposed
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=proposed]")

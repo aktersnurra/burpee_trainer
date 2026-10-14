@@ -37,7 +37,17 @@ defmodule BurpeeTrainer.Coach.Agent do
     else
       with {:ok, expected} <- original_selection(scope, run) do
         run = Map.put(run, :expected_selection, expected)
-        messages = AgentPrompt.messages(scope, surface, input, notebook, run.slot)
+
+        messages =
+          AgentPrompt.messages(
+            scope,
+            surface,
+            input,
+            notebook,
+            run.slot,
+            Keyword.get(opts, :history, [])
+          )
+
         loop(scope, messages, tools, run, 0, opts)
       end
     end

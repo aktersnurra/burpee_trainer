@@ -27,7 +27,11 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     free_form_session_fixture(user, %{duration_sec_actual: 1_200})
     {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-done-today ~ #home-coach-panel")
+    # Done opens like the workout day: the title opens and closes the coach.
+    assert has_element?(view, "#home-done-expansion[data-open=false] #home-coach-panel")
+    view |> element("#home-done-summary[aria-expanded=false]") |> render_click()
+    assert has_element?(view, "#home-done-expansion[data-open=true] #home-coach-panel")
+    assert has_element?(view, "#home-done-summary[aria-expanded=true]")
     assert has_element?(view, "#home-coach-message-form")
     assert Notebook.get(Scope.for_user(user)).body == ""
   end

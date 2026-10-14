@@ -53,6 +53,25 @@ defmodule BurpeeTrainerWeb.HomeScreen do
   defp state_tag({state, _}), do: state
   defp state_tag(state), do: state
 
+  attr(:expanded?, :boolean, required: true)
+  slot(:inner_block, required: true)
+
+  # The result's title opens and closes the coach, as the workout's title opens the workout.
+  defp done_toggle(assigns) do
+    ~H"""
+    <button
+      id="home-done-summary"
+      type="button"
+      phx-click="coach_toggle"
+      class={["home-summary", @expanded? && "home-summary-expanded"]}
+      aria-expanded={to_string(@expanded?)}
+      aria-controls="home-coach-panel"
+    >
+      <span class="home-workout-name">{render_slot(@inner_block)}</span>
+    </button>
+    """
+  end
+
   def screen(assigns) do
     ~H"""
     <main
@@ -136,10 +155,16 @@ defmodule BurpeeTrainerWeb.HomeScreen do
               </section>
             <% {state, _results} when state in [:done_today, :week_complete] -> %>
               <%= if @result_today_session do %>
-                <section id="home-done-today" class="home-result">
+                <section
+                  id="home-done-today"
+                  class="home-result"
+                  data-expanded={to_string(@coach_expanded?)}
+                >
                   <h1 class="home-state-heading">
-                    {@result_today_session.display_name_snapshot ||
-                      Fmt.burpee_type(@result_today_session.burpee_type)}
+                    <.done_toggle expanded?={@coach_expanded?}>
+                      {@result_today_session.display_name_snapshot ||
+                        Fmt.burpee_type(@result_today_session.burpee_type)}
+                    </.done_toggle>
                   </h1>
                   <p
                     id={
@@ -170,9 +195,10 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 <section
                   id="home-week-complete"
                   class="home-result"
+                  data-expanded={to_string(@coach_expanded?)}
                 >
                   <h1 class="home-state-heading">
-                    Training target complete
+                    <.done_toggle expanded?={@coach_expanded?}>Training target complete</.done_toggle>
                   </h1>
                   <p
                     id="home-result-actual-seconds"
@@ -195,8 +221,21 @@ defmodule BurpeeTrainerWeb.HomeScreen do
               >
                 Done for today.
               </p>
-              <%!-- Done is when there is something to talk about, so the coach speaks here. --%>
-              <BurpeeTrainerWeb.HomeCoachComponents.panel state={assigns} />
+              <%!-- Done is when there is something to talk about: the result opens, like the
+                   workout day, onto the coach's report on the week and the conversation. --%>
+              <div
+                id="home-done-expansion"
+                class="home-expansion"
+                data-open={to_string(@coach_expanded?)}
+              >
+                <div
+                  class="home-expansion-content"
+                  inert={!@coach_expanded?}
+                  aria-hidden={to_string(!@coach_expanded?)}
+                >
+                  <BurpeeTrainerWeb.HomeCoachComponents.panel state={assigns} />
+                </div>
+              </div>
             <% {:start, _selection} -> %>
               <HomeWorkoutComponents.workspace state={assigns} />
             <% :choose -> %>

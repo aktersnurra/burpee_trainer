@@ -85,7 +85,7 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert prompt =~ "next level"
     assert prompt =~ "metric_ids"
     # It sits under the headline, so it says what to do rather than restating the numbers.
-    assert prompt =~ "what to do next"
+    assert prompt =~ "how this week is going and what to change next"
     assert prompt =~ "do not restate"
   end
 

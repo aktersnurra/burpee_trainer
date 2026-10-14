@@ -90,7 +90,7 @@ Font stack: `Geist, ui-sans-serif, system-ui, -apple-system, sans-serif`
 
 Geist is the only typeface: no serif or Arial declarations anywhere, including headings, the chooser and session panels. Use `var(--font-sans)` rather than repeating the stack; headings change size and weight, never family. Keep the type system restrained: most text uses 400 / 500 / 600 weights, with large headings using careful negative tracking.
 
-Home, Progress and Coach use three sizes, as tokens in `assets/css/adaptive_home.css`:
+Home and Progress use three sizes, as tokens in `assets/css/adaptive_home.css`:
 
 | Token            | Size | Roles                                                         |
 |------------------|------|---------------------------------------------------------------|
@@ -159,26 +159,25 @@ There is no navigation bar. The app opens on the one thing the owner needs now, 
 screen leads to the next in context:
 
 - **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
-  first use, never an empty prompt), or the day's insight once trained. The week strip
-  opens Progress. Home has no coach entry. Design:
+  first use, never an empty prompt), or once trained, the day's result. The result's title
+  opens it like the workout's: the coach's report on the week, this week's conversation,
+  replies the coach predicts you'll send, "Message the coach", goals waiting for Confirm
+  or Dismiss, and "What the coach knows about you". The coach speaks only once the day is
+  done; `/coach` lands on Home. The week strip opens Progress. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
-  `docs/specs/2026-10-10-frictionless-home-design.md`.
+  `docs/specs/2026-10-10-frictionless-home-design.md` and
+  `docs/specs/2026-10-14-coach-on-home-design.md`.
 - **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads
-  back Home, then leads with one headline: the nearest goal as "best / target" (with its
-  course when honest), a goal just reached, your best, or your first result. One coach
-  line says what to do and opens the coach in place; other goals follow as quiet rows,
-  then the weekly record. Design: `docs/specs/2026-10-13-progress-headline-design.md`.
-- **Coach** (`/coach`) is its own screen, reached from the coach line on Progress. It reads
-  top to bottom: the coach's note, the last exchange, replies the coach predicts you'll
-  want to send, "Message the coach", goals waiting for Confirm or Dismiss, and "What the
-  coach knows about you" collapsed. Escape and the Progress link return to Progress.
-  Design: `docs/specs/2026-10-14-coach-screen-design.md`.
+  back Home, then the coach's look back over recent weeks, then a gauge per burpee type
+  side by side (best against goal, its course, or the next goal to set), then one chart
+  with both types on their own axes and the weekly record. Design:
+  `docs/specs/2026-10-14-coach-on-home-design.md`.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
   session and camera specs that follow it.
 
 Every screen uses the `--color-base-100` page background, Geist, and Home's centred
-column: Home, Progress and Coach render in the same `.adaptive-home` container on the
+column: Home and Progress render in the same `.adaptive-home` container on the
 layout's session surface, so the background, gutters and width never change between
 them. Sheets and the chooser use `--color-base-200`. Never hard-code a page background.
 

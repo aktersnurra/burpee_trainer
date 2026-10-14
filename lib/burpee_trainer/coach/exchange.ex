@@ -1,7 +1,8 @@
 defmodule BurpeeTrainer.Coach.Exchange do
-  @moduledoc "The owner's latest exchange with the coach: one row per user, replaced on each reply."
+  @moduledoc "The owner's exchanges with the coach: what they said and what the coach replied."
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
   alias BurpeeTrainer.{Repo, Accounts.Scope}
 
   @type t :: %__MODULE__{}
@@ -14,7 +15,26 @@ defmodule BurpeeTrainer.Coach.Exchange do
   end
 
   @spec latest(Scope.t()) :: t() | nil
-  def latest(%Scope{user: %{id: id}}), do: Repo.get_by(__MODULE__, user_id: id)
+  def latest(%Scope{user: %{id: id}}),
+    do:
+      Repo.one(
+        from e in __MODULE__,
+          where: e.user_id == ^id,
+          order_by: [desc: e.inserted_at, desc: e.id],
+          limit: 1
+      )
+
+  @doc "The owner's exchanges from `since` on, oldest first; at most the last `limit`."
+  @spec since(Scope.t(), DateTime.t(), pos_integer()) :: [t()]
+  def since(%Scope{user: %{id: id}}, %DateTime{} = since, limit \\ 20) do
+    from(e in __MODULE__,
+      where: e.user_id == ^id and e.inserted_at >= ^since,
+      order_by: [desc: e.inserted_at, desc: e.id],
+      limit: ^limit
+    )
+    |> Repo.all()
+    |> Enum.reverse()
+  end
 
   @spec record(Scope.t(), String.t(), String.t(), [String.t()]) ::
           {:ok, t()} | {:error, Ecto.Changeset.t()}
@@ -26,9 +46,6 @@ defmodule BurpeeTrainer.Coach.Exchange do
       :suggestions
     ])
     |> validate_required([:message, :reply])
-    |> Repo.insert(
-      on_conflict: {:replace, [:message, :reply, :suggestions, :updated_at]},
-      conflict_target: :user_id
-    )
+    |> Repo.insert()
   end
 end

@@ -29,7 +29,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   # What you might say next: the last reply's suggestions, else the note's, else two
   # plain asks that always make sense.
   defp quick_replies(state) do
-    exchange = Map.get(state, :coach_exchange)
+    exchange = state |> Map.get(:coach_thread, []) |> List.last()
     summary = Map.get(state, :progress_summary)
 
     predicted =
@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       class="home-coach-panel"
       aria-label="Coach"
     >
-      <%!-- The coach speaks first: what to do next, in a sentence or two. --%>
+      <%!-- The coach speaks first: how the week is going and what to change. --%>
       <p id="home-coach-note" class="coach-note">
         <.summary_body
           :if={@state.progress_summary || @state.progress_summary_loading?}
@@ -65,11 +65,29 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           Tell me what you're training for, or how the last session felt.
         </span>
       </p>
-      <%!-- The last exchange, kept across reloads: what you said, then what the coach said. --%>
-      <div :if={@state.coach_exchange} id="home-coach-exchange" class="coach-exchange">
-        <p class="coach-exchange-you">{@state.coach_exchange.message}</p>
-        <p>{@state.coach_exchange.reply}</p>
-      </div>
+      <%!-- This week's conversation, kept across reloads: what you said, what the coach said. --%>
+      <ol
+        :if={@state.coach_thread != [] or @state.coach_pending_message}
+        id="home-coach-thread"
+        class="coach-thread"
+        aria-label="Conversation with the coach"
+      >
+        <li
+          :for={exchange <- @state.coach_thread}
+          id={"home-coach-exchange-#{exchange.id}"}
+          class="coach-exchange"
+        >
+          <p class="coach-exchange-you">{exchange.message}</p>
+          <p>{exchange.reply}</p>
+        </li>
+        <li
+          :if={@state.coach_busy? and @state.coach_pending_message}
+          id="home-coach-pending"
+          class="coach-exchange"
+        >
+          <p class="coach-exchange-you">{@state.coach_pending_message}</p>
+        </li>
+      </ol>
       <div class="coach-quick-replies" role="group" aria-label="Quick replies">
         <button
           :for={{id, text} <- quick_replies(@state)}

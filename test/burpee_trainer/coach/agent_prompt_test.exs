@@ -30,4 +30,16 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     assert rule.content =~ "What the coach knows about you"
     assert message == %{role: "user", content: "How am I doing?"}
   end
+
+  test "the conversation so far comes before the new message, in order" do
+    scope = scope_fixture()
+    history = [{"Can Thursday be mornings?", "Yes, 7:00."}, {"And Friday?", "Rest."}]
+
+    [_rule, _context | turns] =
+      AgentPrompt.messages(scope, :coach_page, "Thanks", %{body: ""}, nil, history)
+
+    assert Enum.map(turns, & &1.role) == ~w[user assistant user assistant user]
+    assert Enum.at(turns, 1).content == Jason.encode!(%{"reply" => "Yes, 7:00."})
+    assert List.last(turns) == %{role: "user", content: "Thanks"}
+  end
 end

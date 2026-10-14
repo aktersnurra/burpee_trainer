@@ -6,12 +6,13 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
   alias BurpeeTrainer.Coach.{Agent, Exchange, Notebook}
-  alias BurpeeTrainer.Goals
+  alias BurpeeTrainer.{Goals, UserTime}
 
   def initialize(socket) do
     socket
     |> assign(
       coach_details_open?: false,
+      coach_expanded?: false,
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
       coach_busy?: false,
       coach_reply: nil,
@@ -29,12 +30,16 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
     socket
     |> assign(
-      coach_exchange: Exchange.latest(socket.assigns.current_scope),
+      coach_thread: this_week(socket.assigns.current_scope),
       coach_notebook_seen: notebook.updated_at,
       coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
     )
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end
+
+  # Done opens like the workout day: the result stays, the coach unfolds under it.
+  def handle_event("coach_toggle", _, socket),
+    do: {:noreply, assign(socket, coach_expanded?: not socket.assigns.coach_expanded?)}
 
   def handle_event("coach_details_toggle", _, socket),
     do: {:noreply, assign(socket, coach_details_open?: not socket.assigns.coach_details_open?)}
@@ -62,6 +67,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
       true ->
         scope = socket.assigns.current_scope
+        history = Enum.map(socket.assigns.coach_thread, &{&1.message, &1.reply})
 
         {:noreply,
          socket
@@ -71,7 +77,9 @@ defmodule BurpeeTrainerWeb.HomeCoach do
            coach_pending_message: text,
            coach_message_form: to_form(%{"text" => text}, as: :coach_message)
          )
-         |> start_async(:coach_reply, fn -> Agent.run(scope, :coach_page, text) end)}
+         |> start_async(:coach_reply, fn ->
+           Agent.run(scope, :coach_page, text, history: history)
+         end)}
     end
   end
 
@@ -106,6 +114,21 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
+  # This week's conversation; it starts over with the week, as the report does.
+  defp this_week(scope) do
+    now = DateTime.utc_now()
+
+    since =
+      with {:ok, context} <- UserTime.context(scope.user, now),
+           {:ok, week_start, _week_end} <- UserTime.week_bounds_utc(context) do
+        week_start
+      else
+        _ -> DateTime.add(now, -7, :day)
+      end
+
+    Exchange.since(scope, since)
+  end
+
   defp save_notebook(socket, text) do
     case Notebook.write(socket.assigns.current_scope, text, socket.assigns.coach_notebook_seen) do
       {:ok, _} ->
@@ -136,7 +159,8 @@ defmodule BurpeeTrainerWeb.HomeCoach do
      socket
      |> assign(
        coach_busy?: false,
-       # The reply reads in the exchange; this line is for failures only.
+       coach_pending_message: nil,
+       # The reply reads in the conversation; this line is for failures only.
        coach_reply: nil,
        coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
      )
@@ -146,5 +170,9 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def handle_async(:coach_reply, _, socket),
     do:
       {:noreply,
-       assign(socket, coach_busy?: false, coach_reply: "Coach unavailable. Try again later.")}
+       assign(socket,
+         coach_busy?: false,
+         coach_pending_message: nil,
+         coach_reply: "Coach unavailable. Try again later."
+       )}
 end

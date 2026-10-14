@@ -52,7 +52,9 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
     }
   end
 
-  def messages(scope, surface, input, notebook, slot) do
+  # `history` is the conversation so far, as `{message, reply}` pairs, oldest first; the
+  # coach's turns read as it wrote them.
+  def messages(scope, surface, input, notebook, slot, history \\ []) do
     slot =
       slot ||
         case Policy.required_slot(scope, DateTime.utc_now(:second)) do
@@ -74,6 +76,18 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
       }
     ]
 
-    if surface == :coach_page, do: messages ++ [%{role: "user", content: input}], else: messages
+    if surface == :coach_page do
+      turns =
+        Enum.flat_map(history, fn {message, reply} ->
+          [
+            %{role: "user", content: message},
+            %{role: "assistant", content: Jason.encode!(%{"reply" => reply})}
+          ]
+        end)
+
+      messages ++ turns ++ [%{role: "user", content: input}]
+    else
+      messages
+    end
   end
 end
