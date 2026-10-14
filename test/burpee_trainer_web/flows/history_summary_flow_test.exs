@@ -39,23 +39,19 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     pid = view.pid
 
-    # Coach opens inside History, under the summary, like the workout card on Home.
+    # The coach line leads to Coach's own screen, which speaks first with the same note.
     view |> element("#history-coach-summary") |> render_click()
     assert_patch(view, "/coach")
     assert view.pid == pid
-    assert has_element?(view, "#history-page #history-header #home-coach-panel")
-    assert has_element?(view, "#history-coach-summary[aria-expanded=true]", "Best so far")
-    refute has_element?(view, "#home-coach-back, #home-coach-heading, #home-coach-summary")
-    # Coach unfolds under its summary and folds away before History closes it.
-    assert has_element?(view, "#history-coach-expansion #home-coach-panel")
-    assert view |> element("#history-coach-summary") |> render() =~ "history-coach-closing"
-    # The active goal reads once, in the header, not again in Coach's list.
+    assert has_element?(view, "#coach-page h1#home-coach-heading", "Coach")
+    assert has_element?(view, "#coach-page #home-coach-note", "Best so far")
+    refute has_element?(view, "#history-page, #progress-headline")
+    # The active goal leads Progress; Coach lists only goals waiting on you.
     refute has_element?(view, "#home-coach-goals [data-status=active]")
 
-    view |> element("#history-coach-summary") |> render_click()
+    view |> element("#coach-progress-link") |> render_click()
     assert_patch(view, "/progress")
     refute has_element?(view, "#home-coach-panel")
-    assert has_element?(view, "#history-coach-summary[aria-expanded=false]")
   end
 
   test "the nearest goal leads as the headline; others follow as quiet rows", %{
@@ -214,17 +210,17 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#history-coach-summary [role=status]")
   end
 
-  test "a Coach link opens History with Coach open, and Escape closes it", %{conn: conn} do
+  test "a Coach link opens Coach's own screen, and Escape returns to Progress", %{conn: conn} do
     for path <- ["/coach", "/coach?from=home", "/coach?from=//evil.example"] do
       {:ok, view, _} = live(conn, path)
-      assert has_element?(view, "#history-page #home-coach-panel")
-      view |> element("#home-coach-panel") |> render_keydown(%{"key" => "Escape"})
+      assert has_element?(view, "#coach-page #home-coach-panel")
+      view |> element("#coach-page") |> render_keydown(%{"key" => "Escape"})
       assert_patch(view, "/progress")
       assert focus_target(view, "#home-history-heading") == "#history-coach-summary"
     end
   end
 
-  test "Coach reads top to bottom under its line: message, reply, waiting goals, notebook", %{
+  test "Coach reads top to bottom: note, message, reply, waiting goals, notebook", %{
     conn: conn,
     user: user
   } do
@@ -234,7 +230,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     positions =
       for id <-
-            ~w[history-coach-summary home-coach-message-form home-coach-reply home-coach-goals home-coach-notebook] do
+            ~w[home-coach-note home-coach-message-form home-coach-reply home-coach-goals home-coach-notebook] do
         {index, _} = :binary.match(html, ~s(id="#{id}"))
         index
       end

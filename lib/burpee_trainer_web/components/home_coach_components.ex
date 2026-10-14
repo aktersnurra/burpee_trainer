@@ -31,9 +31,18 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       id="home-coach-panel"
       class="home-coach-panel"
       aria-label="Coach"
-      phx-window-keydown="close_coach"
-      phx-key="Escape"
     >
+      <%!-- The coach speaks first: what to do next, in a sentence or two. --%>
+      <p id="home-coach-note" class="coach-note">
+        <.summary_body
+          :if={@state.progress_summary || @state.progress_summary_loading?}
+          summary={@state.progress_summary}
+          loading?={@state.progress_summary_loading?}
+        />
+        <span :if={is_nil(@state.progress_summary) and not @state.progress_summary_loading?}>
+          Tell me what you're training for, or how the last session felt.
+        </span>
+      </p>
       <%!-- The last exchange, kept across reloads: what you said, then what the coach said. --%>
       <div :if={@state.coach_exchange} id="home-coach-exchange" class="coach-exchange">
         <p class="coach-exchange-you">{@state.coach_exchange.message}</p>

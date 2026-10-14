@@ -425,36 +425,21 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         headline={@state.history_headline.headline}
         dismissed?={Map.get(@state, :history_next_dismissed?, false)}
       />
-      <%!-- The coach's line says what to do next; tapping it opens the coach in place.
-           /coach is Progress with the coach open. --%>
-      <div id="history-coach" class="history-coach">
-        <.link
-          id="history-coach-summary"
-          patch={if(coach_open?(@state), do: ~p"/progress", else: ~p"/coach")}
-          class="history-coach-summary"
-          aria-expanded={to_string(coach_open?(@state))}
-          aria-controls="home-coach-panel"
-          phx-click={coach_open?(@state) && fold_coach()}
-        >
-          <BurpeeTrainerWeb.HomeCoachComponents.summary_body
-            :if={summary_line?(@state)}
-            summary={@state.progress_summary}
-            loading?={@state.progress_summary_loading?}
-          />
-          <span :if={not summary_line?(@state)} class="coach-summary-invitation">
-            {if(@state.history_headline.headline.kind == :goal,
-              do: "Ask the coach about this week",
-              else: "Set a goal with the coach"
-            )}
-          </span>
-          <.icon name="hero-chevron-right" class="history-coach-summary-arrow size-4" />
-        </.link>
-        <div :if={coach_open?(@state)} id="history-coach-expansion" class="history-coach-expansion">
-          <div class="history-coach-expansion-content">
-            <BurpeeTrainerWeb.HomeCoachComponents.panel state={@state} />
-          </div>
-        </div>
-      </div>
+      <%!-- The coach's line says what to do next; tapping it opens the coach's own screen. --%>
+      <.link id="history-coach-summary" patch={~p"/coach"} class="history-coach-summary">
+        <BurpeeTrainerWeb.HomeCoachComponents.summary_body
+          :if={summary_line?(@state)}
+          summary={@state.progress_summary}
+          loading?={@state.progress_summary_loading?}
+        />
+        <span :if={not summary_line?(@state)} class="coach-summary-invitation">
+          {if(@state.history_headline.headline.kind == :goal,
+            do: "Ask the coach about this week",
+            else: "Set a goal with the coach"
+          )}
+        </span>
+        <.icon name="hero-chevron-right" class="history-coach-summary-arrow size-4" />
+      </.link>
       <%!-- Other goals follow the headline as quiet rows: what, by when, your best. --%>
       <ul :if={@state.history_headline.others != []} id="progress-goals" class="progress-goals">
         <li :for={row <- @state.history_headline.others} id={"progress-goal-#{row.goal.id}"}>
@@ -611,14 +596,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       days -> ", #{div(days, 7)} weeks early"
     end
   end
-
-  # LiveView holds the patch's reply until a running transition ends, so Coach folds away
-  # before it is removed and History below slides up instead of snapping.
-  defp fold_coach do
-    JS.transition("history-coach-closing", to: "#history-coach-expansion", time: 200)
-  end
-
-  defp coach_open?(state), do: Map.get(state, :coach_open?, false)
 
   defp summary_line?(state),
     do:

@@ -42,7 +42,7 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end
 
-  # Coach is reached only from History, so leaving it always returns there.
+  # Coach is reached from Progress's coach line, so leaving it returns there.
   def handle_event("close_coach", _, socket),
     do: {:noreply, push_patch(socket, to: ~p"/progress")}
 
@@ -130,6 +130,46 @@ defmodule BurpeeTrainerWeb.CoachScreen do
       {:error, :too_long} ->
         {:noreply, assign(socket, coach_status: "Notebook exceeds 4,000 characters.")}
     end
+  end
+
+  def screen(assigns) do
+    ~H"""
+    <main
+      id="coach-page"
+      class="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16"
+      phx-window-keydown="close_coach"
+      phx-key="Escape"
+    >
+      <div class="adaptive-home">
+        <%!-- The week's progress stays on top of every screen; here too it leads back Home. --%>
+        <div id="coach-progress" class="relative min-h-11">
+          <BurpeeTrainerWeb.HomeWorkoutComponents.week_progress :if={@slot} slot={@slot} />
+          <.link
+            id="coach-home"
+            patch={~p"/"}
+            class="absolute inset-0 min-h-11 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+            aria-label="Back to Home"
+          >
+            <span class="sr-only">Back to Home</span>
+          </.link>
+        </div>
+        <div class="home-history-header">
+          <h1
+            id="home-coach-heading"
+            tabindex="-1"
+            phx-mounted={JS.focus(to: "#home-coach-heading")}
+            class="screen-heading"
+          >
+            Coach
+          </h1>
+          <.link id="coach-progress-link" patch={~p"/progress"} class="coach-progress-link">
+            Progress
+          </.link>
+        </div>
+        <BurpeeTrainerWeb.HomeCoachComponents.panel state={assigns} />
+      </div>
+    </main>
+    """
   end
 
   def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket) do

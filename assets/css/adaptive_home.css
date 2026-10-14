@@ -811,14 +811,6 @@
 #home-coach-goals { margin-top: 28px; }
 /* Coach's message is a New form row: the label above an underlined field that grows with its text. */
 .home-authoring-form.coach-message-form { margin-top: 8px; }
-/* Coach unfolds under its summary, and folds away before it is removed. */
-@keyframes history-coach-unfold { from { grid-template-rows: 0fr; opacity: 0; } }
-.history-coach-expansion { display: grid; grid-template-rows: 1fr; animation: history-coach-unfold var(--motion-settle) var(--ease-out) backwards; transition: grid-template-rows var(--motion-quick) var(--ease-in-out), opacity var(--motion-quick) ease-in; }
-.history-coach-expansion-content { min-height: 0; overflow: hidden; margin-inline: -5px; padding-inline: 5px; }
-/* Folded stays folded until History's reply removes it, however long that takes. */
-.history-coach-expansion.history-coach-closing,
-.history-coach-summary.phx-click-loading + .history-coach-expansion { grid-template-rows: 0fr; opacity: 0; }
-@media (prefers-reduced-motion: reduce) { .history-coach-expansion { animation: none; transition: none; } }
 .coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-guidance-status:empty { display: none; }
 .history-coach-memory { margin-top: 32px; }
@@ -939,7 +931,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .coach-message-form:has(textarea:placeholder-shown) .coach-send { opacity: 0; visibility: hidden; transition: opacity var(--motion-quick) ease, visibility 0s linear var(--motion-quick); }
 .coach-send:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
 /* The progress row keeps the column's edges on wide screens, on Home and History alike. */
-@media (min-width: 601px) { #history-progress, #home-progress-history { max-width: 640px; margin-inline: auto; } }
+@media (min-width: 601px) { #history-progress, #home-progress-history, #coach-progress, #coach-page .home-history-header { max-width: 640px; margin-inline: auto; } }
 /* Sign in sits where Home's workout does, with the app's one primary button. */
 .login { max-width: 354px; margin: clamp(120px, calc(39svh - 110px), 280px) auto 0; text-align: center; }
 .login .screen-heading { margin: 0; }
@@ -1029,7 +1021,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .progress-goal-best { color: #262722; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .progress-headline-meter span { transition: none; } }
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
-.history-header .home-coach-panel { margin-top: 16px; }
 .coach-exchange { display: grid; gap: 10px; padding-left: 16px; border-left: 2px solid #dcd8d0; font-size: var(--text-body); line-height: 1.5; }
 .coach-exchange-you { color: var(--home-muted); }
 .coach-quick-replies { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
@@ -1043,3 +1034,9 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .progress-course-ahead { fill: none; stroke: #262722; stroke-width: 2; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
 .progress-course-caption { display: flex; justify-content: space-between; margin-top: 8px; color: var(--home-muted); font-size: var(--text-body); }
 .progress-course-on { color: #262722; }
+/* Coach is its own screen: the note leads, then the last exchange, the replies, the field. */
+.coach-progress-link { color: var(--home-muted); font-size: var(--text-body); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.coach-progress-link:hover { color: #262722; }
+#coach-page .home-coach-panel { max-width: 640px; margin: 24px auto 0; }
+.coach-note { margin: 0 0 24px; color: #262722; font-size: var(--text-body); line-height: 1.6; }
+.coach-note .coach-summary-text { font-size: inherit; }

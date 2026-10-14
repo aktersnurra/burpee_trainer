@@ -20,13 +20,13 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     |> form("#home-coach-message-form", coach_message: %{text: "UNSENT morning preference"})
     |> render_change()
 
-    view |> element("#history-coach-summary") |> render_click()
+    view |> element("#coach-progress-link") |> render_click()
     assert_patch(view, "/progress")
     render_patch(view, ~p"/")
     render_patch(view, ~p"/coach")
     assert view.pid == pid
     assert has_element?(view, "#home-coach-message-text", "UNSENT morning preference")
-    view |> element("#history-coach-summary") |> render_click()
+    view |> element("#coach-progress-link") |> render_click()
     assert_patch(view, "/progress")
     render_patch(view, ~p"/coach")
     assert has_element?(view, "#home-coach-message-text", "UNSENT morning preference")
@@ -71,7 +71,10 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     view |> element("#home-coach-goal-#{id}-confirm") |> render_click()
     # A confirmed goal leaves Coach's list for the header above it, so it reads once.
     refute has_element?(view, "#home-coach-goal-#{id}")
+    # A confirmed goal leads Progress.
+    render_patch(view, ~p"/progress")
     assert has_element?(view, "#progress-headline .progress-headline-of", "150")
+    render_patch(view, ~p"/coach")
     assert summary_jobs() == 1
     BurpeeTrainer.Repo.delete_all(Oban.Job)
 
@@ -164,7 +167,10 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=proposed]")
     view |> element("#home-coach-goal-#{goal.id}-confirm") |> render_click()
     refute has_element?(view, "#home-coach-goal-#{goal.id}")
+    # A confirmed goal leads Progress.
+    render_patch(view, ~p"/progress")
     assert has_element?(view, "#progress-headline .progress-headline-of", "150")
+    render_patch(view, ~p"/coach")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
   end
 

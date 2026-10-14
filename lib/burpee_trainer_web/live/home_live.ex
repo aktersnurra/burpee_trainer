@@ -63,7 +63,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     socket =
       assign(socket,
         workspace_screen: screen,
-        history_open?: screen in [:history, :coach],
+        history_open?: screen == :history,
         coach_open?: screen == :coach,
         home_focus_return?: screen == :home and previous != :home,
         history_focus_return?: screen == :history and previous == :coach
@@ -75,7 +75,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
           HistoryScreen.open(socket)
 
         :coach ->
-          socket |> HistoryScreen.open() |> CoachScreen.open()
+          CoachScreen.open(socket)
 
         :home when previous != :home ->
           if socket.assigns.home_state == :choose or not is_nil(socket.assigns.home_selection),
@@ -267,8 +267,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "history_cancel_delete",
              "history_delete_session"
            ] do
-    # /coach is Progress with the coach open, so Progress's events work there too.
-    if socket.assigns.workspace_screen in [:history, :coach] do
+    if socket.assigns.workspace_screen == :history do
       {:noreply, updated} = HistoryScreen.handle_event(event, params, socket)
 
       updated =
@@ -543,7 +542,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         <% :history -> %>
           <HistoryScreen.screen {assigns} />
         <% :coach -> %>
-          <HistoryScreen.screen {assigns} />
+          <CoachScreen.screen {assigns} />
         <% :home -> %>
           <HomeScreen.screen {assigns} />
       <% end %>

@@ -98,7 +98,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       |> form("#home-coach-message-form", coach_message: %{text: "Keep this unsent"})
       |> render_change()
 
-      view |> element("#history-coach-summary") |> render_click()
+      view |> element("#coach-progress-link") |> render_click()
       assert_patch(view, "/progress")
       view |> element("#home-history-close") |> render_click()
       assert_patch(view, "/")

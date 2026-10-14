@@ -249,11 +249,11 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       |> form("#home-coach-message-form", coach_message: %{text: "Unsent"})
       |> render_change()
 
-      view |> element("#history-coach-summary") |> render_click()
+      view |> element("#coach-progress-link") |> render_click()
       assert_patch(view, "/progress")
       render_patch(view, ~p"/coach")
       assert has_element?(view, "#home-coach-message-text", "Unsent")
-      view |> element("#history-coach-summary") |> render_click()
+      view |> element("#coach-progress-link") |> render_click()
       assert_patch(view, "/progress")
     end
 
