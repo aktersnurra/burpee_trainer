@@ -90,10 +90,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
           assign(
             socket,
             :home_insight,
-            BurpeeTrainer.Insights.latest(
-              socket.assigns.current_scope,
-              socket.assigns.home_now.()
-            )
+            day_insight(socket.assigns.current_scope, socket.assigns.home_now.())
           ),
         else: socket
 
@@ -480,7 +477,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         socket
         |> assign(
           home_facts: facts,
-          home_insight: BurpeeTrainer.Insights.latest(socket.assigns.current_scope, now),
+          home_insight: day_insight(socket.assigns.current_scope, now),
           home_state: state,
           home_primary_action: BurpeeTrainer.Home.State.primary_action(state),
           slot: facts.slot,
@@ -502,6 +499,15 @@ defmodule BurpeeTrainerWeb.HomeLive do
           home_error: "Weekly progress is unavailable because your timezone could not be read."
         )
         |> HomeScreen.assign_results(nil)
+    end
+  end
+
+  # The coach's line for the day, when it wrote one; a stand-in ("Session saved") says
+  # nothing the result does not, so Home says "Done for today." instead.
+  defp day_insight(scope, now) do
+    case BurpeeTrainer.Insights.latest(scope, now) do
+      %{source: "fallback"} -> nil
+      insight -> insight
     end
   end
 

@@ -26,7 +26,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
           result_today_reps: Enum.sum_by(results.today, &(&1.burpee_count_actual || 0)),
           result_today_count: length(results.today),
           result_today_session: latest_today,
-          result_mood: latest_today && mood_label(latest_today.mood),
           result_reps: reps
         )
         |> stream(:result_sessions, results.today, reset: true)
@@ -38,17 +37,11 @@ defmodule BurpeeTrainerWeb.HomeScreen do
           result_today_reps: 0,
           result_today_count: 0,
           result_today_session: nil,
-          result_mood: nil,
           result_reps: %{six_count: 0, navy_seal: 0}
         )
         |> stream(:result_sessions, [], reset: true)
     end
   end
-
-  defp mood_label(-1), do: "Rough"
-  defp mood_label(0), do: "OK"
-  defp mood_label(1), do: "Good"
-  defp mood_label(_), do: nil
 
   # What the started workout is, on one line: type, style, reps, time.
   defp resume_meta(session) do
@@ -181,9 +174,6 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   >
                     {Fmt.duration_sec(@result_today_session.duration_sec_actual)} · {@result_today_session.burpee_count_actual ||
                       0} reps
-                  </p>
-                  <p :if={@result_mood} id="home-today-mood" class="home-result-mood">
-                    {@result_mood}
                   </p>
                   <p
                     :if={@result_today_count > 1}

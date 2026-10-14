@@ -76,7 +76,21 @@ defmodule BurpeeTrainerWeb.Flows.InsightFlowTest do
       assert :ok = perform_job(NarrateJob, %{user_id: user.id, session_id: started.id})
       assert Insights.for_session(scope, started.id).source == @source
       {:ok, home, _} = live(conn, ~p"/")
-      assert has_element?(home, "[data-home-state=done_today] #home-insight-headline", @headline)
+      # The coach's line reads on Home; a stand-in leaves the day just done.
+      if @source == "llm",
+        do:
+          assert(
+            has_element?(home, "[data-home-state=done_today] #home-insight-headline", @headline)
+          ),
+        else:
+          assert(
+            has_element?(
+              home,
+              "[data-home-state=done_today] #home-done-status",
+              "Done for today."
+            )
+          )
+
       pid = home.pid
       home |> element("#home-history-toggle") |> render_click()
       assert_patch(home, "/progress")

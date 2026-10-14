@@ -68,7 +68,9 @@ defmodule BurpeeTrainerWeb.InsightPresentationTest do
     assert_patch(view, "/progress")
     view |> element("#home-history-close") |> render_click()
     assert_patch(view, "/")
-    assert has_element?(view, "#home-insight-headline", "Session saved")
+    # A stand-in insight says nothing new, so the day just says it is done.
+    refute has_element?(view, "#home-insight-headline")
+    assert has_element?(view, "#home-done-status", "Done for today.")
     assert view.pid == pid
   end
 end

@@ -655,7 +655,6 @@
 #home-done-today, #home-week-complete { padding-bottom: 23px; border-bottom: 1px solid var(--home-line); }
 .home-result .home-state-heading { margin-top: 14px; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 .home-result-meta { margin-top: 14px; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.home-result-mood { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
 .home-eyebrow { margin-bottom: 14px; color: var(--home-muted); font-size: var(--text-small); }
 .home-hero { padding-bottom: 23px; border-bottom: 1px solid var(--home-line); }
 .home-hero-main { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 640px; }

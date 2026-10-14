@@ -1460,7 +1460,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-done-today h1", "Evening sets")
     refute has_element?(view, "#home-done-today h1", "Workout saved")
     assert has_element?(view, "#home-today-session-meta", "15:00 · 7 reps")
-    assert has_element?(view, "#home-today-mood", "Good")
+    # The mood you just chose is not echoed back.
+    refute has_element?(view, "#home-today-mood")
 
     assert has_element?(
              view,
