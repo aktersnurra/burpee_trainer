@@ -136,9 +136,11 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   type="button"
                   phx-click="resume_recommendation"
                   phx-value-session-id={@started_session.id}
-                  class="home-primary-action"
+                  class="home-primary-action home-play-action"
                 >
-                  <span id="home-resume-action-label">Resume</span>
+                  <.icon name="hero-play-solid" class="size-6" />
+                  <%!-- Named for screen readers; the hook says "Review & save" for a draft. --%>
+                  <span id="home-resume-action-label" class="sr-only">Resume</span>
                 </button>
               </section>
             <% nil -> %>
@@ -147,9 +149,11 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 <a
                   id="home-reload"
                   href={~p"/"}
-                  class="mt-4 inline-flex min-h-11 items-center underline focus-visible:outline-2"
+                  class="home-text-action home-icon-action mt-4"
+                  aria-label="Reload Home"
+                  title="Reload Home"
                 >
-                  Reload Home
+                  <.icon name="hero-arrow-path" class="size-5" />
                 </a>
               </section>
             <% {state, _results} when state in [:done_today, :week_complete] -> %>
@@ -254,17 +258,21 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                   :if={@local_error}
                   id="home-fallback-reload"
                   href={~p"/"}
-                  class="mt-4 inline-flex min-h-11 items-center underline focus-visible:outline-2"
+                  class="home-text-action home-icon-action mt-4"
+                  aria-label="Reload Home"
+                  title="Reload Home"
                 >
-                  Reload Home
+                  <.icon name="hero-arrow-path" class="size-5" />
                 </a>
                 <button
                   :if={is_nil(@local_error)}
                   id="retry-recommendation-button"
                   phx-click="retry_recommendation"
-                  class="home-state-action min-h-11 focus-visible:outline-2 focus-visible:outline-offset-4"
+                  class="home-state-action min-h-11 focus-visible:outline-2 focus-visible:outline-offset-4 home-icon-action"
+                  aria-label="Retry"
+                  title="Retry"
                 >
-                  Retry
+                  <.icon name="hero-arrow-path" class="size-5" />
                 </button>
               </section>
           <% end %>

@@ -149,8 +149,12 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
            )
 
     assert has_element?(view, "#home-edit-instruction[placeholder^='e.g.']")
-    assert has_element?(view, "#home-edit-form #home-request-abort", "Cancel")
-    assert has_element?(view, "#home-edit-send.home-primary-action", "Review")
+    assert has_element?(view, "#home-edit-form #home-request-abort[aria-label] .hero-x-mark")
+
+    assert has_element?(
+             view,
+             "#home-edit-send.home-primary-action[aria-label=Send] .hero-arrow-turn-down-left"
+           )
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-edit-form")
@@ -266,13 +270,16 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
     refute has_element?(view, "#home-authoring-source, #home-edit-review h2")
-    assert has_element?(view, "#home-edit-review #home-request-abort", "Cancel")
-    assert has_element?(view, "#home-edit-review #home-request-edit", "Edit")
+    assert has_element?(view, "#home-edit-review #home-request-abort[aria-label] .hero-x-mark")
 
     assert has_element?(
              view,
-             "#home-edit-review #home-request-confirm.home-primary-action",
-             "Save"
+             "#home-edit-review #home-request-edit[aria-label] .hero-pencil-square"
+           )
+
+    assert has_element?(
+             view,
+             "#home-edit-review #home-request-confirm.home-primary-action[aria-label] .hero-check"
            )
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")

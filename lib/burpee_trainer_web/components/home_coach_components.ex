@@ -168,7 +168,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
               aria-label="Send"
               title="Send"
             >
-              <.icon name="hero-arrow-up" class="size-5" />
+              <.icon name="hero-arrow-turn-down-left" class="size-5" />
             </button>
           </.form>
           <p

@@ -130,7 +130,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-ready-recommendation")
     assert has_element?(view, "#home-action")
     refute has_element?(view, "#home-adjustment-form")
-    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
+    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
     assert has_element?(view, "#home-new-workout[inert]")
     refute has_element?(view, "#resume-recommended-workout")
     refute has_element?(view, "#tell-coach-button")
@@ -328,7 +328,11 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              "#home-title-action[aria-label='Switch workout'] .hero-arrows-right-left"
            )
 
-    assert has_element?(view, "#home-action[type=button][aria-label='Start workout']", "Start")
+    assert has_element?(
+             view,
+             "#home-action[type=button][aria-label='Start workout'] .hero-play-solid"
+           )
+
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
@@ -746,7 +750,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
     assert has_element?(view, "#home-expansion[data-open='true']")
     assert has_element?(view, "#home-inspection")
-    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
+    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
@@ -834,7 +838,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
     assert has_element?(view, "#home-adjustment-error")
     view |> element("#home-request-abort") |> render_click()
-    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
+    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
   end
 
   test "blank submit starts despite prior Update label and old events cannot mutate", %{
@@ -869,15 +873,17 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
         "home_adjustment" => %{"instruction" => instruction}
       })
 
-      assert has_element?(view, "#home-action[type=button][aria-label='Start workout']", "Start")
+      assert has_element?(
+               view,
+               "#home-action[type=button][aria-label='Start workout'] .hero-play-solid"
+             )
     end
 
     view |> element("#home-title-action") |> render_click()
 
     assert has_element?(
              view,
-             "#home-filter-toggle[aria-expanded=false]",
-             "Filter"
+             "#home-filter-toggle[aria-expanded=false][aria-label=Filter] .hero-adjustments-horizontal"
            )
 
     view |> element("#home-filter-toggle") |> render_click()
@@ -894,7 +900,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
     render_click(view, "change_adjustment", %{"home_adjustment" => %{"instruction" => %{}}})
-    assert has_element?(view, "#home-action[aria-label='Start workout']", "Start")
+    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
   end
 
   test "real missing-selection chooser preserves History and the mounted token", %{user: user} do

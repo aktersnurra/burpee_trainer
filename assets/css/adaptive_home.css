@@ -1100,3 +1100,5 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-resume .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 .home-resume .home-result-status { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
 .home-resume #resume-recommended-workout { margin: 26px auto 0; padding-inline: 36px; }
+/* Start and Resume are the filled pill with a play mark; the pill keeps its width. */
+.adaptive-home .home-play-action { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; }

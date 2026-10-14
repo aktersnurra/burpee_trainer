@@ -94,35 +94,43 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           id="home-request-abort"
           type="button"
           phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-          class="home-text-action"
+          class="home-text-action home-icon-action"
+          aria-label="Cancel"
+          title="Cancel"
         >
-          Cancel
+          <.icon name="hero-x-mark" class="size-5" />
         </button>
         <button
           :if={@editable}
           id="home-request-edit"
           type="button"
           phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-review-reps")}
-          class="home-text-action"
+          class="home-text-action home-icon-action"
+          aria-label="Edit"
+          title="Edit"
         >
-          Edit
+          <.icon name="hero-pencil-square" class="size-5" />
         </button>
         <button
           id="home-request-confirm"
           type="button"
           phx-click="confirm_workout_request"
-          class="home-primary-action"
+          class="home-primary-action home-icon-action"
+          aria-label="Approve"
+          title="Approve"
         >
-          Approve
+          <.icon name="hero-check" class="size-5" />
         </button>
         <button
           :if={!@editable}
           id="home-request-back"
           type="button"
           phx-click="back_to_workout_request"
-          class="home-text-action"
+          class="home-text-action home-icon-action"
+          aria-label="Edit"
+          title="Edit"
         >
-          Edit
+          <.icon name="hero-pencil-square" class="size-5" />
         </button>
       </div>
     </section>
@@ -263,43 +271,47 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           id="home-request-abort"
           type="button"
           phx-click="abort_new_workout"
-          class="home-text-action"
+          class="home-text-action home-icon-action"
           aria-label="Cancel new workout"
           disabled={@busy && @locked}
+          title="Cancel"
         >
-          Cancel
+          <.icon name="hero-x-mark" class="size-5" />
         </button>
         <button
           :if={@locked}
           id="home-request-edit"
           type="button"
           phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-new-reps")}
-          class="home-text-action"
+          class="home-text-action home-icon-action"
           aria-label="Edit workout"
           disabled={@busy}
+          title="Edit"
         >
-          Edit
+          <.icon name="hero-pencil-square" class="size-5" />
         </button>
         <button
           :if={@locked}
           id="home-request-confirm"
           type="button"
           phx-click="confirm_workout_request"
-          class="home-primary-action"
+          class="home-primary-action home-icon-action"
           aria-label="Approve and save workout"
           disabled={@busy || is_nil(@candidate)}
+          title="Save"
         >
-          Save
+          <.icon name="hero-check" class="size-5" />
         </button>
         <button
           :if={!@locked}
           id="home-new-review"
           type="submit"
-          class="home-primary-action"
+          class="home-primary-action home-icon-action"
           aria-label="Review workout"
           disabled={@busy}
+          title="Review"
         >
-          Review
+          <.icon name="hero-arrow-right" class="size-5" />
         </button>
       </div>
       <section
@@ -393,11 +405,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <button
           id="home-request-abort"
           type="button"
-          class="home-text-action"
+          class="home-text-action home-icon-action"
           aria-label="Cancel edit"
           phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+          title="Cancel"
         >
-          Cancel
+          <.icon name="hero-x-mark" class="size-5" />
         </button>
       </div>
     <% else %>
@@ -425,19 +438,21 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <button
               type="button"
               id="home-request-abort"
-              class="home-text-action"
+              class="home-text-action home-icon-action"
               aria-label="Cancel edit"
               phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+              title="Cancel"
             >
-              Cancel
+              <.icon name="hero-x-mark" class="size-5" />
             </button>
             <button
               type="submit"
               id="home-edit-send"
-              class="home-primary-action"
-              aria-label="Review variation"
+              class="home-primary-action home-icon-action"
+              aria-label="Send"
+              title="Send"
             >
-              Review
+              <.icon name="hero-arrow-turn-down-left" class="size-5" />
             </button>
           </div>
         </.form>
@@ -464,29 +479,32 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <button
               type="button"
               id="home-request-abort"
-              class="home-text-action"
+              class="home-text-action home-icon-action"
               aria-label="Cancel edit"
               phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+              title="Cancel"
             >
-              Cancel
+              <.icon name="hero-x-mark" class="size-5" />
             </button>
             <button
               type="button"
               id="home-request-edit"
-              class="home-text-action"
+              class="home-text-action home-icon-action"
               aria-label="Change instruction"
               phx-click="edit_workout_request"
+              title="Edit"
             >
-              Edit
+              <.icon name="hero-pencil-square" class="size-5" />
             </button>
             <button
               type="button"
               id="home-request-confirm"
-              class="home-primary-action"
+              class="home-primary-action home-icon-action"
               aria-label="Approve and save variation"
               phx-click="confirm_workout_request"
+              title="Save"
             >
-              Save
+              <.icon name="hero-check" class="size-5" />
             </button>
           </div>
         </section>
@@ -619,10 +637,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 phx-value-client_session_id={@state.start_client_session_id}
                 aria-label="Start workout"
                 title="Start workout"
-                class="home-primary-action"
+                class="home-primary-action home-play-action"
                 disabled={@state.authoring_stage != :idle}
               >
-                Start
+                <.icon name="hero-play-solid" class="size-6" />
               </button>
               <button
                 id="home-new-workout"
@@ -685,16 +703,20 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     <button
                       id="home-new-dismiss"
                       phx-click="abort_new_workout"
-                      class="home-text-action"
+                      class="home-text-action home-icon-action"
+                      aria-label="Keep current workout"
+                      title="Keep current workout"
                     >
-                      Keep current
+                      <.icon name="hero-x-mark" class="size-5" />
                     </button>
                     <button
                       id="home-new-select"
                       phx-click="select_created_workout"
-                      class="home-primary-action"
+                      class="home-primary-action home-icon-action"
+                      aria-label="Use this workout"
+                      title="Use this workout"
                     >
-                      Use this workout
+                      <.icon name="hero-check" class="size-5" />
                     </button>
                   </div>
                 </section>
@@ -734,10 +756,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <button
             id="home-chooser-close"
             type="button"
-            class="home-text-action"
+            class="home-text-action home-icon-action"
             phx-click={close_chooser()}
+            aria-label="Close"
+            title="Close"
           >
-            Close
+            <.icon name="hero-x-mark" class="size-5" />
           </button>
         </header>
         <p
@@ -768,13 +792,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </div>
           <button
             id="home-filter-toggle"
-            class="home-text-action"
+            class="home-text-action home-icon-action"
             type="button"
             phx-click="toggle_filters"
             aria-expanded={to_string(@state.filters_open?)}
             aria-controls="home-filters"
+            aria-label="Filter"
+            title="Filter"
           >
-            Filter
+            <.icon name="hero-adjustments-horizontal" class="size-5" />
           </button>
         </div>
         <div :if={@state.filters_open?} id="home-filters">
@@ -793,8 +819,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </div>
           <div class="home-filter-level-heading">
             <span>Levels</span>
-            <button id="home-filter-reset" type="button" phx-click="reset_filters">
-              Reset
+            <button
+              id="home-filter-reset"
+              type="button"
+              phx-click="reset_filters"
+              class="home-icon-action"
+              aria-label="Reset filters"
+              title="Reset filters"
+            >
+              <.icon name="hero-arrow-path" class="size-5" />
             </button>
           </div>
           <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
@@ -865,9 +898,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           aria-haspopup="dialog"
           aria-expanded={to_string(@state.chooser_open?)}
           aria-controls="home-alternatives-panel"
-          class="home-primary-action"
+          class="home-primary-action home-icon-action"
         >
-          Choose a workout
+          <.icon name="hero-arrows-right-left" class="size-5" />
         </button>
       </div>
       <.chooser state={@state} />
@@ -908,13 +941,14 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         :if={Map.get(@item, :owned?, false)}
         id={"home-delete-workout-#{@item.source_id}"}
         type="button"
-        class="home-text-action"
+        class="home-text-action home-icon-action"
         aria-label={"Delete #{@item.name}"}
         data-confirm="Delete this workout? Past sessions will be kept."
         phx-click="delete_workout"
         phx-value-id={@item.source_id}
+        title="Delete workout"
       >
-        Delete
+        <.icon name="hero-trash" class="size-5" />
       </button>
     </div>
     """

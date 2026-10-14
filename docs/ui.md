@@ -131,13 +131,17 @@ Component gap inside card: 16px
 
 ## 4a2. Actions
 
-- One filled pill per view for the primary action. Start keeps its word; a filled action
-  inside a field or row is an icon (Send is an arrow up, Confirm and Save a check).
+- One filled pill per view for the primary action, as an icon: Start and Resume are a
+  play mark in a wide pill; Save, Approve and Use this workout a check; Review an arrow
+  right; sending words (to the coach, or Edit's instruction) the return mark ↵.
 - Every other action is a quiet icon from one set (heroicons), each with an `aria-label`
   and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
-  switches, plus adds or sets, trash deletes or clears, x-mark dismisses, check confirms,
-  chevron-down loads more.
-- Words stay only where an icon would be ambiguous: period tabs ("12 weeks"), Start.
+  switches or chooses a workout, plus adds or sets, trash deletes, x-mark cancels, closes,
+  keeps or dismisses, check confirms, arrow-path resets, retries or reloads,
+  adjustments-horizontal filters, chevron-down loads more.
+- Words stay only where they are the content or an icon would be ambiguous: picks (types,
+  levels, styles), tabs (period, Workouts and Videos), the coach's predicted replies, and
+  "Sign in with Pocket ID".
 - A view switch is one icon at the end of its heading showing the view it leads to, and
   it turns into the other when tapped: list-bullet shows the sessions, chart-bar the
   chart; calendar-days shows a week's days, squares-2x2 the weeks.

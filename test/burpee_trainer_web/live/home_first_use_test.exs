@@ -63,7 +63,7 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
 
   test "Start is the one filled action and the others are quiet icons", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-action.home-primary-action", "Start")
+    assert has_element?(view, "#home-action.home-primary-action .hero-play-solid")
 
     for {id, label, icon} <- [
           {"home-edit-workout", "Edit current workout", "hero-pencil-square"},

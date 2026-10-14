@@ -218,7 +218,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # Send is the primary pill inside the field row, an arrow, not a row of its own.
     assert has_element?(
              view,
-             "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action[aria-label=Send] .hero-arrow-up"
+             "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action[aria-label=Send] .hero-arrow-turn-down-left"
            )
 
     # The week's window: today's session done, the rest of the 80 minutes left.
