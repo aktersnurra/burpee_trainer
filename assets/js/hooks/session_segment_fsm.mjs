@@ -1,3 +1,4 @@
+import { recoveryLeadIn } from "./session_display_model.mjs";
 export function initialSegmentState() {
 	return {
 		mode: "idle",
@@ -219,7 +220,16 @@ function beepCommandsForFrame(beeps, frame) {
 			};
 		}
 
-		return { beeps: { ...beeps, lastRestCount: null }, commands: [] };
+		// An even-paced set leads into each next rep as a rest leads into a set.
+		const lead = recoveryLeadIn(frame);
+		if (lead !== null && lead !== beeps.lastRestCount) {
+			return {
+				beeps: { lastRepIndex: repIndex, lastRestCount: lead },
+				commands: [{ type: "playLeadBeep" }],
+			};
+		}
+
+		return { beeps, commands: [] };
 	}
 
 	if (eventKind(timelineEvent) !== "rest") {

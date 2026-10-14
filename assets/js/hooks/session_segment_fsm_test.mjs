@@ -44,6 +44,52 @@ test("rest does not emit countdown beeps before three seconds", () => {
 	assert.deepEqual(result.commands, []);
 });
 
+test("an even-paced set beeps each rep in like a set: 3, 2, 1, then the rep", () => {
+	const event = { kind: "work", reps: 3, sec_per_rep: 20, sec_per_burpee: 6 };
+	const frame = (elapsed) => ({ event, phase_elapsed: elapsed, phase_remaining: 60 - elapsed, index: 0 });
+	let state = initialSegmentState();
+	const beeps = [];
+
+	for (let elapsed = 0; elapsed < 41; elapsed += 0.25) {
+		const result = segmentTransition(state, { type: "BEEP_FRAME", frame: frame(elapsed) });
+		for (const command of result.commands) beeps.push([elapsed, command.type]);
+		state = result.state;
+	}
+
+	assert.deepEqual(beeps, [
+		[0, "playRepBeep"],
+		[17, "playLeadBeep"],
+		[18, "playLeadBeep"],
+		[19, "playLeadBeep"],
+		[20, "playRepBeep"],
+		[37, "playLeadBeep"],
+		[38, "playLeadBeep"],
+		[39, "playLeadBeep"],
+		[40, "playRepBeep"],
+	]);
+});
+
+test("unbroken reps and short gaps beep only for each rep", () => {
+	for (const event of [
+		{ kind: "work", reps: 3, sec_per_rep: 6, sec_per_burpee: 6 },
+		{ kind: "work", reps: 3, sec_per_rep: 9, sec_per_burpee: 6 },
+	]) {
+		let state = initialSegmentState();
+		const kinds = [];
+
+		for (let elapsed = 0; elapsed < event.reps * event.sec_per_rep; elapsed += 0.25) {
+			const result = segmentTransition(state, {
+				type: "BEEP_FRAME",
+				frame: { event, phase_elapsed: elapsed, phase_remaining: 0, index: 0 },
+			});
+			for (const command of result.commands) kinds.push(command.type);
+			state = result.state;
+		}
+
+		assert.deepEqual(kinds, ["playRepBeep", "playRepBeep", "playRepBeep"]);
+	}
+});
+
 test("resume excludes overlapping hidden and paused time exactly once", () => {
 	const running = {
 		...initialSegmentState(),

@@ -263,6 +263,13 @@ Time left in a recovery or rest reads as minutes and seconds (`0:23`, `1:05`), n
 seconds: the phone is a meter away, and `23` would read as 23 reps. Ten minutes and more
 take a smaller size. The final three seconds stay plain numerals (3, 2, 1).
 
+An even-paced set leads into each next rep the way a rest leads into a set: in the last
+three seconds of a recovery longer than three seconds, the screen turns to the still
+`rest_count_in` numerals (3, 2, 1) with a lead beep on each, then the rep beep. Unbroken
+reps, gaps of three seconds or less, and the recovery after a set's last rep (whose next
+phase counts itself in) have none, so a count-in before a rep always means a pause came
+before it.
+
 All blue rest screens, including `work_recovery`, use the same subtle breathing animation. The `is-work-recovery` class preserves recovery semantics without disabling that motion. Do not add active-workout labels, cards, or extra chrome.
 
 ## Client completion review

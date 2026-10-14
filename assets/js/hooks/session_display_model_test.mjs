@@ -159,6 +159,29 @@ test("active fill completes before full-screen recovery shows exact remaining ti
 	assertLeanContract(recoveryMidpoint, runningKeys);
 });
 
+test("an even-paced rest leads into the next rep with 3, 2, 1, but not after the last rep", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20, sec_per_burpee: 6 }];
+	const at = (elapsed) =>
+		runningModel(timeline, 0, { phase_elapsed: elapsed, phase_remaining: 60 - elapsed });
+
+	assert.equal(at(10).visual.state, "work_recovery");
+	assert.equal(at(10).primaryCount, "0:10");
+	assert.equal(at(17.5).visual.state, "rest_count_in");
+	assert.equal(at(17.5).primaryCount, 3);
+	assert.equal(at(19.5).primaryCount, 1);
+	assert.equal(at(20.5).visual.state, "work_active");
+	// After the last rep the next phase counts itself in.
+	assert.equal(at(57.5).visual.state, "work_recovery");
+	assert.equal(at(57.5).primaryCount, "0:03");
+});
+
+test("a short gap between reps stays a clock, without a count-in", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 9, sec_per_burpee: 6 }];
+	const model = runningModel(timeline, 0, { phase_elapsed: 7, phase_remaining: 20 });
+	assert.equal(model.visual.state, "work_recovery");
+	assert.equal(model.primaryCount, "0:02");
+});
+
 test("single-set recovery hides redundant 1/1 position", () => {
 	const timeline = [
 		{ kind: "work", reps: 6, sec_per_rep: 4, sec_per_burpee: 3 },

@@ -50,7 +50,7 @@ export function runningDisplayModel({
 			visual.state === "work_recovery"
 				? formatClock(recoveryRemainingSec)
 				: visual.state === "rest_count_in"
-					? Math.max(Math.ceil(remainingSec), 1)
+					? (recoveryLeadIn(frame) ?? Math.max(Math.ceil(remainingSec), 1))
 					: isRest
 						? formatClock(remainingSec)
 						: isWork
@@ -89,6 +89,12 @@ function workVisualState(frame) {
 		return { state: "work_active", progress: 0, activeRatio: 1, pulse: null };
 	}
 
+	// The last three seconds before the next rep of an even-paced set count in like the
+	// end of a rest, so every rep that follows a pause is announced the same way.
+	if (recoveryLeadIn(frame) !== null) {
+		return { state: "rest_count_in", progress: 0, pulse: null };
+	}
+
 	const configuredActiveSec = Number(frame?.event?.sec_per_burpee);
 	const activeSec =
 		configuredActiveSec > 0
@@ -104,6 +110,31 @@ function workVisualState(frame) {
 		progress: recovery ? 0 : clamp(repElapsedSec / activeSec),
 		pulse: null,
 	};
+}
+
+// Seconds (3, 2 or 1) until the next rep of this set, while recovering from the one
+// before; null otherwise: for a gap of three seconds or less, and after the set's last
+// rep, whose next phase counts itself in.
+export function recoveryLeadIn(frame) {
+	const event = frame?.event;
+	const cadenceSec = Number(event?.sec_per_rep) || 0;
+	if (event?.kind !== "work" || cadenceSec <= 0) return null;
+
+	const configuredActiveSec = Number(event?.sec_per_burpee);
+	const activeSec =
+		configuredActiveSec > 0 ? Math.min(configuredActiveSec, cadenceSec) : cadenceSec;
+	// Only a real pause is counted in; a gap of three seconds or less stays a clock.
+	if (cadenceSec - activeSec <= 3) return null;
+
+	const elapsed = frame?.phase_elapsed || 0;
+	const repIndex = Math.floor(elapsed / cadenceSec);
+	if (repIndex + 1 >= (event?.reps || 0)) return null;
+
+	const intoRep = elapsed - repIndex * cadenceSec;
+	if (intoRep < activeSec) return null;
+
+	const lead = Math.ceil(cadenceSec - intoRep);
+	return lead >= 1 && lead <= 3 ? lead : null;
 }
 
 function recoveryRemainingForFrame(frame) {
