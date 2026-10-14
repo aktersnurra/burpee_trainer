@@ -1,6 +1,7 @@
 defmodule BurpeeTrainer.Coach.Agent do
   @moduledoc "Bounded scoped coach loop; tool errors are visible to the model, not exceptions."
   alias BurpeeTrainer.Accounts.Scope
+  alias BurpeeTrainer.Coach.Suggestions
   alias BurpeeTrainer.Coach.{Client, Notebook, Tool, Tools, AgentPrompt}
 
   @tools %{
@@ -15,7 +16,7 @@ defmodule BurpeeTrainer.Coach.Agent do
     coach_page: [Tools.History, Tools.Goals, Tools.UpdateNotebook, Tools.ProposeGoal]
   }
   @spec run(Scope.t(), :planner | :coach_page, String.t() | nil, keyword()) ::
-          {:ok, %{reply: String.t()}} | {:error, term()}
+          {:ok, %{reply: String.t(), suggestions: [String.t()]}} | {:error, term()}
   def run(%Scope{} = scope, surface, input, opts \\ []) when surface in [:planner, :coach_page] do
     notebook = Notebook.get(scope)
     tools = Map.fetch!(@tools, surface)
@@ -55,7 +56,13 @@ defmodule BurpeeTrainer.Coach.Agent do
           tools: Enum.map(tools, &Tool.definition/1),
           response_format:
             {"coach_reply",
-             Tool.object(%{"reply" => %{"type" => "string", "maxLength" => 600}}, ["reply"])},
+             Tool.object(
+               %{
+                 "reply" => %{"type" => "string", "maxLength" => 600},
+                 "suggestions" => Suggestions.schema()
+               },
+               ["reply"]
+             )},
           ledger: %{
             scope: scope,
             purpose: if(run.surface == :planner, do: "plan_next", else: "coach_message"),
@@ -65,10 +72,20 @@ defmodule BurpeeTrainer.Coach.Agent do
 
       case Client.chat(messages, opts) do
         {:ok, %{tool_calls: [], content: %{"reply" => reply} = content}}
-        when is_binary(reply) and map_size(content) == 1 ->
-          if String.length(reply) <= 600,
-            do: finalize(scope, run, reply),
-            else: {:error, :invalid_provider_response}
+        when is_binary(reply) and map_size(content) <= 2 ->
+          cond do
+            Map.keys(content) -- ["reply", "suggestions"] != [] ->
+              {:error, :invalid_provider_response}
+
+            String.length(reply) > 600 ->
+              {:error, :invalid_provider_response}
+
+            true ->
+              with {:ok, result} <- finalize(scope, run, reply),
+                   do:
+                     {:ok,
+                      Map.put(result, :suggestions, Suggestions.clean(content["suggestions"]))}
+          end
 
         {:ok, %{tool_calls: [_ | _] = calls_returned}} ->
           if run.proposals + Enum.count(calls_returned, &(&1.name == Tools.ProposeWorkout.name())) >

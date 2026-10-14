@@ -172,10 +172,15 @@ defmodule BurpeeTrainerWeb.CoachScreen do
     """
   end
 
-  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket) do
+  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply} = result}}, socket) do
     # The exchange is kept so it is still there after a reload; failing to keep it loses
     # nothing the owner sees now.
-    Exchange.record(socket.assigns.current_scope, socket.assigns.coach_pending_message, reply)
+    Exchange.record(
+      socket.assigns.current_scope,
+      socket.assigns.coach_pending_message,
+      reply,
+      Map.get(result, :suggestions, [])
+    )
 
     {:noreply,
      socket

@@ -168,11 +168,11 @@ screen leads to the next in context:
   course when honest), a goal just reached, your best, or your first result. One coach
   line says what to do and opens the coach in place; other goals follow as quiet rows,
   then the weekly record. Design: `docs/specs/2026-10-13-progress-headline-design.md`.
-- **Coach** opens in place under its line on Progress; there is no separate Coach screen.
-  `/coach` is Progress with Coach open. It reads top to bottom: the last exchange (kept
-  across reloads), one-tap replies, "Message the coach" with the Send pill once there is
-  text, goals waiting for Confirm or Dismiss, and "What the coach knows about you"
-  collapsed. The coach line and Escape close it.
+- **Coach** (`/coach`) is its own screen, reached from the coach line on Progress. It reads
+  top to bottom: the coach's note, the last exchange, replies the coach predicts you'll
+  want to send, "Message the coach", goals waiting for Confirm or Dismiss, and "What the
+  coach knows about you" collapsed. Escape and the Progress link return to Progress.
+  Design: `docs/specs/2026-10-14-coach-screen-design.md`.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
   session and camera specs that follow it.

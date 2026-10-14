@@ -23,6 +23,25 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     """
   end
 
+  # What you might say next: the last reply's suggestions, else the note's, else two
+  # plain asks that always make sense.
+  defp quick_replies(state) do
+    exchange = Map.get(state, :coach_exchange)
+    summary = Map.get(state, :progress_summary)
+
+    predicted =
+      cond do
+        exchange && exchange.suggestions != [] -> exchange.suggestions
+        is_nil(exchange) && summary && summary.suggestions != [] -> summary.suggestions
+        true -> []
+      end
+
+    case predicted do
+      [] -> [{"harder", "Make the next one harder"}, {"easier", "Make the next one easier"}]
+      texts -> Enum.with_index(texts, &{"predicted-#{&2}", &1})
+    end
+  end
+
   attr(:state, :map, required: true)
 
   def panel(assigns) do
@@ -50,12 +69,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       </div>
       <div class="coach-quick-replies" role="group" aria-label="Quick replies">
         <button
-          :for={
-            {id, text} <- [
-              {"harder", "Make the next one harder"},
-              {"easier", "Make the next one easier"}
-            ]
-          }
+          :for={{id, text} <- quick_replies(@state)}
           id={"home-coach-quick-#{id}"}
           type="button"
           class="home-selection-pill"

@@ -5,7 +5,7 @@ defmodule BurpeeTrainer.Coach.Tools.UpdateNotebook do
 
   def description,
     do:
-      "Replace the notes the athlete reads under Coach's notes: lasting facts and preferences in the voice above, max 4000 characters."
+      "Replace the notes the athlete reads under What the coach knows about you: lasting facts and preferences in the voice above, max 4000 characters."
 
   def schema, do: Tool.object(%{"text" => %{"type" => "string", "maxLength" => 4000}}, ["text"])
 

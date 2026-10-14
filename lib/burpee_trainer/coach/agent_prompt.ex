@@ -15,12 +15,14 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   @coach_page_task """
   Answer what the athlete asked in at most three sentences. Save lasting preferences and \
   facts they tell you with update_notebook. Use propose_goal only when they ask for a goal; \
-  they confirm it themselves.
+  they confirm it themselves. In suggestions, give up to three short things the athlete is \
+  likely to say next, in their own words and specific to this reply (under 60 characters \
+  each); they tap one to send it.
   """
 
   @context_glossary """
   The context that follows is JSON. notebook: what you have saved about the athlete; they \
-  read it under Coach's notes, so write it in the voice above. goals: \
+  read it under What the coach knows about you, so write it in the voice above. goals: \
   their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \
