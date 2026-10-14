@@ -255,9 +255,13 @@ No application API request, LiveView event, telemetry push, or trace upload occu
 The semantic states remain distinct:
 
 - `work_active`: orange active movement fill;
-- `work_recovery`: muted-blue full-screen recovery with centered bare seconds;
-- `rest`: muted-blue set-rest field;
+- `work_recovery`: muted-blue full-screen recovery with its time left centered as a clock;
+- `rest`: muted-blue set-rest field with its time left as a clock;
 - `rest_count_in`: still, field-free final three-second count-in.
+
+Time left in a recovery or rest reads as minutes and seconds (`0:23`, `1:05`), never bare
+seconds: the phone is a meter away, and `23` would read as 23 reps. Ten minutes and more
+take a smaller size. The final three seconds stay plain numerals (3, 2, 1).
 
 All blue rest screens, including `work_recovery`, use the same subtle breathing animation. The `is-work-recovery` class preserves recovery semantics without disabling that motion. Do not add active-workout labels, cards, or extra chrome.
 

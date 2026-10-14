@@ -581,14 +581,19 @@ test("intra-rep recovery uses the full rest screen and exact seconds", () => {
 	);
 });
 
-test("legacy rest rendering always uses bare total seconds", () => {
+test("legacy rest rendering reads as a time; ten minutes and more are sized down", () => {
 	const { renderer, elements } = harness();
 
 	renderer.renderRestProgress(16);
-	assert.equal(elements["#count"].textContent, "16");
+	assert.equal(elements["#count"].textContent, "0:16");
 
 	renderer.renderRestProgress(65);
-	assert.equal(elements["#count"].textContent, "65");
+	assert.equal(elements["#count"].textContent, "1:05");
+	assert.equal(elements["#count"].classList.contains("is-rest-time-long"), false);
+
+	renderer.renderRestProgress(600);
+	assert.equal(elements["#count"].textContent, "10:00");
+	assert.equal(elements["#count"].classList.contains("is-rest-time-long"), true);
 });
 
 test("clearing countdown state renders a subsequent one-second rest count-in", () => {
@@ -854,7 +859,7 @@ test("a repeated rest count is restored after the rest clock overwrites it", () 
 	assert.equal(elements["#count"].textContent, "18");
 
 	renderer.renderRestProgress(12);
-	assert.equal(elements["#count"].textContent, "12");
+	assert.equal(elements["#count"].textContent, "0:12");
 
 	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
 	assert.equal(elements["#count"].textContent, "18");
@@ -883,7 +888,7 @@ test("a repeated rest count is restored after entering the count-in phase", () =
 
 	renderer.enterCountInPhase();
 	renderer.renderRestProgress(9);
-	assert.equal(elements["#count"].textContent, "9");
+	assert.equal(elements["#count"].textContent, "0:09");
 
 	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
 	assert.equal(elements["#count"].textContent, "18");

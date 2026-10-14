@@ -1,3 +1,4 @@
+import { formatClock } from "./session_display_model.mjs";
 const VISUAL_STATE_CLASSES = [
 	"is-working",
 	"is-work-active",
@@ -744,6 +745,8 @@ export class SessionRenderer {
 				"is-count-long",
 				"is-countdown-dots",
 			);
+			// Ten minutes and more need a fifth character; it gets a smaller size.
+			if (timeText.length >= 5) countEl.classList.add("is-rest-time-long");
 			this.writeCount({ text: timeText });
 		}
 		const downEl = this.root.querySelector("#down-word");
@@ -882,7 +885,7 @@ export class SessionRenderer {
 	}
 
 	formatClock(sec) {
-		return String(Math.max(Math.ceil(sec), 0));
+		return formatClock(sec);
 	}
 
 	formatSetProgress(value) {

@@ -132,6 +132,8 @@ function clamp(value) {
 	return Math.min(Math.max(value, 0), 1);
 }
 
-function formatClock(sec) {
-	return String(Math.max(Math.ceil(sec || 0), 0));
+// Rest reads as a time, 0:23, so from across the room it is never taken for 23 reps.
+export function formatClock(sec) {
+	const total = Math.max(Math.ceil(sec || 0), 0);
+	return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }

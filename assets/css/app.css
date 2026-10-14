@@ -264,6 +264,10 @@ body {
   line-height: 0.88;
 }
 
+#session-runner-client.is-rest #count.is-rest-time-long {
+  font-size: clamp(7rem, min(28vw, 26dvh), 11rem);
+}
+
 #session-runner-layout {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
