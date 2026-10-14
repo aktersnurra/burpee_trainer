@@ -33,8 +33,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_loaded_ids: [],
       history_loaded_count: 0,
       history_available?: false,
-      history_headline: %{headline: %{kind: :none}, others: []},
-      history_next_dismissed?: false
+      history_gauges: gauges_none()
     )
     |> stream_configure(:history_sessions, dom_id: &"home-history-session-#{&1.id}")
     |> stream(:history_sessions, [])
@@ -219,10 +218,11 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
     end
   end
 
-  def handle_event("progress_set_goal", _, socket) do
+  # Sets the next goal a gauge suggests for its burpee type.
+  def handle_event("progress_set_goal", %{"type" => type}, socket) do
     a = socket.assigns
 
-    with %{next: next} <- a.history_headline.headline,
+    with %{next: next} <- Enum.find(a.history_gauges, &(Atom.to_string(&1.burpee_type) == type)),
          {:ok, %{"goal_id" => id}} <-
            BurpeeTrainer.Coach.Tools.ProposeGoal.call(
              a.current_scope,
@@ -237,12 +237,9 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
          {:ok, _goal} <- Goals.confirm(a.current_scope, id) do
       {:noreply, load_history(socket, false)}
     else
-      _ -> {:noreply, assign(socket, history_next_dismissed?: true)}
+      _ -> {:noreply, assign(socket, history_error: "Couldn’t set this goal. Try again.")}
     end
   end
-
-  def handle_event("progress_not_now", _, socket),
-    do: {:noreply, assign(socket, history_next_dismissed?: true)}
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
@@ -318,7 +315,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       socket
       |> assign(
         history_available?: history_available?,
-        history_headline: headline(a.current_scope, all_sessions, now),
+        history_gauges: gauges(a.current_scope, all_sessions, now),
         history_weeks: weeks,
         history_week_start: selected_week,
         history_week_days: days,
@@ -407,11 +404,11 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
     Enum.drop_while(earlier, &(&1.seconds == 0)) ++ [current]
   end
 
-  @doc "What leads Progress for `scope` at `now`; nothing when the owner's calendar is unknown."
-  def headline(scope, sessions, now) do
+  @doc "Each burpee type's gauge for `scope` at `now`; empty ones when the calendar is unknown."
+  def gauges(scope, sessions, now) do
     case BurpeeTrainer.UserTime.context(scope.user, now) do
       {:ok, context} ->
-        BurpeeTrainer.ProgressHeadline.pick(
+        BurpeeTrainer.ProgressGauges.for_types(
           Goals.list(scope),
           sessions,
           context.date,
@@ -419,9 +416,12 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
         )
 
       {:error, _reason} ->
-        %{headline: %{kind: :none}, others: []}
+        gauges_none()
     end
   end
+
+  defp gauges_none,
+    do: [%{kind: :none, burpee_type: :six_count}, %{kind: :none, burpee_type: :navy_seal}]
 
   def screen(assigns) do
     ~H"""

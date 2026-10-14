@@ -11,6 +11,7 @@ defmodule BurpeeTrainer.Coach.Summary do
     field :metric_ids, {:array, :string}, default: []
     field :source, Ecto.Enum, values: [:llm, :fallback]
     field :suggestions, {:array, :string}, default: []
+    field :review, :string
     timestamps(type: :utc_datetime_usec)
   end
 
@@ -32,10 +33,10 @@ defmodule BurpeeTrainer.Coach.Summary do
   @spec store(Scope.t(), map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
   def store(%Scope{user: %{id: id}}, attrs) do
     %__MODULE__{user_id: id}
-    |> cast(attrs, [:text, :metric_ids, :source, :suggestions])
+    |> cast(attrs, [:text, :metric_ids, :source, :suggestions, :review])
     |> validate_required([:text, :source])
     |> Repo.insert(
-      on_conflict: {:replace, [:text, :metric_ids, :source, :suggestions, :updated_at]},
+      on_conflict: {:replace, [:text, :metric_ids, :source, :suggestions, :review, :updated_at]},
       conflict_target: :user_id
     )
   end

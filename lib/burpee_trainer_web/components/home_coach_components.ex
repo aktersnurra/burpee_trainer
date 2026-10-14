@@ -5,8 +5,9 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   attr(:summary, :any, required: true)
   attr(:loading?, :boolean, required: true)
+  attr(:field, :atom, default: :text, values: [:text, :review])
 
-  @doc "The coach summary text, or the app's loader while a refresh is on its way."
+  @doc "The coach's note (or its look back), or the app's loader while a refresh is on its way."
   def summary_body(assigns) do
     ~H"""
     <span :if={@loading?} role="status" class="coach-summary-loading">
@@ -19,7 +20,9 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       />
       <span>Updating your summary</span>
     </span>
-    <span :if={not @loading? and @summary} class="coach-summary-text">{@summary.text}</span>
+    <span :if={not @loading? and @summary} class="coach-summary-text">
+      {Map.fetch!(@summary, @field)}
+    </span>
     """
   end
 

@@ -61,10 +61,11 @@ defmodule BurpeeTrainer.Fixtures do
   end
 
   @doc "Store a current coach summary for the user (written now, so it needs no refresh)."
-  def summary_fixture(user, text \\ "Steady progress toward the goal.") do
+  def summary_fixture(user, text \\ "Steady progress toward the goal.", review \\ nil) do
     {:ok, summary} =
       BurpeeTrainer.Coach.Summary.store(BurpeeTrainer.Accounts.Scope.for_user(user), %{
         text: text,
+        review: review,
         metric_ids: [],
         source: :llm
       })

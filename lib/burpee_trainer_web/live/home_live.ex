@@ -260,7 +260,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "history_session",
              "history_close_session",
              "progress_set_goal",
-             "progress_not_now",
              "history_confirm_delete",
              "history_cancel_delete",
              "history_delete_session"

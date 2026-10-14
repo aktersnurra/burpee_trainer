@@ -48,7 +48,10 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     coach_plans_before = Repo.all(WorkoutPlan)
     pid = view.pid
     # The coach shows on Home once the day is done; its events are scoped either way.
-    render_submit(view, "coach_notebook_save", %{"coach_notebook" => %{"text" => "Attacker notes"}})
+    render_submit(view, "coach_notebook_save", %{
+      "coach_notebook" => %{"text" => "Attacker notes"}
+    })
+
     assert view.pid == pid
 
     assert Notebook.get(Scope.for_user(owner)).body == entry.body

@@ -22,10 +22,11 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
     additionalProperties: false,
     properties: %{
       text: %{type: "string", minLength: 1, maxLength: 280},
+      review: %{type: "string", maxLength: 280},
       metric_ids: %{type: "array", items: %{type: "string"}},
       replies: BurpeeTrainer.Coach.Suggestions.schema()
     },
-    required: ["text", "metric_ids", "replies"]
+    required: ["text", "review", "metric_ids", "replies"]
   }
 
   @spec enqueue(Scope.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -147,7 +148,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         content:
           Voice.text() <>
             "\n" <>
-            "Write at most two sentences telling the athlete what to do next to reach their active goal, or the next level when they have none. It sits under a headline that already shows their best and their target, above their weekly record, so do not restate those numbers; use a number only when it says something the page does not. In replies, give up to three short things the athlete is likely to answer, in their own words (under 60 characters each). Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
+            "Write at most two sentences telling the athlete what to do next to reach their active goal, or the next level when they have none. It sits under their result for the day, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences looking back over the last weeks for each burpee type: what is rising, what is flat, what was missed. It leads their Progress page, above each goal's best and target, so do not restate those either. In replies, give up to three short things the athlete is likely to answer, in their own words (under 60 characters each). Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
             Jason.encode!(metrics)
       }
     ]
@@ -162,7 +163,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
 
     with {:ok, %{content: content, tool_calls: []}} <- Client.chat(messages, chat_opts),
          {:ok, validated} <- Validator.validate_summary(content, metrics) do
-      store(scope, validated, :llm)
+      store(scope, Map.put(validated, "review", review(content, metrics)), :llm)
     else
       _ ->
         case fallback(metrics) do
@@ -172,12 +173,24 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
     end
   end
 
+  # The look back is checked like the note; one that fails is left out, not the note.
+  defp review(%{"review" => review, "metric_ids" => ids}, metrics)
+       when is_binary(review) and review != "" do
+    case Validator.validate_summary(%{"text" => review, "metric_ids" => ids}, metrics) do
+      {:ok, _} -> review
+      {:error, _} -> nil
+    end
+  end
+
+  defp review(_content, _metrics), do: nil
+
   defp store(scope, summary, source),
     do:
       Summary.store(scope, %{
         text: summary["text"],
         metric_ids: summary["metric_ids"],
         source: source,
+        review: summary["review"],
         suggestions: BurpeeTrainer.Coach.Suggestions.clean(summary["replies"])
       })
 

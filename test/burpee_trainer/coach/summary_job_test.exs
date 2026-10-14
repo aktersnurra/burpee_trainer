@@ -43,6 +43,31 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert call.purpose == "summary"
   end
 
+  test "the look back is stored with the note; one with an unsupported number is left out" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+
+    reply(%{
+      "text" => "Keep Thursday.",
+      "review" => "Six-count is steady at 25 reps.",
+      "metric_ids" => ["session.reps"],
+      "replies" => []
+    })
+
+    assert {:ok, %Summary{review: "Six-count is steady at 25 reps."}} =
+             SummaryJob.summarize(scope, opts())
+
+    reply(%{
+      "text" => "Keep Thursday.",
+      "review" => "Six-count rose by 999 reps.",
+      "metric_ids" => ["session.reps"],
+      "replies" => []
+    })
+
+    assert {:ok, %Summary{text: "Keep Thursday.", review: nil}} =
+             SummaryJob.summarize(scope, opts())
+  end
+
   test "the summary prompt speaks in the voice and aims at goals, or the next level" do
     scope = scope_fixture()
     free_form_session_fixture(scope.user)
