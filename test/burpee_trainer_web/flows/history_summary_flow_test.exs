@@ -187,7 +187,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#history-coach-summary [role=status]")
   end
 
-  test "the coach card: this week, note, message, reply and goals in front; notes behind", %{
+  test "the coach card: this week, the note, the conversation, message and waiting goals", %{
     conn: conn,
     user: user
   } do
@@ -198,7 +198,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     positions =
       for id <-
-            ~w[home-coach-week home-coach-note home-coach-message-form home-coach-reply home-coach-goals home-coach-notebook] do
+            ~w[home-coach-week home-coach-note home-coach-message-form home-coach-reply home-coach-goals] do
         {index, _} = :binary.match(html, ~s(id="#{id}"))
         index
       end
@@ -221,9 +221,6 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action[aria-label=Send] .hero-arrow-up"
            )
 
-    assert has_element?(view, "#home-coach-notebook-save.home-primary-action")
-    assert has_element?(view, "#home-coach-notebook-clear.home-text-action")
-
     # The week's window: today's session done, the rest of the 80 minutes left.
     assert has_element?(
              view,
@@ -232,17 +229,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
            )
 
     assert has_element?(view, "#home-coach-front #home-coach-week [data-status=left]")
-    # The notes are on the back of the card, turned over with the book and back again.
-    assert has_element?(view, "#home-coach-panel[data-flipped=false] #home-coach-notebook[inert]")
-
-    view
-    |> element("#home-coach-flip[aria-label='What the coach knows about you']")
-    |> render_click()
-
-    assert has_element?(view, "#home-coach-panel[data-flipped=true] #home-coach-front[inert]")
-    refute has_element?(view, "#home-coach-notebook[inert]")
-    view |> element("#home-coach-unflip") |> render_click()
-    assert has_element?(view, "#home-coach-panel[data-flipped=false]")
+    # No notebook: the coach keeps its memory itself.
+    refute has_element?(view, "#home-coach-notebook, #home-coach-flip")
 
     busy =
       render_component(&HomeCoachComponents.panel/1,
@@ -250,6 +238,31 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
       )
 
     assert busy =~ "Sending to the coach"
+  end
+
+  test "what the coach noted or forgot reads in the thread, after the exchange that caused it",
+       %{conn: conn, user: user} do
+    scope = Scope.for_user(user)
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Memory.apply_ops(scope, [%{"op" => "add", "text" => "Trains at 7:00"}])
+
+    {:ok, _} = BurpeeTrainer.Coach.Exchange.record(scope, "I train evenings now", "18:00 then.")
+    [old] = BurpeeTrainer.Coach.Memory.list(scope)
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Memory.apply_ops(scope, [
+        %{"op" => "replace", "id" => old.id, "text" => "Trains at 18:00"}
+      ])
+
+    {:ok, view, _} = live(conn, ~p"/")
+    html = render(view)
+    {said, _} = :binary.match(html, "I train evenings now")
+    {noted, _} = :binary.match(html, "Noted: Trains at 18:00")
+    {forgot, _} = :binary.match(html, "Forgot: Trains at 7:00")
+    assert said < noted and said < forgot
+    assert has_element?(view, "#home-coach-thread .coach-memory[data-kind=noted] .hero-bookmark")
   end
 
   defp text(view, selector),

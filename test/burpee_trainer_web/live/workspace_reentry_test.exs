@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.Notebook
+  alias BurpeeTrainer.Coach.Memory
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
   setup %{conn: conn} do
@@ -39,7 +39,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       assert has_element?(view, "#home-expansion[data-open=true]")
       assert Repo.all(WorkoutPlan) == rows
       assert Workouts.list_sessions(Scope.for_user(user)) == sessions
-      assert Notebook.get(Scope.for_user(user)).body == ""
+      assert Memory.list(Scope.for_user(user)) == []
     end
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()

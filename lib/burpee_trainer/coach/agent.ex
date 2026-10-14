@@ -2,7 +2,7 @@ defmodule BurpeeTrainer.Coach.Agent do
   @moduledoc "Bounded scoped coach loop; tool errors are visible to the model, not exceptions."
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Suggestions
-  alias BurpeeTrainer.Coach.{Client, Notebook, Tool, Tools, AgentPrompt}
+  alias BurpeeTrainer.Coach.{Client, Tool, Tools, AgentPrompt}
 
   @tools %{
     planner: [
@@ -10,15 +10,13 @@ defmodule BurpeeTrainer.Coach.Agent do
       Tools.Goals,
       Tools.Library,
       Tools.ProposeWorkout,
-      Tools.SelectWorkout,
-      Tools.UpdateNotebook
+      Tools.SelectWorkout
     ],
-    coach_page: [Tools.History, Tools.Goals, Tools.UpdateNotebook, Tools.ProposeGoal]
+    coach_page: [Tools.History, Tools.Goals, Tools.ProposeGoal]
   }
   @spec run(Scope.t(), :planner | :coach_page, String.t() | nil, keyword()) ::
           {:ok, %{reply: String.t(), suggestions: [String.t()]}} | {:error, term()}
   def run(%Scope{} = scope, surface, input, opts \\ []) when surface in [:planner, :coach_page] do
-    notebook = Notebook.get(scope)
     tools = Map.fetch!(@tools, surface)
 
     run = %{
@@ -26,7 +24,6 @@ defmodule BurpeeTrainer.Coach.Agent do
       surface: surface,
       slot: Keyword.get(opts, :slot),
       pending_selection: nil,
-      notebook_seen: notebook.updated_at,
       proposals: 0,
       call_index: 0
     }
@@ -43,7 +40,6 @@ defmodule BurpeeTrainer.Coach.Agent do
             scope,
             surface,
             input,
-            notebook,
             run.slot,
             Keyword.get(opts, :history, [])
           )

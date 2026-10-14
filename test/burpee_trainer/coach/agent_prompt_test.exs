@@ -3,16 +3,15 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.Coach.{AgentPrompt, Voice}
 
-  @glossary ~w[notebook goals current_level landmarks recent_sessions slot]
+  @glossary ~w[memory goals current_level landmarks recent_sessions slot]
 
   test "the planner speaks in the voice, explains its context and caps at a 20-minute rate" do
     scope = scope_fixture()
-    [rule, context] = AgentPrompt.messages(scope, :planner, nil, %{body: ""}, nil)
+    [rule, context] = AgentPrompt.messages(scope, :planner, nil, nil)
 
     assert String.starts_with?(rule.content, Voice.text())
     for key <- @glossary, do: assert(rule.content =~ key)
     assert rule.content =~ "reps per 20 minutes"
-    assert rule.content =~ "What the coach knows about you"
     assert rule.content =~ "why, not what"
     refute rule.content =~ "scale them for a longer slot"
     assert Map.has_key?(Jason.decode!(context.content), "recent_sessions")
@@ -22,12 +21,14 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     scope = scope_fixture()
 
     [rule, _context, message] =
-      AgentPrompt.messages(scope, :coach_page, "How am I doing?", %{body: ""}, nil)
+      AgentPrompt.messages(scope, :coach_page, "How am I doing?", nil)
 
     assert String.starts_with?(rule.content, Voice.text())
     for key <- @glossary, do: assert(rule.content =~ key)
     assert rule.content =~ "at most three sentences"
-    assert rule.content =~ "What the coach knows about you"
+    # The coach does not keep notes mid-reply; they are kept after the conversation.
+    assert rule.content =~ "noted for you after the conversation"
+    refute rule.content =~ "update_notebook"
     assert message == %{role: "user", content: "How am I doing?"}
   end
 
@@ -36,7 +37,7 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     history = [{"Can Thursday be mornings?", "Yes, 7:00."}, {"And Friday?", "Rest."}]
 
     [_rule, _context | turns] =
-      AgentPrompt.messages(scope, :coach_page, "Thanks", %{body: ""}, nil, history)
+      AgentPrompt.messages(scope, :coach_page, "Thanks", nil, history)
 
     assert Enum.map(turns, & &1.role) == ~w[user assistant user assistant user]
     assert Enum.at(turns, 1).content == Jason.encode!(%{"reply" => "Yes, 7:00."})

@@ -1,17 +1,17 @@
 defmodule BurpeeTrainerWeb.HomeCoach do
   @moduledoc """
-  The coach on Home: once today's training is done, its note, the conversation and the
-  owner-editable bounded notebook sit under the result.
+  The coach on Home: once today's training is done, the coach card opens under the result:
+  this week's window, the coach's note, and the conversation, with what the coach noted
+  or forgot about you between the exchanges.
   """
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainer.Coach.{Agent, Exchange, Notebook}
+  alias BurpeeTrainer.Coach.{Agent, Exchange, Memory, MemoryJob}
   alias BurpeeTrainer.{Goals, UserTime}
 
   def initialize(socket) do
     socket
     |> assign(
-      coach_flipped?: false,
       coach_expanded?: false,
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
       coach_busy?: false,
@@ -23,17 +23,17 @@ defmodule BurpeeTrainerWeb.HomeCoach do
     |> refresh()
   end
 
-  # Coach lists only goals waiting on the owner; active ones read on Progress.
-  defp refresh(socket) do
-    notebook = Notebook.get(socket.assigns.current_scope)
-    goals = Goals.list(socket.assigns.current_scope)
+  # Reloads the coach's state, as after a reply or a change to its memory. Coach lists
+  # only goals waiting on the owner; active ones read on Progress.
+  def refresh(socket) do
+    scope = socket.assigns.current_scope
+    goals = Goals.list(scope)
 
     socket
     |> assign(
-      coach_thread: this_week(socket.assigns.current_scope),
-      coach_week: week_window(socket.assigns.current_scope, socket.assigns[:slot]),
-      coach_notebook_seen: notebook.updated_at,
-      coach_notebook_form: to_form(%{"text" => notebook.body}, as: :coach_notebook)
+      coach_thread: this_week(scope),
+      coach_memory_changes: Memory.changes_since(scope, week_start_utc(scope)),
+      coach_week: week_window(scope, socket.assigns[:slot])
     )
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end
@@ -41,10 +41,6 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   # Done opens like the workout day: the result stays, the coach unfolds under it.
   def handle_event("coach_toggle", _, socket),
     do: {:noreply, assign(socket, coach_expanded?: not socket.assigns.coach_expanded?)}
-
-  # The card turns over to what the coach knows about you, and back.
-  def handle_event("coach_flip", _, socket),
-    do: {:noreply, assign(socket, coach_flipped?: not socket.assigns.coach_flipped?)}
 
   def handle_event("coach_message_change", %{"coach_message" => %{"text" => text}}, socket)
       when is_binary(text),
@@ -89,17 +85,6 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def handle_event("coach_quick_reply", %{"text" => text}, socket) when is_binary(text),
     do: handle_event("coach_message", %{"coach_message" => %{"text" => text}}, socket)
 
-  def handle_event("coach_notebook_change", %{"coach_notebook" => %{"text" => text}}, socket)
-      when is_binary(text),
-      do:
-        {:noreply,
-         assign(socket, coach_notebook_form: to_form(%{"text" => text}, as: :coach_notebook))}
-
-  def handle_event("coach_notebook_save", %{"coach_notebook" => %{"text" => text}}, socket)
-      when is_binary(text), do: save_notebook(socket, text)
-
-  def handle_event("coach_notebook_clear", _, socket), do: save_notebook(socket, "")
-
   def handle_event(event, %{"id" => raw}, socket)
       when event in ["coach_goal_confirm", "coach_goal_dismiss"] and is_binary(raw) do
     with {id, ""} <- Integer.parse(raw),
@@ -143,31 +128,21 @@ defmodule BurpeeTrainerWeb.HomeCoach do
     end
   end
 
-  defp save_notebook(socket, text) do
-    case Notebook.write(socket.assigns.current_scope, text, socket.assigns.coach_notebook_seen) do
-      {:ok, _} ->
-        {:noreply, socket |> assign(coach_status: "Saved.") |> refresh()}
-
-      {:error, :stale_notebook} ->
-        {:noreply,
-         socket
-         |> refresh()
-         |> assign(coach_status: "Updated by your coach; review and save again.")}
-
-      {:error, :too_long} ->
-        {:noreply, assign(socket, coach_status: "Notebook exceeds 4,000 characters.")}
-    end
-  end
-
   def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply} = result}}, socket) do
     # The exchange is kept so it is still there after a reload; failing to keep it loses
     # nothing the owner sees now.
-    Exchange.record(
-      socket.assigns.current_scope,
-      socket.assigns.coach_pending_message,
-      reply,
-      Map.get(result, :suggestions, [])
-    )
+    scope = socket.assigns.current_scope
+
+    with {:ok, exchange} <-
+           Exchange.record(
+             scope,
+             socket.assigns.coach_pending_message,
+             reply,
+             Map.get(result, :suggestions, [])
+           ) do
+      # The coach keeps its memory after the exchange; what it notes reads in the thread.
+      MemoryJob.admit_exchange(scope, exchange)
+    end
 
     {:noreply,
      socket

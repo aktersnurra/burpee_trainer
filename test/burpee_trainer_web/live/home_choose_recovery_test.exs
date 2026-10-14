@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.Notebook
+  alias BurpeeTrainer.Coach.Memory
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession, WorkoutVideo}
 
   setup %{conn: conn} do
@@ -99,7 +99,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
       assert :sys.get_state(view.pid).socket.assigns.filters == filters
 
-      assert Notebook.get(Scope.for_user(user)).body == ""
+      assert Memory.list(Scope.for_user(user)) == []
       assert persisted() == before
     end
   end
@@ -344,6 +344,6 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
   defp persisted do
     {Repo.all(WorkoutPlan), Repo.all(WorkoutSession), Repo.all(CoachRecommendation),
-     Repo.all(WorkoutVideo), Repo.all(BurpeeTrainer.Coach.Notebook)}
+     Repo.all(WorkoutVideo), Repo.all(BurpeeTrainer.Coach.Memory)}
   end
 end

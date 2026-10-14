@@ -1,28 +1,28 @@
 defmodule BurpeeTrainer.Coach.AgentPrompt do
   @moduledoc "Bounded scoped facts shared by conversation, planning, and authoring."
-  alias BurpeeTrainer.Coach.{Notebook, Tools, Policy, Voice}
+  alias BurpeeTrainer.Coach.{Memory, Tools, Policy, Voice}
   alias BurpeeTrainer.{Levels, Workouts}
 
   @planner_task """
   Plan the athlete's next session. Prefer a saved or built-in workout that fits, with \
   select_workout; otherwise design one with propose_workout. Never go above the level after \
   their current one; easier sessions are fine. For a session longer than 20 minutes, compare \
-  its reps per 20 minutes with the landmarks. Save only lasting facts to the notebook. The \
+  its reps per 20 minutes with the landmarks. The \
   rationale appears under the workout: one sentence in the voice above on why this session \
   suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
   """
 
   @coach_page_task """
-  Answer what the athlete asked in at most three sentences. Save lasting preferences and \
-  facts they tell you with update_notebook. Use propose_goal only when they ask for a goal; \
+  Answer what the athlete asked in at most three sentences. What they tell you about \
+  themselves is noted for you after the conversation. Use propose_goal only when they ask for a goal; \
   they confirm it themselves. In suggestions, give up to three short things the athlete is \
   likely to say next, in their own words and specific to this reply (under 60 characters \
   each); they tap one to send it.
   """
 
   @context_glossary """
-  The context that follows is JSON. notebook: what you have saved about the athlete; they \
-  read it under What the coach knows about you, so write it in the voice above. goals: \
+  The context that follows is JSON. memory: short notes on what you know about the athlete \
+  from earlier, oldest first. goals: \
   their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \
@@ -36,7 +36,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
     sessions = Workouts.list_recent_training_sessions(scope)
 
     %{
-      notebook: Notebook.get(scope).body,
+      memory: scope |> Memory.list() |> Enum.map(& &1.text),
       goals: goals["goals"] |> Enum.take(20),
       current_level: Levels.current_level(Workouts.list_sessions(scope)),
       slot: slot,
@@ -54,7 +54,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
 
   # `history` is the conversation so far, as `{message, reply}` pairs, oldest first; the
   # coach's turns read as it wrote them.
-  def messages(scope, surface, input, notebook, slot, history \\ []) do
+  def messages(scope, surface, input, slot, history \\ []) do
     slot =
       slot ||
         case Policy.required_slot(scope, DateTime.utc_now(:second)) do
@@ -72,7 +72,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
       %{role: "system", content: rule},
       %{
         role: "system",
-        content: Jason.encode!(Map.put(context(scope, slot), :notebook, notebook.body))
+        content: Jason.encode!(context(scope, slot))
       }
     ]
 

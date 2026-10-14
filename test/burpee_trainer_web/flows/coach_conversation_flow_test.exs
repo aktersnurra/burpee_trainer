@@ -92,10 +92,11 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     render_async(view)
     # No provider in tests: the send happened and the coach says it is unavailable.
     assert has_element?(view, "#home-coach-reply", "Coach unavailable")
-    assert has_element?(view, "#home-coach-notebook h2", "What the coach knows about you")
+    # There is no notebook to edit: the coach keeps its memory itself.
+    refute has_element?(view, "#home-coach-notebook")
   end
 
-  test "goal confirmation and notebook edit use scoped effects", %{conn: conn, scope: scope} do
+  test "goal confirmation is scoped and admits a new summary", %{conn: conn, scope: scope} do
     assert {:ok, %{"goal_id" => id}} =
              BurpeeTrainer.Coach.Tools.ProposeGoal.call(
                scope,
@@ -118,15 +119,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150")
     render_patch(view, ~p"/")
     assert summary_jobs() == 1
-    BurpeeTrainer.Repo.delete_all(Oban.Job)
-
-    view
-    |> form("#home-coach-notebook-form", coach_notebook: %{text: "Owner note"})
-    |> render_submit()
-
-    assert BurpeeTrainer.Coach.Notebook.get(scope).body == "Owner note"
-    # The summary is computed from metrics, not the notebook.
-    assert summary_jobs() == 0
   end
 
   test "real provider tool conversation proposes a goal, replies, then confirms in the same screen",

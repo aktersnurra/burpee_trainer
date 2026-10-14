@@ -578,7 +578,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
       foreign_keys: Repo.query!("PRAGMA foreign_key_list(coach_recommendations)").rows,
       schema: Repo.query!("SELECT sql FROM sqlite_master WHERE name = 'coach_recommendations'").rows,
       recommendations: Repo.query!("SELECT * FROM coach_recommendations WHERE user_id = ?", [report.user_id]).rows,
-      memories: Repo.query!("SELECT * FROM coach_notebooks WHERE user_id = ?", [report.user_id]).rows}))
+      memories: Repo.query!("SELECT * FROM coach_notes WHERE user_id = ?", [report.user_id]).rows}))
     """
 
     {output, status} = System.cmd("mix", ["run", "-e", script], env: env, stderr_to_stdout: true)
@@ -642,7 +642,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
             "workout_sessions",
             "coach_recommendations",
             "user_stats",
-            "coach_notebooks",
+            "coach_notes",
             "llm_calls",
             "coach_summaries",
             "goals",

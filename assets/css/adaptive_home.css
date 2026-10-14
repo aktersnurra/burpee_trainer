@@ -1080,14 +1080,9 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--home-muted); background: transparent; }
 @media (prefers-reduced-motion: reduce) { .home-history-session-delete { animation: none; } }
 
-/* The coach card: two faces in one cell, so the card is as tall as the taller face; it
-   turns over on its vertical axis. */
-.coach-card { perspective: 1400px; }
-.coach-card-inner { display: grid; transform-style: preserve-3d; transition: transform var(--motion-settle) var(--ease-in-out); }
-.coach-card[data-flipped="true"] .coach-card-inner { transform: rotateY(180deg); }
-.coach-card-face { grid-area: 1 / 1; min-width: 0; padding: 20px; border: 1px solid var(--home-line); border-radius: 20px; background: var(--color-base-100); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-.coach-card-back { transform: rotateY(180deg); }
-.coach-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -10px -10px 8px 0; }
+/* The coach card: this week, the note and the conversation, in one quiet frame. */
+.coach-card-face { min-width: 0; padding: 20px; border: 1px solid var(--home-line); border-radius: 20px; background: var(--color-base-100); }
+.coach-card-header { margin: 0 0 12px; }
 .adaptive-home .coach-card-header h2 { margin: 0; color: var(--home-muted); font-size: var(--text-small); font-weight: 400; }
 .coach-week { display: grid; gap: 2px; margin: 0 0 20px; padding: 0; list-style: none; }
 .coach-week-item { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; min-height: 32px; font-size: var(--text-body); }
@@ -1097,12 +1092,8 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .coach-week-done .coach-week-type { color: #262722; }
 .coach-week-when { color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .coach-card .coach-note { margin: 0 0 20px; padding-top: 16px; border-top: 1px solid var(--home-line); }
-/* The back is as tall as the front; the notes fill it, the actions sit at its foot. */
-.coach-card-back { display: flex; flex-direction: column; }
-.coach-card-back #home-coach-notebook-form { display: flex; flex: 1; flex-direction: column; margin-top: 0; }
-.coach-card-back #home-coach-notebook-form .fieldset, .coach-card-back #home-coach-notebook-form .fieldset > label { display: flex; flex: 1; flex-direction: column; align-items: stretch; }
-.adaptive-home textarea.coach-notebook-input { flex: 1; width: 100%; min-height: 160px; field-sizing: fixed; line-height: 1.6; }
-.coach-card-back .home-review-actions { justify-content: flex-end; gap: 8px; margin-top: 12px; }
-@media (prefers-reduced-motion: reduce) { .coach-card-inner { transition: none; } }
 /* The streak sits opposite the level: a flame and the weeks in a row at the target. */
 .history-streak { display: inline-flex; align-items: center; gap: 4px; color: #262722; font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+/* What the coach noted or forgot: a quiet line between exchanges. */
+.coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
+.coach-memory .size-4 { flex: none; margin-top: 2px; }

@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Notebook, Policy}
+  alias BurpeeTrainer.Coach.{Memory, Policy}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.HomeLive
 
@@ -33,7 +33,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-done-expansion[data-open=true] #home-coach-panel")
     assert has_element?(view, "#home-done-summary[aria-expanded=true]")
     assert has_element?(view, "#home-coach-message-form")
-    assert Notebook.get(Scope.for_user(user)).body == ""
+    assert Memory.list(Scope.for_user(user)) == []
   end
 
   test "invalid guidance remains editable and can be corrected and saved", %{
@@ -44,7 +44,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> form("#home-coach-message-form", coach_message: %{text: "  "}) |> render_submit()
     assert has_element?(view, "#home-coach-status[role=status]", "Enter a message")
-    assert Notebook.get(Scope.for_user(user)).body == ""
+    assert Memory.list(Scope.for_user(user)) == []
     long_text = String.duplicate("x", 1001)
 
     view
@@ -52,14 +52,14 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     |> render_submit()
 
     assert has_element?(view, "#home-coach-message-text", long_text)
-    assert Notebook.get(Scope.for_user(user)).body == ""
+    assert Memory.list(Scope.for_user(user)) == []
 
     view
     |> form("#home-coach-message-form", coach_message: %{text: "Keep sets shorter"})
     |> render_submit()
 
     render_async(view)
-    assert Notebook.get(Scope.for_user(user)).body == ""
+    assert Memory.list(Scope.for_user(user)) == []
     assert has_element?(view, "#home-coach-reply[role=status]", "Coach unavailable")
   end
 

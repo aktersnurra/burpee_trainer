@@ -47,37 +47,17 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   attr(:state, :map, required: true)
 
-  # The coach is a card. The front is this week: what is done and left of the training
-  # window, the coach's word on the rest of it, and the conversation. The back, turned
-  # over with the book, is what the coach knows about you.
+  # The coach is a card: this week, what is done and left of the training window, the
+  # coach's word on the rest of it, and the conversation, with what the coach noted or
+  # forgot about you as quiet lines between exchanges.
   # See docs/specs/2026-10-14-coach-card-design.md.
   def panel(assigns) do
     ~H"""
-    <section
-      id="home-coach-panel"
-      class="home-coach-panel coach-card"
-      data-flipped={to_string(@state.coach_flipped?)}
-      aria-label="Coach"
-    >
-      <div class="coach-card-inner">
-        <div
-          id="home-coach-front"
-          class="coach-card-face coach-card-front"
-          inert={@state.coach_flipped?}
-          aria-hidden={to_string(@state.coach_flipped?)}
-        >
+    <section id="home-coach-panel" class="home-coach-panel coach-card" aria-label="Coach">
+      <div>
+        <div id="home-coach-front" class="coach-card-face">
           <div class="coach-card-header">
             <h2>This week</h2>
-            <button
-              id="home-coach-flip"
-              type="button"
-              class="home-text-action home-icon-action"
-              phx-click="coach_flip"
-              aria-label="What the coach knows about you"
-              title="What the coach knows about you"
-            >
-              <.icon name="hero-book-open" class="size-5" />
-            </button>
           </div>
           <ol :if={@state.coach_week != []} id="home-coach-week" class="coach-week">
             <li
@@ -111,21 +91,35 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
               Tell me what you're training for, or how the last session felt.
             </span>
           </p>
-          <%!-- This week's conversation, kept across reloads. --%>
+          <%!-- This week's conversation, kept across reloads, with the coach's memory
+               changes in order between the exchanges. --%>
           <ol
-            :if={@state.coach_thread != [] or @state.coach_pending_message}
+            :if={thread_items(@state) != [] or @state.coach_pending_message}
             id="home-coach-thread"
             class="coach-thread"
             aria-label="Conversation with the coach"
           >
-            <li
-              :for={exchange <- @state.coach_thread}
-              id={"home-coach-exchange-#{exchange.id}"}
-              class="coach-exchange"
-            >
-              <p class="coach-exchange-you">{exchange.message}</p>
-              <p>{exchange.reply}</p>
-            </li>
+            <%= for item <- thread_items(@state) do %>
+              <li
+                :if={match?({:exchange, _}, item)}
+                id={"home-coach-exchange-#{elem(item, 1).id}"}
+                class="coach-exchange"
+              >
+                <p class="coach-exchange-you">{elem(item, 1).message}</p>
+                <p>{elem(item, 1).reply}</p>
+              </li>
+              <li :if={match?({:memory, _}, item)} class="coach-memory" data-kind={elem(item, 1).kind}>
+                <.icon
+                  name={
+                    if(elem(item, 1).kind == :noted, do: "hero-bookmark", else: "hero-bookmark-slash")
+                  }
+                  class="size-4"
+                />
+                <span>
+                  {if(elem(item, 1).kind == :noted, do: "Noted: ", else: "Forgot: ")}{elem(item, 1).text}
+                </span>
+              </li>
+            <% end %>
             <li
               :if={@state.coach_busy? and @state.coach_pending_message}
               id="home-coach-pending"
@@ -226,69 +220,21 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             </div>
           </div>
         </div>
-        <div
-          id="home-coach-notebook"
-          class="coach-card-face coach-card-back"
-          inert={not @state.coach_flipped?}
-          aria-hidden={to_string(not @state.coach_flipped?)}
-        >
-          <div class="coach-card-header">
-            <h2>What the coach knows about you</h2>
-            <button
-              id="home-coach-unflip"
-              type="button"
-              class="home-text-action home-icon-action"
-              phx-click="coach_flip"
-              aria-label="Back to this week"
-              title="Back to this week"
-            >
-              <.icon name="hero-arrow-uturn-left" class="size-5" />
-            </button>
-          </div>
-          <.form
-            for={@state.coach_notebook_form}
-            id="home-coach-notebook-form"
-            phx-submit="coach_notebook_save"
-            phx-change="coach_notebook_change"
-            class="home-authoring-form coach-quiet-label"
-          >
-            <.input
-              field={@state.coach_notebook_form[:text]}
-              id="home-coach-notebook-text"
-              type="textarea"
-              label="Coach's notes"
-              rows="6"
-              maxlength="4000"
-              placeholder="Nothing yet. The coach notes what matters as you talk."
-              class="home-authoring-input coach-notebook-input"
-            />
-            <div class="home-review-actions">
-              <button
-                id="home-coach-notebook-clear"
-                type="button"
-                phx-click="coach_notebook_clear"
-                class="home-text-action home-icon-action"
-                aria-label="Clear notes"
-                title="Clear"
-              >
-                <.icon name="hero-trash" class="size-5" />
-              </button>
-              <button
-                id="home-coach-notebook-save"
-                type="submit"
-                class="home-primary-action home-icon-action"
-                aria-label="Save notes"
-                title="Save"
-              >
-                <.icon name="hero-check" class="size-5" />
-              </button>
-            </div>
-          </.form>
-        </div>
       </div>
     </section>
     """
   end
+
+  # Exchanges and memory changes, in the order they happened.
+  defp thread_items(state) do
+    exchanges = Enum.map(Map.get(state, :coach_thread, []), &{:exchange, &1})
+    changes = Enum.map(Map.get(state, :coach_memory_changes, []), &{:memory, &1})
+
+    Enum.sort_by(exchanges ++ changes, &item_at/1, DateTime)
+  end
+
+  defp item_at({:exchange, exchange}), do: exchange.inserted_at
+  defp item_at({:memory, change}), do: change.at
 
   # Done: the day it was done and its minutes. Left: its minutes.
   defp week_when(%{status: :done, completed_at: at, duration_sec: sec}, timezone) do

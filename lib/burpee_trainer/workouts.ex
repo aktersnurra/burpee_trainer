@@ -1506,7 +1506,8 @@ defmodule BurpeeTrainer.Workouts do
     [
       plan_next: BurpeeTrainer.Coach.PlanNextWorkoutJob.admit(scope),
       narrate: BurpeeTrainer.Insights.NarrateJob.admit(scope, completed),
-      summary: BurpeeTrainer.Coach.SummaryJob.admit(scope)
+      summary: BurpeeTrainer.Coach.SummaryJob.admit(scope),
+      memory: BurpeeTrainer.Coach.MemoryJob.admit_session(scope, completed)
     ]
     |> Enum.each(fn
       {_job, :ok} ->

@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Coach.AgentTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.Coach.{Agent, Notebook}
+  alias BurpeeTrainer.Coach.Agent
 
   @config [
     enabled: true,
@@ -36,18 +36,17 @@ defmodule BurpeeTrainer.Coach.AgentTest do
     [config: @config, req: Req.new(plug: {Req.Test, __MODULE__})]
   end
 
-  test "executes tools, advances notebook CAS version, and returns bounded final answer" do
+  test "executes tools and returns a bounded final answer" do
     scope = scope_fixture()
+    opts = responses([call("goals", %{}), call("history", %{}), final("Keep going.")])
+    assert {:ok, %{reply: "Keep going."}} = Agent.run(scope, :coach_page, "How am I doing?", opts)
+  end
 
-    opts =
-      responses([
-        call("update_notebook", %{"text" => "Mornings"}),
-        call("update_notebook", %{"text" => "Morning short sets"}),
-        final("Noted.")
-      ])
-
+  test "the coach cannot write its memory mid-reply; that is kept afterwards" do
+    scope = scope_fixture()
+    opts = responses([call("update_notebook", %{"text" => "Mornings"}), final("Noted.")])
     assert {:ok, %{reply: "Noted."}} = Agent.run(scope, :coach_page, "I train mornings", opts)
-    assert Notebook.get(scope).body == "Morning short sets"
+    assert BurpeeTrainer.Coach.Memory.list(scope) == []
   end
 
   test "the coach's reply carries what the athlete might say next, cleaned" do

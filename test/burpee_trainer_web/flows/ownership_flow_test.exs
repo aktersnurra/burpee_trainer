@@ -6,10 +6,10 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
 
   alias BurpeeTrainer.{Coach, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Notebook, WorkoutRequest}
+  alias BurpeeTrainer.Coach.{Exchange, Memory, MemoryJob, WorkoutRequest}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
-  test "foreign prepared approval, selection, archive, notebook, and session mount leave rows unchanged",
+  test "foreign prepared approval, selection, archive, memory, and session mount leave rows unchanged",
        %{conn: conn} do
     owner = user_fixture()
     attacker = user_fixture()
@@ -44,18 +44,23 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     render_click(view, "delete_workout", %{"id" => "#{foreign.id}"})
     assert Repo.get!(WorkoutPlan, foreign.id).state == :published
 
-    {:ok, entry} = Notebook.write(Scope.for_user(owner), "Owner notes", nil)
+    owner_scope = Scope.for_user(owner)
+    {:ok, _} = Memory.apply_ops(owner_scope, [%{"op" => "add", "text" => "Trains mornings"}])
+    [owner_note] = Memory.list(owner_scope)
+    {:ok, owner_exchange} = Exchange.record(owner_scope, "Mornings?", "Yes.")
     coach_plans_before = Repo.all(WorkoutPlan)
     pid = view.pid
-    # The coach shows on Home once the day is done; its events are scoped either way.
-    render_submit(view, "coach_notebook_save", %{
-      "coach_notebook" => %{"text" => "Attacker notes"}
-    })
-
+    # The old notebook event is gone, and the memory job reads only the owner's own events.
+    render_submit(view, "coach_notebook_save", %{"coach_notebook" => %{"text" => "Attacker"}})
     assert view.pid == pid
 
-    assert Notebook.get(Scope.for_user(owner)).body == entry.body
-    assert Notebook.get(Scope.for_user(attacker)).body == "Attacker notes"
+    assert {:cancel, :event_missing} =
+             MemoryJob.perform(%Oban.Job{
+               args: %{"user_id" => attacker.id, "exchange_id" => owner_exchange.id}
+             })
+
+    assert Memory.list(owner_scope) == [owner_note]
+    assert Memory.list(Scope.for_user(attacker)) == []
     assert Workouts.ensure_home_selection(Scope.for_user(attacker), slot) == selected_before
     assert Repo.all(WorkoutPlan) == coach_plans_before
 

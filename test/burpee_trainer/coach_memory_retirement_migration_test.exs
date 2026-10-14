@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.CoachMemoryRetirementMigrationTest do
   alias BurpeeTrainer.TestSupport.IsolatedMigrationRepo, as: Repo
   alias BurpeeTrainer.TestSupport.MigrationEquivalence, as: E
   @migrations Path.expand("../../priv/repo/migrations", __DIR__)
-  test "carries ordered guidance to bounded notebooks and retires actual legacy tables" do
+  test "carries ordered guidance through the notebook into notes and retires legacy tables" do
     path = Path.expand(".e2e-artifacts/parallel/db/retirement-#{Ecto.UUID.generate()}.sqlite3")
     start_supervised!({Repo, database: path, pool_size: 1})
     assert [[0, "main", ^path]] = Repo.query!("PRAGMA database_list").rows
@@ -22,8 +22,11 @@ defmodule BurpeeTrainer.CoachMemoryRetirementMigrationTest do
     )
 
     Ecto.Migrator.run(Repo, E.migrations(@migrations), :up, all: true, log: false)
-    [[body]] = Repo.query!("SELECT body FROM coach_notebooks WHERE user_id=?", [id]).rows
-    assert body == "From earlier notes:\n- Prefers short sets\n- Knee is sore"
+    # The notebook carried the old guidance; its lines are now the coach's notes.
+    assert Repo.query!("SELECT text FROM coach_notes WHERE user_id=? ORDER BY id", [id]).rows ==
+             [["Prefers short sets"], ["Knee is sore"]]
+
+    assert Repo.query!("SELECT name FROM sqlite_master WHERE name='coach_notebooks'").rows == []
 
     assert Repo.query!(
              "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('coach_guidance_entries','coach_workout_memories','workout_design_sessions','workout_design_entries')"

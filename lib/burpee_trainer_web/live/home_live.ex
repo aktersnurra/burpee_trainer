@@ -104,6 +104,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_info({:coach_summary, summary}, socket),
     do: {:noreply, assign(socket, progress_summary: summary, progress_summary_loading?: false)}
 
+  # The coach noted or forgot something about the owner; the thread says so.
+  def handle_info(:coach_memory, socket), do: {:noreply, HomeCoach.refresh(socket)}
+
   def handle_info({:home_day_boundary, generation}, socket) do
     if generation == socket.assigns.home_day_generation do
       now = socket.assigns.home_now.()
@@ -284,13 +287,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "coach_toggle",
-             "coach_flip",
              "coach_message_change",
              "coach_message",
              "coach_quick_reply",
-             "coach_notebook_change",
-             "coach_notebook_save",
-             "coach_notebook_clear",
              "coach_goal_confirm",
              "coach_goal_dismiss"
            ] do
@@ -445,6 +444,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     {status, summary} =
       if connected?(socket) do
         Summary.subscribe(scope)
+        BurpeeTrainer.Coach.Memory.subscribe(scope)
         SummaryJob.on_open(scope, now)
       else
         SummaryJob.status(scope, now)

@@ -3,35 +3,12 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.Coach.Tools.{
-    UpdateNotebook,
     ProposeGoal,
     History,
     Goals,
     Library,
     SelectWorkout
   }
-
-  test "stale notebook writes preserve owner edits" do
-    scope = scope_fixture()
-
-    assert {:ok, %{"saved" => true}, %{notebook_seen: _}} =
-             UpdateNotebook.call(scope, %{"text" => "a"}, %{notebook_seen: nil})
-
-    assert {:error, _} = UpdateNotebook.call(scope, %{"text" => "b"}, %{notebook_seen: nil})
-    assert {:error, _} = UpdateNotebook.call(scope, %{"text" => 12}, %{})
-  end
-
-  test "the athlete reads the notebook, so the coach may not write internal ids into it" do
-    scope = scope_fixture()
-
-    assert {:error, message} =
-             UpdateNotebook.call(scope, %{"text" => "Current level: level_1a."}, %{
-               notebook_seen: nil
-             })
-
-    assert message =~ "level_1a"
-    assert BurpeeTrainer.Coach.Notebook.get(scope).body == ""
-  end
 
   test "select_workout asks for the reason, not a restatement of the workout" do
     assert SelectWorkout.schema()["properties"]["rationale"]["description"] =~ "why, not what"
