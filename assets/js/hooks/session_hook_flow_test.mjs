@@ -570,6 +570,79 @@ test("explicit rest and pause candidate reps are ignored", () => {
 	assert.deepEqual(paused.tracking.cadenceMs, []);
 });
 
+test("a rep the camera sees just after a set ends counts for it; later in the rest it does not", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+		{ kind: "rest", duration_sec: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+	]);
+	const at = (elapsedSec) => {
+		ctx.segment = { ...ctx.segment, clock: { ...ctx.segment.clock, elapsedSec } };
+	};
+
+	// The set ends at 8 s; the camera sees its last rep stand up a second late.
+	at(9);
+	ctx.observePoseRep({ index: 1 });
+	// Well into the rest is stretching, not a rep.
+	at(13);
+	ctx.observePoseRep({ index: 2 });
+
+	assert.deepEqual(ctx.tracking.cadenceMs, [9_000]);
+});
+
+test("with the camera, the workout waits briefly for its last rep before the count is final", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
+	ctx.segment = {
+		...ctx.segment,
+		mode: "done",
+		clock: { ...ctx.segment.clock, elapsedSec: 8 },
+	};
+
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 2, durationSec: 8 } });
+	assert.equal(ctx.flow.mode, "workout_running");
+
+	// The last rep lands after the timer: it counts, at the workout's end.
+	ctx.observePoseRep({ index: 1 });
+	assert.deepEqual(ctx.tracking.cadenceMs, [8_000]);
+
+	ctx.completeWorkoutSegment();
+	assert.notEqual(ctx.flow.mode, "workout_running");
+	// Once final, nothing more counts.
+	ctx.observePoseRep({ index: 2 });
+	assert.deepEqual(ctx.tracking.cadenceMs, [8_000]);
+	ctx.destroyed();
+});
+
+test("finishing early with the camera completes at once: it happens while paused", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
+	ctx.finishingEarly = true;
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 1, durationSec: 5 } });
+	assert.notEqual(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.pendingWorkoutResult, undefined);
+});
+
+test("without the camera the workout completes at once", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = { ...ctx.flow, mode: "workout_running", captureMode: "no_camera" };
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 2, durationSec: 8 } });
+	assert.notEqual(ctx.flow.mode, "workout_running");
+});
+
 test("tracking loss keeps workout state but forces timer fallback", () => {
 	const ctx = trackedContext([
 		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
@@ -1439,6 +1512,7 @@ test("storage rejection leaves the local workout and completion operational", as
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
 	await flushHookPromises();
 
 	assert.equal(ctx.traceRetentionAvailable, false);
@@ -1855,6 +1929,9 @@ test("camera through completion review requires no server event", () => {
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	// The camera's count waits a moment for a last rep that stands up after the timer.
+	assert.equal(ctx.flow.mode, "workout_running");
+	ctx.completeWorkoutSegment();
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(
@@ -1905,6 +1982,7 @@ test("completed workout stays quiescent across hidden and visible lifecycle", ()
 		ctx.startTime = 1;
 		scheduledFrames.length = 0;
 		ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+		ctx.completeWorkoutSegment();
 
 		assert.equal(ctx.flow.mode, "completion_review");
 		assert.equal(
@@ -1957,6 +2035,7 @@ test("camera failure during workout keeps timer result authoritative", () => {
 		reason: "detector_error",
 	});
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
 
 	assert.equal(ctx.flow.trackingTrust, "degraded");
 	assert.equal(ctx.flow.completion.burpeeCountActual, 5);
@@ -1981,6 +2060,7 @@ test("manual no-camera journey reaches local completion review", () => {
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(

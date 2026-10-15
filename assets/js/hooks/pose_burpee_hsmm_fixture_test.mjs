@@ -467,6 +467,7 @@ async function runControlledSessionFixture(frames) {
 		session.beginSegment();
 		await runFrames(frames.length);
 		session.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+		session.completeWorkoutSegment();
 		await flush();
 		await flush();
 

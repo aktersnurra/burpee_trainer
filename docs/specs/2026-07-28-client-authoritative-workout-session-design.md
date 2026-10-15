@@ -248,6 +248,21 @@ Detector confidence loss, camera loss, and detector exceptions all use one local
 
 Once degraded, camera results cannot become trusted again during that workout. Completion uses timer-derived reps and duration with no camera cadence analytics.
 
+## Which camera reps count
+
+The camera sees a rep as the athlete stands up, which can be a moment after the bell. A
+rep counts when it lands during work, or within two seconds (`LATE_REP_GRACE_MS`) after a
+set or the workout ends:
+
+- in the first two seconds of a rest that follows work, it counts for that set; later in
+  a rest it is stretching, not a rep;
+- when the workout's timer ends with tracking trusted, the count waits two seconds for a
+  last rep before completion review opens; such a rep is timed at the workout's end.
+  Finishing early skips the wait, since it happens while paused. Without the camera,
+  completion opens at once.
+
+Reps in a count-in, while paused or hidden, or after the count is final never count.
+
 No application API request, LiveView event, telemetry push, or trace upload occurs because of tracking status during exercise. Same-origin camera model/WASM asset loading is limited to camera startup and may fail without blocking the no-camera workout path.
 
 ## Intra-rep recovery and rest

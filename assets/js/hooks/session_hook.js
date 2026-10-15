@@ -28,6 +28,19 @@ import {
   updateTrackingStatus,
 } from "./pose_tracking_observer.mjs";
 
+// How long after a set or the workout ends a rep the camera sees still counts for it: the
+// camera sees a rep as you stand up, which can be a moment after the bell.
+const LATE_REP_GRACE_MS = 2_000;
+
+// The first moments of a rest that follows work, when a set's last rep can still land.
+function justAfterWork(timeline, frame) {
+  return (
+    frame?.event?.kind === "rest" &&
+    (frame.phase_elapsed || 0) * 1_000 <= LATE_REP_GRACE_MS &&
+    timeline?.[frame.index - 1]?.kind === "work"
+  );
+}
+
 const SessionHook = {
   mounted() {
     this.lifecycleGeneration = (this.lifecycleGeneration || 0) + 1;
@@ -705,6 +718,7 @@ const SessionHook = {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
     if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
+    if (this.finalRepGraceTimeoutId) clearTimeout(this.finalRepGraceTimeoutId);
     this.cancelWarmupTimeout();
     this.renderer.clearTimers();
     this.audio.stop();
@@ -995,6 +1009,22 @@ const SessionHook = {
         this.rafId = null;
         break;
       case "segmentDone": {
+        // The camera sees a rep when you stand up, which can be a moment after the timer
+        // ends; with tracking on, the count waits briefly for that last rep.
+        // Finishing early happens while paused, when there is no rep to wait for.
+        if (
+          this.activeSegment === "workout" &&
+          this.flow.captureMode === "camera" &&
+          this.flow.trackingTrust !== "degraded" &&
+          !this.finishingEarly
+        ) {
+          this.pendingWorkoutResult = command.result;
+          this.finalRepGraceTimeoutId = setTimeout(
+            () => this.completeWorkoutSegment(),
+            LATE_REP_GRACE_MS,
+          );
+          break;
+        }
         const result =
           this.activeSegment === "workout"
             ? this.workoutCompletionResult(command.result)
@@ -1346,6 +1376,20 @@ const SessionHook = {
   },
 
   observePoseRep({ index }) {
+    // A rep that lands while the workout waits for its last one counts at its end.
+    if (this.pendingWorkoutResult) {
+      this.tracking = observeTrackingRep(this.tracking, {
+        index,
+        elapsedMs: Math.max(
+          0,
+          Math.round((this.pendingWorkoutResult.durationSec || 0) * 1_000),
+        ),
+        eligible:
+          this.activeSegment === "workout" && document.visibilityState === "visible",
+      });
+      return;
+    }
+
     const elapsedSec = this.segment.clock.elapsedSec || 0;
     const frame = currentFrame(this.timeline, elapsedSec);
     const eligible =
@@ -1353,7 +1397,7 @@ const SessionHook = {
       this.segment.mode === "running" &&
       this.segment.clock.hiddenAt === null &&
       document.visibilityState === "visible" &&
-      frame?.event?.kind === "work";
+      (frame?.event?.kind === "work" || justAfterWork(this.timeline, frame));
 
     this.tracking = observeTrackingRep(this.tracking, {
       index,
@@ -1370,6 +1414,20 @@ const SessionHook = {
         reason: reason || "tracking_lost",
       });
     }
+  },
+
+  // Ends the workout after the grace for its last rep; the count is final from here.
+  completeWorkoutSegment() {
+    if (this.finalRepGraceTimeoutId) clearTimeout(this.finalRepGraceTimeoutId);
+    this.finalRepGraceTimeoutId = null;
+    const pending = this.pendingWorkoutResult;
+    if (!pending) return;
+    this.pendingWorkoutResult = null;
+    this.dispatchFlow({
+      type: "SEGMENT_DONE",
+      segment: "workout",
+      result: this.workoutCompletionResult(pending),
+    });
   },
 
   workoutCompletionResult(timerResult) {
@@ -1418,7 +1476,9 @@ const SessionHook = {
     if (!confirm("End the session now and log what you've done so far?"))
       return;
     const elapsed = this.segment?.clock?.elapsedSec ?? 0;
+    this.finishingEarly = true;
     this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });
+    this.finishingEarly = false;
   },
 
   syncRepStateFromSegment() {
