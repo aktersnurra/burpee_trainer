@@ -791,7 +791,7 @@
 .home-history-session-summary small { display: block; margin-top: 3px; color: var(--home-muted); font-size: var(--text-small); }
 .home-history-session-reps, .home-history-session-time { font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 #home-done-today { border-bottom: 0; }
-.home-coach-panel { width: 100%; max-width: 640px; margin: 32px auto 0; text-align: left; }
+.home-coach-panel { width: 100%; max-width: 640px; margin: 32px auto 0; padding-top: 24px; border-top: 1px solid var(--home-line); text-align: left; }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
 .screen-heading { margin: 16px 0 0; font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -0.02em; }
 /* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
@@ -1020,8 +1020,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* The coach's line: plain text and a chevron, no panel. */
 /* Other goals: one quiet row each under a hairline. */
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
-.coach-exchange { display: grid; gap: 10px; padding-left: 16px; border-left: 2px solid #dcd8d0; font-size: var(--text-body); line-height: 1.5; }
-.coach-exchange-you { color: var(--home-muted); }
 .coach-quick-replies { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
 .coach-quick-replies .home-selection-pill { min-height: 40px; padding: 0 14px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; color: #262722; font: 400 var(--text-body)/1.2 var(--font-sans); }
 .coach-quick-replies .home-selection-pill:disabled { opacity: .45; }
@@ -1045,7 +1043,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 #home-done-today .home-summary, #home-week-complete .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
 #home-done-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
 #home-done-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
-.coach-thread { display: grid; gap: 20px; margin: 0; padding: 0; list-style: none; }
 @media (prefers-reduced-motion: reduce) { #home-done-today, #home-week-complete, #home-done-expansion, #home-done-expansion[data-open="true"] { transition: none; } }
 #home-done-today .home-workout-name, #home-week-complete .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
@@ -1072,18 +1069,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--home-muted); background: transparent; }
 @media (prefers-reduced-motion: reduce) { .home-history-session-delete { animation: none; } }
 
-/* The coach card: this week, the note and the conversation, in one quiet frame. */
-.coach-card-face { min-width: 0; padding: 20px; border: 1px solid var(--home-line); border-radius: 20px; background: var(--color-base-100); }
-.coach-card-header { margin: 0 0 12px; }
-.adaptive-home .coach-card-header h2 { margin: 0; color: var(--home-muted); font-size: var(--text-small); font-weight: 400; }
-.coach-week { display: grid; gap: 2px; margin: 0 0 20px; padding: 0; list-style: none; }
-.coach-week-item { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; min-height: 32px; font-size: var(--text-body); }
-.coach-week-mark { color: var(--home-muted); }
-.coach-week-done .coach-week-mark { color: #262722; }
-.coach-week-left { color: var(--home-muted); }
-.coach-week-done .coach-week-type { color: #262722; }
-.coach-week-when { color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.coach-card .coach-note { margin: 0 0 20px; padding-top: 16px; border-top: 1px solid var(--home-line); }
 /* The streak sits opposite the level: a flame and the weeks in a row at the target. */
 .history-streak { display: inline-flex; align-items: center; gap: 4px; color: #262722; font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 /* What the coach noted or forgot: a quiet line between exchanges. */
@@ -1101,3 +1086,18 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-resume #resume-recommended-workout { margin: 26px auto 0; padding-inline: 36px; }
 /* Start and Resume are the filled pill with a play mark; the pill keeps its width. */
 .adaptive-home .home-play-action { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; }
+
+/* The coach is a section of Home, not a card: its word, Progress's rows, then a chat. */
+.coach-week { margin: 0 0 24px; padding: 0; border-top: 1px solid var(--home-line); list-style: none; }
+.coach-week-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; border-bottom: 1px solid var(--home-line); font-size: var(--text-body); }
+.adaptive-home .coach-week-type { display: flex; align-items: center; gap: 8px; color: #262722; }
+.coach-week-type::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
+.coach-week-type.progress-key-six-count::before { border-color: var(--series-six-count); }
+.coach-week-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.coach-week-when { color: var(--home-muted); font-variant-numeric: tabular-nums; }
+.adaptive-home .coach-week-left .coach-week-type { color: var(--home-muted); }
+.coach-week-left .coach-week-type::before { opacity: .5; }
+.coach-thread { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.coach-exchange { display: grid; gap: 8px; font-size: var(--text-body); line-height: 1.5; }
+.coach-exchange-you { justify-self: end; max-width: 85%; margin: 0; padding: 8px 14px; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; }
+.coach-exchange-coach { margin: 0; color: #262722; }

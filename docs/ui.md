@@ -173,9 +173,10 @@ screen leads to the next in context:
 
 - **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
   first use, never an empty prompt), or once trained, the day's result. The result's title
-  opens it like the workout's onto the coach card: this week's sessions
-  done and left, the coach's word on the rest of the week, the conversation, predicted
-  replies, "Message the coach" and waiting goals. The coach keeps its own memory; what it
+  opens it like the workout's onto the coach, a section of the page (never a card): the
+  coach's word on the rest of the week, this week's sessions done and left in Progress's
+  rows, the conversation as a chat (you on the right in a soft bubble, the coach plain on
+  the left), predicted replies, "Message the coach" and waiting goals. The coach keeps its own memory; what it
   noted or forgot reads as a quiet line in the conversation. The coach speaks only once
   the day is done; `/coach` lands on Home. The week strip opens Progress. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by

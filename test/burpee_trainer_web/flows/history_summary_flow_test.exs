@@ -187,7 +187,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#history-coach-summary [role=status]")
   end
 
-  test "the coach card: this week, the note, the conversation, message and waiting goals", %{
+  test "the coach section: its word first, this week, the conversation, message, goals", %{
     conn: conn,
     user: user
   } do
@@ -198,7 +198,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     positions =
       for id <-
-            ~w[home-coach-week home-coach-note home-coach-message-form home-coach-reply home-coach-goals] do
+            ~w[home-coach-note home-coach-week home-coach-message-form home-coach-reply home-coach-goals] do
         {index, _} = :binary.match(html, ~s(id="#{id}"))
         index
       end
@@ -224,11 +224,14 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # The week's window: today's session done, the rest of the 80 minutes left.
     assert has_element?(
              view,
-             "#home-coach-front #home-coach-week [data-status=done]",
+             "#home-coach-panel #home-coach-week [data-status=done]",
              "Six-count"
            )
 
-    assert has_element?(view, "#home-coach-front #home-coach-week [data-status=left]")
+    assert has_element?(view, "#home-coach-panel #home-coach-week [data-status=left]")
+    # A section of the page, not a card, and the week in Progress's rows.
+    refute has_element?(view, ".coach-card, .coach-card-face")
+    assert has_element?(view, "#home-coach-week .coach-week-type.progress-key-six-count")
     # No notebook: the coach keeps its memory itself.
     refute has_element?(view, "#home-coach-notebook, #home-coach-flip")
 

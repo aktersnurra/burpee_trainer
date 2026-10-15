@@ -1,30 +1,30 @@
-# The coach card, its memory, and the streak on Progress
+# The coach section, its memory, and the streak on Progress
 
 Status: approved by the owner on 2026-10-14. Refines the Home half of
 `docs/specs/2026-10-14-coach-on-home-design.md`; where the coach lives is unchanged (Done's
 result opens it).
 
-## The card
+## The coach section
 
-The coach is one card under Done's result:
+The coach is a section of Home under Done's result, not a card: nothing else in the app
+is boxed. A hairline sets it off; it shares the column's edge.
 
 ```
-┌──────────────────────────────────┐
-│ This week                        │
-│ ● Six-count            Mon, 20 min│
-│ ● Navy SEAL            Tue, 20 min│
-│ ○ Six-count                20 min │
-│ ○ Navy SEAL                20 min │
-│ ──────────────────────────────── │
-│ Keep Thursday unbroken; aim 135. │
-│ │ I train evenings now           │
-│ │ 18:00 then.                    │
-│   🔖 Noted: Trains at 18:00       │
-│   🔖 Forgot: Trains at 7:00       │
-│ (Make Saturday easier) (Add Sun) │
-│ Message the coach           (↑)  │
-│ Goals waiting      ✕ (✓)         │
-└──────────────────────────────────┘
+          Six-count
+       20:00 · 130 reps
+        Done for today.
+──────────────────────────────────────
+Keep Thursday unbroken and aim for 135.   ← the coach's word leads
+— Six-count               Mon · 20 min    ← Progress's rows
+— Six-count               Tue · 20 min
+- - Navy SEAL                   20 min    ← left: muted
+──────────────────────────────────────
+                I train evenings now  ←   you: a soft bubble on the right
+18:00 then.                               ← the coach: plain, on the left
+🔖 Noted: Trains at 18:00
+(Make Saturday easier) (Add Sunday)
+Message the coach                    ↵
+Goals waiting      ✕ (✓)
 ```
 
 - **The week's window** (`WeekWindow.lay_out/2`): this week's sessions done, in order, then
@@ -33,7 +33,9 @@ The coach is one card under Done's result:
   needs no model, so it is always right.
 - **The coach's note** explains what the rest of the week should aim for, given what is
   left of the window and the active goals. A completed session admits a new summary.
-- **The conversation, the predicted replies, the message field and waiting goals** follow.
+- **The conversation** reads as a chat: your messages in a soft bubble on the right, the
+  coach's replies plain on the left, what it noted or forgot as quiet lines between.
+- **The predicted replies, the message field and waiting goals** follow.
 
 ## The coach's memory
 
