@@ -18,9 +18,13 @@
 | `BurpeeTrainer.Coach.{RestFitter, WorkoutLayout, WorkoutRequest, WorkoutConfiguration, WorkoutGuidance, AuthoringPrompt}` | LLM layout schema and prompt, confirmed requests, and the pure rest fitter that computes exact rests |
 | `BurpeeTrainer.Coach.{Agent, AgentPrompt, Tool, Tools.*}` | Bounded tool-using coach for the planner and Coach-page surfaces |
 | `BurpeeTrainer.Coach.{Voice, Rationale}` | The one athlete-facing voice every prompt starts with, and the check the planner tools apply to a rationale before it reaches Home |
-| `BurpeeTrainer.Coach.{Notebook, PlanNextWorkoutJob}` | The coach's bounded memory and the Oban job that plans the next workout (also once on a slot's first open) |
+| `BurpeeTrainer.Coach.{Memory, Memory.Ops, MemoryJob, PlanNextWorkoutJob}` | The coach's notes about the owner (one fact per row, guarded by `Memory.Ops`, shared with Claude), the job that keeps them after an exchange or session, and the job that plans the next workout (never replacing a slot the owner or Claude planned: `planned_by`) |
 | `BurpeeTrainer.Coach.{Summary, SummaryJob}` | The owner's two-sentence progress summary (validated against metrics, deterministic fallback) and the job that refreshes it after a completion or a confirmed goal, and when the app opens with a summary from an earlier week |
 | `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`) and the per-call ledger with daily budgets |
+| `BurpeeTrainer.Coach.enabled?/1` | Whether the app's own coach runs for a user (a Pocket ID claim, `users.coach_enabled`); `Client.chat/2` refuses without it |
+| `BurpeeTrainer.Mcp` / `BurpeeTrainer.Mcp.{Token, Sessions, Workouts, CoachPrompt, WorkoutFormat}` | The MCP server Claude coaches through: JSON-RPC dispatch, Pocket ID token checks, and the history, workout, prompt and format shapes Claude reads and writes |
+| `BurpeeTrainer.Mcp.Tools.*` | The MCP tools, each a `Coach.Tool`; see `docs/specs/2026-10-16-mcp-design.md` and `docs/guides/mcp-setup.md` |
+| `BurpeeTrainerWeb.{McpAuth, McpController, McpMetadataController}` | Bearer sign-in for `/mcp`, the endpoint, and its protected-resource metadata |
 | `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession}` | Deterministic workout selection and policy facts |
 | `BurpeeTrainer.Coach.Policy.Week` | A training week as data: its target and catch-up days (the sign-up week is pro-rated with no catch-up); every weekly target reads it |
 | `BurpeeTrainer.Insights` / `BurpeeTrainer.Insights.*` | Computed metrics, validated LLM narration with deterministic fallback, and the narration job |
