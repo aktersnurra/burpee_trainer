@@ -5,6 +5,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
+  alias BurpeeTrainerWeb.Params
 
   @mood_options [
     {"hero-face-frown", "Tired", -1},
@@ -28,8 +29,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
   def mount(%{"video_id" => video_id, "session_id" => session_id}, _session, socket) do
     scope = socket.assigns.current_scope
 
-    with {:ok, video_id} <- parse_positive_id(video_id),
-         {:ok, session_id} <- parse_positive_id(session_id),
+    with {:ok, video_id} <- Params.positive_id(video_id),
+         {:ok, session_id} <- Params.positive_id(session_id),
          {:ok,
           %WorkoutSession{
             source_kind: :video,
@@ -69,15 +70,6 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
      |> put_flash(:error, "Video session not found.")
      |> push_navigate(to: ~p"/")}
   end
-
-  defp parse_positive_id(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {id, ""} when id > 0 -> {:ok, id}
-      _other -> {:error, :invalid_id}
-    end
-  end
-
-  defp parse_positive_id(_forged), do: {:error, :invalid_id}
 
   @impl true
   def handle_event(

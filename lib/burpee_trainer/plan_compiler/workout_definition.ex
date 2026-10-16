@@ -1,6 +1,7 @@
 defmodule BurpeeTrainer.PlanCompiler.WorkoutDefinition do
   @moduledoc "Canonical, validated workout definition."
 
+  alias BurpeeTrainer.PlanCompiler.CanonicalJson
   alias BurpeeTrainer.Workouts.Error
 
   @version 1
@@ -104,7 +105,7 @@ defmodule BurpeeTrainer.PlanCompiler.WorkoutDefinition do
   def hash(%__MODULE__{} = definition) do
     definition
     |> canonical_map()
-    |> canonical_json()
+    |> CanonicalJson.encode()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
   end
@@ -314,24 +315,6 @@ defmodule BurpeeTrainer.PlanCompiler.WorkoutDefinition do
   defp canonical_event(%{kind: :rest} = event) do
     %{"kind" => "rest", "duration_sec" => event.duration_sec}
   end
-
-  defp canonical_json(value) when is_map(value) do
-    body =
-      value
-      |> Enum.map(fn {key, nested_value} -> {to_string(key), nested_value} end)
-      |> Enum.sort_by(fn {key, _value} -> key end)
-      |> Enum.map_join(",", fn {key, nested_value} ->
-        Jason.encode!(key) <> ":" <> canonical_json(nested_value)
-      end)
-
-    "{" <> body <> "}"
-  end
-
-  defp canonical_json(value) when is_list(value) do
-    "[" <> Enum.map_join(value, ",", &canonical_json/1) <> "]"
-  end
-
-  defp canonical_json(value), do: Jason.encode!(value)
 
   defp sec_to_ms(value), do: round(value * 1_000)
   defp sec_to_us(value), do: round(value * 1_000_000)
