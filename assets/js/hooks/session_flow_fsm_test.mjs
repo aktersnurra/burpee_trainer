@@ -411,7 +411,7 @@ test("completion edits only change approved draft fields", () => {
 		burpeeCountActual: 10,
 		burpeeCountProvenance: "manual",
 		burpeeCountPlanned: 10,
-		durationSecActual: 55,
+		durationSecActual: 52,
 		durationSecPlanned: 50,
 		detectedReps: 8,
 		detectedDurationSec: 49,

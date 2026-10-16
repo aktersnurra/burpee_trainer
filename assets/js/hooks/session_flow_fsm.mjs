@@ -401,7 +401,6 @@ export function flowTransition(state, event) {
 
 			for (const field of [
 				"burpeeCountActual",
-				"durationSecActual",
 				"mood",
 				"contextLowEnergy",
 				"contextHighEnergy",
