@@ -1499,6 +1499,76 @@ defmodule BurpeeTrainer.Workouts do
   def complete_session(%Scope{}, session_id, _attrs, _capture),
     do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
 
+  @doc """
+  Logs a session done away from the phone (`source_kind: :manual`). Like a completion it
+  gets its derived fields, may reach the active goal, and queues the coach's summary and
+  the next plan; not the memory or a session insight, which the one logging it (Claude)
+  keeps itself.
+  """
+  @spec log_session(Scope.t(), map(), DateTime.t()) ::
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | Error.t()}
+  def log_session(
+        %Scope{user: %User{id: user_id} = user} = scope,
+        attrs,
+        %DateTime{} = completed_at
+      )
+      when is_map(attrs) do
+    Repo.immediate_transaction(fn ->
+      changeset =
+        user_id
+        |> WorkoutSession.manual_changeset(attrs, completed_at)
+        |> with_derived_session_fields(user_id, user.timezone)
+
+      logged = persist_completed_session(user, changeset, &Repo.insert/1)
+      admit_follow_up_jobs(scope, logged, plan_next: true)
+      logged
+    end)
+  end
+
+  @doc """
+  Corrects the athlete's feedback on a completed session (notes, tags, mood, limiter,
+  preference, energy and heat); nothing else of a completed session changes. Queues the
+  coach's summary.
+  """
+  @spec correct_session_feedback(Scope.t(), pos_integer(), map()) ::
+          {:ok, WorkoutSession.t()} | {:error, :not_found | Ecto.Changeset.t()}
+  def correct_session_feedback(%Scope{user: %User{id: user_id}} = scope, session_id, attrs)
+      when is_integer(session_id) and is_map(attrs) do
+    Repo.immediate_transaction(fn ->
+      case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id, state: :completed) do
+        nil ->
+          Repo.rollback(:not_found)
+
+        session ->
+          case session |> WorkoutSession.feedback_changeset(attrs) |> Repo.update() do
+            {:ok, corrected} ->
+              admit_follow_up_jobs(scope, corrected, plan_next: false)
+              corrected
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+      end
+    end)
+  end
+
+  defp admit_follow_up_jobs(scope, session, plan_next: plan_next?) do
+    jobs =
+      [summary: BurpeeTrainer.Coach.SummaryJob.admit(scope)] ++
+        if(plan_next?,
+          do: [plan_next: BurpeeTrainer.Coach.PlanNextWorkoutJob.admit(scope)],
+          else: []
+        )
+
+    for {job, {:error, reason}} <- jobs do
+      Logger.warning(
+        "follow_up_job_not_admitted job=#{job} session_id=#{session.id} reason=#{inspect(admission_reason(reason))}"
+      )
+    end
+
+    :ok
+  end
+
   # Follow-up jobs are admitted atomically with the completion when possible, but a saved
   # workout never depends on them: without a job Home keeps its fallback selection and
   # the session has no insight. Admission performs no provider I/O.

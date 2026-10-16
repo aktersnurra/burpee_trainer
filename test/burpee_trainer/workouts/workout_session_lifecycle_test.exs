@@ -400,11 +400,16 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
         Repo.query!("UPDATE workout_sessions SET state = 'started' WHERE id = ?", [completed.id])
       end
 
+      # The result is the record; only the athlete's feedback can be corrected afterwards.
       assert_raise Exqlite.Error, ~r/workout_sessions_exact_once_completion_check/, fn ->
-        Repo.query!("UPDATE workout_sessions SET note_post = 'second write' WHERE id = ?", [
+        Repo.query!("UPDATE workout_sessions SET burpee_count_actual = 2 WHERE id = ?", [
           completed.id
         ])
       end
+
+      Repo.query!("UPDATE workout_sessions SET note_post = 'corrected' WHERE id = ?", [
+        completed.id
+      ])
     end
   end
 end

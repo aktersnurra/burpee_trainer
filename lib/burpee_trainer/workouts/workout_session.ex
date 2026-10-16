@@ -125,6 +125,44 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     |> apply_execution_constraints()
   end
 
+  @doc """
+  A session the athlete did away from the phone, logged by hand: completed at once, with
+  no plan or video behind it. Reps and time must both be positive.
+  """
+  @spec manual_changeset(pos_integer(), map(), DateTime.t()) :: Ecto.Changeset.t()
+  def manual_changeset(user_id, attrs, %DateTime{} = completed_at) when is_map(attrs) do
+    %__MODULE__{user_id: user_id, state: :completed, source_kind: :manual, capture_mode: :logged}
+    |> cast(attrs, [
+      :burpee_type,
+      :burpee_count_actual,
+      :duration_sec_actual,
+      :note_pre,
+      :note_post,
+      :mood,
+      :tags
+      | @feedback_fields
+    ])
+    |> change(completed_at: DateTime.truncate(completed_at, :second))
+    |> validate_session_core()
+    |> validate_number(:burpee_count_actual, greater_than: 0)
+    |> validate_number(:duration_sec_actual, greater_than: 0)
+    |> validate_mood()
+    |> validate_feedback_context()
+    |> apply_execution_constraints()
+  end
+
+  @doc "The athlete's feedback on a completed session, the only part that can be corrected."
+  @spec feedback_changeset(t(), map()) :: Ecto.Changeset.t()
+  def feedback_changeset(%__MODULE__{state: :completed} = session, attrs) when is_map(attrs) do
+    session
+    |> cast(attrs, [:note_pre, :note_post, :mood, :tags | @feedback_fields])
+    |> validate_max_utf8_bytes(:note_pre, 500)
+    |> validate_max_utf8_bytes(:note_post, 500)
+    |> validate_mood()
+    |> validate_feedback_context()
+    |> apply_execution_constraints()
+  end
+
   defp validate_session_core(changeset) do
     changeset
     |> validate_required([:burpee_type, :burpee_count_actual, :duration_sec_actual])
