@@ -12,6 +12,17 @@ defmodule BurpeeTrainerWeb.SessionControllerTest do
       assert html =~ ~p"/auth/oidc"
     end
 
+    test "reads like the app: its page, its primary button and its own title", %{conn: conn} do
+      html = conn |> get(~p"/login") |> html_response(200)
+      doc = LazyHTML.from_document(html)
+
+      assert LazyHTML.query(doc, ".adaptive-home #login-heading.screen-heading") |> Enum.count() ==
+               1
+
+      assert LazyHTML.query(doc, "a.home-primary-action[href='/auth/oidc']") |> Enum.count() == 1
+      refute html =~ "Phoenix Framework"
+    end
+
     test "offers no password form", %{conn: conn} do
       conn = get(conn, ~p"/login")
       html = html_response(conn, 200)

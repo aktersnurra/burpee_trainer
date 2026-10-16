@@ -12,7 +12,7 @@ defmodule BurpeeTrainer.Scoring do
         burpee_type: :six_count | :navy_seal,
         burpee_count_actual: integer,
         duration_sec_actual: integer,
-        inserted_at: DateTime.t(),
+        completed_at: DateTime.t(),
         tags: String.t() | nil
       }
 
@@ -56,23 +56,6 @@ defmodule BurpeeTrainer.Scoring do
   end
 
   @doc """
-  Per-ISO-week push-up totals (Mon–Sun), sorted descending by `week_start`.
-  Warmup sessions are excluded.
-  """
-  @spec weekly_pushups([map]) :: [%{week_start: Date.t(), pushups: non_neg_integer}]
-  def weekly_pushups(sessions) do
-    sessions
-    |> Enum.reject(&warmup?/1)
-    |> Enum.group_by(fn %{inserted_at: dt} ->
-      dt |> DateTime.to_date() |> Date.beginning_of_week(:monday)
-    end)
-    |> Enum.map(fn {week_start, rows} ->
-      %{week_start: week_start, pushups: total_pushups(rows)}
-    end)
-    |> Enum.sort_by(& &1.week_start, {:desc, Date})
-  end
-
-  @doc """
   Push-up total for the ISO week containing `date` (warmup excluded).
   """
   @spec week_pushups([map], Date.t()) :: non_neg_integer
@@ -81,7 +64,7 @@ defmodule BurpeeTrainer.Scoring do
 
     sessions
     |> Enum.reject(&warmup?/1)
-    |> Enum.filter(fn %{inserted_at: dt} ->
+    |> Enum.filter(fn %{completed_at: dt} ->
       Date.compare(DateTime.to_date(dt) |> Date.beginning_of_week(:monday), week_start) == :eq
     end)
     |> total_pushups()

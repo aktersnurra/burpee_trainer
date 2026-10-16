@@ -152,11 +152,34 @@ test("active fill completes before full-screen recovery shows exact remaining ti
 		progress: 0,
 		pulse: null,
 	});
-	assert.equal(recoveryMidpoint.primaryCount, "1");
+	assert.equal(recoveryMidpoint.primaryCount, "0:01");
 	assert.equal(recoveryMidpoint.restTimeLeftSec, 0.5);
 	assert.equal(recoveryMidpoint.sessionProgress, 0.25);
 	assert.equal(recoveryMidpoint.setProgress, "1/3");
 	assertLeanContract(recoveryMidpoint, runningKeys);
+});
+
+test("an even-paced rest leads into the next rep with 3, 2, 1, but not after the last rep", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20, sec_per_burpee: 6 }];
+	const at = (elapsed) =>
+		runningModel(timeline, 0, { phase_elapsed: elapsed, phase_remaining: 60 - elapsed });
+
+	assert.equal(at(10).visual.state, "work_recovery");
+	assert.equal(at(10).primaryCount, "0:10");
+	assert.equal(at(17.5).visual.state, "rest_count_in");
+	assert.equal(at(17.5).primaryCount, 3);
+	assert.equal(at(19.5).primaryCount, 1);
+	assert.equal(at(20.5).visual.state, "work_active");
+	// After the last rep the next phase counts itself in.
+	assert.equal(at(57.5).visual.state, "work_recovery");
+	assert.equal(at(57.5).primaryCount, "0:03");
+});
+
+test("a short gap between reps stays a clock, without a count-in", () => {
+	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 9, sec_per_burpee: 6 }];
+	const model = runningModel(timeline, 0, { phase_elapsed: 7, phase_remaining: 20 });
+	assert.equal(model.visual.state, "work_recovery");
+	assert.equal(model.primaryCount, "0:02");
 });
 
 test("single-set recovery hides redundant 1/1 position", () => {
@@ -169,7 +192,7 @@ test("single-set recovery hides redundant 1/1 position", () => {
 	});
 
 	assert.equal(recovery.visual.state, "work_recovery");
-	assert.equal(recovery.primaryCount, "1");
+	assert.equal(recovery.primaryCount, "0:01");
 	assert.equal(recovery.setProgress, null);
 });
 
@@ -195,7 +218,7 @@ test("unbroken work fills across each cadence interval instead of staying solid"
 	assert.ok(end.visual.progress > 0.999);
 });
 
-test("normal rest uses bare seconds and derives set progress from immutable work events", () => {
+test("normal rest reads as a time and derives set progress from immutable work events", () => {
 	const firstRest = runningModel(threeSetTimeline, 1, {
 		phase_elapsed: 12,
 		phase_remaining: 18,
@@ -206,16 +229,16 @@ test("normal rest uses bare seconds and derives set progress from immutable work
 	});
 
 	assert.equal(firstRest.visual.state, "rest");
-	assert.equal(firstRest.primaryCount, "18");
+	assert.equal(firstRest.primaryCount, "0:18");
 	assert.equal(firstRest.setProgress, "1/3");
 	assert.equal(secondRest.visual.state, "rest");
-	assert.equal(secondRest.primaryCount, "4");
+	assert.equal(secondRest.primaryCount, "0:04");
 	assert.equal(secondRest.setProgress, "2/3");
 	assert.equal(Object.hasOwn(threeSetTimeline[1], "setProgress"), false);
 	assertLeanContract(firstRest, runningKeys);
 });
 
-test("rest always uses bare total seconds", () => {
+test("rest reads as minutes and seconds, so it is never taken for reps", () => {
 	const timeline = [
 		{ kind: "work", reps: 1, sec_per_rep: 4, sec_per_burpee: 3 },
 		{ kind: "rest", duration_sec: 90 },
@@ -223,9 +246,9 @@ test("rest always uses bare total seconds", () => {
 	];
 
 	for (const [remaining, expected] of [
-		[65, "65"],
-		[60, "60"],
-		[59, "59"],
+		[65, "1:05"],
+		[60, "1:00"],
+		[59, "0:59"],
 	]) {
 		const model = runningModel(timeline, 1, {
 			phase_elapsed: 90 - remaining,
@@ -242,7 +265,7 @@ test("just above three seconds remains normal rest", () => {
 	});
 
 	assert.equal(model.visual.state, "rest");
-	assert.equal(model.primaryCount, "4");
+	assert.equal(model.primaryCount, "0:04");
 	assert.equal(model.setProgress, "1/3");
 });
 

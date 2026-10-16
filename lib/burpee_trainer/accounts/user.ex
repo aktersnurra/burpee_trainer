@@ -7,8 +7,24 @@ defmodule BurpeeTrainer.Accounts.User do
   schema "users" do
     field :username, :string
     field :oidc_sub, :string
+    field :timezone, :string, default: "Etc/UTC"
+    field :timezone_provisioned, :boolean, default: false
+    field :coach_enabled, :boolean, default: true
 
     timestamps(type: :utc_datetime)
+  end
+
+  @doc """
+  Changeset for persisting a browser-provided IANA timezone.
+  """
+  def timezone_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:timezone])
+    |> validate_required([:timezone])
+    |> validate_change(:timezone, fn :timezone, timezone ->
+      if Tzdata.zone_exists?(timezone), do: [], else: [timezone: "is not a valid IANA timezone"]
+    end)
+    |> put_change(:timezone_provisioned, true)
   end
 
   @doc """

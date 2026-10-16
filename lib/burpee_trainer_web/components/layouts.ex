@@ -8,12 +8,12 @@ defmodule BurpeeTrainerWeb.Layouts do
   embed_templates("layouts/*")
 
   @doc """
-  Main app layout. `current_user` is optional — the login page passes
+  Main app layout. `current_scope` is optional — the login page passes
   `nil` and the navigation adapts accordingly.
   """
   attr(:flash, :map, required: true)
-  attr(:current_user, :any, default: nil)
   attr(:current_level, :atom, default: nil)
+  attr(:current_scope, :any, default: nil)
   attr(:current_page, :atom, default: nil)
   attr(:navigation?, :boolean, default: true)
   attr(:flash?, :boolean, default: true)
@@ -24,7 +24,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       Map.put(assigns, :session_surface_page?, session_surface_page?(assigns.current_page))
 
     ~H"""
-    <%= if @current_user && @navigation? do %>
+    <%= if @current_scope && @navigation? do %>
       <%!-- Desktop top nav — hidden on mobile --%>
       <nav class={[
         "hidden sm:flex items-center justify-center gap-2 px-4 py-3 border-b",
@@ -33,7 +33,9 @@ defmodule BurpeeTrainerWeb.Layouts do
         !@session_surface_page? && "border-base-border bg-base-nav text-base-content"
       ]}>
         <.nav_icon
+          id="desktop-home-nav"
           navigate={~p"/"}
+          patch?={@current_page in [:home, :history, :coach]}
           title="Home"
           active={@current_page == :home}
           session_nav?={@session_surface_page?}
@@ -43,32 +45,14 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.nav_icon>
 
         <.nav_icon
-          navigate={~p"/workouts"}
-          title="Workouts"
-          active={@current_page == :workouts}
+          id="desktop-history-nav"
+          navigate={~p"/progress"}
+          patch?={@current_page in [:home, :history, :coach]}
+          title="Progress"
+          active={false}
           session_nav?={@session_surface_page?}
         >
-          <.icon
-            name="hero-rectangle-stack-solid"
-            class={if @current_page == :workouts, do: "", else: "hidden"}
-          />
-          <.icon
-            name="hero-rectangle-stack"
-            class={if @current_page == :workouts, do: "hidden", else: ""}
-          />
-        </.nav_icon>
-
-        <.nav_icon
-          navigate={~p"/stats"}
-          title="Stats"
-          active={@current_page == :stats}
-          session_nav?={@session_surface_page?}
-        >
-          <.icon
-            name="hero-chart-bar-solid"
-            class={if @current_page == :stats, do: "", else: "hidden"}
-          />
-          <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
+          <.icon name="hero-chart-bar" />
         </.nav_icon>
       </nav>
 
@@ -80,7 +64,9 @@ defmodule BurpeeTrainerWeb.Layouts do
         !@session_surface_page? && "h-16 border-base-border bg-base-nav/95"
       ]}>
         <.bottom_tab
+          id="mobile-home-nav"
           navigate={~p"/"}
+          patch?={@current_page in [:home, :history, :coach]}
           active={@current_page == :home}
           label="Home"
           session_nav?={@session_surface_page?}
@@ -90,32 +76,14 @@ defmodule BurpeeTrainerWeb.Layouts do
         </.bottom_tab>
 
         <.bottom_tab
-          navigate={~p"/workouts"}
-          active={@current_page == :workouts}
-          label="Workouts"
+          id="mobile-history-nav"
+          navigate={~p"/progress"}
+          patch?={@current_page in [:home, :history, :coach]}
+          active={false}
+          label="Progress"
           session_nav?={@session_surface_page?}
         >
-          <.icon
-            name="hero-rectangle-stack-solid"
-            class={if @current_page == :workouts, do: "", else: "hidden"}
-          />
-          <.icon
-            name="hero-rectangle-stack"
-            class={if @current_page == :workouts, do: "hidden", else: ""}
-          />
-        </.bottom_tab>
-
-        <.bottom_tab
-          navigate={~p"/stats"}
-          active={@current_page == :stats}
-          label="Stats"
-          session_nav?={@session_surface_page?}
-        >
-          <.icon
-            name="hero-chart-bar-solid"
-            class={if @current_page == :stats, do: "", else: "hidden"}
-          />
-          <.icon name="hero-chart-bar" class={if @current_page == :stats, do: "hidden", else: ""} />
+          <.icon name="hero-chart-bar" />
         </.bottom_tab>
       </nav>
     <% end %>
@@ -129,7 +97,7 @@ defmodule BurpeeTrainerWeb.Layouts do
       {render_slot(@inner_block)}
     </main>
 
-    <%= if @current_user && @navigation? do %>
+    <%= if @current_scope && @navigation? do %>
       <div class={[
         "sm:hidden",
         @session_surface_page? &&
@@ -142,44 +110,17 @@ defmodule BurpeeTrainerWeb.Layouts do
     """
   end
 
+  # Home, History and Coach are one surface: same background, padding and column.
   defp session_surface_page?(:home), do: true
-  defp session_surface_page?(:workouts), do: true
-  defp session_surface_page?(:stats), do: true
-  defp session_surface_page?(:plans), do: true
+  defp session_surface_page?(:history), do: true
+  defp session_surface_page?(:coach), do: true
+  defp session_surface_page?(:session), do: true
   defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false
 
-  attr(:id, :string, default: "theme-toggle")
-  attr(:session_nav?, :boolean, default: false)
-  attr(:label, :boolean, default: false)
-  attr(:class, :any, default: nil)
-
-  def theme_button(assigns) do
-    ~H"""
-    <button
-      id={@id}
-      type="button"
-      phx-click={JS.dispatch("phx:toggle-theme")}
-      class={[
-        "items-center justify-center gap-2 rounded-xl border transition",
-        @label && "px-3 py-2 text-sm font-medium",
-        !@label && "size-9",
-        @session_nav? &&
-          "session-surface border-[var(--session-border)] text-[var(--session-muted)] hover:text-[var(--session-ink)] hover:bg-[var(--session-surface-alt)]",
-        !@session_nav? &&
-          "border-base-border text-base-muted hover:text-base-content hover:bg-base-raised",
-        @class
-      ]}
-      aria-label="Toggle color theme"
-    >
-      <.icon name="hero-moon" class="size-4 dark:hidden" />
-      <.icon name="hero-sun" class="hidden size-4 dark:block" />
-      <span :if={@label}>Theme</span>
-    </button>
-    """
-  end
-
+  attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
+  attr(:patch?, :boolean, default: false)
   attr(:title, :string, required: true)
   attr(:active, :boolean, required: true)
   attr(:session_nav?, :boolean, default: false)
@@ -188,7 +129,9 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp nav_icon(assigns) do
     ~H"""
     <.link
-      navigate={@navigate}
+      id={@id}
+      navigate={if(!@patch?, do: @navigate)}
+      patch={if(@patch?, do: @navigate)}
       title={@title}
       class={[
         "relative inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors",
@@ -210,8 +153,10 @@ defmodule BurpeeTrainerWeb.Layouts do
     """
   end
 
+  attr(:id, :string, default: nil)
   attr(:navigate, :string, required: true)
   attr(:active, :boolean, required: true)
+  attr(:patch?, :boolean, default: false)
   attr(:label, :string, required: true)
   attr(:session_nav?, :boolean, default: false)
   slot(:inner_block, required: true)
@@ -219,7 +164,9 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp bottom_tab(assigns) do
     ~H"""
     <.link
-      navigate={@navigate}
+      id={@id}
+      navigate={if(!@patch?, do: @navigate)}
+      patch={if(@patch?, do: @navigate)}
       class={[
         "relative inline-flex flex-col items-center transition-colors",
         @session_nav? && "h-[84px] min-w-0 flex-1 justify-start gap-1.5 pt-5",

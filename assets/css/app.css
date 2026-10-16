@@ -7,6 +7,7 @@
 @import "@fontsource/geist/500.css";
 @import "@fontsource/geist/600.css";
 @import "tailwindcss" source(none);
+@import "./adaptive_home.css";
 @source "../css";
 @source "../js";
 @source "../../lib/burpee_trainer_web";
@@ -74,78 +75,32 @@
   --color-base-muted-token: #74716A;
 }
 
-[data-theme="dark"] {
-  --color-base-100: #111318;
-  --color-base-200: #171A21;
-  --color-base-300: #20242C;
-  --color-base-content: #ECEFF3;
-  --color-primary: #ECEFF3;
-  --color-primary-content: #111318;
-  --color-secondary: #E3B341;
-  --color-secondary-content: #111318;
-  --color-accent: #E06A5F;
-  --color-accent-content: #111318;
-  --color-neutral: #343A45;
-  --color-neutral-content: #ECEFF3;
-  --color-info: #5AA9F5;
-  --color-info-content: #111318;
-  --color-warning: #E3B341;
-  --color-warning-content: #111318;
-  --color-error: #FF8A7D;
-  --color-error-content: #111318;
-  --color-base-border-hover-token: #46505E;
-  --color-base-muted-token: #AAB2BE;
-}
-
 /* Add variants based on LiveView classes */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
 @custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
 
-/* Use the data attribute for dark mode  */
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
-
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* Keep the document chrome/background aligned with the selected app theme. */
+/* One light theme and one page background on every screen: base-100. */
 :root {
   color-scheme: light;
-  background: #F3EEE8;
+  background: var(--color-base-100);
 }
 
 body {
-  background: #F3EEE8;
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-  background: #111318;
-}
-
-[data-theme="dark"] body {
-  background: #111318;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: light;
-    background: #F3EEE8;
-  }
-
-  html:not([data-theme]) body {
-    background: #F3EEE8;
-  }
+  background: var(--color-base-100);
 }
 
 #burpee-session,
 .session-surface {
-  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --session-bg: #F3EEE8;
+  font-family: var(--font-sans);
+  --session-bg: var(--color-base-100);
   --session-surface: #FAF8F3;
   --session-surface-alt: #EFECE4;
   --session-ink: #20201D;
-  --session-active-bg: #F3EEE8;
+  --session-active-bg: var(--color-base-100);
   --session-active-ink: #20201D;
   --session-active-muted: #706C64;
   --session-muted: #706C64;
@@ -176,40 +131,6 @@ body {
   --session-countin-ink: var(--session-ink);
 }
 
-[data-theme="dark"] #burpee-session,
-[data-theme="dark"] .session-surface {
-  --session-bg: #111318;
-  --session-surface: #171A21;
-  --session-surface-alt: #20242C;
-  --session-ink: #ECEFF3;
-  --session-active-bg: #F3EEE8;
-  --session-active-ink: #20201D;
-  --session-active-muted: #706C64;
-  --session-muted: #AAB2BE;
-  --session-soft-muted: #7E8794;
-  --session-border: #343A45;
-  --session-track: #DDD6CF;
-  --session-accent: #E06A5F;
-  --session-accent-strong: #FF8A7D;
-  --session-toggle-bg: #112A42;
-  --session-toggle-border: #2383E2;
-  --session-toggle-ink: #9BD0FF;
-  --session-tag-bg: #332A10;
-  --session-tag-border: #E3B341;
-  --session-tag-ink: #F6D98A;
-  --session-info-bg: #112A42;
-  --session-info-border: #2F85D0;
-  --session-info-ink: #9BD0FF;
-  --session-error-bg: #3A1F20;
-  --session-error-border: #9F4B47;
-  --session-error-ink: #FF9A91;
-  --session-progress: #5AA9F5;
-  --session-series-six: var(--session-ink);
-  --session-series-seal: var(--session-accent);
-  --session-countin-bg: var(--session-bg);
-  --session-countin-ink: var(--session-ink);
-}
-
 .qs-tabular {
   font-variant-numeric: tabular-nums;
 }
@@ -229,7 +150,7 @@ body {
 
 .session-camera-layout {
   box-sizing: border-box;
-  grid-template-rows: 7.75rem minmax(0, 1fr) 3.5rem;
+  grid-template-rows: 11rem minmax(0, 1fr) 3.5rem;
   gap: 1.25rem;
   padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem max(1.5rem, env(safe-area-inset-bottom));
 }
@@ -343,6 +264,10 @@ body {
   line-height: 0.88;
 }
 
+#session-runner-client.is-rest #count.is-rest-time-long {
+  font-size: clamp(7rem, min(28vw, 26dvh), 11rem);
+}
+
 #session-runner-layout {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -428,6 +353,11 @@ body {
   border-radius: 1.25rem;
   background: var(--session-active-ink);
   color: var(--session-active-bg);
+}
+
+/* Back to Home under Finish early: the quiet way out, in the session's ink. */
+.session-pause-leave {
+  color: var(--session-active-ink);
 }
 
 .session-choice-toggle[aria-pressed="true"] {
@@ -533,7 +463,7 @@ body {
 }
 
 #count {
-  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
   font-stretch: normal;
   font-weight: 500;
 }
@@ -591,4 +521,96 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   display: inline-block;
   width: 1.5rem;
   height: 1.5rem;
+}
+
+/* Idle/review panels are editorial; the runner's timing colors and layers remain untouched. */
+#burpee-session {
+  --session-bg: var(--color-base-100);
+  --session-ink: #262722;
+  --session-muted: #686b65;
+  --session-border: #d6d7d0;
+  font-family: var(--font-sans);
+}
+#burpee-session [data-session-panel]:not(#session-runner-client) {
+  background: var(--session-bg);
+}
+#burpee-session .session-preflight-chrome {
+  position: absolute;
+  z-index: 30;
+  inset-inline: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: calc(100% - 60px);
+  max-width: 640px;
+  margin-inline: auto;
+  padding-top: max(20px, env(safe-area-inset-top));
+}
+#burpee-session .session-preflight-back {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 4px;
+  transition: background-color 150ms ease;
+}
+#burpee-session .session-preflight-back:hover {
+  background: var(--session-border);
+}
+#burpee-session .session-preflight-workout-name {
+  overflow: hidden;
+  color: var(--session-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Headings take focus so screen readers announce each step; they are not controls, so
+   no outline. */
+#burpee-session [data-session-panel]:not(#session-runner-client) [data-session-heading]:focus {
+  outline: none;
+}
+#burpee-session [data-session-panel]:not(#session-runner-client) h1 {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  letter-spacing: -.045em;
+}
+#burpee-session :is(button, a, input, textarea, select, [role="button"]):focus-visible {
+  outline: 2px solid var(--session-ink);
+  outline-offset: 3px;
+}
+/* Session actions are pills, as on Home. */
+#burpee-session #session-save-btn {
+  border-radius: 999px;
+}
+/* No rule under the result: the mood row's line divides it, with or without open fields. */
+#session-completion-review #session-completion-summary { padding-bottom: 0; }
+#session-completion-review #session-completion-heading { font-size: clamp(34px, 6vw, 48px); }
+/* − count +: round buttons as the trash, so the count is plainly the thing to adjust.
+   No long-press menu or text selection while a button is held. */
+#session-completion-review .session-reps-stepper { display: flex; align-items: center; justify-content: center; gap: 32px; }
+#session-completion-review .session-reps-step { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 56px; height: 56px; border: 1px solid var(--session-border); border-radius: 999px; background: transparent; color: var(--session-ink); touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: background var(--motion-quick) ease; }
+#session-completion-review .session-reps-step:active:not(:disabled) { background: var(--session-surface-alt); }
+#session-completion-review .session-reps-step:disabled { opacity: .35; }
+#session-completion-review #session-actual-reps { min-width: 2ch; }
+#session-completion-review #session-typed-feedback { border-top: 1px solid var(--session-border); }
+/* Tags and the note use Home's pill and field, in the session's tokens. */
+#session-completion-review .session-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+#session-completion-review .session-tag-pill { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--session-border); border-radius: 999px; background: transparent; color: var(--session-muted); font: 400 var(--text-body)/1.2 var(--font-sans); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
+#session-completion-review .session-tag-pill[aria-pressed="true"] { background: var(--session-surface-alt); border-color: var(--session-soft-muted); color: var(--session-ink); }
+#session-completion-review .session-tag-pill:disabled { opacity: .45; }
+#session-completion-review .session-note-field { min-height: 60px; margin-top: 20px; padding: 12px 0; border-bottom: 1px solid var(--session-border); }
+#session-completion-review .session-note-input { display: block; width: 100%; min-height: 1.5em; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: var(--session-ink); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; box-shadow: none; }
+#session-completion-review .session-note-input::placeholder { color: var(--session-muted); opacity: 1; }
+#session-completion-review .session-note-input:focus-visible { outline: none; }
+#session-completion-review .session-note-field:focus-within { border-bottom-color: var(--session-ink); }
+@media (prefers-reduced-motion: reduce) { #session-completion-review :is(.session-tag-pill, .session-reps-step) { transition: none; } }
+@media (min-width: 800px) {
+  #burpee-session [data-session-panel]:not(#session-runner-client):not(#session-completion-review) > div:first-child { max-width: 640px; }
+  #burpee-session #session-completion-review > div:first-child { max-width: 680px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #burpee-session :is(button, a) { transition: none; }
 }

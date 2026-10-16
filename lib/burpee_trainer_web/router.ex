@@ -10,7 +10,7 @@ defmodule BurpeeTrainerWeb.Router do
     plug(:put_root_layout, html: {BurpeeTrainerWeb.Layouts, :root})
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
-    plug(:fetch_current_user)
+    plug(:fetch_current_scope)
   end
 
   pipeline :require_auth do
@@ -27,8 +27,32 @@ defmodule BurpeeTrainerWeb.Router do
     plug(:fetch_live_flash)
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
-    plug(:fetch_current_user)
+    plug(:fetch_current_scope)
     plug(:require_authenticated_user)
+  end
+
+  pipeline :mcp_metadata do
+    plug(:accepts, ["json"])
+  end
+
+  scope "/.well-known", BurpeeTrainerWeb do
+    pipe_through(:mcp_metadata)
+
+    get("/oauth-protected-resource", McpMetadataController, :show)
+    get("/oauth-protected-resource/mcp", McpMetadataController, :show)
+  end
+
+  pipeline :mcp do
+    plug(:accepts, ["json"])
+    plug(BurpeeTrainerWeb.McpAuth)
+  end
+
+  scope "/mcp", BurpeeTrainerWeb do
+    pipe_through(:mcp)
+
+    post("/", McpController, :create)
+    get("/", McpController, :unsupported)
+    delete("/", McpController, :unsupported)
   end
 
   scope "/", BurpeeTrainerWeb do
@@ -58,19 +82,12 @@ defmodule BurpeeTrainerWeb.Router do
 
     live_session :authed,
       on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
-      live("/", OverviewLive)
-      live("/workouts", WorkoutsLive, :index)
-      live("/workouts/new", PlansLive.Edit, :new)
-      live("/workouts/:id/edit", PlansLive.Edit, :edit)
-
-      live("/session/:plan_id", SessionLive)
-      live("/sessions/:id/resolve", SessionResolutionLive)
-
-      live("/stats", StatsLive)
-      live("/stats/sessions/:id", SessionAnalysisLive)
-      live("/tracking-test", TrackingTestLive)
-
-      live("/videos/:id", VideoLive.Show)
+      live("/", HomeLive, :home)
+      live("/progress", HomeLive, :history)
+      live("/history", HomeLive, :history_moved)
+      live("/coach", HomeLive, :coach_moved)
+      live("/session/:session_id", SessionLive, :show)
+      live("/videos/:video_id/session/:session_id", VideoLive.Show, :session)
     end
   end
 
@@ -81,7 +98,15 @@ defmodule BurpeeTrainerWeb.Router do
       pipe_through(:browser)
 
       live_dashboard("/dashboard", metrics: BurpeeTrainerWeb.Telemetry)
-      forward("/mailbox", Plug.Swoosh.MailboxPreview)
+    end
+
+    scope "/", BurpeeTrainerWeb do
+      pipe_through([:browser, :require_auth])
+
+      live_session :dev_authed,
+        on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
+        live("/tracking-test", TrackingTestLive)
+      end
     end
   end
 end

@@ -15,21 +15,22 @@ defmodule BurpeeTrainerWeb.Auth do
   import Phoenix.Controller
 
   alias BurpeeTrainer.{Accounts, Levels, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
 
   @session_key :user_id
 
   @doc """
   Plug that loads the current user from the session into `conn.assigns`,
-  as `:current_user`. Leaves `:current_user` as `nil` when no session.
+  as `:current_scope`. Leaves `:current_scope` as `nil` when no session.
   """
-  def fetch_current_user(conn, _opts) do
+  def fetch_current_scope(conn, _opts) do
     user =
       case get_session(conn, @session_key) do
         nil -> nil
         user_id -> Accounts.get_user(user_id)
       end
 
-    assign(conn, :current_user, user)
+    assign(conn, :current_scope, Scope.for_user(user))
   end
 
   @doc """
@@ -41,7 +42,7 @@ defmodule BurpeeTrainerWeb.Auth do
   failure when nothing has gone wrong.
   """
   def require_authenticated_user(conn, _opts) do
-    case conn.assigns[:current_user] do
+    case conn.assigns[:current_scope] do
       nil ->
         conn
         |> redirect(to: ~p"/login")
@@ -57,11 +58,11 @@ defmodule BurpeeTrainerWeb.Auth do
   only make sense when logged out (like `/login`).
   """
   def redirect_if_user_is_authenticated(conn, _opts) do
-    case conn.assigns[:current_user] do
+    case conn.assigns[:current_scope] do
       nil ->
         conn
 
-      _user ->
+      _scope ->
         conn
         |> redirect(to: ~p"/")
         |> halt()
@@ -94,7 +95,7 @@ defmodule BurpeeTrainerWeb.Auth do
   end
 
   @doc """
-  LiveView on_mount hook: loads `:current_user` into socket assigns and
+  LiveView on_mount hook: loads `:current_scope` into socket assigns and
   halts with a redirect when no user is present.
   """
   def on_mount(:require_authenticated_user, _params, session, socket) do
@@ -109,12 +110,27 @@ defmodule BurpeeTrainerWeb.Auth do
         {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/login")}
 
       _ ->
-        level = user |> Workouts.list_sessions() |> Levels.current_level()
+        user = provision_browser_timezone(user, socket)
+        scope = Scope.for_user(user)
+        level = scope |> Workouts.list_sessions() |> Levels.current_level()
 
         {:cont,
          socket
-         |> Phoenix.Component.assign(:current_user, user)
+         |> Phoenix.Component.assign(:current_scope, scope)
          |> Phoenix.Component.assign(:current_level, level)}
+    end
+  end
+
+  defp provision_browser_timezone(user, socket) do
+    case Phoenix.LiveView.get_connect_params(socket) do
+      %{"timezone" => timezone} when is_binary(timezone) ->
+        case Accounts.update_timezone(user, timezone) do
+          {:ok, updated_user} -> updated_user
+          {:error, _changeset} -> user
+        end
+
+      _connect_params ->
+        user
     end
   end
 end

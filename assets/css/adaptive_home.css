@@ -1,0 +1,1110 @@
+/* Motion: two durations and two curves for every move on Home, History and Coach.
+   Quick for fades, folds and hovers; settle for things that arrive or open. */
+:root {
+  /* Type: three sizes, plus Home's one title. Display for headings and big numbers, body
+     for what you read and tap, small for labels and chart scales; title is today's
+     workout or result on Home. */
+  --text-title: 34px;
+  --text-display: 28px;
+  --text-body: 16px;
+  --text-small: 13px;
+  --motion-quick: 180ms;
+  --motion-settle: 360ms;
+  --motion-stagger: 80ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+}
+/* Home, History and Coach share one page: no nested gutters, the theme background. */
+.session-surface:has(> :is(#home-page, #history-page, #login-page) .adaptive-home) {
+  padding: 0;
+}
+:is(#home-page, #history-page, #login-page):has(.adaptive-home) {
+  max-width: none;
+  padding: 0;
+}
+.adaptive-home {
+  max-width: 410px;
+  margin-inline: auto;
+  padding: calc(26px + env(safe-area-inset-top)) 28px 34px;
+  color: #1d1d1b;
+  font: 400 var(--text-body) / 1.55 var(--font-sans);
+  --home-muted: #736f68;
+  --home-line: #d8d5ce;
+  --home-surface: var(--color-base-100);
+}
+.adaptive-home button {
+  cursor: pointer;
+}
+#home-state-content[hidden],
+#home-page:has(#home-history) #home-state-content {
+  display: none;
+}
+#home-week-progress {
+  color: var(--home-muted);
+  font-size: var(--text-small);
+}
+.home-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+#home-week-dates {
+  font-size: var(--text-small);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+#home-week-track {
+  height: 2px;
+  background: var(--home-line);
+  margin-top: 8px;
+}
+#home-week-fill {
+  display: block;
+  height: 100%;
+  background: #20201e;
+}
+.home-summary {
+  display: block;
+  width: 100%;
+  margin-top: clamp(140px, calc(30svh + 28px), 298px);
+  padding: 0 0 18px;
+  text-align: center;
+  transition: margin-top var(--motion-quick) var(--ease-out);
+}
+.home-summary-expanded {
+  margin-top: 50px;
+}
+.home-workout-name {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.9px;
+}
+button.home-summary:hover .home-workout-name {
+  color: #55534c;
+}
+.home-workout-totals {
+  display: block;
+  margin-top: 11px;
+  font-size: var(--text-body);
+  font-weight: 400;
+  color: #68645e;
+}
+.home-expansion {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--motion-quick) ease,
+    opacity var(--motion-quick) ease,
+    visibility 0s linear var(--motion-quick);
+}
+.home-expansion[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows var(--motion-quick) ease,
+    opacity var(--motion-quick) ease,
+    visibility 0s;
+}
+/* Reserve focus outline room without moving the structure off the 28px inset. */
+.home-expansion-content {
+  min-height: 0;
+  overflow: hidden;
+  margin-inline: -5px;
+  padding-inline: 5px;
+}
+#home-adjustment-form {
+  margin-top: 22px;
+}
+/* Core input's fieldset carries a small DaisyUI font and padding even with a custom input class. */
+#home-adjustment-form .fieldset {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+}
+.home-adjustment-row {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  border-bottom: 1px solid var(--home-line);
+}
+.home-adjustment-row .home-action { flex: none; margin: 0; }
+.home-adjustment-row:focus-within { border-bottom-color: #5e615b; }
+#home-adjustment {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #24231e;
+  font: 400 var(--text-body) / 1.6 var(--font-sans);
+  resize: none;
+  overflow-y: hidden;
+  box-shadow: none;
+}
+#home-adjustment::placeholder {
+  color: #817c72;
+  opacity: 1;
+}
+.home-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 12px 0 0 auto;
+  padding: 10px;
+  transition: opacity var(--motion-quick) ease;
+}
+.home-action:hover {
+  opacity: 0.65;
+}
+.home-local-message {
+  margin-block: 8px;
+  color: var(--home-muted);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+.home-local-message:empty {
+  margin: 0;
+}
+.adaptive-home :is(button, textarea):focus-visible {
+  outline: 2px solid #5e615b;
+  outline-offset: 3px;
+}
+.adaptive-home #home-adjustment:focus-visible { outline: none; }
+#home-inspection {
+  padding-top: 14px;
+  overflow-x: auto;
+}
+#home-inspection table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+#home-inspection :is(th, td) {
+  padding: 10px 0;
+  font-weight: 400;
+  text-align: right;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--home-line);
+}
+#home-inspection tbody > tr {
+  height: 52px;
+}
+#home-inspection tbody :is(th, td) {
+  padding-block: 3px;
+}
+#home-inspection thead th {
+  white-space: nowrap;
+  color: var(--home-muted);
+}
+#home-inspection :is(th, td):first-child {
+  width: 28%;
+  text-align: left;
+}
+#home-inspection :is(th, td):nth-child(2) {
+  width: 12%;
+  padding-left: 8px;
+}
+#home-inspection :is(th, td):nth-child(n + 3) {
+  width: 30%;
+  padding-left: 8px;
+}
+#home-inspection[data-move="true"] :is(th, td):first-child {
+  width: 24%;
+}
+#home-inspection[data-move="true"] :is(th, td):nth-child(n + 3) {
+  width: 22%;
+}
+#home-inspection td > span {
+  display: block;
+  white-space: nowrap;
+}
+#home-inspection:focus-visible {
+  outline: 2px solid #5e615b;
+  outline-offset: 3px;
+}
+/* One stable native button owns the entire disclosure row, including its prescription cells. */
+.home-group-row {
+  position: relative;
+}
+.home-group-toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.adaptive-home .home-group-toggle:focus-visible {
+  outline: none;
+}
+.home-group-toggle:focus-visible::after {
+  outline: 2px solid #5e615b;
+  outline-offset: 2px;
+}
+.home-group-row:hover {
+  background: rgb(115 111 104 / 4%);
+}
+.home-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+}
+.home-chevron {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  color: #807a6f;
+  transition: transform var(--motion-quick) ease;
+}
+.home-group-toggle .home-chevron {
+  width: 14px;
+  height: 14px;
+  color: #625e56;
+}
+[aria-expanded="true"] > .home-chevron {
+  transform: rotate(180deg);
+}
+#home-filter-toggle {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  color: #817b70;
+}
+#home-filter-toggle[aria-expanded="true"] { color: #262722; }
+/* Filters are the same rounded choices as New's: one shape for every pick in the app. */
+#home-filters { display: grid; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--home-line); }
+#home-filters [role="group"] { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-filter-level-heading { display: flex; align-items: center; justify-content: space-between; color: var(--home-muted); font-size: var(--text-body); }
+#home-filter-reset { min-height: 44px; padding: 0 0 0 12px; color: var(--home-muted); font-size: var(--text-body); }
+#home-filter-reset:hover { color: #262722; }
+#home-alternatives-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 15px 0 4px;
+}
+.adaptive-home [role="tablist"] {
+  display: flex;
+  gap: 22px;
+}
+.adaptive-home [role="tab"] {
+  min-height: 44px;
+  padding: 10px 0;
+  font-size: var(--text-body);
+  color: var(--home-muted);
+  border-bottom: 1px solid transparent;
+}
+.adaptive-home [role="tab"][aria-selected="true"] {
+  color: #1d1d1b;
+  border-bottom-color: #6d665b;
+}
+.home-alternative-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--home-line);
+}
+.home-alternative-row .home-alternative {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+.home-alternative {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 16px 0;
+  text-align: left;
+  border-bottom: 1px solid #ddd7cd;
+  overflow-wrap: anywhere;
+}
+.home-alternative:hover .home-alternative-name {
+  color: #55534c;
+}
+.home-alternative-name,
+.home-alternative-metadata {
+  display: block;
+}
+.home-alternative-metadata {
+  margin-top: 3px;
+  font-size: var(--text-small);
+  color: var(--home-muted);
+}
+#home-update-loading {
+  display: grid;
+  min-height: 16rem;
+  place-items: center;
+}
+.home-loading-animation {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--home-line);
+  border-top-color: #1d1d1b;
+  border-radius: 50%;
+  animation: home-loading 900ms linear infinite;
+}
+@keyframes home-loading {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (min-width: 501px) {
+  .home-summary-expanded {
+    margin-top: 58px;
+  }
+}
+@media (max-height: 640px) {
+  .home-summary {
+    margin-top: calc(20svh + 20px);
+  }
+  .home-summary-expanded {
+    margin-top: 30px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-summary,
+  .home-action,
+  .home-chevron,
+  .home-expansion,
+  .home-expansion[data-open="true"] {
+    transition: none;
+  }
+  .home-loading-animation {
+    animation: none;
+  }
+}
+
+/* Inline saved results share Home's surface; History becomes a compact phone dashboard. */
+.home-result,
+.home-history {
+  margin-top: 2.5rem;
+}
+.home-state-label,
+.home-result-totals dt {
+  color: var(--home-muted);
+  font-size: var(--text-small);
+}
+.home-state-heading {
+  margin: 0.35rem 0 0;
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+.home-state-action {
+  margin-top: 1.5rem;
+  padding: 0.5rem 0;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+.home-result-totals {
+  margin-top: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.home-result-totals dt:not(:first-child) {
+  margin-top: 0.75rem;
+}
+.home-result-duration {
+  font-size: var(--text-display);
+  line-height: 1.4;
+}
+.home-history {
+  width: 100%;
+  max-width: 42rem;
+  margin-top: 1.5rem;
+  overflow: hidden;
+}
+.home-history > * + * {
+  margin-top: 1rem;
+}
+.home-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.home-history-more {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--home-line);
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+}
+.home-history-periods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--home-line);
+  border-radius: 0.875rem;
+}
+.home-history-period {
+  min-height: 44px;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.25rem;
+  color: var(--home-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+.home-history-period[aria-pressed="true"] {
+  background: #8d3d25;
+  color: white;
+}
+.home-history-kpis {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(8rem, 1fr);
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.125rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.home-history-kpi,
+.home-history-trend,
+.home-history-session-card > td {
+  border: 1px solid var(--home-line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--home-surface) 92%, white);
+}
+.home-history-kpi {
+  min-height: 6.5rem;
+  padding: 0.875rem;
+  scroll-snap-align: start;
+  font-variant-numeric: tabular-nums;
+}
+.home-history-kpi p {
+  color: var(--home-muted);
+  font-size: var(--text-small);
+}
+.home-history-kpi strong {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: var(--text-body);
+  line-height: 1.2;
+}
+.home-history-trend {
+  padding: 1rem;
+}
+.home-history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  color: var(--home-muted);
+  font-size: var(--text-small);
+}
+.home-history-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  background: #8d3d25;
+}
+.home-history-plot {
+  padding: 1rem 0.75rem;
+}
+.home-history-plot-area {
+  position: relative;
+  height: 9rem;
+  border-bottom: 1px solid var(--home-line);
+  border-left: 1px solid var(--home-line);
+}
+.home-history-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: #8d3d25;
+}
+.home-history-point {
+  position: absolute;
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+}
+.home-history-point span {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: #8d3d25;
+}
+.home-history-trend-empty,
+.home-history-empty {
+  color: var(--home-muted);
+  font-size: var(--text-small);
+}
+.home-history-table-region {
+  max-width: 100%;
+}
+.home-history-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.home-history-session-card {
+  display: table-row;
+}
+.home-history-session-card > td {
+  display: block;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.home-history-session-toggle {
+  display: grid;
+  width: 100%;
+  min-height: 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.75rem;
+  text-align: left;
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+}
+.home-history-session-name {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.home-history-session-chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  transition: transform var(--motion-quick) ease;
+}
+.home-history-session-toggle[aria-expanded="true"]
+  .home-history-session-chevron {
+  transform: rotate(180deg);
+}
+.home-history-session-type {
+  margin-top: 0.5rem;
+  color: var(--home-muted);
+  font-size: var(--text-small);
+}
+.home-history-period:focus-visible,
+.home-history-more:focus-visible,
+.home-history-session-toggle:focus-visible,
+.home-history-point:focus-visible {
+  outline: 2px solid #8d3d25;
+  outline-offset: 3px;
+}
+@media (min-width: 640px) {
+  .home-history {
+    max-width: 56rem;
+  }
+  .home-history-kpis {
+    grid-auto-flow: initial;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-history-session-chevron {
+    transition: none;
+  }
+}
+
+/* Keep the approved Home/History measure on wide screens instead of stretching the grid. */
+.adaptive-home {
+  max-width: 390px;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: calc(32px + env(safe-area-inset-top)) 30px 75px;
+  color: #262722;
+  font-family: var(--font-sans);
+  --home-muted: #696b65;
+  --home-line: #d6d7d0;
+  --home-surface: var(--color-base-100);
+}
+#home-progress-history { max-width: 100%; }
+#home-week-track { background: var(--home-line); }
+#home-week-fill { background: #262722; }
+#home-ready-recommendation, .home-result { max-width: 100%; margin-inline: auto; }
+#home-ready-recommendation:has(.home-hero), #home-done-today, #home-week-complete { margin-top: clamp(65px, 12vh, 150px); }
+#home-done-today, #home-week-complete { padding-bottom: 23px; border-bottom: 1px solid var(--home-line); }
+.home-result .home-state-heading { margin-top: 14px; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
+.home-result-meta { margin-top: 14px; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.home-eyebrow { margin-bottom: 14px; color: var(--home-muted); font-size: var(--text-small); }
+.home-hero { padding-bottom: 23px; border-bottom: 1px solid var(--home-line); }
+.home-hero-main { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 640px; }
+.home-hero h1 { min-width: 0; }
+.home-summary, .home-summary-expanded { width: auto; margin: 0; padding: 0; text-align: left; }
+.home-workout-name { font: 400 var(--text-title)/1.08 var(--font-sans); letter-spacing: -.045em; text-wrap: balance; }
+.home-workout-totals { margin-top: 12px; color: var(--home-muted); font-size: var(--text-small); }
+.home-title-action { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; color: #24231e; transition: background var(--motion-quick), color var(--motion-quick); }
+.home-title-action:hover, .home-action:hover { background: #efefeb; opacity: 1; }
+.home-expansion { margin-top: 0; }
+#home-inspection { max-width: 640px; padding-top: 26px; }
+#home-inspection table { font-variant-numeric: tabular-nums; }
+#home-adjustment-form { display: flex; flex-direction: column; max-width: 640px; margin-top: 30px; }
+#home-adjustment { min-height: 28px; font-size: var(--text-body); }
+.home-action { position: static; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; }
+.home-action-icon-update, #home-adjustment-form[data-has-instruction="true"] .home-action-icon-start { display: none; }
+#home-adjustment-form[data-has-instruction="true"] .home-action-icon-update { display: block; }
+#home-chooser-backdrop { position: fixed; inset: 0; z-index: 40; background: #24252255; }
+#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; left: 50%; bottom: 0; width: min(580px, 100%); max-height: min(78svh, 740px); overflow-y: auto; padding: 20px clamp(24px, 5vw, 38px) 42px; border-radius: 16px 16px 0 0; background: var(--color-base-200); transform: translateX(-50%); }
+@media (min-width: 601px) {
+  .adaptive-home {
+    max-width: 1040px;
+    padding: 48px clamp(30px, 4vw, 64px) 80px;
+  }
+  #home-ready-recommendation, .home-result, #home-history, #home-coach-panel { max-width: 640px; }
+  #home-chooser-backdrop { position: fixed; border-radius: 0; }
+  #home-alternatives-panel:not([hidden]) {
+    position: fixed;
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(580px, calc(100vw - 48px));
+    padding: 28px 38px 38px;
+    border-radius: 16px;
+    transform: translate(-50%, -50%);
+  }
+}
+.home-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.home-chooser-header h2 { font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -.02em; }
+.home-chooser-header button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+.home-loading-animation { width: 142px; height: 142px; border: 0; border-radius: 0; animation: none; object-fit: contain; }
+.home-state-heading { font: 400 var(--text-title)/1.12 var(--font-sans); letter-spacing: -.9px; }
+.home-resume-action { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; border-bottom: 1px solid #262722; font-size: var(--text-body); }
+.home-resume-action:hover { color: #55534c; }
+.home-history { max-width: 100%; margin: 0 auto; overflow: visible; }
+
+.home-history-streak-line { white-space: nowrap; }
+.home-history-streak-line strong { font: 600 var(--text-display)/1 var(--font-sans); letter-spacing: -.02em; }
+.home-history-periods { display: flex; gap: 26px; padding: 0; margin-top: 20px; border: 0; border-radius: 0; }
+.home-history-period { border-radius: 0; min-height: 33px; padding: 0 0 12px; font-weight: 400; font-size: var(--text-body); }
+.home-history-period[aria-pressed='true'] { background: transparent; color: #262722; border-bottom: 1.5px solid #262722; }
+#home-history-weekly { margin-top: 24px; }
+#home-history-weekly h2, .home-history-sessions-heading { font-size: var(--text-body); font-weight: 600; }
+.home-history-week-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; gap: 12px; }
+.home-history-week-count { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
+.home-history-week-oldest { color: var(--home-muted); font-size: var(--text-small); }
+.home-history-week-grid { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 0; }
+.home-history-week-row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; }
+.home-history-week-cell { aspect-ratio: 1; border-radius: 2px; }
+.home-history-week-open { outline: 1px dashed #262722; outline-offset: 1px; }
+.home-history-tone-0 { background: #e9ebe8; }
+.home-history-tone-1 { background: #dce9eb; }
+.home-history-tone-20 { background: #bed9de; }
+.home-history-tone-40 { background: #8cb8c2; }
+.home-history-tone-60 { background: #568b9a; }
+.home-history-tone-80 { background: #245b70; }
+.home-history-week-oldest { margin-top: 9px; }
+.home-history-trend { margin-top: 36px; padding: 0; border: 0; background: transparent; }
+.home-history-trend-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
+.home-history-plot { display: grid; grid-template-columns: 29px minmax(0, 1fr); gap: 10px; margin-top: 20px; padding: 0; }
+.home-history-plot:has(.home-history-trend-axis-right) { grid-template-columns: 29px minmax(0, 1fr) 29px; }
+.home-history-plot .home-history-trend-axis-right { grid-column: 3; grid-row: 1; text-align: left; }
+.home-history-plot .home-history-trend-axis-left { grid-column: 1; grid-row: 1; }
+.home-history-plot .home-history-plot-area { grid-column: 2; grid-row: 1; }
+.home-history-trend-axis { position: relative; height: 120px; font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
+.home-history-trend-axis span { position: absolute; inset-inline: 0; transform: translateY(-50%); line-height: 1; }
+.home-history-plot-area { height: 120px; border: 0; background: none; }
+.home-history-grid { stroke: var(--home-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.home-history-grid.home-history-goal-line { stroke: #8a877f; stroke-dasharray: 3 3; }
+.home-history-svg { color: var(--series-six-count); }
+.home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--series-six-count); border-radius: 0; background: var(--home-surface); }
+.home-history-point-navy-seal span { border-color: var(--series-navy-seal); }
+.home-history-legend { margin-top: 12px; font-size: var(--text-small); }
+.home-history-legend span::before { width: 15px; height: 0; border: 0; border-top: 2px solid var(--series-six-count); border-radius: 0; background: transparent; }
+.home-history-legend #home-history-navy-seal::before { border-top: 2px dashed var(--series-navy-seal); border-radius: 0; background: transparent; }
+.home-history-sessions-heading { margin-top: 44px; }
+.home-history-table { table-layout: auto; }
+.home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
+.home-history-sheet-tags { display: flex; flex-wrap: wrap; gap:7px; margin-top:18px; }
+.home-history-sheet-tags span { padding:5px 8px; border:1px solid var(--home-line); border-radius:3px; color:var(--home-muted); font-size: var(--text-small); }
+#home-history-sheet-note { margin-top: 12px; font-size: var(--text-body); line-height: 1.5; }
+@media (max-width: 600px) { .adaptive-home { padding-inline: 30px; } }
+@media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } .home-loading-animation { display: none; } }
+/* Measured local-day detail keeps the same 80-minute visual ceiling as weekly cells. */
+.home-history-week-cell { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform var(--motion-quick) ease; }
+.home-history-week-cell:hover { transform: translateY(-2px); }
+.home-history-week-cell:focus-visible, #home-history-week-back:focus-visible { outline: 2px solid #262722; outline-offset: 3px; }
+#home-history-week-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 7px 0; font-size: var(--text-small); }
+.home-history-daily { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; max-width: 640px; padding-top: 21px; }
+.home-history-day-axis { display: flex; height: 121px; flex-direction: column; justify-content: space-between; color: var(--home-muted); font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
+.home-history-day-plot { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; height: 121px; border-bottom: 1px solid var(--home-line); background: linear-gradient(to bottom, var(--home-line) 0 1px, transparent 1px 50%, var(--home-line) 50% calc(50% + 1px), transparent calc(50% + 1px)); }
+.home-history-day { position: relative; display: flex; align-items: end; justify-content: center; min-width: 0; height: 121px; }
+.home-history-day-bar { display: block; width: min(100%, 24px); min-height: 0; background: #568b9a; border-radius: 2px 2px 0 0; }
+.home-history-day-label { position: absolute; top: calc(100% + 8px); left: 0; right: 0; text-align: center; color: var(--home-muted); font-size: var(--text-small); }
+.home-history-line-six-count { color: var(--series-six-count); }
+.home-history-line-navy-seal { color: var(--series-navy-seal); }
+.home-history-point-six-count span { background: var(--home-surface); border-color: var(--series-six-count); }
+.home-history-point-navy-seal span { background: var(--home-surface); border-color: var(--series-navy-seal); border-radius: 0; }
+.home-history-legend #home-history-navy-seal::before { background: transparent; border-top-color: var(--series-navy-seal); border-radius: 0; }
+@media (prefers-reduced-motion: reduce) { .home-history-week-cell { transition: none; } }
+#home-history-empty { margin-top: 24px; }
+.home-history-day-bar { position: relative; }
+.home-history-day-value { position: absolute; bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--home-muted); font-size: var(--text-small); white-space: nowrap; }
+/* The approved density view swaps its chart and session list in the same place. */
+#home-history-trend, #home-history-sessions-panel { max-width: 640px; }
+#home-history-trend[hidden], #home-history-sessions-panel[hidden] { display: none; }
+.home-history-trend-open-sessions { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; cursor: pointer; }
+.home-history-point { z-index: 3; }
+.home-history-sessions-panel { margin-top: 36px; }
+.home-history-sessions-panel .home-history-trend-heading { margin-bottom: 18px; font-size: var(--text-body); font-weight: 600; }
+.home-history-sessions-panel .home-history-sessions-heading { margin: 0; }
+.home-history-session-columns, .home-history-sessions-panel .home-history-session-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 55px;
+  gap: 9px;
+  align-items: center;
+}
+.home-history-session-columns span:nth-child(n+2), .home-history-session-reps, .home-history-session-time { text-align: right; }
+.home-history-sessions-panel .home-history-session-card > td { padding: 0; border-top: 0; }
+.home-history-sessions-panel .home-history-session-toggle { min-height: 44px; padding: 13px 0; border-bottom: 1px solid var(--home-line); }
+.home-history-session-summary { min-width: 0; }
+.home-history-session-name { display: block; font-weight: 550; }
+.home-history-session-summary small { display: block; margin-top: 3px; color: var(--home-muted); font-size: var(--text-small); }
+.home-history-session-reps, .home-history-session-time { font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+#home-done-today { border-bottom: 0; }
+.home-coach-panel { width: 100%; max-width: 640px; margin: 32px auto 0; padding-top: 24px; border-top: 1px solid var(--home-line); text-align: left; }
+/* History and Coach start where Home's top row does, so Back never moves between screens. */
+.screen-heading { margin: 16px 0 0; font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -0.02em; }
+/* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
+.screen-heading:focus { outline: none; }
+/* New and Edit take today's workout's place smoothly: it fades out, they rise in. */
+@keyframes home-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* backwards, not both: a held end state would override the hero's fade on its next leave. */
+.home-enter { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.home-authoring-form.home-enter { animation-delay: var(--motion-stagger); }
+/* The workout stays faded until the server's reply replaces it, however long that takes. */
+#home-workout-hero { transition: opacity var(--motion-quick) ease-in; }
+#home-workout-hero.home-leaving,
+#home-workout-hero:has(#home-new-workout.phx-click-loading, #home-edit-workout.phx-click-loading) { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .home-enter { animation: none; } #home-workout-hero { transition: none; } }
+.home-authoring-source { margin-top: 6px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.4; }
+.home-review-name { margin: 18px 0 4px; color: #262722; font: 600 var(--text-body)/1.3 var(--font-sans); letter-spacing: -0.01em; }
+.screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
+.home-coach-summary-text { margin-top: 18px; font-size: var(--text-body); line-height: 1.6; overflow-wrap: anywhere; }
+#home-coach-goals { margin-top: 28px; }
+/* Coach's message is a New form row: the label above an underlined field that grows with its text. */
+.home-authoring-form.coach-message-form { margin-top: 8px; }
+.coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: var(--text-small); }
+.coach-guidance-status:empty { display: none; }
+.history-coach-memory { margin-top: 32px; }
+.history-coach-memory summary { display: flex; align-items: center; min-height: 44px; color: var(--home-muted); font-size: var(--text-body); cursor: pointer; }
+.history-coach-memory summary:hover { color: #24231e; }
+.history-coach-memory summary { justify-content: space-between; list-style: none; }
+.history-coach-memory summary::-webkit-details-marker { display: none; }
+.history-coach-memory-chevron { transition: transform var(--motion-quick) ease; }
+.history-coach-memory[open] .history-coach-memory-chevron { transform: rotate(180deg); }
+.history-coach-entry { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-body); }
+.history-coach-entry p { flex: 1; }
+/* History header: facts at a glance, then the coach summary as the way into Coach. */
+.history-header { margin-top: 8px; }
+.history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
+.coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: var(--text-small); }
+.coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }
+.home-edit-structure summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--home-muted); font-size: var(--text-small); }
+.home-edit-structure ol { font-size: var(--text-small); line-height: 1.8; color: var(--home-muted); }
+.adaptive-home .history-coach-memory summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
+
+/* Approved title-led Home: stable actions, quiet inline authoring. */
+#home-ready-recommendation:has(.home-hero) {
+  margin-top: clamp(120px, calc(39svh - 110px), 280px);
+  transition: margin-top var(--motion-settle) var(--ease-out);
+}
+#home-ready-recommendation[data-expanded="true"]:has(.home-hero) { margin-top: 56px; }
+#home-ready-recommendation { max-width: 354px; }
+#home-ready-recommendation .home-hero { padding: 0; border: 0; text-align: center; }
+#home-ready-recommendation .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
+#home-ready-recommendation .home-workout-totals { font-size: var(--text-body); }
+#home-ready-recommendation .home-hero-main { display: block; }
+#home-ready-recommendation .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
+#home-ready-recommendation .home-eyebrow { display: none; }
+/* Start is the one filled action in the centre; Edit, Switch and New open as quiet words
+   beneath it. The row takes no space while closed. */
+.home-workout-actions { display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto 0px; justify-content: center; justify-items: center; column-gap: 4px; margin: 26px auto 18px; align-items: start; }
+.home-workout-actions[data-expanded="true"] { grid-template-rows: auto auto; }
+.home-workout-actions #home-action { grid-column: 2; grid-row: 1; }
+/* Camera and warmup flank play: on is ink, off is muted and struck through. */
+.home-workout-actions #home-start-camera { grid-column: 1; grid-row: 1; }
+.home-workout-actions #home-start-warmup { grid-column: 3; grid-row: 1; }
+.home-start-choice { position: relative; min-width: 44px; padding-inline: 14px; }
+.home-start-choice[aria-pressed="true"] { color: #262722; }
+.home-start-choice[aria-pressed="false"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
+.home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
+.home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
+.home-workout-actions #home-new-workout { grid-column: 3; grid-row: 2; }
+.home-workout-actions #home-action { padding-inline: 36px; }
+.home-workout-actions .home-expanded-action { margin-top: 12px; padding-inline: 14px; }
+.home-workout-actions .home-expanded-action { opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity var(--motion-quick) ease, transform var(--motion-settle) var(--ease-out), visibility 0s linear var(--motion-quick); }
+.home-workout-actions[data-expanded="true"] .home-expanded-action { opacity: 1; visibility: visible; transform: translateY(0); transition: opacity var(--motion-settle) ease var(--motion-stagger), transform var(--motion-settle) var(--ease-out) var(--motion-stagger), visibility 0s; }
+#home-ready-recommendation .home-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
+#home-ready-recommendation .home-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
+.home-review, .home-authoring-form { margin-top: 14px; }
+.home-review-heading { padding: 11px 0 13px; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: var(--text-small); font-weight: 400; }
+.home-review-values > div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--home-line); padding: 14px 0; border-radius: 0; background: transparent; font-size: var(--text-body); }
+.home-review-values dt { color: var(--home-muted); }
+.home-review-values dd { margin: 0; font-weight: 400; text-align: right; }
+.home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
+/* New form actions are words: a quiet Cancel or Edit, and one filled primary action. */
+.home-review-actions:has(.home-text-action, .home-primary-action) { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
+.home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
+.home-text-action { background: transparent; border: 0; color: var(--home-muted); }
+.home-text-action:hover { color: #262722; }
+.home-primary-action { background: #262722; border: 1px solid #262722; color: var(--color-base-100); }
+.home-primary-action:hover { opacity: .85; }
+:is(.home-text-action, .home-primary-action):disabled { opacity: .4; cursor: default; }
+#home-request-timing { color: var(--home-muted); font-size: var(--text-small); }
+/* Every row of the New form: label left, value right, one height and one value size. */
+.home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--home-line); font: inherit; display: flex; align-items: center; }
+.home-authoring-form .fieldset > label { flex: 1; }
+.home-authoring-form .fieldset label { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; }
+.home-authoring-form .label { padding: 0; color: var(--home-muted); font-size: var(--text-body); }
+.home-authoring-form .fieldset label:has(.input-unit):not(:has(input:placeholder-shown)) { grid-template-columns: 1fr 1.4fr auto; }
+.home-authoring-form .input-unit { color: var(--home-muted); font-size: var(--text-small); }
+.home-authoring-form label:has(input:placeholder-shown) .input-unit { display: none; }
+.home-authoring-input { display: block; width: 100%; min-width: 0; min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: #1d1d1b; font: 400 var(--text-body)/1.5 var(--font-sans); text-align: right; box-shadow: none; }
+/* Pauses and Note stack: label above, a full-width field that grows with its text. */
+textarea.home-authoring-input { text-align: left; resize: none; field-sizing: content; min-height: 1.5em; }
+.home-authoring-form .fieldset label:has(textarea) { grid-template-columns: 1fr; gap: 4px; }
+.home-authoring-input::placeholder { color: var(--home-muted); opacity: 1; }
+/* The focused field underlines its row instead of drawing a box past the column edge. */
+.home-authoring-form .home-authoring-input:focus-visible { outline: none; }
+.home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
+.home-authoring-form input[type="hidden"] { display: none; }
+#home-new-form .home-authoring-input:disabled { opacity: 1; color: #1d1d1b; -webkit-text-fill-color: #1d1d1b; }
+.home-pill-row { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; min-height: 60px; padding: 8px 0; border-bottom: 1px solid var(--home-line); }
+.home-pill-row:first-of-type { border-top: 1px solid var(--home-line); }
+.home-pill-label { color: var(--home-muted); font-size: var(--text-body); }
+.home-pill-options { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; }
+#home-new-form .home-selection-pill, #home-filters [role="group"] button { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
+#home-new-form .home-selection-pill[aria-pressed="true"], #home-filters [role="group"] button[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
+#home-new-form .home-selection-pill:disabled { opacity: 1; }
+/* Work and recovery is computed, not typed: a caption under Duration, not a row. */
+/* Duration and its Movement/Recovery caption read as one row; with no caption, Duration keeps its own line. */
+.home-authoring-form .fieldset:has(#home_workout_duration):has(+ #home-workout-budget:has(*)) { border-bottom: 0; }
+.home-budget { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 0 12px; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: var(--text-body); line-height: 1.5; font-variant-numeric: tabular-nums; }
+.home-budget strong { margin-left: 6px; color: #262722; font-weight: 400; }
+.home-budget-detail { color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
+.home-budget > .home-budget-detail { flex-basis: 100%; }
+.home-rest-alternative { margin-top: 14px; font-size: var(--text-small); line-height: 1.7; }
+#home-new-form .home-alternative-choice { min-height: 44px; margin-top: 8px; padding: 8px 0; background: transparent; border: 0; border-bottom: 1px solid var(--home-line); color: #262722; font-size: var(--text-small); }
+@media (prefers-reduced-motion: reduce) { #home-new-form .home-selection-pill, #home-filters [role="group"] button { transition: none; } }
+.adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"], .home-workout-actions .home-expanded-action, .home-workout-actions[data-expanded="true"] .home-expanded-action { transition: none; }
+}
+
+/* The streak: its number at display size and its words on the same baseline. */
+/* Streak and level: two numbers side by side, each with its word on the same baseline. */
+.home-history-status { display: flex; gap: 40px; margin-top: 32px; }
+.home-history-streak-line { display: flex; align-items: baseline; gap: 8px; }
+.home-history-streak-line span { color: var(--home-muted); font-size: var(--text-body); }
+/* Coach's Send is the primary pill inside the field row, shown once there is something to send. */
+.coach-message-form { position: relative; }
+#home-coach-message-text { padding-right: 88px; }
+.coach-send { position: absolute; right: 0; bottom: 10px; min-height: 36px; padding: 0 16px; transition: opacity var(--motion-quick) ease, visibility 0s; }
+.coach-message-form:has(textarea:placeholder-shown) .coach-send { opacity: 0; visibility: hidden; transition: opacity var(--motion-quick) ease, visibility 0s linear var(--motion-quick); }
+.coach-send:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
+/* The progress row keeps the column's edges on wide screens, on Home and History alike. */
+@media (min-width: 601px) { #history-progress, #home-progress-history { max-width: 640px; margin-inline: auto; } }
+/* Sign in sits where Home's workout does, with the app's one primary button. */
+.login { max-width: 354px; margin: clamp(120px, calc(39svh - 110px), 280px) auto 0; text-align: center; }
+.login .screen-heading { margin: 0; }
+.login-note { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
+.login-action { display: inline-flex; align-items: center; margin-top: 28px; text-decoration: none; }
+@media (prefers-reduced-motion: reduce) { .coach-send { transition: none; } }
+
+/* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
+.home-chooser-header .home-text-action { margin-right: -20px; padding-inline: 20px; }
+/* Coach's fields are named by their placeholder; the label stays for screen readers only. */
+.coach-quiet-label .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#home-workout-budget:empty, #home-workout-budget:not(:has(*)) { display: none; }
+/* The density readout sits under its heading like the streak and level pair. */
+.home-history-trend-readout { margin-top: 12px; }
+/* Points are dots: six-count filled ink, navy seal an open ring. */
+.adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--home-surface); background: var(--series-six-count); outline: 1px solid var(--series-six-count); }
+.adaptive-home .home-history-point-navy-seal span { background: var(--home-surface); outline: 1.5px solid var(--series-navy-seal); }
+/* A session's numbers sit like the streak pair: what was done, then "of" the plan. */
+.home-history-comparison { flex-wrap: wrap; gap: 12px 32px; margin-top: 20px; }
+/* View switches sit at the heading's right edge and look like the period tabs. */
+/* Switch opens in place: the list takes the set table's spot under the workout, which stays
+   above it, inactive, as context. No backdrop, nothing covers the page. */
+#home-chooser-backdrop { display: none; }
+#home-alternatives-panel:not([hidden]) { position: static; inset: auto; z-index: auto; width: auto; max-height: none; overflow: visible; margin-top: 24px; padding: 0; border-radius: 0; background: transparent; transform: none; }
+.adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: none; }
+.home-workout-actions[inert] { opacity: .45; transition: opacity var(--motion-quick) ease; }
+#home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
+#home-alternatives-panel:not([hidden]) { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+/* The workout you have now reads heavier in the list, so you can see what you would swap. */
+.home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
+/* New's title takes the workout title's place: centred, at the title size. */
+.home-authoring-title { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-align: center; text-wrap: balance; }
+/* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
+.adaptive-home mark.home-changed { background: transparent; color: inherit; }
+.adaptive-home .home-changed { font-weight: 600; color: #262722; text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+.adaptive-home td.home-changed, .adaptive-home th.home-changed { text-decoration: none; }
+.adaptive-home td.home-changed span, .adaptive-home th.home-changed > span { text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+/* New's title lands exactly where the open workout's title was. */
+#home-ready-recommendation[data-expanded="true"]:has(#home-authoring-heading) { margin-top: 56px; }
+/* The status row opens the page under its heading; the period tabs then open the record. */
+.home-history-periods { margin-top: 36px; }
+/* A finished day reads like the workout did: centred in Home's column, at the hero's height. */
+#home-done-today, #home-week-complete { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
+#home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
+.home-result-insight { max-width: 354px; margin: 20px auto 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-align: center; }
+/* Progress groups breathe evenly: status, goals, coach. */
+/* Progress: the coach's look back, then one gauge per burpee type, side by side. */
+.history-header .history-coach-summary { display: block; margin-top: 24px; padding: 0; color: #262722; font-size: var(--text-body); line-height: 1.6; }
+.progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--home-line); }
+.progress-gauge { display: flex; flex-direction: column; min-width: 0; }
+.progress-gauge p { margin: 0; }
+.progress-gauge-type, .progress-gauge-label { color: var(--home-muted); font-size: var(--text-small); }
+.adaptive-home .progress-gauge-number { margin-top: 8px; color: #262722; font: 600 48px/1 var(--font-sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.adaptive-home .progress-gauge-number.progress-gauge-met { color: #6f7d55; }
+.progress-gauge[data-kind="none"] .progress-gauge-number { color: #a8a49c; }
+.progress-gauge-label { margin-top: 8px; }
+.progress-gauge-chart { min-height: 52px; margin-top: 16px; }
+.progress-gauge-meter { height: 4px; overflow: hidden; border-radius: 999px; background: #dcd8d0; }
+.progress-gauge-meter span { display: block; height: 100%; border-radius: inherit; background: #262722; transition: width var(--motion-settle) var(--ease-out); }
+.progress-gauge-meter.progress-gauge-met span { background: #6f7d55; }
+.progress-course { margin: 0; }
+.progress-course svg { display: block; width: 100%; height: 32px; overflow: visible; }
+.progress-course-target { stroke: #262722; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.progress-course-done { fill: none; stroke: #262722; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.progress-course-ahead { fill: none; stroke: #262722; stroke-width: 2; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.progress-course-caption { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
+.progress-course-caption.progress-course-on { color: #262722; }
+.adaptive-home .progress-gauge-set { align-self: flex-start; min-height: 44px; padding: 0; color: #262722; font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .progress-gauge-meter span { transition: none; } }
+.home-result-status { color: var(--home-muted); }
+/* A destructive decision is still the one filled action, in the error colour. */
+.home-danger-action { background: #a55643; border-color: #a55643; color: var(--color-base-100); }
+/* A session opens under its own row: the coach's read, the numbers, then a quiet Delete. */
+.home-history-detail { padding: 4px 0 16px; }
+.home-history-detail #history-insight { margin-top: 4px; }
+.home-history-detail #history-insight-headline { font: 500 var(--text-body)/1.5 var(--font-sans); color: #262722; }
+.home-history-detail #history-insight-points { margin: 6px 0 0; padding: 0; list-style: none; color: var(--home-muted); font-size: var(--text-body); line-height: 1.5; }
+.home-history-detail .home-history-comparison { margin-top: 12px; }
+.home-history-detail .home-review-actions { justify-content: flex-start; margin-top: 8px; }
+.home-history-detail .home-review-actions .home-text-action:first-child { margin-left: -20px; }
+.home-history-delete-ask { margin-top: 12px; }
+.home-history-delete-ask p { color: #262722; font-size: var(--text-body); }
+.home-history-delete-ask .home-review-actions { justify-content: flex-end; }
+.home-history-delete-ask .home-review-actions .home-text-action:first-child { margin-left: 0; }
+/* Progress leads with one headline: the number at 64px, one line saying what, a thin bar. */
+.home-history-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+#history-level { color: inherit; font: inherit; white-space: nowrap; }
+#progress-choose-goal { display: inline-flex; align-items: center; text-decoration: none; }
+/* The coach's line: plain text and a chevron, no panel. */
+/* Other goals: one quiet row each under a hairline. */
+/* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
+.coach-quick-replies { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.coach-quick-replies .home-selection-pill { min-height: 40px; padding: 0 14px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; color: #262722; font: 400 var(--text-body)/1.2 var(--font-sans); }
+.coach-quick-replies .home-selection-pill:disabled { opacity: .45; }
+/* The course: weekly bests climbing to the target, the rest of the way dashed. */
+/* Coach is its own screen: the note leads, then the last exchange, the replies, the field. */
+.coach-note { margin: 0 0 24px; color: #262722; font-size: var(--text-body); line-height: 1.6; }
+.coach-note .coach-summary-text { font-size: inherit; }
+
+/* One colour per burpee type, for its line, its points, its axis and its key. */
+:root { --series-six-count: #245b70; --series-navy-seal: #c8641f; }
+.progress-key-six-count { color: var(--series-six-count); }
+.progress-key-navy-seal { color: var(--series-navy-seal); }
+.adaptive-home .progress-gauge-type { display: flex; align-items: center; gap: 8px; color: var(--home-muted); }
+.progress-gauge-type::before { content: ""; width: 14px; border-top: 2px solid currentColor; }
+.progress-gauge-type.progress-key-six-count::before { border-color: var(--series-six-count); }
+.progress-gauge-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.progress-gauge .progress-course-caption { margin-top: 12px; }
+/* Done opens like the workout day: the title moves up and the coach unfolds under it. */
+#home-done-today, #home-week-complete { transition: margin-top var(--motion-settle) var(--ease-out); }
+#home-done-today[data-expanded="true"], #home-week-complete[data-expanded="true"] { margin-top: 56px; }
+#home-done-today .home-summary, #home-week-complete .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
+#home-done-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
+#home-done-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
+@media (prefers-reduced-motion: reduce) { #home-done-today, #home-week-complete, #home-done-expansion, #home-done-expansion[data-open="true"] { transition: none; } }
+#home-done-today .home-workout-name, #home-week-complete .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
+/* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
+.adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
+.adaptive-home .home-primary-action.home-icon-action { width: 44px; }
+.adaptive-home .coach-send { display: inline-flex; align-items: center; justify-content: center; width: 36px; padding: 0; }
+.adaptive-home .home-workout-actions .home-expanded-action { padding-inline: 10px; }
+.adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+/* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
+.home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--home-line); }
+.adaptive-home .home-history-sessions-panel .home-history-session-toggle { flex: 1; min-width: 0; border-bottom: 0; text-align: left; }
+.adaptive-home .home-history-session-name { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+.home-history-session-name::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
+.home-history-session-name.progress-key-navy-seal::before { border-top-style: dashed; }
+.adaptive-home .home-history-session-name { color: #262722; }
+.home-history-session-name.progress-key-six-count::before { border-color: var(--series-six-count); }
+.home-history-session-name.progress-key-navy-seal::before { border-color: var(--series-navy-seal); }
+.adaptive-home .home-history-session-summary small { padding-left: 20px; }
+.home-history-session-tag::before { content: " · "; }
+.home-history-session-selected .home-history-session-toggle { color: #262722; }
+.home-history-session-delete { margin-left: 4px; color: var(--home-muted); background: transparent; border: 0; animation: home-fade-in var(--motion-quick) ease; }
+.home-history-session-delete-armed { color: #a55643; }
+@keyframes home-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--home-muted); background: transparent; }
+@media (prefers-reduced-motion: reduce) { .home-history-session-delete { animation: none; } }
+
+/* The streak sits opposite the level: a flame and the weeks in a row at the target. */
+.history-streak { display: inline-flex; align-items: center; gap: 4px; color: #262722; font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+/* What the coach noted or forgot: a quiet line between exchanges. */
+.coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
+.coach-memory .size-4 { flex: none; margin-top: 2px; }
+/* A view switch is one icon showing the view it leads to; it sits at the heading's end. */
+.adaptive-home .home-history-switch { min-height: 44px; margin-right: -10px; border: 0; background: transparent; color: var(--home-muted); }
+.adaptive-home .home-history-switch:hover { color: #262722; }
+.home-history-switch:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; border-radius: 8px; }
+/* A workout in progress sits where the workout and the result do, centred like them. */
+#home-ready-recommendation.home-resume { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
+.home-resume .home-state-heading { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
+.home-resume .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+.home-resume .home-result-status { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
+.home-resume .home-resume-actions { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 26px; }
+.home-resume #resume-recommended-workout { padding-inline: 36px; }
+/* Start and Resume are the filled pill with a play mark; the pill keeps its width. */
+.adaptive-home .home-play-action { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; }
+
+/* The coach is a section of Home, not a card: its word, Progress's rows, then a chat. */
+.coach-week { margin: 0 0 24px; padding: 0; border-top: 1px solid var(--home-line); list-style: none; }
+.coach-week-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; border-bottom: 1px solid var(--home-line); font-size: var(--text-body); }
+.adaptive-home .coach-week-type { display: flex; align-items: center; gap: 8px; color: #262722; }
+.coach-week-type::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
+.coach-week-type.progress-key-six-count::before { border-color: var(--series-six-count); }
+.coach-week-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.coach-week-when { color: var(--home-muted); font-variant-numeric: tabular-nums; }
+.adaptive-home .coach-week-left .coach-week-type { color: var(--home-muted); }
+.coach-week-left .coach-week-type::before { opacity: .5; }
+.coach-thread { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.coach-exchange { display: grid; gap: 8px; font-size: var(--text-body); line-height: 1.5; }
+.coach-exchange-you { justify-self: end; max-width: 85%; margin: 0; padding: 8px 14px; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; }
+.coach-exchange-coach { margin: 0; color: #262722; }

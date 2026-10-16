@@ -2,11 +2,29 @@ import Ecto.Query
 
 alias BurpeeTrainer.Accounts.User
 alias BurpeeTrainer.Repo
-alias BurpeeTrainer.Workouts.{PoseCaptureRun, WorkoutPlan, WorkoutSession}
+
+alias BurpeeTrainer.Workouts.{
+  CoachRecommendation,
+  PoseCaptureRun,
+  WorkoutPlan,
+  WorkoutSession,
+  WorkoutVideo
+}
 
 if Mix.env() == :prod do
   raise "workout-session E2E cleanup refuses to run in production"
 end
+
+fixture = Application.get_env(:burpee_trainer, :adaptive_e2e_fixture, [])
+database = Keyword.get(fixture, :database_path)
+
+valid_database? =
+  Keyword.get(fixture, :enabled, false) and is_binary(database) and
+    Path.dirname(database) == "/tmp" and
+    String.starts_with?(Path.basename(database), "adaptive-home-coach-e2e-") and
+    String.ends_with?(database, ".db") and Repo.config()[:database] == database
+
+unless valid_database?, do: raise("E2E cleanup requires the disposable adaptive E2E database")
 
 arguments =
   case System.argv() do
@@ -22,24 +40,108 @@ case arguments do
           nil ->
             IO.puts("E2E_CLEANUP=#{Jason.encode!(%{status: "already_absent", user_id: user_id})}")
 
-          %User{username: "e2e_workout_" <> _suffix} = user ->
-            counts = %{
-              plans:
-                Repo.aggregate(from(plan in WorkoutPlan, where: plan.user_id == ^user_id), :count),
-              sessions:
-                Repo.aggregate(
-                  from(session in WorkoutSession, where: session.user_id == ^user_id),
-                  :count
-                ),
-              pose_runs:
-                Repo.aggregate(
-                  from(run in PoseCaptureRun, where: run.user_id == ^user_id),
-                  :count
-                )
-            }
+          %User{} = user ->
+            unless Regex.match?(~r/^e2e_workout_[0-9a-f]{16}$/, user.username) do
+              IO.puts(
+                :stderr,
+                "refusing to delete user #{user_id}: username is not an exact fixture identity"
+              )
 
-            case Repo.delete(user) do
-              {:ok, _user} ->
+              System.halt(1)
+            end
+
+            owned_video_filename = "e2e-available-#{user.username}.mp4"
+
+            result =
+              Repo.immediate_transaction(fn ->
+                videos =
+                  from(video in WorkoutVideo, where: video.filename == ^owned_video_filename)
+
+                Repo.delete_all(
+                  from(job in Oban.Job,
+                    where:
+                      job.worker in [
+                        "BurpeeTrainer.Coach.PlanNextWorkoutJob",
+                        "BurpeeTrainer.Insights.NarrateJob",
+                        "BurpeeTrainer.Coach.SummaryJob",
+                        "BurpeeTrainer.Coach.MemoryJob"
+                      ] and fragment("json_extract(?, '$.user_id')", job.args) == ^user_id
+                  )
+                )
+
+                counts = %{
+                  videos: Repo.aggregate(videos, :count),
+                  plans:
+                    Repo.aggregate(
+                      from(plan in WorkoutPlan, where: plan.user_id == ^user_id),
+                      :count
+                    ),
+                  drafts:
+                    Repo.aggregate(
+                      from(plan in WorkoutPlan,
+                        where: plan.user_id == ^user_id and plan.state == :draft
+                      ),
+                      :count
+                    ),
+                  recommendations:
+                    Repo.aggregate(
+                      from(recommendation in CoachRecommendation,
+                        where: recommendation.user_id == ^user_id
+                      ),
+                      :count
+                    ),
+                  sessions:
+                    Repo.aggregate(
+                      from(session in WorkoutSession, where: session.user_id == ^user_id),
+                      :count
+                    ),
+                  pose_runs:
+                    Repo.aggregate(
+                      from(run in PoseCaptureRun, where: run.user_id == ^user_id),
+                      :count
+                    )
+                }
+
+                trigger_name = "workout_plans_draft_only_delete_trigger"
+
+                [[trigger_sql]] =
+                  Repo.query!(
+                    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+                    [trigger_name]
+                  ).rows
+
+                Repo.query!("DROP TRIGGER #{trigger_name}")
+
+                if System.get_env("E2E_CLEANUP_INDUCED_FAILURE_AFTER") == "after-trigger-drop" do
+                  raise "induced cleanup failure after trigger drop"
+                end
+
+                # SQLite's immediate RESTRICT on selected_workout_plan_id can fire
+                # before the user's recommendation cascade when its plans are deleted.
+                # Remove only this fixture owner's recommendations before that cascade.
+                Repo.delete_all(
+                  from(recommendation in CoachRecommendation,
+                    where: recommendation.user_id == ^user_id
+                  )
+                )
+
+                delete_result = Repo.delete(user)
+                Repo.query!(trigger_sql)
+
+                case delete_result do
+                  {:ok, _user} ->
+                    # Remove dependent sessions first; deleting media while they still exist
+                    # would try to null an immutable session snapshot's source identity.
+                    Repo.delete_all(videos)
+                    counts
+
+                  {:error, changeset} ->
+                    Repo.rollback(changeset)
+                end
+              end)
+
+            case result do
+              {:ok, counts} ->
                 IO.puts(
                   "E2E_CLEANUP=" <>
                     Jason.encode!(%{
@@ -49,18 +151,14 @@ case arguments do
                     })
                 )
 
-              {:error, changeset} ->
+              {:error, %Ecto.Changeset{} = changeset} ->
                 IO.puts(:stderr, "E2E cleanup failed: #{inspect(changeset.errors)}")
                 System.halt(1)
+
+              {:error, reason} ->
+                IO.puts(:stderr, "E2E cleanup failed: #{inspect(reason)}")
+                System.halt(1)
             end
-
-          %User{} ->
-            IO.puts(
-              :stderr,
-              "refusing to delete user #{user_id}: username lacks e2e_workout_ prefix"
-            )
-
-            System.halt(1)
         end
 
       _invalid_user_id ->

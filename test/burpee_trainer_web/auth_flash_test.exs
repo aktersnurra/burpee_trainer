@@ -18,7 +18,7 @@ defmodule BurpeeTrainerWeb.AuthFlashTest do
   end
 
   test "a live route reached logged out redirects to login without an error", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/login"} = redirect}} = live(conn, ~p"/stats")
+    assert {:error, {:redirect, %{to: "/login"} = redirect}} = live(conn, ~p"/session/1")
 
     assert Map.get(redirect, :flash) in [nil, %{}]
   end

@@ -9,22 +9,14 @@ defmodule BurpeeTrainer.Videos do
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Workouts.WorkoutVideo
 
-  @spec list_videos() :: [WorkoutVideo.t()]
-  def list_videos do
-    Repo.all(from v in WorkoutVideo, order_by: [asc: v.inserted_at])
-  end
-
-  @spec list_videos(atom) :: [WorkoutVideo.t()]
-  def list_videos(burpee_type) when is_atom(burpee_type) do
+  def list_home_videos do
     Repo.all(
-      from v in WorkoutVideo,
-        where: v.burpee_type == ^burpee_type,
-        order_by: [asc: v.inserted_at]
+      from(v in WorkoutVideo,
+        where: v.available == true and v.format == :follow_along,
+        order_by: [asc: v.name, asc: v.id]
+      )
     )
   end
-
-  @spec get_video!(integer) :: WorkoutVideo.t()
-  def get_video!(id), do: Repo.get!(WorkoutVideo, id)
 
   @spec create_video(map) :: {:ok, WorkoutVideo.t()} | {:error, Ecto.Changeset.t()}
   def create_video(attrs) do

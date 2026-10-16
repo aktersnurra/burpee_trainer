@@ -32,6 +32,19 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
     def fetch_claims("other-code", _verifier),
       do: {:ok, %{"sub" => "sub-other", "preferred_username" => "bob"}}
 
+    def fetch_claims("coach-" <> value, _verifier) do
+      claims = %{"sub" => "sub-coach", "preferred_username" => "coached"}
+
+      {:ok,
+       case value do
+         "absent" -> claims
+         "bool" -> Map.put(claims, "burpee_coach", true)
+         "string" -> Map.put(claims, "burpee_coach", "true")
+         "false" -> Map.put(claims, "burpee_coach", false)
+         "other-key" -> Map.put(claims, "kcal_coach", true)
+       end}
+    end
+
     def fetch_claims(_code, _verifier), do: {:error, :invalid_grant}
   end
 
@@ -76,7 +89,7 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
 
       assert redirected_to(conn) == ~p"/"
       assert get_session(conn, :user_id) == user.id
-      assert Accounts.get_user!(user.id).oidc_sub == "sub-fresh"
+      assert Repo.get!(Accounts.User, user.id).oidc_sub == "sub-fresh"
       # Adopted, not duplicated — this is what keeps existing history reachable.
       assert Repo.aggregate(Accounts.User, :count) == before_count
     end
@@ -110,7 +123,7 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
       assert redirected_to(conn) == ~p"/login"
       refute get_session(conn, :user_id)
       # The impostor sub must not overwrite the established link.
-      assert Accounts.get_user!(user.id).oidc_sub == "sub-abc-123"
+      assert Repo.get!(Accounts.User, user.id).oidc_sub == "sub-abc-123"
       assert Repo.aggregate(Accounts.User, :count) == before_count
     end
 
@@ -179,6 +192,36 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
 
       assert redirected_to(conn) == ~p"/login"
       refute get_session(conn, :user_id)
+    end
+  end
+
+  describe "the coach claim" do
+    defp sign_in(conn, code) do
+      conn
+      |> init_test_session(%{oidc_state: "s", oidc_pkce_verifier: "v"})
+      |> get(~p"/auth/oidc/callback", %{"code" => code, "state" => "s"})
+    end
+
+    test "every sign-in sets the in-app coach from the Pocket ID claim", %{conn: conn} do
+      for {code, enabled?} <- [
+            {"coach-bool", true},
+            {"coach-absent", false},
+            {"coach-string", true},
+            {"coach-false", false},
+            {"coach-other-key", false}
+          ] do
+        conn |> recycle() |> sign_in(code)
+        user = Accounts.get_user_by_oidc_sub("sub-coach")
+        assert user.coach_enabled == enabled?, "#{code} gave #{user.coach_enabled}"
+      end
+    end
+
+    test "the claim's key is configurable", %{conn: conn} do
+      Application.put_env(:burpee_trainer, :coach_claim, "kcal_coach")
+      on_exit(fn -> Application.delete_env(:burpee_trainer, :coach_claim) end)
+
+      sign_in(conn, "coach-other-key")
+      assert Accounts.get_user_by_oidc_sub("sub-coach").coach_enabled
     end
   end
 end

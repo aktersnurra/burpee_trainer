@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import SessionHook from "./session_hook.js";
 import { initialFlowState } from "./session_flow_fsm.mjs";
+import { openSessionStore } from "./session_store.mjs";
 import { initialSegmentState } from "./session_segment_fsm.mjs";
 import {
 	initialTrackingObserver,
@@ -13,6 +14,10 @@ import {
 	resolvePreviewVideo,
 	trackingFinishPayload,
 } from "./pose_tracker_impl.mjs";
+import {
+	programBurpeeCount,
+	workoutTimelineFromProgram,
+} from "./session_plan.mjs";
 import * as PoseTrackerDiagnostics from "./pose_tracker_impl.mjs";
 
 class FakeElement {
@@ -220,11 +225,7 @@ globalThis.clearTimeout = () => {};
 
 function appendStablePanels(root) {
 	const panelIds = [
-		"session-capture-choice",
-		"session-camera-status",
 		"session-camera-setup",
-		"session-warmup-choice",
-		"session-workout-ready",
 		"session-runner-client",
 		"session-completion-review",
 	];
@@ -235,87 +236,65 @@ function appendStablePanels(root) {
 		panel.setAttribute("data-session-panel", "");
 		panel.setAttribute("inert", "");
 		const heading = new FakeElement("h1");
-		heading.id = `${id}-heading`;
+		heading.id =
+			id === "session-camera-setup" ? "camera-setup-heading" : `${id}-heading`;
 		panel.append(heading);
 		root.append(panel);
 	}
 
-	const beginConflict = new FakeElement("div");
-	beginConflict.id = "session-begin-conflict";
-	beginConflict.hidden = true;
-	beginConflict.setAttribute("inert", "");
-	const beginConflictMessage = new FakeElement("p");
-	beginConflictMessage.id = "session-begin-conflict-message";
-	const beginConflictResolve = new FakeElement("a");
-	beginConflictResolve.id = "session-begin-conflict-resolve";
-	beginConflict.append(beginConflictMessage, beginConflictResolve);
-	root.append(beginConflict);
-
 	const stableElements = [
-		["camera-choice-yes", "button", "Yes, use camera"],
-		["camera-choice-no", "button", "No, continue"],
-		["camera-status-starting", "div", ""],
-		["camera-status-error", "div", ""],
-		["camera-status-failure-detail", "p", ""],
-		["camera-status-retry", "button", "Try again"],
-		["camera-status-continue", "button", "Continue without camera"],
-		["camera-setup-arming", "div", "Step into frame"],
-		["camera-setup-ready", "div", "Camera ready"],
+		["camera-setup-failure-detail", "p", ""],
+		["camera-setup-retry", "button", ""],
 		["camera-setup-continue", "button", "Continue without camera"],
-		["warmup-tracked-instruction", "p", "Raise one hand to warm up."],
-		["warmup-skip-countdown", "p", "Skipping in "],
-		["warmup-skip-seconds", "span", "4"],
-		["warmup-manual-controls", "div", ""],
-		["warmup-yes-btn", "button", "Warm up"],
-		["warmup-skip-btn", "button", "Skip warmup"],
-		["workout-ready-instruction", "p", "Hold one hand up to start."],
-		["workout-ready-btn", "button", "Start workout"],
-		["workout-ready-continue", "button", "Continue without camera"],
+		["session-discard-btn", "button", ""],
+		["session-discard-confirm", "div", ""],
+		["session-discard-keep", "button", "Keep it"],
+		["session-discard-yes", "button", "Discard"],
+		["session-completion-actions", "div", ""],
+		["completion-reps-less", "button", ""],
+		["completion-reps-more", "button", ""],
 		["session-actual-reps", "p", "0"],
 		["session-planned-reps", "span", "0"],
 		["session-actual-duration", "p", "0:00"],
 		["session-count-source", "p", ""],
-		["completion-reps-input", "input", ""],
-		["completion-duration-input", "input", ""],
+		["session-count-source-text", "span", ""],
+		["completion-reps-undo", "button", "Undo"],
 		["completion-note-input", "textarea", ""],
+		["completion-context-low-energy", "input", ""],
+		["completion-context-high-energy", "input", ""],
+		["completion-context-heat-affected", "input", ""],
+		["completion-primary-limiter", "select", ""],
+		["completion-preference-feedback", "select", ""],
 		["workout_session_burpee_type", "input", ""],
 		["session-completion-form", "form", ""],
 		["session-save-btn", "button", "Save session"],
 		["session-save-errors", "div", ""],
-		["session-report-pending-status", "div", ""],
-		["session-report-pending-retry", "button", "Try again"],
+		["session-live-status", "div", ""],
 		["completion-reps-error", "p", ""],
-		["completion-duration-error", "p", ""],
 		["completion-note-error", "p", ""],
-		["session-discard-btn", "button", "Discard"],
+		["completion-context-low-energy-error", "p", ""],
+		["completion-context-high-energy-error", "p", ""],
+		["completion-context-heat-affected-error", "p", ""],
+		["completion-primary-limiter-error", "p", ""],
+		["completion-preference-feedback-error", "p", ""],
 	];
 	for (const [id, tag, text] of stableElements) {
 		const element = new FakeElement(tag);
 		element.id = id;
 		element.textContent = text;
-		if (id === "camera-setup-ready") {
+		if (id.endsWith("-field") || id === "session-discard-confirm") {
+			element.hidden = true;
+		}
+		if (id === "camera-setup-retry") {
 			element.hidden = true;
 			element.setAttribute("inert", "");
-		}
-		if (id === "session-discard-btn") {
-			element.dataset.confirmMessage = "Discard this session?";
 		}
 		if (id === "workout_session_burpee_type") element.value = "six_count";
 		if (id.endsWith("-error") || id === "session-save-errors") {
 			element.hidden = true;
 		}
 		let panelId = "session-completion-review";
-		if (id.startsWith("camera-choice")) {
-			panelId = "session-capture-choice";
-		} else if (id.startsWith("camera-status")) {
-			panelId = "session-camera-status";
-		} else if (id.startsWith("camera-setup")) {
-			panelId = "session-camera-setup";
-		} else if (id.startsWith("warmup")) {
-			panelId = "session-warmup-choice";
-		} else if (id.startsWith("workout-ready")) {
-			panelId = "session-workout-ready";
-		}
+		if (id.startsWith("camera-setup")) panelId = "session-camera-setup";
 		root.findById(panelId).append(element);
 	}
 
@@ -325,19 +304,32 @@ function appendStablePanels(root) {
 		button.dataset.mood = String(mood);
 		completion.append(button);
 	}
-	for (const tag of ["tired", "great_energy", "bad_sleep"]) {
+	for (const tag of ["tired", "great_energy", "bad_sleep", "sick", "travel", "hot"]) {
 		const button = new FakeElement("button");
 		button.dataset.tag = tag;
 		completion.append(button);
 	}
 }
 
+function startChoiceStorage({ camera, warmup }) {
+	const values = {
+		"burpee.start.camera": camera ? "1" : "0",
+		"burpee.start.warmup": warmup ? "1" : "0",
+	};
+	return { getItem: (key) => values[key] ?? null, setItem() {} };
+}
+
+const withCamera = {
+	enumerateDevices: async () => [{ kind: "videoinput", deviceId: "", label: "" }],
+};
+
 function buildHarness({
 	poseTrackerReady = false,
+	choices = { camera: false, warmup: false },
+	mediaDevices = withCamera,
 	openSessionStore,
 	setTimeout: hookSetTimeout,
 	clearTimeout: hookClearTimeout,
-	realLifecycle = false,
 } = {}) {
 	const events = [];
 	const renderedModels = [];
@@ -349,8 +341,9 @@ function buildHarness({
 	root.dataset.sessionProgram = JSON.stringify({
 		events: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
 	});
-	root.dataset.planId = "plan-1";
-	root.dataset.programHash = "hash-1";
+	root.dataset.sessionId = "41";
+	root.dataset.sourceKind = "plan";
+	root.dataset.contentHash = "hash-1";
 	root.dataset.clientSessionId = "client-1";
 	globalThis.document.root = root;
 	appendStablePanels(root);
@@ -371,10 +364,7 @@ function buildHarness({
 	const finishEarly = new FakeElement("button");
 	finishEarly.id = "finish-early-btn";
 	finishEarly.setAttribute("disabled", "disabled");
-	const abort = new FakeElement("button");
-	abort.id = "session-abort-btn";
-	abort.setAttribute("disabled", "disabled");
-	pauseActions.append(finishEarly, abort);
+	pauseActions.append(finishEarly);
 	root.append(pauseActions);
 
 	const renderer = {
@@ -423,22 +413,14 @@ function buildHarness({
 	return {
 		...SessionHook,
 		el: root,
+		startChoiceStorage: startChoiceStorage(choices),
+		mediaDevices,
 		...(openSessionStore ? { openSessionStore } : {}),
 		...(hookSetTimeout ? { setTimeout: hookSetTimeout } : {}),
 		...(hookClearTimeout ? { clearTimeout: hookClearTimeout } : {}),
 		renderer,
 		audio,
 		wakeLock,
-		...(realLifecycle
-			? {}
-			: {
-					requestBeginSession() {
-						this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" });
-					},
-					requestReportPending() {
-						this.dispatchFlow({ type: "REPORT_PENDING_ACKNOWLEDGED" });
-					},
-				}),
 		flow: initialFlowState(),
 		segment: initialSegmentState(),
 		activeSegment: null,
@@ -450,31 +432,7 @@ function buildHarness({
 		countdownCount: null,
 		countdownTimeoutId: null,
 		lastDownCueKey: null,
-		pushEvent(name, payload, callback) {
-			if (name === "begin_session") {
-				callback?.({
-					status: "ok",
-					session_id: 1,
-					lifecycle_status: "running",
-				});
-				return;
-			}
-			if (name === "mark_report_pending") {
-				callback?.({
-					status: "ok",
-					session_id: 1,
-					lifecycle_status: "report_pending",
-				});
-				return;
-			}
-			if (name === "abort_session") {
-				callback?.({
-					status: "ok",
-					session_id: 1,
-					lifecycle_status: "aborted",
-				});
-				return;
-			}
+		pushEvent(name, payload) {
 			events.push({ name, payload });
 		},
 		events,
@@ -536,7 +494,7 @@ test("flow rendering reports whether the camera setup preview is visible", () =>
 
 	ctx.flow = { ...ctx.flow, mode: "camera_setup" };
 	ctx.runFlowCommand({ type: "renderFlow" });
-	ctx.flow = { ...ctx.flow, mode: "warmup_choice" };
+	ctx.flow = { ...ctx.flow, mode: "warmup_running" };
 	ctx.runFlowCommand({ type: "renderFlow" });
 
 	assert.deepEqual(visibility, [true, false]);
@@ -611,7 +569,80 @@ test("explicit rest and pause candidate reps are ignored", () => {
 	assert.deepEqual(paused.tracking.cadenceMs, []);
 });
 
-test("ordinary tracking loss leaves camera completion provenance unchanged", () => {
+test("a rep the camera sees just after a set ends counts for it; later in the rest it does not", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+		{ kind: "rest", duration_sec: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+	]);
+	const at = (elapsedSec) => {
+		ctx.segment = { ...ctx.segment, clock: { ...ctx.segment.clock, elapsedSec } };
+	};
+
+	// The set ends at 8 s; the camera sees its last rep stand up a second late.
+	at(9);
+	ctx.observePoseRep({ index: 1 });
+	// Well into the rest is stretching, not a rep.
+	at(13);
+	ctx.observePoseRep({ index: 2 });
+
+	assert.deepEqual(ctx.tracking.cadenceMs, [9_000]);
+});
+
+test("with the camera, the workout waits briefly for its last rep before the count is final", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
+	ctx.segment = {
+		...ctx.segment,
+		mode: "done",
+		clock: { ...ctx.segment.clock, elapsedSec: 8 },
+	};
+
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 2, durationSec: 8 } });
+	assert.equal(ctx.flow.mode, "workout_running");
+
+	// The last rep lands after the timer: it counts, at the workout's end.
+	ctx.observePoseRep({ index: 1 });
+	assert.deepEqual(ctx.tracking.cadenceMs, [8_000]);
+
+	ctx.completeWorkoutSegment();
+	assert.notEqual(ctx.flow.mode, "workout_running");
+	// Once final, nothing more counts.
+	ctx.observePoseRep({ index: 2 });
+	assert.deepEqual(ctx.tracking.cadenceMs, [8_000]);
+	ctx.destroyed();
+});
+
+test("finishing early with the camera completes at once: it happens while paused", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
+	ctx.finishingEarly = true;
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 1, durationSec: 5 } });
+	assert.notEqual(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.pendingWorkoutResult, undefined);
+});
+
+test("without the camera the workout completes at once", () => {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = { ...ctx.flow, mode: "workout_running", captureMode: "no_camera" };
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 2, durationSec: 8 } });
+	assert.notEqual(ctx.flow.mode, "workout_running");
+});
+
+test("tracking loss keeps workout state but forces timer fallback", () => {
 	const ctx = trackedContext([
 		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 3 },
 	]);
@@ -621,8 +652,11 @@ test("ordinary tracking loss leaves camera completion provenance unchanged", () 
 
 	assert.equal(ctx.segment.mode, "running");
 	assert.equal(ctx.timeline, timelineBefore);
-	assert.equal(ctx.flow.trackingTrust, "disabled");
-	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
+	assert.deepEqual(
+		ctx.workoutCompletionResult({ burpeeCountDone: 2, durationSec: 10 }),
+		{ burpeeCountDone: 2, durationSec: 10, cadenceMs: [] },
+	);
+	assert.equal(ctx.trackingCompletion.reason, "tracking_lost");
 });
 
 test("count-in hidden and done candidate reps are ignored", () => {
@@ -1209,6 +1243,64 @@ test("session hook removes pose observer listeners on destroy", () => {
 	assert.equal(ctx.el.listenerCount("pose-tracker:readiness"), 0);
 });
 
+test("root click and keydown controls are inert after hook destruction", async () => {
+	const ctx = buildHarness({
+		poseTrackerReady: null,
+		choices: { camera: true, warmup: true },
+	});
+	const ring = new FakeElement("div");
+	ring.id = "ring-container";
+	ctx.el.append(ring);
+	ctx.mounted();
+	await ctx.started;
+
+	assert.equal(ctx.el.listenerCount("click"), 1);
+	assert.equal(ctx.el.listenerCount("keydown"), 1);
+	assert.equal(ctx.flow.mode, "camera_starting");
+	ctx.dispatchFlow({ type: "CAMERA_START_FAILED", reason: "x" });
+	click(ctx, "camera-setup-retry");
+	assert.equal(ctx.flow.mode, "camera_starting");
+	ctx.dispatchFlow({ type: "CAMERA_START_FAILED", reason: "x" });
+
+	let pauseToggles = 0;
+	ctx.startTime = 0;
+	ctx.togglePause = () => {
+		pauseToggles += 1;
+	};
+	let mountedKeyPrevented = false;
+	ctx.el.dispatchEvent({
+		type: "keydown",
+		target: ring,
+		key: "Enter",
+		repeat: false,
+		preventDefault() {
+			mountedKeyPrevented = true;
+		},
+	});
+	assert.equal(pauseToggles, 1);
+	assert.equal(mountedKeyPrevented, true);
+
+	ctx.destroyed();
+	assert.equal(ctx.el.listenerCount("click"), 0);
+	assert.equal(ctx.el.listenerCount("keydown"), 0);
+
+	click(ctx, "camera-setup-retry");
+	let destroyedKeyPrevented = false;
+	ctx.el.dispatchEvent({
+		type: "keydown",
+		target: ring,
+		key: "Enter",
+		repeat: false,
+		preventDefault() {
+			destroyedKeyPrevented = true;
+		},
+	});
+
+	assert.equal(ctx.flow.mode, "camera_error");
+	assert.equal(pauseToggles, 1);
+	assert.equal(destroyedKeyPrevented, false);
+});
+
 test("visibility restoration resets detector phase", () => {
 	const ctx = buildHarness({ poseTrackerReady: true });
 	const tracker = ctx.el.querySelector("#pose-tracker");
@@ -1273,10 +1365,15 @@ function mountedFlowHarness(options = {}) {
 }
 
 function click(ctx, id) {
+	let prevented = false;
 	ctx.el.dispatchEvent({
 		type: "click",
 		target: ctx.el.querySelector(`#${id}`),
+		preventDefault() {
+			prevented = true;
+		},
 	});
+	return prevented;
 }
 
 function trackerEvent(ctx, type, detail = {}) {
@@ -1286,64 +1383,68 @@ function trackerEvent(ctx, type, detail = {}) {
 test("mount bootstraps the local flow synchronously from the root dataset", () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 
-	assert.equal(ctx.flow.mode, "capture_choice");
-	assert.equal(ctx.planId, "plan-1");
-	assert.equal(ctx.programHash, "hash-1");
+	assert.equal(ctx.flow.mode, "starting");
+	assert.equal(ctx.sessionId, 41);
+	assert.equal(ctx.contentHash, "hash-1");
+	assert.equal(ctx.sourceKind, "plan");
 	assert.equal(ctx.clientSessionId, "client-1");
 	assert.deepEqual(ctx.timeline, []);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
 
-const flushHookPromises = () => new Promise((resolve) => setImmediate(resolve));
-
-test("no-camera completion renders scheduled pace progress and asks for actual reps", () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	const completion = {
-		scheduledRepsDone: 2,
-		burpeeCountActual: null,
-		burpeeCountPlanned: 3,
-		durationSecActual: 25,
-		mood: 0,
-		tags: [],
-		notePost: "",
+test("mount keeps source-v2 work and rest payloads intact", () => {
+	const ctx = buildHarness({ poseTrackerReady: true });
+	const payload = {
+		program_id: 99,
+		program_hash: "source-v2",
+		target_reps: 5,
+		target_duration_sec: 14,
+		events: [
+			{ kind: "work", reps: 2, sec_per_rep: 2, sec_per_burpee: 1 },
+			{ kind: "rest", duration_sec: 4 },
+			{ kind: "work", reps: 3, sec_per_rep: 2, sec_per_burpee: 1 },
+		],
 	};
-
-	try {
-		ctx.renderer.renderCompletion(completion);
-
-		assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
-		assert.equal(ctx.el.querySelector("#completion-reps-input").value, "");
-		assert.equal(ctx.el.querySelector("#session-count-source").hidden, false);
-		assert.equal(
-			ctx.el.querySelector("#session-count-source").textContent,
-			"Pace progress: 2 of 3. Enter actual reps below.",
+	ctx.el.dataset.sessionProgram = JSON.stringify(payload);
+	ctx.handleEvent = () =>
+		assert.fail(
+			"SessionHook must not await session_ready for source-v2 payloads",
 		);
-	} finally {
-		ctx.destroyed();
-	}
+
+	ctx.mounted();
+
+	assert.deepEqual(workoutTimelineFromProgram(ctx.program), payload.events);
+	assert.equal(programBurpeeCount(ctx.program), payload.target_reps);
+	ctx.destroyed();
 });
+
+const flushHookPromises = () => new Promise((resolve) => setImmediate(resolve));
 
 function completionDraft(overrides = {}) {
 	return {
-		client_session_id: "original-client",
-		plan_id: "plan-1",
-		program_hash: "hash-1",
+		session_id: 41,
+		content_hash: "hash-1",
+		client_session_id: "client-1",
 		burpee_count_actual: 4,
-		burpee_count_provenance: "camera_confirmed",
-		scheduled_reps_done: 4,
 		burpee_count_planned: 5,
 		duration_sec_actual: 9,
 		duration_sec_planned: 10,
 		tracking: {
 			enabled: true,
 			trust: "finished",
+			reason: null,
 			detected_reps: 4,
 			detected_duration_sec: 9,
 			cadence_ms: [2_000, 4_000, 6_000, 8_000],
 		},
 		mood: 1,
 		tags: ["great_energy"],
+		context_low_energy: false,
+		context_high_energy: false,
+		context_heat_affected: false,
+		primary_limiter: null,
+		preference_feedback: null,
 		note_post: "Strong finish",
 		...overrides,
 	};
@@ -1353,8 +1454,10 @@ test("trace chunks serialize without blocking the tracker event callback", async
 	let resolveFirst;
 	const calls = [];
 	const store = {
-		loadDraftByClientSessionId: async () => null,
-		appendTraceChunk(_clientSessionId, chunk) {
+		loadDraft: async () => null,
+		appendTraceChunk(sessionId, clientSessionId, chunk) {
+			assert.equal(sessionId, 41);
+			assert.equal(clientSessionId, "client-1");
 			calls.push(structuredClone(chunk));
 			if (chunk.chunk_index === 0) {
 				return new Promise((resolve) => {
@@ -1408,19 +1511,17 @@ test("storage rejection leaves the local workout and completion operational", as
 		},
 	});
 
-	assert.equal(ctx.flow.mode, "capture_choice");
-	click(ctx, "camera-choice-no");
-	click(ctx, "warmup-skip-btn");
-	click(ctx, "workout-ready-btn");
+	await ctx.started;
+	assert.equal(ctx.flow.mode, "workout_running");
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
 	await flushHookPromises();
 
 	assert.equal(ctx.traceRetentionAvailable, false);
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
-	assert.equal(ctx.flow.completion.burpeeCountActual, null);
+	assert.equal(ctx.flow.completion.burpeeCountActual, 5);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
@@ -1429,12 +1530,13 @@ test("trace write rejection degrades retention without changing workout flow", a
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => null,
+			loadDraft: async () => null,
 			appendTraceChunk: async () => {
 				throw new Error("write failed");
 			},
 		}),
 	});
+	await ctx.started;
 	const flow = ctx.flow;
 	trackerEvent(ctx, "pose-tracker:trace-chunk", {
 		chunk: { chunk_index: 0, payload: { frame: 0 } },
@@ -1450,7 +1552,7 @@ test("trace write rejection degrades retention without changing workout flow", a
 test("completion display and every stable edit queue the full draft", async () => {
 	const saved = [];
 	const store = {
-		loadDraftByClientSessionId: async () => null,
+		loadDraft: async () => null,
 		async saveDraft(draft) {
 			saved.push(structuredClone(draft));
 		},
@@ -1483,50 +1585,40 @@ test("completion display and every stable edit queue the full draft", async () =
 		},
 	});
 	await ctx.draftWrite;
-	await flushHookPromises();
-	await flushHookPromises();
 
 	assert.equal(saved.length, 1);
 	assert.deepEqual(
 		saved[0],
 		completionDraft({
 			client_session_id: "client-1",
-			burpee_count_actual: null,
-			burpee_count_provenance: "unresolved",
+			burpee_count_provenance: "scheduled",
+			scheduled_reps_done: 4,
+			// A camera still watching when the workout ends never finished counting.
 			tracking: {
 				enabled: true,
-				trust: "observing",
+				trust: "degraded",
+				reason: "tracking_incomplete",
 				detected_reps: 4,
 				detected_duration_sec: 9,
 				cadence_ms: [2_000, 4_000, 6_000, 8_000],
 			},
-			mood: 0,
+			mood: null,
+			ended_early: false,
 			tags: [],
+			context_low_energy: false,
+			context_high_energy: false,
+			context_heat_affected: false,
+			primary_limiter: null,
+			preference_feedback: null,
 			note_post: "",
 		}),
 	);
 
-	const reps = ctx.el.querySelector("#completion-reps-input");
-	reps.value = "5";
-	ctx.el.dispatchEvent({ type: "input", target: reps });
+	click(ctx, "completion-reps-more");
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).burpee_count_actual, 5);
 	assert.equal(saved.at(-1).burpee_count_provenance, "manual");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
-	assert.equal(
-		ctx.el.querySelector("#session-count-source").textContent,
-		"Manually entered reps",
-	);
-
-	const duration = ctx.el.querySelector("#completion-duration-input");
-	duration.value = "11";
-	ctx.el.dispatchEvent({ type: "input", target: duration });
-	await ctx.draftWrite;
-	assert.equal(saved.at(-1).duration_sec_actual, 11);
-	assert.equal(
-		ctx.el.querySelector("#session-actual-duration").textContent,
-		"0:11",
-	);
 
 	const mood = ctx.el
 		.querySelectorAll("[data-mood]")
@@ -1535,33 +1627,47 @@ test("completion display and every stable edit queue the full draft", async () =
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).mood, 1);
 
-	const tag = ctx.el
-		.querySelectorAll("[data-tag]")
-		.find((button) => button.dataset.tag === "great_energy");
-	ctx.el.dispatchEvent({ type: "click", target: tag });
-	await ctx.draftWrite;
-	assert.deepEqual(saved.at(-1).tags, ["great_energy"]);
-
 	const note = ctx.el.querySelector("#completion-note-input");
 	note.value = "Strong finish";
 	ctx.el.dispatchEvent({ type: "input", target: note });
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).note_post, "Strong finish");
-	assert.equal(saved.length, 6);
+	assert.equal(saved.length, 4);
 	ctx.destroyed();
 });
 
-test("completion draft restores only for the server-minted client UUID", async () => {
-	const exactDraft = completionDraft({
-		client_session_id: "client-1",
-		note_post: "Server lifecycle draft",
+test("an older camera draft that never says where its count came from is the camera's", async () => {
+	const draft = completionDraft();
+	delete draft.burpee_count_provenance;
+	draft.tracking = { ...draft.tracking, trust: "finished", detected_reps: 4 };
+	draft.burpee_count_actual = 4;
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({ loadDraft: async () => draft }),
 	});
-	const store = {
-		loadDraftByClientSessionId: async (clientSessionId) => {
-			assert.equal(clientSessionId, "client-1");
-			return exactDraft;
-		},
-	};
+	await ctx.draftRestore;
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "camera_confirmed");
+	assert.equal(
+		ctx.el.querySelector("#session-count-source-text").textContent,
+		"Counted by camera",
+	);
+	ctx.destroyed();
+});
+
+test("a draft saved with an unsettled camera opens as one that lost tracking", async () => {
+	const draft = completionDraft();
+	draft.tracking = { ...draft.tracking, trust: "arming" };
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({ loadDraft: async () => draft }),
+	});
+	await ctx.draftRestore;
+	assert.equal(ctx.completionPayload().tracking.trust, "degraded");
+	ctx.destroyed();
+});
+
+test("exact session draft resumes while preserving the server client UUID", async () => {
+	const store = { loadDraft: async () => completionDraft() };
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => store,
@@ -1570,13 +1676,11 @@ test("completion draft restores only for the server-minted client UUID", async (
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.clientSessionId, "client-1");
-	assert.equal(ctx.flow.completion.scheduledRepsDone, 4);
-	assert.equal(ctx.flow.completion.burpeeCountProvenance, "camera_confirmed");
+	assert.equal(ctx.el.dataset.clientSessionId, "client-1");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
-	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
 	assert.equal(
 		ctx.el.querySelector("#completion-note-input").value,
-		"Server lifecycle draft",
+		"Strong finish",
 	);
 	assert.equal(
 		ctx.el
@@ -1589,76 +1693,12 @@ test("completion draft restores only for the server-minted client UUID", async (
 	ctx.destroyed();
 });
 
-test("legacy completion drafts recover a non-camera count as manual", async () => {
-	const { burpee_count_provenance: _provenance, ...legacyDraft } =
-		completionDraft({
-			client_session_id: "client-1",
-			tracking: { enabled: false, trust: "disabled" },
-		});
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => legacyDraft,
-		}),
-	});
-	await ctx.draftRestore;
-
-	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
-	assert.equal(
-		ctx.el.querySelector("#session-count-source").textContent,
-		"Manually entered reps",
-	);
-	ctx.destroyed();
-});
-
-test("legacy finished-camera completion drafts recover an integer count as manual", async () => {
-	const { burpee_count_provenance: _provenance, ...legacyDraft } =
-		completionDraft({
-			client_session_id: "client-1",
-		});
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => legacyDraft,
-		}),
-	});
-	await ctx.draftRestore;
-
-	assert.equal(ctx.flow.completion.burpeeCountActual, 4);
-	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
-	assert.equal(
-		ctx.el.querySelector("#session-count-source").textContent,
-		"Manually entered reps",
-	);
-	ctx.destroyed();
-});
-
-test("unresolved completion drafts discard inconsistent integer actuals", async () => {
-	const draft = completionDraft({
-		client_session_id: "client-1",
-		burpee_count_provenance: "unresolved",
-	});
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => draft,
-		}),
-	});
-	await ctx.draftRestore;
-
-	assert.equal(ctx.flow.completion.burpeeCountActual, null);
-	assert.equal(ctx.flow.completion.burpeeCountProvenance, "unresolved");
-	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
-	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "");
-	ctx.destroyed();
-});
-
-test("completion drafts omit absent-observation provenance", async () => {
+test("degraded tracking reason survives completion draft round-trip exactly", async () => {
 	const saved = [];
 	const first = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => null,
+			loadDraft: async () => null,
 			async saveDraft(draft) {
 				saved.push(structuredClone(draft));
 			},
@@ -1667,28 +1707,43 @@ test("completion drafts omit absent-observation provenance", async () => {
 	await first.draftRestore;
 	first.flow = {
 		...first.flow,
-		mode: "completion_review",
+		mode: "workout_running",
 		captureMode: "camera",
-		completion: {
-			burpeeCountActual: 4,
-			burpeeCountPlanned: 5,
-			durationSecActual: 9,
-			durationSecPlanned: 10,
-			detectedReps: 4,
-			detectedDurationSec: 9,
-			trackingTrust: "finished",
-			cadenceMs: [2_000, 4_000, 9_000],
-			mood: 0,
-			tags: [],
-			notePost: "",
-		},
+		trackingTrust: "degraded",
+		trackingReason: "confidence_lost/core-pose",
+		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
 	};
-	first.queueCompletionDraft();
+	first.dispatchFlow({
+		type: "SESSION_DONE",
+		result: { burpeeCountDone: 4, durationSec: 9 },
+	});
 	await first.draftWrite;
 
 	assert.equal(saved.length, 1);
-	assert.equal(Object.hasOwn(saved[0].tracking, "reason"), false);
+	assert.equal(saved[0].tracking.reason, "confidence_lost/core-pose");
 	first.destroyed();
+
+	const restoredWrites = [];
+	const restored = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => saved[0],
+			async saveDraft(draft) {
+				restoredWrites.push(structuredClone(draft));
+			},
+		}),
+	});
+	await restored.draftRestore;
+	await restored.draftWrite;
+
+	assert.equal(restored.flow.mode, "completion_review");
+	assert.equal(restored.flow.trackingReason, "confidence_lost/core-pose");
+	assert.equal(
+		restoredWrites.at(-1).tracking.reason,
+		"confidence_lost/core-pose",
+	);
+	assert.deepEqual(restored.events, []);
+	restored.destroyed();
 });
 
 test("draft load settlement after destroy cannot restore, render, or save", async () => {
@@ -1704,7 +1759,7 @@ test("draft load settlement after destroy cannot restore, render, or save", asyn
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
 		openSessionStore: async () => ({
-			loadDraftByClientSessionId() {
+			loadDraft() {
 				signalLoadStarted();
 				return draftPending;
 			},
@@ -1730,245 +1785,38 @@ test("draft load settlement after destroy cannot restore, render, or save", asyn
 	await ctx.draftRestore;
 	await ctx.draftWrite;
 
-	assert.equal(ctx.flow.mode, "capture_choice");
+	await ctx.started;
+	assert.equal(ctx.flow.mode, "starting");
 	assert.equal(ctx.clientSessionId, "client-1");
 	assert.deepEqual(dispatched, []);
 	assert.equal(completionRenders, 0);
 	assert.deepEqual(saved, []);
 });
 
-test("drafts with a mismatched plan, program, or lifecycle UUID are ignored", async () => {
+test("mismatched session, content hash, or client draft is ignored", async () => {
 	for (const mismatch of [
-		{ plan_id: "other-plan" },
-		{ program_hash: "other-hash" },
-		{ client_session_id: "newest-client" },
+		{ session_id: 42 },
+		{ content_hash: "other-hash" },
+		{ client_session_id: "other-client" },
 	]) {
 		const ctx = mountedFlowHarness({
 			poseTrackerReady: true,
 			openSessionStore: async () => ({
-				loadDraftByClientSessionId: async () => completionDraft(mismatch),
+				loadDraft: async () => completionDraft(mismatch),
 			}),
 		});
-		await ctx.draftRestore;
-		assert.equal(ctx.flow.mode, "capture_choice");
+		await ctx.started;
+		assert.equal(ctx.flow.mode, "workout_running");
 		assert.equal(ctx.clientSessionId, "client-1");
 		ctx.destroyed();
 	}
 });
 
-test("confirmed discard clears local session data and emits zero server events", async () => {
-	const local = { draft: true, chunks: [0, 1], upload: true };
-	const store = {
-		loadDraftByClientSessionId: async () =>
-			completionDraft({ client_session_id: "client-1" }),
-		async discardSession(clientSessionId) {
-			assert.equal(clientSessionId, "client-1");
-			local.draft = false;
-			local.chunks = [];
-			local.upload = false;
-		},
-	};
-	const originalWindow = globalThis.window;
-	const navigations = [];
-	globalThis.window = {
-		confirm: () => true,
-		location: { assign: (path) => navigations.push(path) },
-	};
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => store,
-	});
-	const trackerStops = [];
-	ctx.el
-		.querySelector("#pose-tracker")
-		.addEventListener("pose-tracker:stop", () => trackerStops.push("stop"));
-
-	try {
-		await ctx.draftRestore;
-		click(ctx, "session-discard-btn");
-		await ctx.discardWrite;
-
-		assert.deepEqual(local, { draft: false, chunks: [], upload: false });
-		assert.deepEqual(trackerStops, ["stop"]);
-		assert.deepEqual(navigations, ["/workouts"]);
-		assert.deepEqual(ctx.events, []);
-		assert.equal(ctx.flow.mode, "discarded");
-		assert.equal(ctx.flow.completion, null);
-	} finally {
-		ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
-test("paused Abort requests lifecycle abort and clears local recovery data", async () => {
-	const local = { draft: true, chunks: [0, 1], upload: true };
-	const pushes = [];
-	const navigations = [];
-	const originalWindow = globalThis.window;
-	globalThis.window = {
-		confirm: () => true,
-		location: { assign: (path) => navigations.push(path) },
-	};
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => null,
-			async discardSession(clientSessionId) {
-				assert.equal(clientSessionId, "client-1");
-				local.draft = false;
-				local.chunks = [];
-				local.upload = false;
-			},
-		}),
-	});
-	ctx.flow = { ...ctx.flow, mode: "workout_running" };
-	ctx.activeSegment = "workout";
-	ctx.startTime = 1;
-	ctx.paused = true;
-	ctx.pushEvent = (name, payload, callback) => {
-		pushes.push({ name, payload });
-		callback({ status: "ok", lifecycle_status: "aborted" });
-	};
-
-	try {
-		await ctx.draftRestore;
-		click(ctx, "session-abort-btn");
-
-		assert.deepEqual(pushes, [
-			{
-				name: "abort_session",
-				payload: { client_session_id: "client-1" },
-			},
-		]);
-		await ctx.discardWrite;
-		assert.deepEqual(local, { draft: false, chunks: [], upload: false });
-		assert.deepEqual(navigations, ["/workouts"]);
-	} finally {
-		ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
-test("discard retains recovery data until the abort acknowledgement and local cleanup complete", async () => {
-	let resolveOpen;
-	const opened = new Promise((resolve) => {
-		resolveOpen = resolve;
-	});
-	const storageCalls = [];
-	const scheduled = new Map();
-	let nextTimerId = 1;
-	const navigations = [];
-	let destroyed = false;
-	const originalWindow = globalThis.window;
-	globalThis.window = {
-		confirm: () => true,
-		location: { assign: (path) => navigations.push(path) },
-	};
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: () => opened,
-		setTimeout(callback, delayMs) {
-			const id = nextTimerId++;
-			scheduled.set(id, { callback, delayMs });
-			return id;
-		},
-		clearTimeout(id) {
-			scheduled.delete(id);
-		},
-	});
-	const trackerStops = [];
-	ctx.el
-		.querySelector("#pose-tracker")
-		.addEventListener("pose-tracker:stop", () => trackerStops.push("stop"));
-	ctx.flow = {
-		...ctx.flow,
-		mode: "completion_review",
-		completion: {
-			burpeeCountActual: 4,
-			burpeeCountPlanned: 5,
-			durationSecActual: 9,
-			durationSecPlanned: 10,
-			trackingTrust: "disabled",
-			cadenceMs: [],
-		},
-	};
-	ctx.activeSegment = "workout";
-	ctx.startTime = 1;
-	ctx.queueCompletionDraft();
-
-	try {
-		click(ctx, "session-discard-btn");
-
-		assert.equal(ctx.flow.mode, "discarded");
-		assert.equal(ctx.activeSegment, null);
-		assert.equal(ctx.startTime, null);
-		assert.deepEqual(trackerStops, ["stop"]);
-		assert.deepEqual(navigations, []);
-		assert.equal(scheduled.size, 0);
-		assert.deepEqual(navigations, []);
-
-		resolveOpen({
-			async loadDraftByClientSessionId() {
-				storageCalls.push("restore");
-				return completionDraft();
-			},
-			async saveDraft() {
-				storageCalls.push("save");
-			},
-			async discardSession(clientSessionId) {
-				storageCalls.push(`discard:${clientSessionId}`);
-			},
-		});
-		await ctx.discardWrite;
-		assert.deepEqual(storageCalls, ["discard:client-1"]);
-		assert.deepEqual(navigations, ["/workouts"]);
-		ctx.destroyed();
-		destroyed = true;
-	} finally {
-		if (!destroyed) ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
-test("discard still navigates when storage is unavailable", async () => {
-	const originalWindow = globalThis.window;
-	const navigations = [];
-	globalThis.window = {
-		confirm: () => true,
-		location: { assign: (path) => navigations.push(path) },
-	};
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => {
-			throw new Error("unavailable");
-		},
-	});
-	ctx.flow = {
-		...ctx.flow,
-		mode: "completion_review",
-		completion: {
-			burpeeCountActual: 1,
-			burpeeCountPlanned: 1,
-			durationSecActual: 2,
-			durationSecPlanned: 2,
-			trackingTrust: "disabled",
-			cadenceMs: [],
-		},
-	};
-
-	try {
-		click(ctx, "session-discard-btn");
-		await ctx.discardWrite;
-		assert.deepEqual(navigations, ["/workouts"]);
-		assert.equal(ctx.flow.completion, null);
-	} finally {
-		ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
 test("camera through completion review requires no server event", async () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: false },
+	});
 	const tracker = ctx.el.querySelector("#pose-tracker");
 	const trackerCommands = [];
 	for (const type of [
@@ -1980,62 +1828,31 @@ test("camera through completion review requires no server event", async () => {
 			trackerCommands.push({ type, detail: event.detail }),
 		);
 	}
-	tracker.addEventListener("pose-tracker:finish", () => {
-		trackerEvent(ctx, "pose-tracker:finished", {
-			reps: 0,
-			duration_ms: 10_000,
-			cadence_ms: [],
-		});
-	});
+	const heading = () => ctx.el.querySelector("#camera-setup-heading").textContent;
 
-	assert.equal(ctx.flow.mode, "capture_choice");
-	assert.equal(ctx.el.querySelector("#session-capture-choice").hidden, false);
-	assert.equal(
-		ctx.el.querySelector("#camera-choice-yes").textContent,
-		"Yes, use camera",
-	);
-	assert.equal(
-		ctx.el.querySelector("#camera-choice-no").textContent,
-		"No, continue",
-	);
-
-	click(ctx, "camera-choice-yes");
+	await ctx.started;
+	assert.equal(ctx.flow.mode, "camera_starting");
+	assert.equal(ctx.el.querySelector("#session-camera-setup").hidden, false);
+	assert.equal(heading(), "Starting camera");
 	trackerEvent(ctx, "pose-tracker:started");
-	assert.equal(ctx.el.querySelector("#camera-setup-arming").hidden, false);
-	assert.equal(ctx.el.querySelector("#camera-setup-ready").hidden, true);
+	assert.equal(heading(), "Step into frame");
 	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
-	assert.equal(ctx.el.querySelector("#camera-setup-arming").hidden, true);
-	assert.equal(ctx.el.querySelector("#camera-setup-ready").hidden, false);
+	assert.equal(heading(), "Hand up or hold still");
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
-	assert.equal(ctx.flow.mode, "warmup_choice");
-	assert.equal(
-		ctx.el.querySelector("#warmup-skip-countdown").textContent,
-		"Skipping in ",
-	);
-	assert.equal(ctx.el.querySelector("#warmup-manual-controls").hidden, true);
-	assert.equal(
-		ctx.el.querySelector("#warmup-tracked-instruction").hidden,
-		false,
-	);
-	ctx.finishWarmupTimeout();
-	assert.equal(ctx.flow.mode, "workout_ready");
-	assert.equal(
-		ctx.el.querySelector("#workout-ready-instruction").textContent,
-		"Hold one hand up to start.",
-	);
-	assert.equal(ctx.el.querySelector("#workout-ready-btn").hidden, true);
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "workout_start" });
+	assert.equal(ctx.flow.mode, "workout_running");
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
-	await flushHookPromises();
-	await flushHookPromises();
+	// The camera's count waits a moment for a last rep that stands up after the timer.
+	assert.equal(ctx.flow.mode, "workout_running");
+	ctx.completeWorkoutSegment();
 
 	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(ctx.el.querySelector("#session-completion-review").hidden, false);
-	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
-	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
-	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "0");
+	assert.equal(
+		ctx.el.querySelector("#session-completion-review").hidden,
+		false,
+	);
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
 	assert.equal(
 		ctx.el.querySelector("#session-actual-duration").textContent,
 		"0:10",
@@ -2072,15 +1889,12 @@ test("completed workout stays quiescent across hidden and visible lifecycle", as
 	};
 
 	try {
-		click(ctx, "camera-choice-no");
-		click(ctx, "warmup-skip-btn");
-		click(ctx, "workout-ready-btn");
+		await ctx.started;
 		ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 		ctx.startTime = 1;
 		scheduledFrames.length = 0;
 		ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
-		await flushHookPromises();
-		await flushHookPromises();
+		ctx.completeWorkoutSegment();
 
 		assert.equal(ctx.flow.mode, "completion_review");
 		assert.equal(
@@ -2118,194 +1932,142 @@ test("completed workout stays quiescent across hidden and visible lifecycle", as
 	}
 });
 
-test("camera startup failure carries its stage and reason into the error screen", () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	click(ctx, "camera-choice-yes");
-	trackerEvent(ctx, "pose-tracker:start-failed", {
-		stage: "detector",
-		reason: "pose worker crashed",
+test("camera failure during workout keeps timer result authoritative", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: true },
 	});
-	assert.equal(ctx.flow.mode, "camera_error");
-	assert.equal(ctx.flow.camera.stage, "detector");
-	assert.equal(
-		ctx.el.querySelector("#camera-status-failure-detail").textContent,
-		"Detector: pose worker crashed",
-	);
-	ctx.destroyed();
-});
-
-test("absent camera observations do not change the running flow", () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	click(ctx, "camera-choice-yes");
+	await ctx.started;
 	trackerEvent(ctx, "pose-tracker:started");
 	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
-	ctx.finishWarmupTimeout();
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "workout_start" });
-	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
-	ctx.startTime = 1;
-	trackerEvent(ctx, "pose-tracker:status", { state: "lost" });
-
+	assert.equal(ctx.flow.mode, "warmup_running");
+	ctx.dispatchFlow({ type: "SEGMENT_DONE", segment: "warmup" });
 	assert.equal(ctx.flow.mode, "workout_running");
-	assert.equal(ctx.flow.trackingTrust, "observing");
-	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
-	assert.deepEqual(ctx.events, []);
-	ctx.destroyed();
-});
-
-test("manual no-camera journey reaches local completion review", async () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	const arms = [];
-	ctx.el
-		.querySelector("#pose-tracker")
-		.addEventListener("pose-tracker:arm", (event) => arms.push(event.detail));
-	click(ctx, "camera-choice-no");
-	assert.equal(ctx.flow.mode, "warmup_choice");
-	assert.equal(ctx.el.querySelector("#warmup-manual-controls").hidden, false);
-	click(ctx, "warmup-skip-btn");
-	assert.equal(ctx.flow.mode, "workout_ready");
-	assert.equal(ctx.el.querySelector("#workout-ready-btn").hidden, false);
-	click(ctx, "workout-ready-btn");
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
+	trackerEvent(ctx, "pose-tracker:status", {
+		state: "lost",
+		reason: "detector_error",
+	});
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
-	await flushHookPromises();
-	await flushHookPromises();
+	ctx.completeWorkoutSegment();
 
-	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(ctx.el.querySelector("#session-completion-review").hidden, false);
-	assert.equal(ctx.flow.completion.scheduledRepsDone, 5);
-	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "—");
-	assert.equal(
-		ctx.el.querySelector("#session-actual-duration").textContent,
-		"0:10",
-	);
-	assert.deepEqual(arms, []);
+	assert.equal(ctx.flow.trackingTrust, "degraded");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 5);
+	assert.deepEqual(ctx.flow.completion.cadenceMs, []);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
 
-test("warmup timeout pauses while not ready and resumes monotonically", () => {
-	const originalNow = performance.now;
-	let now = 1_000;
-	performance.now = () => now;
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	click(ctx, "camera-choice-yes");
-	trackerEvent(ctx, "pose-tracker:started");
-	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
-
-	now = 2_250;
-	ctx.renderWarmupTimeout();
-	assert.equal(ctx.el.querySelector("#warmup-skip-seconds").textContent, "3");
-	trackerEvent(ctx, "pose-tracker:readiness", { state: "not_ready" });
-	const pausedRemaining = ctx.warmupTimeoutRemainingMs;
-	now = 5_000;
-	ctx.renderWarmupTimeout();
-	assert.equal(ctx.warmupTimeoutRemainingMs, pausedRemaining);
-	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
-	now = 5_500;
-	ctx.renderWarmupTimeout();
-	assert.ok(ctx.warmupTimeoutRemainingMs < pausedRemaining);
-	assert.equal(ctx.el.querySelector("#warmup-skip-seconds").textContent, "3");
-
-	performance.now = originalNow;
-	ctx.destroyed();
-});
-
-test("absent camera observations leave the warmup timeout active", async () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: false });
-	const readyFrames = Array.from({ length: 8 }, (_, index) =>
-		trackerFrame(trackerSample({ tMs: index * 100 })),
-	);
-	const absentFrame = trackerFrame(trackerSample({ tMs: 800, confidence: 0.1 }));
-	const harness = poseTrackerHarness({
-		frames: [...readyFrames, absentFrame],
-		trackerElement: ctx.el.querySelector("#pose-tracker"),
-	});
-
-	try {
-		await harness.impl.mounted();
-		click(ctx, "camera-choice-yes");
-		await harness.flushAllPromises();
-		await harness.runUntilConsumed(8);
-		trackerEvent(ctx, "pose-tracker:gesture-confirm", {
-			step: "camera_setup",
+test("without the camera, play is the only tap before the countdown", async () => {
+	for (const [warmup, segment] of [
+		[true, "warmup"],
+		[false, "workout"],
+	]) {
+		const ctx = mountedFlowHarness({
+			poseTrackerReady: true,
+			choices: { camera: false, warmup },
 		});
-		assert.equal(ctx.flow.mode, "warmup_choice");
-		assert.notEqual(ctx.warmupTimeoutDeadline, null);
+		const arms = [];
+		ctx.el
+			.querySelector("#pose-tracker")
+			.addEventListener("pose-tracker:arm", (event) => arms.push(event.detail));
+		await ctx.started;
 
-		await harness.runUntilConsumed(9);
-
-		assert.equal(ctx.trackerReadiness, "ready");
-		assert.notEqual(ctx.warmupTimeoutDeadline, null);
-	} finally {
-		harness.poseTracker.destroyed();
+		assert.equal(ctx.flow.mode, `${segment}_running`);
+		assert.equal(ctx.activeSegment, segment);
+		assert.equal(ctx.countdownCount, 5);
+		assert.equal(
+			ctx.el.querySelector("#session-runner-client").hidden,
+			false,
+		);
+		assert.deepEqual(arms, []);
 		ctx.destroyed();
 	}
 });
 
-test("warmup timeout refreshes the visible seconds without tracker help", () => {
-	const originalNow = performance.now;
-	const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-	let now = 1_000;
-	const frames = [];
-	performance.now = () => now;
-	globalThis.requestAnimationFrame = (callback) => {
-		frames.push(callback);
-		return frames.length;
-	};
+test("manual no-camera journey reaches local completion review", async () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	click(ctx, "camera-choice-yes");
-	trackerEvent(ctx, "pose-tracker:started");
-	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	await ctx.started;
+	assert.equal(ctx.flow.mode, "workout_running");
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
 
-	assert.ok(frames.length > 0);
-	now = 2_250;
-	frames.shift()();
-	assert.equal(ctx.el.querySelector("#warmup-skip-seconds").textContent, "3");
-
-	performance.now = originalNow;
-	globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(
+		ctx.el.querySelector("#session-completion-review").hidden,
+		false,
+	);
+	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
+	assert.equal(
+		ctx.el.querySelector("#session-actual-duration").textContent,
+		"0:10",
+	);
+	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
 
-test("second warmup gesture cannot restart warmup", () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	click(ctx, "camera-choice-yes");
+test("a stored draft opens the finish screen and never starts", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: true },
+		openSessionStore: async () => ({
+			loadDraft: async () => completionDraft(),
+		}),
+	});
+	const starts = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:start", () => starts.push(true));
+	await ctx.started;
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.activeSegment, null);
+	assert.deepEqual(starts, []);
+	ctx.destroyed();
+});
+
+test("a second raised hand cannot restart the warmup", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: true },
+	});
+	await ctx.started;
 	trackerEvent(ctx, "pose-tracker:started");
 	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "warmup" });
 	const firstSegment = ctx.segment;
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "warmup" });
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
 	assert.equal(ctx.segment, firstSegment);
+	assert.equal(ctx.flow.mode, "warmup_running");
 	ctx.destroyed();
 });
 
-test("delayed stale gesture confirms cannot act on the next armed step", () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	click(ctx, "camera-choice-yes");
+test("delayed stale gesture confirms cannot act once the camera has started", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: false },
+	});
+	await ctx.started;
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "camera_starting");
 	trackerEvent(ctx, "pose-tracker:started");
 	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
-	assert.equal(ctx.flow.mode, "warmup_choice");
-
 	trackerEvent(ctx, "pose-tracker:gesture-confirm");
-	assert.equal(ctx.flow.mode, "warmup_choice");
-	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
-	assert.equal(ctx.flow.mode, "warmup_choice");
-
-	ctx.finishWarmupTimeout();
-	assert.equal(ctx.flow.mode, "workout_ready");
+	assert.equal(ctx.flow.mode, "camera_setup");
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "warmup" });
-	assert.equal(ctx.flow.mode, "workout_ready");
+	assert.equal(ctx.flow.mode, "camera_setup");
 	ctx.destroyed();
 });
 
-test("camera escape actions use stable copy and stop locally", () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+test("camera escape actions use stable copy and stop locally", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: true },
+	});
 	const tracker = ctx.el.querySelector("#pose-tracker");
 	const commands = [];
 	tracker.addEventListener("pose-tracker:arm", (event) =>
@@ -2314,7 +2076,7 @@ test("camera escape actions use stable copy and stop locally", () => {
 	tracker.addEventListener("pose-tracker:stop", (event) =>
 		commands.push({ type: event.type, detail: event.detail }),
 	);
-	click(ctx, "camera-choice-yes");
+	await ctx.started;
 	trackerEvent(ctx, "pose-tracker:started");
 	assert.equal(
 		ctx.el.querySelector("#camera-setup-continue").textContent,
@@ -2323,7 +2085,8 @@ test("camera escape actions use stable copy and stop locally", () => {
 	click(ctx, "camera-setup-continue");
 
 	assert.equal(ctx.flow.captureMode, "no_camera");
-	assert.equal(ctx.flow.mode, "warmup_choice");
+	assert.equal(ctx.flow.mode, "warmup_running");
+	assert.equal(ctx.activeSegment, "warmup");
 	assert.deepEqual(commands.slice(-2), [
 		{
 			type: "pose-tracker:arm",
@@ -2705,98 +2468,6 @@ test("readiness transitions update the dataset and stay local", async () => {
 	harness.poseTracker.destroyed();
 });
 
-test("ordinary absent samples emit no tracking state or server event", async () => {
-	const harness = buildPoseTrackerHarness(
-		[0.2, 0.5, 0.25, 0.2].map((closeness, index) =>
-			trackerFrame(trackerSample({ tMs: [0, 500, 900, 1_100][index], closeness })),
-		),
-	);
-
-	await harness.mount();
-	await harness.runUntilConsumed(4);
-
-	assert.deepEqual(
-		harness.localEvents.filter(({ type }) => type === "pose-tracker:rep"),
-		[],
-	);
-	assert.deepEqual(
-		harness.localEvents
-			.filter(({ type }) => type === "pose-tracker:status")
-			.map(({ bubbles, detail }) => ({ bubbles, detail })),
-		[{ bubbles: true, detail: { state: "live" } }],
-	);
-	assert.deepEqual(harness.pushes, []);
-	harness.poseTracker.destroyed();
-});
-
-test("tracker reset does not turn absent samples into tracking loss", async () => {
-	const samples = [
-		[0, 0.2],
-		[500, 0.5],
-		[900, 0.25],
-		[1_100, 0.2],
-		[1_300, 0.5],
-		[1_400, 0.2],
-		[1_500, 0.5],
-		[1_600, 0.25],
-		[1_700, 0.2],
-	].map(([tMs, closeness]) => trackerFrame(trackerSample({ tMs, closeness })));
-	const harness = buildPoseTrackerHarness(samples);
-
-	await harness.mount();
-	await harness.runUntilConsumed(5);
-	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 1);
-	harness.tracker.dispatchEvent(new CustomEvent("pose-tracker:reset"));
-	await harness.runUntilConsumed(9);
-
-	assert.deepEqual(
-		harness.localEvents
-			.filter(({ type }) => type === "pose-tracker:status")
-			.map(({ bubbles, detail }) => ({ bubbles, detail })),
-		[{ bubbles: true, detail: { state: "live" } }],
-	);
-	harness.poseTracker.destroyed();
-	assert.equal(harness.tracker.listenerCount("pose-tracker:reset"), 0);
-});
-
-test("confidence loss samples do not emit a tracking-loss transition", async () => {
-	const harness = buildPoseTrackerHarness(
-		[0.9, 0.9, 0.1, 0.1, 0.9].map((confidence, index) =>
-			trackerFrame(trackerSample({ tMs: index * 100, confidence })),
-		),
-	);
-
-	await harness.mount();
-	await harness.runUntilConsumed(5);
-
-	assert.deepEqual(
-		harness.localEvents
-			.filter(({ type }) => type === "pose-tracker:status")
-			.map(({ bubbles, detail }) => ({ bubbles, detail })),
-		[{ bubbles: true, detail: { state: "live" } }],
-	);
-	assert.deepEqual(harness.pushes, []);
-	harness.poseTracker.destroyed();
-});
-
-test("invalid tracker finish does not emit a tracking-loss fallback", async () => {
-	const harness = buildPoseTrackerHarness([], { holdDetector: true });
-	await harness.mount();
-
-	harness.tracker.dispatchEvent(
-		new CustomEvent("pose-tracker:finish", {
-			detail: { durationMs: -1, cadenceMs: [] },
-		}),
-	);
-
-	assert.deepEqual(
-		harness.events.filter(({ type }) => type === "pose-tracker:status"),
-		[],
-	);
-	assert.deepEqual(harness.pushes, []);
-	harness.poseTracker.destroyed();
-});
-
 test("camera selection matches the working debug page", async () => {
 	const calls = [];
 	const stream = { id: "front-camera" };
@@ -2818,18 +2489,17 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	const ctx = buildHarness({ poseTrackerReady: null });
 	const actions = ctx.el.querySelector("#session-pause-actions");
 	const finishEarly = ctx.el.querySelector("#finish-early-btn");
-	const abort = ctx.el.querySelector("#session-abort-btn");
 	ctx.activeSegment = "workout";
 	ctx.startTime = 0;
 	ctx.paused = true;
 
+	assert.equal(actions.children.length, 1);
 	ctx.updatePauseActionsVisibility();
 	assert.equal(actions.style.opacity, "1");
 	assert.equal(actions.style.pointerEvents, "auto");
 	assert.equal(actions.attributes.get("aria-hidden"), "false");
 	assert.equal(actions.hasAttribute("inert"), false);
 	assert.equal(finishEarly.hasAttribute("disabled"), false);
-	assert.equal(abort.hasAttribute("disabled"), false);
 
 	ctx.paused = false;
 	ctx.updatePauseActionsVisibility();
@@ -2838,116 +2508,6 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	assert.equal(actions.attributes.get("aria-hidden"), "true");
 	assert.equal(actions.hasAttribute("inert"), true);
 	assert.equal(finishEarly.hasAttribute("disabled"), true);
-	assert.equal(abort.hasAttribute("disabled"), true);
-});
-
-test("tick accounts scheduled totals once and renders its command frame", () => {
-	const originalNow = performance.now;
-	performance.now = () => 4_500;
-	const ctx = buildHarness({ poseTrackerReady: null });
-	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 2 }];
-	const dispatchedEvents = [];
-	const dispatchSegment = ctx.dispatchSegment;
-	let renderedFrame;
-	const renderRunningFrame = ctx.renderRunningFrame;
-	ctx.dispatchSegment = function (event) {
-		dispatchedEvents.push(event);
-		return dispatchSegment.call(this, event);
-	};
-	ctx.renderRunningFrame = function (elapsedSec, frame) {
-		renderedFrame = frame;
-		return renderRunningFrame.call(this, elapsedSec, frame);
-	};
-
-	try {
-		ctx.dispatchSegment({
-			type: "SEGMENT_READY",
-			timeline,
-			burpeeCountTarget: 3,
-		});
-		ctx.activeSegment = "workout";
-		ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
-		ctx.startTime = 0;
-		ctx.tick();
-
-		assert.equal(ctx.segment.reps.burpeeCountDone, 2);
-		assert.equal(ctx.renderedModels[0].totalDone, 2);
-		assert.equal(renderedFrame, ctx.segment.reps.previousFrame);
-		assert.deepEqual(
-			dispatchedEvents.filter(({ type }) => type === "ACCOUNT_REPS"),
-			[],
-		);
-	} finally {
-		performance.now = originalNow;
-	}
-});
-
-test("delayed rest-to-work ticks render and cue the accounted work frame", () => {
-	const ctx = buildHarness({ poseTrackerReady: null });
-	const timeline = [
-		{ kind: "rest", duration_sec: 5 },
-		{ kind: "work", reps: 3, sec_per_rep: 2 },
-	];
-	const dispatchedEvents = [];
-	const dispatchSegment = ctx.dispatchSegment;
-	const renderedFrames = [];
-	const renderRunningFrame = ctx.renderRunningFrame;
-	ctx.dispatchSegment = function (event) {
-		dispatchedEvents.push(event);
-		return dispatchSegment.call(this, event);
-	};
-	ctx.renderRunningFrame = function (elapsedSec, frame) {
-		renderedFrames.push(frame);
-		return renderRunningFrame.call(this, elapsedSec, frame);
-	};
-
-	ctx.dispatchSegment({
-		type: "SEGMENT_READY",
-		timeline,
-		burpeeCountTarget: 3,
-	});
-	ctx.activeSegment = "workout";
-	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
-	ctx.dispatchSegment({ type: "TICK", elapsedSec: 1 });
-	ctx.dispatchSegment({ type: "TICK", elapsedSec: 9.5 });
-
-	assert.equal(ctx.segment.reps.burpeeCountDone, 2);
-	assert.equal(ctx.renderedModels.at(-1).primaryCount, 1);
-	assert.equal(renderedFrames.at(-1), ctx.segment.reps.previousFrame);
-	assert.deepEqual(ctx.downCueValues, [1]);
-	assert.deepEqual(
-		dispatchedEvents.filter(({ type }) => type === "ACCOUNT_REPS"),
-		[],
-	);
-});
-
-test("running frames cue authoritative remaining reps during work recovery", () => {
-	const ctx = buildHarness({ poseTrackerReady: null });
-	const timeline = Object.freeze([
-		Object.freeze({
-			kind: "work",
-			reps: 5,
-			sec_per_rep: 10,
-			sec_per_burpee: 3,
-		}),
-	]);
-
-	ctx.dispatchSegment({
-		type: "SEGMENT_READY",
-		timeline,
-		burpeeCountTarget: 5,
-	});
-	ctx.activeSegment = "workout";
-	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 0 });
-
-	ctx.dispatchSegment({ type: "TICK", elapsedSec: 4 });
-	ctx.dispatchSegment({ type: "TICK", elapsedSec: 5 });
-	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10.5 });
-
-	assert.equal(ctx.renderedModels[0].visual.state, "work_recovery");
-	assert.equal(ctx.renderedModels[0].primaryCount, "6");
-	// Active work ends at 3s, so recovery begins with one scheduled rep complete.
-	assert.deepEqual(ctx.downCueValues, [4, 4]);
 });
 
 test("running frames derive rest set progress from the hook timeline", () => {
@@ -2985,22 +2545,84 @@ test("running frames derive rest set progress from the hook timeline", () => {
 	assert.equal(warmupCtx.renderedModels[0].sessionProgress, null);
 });
 
-test("countdown pause enables Abort but keeps Finish early disabled", () => {
-	const ctx = buildHarness({ poseTrackerReady: null });
-	const actions = ctx.el.querySelector("#session-pause-actions");
-	const finishEarly = ctx.el.querySelector("#finish-early-btn");
-	const abort = ctx.el.querySelector("#session-abort-btn");
-	ctx.activeSegment = "workout";
-	ctx.startTime = null;
+test("any pause can finish early, so a session can always reach discard", () => {
+	for (const [activeSegment, startTime, countdownPaused, paused] of [
+		["workout", null, true, false],
+		["warmup", null, true, false],
+		["warmup", 0, false, true],
+	]) {
+		const ctx = buildHarness({ poseTrackerReady: null });
+		const finishEarly = ctx.el.querySelector("#finish-early-btn");
+		Object.assign(ctx, { activeSegment, startTime, countdownPaused, paused });
+		ctx.updatePauseActionsVisibility();
+		assert.equal(finishEarly.hasAttribute("disabled"), false, activeSegment);
+	}
+});
+
+test("finishing early in the warmup opens the finish screen with nothing counted", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: true },
+	});
+	const stops = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:stop", () => stops.push(true));
+	await ctx.started;
+	trackerEvent(ctx, "pose-tracker:started");
+	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "warmup_running");
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.paused = true;
+
+	click(ctx, "finish-early-btn");
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	assert.equal(ctx.flow.completion.durationSecActual, 0);
+	assert.equal(ctx.activeSegment, null);
+	assert.ok(stops.length > 0);
+	// The server takes only a settled camera: the count never started, so it was lost.
+	const { tracking } = ctx.completionPayload();
+	assert.equal(tracking.trust, "degraded");
+	assert.equal(tracking.reason, "tracking_incomplete");
+	ctx.destroyed();
+});
+
+test("finishing early in the workout countdown with the camera on can be saved", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: false },
+	});
+	await ctx.started;
+	trackerEvent(ctx, "pose-tracker:started");
+	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.flow.trackingTrust, "observing");
 	ctx.countdownPaused = true;
 
-	ctx.updatePauseActionsVisibility();
+	click(ctx, "finish-early-btn");
 
-	assert.equal(actions.hasAttribute("inert"), false);
-	assert.equal(actions.attributes.get("aria-hidden"), "false");
-	assert.equal(actions.style.pointerEvents, "auto");
-	assert.equal(finishEarly.hasAttribute("disabled"), true);
-	assert.equal(abort.hasAttribute("disabled"), false);
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.completionPayload().tracking.trust, "degraded");
+	ctx.destroyed();
+});
+
+test("finishing early during the countdown opens the finish screen too", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	assert.equal(ctx.countdownCount, 5);
+	ctx.countdownPaused = true;
+
+	click(ctx, "finish-early-btn");
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	assert.equal(ctx.countdownCount, null);
+	ctx.destroyed();
 });
 
 function prepareTrustedCompletion(ctx) {
@@ -3075,54 +2697,23 @@ test("trusted completion consumes synchronous tracker output before stop", () =>
 	ctx.destroyed();
 });
 
-test("unavailable tracker finish cannot complete a camera session with timer values", () => {
+test("missing tracker finish degrades completion to timer authority", () => {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	prepareTrustedCompletion(ctx);
 
-	ctx.runSegmentCommand({
-		type: "segmentDone",
-		result: { burpeeCountDone: 5, durationSec: 10 },
+	const result = ctx.workoutCompletionResult({
+		burpeeCountDone: 5,
+		durationSec: 10,
 	});
 
-	assert.equal(ctx.flow.mode, "workout_running");
-	assert.equal(ctx.flow.completion, null);
-	assert.equal(ctx.inMemoryCompletionDraft, null);
-	assert.equal(ctx.flow.trackingTrust, "observing");
-	assert.equal(Object.hasOwn(ctx.flow, "trackingReason"), false);
+	assert.deepEqual(result, {
+		burpeeCountDone: 5,
+		durationSec: 10,
+		cadenceMs: [],
+	});
+	assert.equal(ctx.flow.trackingTrust, "degraded");
+	assert.equal(ctx.flow.trackingReason, "tracking_incomplete");
 	ctx.destroyed();
-});
-
-test("detector error followed by segment end creates no trusted camera completion or draft", async () => {
-	const ctx = mountedFlowHarness({ poseTrackerReady: true });
-	const readyFrames = Array.from({ length: 8 }, (_, index) =>
-		trackerFrame(trackerSample({ tMs: index * 100 })),
-	);
-	const harness = poseTrackerHarness({
-		frames: readyFrames,
-		detectorThrowsAfterReady: true,
-		trackerElement: ctx.el.querySelector("#pose-tracker"),
-	});
-
-	try {
-		await harness.impl.mounted();
-		await harness.start();
-		await harness.runUntilConsumed(8);
-		await harness.runUntilConsumed(9).catch(() => {});
-		prepareTrustedCompletion(ctx);
-
-		ctx.runSegmentCommand({
-			type: "segmentDone",
-			result: { burpeeCountDone: 5, durationSec: 10 },
-		});
-
-		assert.equal(ctx.flow.mode, "workout_running");
-		assert.equal(ctx.flow.completion, null);
-		assert.equal(ctx.inMemoryCompletionDraft, null);
-		assert.equal(ctx.flow.trackingTrust, "observing");
-	} finally {
-		harness.poseTracker.destroyed();
-		ctx.destroyed();
-	}
 });
 
 test("real trusted completion handshake preserves finish data and cleans tracker resources", async () => {
@@ -3189,9 +2780,9 @@ function prepareSaveReview(ctx, overrides = {}) {
 		...ctx.flow,
 		mode: "completion_review",
 		captureMode: "camera",
+		trackingReason: null,
 		completion: {
 			burpeeCountActual: 4,
-			burpeeCountProvenance: "manual",
 			burpeeCountPlanned: 5,
 			durationSecActual: 9,
 			durationSecPlanned: 10,
@@ -3206,6 +2797,7 @@ function prepareSaveReview(ctx, overrides = {}) {
 		},
 	};
 	ctx.inMemoryCompletionDraft = ctx.completionDraft();
+	ctx.renderer.renderFlowState(ctx.flow);
 }
 
 function submitCompletion(ctx) {
@@ -3220,98 +2812,253 @@ function submitCompletion(ctx) {
 	return prevented;
 }
 
-test("final Save is the only server event and keeps invalid drafts editable", async () => {
-	const store = {
-		loadDraftByClientSessionId: async () => null,
-	};
-	const ctx = mountedFlowHarness({
-		openSessionStore: async () => store,
+test("Save serializes planned seconds as an integer despite runtime floating-point drift", () => {
+	const ctx = mountedFlowHarness();
+	prepareSaveReview(ctx, { durationSecPlanned: 1200.0000000000002 });
+	assert.equal(ctx.completionPayload().workout_session.duration_sec_planned, 1200);
+	assert.equal(ctx.flow.completion.durationSecPlanned, 1200.0000000000002);
+	ctx.destroyed();
+});
+
+test("Save omits removed feedback even when an old draft has contradictory energy", () => {
+	const ctx = mountedFlowHarness();
+	prepareSaveReview(ctx, {
+		contextLowEnergy: true,
+		contextHighEnergy: true,
+		contextHeatAffected: true,
+		primaryLimiter: "legs",
+		preferenceFeedback: "avoid",
 	});
-	prepareSaveReview(ctx);
+
+	assert.equal(ctx.inMemoryCompletionDraft.context_low_energy, true);
+	assert.equal(ctx.inMemoryCompletionDraft.context_high_energy, true);
+	assert.equal(ctx.inMemoryCompletionDraft.primary_limiter, "legs");
+	assert.deepEqual(ctx.completionPayload().workout_session, {
+		burpee_type: "six_count",
+		burpee_count_actual: 4,
+		burpee_count_planned: 5,
+		duration_sec_actual: 9,
+		duration_sec_planned: 10,
+		client_session_id: "client-save",
+		mood: 1,
+		tags: "tired,great_energy",
+		note_post: "Strong finish",
+	});
+	ctx.destroyed();
+});
+
+test("final Save excludes stale feedback and shows errors for removed fields", async () => {
+	const ctx = mountedFlowHarness({
+		openSessionStore: async () => ({ loadDraft: async () => null }),
+	});
+	prepareSaveReview(ctx, {
+		contextLowEnergy: true,
+		contextHighEnergy: true,
+		primaryLimiter: "legs",
+		preferenceFeedback: "avoid",
+	});
 	const draft = ctx.inMemoryCompletionDraft;
 	const calls = [];
+	const contradiction = "cannot be true when low energy is also true";
 	ctx.pushEvent = (name, payload, callback) => {
 		calls.push({ name, payload });
 		callback({
 			status: "invalid",
-			field_errors: { burpee_count_actual: ["must be at least 0"] },
-			global_errors: ["Could not save. Try again."],
+			field_errors: { context_high_energy: [contradiction] },
+			global_errors: [],
 		});
 	};
 
 	assert.equal(submitCompletion(ctx), true);
 	await flushHookPromises();
 
-	assert.deepEqual(calls, [
-		{
-			name: "save_session",
-			payload: {
-				workout_session: {
-					burpee_type: "six_count",
-					burpee_count_actual: 4,
-					burpee_count_planned: 5,
-					duration_sec_actual: 9,
-					duration_sec_planned: 10,
-					client_session_id: "client-save",
-					mood: 1,
-					tags: "great_energy,tired",
-					note_post: "Strong finish",
-				},
-				tracking: {
-					enabled: true,
-					trust: "finished",
-					detected_reps: 4,
-					detected_duration_sec: 9,
-					cadence_ms: [2_000, 4_000, 6_000, 8_000],
-				},
-			},
-		},
-	]);
-	assert.equal(
-		ctx.el.querySelector("#completion-reps-error").textContent,
-		"must be at least 0",
-	);
-	assert.equal(ctx.el.querySelector("#completion-reps-error").hidden, false);
-	assert.equal(
-		ctx.el.querySelector("#session-save-errors").textContent,
-		"Could not save. Try again.",
-	);
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0].name, "save_session");
+	assert.deepEqual(calls[0].payload.workout_session, ctx.completionPayload().workout_session);
+	assert.equal(Object.hasOwn(calls[0].payload.workout_session, "context_high_energy"), false);
+	assert.equal(ctx.el.querySelector("#session-save-errors").textContent, contradiction);
 	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+	assert.equal(ctx.el.querySelector("#session-live-status").textContent, contradiction);
 	assert.equal(ctx.inMemoryCompletionDraft, draft);
-	assert.equal(
-		ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"),
-		false,
-	);
+	assert.equal(ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"), false);
 	ctx.destroyed();
 });
 
-test("successful Save marks buffered traces ready before deleting draft and navigating", async () => {
+test("a delayed Save acknowledgement finalizes once and never navigates after destroy", async () => {
+	let acknowledge;
+	let resolveFinalization;
+	let finalizationCalls = 0;
+	const finalizationPending = new Promise((resolve) => {
+		resolveFinalization = resolve;
+	});
+	const store = {
+		loadDraft: async () => null,
+		finalizeServerCompletion() {
+			finalizationCalls += 1;
+			return finalizationPending;
+		},
+	};
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = {
+		location: { assign: (path) => navigations.push(path) },
+		dispatchEvent() {},
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store });
+	prepareSaveReview(ctx);
+	ctx.pushEvent = (_name, _payload, callback) => {
+		acknowledge = callback;
+	};
+
+	try {
+		submitCompletion(ctx);
+		assert.equal(ctx.flow.saveStatus, "saving");
+		await flushHookPromises();
+		assert.equal(finalizationCalls, 0);
+		assert.deepEqual(navigations, []);
+
+		acknowledge({ status: "ok", session_id: 41, redirect_to: "/stats" });
+		await flushHookPromises();
+		assert.equal(finalizationCalls, 1);
+		assert.deepEqual(navigations, []);
+
+		ctx.destroyed();
+		resolveFinalization({ traceReady: false });
+		await ctx.saveCleanup;
+		assert.deepEqual(navigations, []);
+	} finally {
+		if (!ctx.lifecycleDestroyed) ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("acknowledged completion facts stay frozen and Retry finalization is local-only", async () => {
+	let finalizationAttempts = 0;
+	let draftWrites = 0;
+	let serverCalls = 0;
+	const store = {
+		loadDraft: async () => null,
+		async saveDraft() {
+			draftWrites += 1;
+		},
+		async finalizeServerCompletion() {
+			finalizationAttempts += 1;
+			if (finalizationAttempts === 1) throw new Error("local commit failed");
+			return { traceReady: false };
+		},
+	};
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = {
+		location: { assign: (path) => navigations.push(path) },
+		dispatchEvent() {},
+	};
+	const ctx = mountedFlowHarness({ openSessionStore: async () => store });
+	prepareSaveReview(ctx);
+	const acknowledgedCompletion = structuredClone(ctx.flow.completion);
+	ctx.renderer.renderCompletion(ctx.flow.completion);
+	ctx.pushEvent = (_name, _payload, callback) => {
+		serverCalls += 1;
+		callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
+	};
+
+	try {
+		submitCompletion(ctx);
+		await ctx.saveCleanup;
+		assert.equal(ctx.flow.completionLocked, true);
+		assert.equal(ctx.flow.saveStatus, "failed");
+		assert.deepEqual(ctx.flow.completion, acknowledgedCompletion);
+		assert.equal(
+			ctx.el.querySelector("#session-save-btn").getAttribute("aria-label"),
+			"Retry finalization",
+		);
+		assert.equal(
+			ctx.el.querySelector("#session-save-btn").dataset.localOnly,
+			"true",
+		);
+
+		for (const id of [
+			"completion-reps-less",
+			"completion-reps-more",
+			"completion-reps-undo",
+			"completion-note-input",
+			"completion-context-low-energy",
+			"completion-context-high-energy",
+			"completion-context-heat-affected",
+			"completion-primary-limiter",
+			"completion-preference-feedback",
+		]) {
+			assert.equal(
+				ctx.el.querySelector(`#${id}`).hasAttribute("disabled"),
+				true,
+				id,
+			);
+		}
+		for (const button of ctx.el.querySelectorAll("[data-mood]")) {
+			assert.equal(button.hasAttribute("disabled"), true);
+		}
+
+		click(ctx, "completion-reps-more");
+		const note = ctx.el.querySelector("#completion-note-input");
+		note.value = "not on server";
+		ctx.el.dispatchEvent({ type: "input", target: note });
+		ctx.el.dispatchEvent({
+			type: "click",
+			target: ctx.el.querySelectorAll("[data-mood]")[0],
+			preventDefault() {},
+		});
+		await ctx.draftWrite;
+
+		assert.deepEqual(ctx.flow.completion, acknowledgedCompletion);
+		assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
+		assert.equal(
+			ctx.el.querySelector("#completion-note-input").value,
+			"Strong finish",
+		);
+		assert.equal(draftWrites, 0);
+
+		submitCompletion(ctx);
+		await ctx.saveCleanup;
+		assert.equal(serverCalls, 1);
+		assert.equal(finalizationAttempts, 2);
+		assert.deepEqual(navigations, ["/stats"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("successful Save commits local finalization before success state, upload dispatch, and navigation", async () => {
 	const order = [];
 	const store = {
-		loadDraftByClientSessionId: async () => null,
-		hasTraceChunks: async (clientSessionId) => {
-			order.push(["has", clientSessionId]);
-			return true;
-		},
-		markTraceReady: async (clientSessionId, sessionId) => {
-			order.push(["mark", clientSessionId, sessionId]);
-		},
-		deleteDraft: async (clientSessionId) => {
-			order.push(["delete", clientSessionId]);
+		loadDraft: async () => null,
+		finalizeServerCompletion: async (
+			sessionId,
+			contentHash,
+			clientSessionId,
+		) => {
+			order.push(["finalize", sessionId, contentHash, clientSessionId]);
+			return { traceReady: true };
 		},
 	};
 	const originalWindow = globalThis.window;
 	const navigations = [];
 	const readyEvents = [];
+	let ctx;
 	globalThis.window = {
-		location: { assign: (path) => navigations.push(path) },
+		location: {
+			assign: (path) => {
+				assert.equal(ctx.flow.mode, "persisted");
+				navigations.push(path);
+			},
+		},
 		dispatchEvent: (event) => readyEvents.push(event.type),
 	};
-	const ctx = mountedFlowHarness({ openSessionStore: async () => store });
+	ctx = mountedFlowHarness({ openSessionStore: async () => store });
 	prepareSaveReview(ctx);
 	ctx.pushEvent = (name, payload, callback) => {
 		assert.equal(name, "save_session");
-		callback({ status: "ok", session_id: 99, redirect_to: "/stats" });
+		callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
 	};
 
 	try {
@@ -3319,11 +3066,7 @@ test("successful Save marks buffered traces ready before deleting draft and navi
 		await flushHookPromises();
 		await flushHookPromises();
 
-		assert.deepEqual(order, [
-			["has", "client-save"],
-			["mark", "client-save", 99],
-			["delete", "client-save"],
-		]);
+		assert.deepEqual(order, [["finalize", 41, "hash-1", "client-save"]]);
 		assert.deepEqual(readyEvents, ["burpee:trace-upload-ready"]);
 		assert.deepEqual(navigations, ["/stats"]);
 		assert.equal(ctx.inMemoryCompletionDraft, null);
@@ -3333,13 +3076,18 @@ test("successful Save marks buffered traces ready before deleting draft and navi
 	}
 });
 
-test("successful Save without trace chunks skips upload marker", async () => {
+test("successful Save without trace chunks atomically deletes only the exact completion draft", async () => {
 	const calls = [];
 	const store = {
-		loadDraftByClientSessionId: async () => null,
-		hasTraceChunks: async () => false,
-		markTraceReady: async () => calls.push("mark"),
-		deleteDraft: async () => calls.push("delete"),
+		loadDraft: async () => null,
+		finalizeServerCompletion: async (
+			sessionId,
+			contentHash,
+			clientSessionId,
+		) => {
+			calls.push(["finalize", sessionId, contentHash, clientSessionId]);
+			return { traceReady: false };
+		},
 	};
 	const originalWindow = globalThis.window;
 	const navigations = [];
@@ -3357,13 +3105,13 @@ test("successful Save without trace chunks skips upload marker", async () => {
 	});
 	ctx.flow.captureMode = "no_camera";
 	ctx.pushEvent = (_name, _payload, callback) =>
-		callback({ status: "ok", session_id: 100, redirect_to: "/stats" });
+		callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
 
 	try {
 		submitCompletion(ctx);
 		await flushHookPromises();
 		await flushHookPromises();
-		assert.deepEqual(calls, ["delete"]);
+		assert.deepEqual(calls, [["finalize", 41, "hash-1", "client-save"]]);
 		assert.deepEqual(readyEvents, []);
 		assert.deepEqual(navigations, ["/stats"]);
 	} finally {
@@ -3372,11 +3120,9 @@ test("successful Save without trace chunks skips upload marker", async () => {
 	}
 });
 
-test("disconnected Save keeps controls and local draft available", () => {
+test("disconnected Save disables completion controls while retaining the local draft", () => {
 	const ctx = mountedFlowHarness({
-		openSessionStore: async () => ({
-			loadDraftByClientSessionId: async () => null,
-		}),
+		openSessionStore: async () => ({ loadDraft: async () => null }),
 	});
 	prepareSaveReview(ctx);
 	let callback;
@@ -3390,170 +3136,246 @@ test("disconnected Save keeps controls and local draft available", () => {
 	assert.ok(ctx.inMemoryCompletionDraft);
 	assert.equal(
 		ctx.el.querySelector("#session-save-btn").hasAttribute("disabled"),
-		false,
+		true,
 	);
 	assert.equal(ctx.flow.mode, "completion_review");
 	ctx.destroyed();
 });
 
-test("begin lifecycle conflicts restore the ready UI and surface server resolution", async () => {
-	const store = {
-		loadDraftByClientSessionId: async () => null,
-		saveLifecycleCommand: async () => {},
-	};
-	const ctx = mountedFlowHarness({
-		openSessionStore: async () => store,
-		realLifecycle: true,
-	});
-	await ctx.draftRestore;
-	ctx.flow = { ...ctx.flow, mode: "workout_ready", captureMode: "no_camera" };
-	let beginConflictsCleared = 0;
-	const clearBeginConflict = ctx.renderer.clearBeginConflict.bind(ctx.renderer);
-	ctx.renderer.clearBeginConflict = () => {
-		beginConflictsCleared += 1;
-		clearBeginConflict();
-	};
-	ctx.pushEvent = (name, payload, callback) => {
-		assert.equal(name, "begin_session");
-		assert.deepEqual(payload, { client_session_id: "client-1" });
-		callback({
-			status: "error",
-			reason: "unresolved_session",
-			message:
-				"Finish or discard your current workout before starting another one.",
-			resolve_to: "/sessions/42/resolve",
+test("successful Save keeps the real completion panel accessible while every local finalization step is pending", async () => {
+	for (const pendingStep of [
+		"open",
+		"trace-write",
+		"draft-write",
+		"finalize",
+	]) {
+		let settlePending;
+		const pending = new Promise((resolve) => {
+			settlePending = resolve;
 		});
-	};
+		const scheduled = [];
+		const originalWindow = globalThis.window;
+		const navigations = [];
+		const readyEvents = [];
+		const store = {
+			loadDraft: async () => null,
+			appendTraceChunk: () =>
+				pendingStep === "trace-write" ? pending : Promise.resolve(),
+			saveDraft: () =>
+				pendingStep === "draft-write" ? pending : Promise.resolve(),
+			finalizeServerCompletion: () =>
+				pendingStep === "finalize"
+					? pending
+					: Promise.resolve({ traceReady: true }),
+		};
+		globalThis.window = {
+			location: { assign: (path) => navigations.push(path) },
+			dispatchEvent: (event) => readyEvents.push(event.type),
+		};
+		const ctx = mountedFlowHarness({
+			openSessionStore: () =>
+				pendingStep === "open"
+					? pending.then(() => store)
+					: Promise.resolve(store),
+			setTimeout(callback) {
+				scheduled.push(callback);
+				return scheduled.length;
+			},
+		});
+		prepareSaveReview(ctx);
+		if (pendingStep === "trace-write") ctx.queueTraceChunk({ chunk_index: 0 });
+		if (pendingStep === "draft-write") ctx.queueCompletionDraft();
+		ctx.pushEvent = (_name, _payload, callback) =>
+			callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
 
-	ctx.onWorkoutReady();
-	await flushHookPromises();
-	await flushHookPromises();
+		try {
+			submitCompletion(ctx);
+			await flushHookPromises();
+			scheduled.forEach((callback) => callback());
+			assert.deepEqual(
+				navigations,
+				[],
+				`${pendingStep} navigated while pending`,
+			);
+			assert.deepEqual(
+				readyEvents,
+				[],
+				`${pendingStep} dispatched before commit`,
+			);
+			assert.equal(ctx.flow.mode, "completion_review");
+			assert.equal(
+				ctx.el.querySelector("#session-completion-review").hidden,
+				false,
+			);
+			const saveErrors = ctx.el.querySelector("#session-save-errors");
+			assert.equal(saveErrors.hidden, false);
+			assert.equal(saveErrors.classList.contains("hidden"), false);
+			assert.match(saveErrors.textContent, /Finalizing local evidence/);
 
-	assert.equal(ctx.flow.mode, "workout_ready");
-	assert.equal(beginConflictsCleared, 1);
-	assert.equal(ctx.el.querySelector("#session-begin-conflict").hidden, false);
-	assert.equal(
-		ctx.el.querySelector("#session-begin-conflict-message").textContent,
-		"Finish or discard your current workout before starting another one.",
-	);
-	assert.equal(
-		ctx.el.querySelector("#session-begin-conflict-resolve").getAttribute("href"),
-		"/sessions/42/resolve",
-	);
-	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, true);
-	ctx.destroyed();
+			settlePending(
+				pendingStep === "finalize" ? { traceReady: true } : undefined,
+			);
+			await ctx.saveCleanup;
+			assert.deepEqual(
+				navigations,
+				["/stats"],
+				`${pendingStep} did not navigate`,
+			);
+		} finally {
+			ctx.destroyed();
+			globalThis.window = originalWindow;
+		}
+	}
 });
 
-test("lifecycle begin and pending commands persist before their server events", async () => {
-	const order = [];
-	const store = {
-		loadDraftByClientSessionId: async () => null,
-		async saveDraft() {
-			order.push("draft");
-		},
-		async saveLifecycleCommand(command) {
-			order.push(`command:${command.kind}`);
-		},
-		loadLifecycleCommand: async () => null,
-	};
-	const ctx = mountedFlowHarness({
-		openSessionStore: async () => store,
-		realLifecycle: true,
-	});
-	await ctx.draftRestore;
-	ctx.flow = { ...ctx.flow, mode: "workout_ready", captureMode: "no_camera" };
-	ctx.pushEvent = (name, _payload, callback) => {
-		order.push(`event:${name}`);
-		callback({ status: "ok", session_id: 7, lifecycle_status: "running" });
-	};
+test("successful Save keeps real completion evidence and errors visible when any local finalization step rejects", async () => {
+	for (const rejectedStep of [
+		"open",
+		"trace-write",
+		"draft-write",
+		"finalize",
+	]) {
+		let rejectPending;
+		const pending = new Promise((_resolve, reject) => {
+			rejectPending = reject;
+		});
+		const originalWindow = globalThis.window;
+		const navigations = [];
+		const store = {
+			loadDraft: async () => null,
+			appendTraceChunk: () =>
+				rejectedStep === "trace-write" ? pending : Promise.resolve(),
+			saveDraft: () =>
+				rejectedStep === "draft-write" ? pending : Promise.resolve(),
+			finalizeServerCompletion: () =>
+				rejectedStep === "finalize"
+					? pending
+					: Promise.resolve({ traceReady: true }),
+		};
+		globalThis.window = {
+			location: { assign: (path) => navigations.push(path) },
+			dispatchEvent() {},
+		};
+		const ctx = mountedFlowHarness({
+			openSessionStore: () =>
+				rejectedStep === "open" ? pending : Promise.resolve(store),
+		});
+		prepareSaveReview(ctx);
+		if (rejectedStep === "trace-write") ctx.queueTraceChunk({ chunk_index: 0 });
+		if (rejectedStep === "draft-write") ctx.queueCompletionDraft();
+		ctx.pushEvent = (_name, _payload, callback) =>
+			callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
 
-	ctx.onWorkoutReady();
-	await flushHookPromises();
-	await flushHookPromises();
-	assert.deepEqual(order.slice(0, 2), [
-		"command:begin_session",
-		"event:begin_session",
-	]);
-	assert.equal(ctx.flow.mode, "workout_running");
+		try {
+			submitCompletion(ctx);
+			await flushHookPromises();
+			assert.deepEqual(navigations, []);
+			rejectPending(new Error(`${rejectedStep} failed`));
+			await ctx.saveCleanup;
 
-	ctx.dispatchFlow({
-		type: "SESSION_DONE",
-		result: { burpeeCountDone: 5, durationSec: 10 },
-	});
-	await flushHookPromises();
-	await flushHookPromises();
-	assert.deepEqual(order.slice(-3), [
-		"draft",
-		"command:mark_report_pending",
-		"event:mark_report_pending",
-	]);
-	assert.equal(ctx.flow.mode, "completion_review");
-	ctx.destroyed();
+			const completionPanel = ctx.el.querySelector(
+				"#session-completion-review",
+			);
+			const saveErrors = ctx.el.querySelector("#session-save-errors");
+			assert.deepEqual(navigations, []);
+			assert.equal(ctx.flow.mode, "completion_review");
+			assert.equal(ctx.flow.saveStatus, "failed");
+			assert.equal(completionPanel.hidden, false);
+			assert.equal(completionPanel.hasAttribute("inert"), false);
+			assert.equal(saveErrors.hidden, false);
+			assert.equal(saveErrors.classList.contains("hidden"), false);
+			assert.match(saveErrors.textContent, /local evidence is still pending/);
+			assert.equal(ctx.traceRetentionAvailable, false);
+			assert.ok(ctx.inMemoryCompletionDraft);
+		} finally {
+			ctx.destroyed();
+			globalThis.window = originalWindow;
+		}
+	}
 });
 
-test("pending failure retains recovery data and retry resends its persisted command", async () => {
-	const calls = [];
-	const store = {
-		loadDraftByClientSessionId: async () => null,
-		async saveDraft() {
-			calls.push("draft");
-		},
-		async saveLifecycleCommand() {
-			calls.push("command");
-		},
-		loadLifecycleCommand: async () => null,
-	};
-	const ctx = mountedFlowHarness({
-		openSessionStore: async () => store,
-		realLifecycle: true,
-	});
-	await ctx.draftRestore;
-	ctx.flow = {
-		...ctx.flow,
-		mode: "workout_running",
-		captureMode: "no_camera",
-		workoutTimeline: [{ kind: "work", reps: 5, sec_per_rep: 2 }],
-	};
-	let pendingAttempts = 0;
-	ctx.pushEvent = (name, payload, callback) => {
-		calls.push(`event:${name}`);
-		assert.equal(name, "mark_report_pending");
-		assert.deepEqual(payload, { client_session_id: "client-1" });
-		pendingAttempts += 1;
-		callback(
-			pendingAttempts === 1
-				? { status: "error", message: "offline" }
-				: { status: "ok", session_id: 7, lifecycle_status: "report_pending" },
-		);
-	};
-	ctx.dispatchFlow({
-		type: "SESSION_DONE",
-		result: { burpeeCountDone: 5, durationSec: 10 },
-	});
-	await flushHookPromises();
-	await flushHookPromises();
+test("retry after server completion retries every failed local step without another server completion", async () => {
+	for (const failedStep of ["open", "trace-write", "draft-write", "finalize"]) {
+		let openAttempts = 0;
+		let traceAttempts = 0;
+		let draftAttempts = 0;
+		let finalizationAttempts = 0;
+		let serverCompletionCalls = 0;
+		const store = {
+			loadDraft: async () => null,
+			async appendTraceChunk() {
+				traceAttempts += 1;
+				if (failedStep === "trace-write" && traceAttempts === 1) {
+					throw new Error("trace write unavailable");
+				}
+			},
+			async saveDraft() {
+				draftAttempts += 1;
+				if (failedStep === "draft-write" && draftAttempts === 1) {
+					throw new Error("draft write unavailable");
+				}
+			},
+			async finalizeServerCompletion() {
+				finalizationAttempts += 1;
+				if (failedStep === "finalize" && finalizationAttempts === 1) {
+					throw new Error("finalization unavailable");
+				}
+				return { traceReady: false };
+			},
+		};
+		const originalWindow = globalThis.window;
+		const navigations = [];
+		globalThis.window = {
+			location: { assign: (path) => navigations.push(path) },
+			dispatchEvent() {},
+		};
+		const ctx = mountedFlowHarness({
+			openSessionStore: async () => {
+				openAttempts += 1;
+				if (failedStep === "open" && openAttempts === 1) {
+					throw new Error("open unavailable");
+				}
+				return store;
+			},
+		});
+		prepareSaveReview(ctx);
+		if (failedStep === "trace-write") ctx.queueTraceChunk({ chunk_index: 0 });
+		if (failedStep === "draft-write") ctx.queueCompletionDraft();
+		ctx.pushEvent = (_name, _payload, callback) => {
+			serverCompletionCalls += 1;
+			callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
+		};
 
-	const draft = ctx.inMemoryCompletionDraft;
-	assert.equal(ctx.flow.mode, "completion_pending_failed");
-	assert.deepEqual(calls, ["draft", "command", "event:mark_report_pending"]);
+		try {
+			submitCompletion(ctx);
+			await ctx.saveCleanup;
+			assert.equal(ctx.flow.mode, "completion_review");
+			assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
 
-	click(ctx, "session-report-pending-retry");
-	await flushHookPromises();
-	assert.equal(ctx.flow.mode, "completion_review");
-	assert.equal(ctx.inMemoryCompletionDraft, draft);
-	assert.deepEqual(calls, [
-		"draft",
-		"command",
-		"event:mark_report_pending",
-		"event:mark_report_pending",
-	]);
-	ctx.destroyed();
+			submitCompletion(ctx);
+			await ctx.saveCleanup;
+			assert.equal(serverCompletionCalls, 1, failedStep);
+			assert.deepEqual(navigations, ["/stats"], failedStep);
+			if (failedStep === "open") assert.equal(openAttempts, 2);
+			if (failedStep === "trace-write") assert.equal(traceAttempts, 2);
+			if (failedStep === "draft-write") assert.equal(draftAttempts, 2);
+			if (failedStep === "finalize") assert.equal(finalizationAttempts, 2);
+		} finally {
+			ctx.destroyed();
+			globalThis.window = originalWindow;
+		}
+	}
 });
 
-test("successful Save navigates by a deadline when local storage remains pending", () => {
-	const opened = new Promise(() => {});
-	const scheduled = new Map();
-	let nextTimerId = 1;
+test("a fake IndexedDB blocked open settles into actionable visible Save failure", async () => {
+	const database = { close() {} };
+	const indexedDB = {
+		open() {
+			const request = { result: database, error: null };
+			queueMicrotask(() => request.onblocked?.());
+			return request;
+		},
+	};
 	const originalWindow = globalThis.window;
 	const navigations = [];
 	globalThis.window = {
@@ -3561,32 +3383,458 @@ test("successful Save navigates by a deadline when local storage remains pending
 		dispatchEvent() {},
 	};
 	const ctx = mountedFlowHarness({
-		openSessionStore: () => opened,
-		setTimeout(callback, delayMs) {
-			const id = nextTimerId++;
-			scheduled.set(id, { callback, delayMs });
-			return id;
-		},
-		clearTimeout(id) {
-			scheduled.delete(id);
-		},
+		openSessionStore: () => openSessionStore(indexedDB),
 	});
 	prepareSaveReview(ctx);
 	ctx.pushEvent = (_name, _payload, callback) =>
-		callback({ status: "ok", session_id: 101, redirect_to: "/stats" });
+		callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
 
 	try {
 		submitCompletion(ctx);
+		await flushHookPromises();
+		await ctx.saveCleanup;
 
-		assert.equal(ctx.flow.mode, "persisted");
+		const saveErrors = ctx.el.querySelector("#session-save-errors");
 		assert.deepEqual(navigations, []);
-		assert.equal(scheduled.size, 1);
-		const [{ callback, delayMs }] = scheduled.values();
-		assert.ok(delayMs <= 250, `save deadline was ${delayMs}ms`);
-		callback();
-		assert.deepEqual(navigations, ["/stats"]);
+		assert.equal(ctx.flow.mode, "completion_review");
+		assert.equal(
+			ctx.el.querySelector("#session-completion-review").hidden,
+			false,
+		);
+		assert.equal(saveErrors.hidden, false);
+		assert.match(
+			saveErrors.textContent,
+			/Close other Burpee Trainer tabs and retry/,
+		);
+		assert.ok(ctx.inMemoryCompletionDraft);
 	} finally {
 		ctx.destroyed();
 		globalThis.window = originalWindow;
 	}
+});
+
+test("finishing untouched saves the counted reps and time with one tap", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	const payload = ctx.completionPayload().workout_session;
+	assert.equal(payload.burpee_count_actual, 5);
+	assert.equal(payload.duration_sec_actual, 10);
+	ctx.destroyed();
+});
+
+async function finishedWith({ trackingTrust = "disabled", detectedReps = null } = {}) {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+	if (trackingTrust !== "disabled") {
+		const completion = {
+			...ctx.flow.completion,
+			trackingTrust,
+			detectedReps,
+			burpeeCountActual: detectedReps,
+			burpeeCountProvenance: "camera_confirmed",
+		};
+		ctx.flow = { ...ctx.flow, completion };
+		ctx.renderer.renderCompletion(completion);
+	}
+	return ctx;
+}
+
+function sourceLine(ctx) {
+	return {
+		text: ctx.el.querySelector("#session-count-source-text").textContent,
+		undo: !ctx.el.querySelector("#completion-reps-undo").hidden,
+	};
+}
+
+test("minus and plus correct the count by one, and it is saved", async () => {
+	const ctx = await finishedWith();
+	const planned = ctx.flow.completion.burpeeCountActual;
+	assert.deepEqual(sourceLine(ctx), { text: "From your plan", undo: false });
+
+	click(ctx, "completion-reps-more");
+	click(ctx, "completion-reps-more");
+	click(ctx, "completion-reps-less");
+	assert.equal(ctx.flow.completion.burpeeCountActual, planned + 1);
+	assert.equal(
+		ctx.el.querySelector("#session-actual-reps").textContent,
+		String(planned + 1),
+	);
+	assert.equal(
+		ctx.completionPayload().workout_session.burpee_count_actual,
+		planned + 1,
+	);
+	assert.deepEqual(sourceLine(ctx), {
+		text: `From your plan: ${planned}`,
+		undo: true,
+	});
+	ctx.destroyed();
+});
+
+test("a step is announced; a hold is announced once, when it ends", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const status = ctx.el.querySelector("#session-live-status");
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	click(ctx, "completion-reps-more");
+	assert.equal(status.textContent, "11 reps");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(status.textContent, "11 reps");
+	ctx.el.dispatchEvent({ type: "pointerup", target: more });
+	assert.equal(
+		status.textContent,
+		`${ctx.flow.completion.burpeeCountActual} reps`,
+	);
+
+	click(ctx, "completion-reps-undo");
+	assert.equal(status.textContent, "10 reps");
+	ctx.destroyed();
+});
+
+test("holding minus stops at zero, and the next key press still counts", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 3 });
+	const less = ctx.el.querySelector("#completion-reps-less");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: less, button: 0 });
+	for (let elapsed = 0; elapsed < 3_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	// The disabled button never sees the release or its click.
+	assert.equal(ctx.repHold?.timer ?? null, null);
+
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 1);
+	ctx.destroyed();
+});
+
+test("sliding off a held button stops it, and the next key press still counts", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	ctx.el.dispatchEvent({ type: "pointerout", target: more, relatedTarget: ctx.el });
+	const held = ctx.flow.completion.burpeeCountActual;
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(ctx.flow.completion.burpeeCountActual, held);
+
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountActual, held + 1);
+	ctx.destroyed();
+});
+
+test("a hold stops while the result is being saved", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	ctx.dispatchFlow({ type: "SAVE_STARTED" });
+	ctx.renderer.renderCompletionControls(ctx.flow);
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	ctx.dispatchFlow({ type: "SAVE_FAILED" });
+	ctx.renderer.renderCompletionControls(ctx.flow);
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(ctx.flow.completion.burpeeCountActual, 10);
+	ctx.destroyed();
+});
+
+test("the count never goes below zero", async () => {
+	const ctx = await finishedWith();
+	ctx.editCompletion({ burpeeCountActual: 0 });
+	assert.equal(ctx.el.querySelector("#completion-reps-less").hasAttribute("disabled"), true);
+	click(ctx, "completion-reps-less");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	ctx.destroyed();
+});
+
+test("a camera count says so, and a correction keeps it in view with undo", async () => {
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 42 });
+	assert.deepEqual(sourceLine(ctx), { text: "Counted by camera", undo: false });
+
+	click(ctx, "completion-reps-more");
+	assert.deepEqual(sourceLine(ctx), { text: "Camera counted 42", undo: true });
+
+	click(ctx, "completion-reps-undo");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 42);
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "camera_confirmed");
+	assert.deepEqual(sourceLine(ctx), { text: "Counted by camera", undo: false });
+	ctx.destroyed();
+});
+
+test("holding plus keeps counting until it is let go", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	// Mocked timers don't run a timer set during the same tick, so time moves in steps.
+	const wait = (ms) => {
+		for (let elapsed = 0; elapsed < ms; elapsed += 10) t.mock.timers.tick(10);
+	};
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	wait(2_000);
+	ctx.el.dispatchEvent({ type: "pointerup", target: more });
+	const held = ctx.flow.completion.burpeeCountActual;
+	assert.ok(held > 15, `held to ${held}`);
+
+	// The click that ends a hold is not one more rep.
+	click(ctx, "completion-reps-more");
+	wait(2_000);
+	assert.equal(ctx.flow.completion.burpeeCountActual, held);
+
+	// A plain tap after that is.
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountActual, held + 1);
+	ctx.destroyed();
+});
+
+test("a remembered camera on a device without one goes straight to the countdown", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: false },
+		mediaDevices: { enumerateDevices: async () => [{ kind: "audioinput" }] },
+	});
+	const starts = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:start", () => starts.push(true));
+	await ctx.started;
+
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.flow.captureMode, "no_camera");
+	assert.equal(ctx.countdownCount, 5);
+	assert.deepEqual(starts, []);
+	ctx.destroyed();
+});
+
+async function finishedWithDiscardReply(reply, discarded = []) {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => null,
+			saveDraft: async () => {},
+			discardSession: async (...args) => {
+				discarded.push(args);
+			},
+		}),
+	});
+	ctx.pushEvent = (name, payload, callback) => {
+		ctx.events.push({ name, payload });
+		if (reply) callback(reply);
+	};
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+	return ctx;
+}
+
+test("discard asks on the page before it deletes anything", async () => {
+	const ctx = await finishedWithDiscardReply(null);
+	const confirm = ctx.el.querySelector("#session-discard-confirm");
+	const actions = ctx.el.querySelector("#session-completion-actions");
+	click(ctx, "session-discard-btn");
+	// The question takes the place of the trash and save buttons.
+	assert.equal(confirm.hidden, false);
+	assert.equal(actions.hidden, true);
+	assert.equal(ctx.el.querySelector("#session-discard-keep").focused, true);
+	click(ctx, "session-discard-keep");
+	assert.equal(confirm.hidden, true);
+	assert.equal(actions.hidden, false);
+	assert.equal(ctx.el.querySelector("#session-discard-btn").focused, true);
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("a confirmed discard deletes the session, clears the device copy, and goes Home", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	const discarded = [];
+	const ctx = await finishedWithDiscardReply({ status: "discarded" }, discarded);
+	try {
+		click(ctx, "session-discard-btn");
+		click(ctx, "session-discard-yes");
+		await ctx.discarding;
+
+		assert.deepEqual(ctx.events, [{ name: "discard_session", payload: {} }]);
+		assert.deepEqual(discarded, [[41, "hash-1"]]);
+		assert.deepEqual(navigations, ["/"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("a refused discard keeps everything and says so", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	const discarded = [];
+	const ctx = await finishedWithDiscardReply({ status: "error" }, discarded);
+	try {
+		click(ctx, "session-discard-btn");
+		click(ctx, "session-discard-yes");
+		await ctx.discarding;
+
+		assert.deepEqual(discarded, []);
+		assert.deepEqual(navigations, []);
+		assert.equal(ctx.el.querySelector("#session-discard-confirm").hidden, true);
+		assert.equal(ctx.el.querySelector("#session-completion-actions").hidden, false);
+		assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+		assert.equal(ctx.flow.mode, "completion_review");
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("while a discard is in flight nothing else can change or save", async () => {
+	const ctx = await finishedWithDiscardReply(null);
+	click(ctx, "session-discard-btn");
+	click(ctx, "session-discard-yes");
+	assert.ok(ctx.discarding);
+	const before = structuredClone(ctx.flow.completion);
+
+	click(ctx, "completion-reps-more");
+	const note = ctx.el.querySelector("#completion-note-input");
+	note.value = "too late";
+	ctx.el.dispatchEvent({ type: "input", target: note });
+	ctx.saveCompletion();
+
+	assert.deepEqual(ctx.flow.completion, before);
+	assert.equal(ctx.flow.saveStatus, "idle");
+	assert.equal(ctx.el.querySelector("#session-discard-keep").hasAttribute("disabled"), true);
+	assert.equal(ctx.el.querySelector("#session-discard-yes").hasAttribute("disabled"), true);
+	ctx.destroyed();
+});
+
+test("a discard with no answer gives up and says so", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWithDiscardReply(null);
+	click(ctx, "session-discard-btn");
+	click(ctx, "session-discard-yes");
+	t.mock.timers.tick(15_000);
+	await ctx.discarding;
+
+	assert.equal(ctx.discarding, null);
+	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+	assert.equal(ctx.el.querySelector("#session-discard-keep").hasAttribute("disabled"), false);
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
+	ctx.destroyed();
+});
+
+test("discard waits while a save is in flight", async () => {
+	const ctx = await finishedWithDiscardReply({ status: "discarded" });
+	ctx.dispatchFlow({ type: "SAVE_STARTED" });
+	click(ctx, "session-discard-btn");
+	click(ctx, "session-discard-yes");
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("an untouched mood is not saved, and tapping the chosen mood again clears it", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	assert.equal("mood" in ctx.completionPayload().workout_session, false);
+	assert.equal(ctx.completionDraft().mood, null);
+
+	const good = ctx.el.querySelectorAll("[data-mood]").find((b) => b.dataset.mood === "1");
+	ctx.el.dispatchEvent({ type: "click", target: good, preventDefault() {} });
+	assert.equal(ctx.completionPayload().workout_session.mood, 1);
+	ctx.el.dispatchEvent({ type: "click", target: good, preventDefault() {} });
+	assert.equal("mood" in ctx.completionPayload().workout_session, false);
+	ctx.destroyed();
+});
+
+test("a restored draft keeps its early end and its missing mood", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => completionDraft({ mood: null, ended_early: true }),
+		}),
+	});
+	await ctx.started;
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.mood, null);
+	assert.equal(ctx.flow.completion.endedEarly, true);
+	ctx.destroyed();
+});
+
+test("tags toggle with a tap and are saved with the note; none chosen sends none", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	assert.equal("tags" in ctx.completionPayload().workout_session, false);
+
+	const tag = (name) =>
+		ctx.el.querySelectorAll("[data-tag]").find((button) => button.dataset.tag === name);
+	const tap = (target) => ctx.el.dispatchEvent({ type: "click", target, preventDefault() {} });
+	tap(tag("tired"));
+	tap(tag("hot"));
+	tap(tag("travel"));
+	tap(tag("travel"));
+	assert.equal(ctx.completionPayload().workout_session.tags, "tired,hot");
+	assert.equal(tag("tired").getAttribute("aria-pressed"), "true");
+	assert.equal(tag("travel").getAttribute("aria-pressed"), "false");
+
+	const note = ctx.el.querySelector("#completion-note-input");
+	note.value = "Legs heavy";
+	ctx.el.dispatchEvent({ type: "input", target: note });
+	assert.equal(ctx.completionPayload().workout_session.note_post, "Legs heavy");
+	assert.deepEqual(ctx.completionDraft().tags, ["tired", "hot"]);
+	ctx.destroyed();
+});
+
+test("finishing early mid-workout says so on the finish screen", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 3 });
+	// As in the browser: the count-in is over and the workout's clock is running.
+	ctx.countdownCount = null;
+	ctx.paused = true;
+
+	click(ctx, "finish-early-btn");
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.endedEarly, true);
+	assert.equal(ctx.completionDraft().ended_early, true);
+	ctx.destroyed();
+});
+
+test("a workout whose timer runs out is complete, not ended early", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.endedEarly, false);
+	ctx.destroyed();
 });

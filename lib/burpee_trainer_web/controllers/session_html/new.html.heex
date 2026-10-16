@@ -1,15 +1,13 @@
-<Layouts.app flash={@flash} current_user={nil}>
-  <div class="max-w-sm mx-auto mt-16 space-y-6">
-    <div class="text-center space-y-1">
-      <h1 class="text-2xl font-semibold tracking-tight">BurpeeTrainer</h1>
-      <p class="text-sm text-base-content/70">Sign in to continue</p>
+<Layouts.app flash={@flash} current_scope={nil}>
+  <main id="login-page" class="mx-auto w-full max-w-3xl">
+    <div class="adaptive-home">
+      <section class="login">
+        <h1 id="login-heading" class="screen-heading">BurpeeTrainer</h1>
+        <p class="login-note">Sign in to see today's workout.</p>
+        <a href={~p"/auth/oidc"} class="home-primary-action login-action">
+          Sign in with Pocket ID
+        </a>
+      </section>
     </div>
-
-    <a
-      href={~p"/auth/oidc"}
-      class="block w-full rounded-md bg-primary px-4 py-2 text-center font-medium text-primary-content hover:bg-primary/90 transition"
-    >
-      Sign in with Pocket ID
-    </a>
-  </div>
+  </main>
 </Layouts.app>

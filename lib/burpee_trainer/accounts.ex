@@ -10,11 +10,27 @@ defmodule BurpeeTrainer.Accounts do
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Repo
 
+  @users_page_limit 100
+
   @doc """
-  Fetch a user by id, raising if not found.
+  List the next fixed-size page of users ordered by id.
   """
-  @spec get_user!(integer) :: User.t()
-  def get_user!(id), do: Repo.get!(User, id)
+  @spec list_users_page(non_neg_integer() | nil) :: [User.t()]
+  def list_users_page(after_user_id \\ nil)
+
+  def list_users_page(nil) do
+    Repo.all(from(user in User, order_by: [asc: user.id], limit: @users_page_limit))
+  end
+
+  def list_users_page(after_user_id) when is_integer(after_user_id) and after_user_id >= 0 do
+    Repo.all(
+      from(user in User,
+        where: user.id > ^after_user_id,
+        order_by: [asc: user.id],
+        limit: @users_page_limit
+      )
+    )
+  end
 
   @doc """
   Fetch a user by id, returning nil if not found.
@@ -27,7 +43,7 @@ defmodule BurpeeTrainer.Accounts do
   """
   @spec get_user_by_username(String.t()) :: User.t() | nil
   def get_user_by_username(username) when is_binary(username) do
-    Repo.one(from u in User, where: u.username == ^username)
+    Repo.one(from(u in User, where: u.username == ^username))
   end
 
   @doc """
@@ -104,6 +120,16 @@ defmodule BurpeeTrainer.Accounts do
   def resolve_oidc_identity(_sub, _username), do: {:error, :username_missing}
 
   @doc """
+  Sets whether the app's own coach runs for the user, from the identity provider's claim
+  at sign-in. Writes only when it changes.
+  """
+  @spec put_coach_enabled(User.t(), boolean()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
+  def put_coach_enabled(%User{coach_enabled: enabled?} = user, enabled?), do: {:ok, user}
+
+  def put_coach_enabled(%User{} = user, enabled?) when is_boolean(enabled?),
+    do: user |> Ecto.Changeset.change(coach_enabled: enabled?) |> Repo.update()
+
+  @doc """
   Create a user. Users are normally provisioned in Pocket ID; this is for
   seeding and tests.
   """
@@ -115,10 +141,29 @@ defmodule BurpeeTrainer.Accounts do
   end
 
   @doc """
-  True when any user exists. Used by the mix task to avoid double-seeding.
+  Persist a valid IANA timezone, avoiding a database write when an already-provisioned timezone is unchanged.
   """
-  @spec any_user?() :: boolean
-  def any_user? do
-    Repo.exists?(User)
+  @spec update_timezone(User.t(), String.t()) ::
+          {:ok, User.t()} | {:error, Ecto.Changeset.t()}
+  def update_timezone(%User{} = user, timezone) do
+    update_timezone_at(user, timezone, DateTime.utc_now(:second))
+  end
+
+  @doc false
+  @spec update_timezone_at(User.t(), String.t(), DateTime.t()) ::
+          {:ok, User.t()} | {:error, Ecto.Changeset.t() | term()}
+  def update_timezone_at(%User{} = user, timezone, %DateTime{} = _now) do
+    changeset = User.timezone_changeset(user, %{timezone: timezone})
+
+    if changeset.valid? and user.timezone == timezone and user.timezone_provisioned do
+      {:ok, user}
+    else
+      Repo.transaction(fn ->
+        case Repo.update(changeset) do
+          {:ok, updated_user} -> updated_user
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end
   end
 end

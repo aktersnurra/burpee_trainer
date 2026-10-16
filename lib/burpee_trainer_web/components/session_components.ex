@@ -8,121 +8,31 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   alias BurpeeTrainerWeb.Fmt
 
   attr(:hidden, :boolean, default: true)
-
-  def capture_choice(assigns) do
-    ~H"""
-    <.panel
-      id="session-capture-choice"
-      heading_id="session-capture-choice-heading"
-      hidden={@hidden}
-    >
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
-        <h1
-          id="session-capture-choice-heading"
-          data-session-heading
-          tabindex="-1"
-          class="qs-heading-tight text-4xl font-medium leading-tight"
-        >
-          Track burpees with the camera?
-        </h1>
-        <p class="mt-4 max-w-sm text-base leading-relaxed text-[var(--session-muted)]">
-          The workout timer runs either way. Camera tracking adds a backup rep count.
-        </p>
-        <div class="mt-10 grid w-full gap-3">
-          <button
-            id="camera-choice-yes"
-            type="button"
-            class="min-h-14 rounded-2xl bg-[var(--session-ink)] px-6 py-4 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
-          >
-            Yes, use camera
-          </button>
-          <button
-            id="camera-choice-no"
-            type="button"
-            class="min-h-14 rounded-2xl border border-[var(--session-border)] px-6 py-4 text-base font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-[0.99]"
-          >
-            No, continue
-          </button>
-        </div>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
-
-  def camera_status(assigns) do
-    ~H"""
-    <.panel id="session-camera-status" heading_id="camera-status-heading" hidden={@hidden}>
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
-        <div id="camera-status-starting">
-          <h1
-            id="camera-status-heading"
-            data-session-heading
-            tabindex="-1"
-            class="qs-heading-tight text-4xl font-medium leading-tight"
-          >
-            Starting camera
-          </h1>
-        </div>
-        <div id="camera-status-error" hidden inert="inert">
-          <h2 class="qs-heading-tight text-4xl font-medium leading-tight">Camera unavailable</h2>
-          <p class="mt-4 text-base text-[var(--session-muted)]">Nothing has started.</p>
-          <p
-            id="camera-status-failure-detail"
-            hidden
-            class="mt-4 break-words text-sm text-[var(--session-muted)]"
-          >
-          </p>
-          <div class="mt-10 grid w-full gap-3">
-            <button
-              id="camera-status-retry"
-              type="button"
-              class="min-h-14 rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-            >
-              Try again
-            </button>
-            <button
-              id="camera-status-continue"
-              type="button"
-              class="min-h-14 px-6 py-4 text-[var(--session-muted)] underline underline-offset-4"
-            >
-              Continue without camera
-            </button>
-          </div>
-        </div>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
   attr(:target_pace_sec, :any, default: nil)
+  attr(:session, :map, required: true)
 
+  # The one camera screen, from starting to "hand up". Its heading is the status line.
   def camera_setup(assigns) do
     ~H"""
     <.panel id="session-camera-setup" heading_id="camera-setup-heading" hidden={@hidden}>
-      <div class="session-camera-layout absolute inset-0 grid text-center">
-        <div class="row-start-1 w-full max-w-[430px] place-self-center self-center px-5">
-          <div id="camera-setup-arming">
-            <h1
-              id="camera-setup-heading"
-              data-session-heading
-              tabindex="-1"
-              class="qs-heading-tight text-3xl font-medium leading-tight"
-            >
-              Step into frame
-            </h1>
-            <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
-              Keep shoulders, hips, and one knee visible.
-            </p>
-          </div>
-          <div id="camera-setup-ready" hidden inert="inert">
-            <h2 class="qs-heading-tight text-3xl font-medium leading-tight">Camera ready</h2>
-            <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
-              Hold one hand up or stay still.
-            </p>
-          </div>
+      <.preflight_chrome id="session-camera-setup" session={@session} />
+      <div class="session-camera-layout absolute inset-0 mx-auto grid w-full max-w-[640px] text-center">
+        <div class="row-start-1 w-full max-w-[640px] place-self-center self-center px-5">
+          <h1
+            id="camera-setup-heading"
+            data-session-heading
+            tabindex="-1"
+            aria-live="polite"
+            class="qs-heading-tight text-3xl font-medium leading-tight"
+          >
+            Starting camera
+          </h1>
+          <p
+            id="camera-setup-failure-detail"
+            hidden
+            class="mx-auto mt-2 max-w-md break-words text-sm text-[var(--session-muted)]"
+          >
+          </p>
         </div>
 
         <div
@@ -147,52 +57,24 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           </div>
         </div>
 
-        <button
-          id="camera-setup-continue"
-          type="button"
-          class="row-start-3 mt-20 place-self-center px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
-        >
-          Continue without camera
-        </button>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
-
-  def warmup_choice(assigns) do
-    ~H"""
-    <.panel id="session-warmup-choice" heading_id="session-warmup-heading" hidden={@hidden}>
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
-        <h1
-          id="session-warmup-heading"
-          data-session-heading
-          tabindex="-1"
-          class="qs-heading-tight text-4xl font-medium leading-tight"
-        >
-          Warm up first?
-        </h1>
-        <p id="warmup-tracked-instruction" class="mt-4 text-lg text-[var(--session-muted)]">
-          Raise one hand to warm up.
-        </p>
-        <p id="warmup-skip-countdown" class="qs-tabular mt-3 text-base text-[var(--session-muted)]">
-          Skipping in <span id="warmup-skip-seconds">4</span>
-        </p>
-        <div id="warmup-manual-controls" class="mt-10 grid w-full gap-3" hidden inert="inert">
+        <div class="row-start-3 flex flex-col items-center gap-1 place-self-center">
           <button
-            id="warmup-yes-btn"
+            id="camera-setup-retry"
             type="button"
-            class="min-h-14 rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
+            hidden
+            inert="inert"
+            aria-label="Try the camera again"
+            title="Try the camera again"
+            class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)]"
           >
-            Warm up
+            <.icon name="hero-arrow-path" class="size-6" />
           </button>
           <button
-            id="warmup-skip-btn"
+            id="camera-setup-continue"
             type="button"
-            class="min-h-14 rounded-2xl border border-[var(--session-border)] px-6 py-4 text-[var(--session-muted)]"
+            class="px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
           >
-            Skip warmup
+            Continue without camera
           </button>
         </div>
       </div>
@@ -200,63 +82,24 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     """
   end
 
-  attr(:hidden, :boolean, default: true)
+  attr(:id, :string, required: true)
+  attr(:session, :map, required: true)
 
-  def workout_ready(assigns) do
+  defp preflight_chrome(assigns) do
     ~H"""
-    <.panel id="session-workout-ready" heading_id="session-workout-ready-heading" hidden={@hidden}>
-      <div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-6 text-center">
-        <h1
-          id="session-workout-ready-heading"
-          data-session-heading
-          tabindex="-1"
-          class="qs-heading-tight text-4xl font-medium leading-tight"
-        >
-          Ready when you are
-        </h1>
-        <p id="workout-ready-instruction" class="mt-4 text-lg text-[var(--session-muted)]">
-          Hold one hand up to start.
-        </p>
-        <button
-          id="workout-ready-btn"
-          type="button"
-          hidden
-          inert="inert"
-          class="mt-10 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-        >
-          Start workout
-        </button>
-        <button
-          id="workout-ready-continue"
-          type="button"
-          class="mt-6 min-h-11 px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
-        >
-          Continue without camera
-        </button>
-      </div>
-    </.panel>
-    """
-  end
-
-  def begin_conflict(assigns) do
-    ~H"""
-    <div
-      id="session-begin-conflict"
-      hidden
-      inert="inert"
-      role="alert"
-      class="absolute inset-x-0 top-0 z-10 mx-auto w-full max-w-[430px] px-6 pt-6"
-    >
-      <div class="rounded-2xl border border-amber-500/40 bg-amber-50 p-4 text-left text-amber-950 shadow-lg">
-        <p id="session-begin-conflict-message" class="text-sm leading-relaxed"></p>
-        <a
-          id="session-begin-conflict-resolve"
-          href=""
-          class="mt-3 inline-flex min-h-11 items-center rounded-xl bg-amber-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-900 focus:outline-2 focus:outline-offset-2 focus:outline-amber-950"
-        >
-          Review current workout
-        </a>
-      </div>
+    <div class="session-preflight-chrome">
+      <.link
+        id={"#{@id}-back"}
+        navigate={~p"/"}
+        aria-label="Back to Home"
+        title="Back to Home"
+        class="session-preflight-back"
+      >
+        <.icon name="hero-arrow-left" class="size-5" />
+      </.link>
+      <p class="session-preflight-workout-name">
+        {@session.display_name_snapshot || Fmt.burpee_type(@session.burpee_type)}
+      </p>
     </div>
     """
   end
@@ -357,15 +200,16 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               >
                 Finish early
               </button>
-              <button
-                id="session-abort-btn"
-                type="button"
-                disabled
-                data-confirm-message="Abort this session without saving?"
-                class="px-6 py-3 text-base text-[var(--session-active-ink)]"
+              <%!-- Leaves the session started, as the start screens' back arrow did. --%>
+              <.link
+                id="session-pause-leave"
+                navigate={~p"/"}
+                aria-label="Back to Home"
+                title="Back to Home"
+                class="session-pause-leave inline-flex size-14 items-center justify-center rounded-full"
               >
-                Abort
-              </button>
+                <.icon name="hero-arrow-left" class="size-6" />
+              </.link>
             </div>
           </div>
         </div>
@@ -377,16 +221,24 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:hidden, :boolean, default: true)
   attr(:form, :any, required: true)
 
-  @mood_options [{"Tired", -1}, {"OK", 0}, {"Hyped", 1}]
-  @tag_options ~w[tired great_energy bad_sleep sick travel hot]
+  @mood_options [{"Rough", -1}, {"OK", 0}, {"Good", 1}]
+  @tag_options [
+    {"Tired", "tired"},
+    {"Great energy", "great_energy"},
+    {"Bad sleep", "bad_sleep"},
+    {"Sick", "sick"},
+    {"Travel", "travel"},
+    {"Hot", "hot"}
+  ]
 
   def completion_review(assigns) do
     assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
 
     ~H"""
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
-      <div class="mx-auto h-dvh w-full max-w-[430px] overflow-y-auto px-5 pb-10 pt-[max(4rem,env(safe-area-inset-top))]">
-        <section id="session-completion-summary" class="text-center">
+      <%!-- Centred like the camera screen; the auto margins still let a tall form scroll. --%>
+      <div class="mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-y-auto px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))]">
+        <section id="session-completion-summary" class="mt-auto text-center">
           <h1
             id="session-completion-heading"
             data-session-heading
@@ -395,18 +247,55 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           >
             Workout complete
           </h1>
-          <p
-            id="session-actual-reps"
-            class="qs-tabular mt-8 text-[clamp(5rem,24vw,9rem)] font-semibold leading-none tracking-[-0.08em]"
-          >
-            0
+          <%!-- The count is the result; − and + correct it. Holding one keeps counting. --%>
+          <div class="session-reps-stepper mt-10">
+            <button
+              id="completion-reps-less"
+              type="button"
+              aria-label="One rep fewer"
+              title="One rep fewer"
+              aria-controls="session-actual-reps"
+              class="session-reps-step"
+            >
+              <.icon name="hero-minus" class="size-6" />
+            </button>
+            <span
+              id="session-actual-reps"
+              aria-describedby="completion-reps-error"
+              class="qs-tabular text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
+            >
+              0
+            </span>
+            <button
+              id="completion-reps-more"
+              type="button"
+              aria-label="One rep more"
+              title="One rep more"
+              aria-controls="session-actual-reps"
+              class="session-reps-step"
+            >
+              <.icon name="hero-plus" class="size-6" />
+            </button>
+          </div>
+          <%!-- What was planned and how long it took, in one line under the count. --%>
+          <p class="qs-tabular mt-5 text-lg text-[var(--session-muted)]">
+            of <span id="session-planned-reps">0</span>
+            · <span id="session-actual-duration">0:00</span>
           </p>
-          <p class="qs-tabular mt-4 text-sm text-[var(--session-muted)]">
-            of <span id="session-planned-reps" class="font-medium text-[var(--session-ink)]">0</span>
-            planned
+          <%!-- Where the count came from; after a correction, the original and a way back. --%>
+          <p id="session-count-source" class="mt-2 text-sm text-[var(--session-muted)]" hidden>
+            <span id="session-count-source-text"></span>
+            <button
+              id="completion-reps-undo"
+              type="button"
+              hidden
+              class="min-h-11 px-2 text-[var(--session-ink)] underline underline-offset-4"
+            >
+              Undo
+            </button>
           </p>
-          <p id="session-count-source" class="mt-3 text-xs text-[var(--session-muted)]" hidden></p>
-          <p id="session-actual-duration" class="qs-tabular mt-8 text-3xl font-medium">0:00</p>
+          <p id="completion-reps-error" class="mt-2 text-sm text-[var(--session-error-ink)]" hidden>
+          </p>
         </section>
 
         <div
@@ -416,88 +305,39 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <div
-          id="session-report-pending-status"
-          role="status"
-          aria-live="polite"
-          hidden
-          inert="inert"
-          class="mt-8 rounded-2xl border border-red-300/50 px-4 py-3 text-sm text-red-700"
-        >
-          We could not prepare this workout for saving. Your workout details are still here.
-        </div>
-        <button
-          id="session-report-pending-retry"
-          type="button"
-          hidden
-          inert="inert"
-          class="mt-3 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-        >
-          Try again
-        </button>
-
-        <div id="session-completion-mood" class="mt-10 flex border-y border-[var(--session-border)]">
-          <%= for {label, value} <- @mood_options do %>
-            <button
-              type="button"
-              data-mood={value}
-              aria-pressed="false"
-              class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
-            >
-              {label}
-            </button>
-          <% end %>
-        </div>
-
-        <.form for={@form} id="session-completion-form" class="mt-10">
-          <.input
-            field={@form[:burpee_count_actual]}
-            id="completion-reps-input"
-            type="number"
-            label="Reps"
-            min="0"
-            inputmode="numeric"
-            aria-describedby="completion-reps-error"
-            class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
-          />
-          <p id="completion-reps-error" hidden></p>
-          <.input
-            field={@form[:duration_sec_actual]}
-            id="completion-duration-input"
-            type="number"
-            label="Seconds"
-            min="0"
-            inputmode="numeric"
-            aria-describedby="completion-duration-error"
-            class="qs-tabular min-h-14 w-full rounded-xl border border-[var(--session-border)] bg-transparent px-4 text-2xl text-[var(--session-ink)]"
-          />
-          <p id="completion-duration-error" hidden></p>
-          <.input
-            field={@form[:note_post]}
-            id="completion-note-input"
-            type="textarea"
-            label="Note"
-            rows="3"
-            placeholder="How did it go?"
-            aria-describedby="completion-note-error"
-            class="w-full resize-none rounded-xl border border-[var(--session-border)] bg-transparent px-4 py-3 text-sm text-[var(--session-ink)]"
-          />
-          <p id="completion-note-error" hidden></p>
-
-          <div id="session-completion-tags" class="border-t border-[var(--session-border)] py-6">
-            <p class="mb-3 text-sm font-medium text-[var(--session-muted)]">Tags</p>
-            <div class="flex flex-wrap gap-2">
-              <%= for tag <- @tag_options do %>
-                <button
-                  type="button"
-                  data-tag={tag}
-                  aria-pressed="false"
-                  class="session-choice-toggle min-h-11 rounded-full border border-[var(--session-border)] px-4 py-2 text-xs text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
-                >
-                  {String.replace(tag, "_", " ")}
-                </button>
-              <% end %>
-            </div>
+        <.form for={@form} id="session-completion-form" class="mt-12 mb-auto">
+          <div id="session-completion-mood" class="flex border-y border-[var(--session-border)]">
+            <%= for {label, value} <- @mood_options do %>
+              <button
+                type="button"
+                data-mood={value}
+                aria-pressed="false"
+                class="session-choice-toggle min-h-16 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
+              >
+                {label}
+              </button>
+            <% end %>
+          </div>
+          <%!-- Optional, like mood: tap to toggle. Pills as on Home. --%>
+          <div id="session-completion-tags" role="group" aria-label="Tags" class="session-tags">
+            <%= for {label, value} <- @tag_options do %>
+              <button type="button" data-tag={value} aria-pressed="false" class="session-tag-pill">
+                {label}
+              </button>
+            <% end %>
+          </div>
+          <%!-- One line that grows, underlined like Home's fields. --%>
+          <div class="session-note-field">
+            <label for="completion-note-input" class="sr-only">Note</label>
+            <textarea
+              id="completion-note-input"
+              name={@form[:note_post].name}
+              rows="1"
+              placeholder="How did it go?"
+              aria-describedby="completion-note-error"
+              class="session-note-input"
+            >{@form[:note_post].value}</textarea>
+            <p id="completion-note-error" hidden></p>
           </div>
 
           <div class="hidden">
@@ -507,21 +347,64 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <.input field={@form[:client_session_id]} type="hidden" />
           </div>
 
-          <button
-            id="session-save-btn"
-            type="submit"
-            class="mt-8 min-h-14 w-full rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
+          <%!-- A finished workout is saved or discarded; nothing else. --%>
+          <div id="session-completion-actions" class="mt-12 flex items-center justify-between gap-3">
+            <button
+              id="session-discard-btn"
+              type="button"
+              aria-label="Discard session"
+              title="Discard session"
+              aria-controls="session-discard-confirm"
+              class="inline-flex size-14 items-center justify-center rounded-full border border-[var(--session-border)] text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
+            >
+              <.icon name="hero-trash" class="size-6" />
+            </button>
+            <button
+              id="session-save-btn"
+              type="submit"
+              aria-label="Save session"
+              title="Save session"
+              class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
+            >
+              <span id="session-save-icon-ready" aria-hidden="true">
+                <.icon name="hero-check" class="size-6" />
+              </span>
+              <span id="session-save-icon-pending" aria-hidden="true" hidden>
+                <.icon name="hero-arrow-path" class="size-6" />
+              </span>
+            </button>
+          </div>
+
+          <%!-- Discarding deletes the started session. The question takes the buttons' place. --%>
+          <div
+            id="session-discard-confirm"
+            hidden
+            role="group"
+            aria-labelledby="session-discard-question"
+            aria-describedby="session-discard-consequence"
+            class="mt-12 text-center"
           >
-            Save session
-          </button>
-          <button
-            id="session-discard-btn"
-            type="button"
-            data-confirm-message="Discard this session?"
-            class="mx-auto mt-2 block min-h-11 px-6 py-3 text-sm text-[var(--session-muted)]"
-          >
-            Discard
-          </button>
+            <p id="session-discard-question" class="text-lg font-medium">Discard this workout?</p>
+            <p id="session-discard-consequence" class="mt-1 text-sm text-[var(--session-muted)]">
+              Nothing will be saved.
+            </p>
+            <div class="mt-5 grid grid-cols-2 gap-3">
+              <button
+                id="session-discard-keep"
+                type="button"
+                class="min-h-14 rounded-full border border-[var(--session-border)] text-base font-medium text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
+              >
+                Keep
+              </button>
+              <button
+                id="session-discard-yes"
+                type="button"
+                class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white transition-opacity hover:opacity-90"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
         </.form>
       </div>
     </.panel>

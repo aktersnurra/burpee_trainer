@@ -1,0 +1,18 @@
+{
+  "id": "navy_seal_80",
+  "form": {
+    "burpee_type": "navy_seal",
+    "pacing_style": "unbroken",
+    "reps": 80,
+    "duration": "20:00",
+    "recovery": "optional",
+    "pace": null,
+    "note": ""
+  },
+  "expected": {
+    "target_reps": 80,
+    "burpee_type": "navy_seal",
+    "target_duration_sec": 1200,
+    "recovery": "optional"
+  }
+}

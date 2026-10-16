@@ -48,6 +48,7 @@ defmodule BurpeeTrainer.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
+      {:stream_data, "~> 1.0", only: [:test, :dev]},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
@@ -58,15 +59,16 @@ defmodule BurpeeTrainer.MixProject do
        app: false,
        compile: false,
        depth: 1},
-      {:swoosh, "~> 1.16"},
+      # Req is the sole HTTP boundary for LLM provider calls.
       {:req, "~> 0.5"},
+      {:oban, "~> 2.19"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:contex, "~> 0.5"},
+      {:tzdata, "~> 1.1"},
       {:remote_ip, "~> 1.2"},
       {:oidcc, "~> 3.9"}
     ]

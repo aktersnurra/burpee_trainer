@@ -26,33 +26,15 @@ defmodule BurpeeTrainerWeb.Fmt do
     end
   end
 
-  @spec session_started_at(DateTime.t() | nil) :: String.t()
-  def session_started_at(nil), do: "Unknown"
-
-  def session_started_at(%DateTime{} = value) do
-    Calendar.strftime(value, "%b %-d, %Y at %-I:%M %p UTC")
-  end
-
   @doc """
   Human-readable label for a burpee_type enum.
   """
   @spec burpee_type(atom | String.t() | nil) :: String.t()
-  def burpee_type(:six_count), do: "6-Count"
+  def burpee_type(:six_count), do: "Six-count"
   def burpee_type(:navy_seal), do: "Navy SEAL"
-  def burpee_type("six_count"), do: "6-Count"
+  def burpee_type("six_count"), do: "Six-count"
   def burpee_type("navy_seal"), do: "Navy SEAL"
   def burpee_type(_), do: "—"
-
-  @doc """
-  Returns Tailwind classes for the level badge background and text color.
-  """
-  @spec level_color(atom) :: String.t()
-  def level_color(level) when level in [:level_4, :graduated],
-    do: "bg-accent/10 text-accent"
-
-  def level_color(:level_3), do: "bg-success/10 text-success"
-  def level_color(:level_2), do: "bg-warning/10 text-warning"
-  def level_color(_), do: "bg-primary/10 text-primary"
 
   @doc """
   Human-readable label for a level atom.
@@ -67,4 +49,48 @@ defmodule BurpeeTrainerWeb.Fmt do
   def level(:level_1b), do: "Level 1B"
   def level(:level_1a), do: "Level 1A"
   def level(_), do: "—"
+
+  @doc "One line for a goal, the same on History and Coach: \"150 six-count burpees in 20 min by 9 Nov\", with the year only when it is not `today`'s."
+  @spec goal(map(), Date.t()) :: String.t()
+  def goal(
+        %{
+          burpee_type: type,
+          burpee_count_target: reps,
+          duration_sec_target: sec,
+          date_target: date
+        },
+        today \\ Date.utc_today()
+      ),
+      do:
+        "#{reps} #{goal_burpee(type)} burpees in #{div(sec, 60)} min by #{goal_date(date, today)}"
+
+  defp goal_burpee(type) when type in [:six_count, "six_count"], do: "six-count"
+  defp goal_burpee(type), do: burpee_type(type)
+
+  @doc "A goal's what, without its date: \"150 six-count burpees in 20 min\"."
+  @spec goal_title(map()) :: String.t()
+  def goal_title(%{burpee_type: type, burpee_count_target: reps, duration_sec_target: sec}),
+    do: "#{reps} #{goal_burpee(type)} burpees in #{div(sec, 60)} min"
+
+  @doc "A goal's date: \"by 9 Nov\", with the year only when it is not `today`'s."
+  @spec goal_by(map(), Date.t()) :: String.t()
+  def goal_by(%{date_target: date}, today \\ Date.utc_today()), do: "by #{goal_date(date, today)}"
+
+  defp goal_date(%Date{year: year} = date, %Date{year: year}),
+    do: Calendar.strftime(date, "%-d %b")
+
+  defp goal_date(%Date{} = date, _today), do: Calendar.strftime(date, "%-d %b %Y")
+
+  @doc "A training week by its dates, Monday to Sunday: \"7–13 Sep\", \"28 Sep – 4 Oct\"."
+  @spec week(Date.t()) :: String.t()
+  def week(%Date{} = monday) do
+    sunday = Date.add(monday, 6)
+    week(monday, sunday, monday.month == sunday.month)
+  end
+
+  defp week(monday, sunday, true = _same_month?),
+    do: "#{monday.day}–#{sunday.day} #{Calendar.strftime(sunday, "%b")}"
+
+  defp week(monday, sunday, false),
+    do: "#{Calendar.strftime(monday, "%-d %b")} – #{Calendar.strftime(sunday, "%-d %b")}"
 end

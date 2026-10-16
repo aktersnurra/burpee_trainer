@@ -218,11 +218,7 @@ function fixtureRoot() {
 	root.dataset.clientSessionId = "fixture-session";
 
 	for (const id of [
-		"session-capture-choice",
-		"session-camera-status",
 		"session-camera-setup",
-		"session-warmup-choice",
-		"session-workout-ready",
 		"session-runner-client",
 		"session-completion-review",
 	]) {
@@ -233,29 +229,21 @@ function fixtureRoot() {
 	}
 
 	for (const [id, tag = "div"] of [
-		["camera-status-starting"],
-		["camera-status-error"],
-		["camera-setup-arming"],
-		["camera-setup-ready"],
-		["warmup-manual-controls"],
-		["warmup-tracked-instruction"],
-		["warmup-skip-countdown"],
-		["workout-ready-btn", "button"],
-		["workout-ready-instruction"],
-		["workout-ready-continue", "button"],
+		["camera-setup-heading"],
+		["camera-setup-retry", "button"],
+		["camera-setup-failure-detail"],
 		["session-report-pending-status"],
 		["session-report-pending-retry", "button"],
 		["session-live-status"],
 		["session-actual-reps"],
 		["session-planned-reps"],
 		["session-actual-duration"],
-		["completion-reps-input", "input"],
-		["completion-duration-input", "input"],
+		["completion-reps-less", "button"],
+		["completion-reps-more", "button"],
 		["completion-note-input", "textarea"],
 		["session-save-btn", "button"],
 		["session-save-errors"],
 		["completion-reps-error"],
-		["completion-duration-error"],
 		["completion-note-error"],
 		["session-pause-actions"],
 		["finish-early-btn", "button"],
@@ -368,6 +356,11 @@ async function runControlledSessionFixture(frames) {
 		...SessionHook,
 		el: root,
 		openSessionStore: async () => null,
+		mediaDevices: { enumerateDevices: async () => [{ kind: "videoinput" }] },
+		startChoiceStorage: {
+			getItem: (key) => ({ "burpee.start.camera": "1", "burpee.start.warmup": "0" })[key] ?? null,
+			setItem() {},
+		},
 		requestBeginSession() {
 			this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" });
 		},
@@ -437,7 +430,7 @@ async function runControlledSessionFixture(frames) {
 			reacquireWhenVisible() {},
 		};
 		await impl.mounted();
-		session.dispatchFlow({ type: "CHOOSE_CAMERA" });
+		await session.started;
 		await flush();
 		await runFrames(readinessFrames.length - 1);
 
@@ -445,18 +438,6 @@ async function runControlledSessionFixture(frames) {
 			new CustomEvent("pose-tracker:gesture-confirm", {
 				bubbles: true,
 				detail: { step: "camera_setup" },
-			}),
-		);
-		session.dispatchFlow({ type: "WARMUP_TIMEOUT", step: "warmup" });
-		assert.equal(
-			session.flow.mode,
-			"workout_ready",
-			JSON.stringify(session.flow),
-		);
-		tracker.dispatchEvent(
-			new CustomEvent("pose-tracker:gesture-confirm", {
-				bubbles: true,
-				detail: { step: "workout_start" },
 			}),
 		);
 		assert.equal(
@@ -467,6 +448,7 @@ async function runControlledSessionFixture(frames) {
 		session.beginSegment();
 		await runFrames(frames.length);
 		session.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+		session.completeWorkoutSegment();
 		await flush();
 		await flush();
 

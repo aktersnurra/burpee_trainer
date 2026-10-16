@@ -2,95 +2,80 @@
 
 ## Tech stack
 
-- Elixir / Phoenix 1.8, LiveView 1.1, Ecto + SQLite (ecto_sqlite3)
-- Tailwind CSS + esbuild (no PostCSS, no Sass)
-- No React, no Node server — all server-rendered LiveView
-
-## Intelligence layer
-
-See `INTELLIGENCE_LAYER.md` for the current fixed weekly contract, coach target planner, catch-up planner, deterministic PlanSolver, and removed architecture.
+- Elixir / Phoenix 1.8, LiveView 1.1, Ecto + SQLite (`ecto_sqlite3`)
+- Tailwind CSS and esbuild
+- Server-rendered LiveView with browser hooks; no React or Node server
 
 ## Module map
 
 | Module | Responsibility |
 |---|---|
-| `BurpeeTrainer.WeeklyTrainingContract` | Fixed 80 min / 4×20 / 2+2 weekly contract status |
-| `BurpeeTrainer.CoachTargetPlanner` | Deterministic 20-minute target suggestions from active performance goals |
-| `BurpeeTrainer.CatchUpPlanner` | Type-locked long catch-up session planning with duration intensity caps |
-| `BurpeeTrainer.PerformanceModel` | Type-specific 20-minute capacity estimates from history |
-| `BurpeeTrainer.PaceModel` | Type-specific recommended pace ranges by level |
-| `BurpeeTrainer.PlanSolver` | Deterministic session structure generation; no MILP/external solver |
-| `BurpeeTrainer.Planner` | Converts a saved `WorkoutPlan` to a flat timeline of events |
-| `BurpeeTrainer.Workouts` | Ecto context: sessions, plans, blocks, sets, style_performance |
-| `BurpeeTrainer.Goals` | Ecto context: goals CRUD and conversion to performance goals |
-| `BurpeeTrainer.Progression` | Pure progression logic: recommend, project_trend, trend_status |
-| `BurpeeTrainer.Scoring` | Pure push-up score (six_count ×1, navy_seal ×3), weekly totals, 40/40 balance |
-| `BurpeeTrainer.Milestones` | Pure celebration-event detection (PRs, level-up, goals, comeback) |
-| `BurpeeTrainer.Levels` | Level unlock + **decay** rules (co-week, landmark_history, level_status) |
-| `BurpeeTrainer.StyleGenerator` | Generates style variants for a plan |
-| `BurpeeTrainer.StyleRecommender` | Picks a style variant to suggest |
-| `BurpeeTrainer.Accounts` | User records + OIDC subject lookup (no passwords) |
-| `BurpeeTrainer.Auth.Oidc` | `oidcc` wrapper (behaviour) for the Pocket ID auth-code+PKCE flow |
+| `BurpeeTrainer.Accounts` / `BurpeeTrainer.Accounts.{User, Scope}` | Local OIDC-scoped user records, identity resolution, and the `%Scope{}` every user-facing context function takes |
+| `BurpeeTrainer.Auth.Oidc` | OIDC provider integration |
+| `BurpeeTrainer.Home` / `BurpeeTrainer.Home.{Facts, State}` | Loads Home facts once and derives exactly one Home state (pure, property-tested) |
+| `BurpeeTrainer.History` | Completed-session History queries and results |
+| `BurpeeTrainer.Coach` | User-scoped workout authoring: layout request, fitting, review, and approval by approval key |
+| `BurpeeTrainer.Coach.{RestFitter, WorkoutLayout, WorkoutRequest, WorkoutConfiguration, WorkoutGuidance, AuthoringPrompt}` | LLM layout schema and prompt, confirmed requests, and the pure rest fitter that computes exact rests |
+| `BurpeeTrainer.Coach.{Agent, AgentPrompt, Tool, Tools.*}` | Bounded tool-using coach for the planner and Coach-page surfaces |
+| `BurpeeTrainer.Coach.{Voice, Rationale}` | The one athlete-facing voice every prompt starts with, and the check the planner tools apply to a rationale before it reaches Home |
+| `BurpeeTrainer.Coach.{Memory, Memory.Ops, MemoryJob, PlanNextWorkoutJob}` | The coach's notes about the owner (one fact per row, guarded by `Memory.Ops`, shared with Claude), the job that keeps them after an exchange or session, and the job that plans the next workout (never replacing a slot the owner or Claude planned: `planned_by`) |
+| `BurpeeTrainer.Coach.{Summary, SummaryJob}` | The owner's two-sentence progress summary (validated against metrics, deterministic fallback) and the job that refreshes it after a completion or a confirmed goal, and when the app opens with a summary from an earlier week |
+| `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`) and the per-call ledger with daily budgets |
+| `BurpeeTrainer.Coach.enabled?/1` | Whether the app's own coach runs for a user (a Pocket ID claim, `users.coach_enabled`); `Client.chat/2` refuses without it |
+| `BurpeeTrainer.Mcp` / `BurpeeTrainer.Mcp.{Token, Sessions, Workouts, CoachPrompt, WorkoutFormat}` | The MCP server Claude coaches through: JSON-RPC dispatch, Pocket ID token checks, and the history, workout, prompt and format shapes Claude reads and writes |
+| `BurpeeTrainer.Mcp.Tools.*` | The MCP tools, each a `Coach.Tool`; see `docs/specs/2026-10-16-mcp-design.md` and `docs/guides/mcp-setup.md` |
+| `BurpeeTrainerWeb.{McpAuth, McpController, McpMetadataController}` | Bearer sign-in for `/mcp`, the endpoint, and its protected-resource metadata |
+| `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession}` | Deterministic workout selection and policy facts |
+| `BurpeeTrainer.Coach.Policy.Week` | A training week as data: its target and catch-up days (the sign-up week is pro-rated with no catch-up); every weekly target reads it |
+| `BurpeeTrainer.Insights` / `BurpeeTrainer.Insights.*` | Computed metrics, validated LLM narration with deterministic fallback, and the narration job |
+| `BurpeeTrainer.Evals.*` / `mix burpee_trainer.eval` | Owner-run authoring evals with a mandatory call budget and response recording |
+| `BurpeeTrainer.PlanCompiler` and `BurpeeTrainer.PlanCompiler.*` | Validation and compilation of workout definitions into programs |
+| `BurpeeTrainer.Workouts` and `BurpeeTrainer.Workouts.*` | Workout library, Home selection (a starter until the first completed session, then the Steady 10 fallback), immutable session snapshots, completion, and pose capture persistence |
+| `BurpeeTrainer.Videos` / `BurpeeTrainer.Workouts.WorkoutVideo` | Video workout lookup and session sources |
+| `BurpeeTrainer.Goals`, `BurpeeTrainer.Levels`, `BurpeeTrainer.Milestones`, `BurpeeTrainer.Scoring`, `BurpeeTrainer.Stats.Series` | Progress and scoring domain queries |
+| `BurpeeTrainer.UserTime` | User-local date and time calculations |
+| `BurpeeTrainerWeb.HomeLive` | One LiveView for `/`, `/history`, and `/coach` (live actions `:home`, `:history`, `:coach`) |
+| `BurpeeTrainerWeb.{HomeScreen, HistoryScreen, CoachScreen}` | Screen modules rendered by `HomeLive` |
+| `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |
+| `BurpeeTrainerWeb.SessionLive` / `BurpeeTrainerWeb.VideoLive.Show` | Plan and video session runners |
+| `BurpeeTrainerWeb.HomeDayBoundary` | Local-day boundary scheduling |
+| `BurpeeTrainerWeb.Components.*` | Shared layout, Home, History, Coach, workout, and session components |
+| `BurpeeTrainerWeb.Router` | OIDC, authenticated Home/History/Coach/session/video, pose upload, and video stream routes |
 
-## Data model — critical distinctions
+## Data and authentication boundaries
 
-- `sec_per_burpee` — movement time only (used for pace validation and warmup)
-- `sec_per_rep` on `Set` — cadence = movement + padding (used for timeline math)
-- `additional_rests` on `WorkoutPlan` — stored as JSON text: `[{rest_sec, target_min}]`
-- `pacing_style` — `:even` (sets with end_of_set_rest) or `:unbroken` (one block, one set)
+- A completed session keeps an immutable program or video snapshot; later edits or archival do not rewrite History.
+- Authoring proposals are reviewed before approval. Selection is distinct from approval.
+- Auth is OIDC-only. `Accounts.resolve_oidc_identity/2` resolves a subject first, adopts an unlinked matching username, and rejects a username bound to another subject. Setup is in `README.md` (Sign in).
+- SQLite has no array column type; persisted collections use JSON text where the schema requires it.
 
-**Levels decay:** `Levels.current_level/2` and `level_status/2` take a `today` and require a
-level to be *maintained* — the most recent co-week pair must be within `window_days/1`
-(30 days for `:graduated`, 14 for the rest) or the level drops. `:level_1a` is the floor.
+## UI rules
 
-**`user_stats` gamification columns** (migration `20260529000000`): `best_week_pushups`(+`_on`),
-`best_session_pushups`(+`_on`), `best_pace_sec_per_burpee`(+`_on`), `lifetime_pushup_milestone`.
-Personal bests are persisted by `Workouts.session_milestones/3` at session-save time.
+See `docs/ui.md` for the visual system. Use the application palette and existing Phoenix components; do not add inline scripts to HEEx templates.
 
-**Removed fields (do not reintroduce):** `warmup_enabled`, `warmup_reps`, `warmup_rounds`,
-`rest_sec_warmup_between`, `rest_sec_warmup_before_main`, `shave_off_sec`, `shave_off_block_count`.
-These were removed in migration `20260426000000`. Warmup is now computed dynamically in `Planner.warmup_timeline/1`.
+## Testing policy
 
-**Auth is OIDC-only.** Identity resolution lives in
-`Accounts.resolve_oidc_identity/2`: an existing `oidc_sub` wins; otherwise a
-matching `username` with no sub is adopted (preserving that account's
-history); a username already bound to a *different* sub is refused; an
-unknown username is created. `mix burpee_trainer.link_oidc` remains as a
-manual override for when the names differ. See `docs/oidc-setup.md`.
-Removed: `password_hash`, `bcrypt_elixir`, `mix burpee_trainer.create_user`.
+Keep a test only when it would fail on a real user-visible regression, data-integrity or ownership violation, or pure-core invariant. Delete styling-, copy-, CSS-, or markup-only assertions, private/internal call-shape checks, mocked forwarding behavior, removed-code coverage, and full-flow duplicates without a distinct failure mode. Keep accessibility contracts even when they use markup or styling assertions: roles, ARIA labels and screen-reader behavior, keyboard operation, reduced-motion behavior, and 44px target-size coverage are user-visible regression protection.
 
-## Planner event types
+Property tests remain for `PlanCompiler` and `WorkoutRequest` validation. Provider-dependent tests use the local recorded-response plug and never make paid calls. The core-flow suite is documented in `docs/testing.md`.
 
-`:warmup_burpee`, `:warmup_rest`, `:work_burpee`, `:work_rest`, `:rest_block`
+## Documentation
 
-No `:shave_rest` — removed in the 2026-04-26 refactor.
+Committed documentation lives in `docs/` (index: `docs/README.md`):
 
-## SQLite constraints
+- `docs/specs/` — dated design specs, `YYYY-MM-DD-<topic>-design.md`. New specs go here.
+- `docs/plans/` — implementation plans in progress, `YYYY-MM-DD-<topic>.md`. Delete a plan
+  once it is complete; version control keeps it.
+- `docs/guides/` — runbooks and checklists.
+- `docs/ui.md` (visual system) and `docs/testing.md` (test policy and core flows).
 
-- No `RETURNING` clause support in older SQLite — avoid in raw queries
-- No array column type — use JSON text fields for collections
-- No `gen_random_uuid()` — use Ecto's `:binary_id` with `autogenerate: true`
+Local notes, reviews, evidence and scratch documents go in the git-ignored `.docs/`. Delete
+a spec when the code it describes is removed.
 
-## UI rules (see UI.md for full spec)
+## Precommit
 
-- Electric blue (`#4A9EFF`) replaces green everywhere — no `text-green-*` or `bg-green-*` for UI chrome
-- No shadows, no gradients, no custom web fonts (system fonts only)
-- Color palette is defined as CSS vars in UI.md — reference those, don't hardcode hex in templates
-- Orange (`#F97316`) is data-only (navy_seal chart series) — never use it for UI elements
+Run before marking work done:
 
-## Testing philosophy (see TESTING.md for full spec)
-
-- Pure modules (`Planner`, `Progression`) use property-based tests via StreamData
-- Test invariants, not examples: duration sums, burpee counts, state machine validity
-- Do not write example-based unit tests for those modules — extend the property suites instead
-- Integration tests (LiveView, Ecto) use standard ExUnit + ConnCase
-
-## Precommit check
-
-Run before marking any patch done:
-
+```bash
+ERL_FLAGS='+S 4:4' MIX_ENV=test mix precommit
 ```
-mix precommit
-```
-
-This runs: `compile --warnings-as-errors`, `deps.unlock --unused`, `format`, `test`.

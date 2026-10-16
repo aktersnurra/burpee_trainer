@@ -5,8 +5,22 @@ import Config
 # The MIX_TEST_PARTITION environment variable can be used
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
+# An OS-level override survives Mix config reloads and child VMs, unlike put_env/3.
+test_database =
+  case System.get_env("BURPEE_TRAINER_TEST_DATABASE_PATH") do
+    nil ->
+      Path.expand("../burpee_trainer_test.db", __DIR__)
+
+    path ->
+      if Path.type(path) != :absolute do
+        raise "BURPEE_TRAINER_TEST_DATABASE_PATH must be an absolute path"
+      end
+
+      path
+  end
+
 config :burpee_trainer, BurpeeTrainer.Repo,
-  database: Path.expand("../burpee_trainer_test.db", __DIR__),
+  database: test_database,
   pool_size: 5,
   pool: Ecto.Adapters.SQL.Sandbox
 
@@ -17,11 +31,13 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
   secret_key_base: "huMiWRpdLrjHA7H+QE14KSdIJwQ8ZdTq8Z/TNM4r/LRTO2ZK3Nqb2j/mi1BkUvGk",
   server: false
 
-# In test we don't send emails
-config :burpee_trainer, BurpeeTrainer.Mailer, adapter: Swoosh.Adapters.Test
-
-# Disable swoosh api client as it is only required for production adapters
-config :swoosh, :api_client, false
+# Draft-authoring tests opt into an in-memory Req plug explicitly.
+config :burpee_trainer, :llm_provider,
+  enabled: false,
+  url: nil,
+  api_key: nil,
+  model: "openai/gpt-6-luna",
+  timeout_ms: 20_000
 
 # Print only warnings and errors during test
 config :logger, level: :warning
@@ -50,3 +66,5 @@ config :burpee_trainer, :oidc,
 # `backoff_type` is `stop` — so against an unreachable issuer it would
 # terminate and take the supervision tree with it.
 config :burpee_trainer, :oidc_start_worker, false
+
+config :burpee_trainer, Oban, testing: :manual

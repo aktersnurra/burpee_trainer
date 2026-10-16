@@ -1,3 +1,5 @@
+import { formatClock } from "./session_display_model.mjs";
+import { countOrigin } from "./session_flow_fsm.mjs";
 const VISUAL_STATE_CLASSES = [
 	"is-working",
 	"is-work-active",
@@ -6,6 +8,17 @@ const VISUAL_STATE_CLASSES = [
 	"is-rest-count-in",
 	"is-count-in",
 ];
+
+function flowAnnouncement(state) {
+	if (state.mode === "camera_starting") return "Starting camera";
+	if (state.mode === "camera_error") return "Camera unavailable";
+	if (state.mode === "completion_review" && state.saveStatus === "saving") {
+		return "Saving session";
+	}
+	if (state.mode === "completion_review") return "Workout complete";
+	if (state.mode === "persisted") return "Session saved";
+	return null;
+}
 
 export class SessionRenderer {
 	constructor(root) {
@@ -113,16 +126,11 @@ export class SessionRenderer {
 
 	renderFlowState(state) {
 		const visibleId = {
-			capture_choice: "session-capture-choice",
-			camera_starting: "session-camera-status",
-			camera_error: "session-camera-status",
+			camera_starting: "session-camera-setup",
+			camera_error: "session-camera-setup",
 			camera_setup: "session-camera-setup",
-			warmup_choice: "session-warmup-choice",
 			warmup_running: "session-runner-client",
-			workout_ready: "session-workout-ready",
 			workout_running: "session-runner-client",
-			reporting_completion: "session-completion-review",
-			completion_pending_failed: "session-completion-review",
 			completion_review: "session-completion-review",
 		}[state.mode];
 
@@ -132,62 +140,45 @@ export class SessionRenderer {
 			panel.toggleAttribute("inert", !visible);
 		}
 
-		this.renderCameraStatus(state);
 		this.renderCameraSetup(state);
-		this.renderCaptureControls(state);
-		this.renderReportPendingStatus(state);
+		this.renderCompletionControls(state);
 		if (visibleId !== this.visiblePanelId) {
 			this.visiblePanelId = visibleId;
 			this.focusPanelHeading(visibleId);
 		}
-		if (state.mode === "camera_starting") {
-			this.announce("Starting camera");
-		} else if (state.mode === "camera_error") {
-			this.announce("Camera unavailable");
-		} else if (state.mode === "reporting_completion") {
-			this.announce("Preparing workout report");
-		} else if (state.mode === "completion_pending_failed") {
-			this.announce("Could not prepare workout report. Try again.");
-		} else if (
-			state.mode === "completion_review" &&
-			state.saveStatus === "saving"
-		) {
-			this.announce("Saving session");
-		} else if (state.mode === "completion_review") {
-			this.announce("Workout complete");
-		} else if (state.mode === "persisted") {
-			this.announce("Session saved");
+		// Said once when it changes, so an edit on the finish screen (which renders the
+		// flow again) does not repeat it over the edit's own announcement.
+		const announcement = flowAnnouncement(state);
+		if (announcement && announcement !== this.flowAnnouncement) {
+			this.announce(announcement);
 		}
+		this.flowAnnouncement = announcement;
 	}
 
+	// One camera screen: its heading is the status, from starting to "hand up".
 	renderCameraSetup(state) {
-		const arming = this.root.querySelector("#camera-setup-arming");
-		const ready = this.root.querySelector("#camera-setup-ready");
-		const cameraReady = ["ready", "optimal"].includes(state.camera?.readiness);
-
-		if (arming) {
-			arming.hidden = cameraReady;
-			arming.toggleAttribute("inert", cameraReady);
-		}
-		if (ready) {
-			ready.hidden = !cameraReady;
-			ready.toggleAttribute("inert", !cameraReady);
-		}
-	}
-
-		renderCameraStatus(state) {
-		const starting = this.root.querySelector("#camera-status-starting");
-		const error = this.root.querySelector("#camera-status-error");
 		const failed = state.mode === "camera_error";
-		if (starting) {
-			starting.hidden = failed;
-			starting.toggleAttribute("inert", failed);
-		}
-		if (error) {
-			error.hidden = !failed;
-			error.toggleAttribute("inert", !failed);
-		}
-		const detail = this.root.querySelector("#camera-status-failure-detail");
+		const cameraReady = ["ready", "optimal"].includes(state.camera?.readiness);
+		let status = "Step into frame";
+		if (state.mode === "camera_starting") status = "Starting camera";
+		else if (failed) status = "Camera unavailable";
+		else if (cameraReady) status = "Hand up or hold still";
+
+		this.setText(
+			this.root.querySelector("#camera-setup-heading"),
+			status,
+			"cameraSetupStatus",
+		);
+		this.setHidden(
+			this.root.querySelector("#pose-tracker-preview-frame"),
+			failed,
+			"cameraPreviewHidden",
+		);
+		const retry = this.root.querySelector("#camera-setup-retry");
+		this.setHidden(retry, !failed, "cameraRetryHidden");
+		retry?.toggleAttribute("inert", !failed);
+
+		const detail = this.root.querySelector("#camera-setup-failure-detail");
 		const stage = {
 			webgl: "WebGL",
 			camera_stream: "Camera stream",
@@ -204,70 +195,62 @@ export class SessionRenderer {
 		this.setHidden(detail, !failed || !state.camera?.reason, "cameraFailureHidden");
 	}
 
-	renderReportPendingStatus(state) {
-		const failed = state.mode === "completion_pending_failed";
-		const status = this.root.querySelector("#session-report-pending-status");
-		const retry = this.root.querySelector("#session-report-pending-retry");
+	renderCompletionControls(state) {
+		const saving =
+			state.mode === "completion_review" && state.saveStatus === "saving";
+		const locked =
+			state.mode === "completion_review" && state.completionLocked === true;
+		const factsDisabled = saving || locked;
+		const factIds = [
+			"completion-reps-more",
+			"completion-reps-undo",
+			"completion-note-input",
+			"completion-context-low-energy",
+			"completion-context-high-energy",
+			"completion-context-heat-affected",
+			"completion-primary-limiter",
+			"completion-preference-feedback",
+			"workout_session_burpee_type",
+			"session-discard-btn",
+			"session-discard-yes",
+		];
 
-		if (status) {
-			status.hidden = !failed;
-			status.toggleAttribute("inert", !failed);
+		for (const id of factIds) {
+			this.root
+				.querySelector(`#${id}`)
+				?.toggleAttribute("disabled", factsDisabled);
 		}
-		if (retry) {
-			retry.hidden = !failed;
-			retry.toggleAttribute("inert", !failed);
+		for (const input of this.root
+			.querySelector("#session-completion-form")
+			?.querySelectorAll?.("input, textarea, select") || []) {
+			input.toggleAttribute("disabled", factsDisabled);
 		}
-	}
-
-	clearBeginConflict() {
-		const conflict = this.root.querySelector("#session-begin-conflict");
-		if (!conflict) return;
-
-		conflict.hidden = true;
-		conflict.toggleAttribute("inert", true);
-	}
-
-	renderBeginConflict(reply = {}) {
-		const conflict = this.root.querySelector("#session-begin-conflict");
-		const message = this.root.querySelector("#session-begin-conflict-message");
-		const resolve = this.root.querySelector("#session-begin-conflict-resolve");
-		const text =
-			reply.message ||
-			"Finish or discard your current workout before starting another one.";
-
-		if (message) message.textContent = text;
-		if (resolve && reply.resolve_to)
-			resolve.setAttribute("href", reply.resolve_to);
-		if (conflict) {
-			conflict.hidden = false;
-			conflict.toggleAttribute("inert", false);
+		this.completionFactsDisabled = factsDisabled;
+		this.renderRepsLess(state.completion);
+		for (const selector of ["[data-mood]", "[data-tag]"]) {
+			for (const button of this.root.querySelectorAll(selector)) {
+				button.toggleAttribute("disabled", factsDisabled);
+			}
 		}
-		this.announce(text);
-	}
 
-	renderCaptureControls(state) {
-		const manual = state.captureMode === "no_camera";
-		const manualWarmup = this.root.querySelector("#warmup-manual-controls");
-		const trackedWarmup = this.root.querySelector("#warmup-tracked-instruction");
-		const warmupCountdown = this.root.querySelector("#warmup-skip-countdown");
-		const manualStart = this.root.querySelector("#workout-ready-btn");
-		const trackedStart = this.root.querySelector("#workout-ready-instruction");
-		const cameraEscape = this.root.querySelector("#workout-ready-continue");
-
-		for (const element of [manualWarmup, manualStart]) {
-			if (!element) continue;
-			element.hidden = !manual;
-			element.toggleAttribute("inert", !manual);
-		}
-		for (const element of [
-			trackedWarmup,
-			warmupCountdown,
-			trackedStart,
-			cameraEscape,
-		]) {
-			if (!element) continue;
-			element.hidden = manual;
-			element.toggleAttribute("inert", manual);
+		const save = this.root.querySelector("#session-save-btn");
+		if (save) {
+			let label = "Save session";
+			if (locked && saving) label = "Finalizing local evidence…";
+			else if (locked) label = "Retry finalization";
+			else if (saving) label = "Saving session…";
+			save.toggleAttribute("disabled", saving);
+			save.setAttribute("aria-label", label);
+			save.setAttribute("title", label);
+			save.setAttribute("aria-busy", String(saving));
+			if (locked) save.dataset.localOnly = "true";
+			else delete save.dataset.localOnly;
+			this.root
+				.querySelector("#session-save-icon-ready")
+				?.toggleAttribute("hidden", saving || locked);
+			this.root
+				.querySelector("#session-save-icon-pending")
+				?.toggleAttribute("hidden", !saving && !locked);
 		}
 	}
 
@@ -283,20 +266,93 @@ export class SessionRenderer {
 			?.focus({ preventScroll: true });
 	}
 
+	// The discard question takes the place of the trash and save buttons while it is asked.
+	showDiscardConfirm(visible) {
+		const confirm = this.root.querySelector("#session-discard-confirm");
+		if (!confirm) return;
+		const actions = this.root.querySelector("#session-completion-actions");
+		const wasVisible = !confirm.hidden;
+		confirm.hidden = !visible;
+		if (actions) actions.hidden = visible;
+		if (visible) this.root.querySelector("#session-discard-keep")?.focus();
+		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
+	}
+
+	// While a discard waits on the server, its answers wait too.
+	setDiscardBusy(busy) {
+		for (const id of ["#session-discard-keep", "#session-discard-yes"]) {
+			this.root.querySelector(id)?.toggleAttribute("disabled", busy);
+		}
+	}
+
+	// A control about to be disabled or hidden hands its focus to +, beside the count.
+	keepFocusFrom(element) {
+		if (!element || element.ownerDocument?.activeElement !== element) return;
+		this.root.querySelector("#completion-reps-more")?.focus();
+	}
+
+	// − cannot take the count below zero.
+	renderRepsLess(completion) {
+		const count = completion?.burpeeCountActual;
+		const atZero = !Number.isInteger(count) || count <= 0;
+		const less = this.root.querySelector("#completion-reps-less");
+		const disabled = atZero || this.completionFactsDisabled === true;
+		if (disabled) this.keepFocusFrom(less);
+		less?.toggleAttribute("disabled", disabled);
+	}
+
+	// Where the count came from; once corrected, the original stays in view with undo.
+	renderCountSource(completion, provenance) {
+		const text = this.root.querySelector("#session-count-source-text");
+		const undo = this.root.querySelector("#completion-reps-undo");
+		const line = this.root.querySelector("#session-count-source");
+		const origin = countOrigin(completion);
+		let label = "";
+		if (provenance === "camera_confirmed") label = "Counted by camera";
+		else if (provenance === "scheduled") label = "From your plan";
+		else if (origin.reps !== null) {
+			label =
+				origin.provenance === "camera_confirmed"
+					? `Camera counted ${origin.reps}`
+					: `From your plan: ${origin.reps}`;
+		}
+		if (text) text.textContent = label;
+		if (undo) {
+			const hidden = provenance !== "manual" || origin.reps === null;
+			if (hidden) this.keepFocusFrom(undo);
+			undo.hidden = hidden;
+		}
+		if (line) line.hidden = label === "";
+	}
+
 	renderCompletion(completion) {
 		if (!completion) return;
+		this.setText(
+			this.root.querySelector("#session-completion-heading"),
+			completion.endedEarly ? "Ended early" : "Workout complete",
+			"completionHeading",
+		);
 		const actualReps = this.root.querySelector("#session-actual-reps");
 		const plannedReps = this.root.querySelector("#session-planned-reps");
 		const duration = this.root.querySelector("#session-actual-duration");
-		const repsInput = this.root.querySelector("#completion-reps-input");
-		const durationInput = this.root.querySelector("#completion-duration-input");
 		const noteInput = this.root.querySelector("#completion-note-input");
+		const lowEnergyInput = this.root.querySelector(
+			"#completion-context-low-energy",
+		);
+		const highEnergyInput = this.root.querySelector(
+			"#completion-context-high-energy",
+		);
+		const heatAffectedInput = this.root.querySelector(
+			"#completion-context-heat-affected",
+		);
+		const limiterInput = this.root.querySelector("#completion-primary-limiter");
+		const preferenceInput = this.root.querySelector(
+			"#completion-preference-feedback",
+		);
 		const hasActualReps = Number.isInteger(completion.burpeeCountActual);
 		const countProvenance =
 			completion.burpeeCountProvenance ??
 			(hasActualReps ? "manual" : "unresolved");
-		const scheduledRepsDone = completion.scheduledRepsDone ?? 0;
-		const countSource = this.root.querySelector("#session-count-source");
 		if (actualReps) {
 			actualReps.textContent = hasActualReps
 				? String(completion.burpeeCountActual)
@@ -306,19 +362,18 @@ export class SessionRenderer {
 			plannedReps.textContent = String(completion.burpeeCountPlanned);
 		if (duration)
 			duration.textContent = this.formatTime(completion.durationSecActual);
-		if (repsInput)
-			repsInput.value = hasActualReps ? String(completion.burpeeCountActual) : "";
-		if (countSource) {
-			countSource.textContent =
-				countProvenance === "camera_confirmed"
-					? "Camera-confirmed reps"
-					: countProvenance === "manual"
-						? "Manually entered reps"
-						: `Pace progress: ${scheduledRepsDone} of ${completion.burpeeCountPlanned}. Enter actual reps below.`;
-			countSource.hidden = false;
-		}
-		if (durationInput) durationInput.value = String(completion.durationSecActual);
+		this.renderCountSource(completion, countProvenance);
+		this.renderRepsLess(completion);
 		if (noteInput) noteInput.value = completion.notePost || "";
+		if (lowEnergyInput)
+			lowEnergyInput.checked = completion.contextLowEnergy ?? false;
+		if (highEnergyInput)
+			highEnergyInput.checked = completion.contextHighEnergy ?? false;
+		if (heatAffectedInput)
+			heatAffectedInput.checked = completion.contextHeatAffected ?? false;
+		if (limiterInput) limiterInput.value = completion.primaryLimiter || "";
+		if (preferenceInput)
+			preferenceInput.value = completion.preferenceFeedback || "";
 
 		for (const button of this.root.querySelectorAll("[data-mood]")) {
 			button.setAttribute(
@@ -326,19 +381,34 @@ export class SessionRenderer {
 				String(Number(button.dataset.mood) === completion.mood),
 			);
 		}
+		const tags = completion.tags || [];
 		for (const button of this.root.querySelectorAll("[data-tag]")) {
-			button.setAttribute(
-				"aria-pressed",
-				String((completion.tags || []).includes(button.dataset.tag)),
-			);
+			button.setAttribute("aria-pressed", String(tags.includes(button.dataset.tag)));
 		}
+
 	}
 
 	clearSaveErrors() {
 		const fields = [
-			["#completion-reps-error", "#completion-reps-input"],
-			["#completion-duration-error", "#completion-duration-input"],
+			["#completion-reps-error", "#session-actual-reps"],
 			["#completion-note-error", "#completion-note-input"],
+			[
+				"#completion-context-low-energy-error",
+				"#completion-context-low-energy",
+			],
+			[
+				"#completion-context-high-energy-error",
+				"#completion-context-high-energy",
+			],
+			[
+				"#completion-context-heat-affected-error",
+				"#completion-context-heat-affected",
+			],
+			["#completion-primary-limiter-error", "#completion-primary-limiter"],
+			[
+				"#completion-preference-feedback-error",
+				"#completion-preference-feedback",
+			],
 		];
 		for (const [errorSelector, inputSelector] of fields) {
 			const error = this.root.querySelector(errorSelector);
@@ -360,34 +430,35 @@ export class SessionRenderer {
 	renderSaveErrors(reply = {}) {
 		this.clearSaveErrors();
 		const fieldMessages = [];
+		const globalMessages = Array.isArray(reply.global_errors)
+			? reply.global_errors.filter(Boolean)
+			: [];
 		const fields = {
-			burpee_count_actual: ["#completion-reps-error", "#completion-reps-input"],
-			duration_sec_actual: [
-				"#completion-duration-error",
-				"#completion-duration-input",
-			],
+			burpee_count_actual: ["#completion-reps-error", "#session-actual-reps"],
 			note_post: ["#completion-note-error", "#completion-note-input"],
 		};
 
 		for (const [field, messages] of Object.entries(reply.field_errors || {})) {
-			const targets = fields[field];
-			if (!targets) continue;
-			const error = this.root.querySelector(targets[0]);
-			const input = this.root.querySelector(targets[1]);
 			const text = (Array.isArray(messages) ? messages : [messages])
 				.filter(Boolean)
 				.join(" ");
-			if (error && text) {
+			if (!text) continue;
+			const targets = fields[field];
+			if (!targets) {
+				globalMessages.push(text);
+				continue;
+			}
+			const error = this.root.querySelector(targets[0]);
+			const input = this.root.querySelector(targets[1]);
+			if (error) {
 				error.textContent = text;
 				error.hidden = false;
+				fieldMessages.push(text);
+			} else {
+				globalMessages.push(text);
 			}
-			if (text) fieldMessages.push(text);
-			if (input && text) input.setAttribute("aria-invalid", "true");
+			if (input) input.setAttribute("aria-invalid", "true");
 		}
-
-		const globalMessages = Array.isArray(reply.global_errors)
-			? reply.global_errors.filter(Boolean)
-			: [];
 		const global = this.root.querySelector("#session-save-errors");
 		if (global && globalMessages.length > 0) {
 			global.textContent = globalMessages.join(" ");
@@ -686,6 +757,8 @@ export class SessionRenderer {
 				"is-count-long",
 				"is-countdown-dots",
 			);
+			// Ten minutes and more need a fifth character; it gets a smaller size.
+			if (timeText.length >= 5) countEl.classList.add("is-rest-time-long");
 			this.writeCount({ text: timeText });
 		}
 		const downEl = this.root.querySelector("#down-word");
@@ -824,7 +897,7 @@ export class SessionRenderer {
 	}
 
 	formatClock(sec) {
-		return String(Math.max(Math.ceil(sec), 0));
+		return formatClock(sec);
 	}
 
 	formatSetProgress(value) {

@@ -6,41 +6,19 @@ defmodule BurpeeTrainer.Goals do
   """
 
   import Ecto.Query
+  require Logger
 
-  alias BurpeeTrainer.Accounts.User
+  alias BurpeeTrainer.Accounts.{Scope, User}
+  alias BurpeeTrainer.Coach.SummaryJob
   alias BurpeeTrainer.Goals.Goal
-  alias BurpeeTrainer.{PerformanceGoal, Repo}
+  alias BurpeeTrainer.Repo
 
   @doc """
-  Active goals for a user, one per `burpee_type` at most.
-  """
-  @spec list_active_goals(User.t()) :: [Goal.t()]
-  def list_active_goals(%User{id: user_id}) do
-    Repo.all(
-      from goal in Goal,
-        where: goal.user_id == ^user_id and goal.status == :active
-    )
-  end
-
-  @doc """
-  Active and achieved goals for a user (excludes abandoned).
-  Used to display both in-progress and completed goal cards.
-  """
-  @spec list_current_goals(User.t()) :: [Goal.t()]
-  def list_current_goals(%User{id: user_id}) do
-    Repo.all(
-      from goal in Goal,
-        where: goal.user_id == ^user_id and goal.status in [:active, :achieved],
-        order_by: [desc: goal.updated_at]
-    )
-  end
-
-  @doc """
-  Fetch the (single) active goal for a `(user, burpee_type)` pair, or
+  Fetch the (single) active goal for a `(scope, burpee_type)` pair, or
   nil if none exists.
   """
-  @spec get_active_goal(User.t(), atom) :: Goal.t() | nil
-  def get_active_goal(%User{id: user_id}, burpee_type) when is_atom(burpee_type) do
+  @spec get_active_goal(Scope.t(), atom) :: Goal.t() | nil
+  def get_active_goal(%Scope{user: %User{id: user_id}}, burpee_type) when is_atom(burpee_type) do
     Repo.one(
       from goal in Goal,
         where:
@@ -50,81 +28,11 @@ defmodule BurpeeTrainer.Goals do
     )
   end
 
-  @doc """
-  Fetch the active persisted goal as a `%PerformanceGoal{}` for coach planning.
-  """
-  @spec get_active_performance_goal(User.t(), atom) :: PerformanceGoal.t() | nil
-  def get_active_performance_goal(%User{} = user, burpee_type) when is_atom(burpee_type) do
-    user
-    |> get_active_goal(burpee_type)
-    |> to_performance_goal()
-  end
-
-  @doc """
-  Convert a persisted goal row to the pure performance-goal struct used by the intelligence layer.
-  """
-  @spec to_performance_goal(Goal.t() | nil) :: PerformanceGoal.t() | nil
-  def to_performance_goal(nil), do: nil
-
-  def to_performance_goal(%Goal{} = goal) do
-    %PerformanceGoal{
-      id: goal.id,
-      burpee_type: goal.burpee_type,
-      target_reps: goal.burpee_count_target,
-      target_duration_min: div(goal.duration_sec_target, 60),
-      start_reps: goal.burpee_count_baseline,
-      start_date: goal.date_baseline,
-      target_date: goal.date_target,
-      status: performance_status(goal.status)
-    }
-  end
-
-  @doc """
-  Fetch a goal by id scoped to a user. Raises if not found.
-  """
-  @spec get_goal!(User.t(), integer) :: Goal.t()
-  def get_goal!(%User{id: user_id}, id) do
-    Repo.one!(
-      from goal in Goal,
-        where: goal.id == ^id and goal.user_id == ^user_id
-    )
-  end
-
-  @doc """
-  Create a goal for a user. Any existing `:active` goal for the same
-  `burpee_type` is abandoned atomically.
-  """
-  @spec create_goal(User.t(), map) :: {:ok, Goal.t()} | {:error, Ecto.Changeset.t()}
-  def create_goal(%User{id: user_id} = user, attrs) do
-    Repo.transaction(fn ->
-      burpee_type = attrs["burpee_type"] || attrs[:burpee_type]
-
-      if burpee_type do
-        case get_active_goal(user, normalize_burpee_type(burpee_type)) do
-          nil -> :noop
-          existing -> existing |> Goal.status_changeset(:abandoned) |> Repo.update!()
-        end
-      end
-
-      result =
-        %Goal{user_id: user_id}
-        |> Goal.changeset(attrs)
-        |> Repo.insert()
-
-      case result do
-        {:ok, goal} -> goal
-        {:error, changeset} -> Repo.rollback(changeset)
-      end
-    end)
-  end
-
-  @doc """
-  Transition a goal to `:abandoned`.
-  """
-  @spec abandon_goal(Goal.t()) :: {:ok, Goal.t()} | {:error, Ecto.Changeset.t()}
-  def abandon_goal(%Goal{} = goal) do
-    goal |> Goal.status_changeset(:abandoned) |> Repo.update()
-  end
+  @doc "Whether the owner has an active goal of any burpee type."
+  @spec any_active?(Scope.t()) :: boolean()
+  def any_active?(%Scope{user: %User{id: user_id}}),
+    do:
+      Repo.exists?(from goal in Goal, where: goal.user_id == ^user_id and goal.status == :active)
 
   @doc """
   Transition a goal to `:achieved`.
@@ -134,18 +42,93 @@ defmodule BurpeeTrainer.Goals do
     goal |> Goal.status_changeset(:achieved) |> Repo.update()
   end
 
-  @doc """
-  Blank changeset for a new goal, useful for forms.
-  """
-  @spec change_goal(Goal.t(), map) :: Ecto.Changeset.t()
-  def change_goal(%Goal{} = goal, attrs \\ %{}), do: Goal.changeset(goal, attrs)
+  @doc "Best scoped completed non-warmup session since a bound, optionally within the goal duration."
+  def best_session(%Scope{user: %{id: id}}, type, since, max_duration \\ 86400) do
+    now = DateTime.utc_now()
 
-  defp performance_status(:active), do: :active
-  defp performance_status(:achieved), do: :completed
-  defp performance_status(:abandoned), do: :paused
+    Repo.one(
+      from s in BurpeeTrainer.Workouts.WorkoutSession,
+        where:
+          s.user_id == ^id and s.state == :completed and s.burpee_type == ^type and
+            s.completed_at >= ^since and s.completed_at <= ^now and s.burpee_count_actual > 0 and
+            s.duration_sec_actual > 0 and s.duration_sec_actual <= ^max_duration and
+            (is_nil(s.tags) or s.tags != "warmup"),
+        order_by: [desc: s.burpee_count_actual, asc: s.duration_sec_actual, desc: s.id],
+        limit: 1
+    )
+  end
 
-  defp normalize_burpee_type(value) when is_atom(value), do: value
-  defp normalize_burpee_type("six_count"), do: :six_count
-  defp normalize_burpee_type("navy_seal"), do: :navy_seal
-  defp normalize_burpee_type(_), do: nil
+  def progress(%Scope{} = scope, %Goal{user_id: user_id} = goal) when user_id == scope.user.id do
+    since = DateTime.new!(goal.date_baseline, ~T[00:00:00], "Etc/UTC")
+    best = best_session(scope, goal.burpee_type, since, goal.duration_sec_target)
+    current = max(goal.burpee_count_baseline, if(best, do: best.burpee_count_actual, else: 0))
+
+    fraction =
+      (current - goal.burpee_count_baseline) /
+        max(goal.burpee_count_target - goal.burpee_count_baseline, 1)
+
+    %{
+      "current_reps" => current,
+      "current_duration_sec" =>
+        if(best, do: best.duration_sec_actual, else: goal.duration_sec_baseline),
+      "fraction" => min(max(fraction, 0.0), 1.0)
+    }
+  end
+
+  def list(%Scope{user: %{id: id}}),
+    do:
+      Repo.all(
+        from g in Goal,
+          where: g.user_id == ^id and g.status in [:active, :proposed],
+          order_by: [asc: g.id]
+      )
+
+  def confirm(%Scope{} = scope, id), do: transition_proposal(scope, id, :active)
+  def dismiss(%Scope{} = scope, id), do: transition_proposal(scope, id, :abandoned)
+
+  defp transition_proposal(%Scope{user: %{id: user_id}} = scope, id, status) do
+    Repo.immediate_transaction(fn ->
+      case Repo.get_by(Goal, user_id: user_id, id: id, status: :proposed) do
+        nil ->
+          Repo.rollback(:not_found)
+
+        goal ->
+          if status == :active do
+            Repo.update_all(
+              from(g in Goal,
+                where:
+                  g.user_id == ^user_id and g.burpee_type == ^goal.burpee_type and
+                    g.status == :active
+              ),
+              set: [status: :abandoned]
+            )
+          end
+
+          case goal |> Goal.status_changeset(status) |> Repo.update() do
+            {:ok, goal} ->
+              admit_summary(scope, goal.status, goal)
+              goal
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+      end
+    end)
+  end
+
+  # The summary follows the active goals; a dismissed proposal changes none of them.
+  # Failing to admit it never undoes the change.
+  defp admit_summary(_scope, :abandoned, _goal), do: :ok
+
+  defp admit_summary(scope, :active, goal) do
+    case SummaryJob.admit(scope) do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "coach_summary_not_admitted trigger=goal goal_id=#{goal.id} reason=#{inspect(reason)}"
+        )
+    end
+  end
 end

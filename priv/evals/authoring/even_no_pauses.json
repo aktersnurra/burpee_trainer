@@ -1,0 +1,18 @@
+{
+  "id": "even_no_pauses",
+  "form": {
+    "burpee_type": "six_count",
+    "pacing_style": "even",
+    "reps": 120,
+    "duration": "20:00",
+    "recovery": "required",
+    "pace": null,
+    "note": ""
+  },
+  "expected": {
+    "target_reps": 120,
+    "burpee_type": "six_count",
+    "target_duration_sec": 1200,
+    "recovery": "required"
+  }
+}

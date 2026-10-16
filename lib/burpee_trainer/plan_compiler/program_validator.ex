@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
 
   @spec validate(Program.t()) :: :ok | {:error, CompileError.t()}
   def validate(%Program{} = program) do
-    with :ok <- validate_events(program.events),
+    with :ok <- validate_canonical_contract(program),
+         :ok <- validate_events(program.events),
          :ok <- validate_terminal_work(program.events),
          :ok <- validate_schema_three_work_durations(program),
          :ok <- validate_reps(program),
@@ -15,6 +16,29 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
       :ok
     end
   end
+
+  defp validate_canonical_contract(%Program{schema_version: 3} = program) do
+    definition_hash =
+      Map.get(program.metadata, :definition_hash, Map.get(program.metadata, "definition_hash"))
+
+    pacing_style =
+      Map.get(program.metadata, :pacing_style, Map.get(program.metadata, "pacing_style"))
+
+    if program.solver_version == 1 and is_binary(definition_hash) and
+         Regex.match?(~r/\A[0-9a-f]{64}\z/, definition_hash) and
+         pacing_style in [:even, :unbroken, "even", "unbroken"] do
+      :ok
+    else
+      {:error,
+       CompileError.new(:invalid_program, "Program violates the canonical contract", %{
+         schema_version: program.schema_version,
+         solver_version: program.solver_version,
+         metadata: program.metadata
+       })}
+    end
+  end
+
+  defp validate_canonical_contract(%Program{}), do: :ok
 
   defp validate_events([]),
     do: {:error, CompileError.new(:empty_program, "Program must contain at least one event")}
@@ -32,8 +56,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
              (is_nil(duration_sec) or (is_number(duration_sec) and duration_sec > 0)) ->
         {:cont, :ok}
 
-      %ProgramEvent.Rest{duration_sec: duration}, :ok
-      when duration > 0 ->
+      %ProgramEvent.Rest{duration_sec: duration}, :ok when duration > 0 ->
         {:cont, :ok}
 
       event, :ok ->

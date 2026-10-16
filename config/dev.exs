@@ -64,7 +64,7 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
     ]
   ]
 
-# Enable dev routes for dashboard and mailbox
+# Enable development-only routes.
 config :burpee_trainer, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
@@ -85,9 +85,6 @@ config :phoenix_live_view,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
 
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
-
 # OIDC login against the self-hosted Pocket ID instance. The client is
 # registered there with both the localhost and production callback URLs,
 # so dev exercises the same code path as prod. Secrets come from the
@@ -97,3 +94,7 @@ config :burpee_trainer, :oidc,
   client_id: System.get_env("OIDC_CLIENT_ID"),
   client_secret: System.get_env("OIDC_CLIENT_SECRET"),
   redirect_uri: "http://localhost:4000/auth/oidc/callback"
+
+# MCP for Claude: the client ID of Claude's BurpeeTrainer client in Pocket ID. Unset
+# means /mcp is off.
+config :burpee_trainer, :mcp, audience: System.get_env("MCP_OIDC_AUDIENCE")

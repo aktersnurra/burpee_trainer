@@ -13,6 +13,7 @@ defmodule BurpeeTrainer.Application do
         BurpeeTrainer.Repo,
         {Ecto.Migrator,
          repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
+        {Oban, Application.fetch_env!(:burpee_trainer, Oban)},
         {DNSCluster, query: Application.get_env(:burpee_trainer, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: BurpeeTrainer.PubSub}
       ] ++

@@ -5,7 +5,7 @@ defmodule BurpeeTrainer.Goals.Goal do
   alias BurpeeTrainer.Accounts.User
 
   @burpee_types [:six_count, :navy_seal]
-  @statuses [:active, :achieved, :abandoned]
+  @statuses [:active, :achieved, :abandoned, :proposed]
 
   @type t :: %__MODULE__{}
 

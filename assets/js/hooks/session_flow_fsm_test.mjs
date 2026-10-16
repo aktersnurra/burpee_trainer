@@ -1,413 +1,551 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
+import {
+	countOrigin,
+	flowTransition,
+	initialFlowState,
+} from "./session_flow_fsm.mjs";
 
 const step = (state, event) => flowTransition(state, event);
 
-function readyCameraState() {
-  let state = initialFlowState();
-  state = step(state, { type: "SESSION_READY", workoutTimeline: [] }).state;
-  state = step(state, { type: "CHOOSE_CAMERA" }).state;
-  state = step(state, { type: "CAMERA_STARTED" }).state;
-  return step(state, { type: "CAMERA_READINESS", readiness: "ready" }).state;
+const warmup = {
+	warmupTimeline: [{ kind: "work", reps: 3, sec_per_rep: 4 }],
+	burpeeCountTarget: 3,
+};
+const workoutTimeline = [{ kind: "work", reps: 10, sec_per_rep: 5 }];
+
+function readyState(choices) {
+	return step(initialFlowState(), {
+		type: "SESSION_READY",
+		workoutTimeline,
+		choices,
+	}).state;
+}
+
+function cameraSetupState(choices = { camera: true, warmup: true }) {
+	let state = readyState(choices);
+	state = step(state, { type: "START", ...warmup }).state;
+	return step(state, { type: "CAMERA_STARTED" }).state;
+}
+
+function readyCameraState(choices) {
+	return step(cameraSetupState(choices), {
+		type: "CAMERA_READINESS",
+		readiness: "ready",
+	}).state;
 }
 
 function cameraRunningState() {
-  return {
-    ...initialFlowState(),
-    mode: "workout_running",
-    captureMode: "camera",
-    trackingTrust: "observing",
-  };
+	return {
+		...initialFlowState(),
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
 }
 
-test("camera choice starts locally and startup failure has explicit recovery", () => {
-  let result = step(initialFlowState(), {
-    type: "SESSION_READY",
-    workoutTimeline: [],
-  });
-  assert.equal(result.state.mode, "capture_choice");
+function segments(commands) {
+	return commands
+		.filter((command) => command.type === "startSegment")
+		.map((command) => command.segment);
+}
 
-  result = step(result.state, { type: "CHOOSE_CAMERA" });
-  assert.equal(result.state.mode, "camera_starting");
-  assert.deepEqual(result.commands, [
-    { type: "startCamera" },
-    { type: "renderFlow" },
-  ]);
+test("the session waits for its draft check before it starts", () => {
+	const state = readyState({ camera: false, warmup: true });
+	assert.equal(state.mode, "starting");
+	assert.equal(state.captureMode, "no_camera");
 
-  result = step(result.state, {
-    type: "CAMERA_START_FAILED",
-    reason: "permission_denied",
-    stage: "camera_stream",
-  });
-  assert.equal(result.state.mode, "camera_error");
-  assert.equal(result.state.camera.reason, "permission_denied");
-  assert.equal(result.state.camera.stage, "camera_stream");
+	assert.deepEqual(step(initialFlowState(), { type: "START", ...warmup }).commands, []);
+	const started = step(state, { type: "START", ...warmup }).state;
+	assert.deepEqual(step(started, { type: "START", ...warmup }).commands, []);
 });
 
-test("camera confirmation is ignored until readiness is valid", () => {
-  let state = initialFlowState();
-  state = step(state, { type: "SESSION_READY", workoutTimeline: [] }).state;
-  state = step(state, { type: "CHOOSE_CAMERA" }).state;
-  state = step(state, { type: "CAMERA_STARTED" }).state;
+test("without the camera, start goes straight into the countdown", () => {
+	const withWarmup = step(readyState({ camera: false, warmup: true }), {
+		type: "START",
+		...warmup,
+	});
+	assert.equal(withWarmup.state.mode, "warmup_running");
+	assert.deepEqual(withWarmup.commands, [
+		{
+			type: "startSegment",
+			segment: "warmup",
+			timeline: warmup.warmupTimeline,
+			burpeeCountTarget: 3,
+		},
+	]);
 
-  const ignored = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "camera_setup",
-  });
-  assert.equal(ignored.state.mode, "camera_setup");
-  assert.deepEqual(ignored.commands, []);
-
-  const accepted = step(readyCameraState(), {
-    type: "GESTURE_CONFIRM",
-    step: "camera_setup",
-  });
-  assert.equal(accepted.state.mode, "warmup_choice");
+	const withoutWarmup = step(readyState({ camera: false, warmup: false }), {
+		type: "START",
+		...warmup,
+	});
+	assert.equal(withoutWarmup.state.mode, "workout_running");
+	assert.equal(withoutWarmup.state.trackingTrust, "disabled");
+	assert.deepEqual(segments(withoutWarmup.commands), ["workout"]);
 });
 
-test("warmup arm is consumed before warmup begins", () => {
-  let state = readyCameraState();
-  state = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "camera_setup",
-  }).state;
-
-  const started = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "warmup",
-    warmupTimeline: [{ kind: "work", reps: 2, sec_per_rep: 5 }],
-  });
-  assert.equal(started.state.mode, "starting_session");
-  assert.equal(started.state.armedStep, null);
-
-  const acknowledged = step(started.state, { type: "SESSION_BEGIN_ACKNOWLEDGED" });
-  assert.equal(acknowledged.state.mode, "warmup_running");
-
-  const stale = step(acknowledged.state, {
-    type: "GESTURE_CONFIRM",
-    step: "warmup",
-  });
-  assert.equal(stale.state.mode, "warmup_running");
-  assert.deepEqual(stale.commands, []);
+test("the warmup runs straight into the workout", () => {
+	for (const state of [
+		step(readyState({ camera: false, warmup: true }), { type: "START", ...warmup })
+			.state,
+		step(readyCameraState({ camera: true, warmup: true }), {
+			type: "GESTURE_CONFIRM",
+			step: "camera_setup",
+			...warmup,
+		}).state,
+	]) {
+		assert.equal(state.mode, "warmup_running");
+		const done = step(state, {
+			type: "SEGMENT_DONE",
+			segment: "warmup",
+			result: { burpeeCountDone: 3, durationSec: 12 },
+		});
+		assert.equal(done.state.mode, "workout_running");
+		assert.deepEqual(done.state.warmupResult, { burpeeCountDone: 3, durationSec: 12 });
+		assert.deepEqual(segments(done.commands), ["workout"]);
+	}
 });
 
-test("camera begin conflict restores the warmup gesture and timeout", () => {
-  const warmupTimeline = [{ kind: "work", reps: 2, sec_per_rep: 5 }];
-  let state = readyCameraState();
-  state = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "camera_setup",
-  }).state;
+test("with the camera, start opens the camera and failure has explicit recovery", () => {
+	let result = step(readyState({ camera: true, warmup: false }), {
+		type: "START",
+		...warmup,
+	});
+	assert.equal(result.state.mode, "camera_starting");
+	assert.equal(result.state.captureMode, "camera");
+	assert.deepEqual(result.commands, [
+		{ type: "startCamera" },
+		{ type: "renderFlow" },
+	]);
 
-  const requested = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "warmup",
-    warmupTimeline,
-    burpeeCountTarget: 2,
-  });
-  const recovered = step(requested.state, { type: "SESSION_BEGIN_FAILED" });
+	result = step(result.state, {
+		type: "CAMERA_START_FAILED",
+		reason: "permission_denied",
+		stage: "camera_stream",
+	});
+	assert.equal(result.state.mode, "camera_error");
+	assert.equal(result.state.camera.reason, "permission_denied");
+	assert.equal(result.state.camera.stage, "camera_stream");
 
-  assert.equal(recovered.state.mode, "warmup_choice");
-  assert.equal(recovered.state.armedStep, "warmup");
-  assert.equal(recovered.state.pendingRuntime, null);
-  assert.deepEqual(recovered.commands, [
-    { type: "armGesture", step: "warmup" },
-    { type: "startWarmupTimeout", step: "warmup" },
-    { type: "renderFlow" },
-  ]);
-
-  const retried = step(recovered.state, {
-    type: "GESTURE_CONFIRM",
-    step: "warmup",
-    warmupTimeline,
-    burpeeCountTarget: 2,
-  });
-  assert.equal(retried.state.mode, "starting_session");
-  assert.deepEqual(retried.state.pendingRuntime, requested.state.pendingRuntime);
+	result = step(result.state, { type: "RETRY_CAMERA" });
+	assert.equal(result.state.mode, "camera_starting");
 });
 
-test("camera begin conflict restores the workout-start gesture", () => {
-  let state = readyCameraState();
-  state = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "camera_setup",
-  }).state;
-  state = step(state, { type: "WARMUP_TIMEOUT", step: "warmup" }).state;
+test("a raised hand starts only once the camera sees you", () => {
+	const ignored = step(cameraSetupState(), {
+		type: "GESTURE_CONFIRM",
+		step: "camera_setup",
+		...warmup,
+	});
+	assert.equal(ignored.state.mode, "camera_setup");
+	assert.deepEqual(ignored.commands, []);
 
-  const requested = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "workout_start",
-  });
-  const recovered = step(requested.state, { type: "SESSION_BEGIN_FAILED" });
+	const withWarmup = step(readyCameraState({ camera: true, warmup: true }), {
+		type: "GESTURE_CONFIRM",
+		step: "camera_setup",
+		...warmup,
+	});
+	assert.equal(withWarmup.state.mode, "warmup_running");
+	assert.equal(withWarmup.commands[0].type, "disarmGesture");
+	assert.deepEqual(segments(withWarmup.commands), ["warmup"]);
 
-  assert.equal(recovered.state.mode, "workout_ready");
-  assert.equal(recovered.state.armedStep, "workout_start");
-  assert.equal(recovered.state.pendingRuntime, null);
-  assert.deepEqual(recovered.commands, [
-    { type: "armGesture", step: "workout_start" },
-    { type: "renderFlow" },
-  ]);
-
-  const retried = step(recovered.state, {
-    type: "GESTURE_CONFIRM",
-    step: "workout_start",
-  });
-  assert.equal(retried.state.mode, "starting_session");
-  assert.deepEqual(retried.state.pendingRuntime, requested.state.pendingRuntime);
+	const withoutWarmup = step(readyCameraState({ camera: true, warmup: false }), {
+		type: "GESTURE_CONFIRM",
+		step: "camera_setup",
+		...warmup,
+	});
+	assert.equal(withoutWarmup.state.mode, "workout_running");
+	assert.equal(withoutWarmup.state.trackingTrust, "observing");
 });
 
-test("warmup timeout pauses on readiness loss and ignores stale expiry", () => {
-  let state = readyCameraState();
-  state = step(state, {
-    type: "GESTURE_CONFIRM",
-    step: "camera_setup",
-  }).state;
+test("continuing without the camera keeps the warmup choice", () => {
+	const starting = step(readyState({ camera: true, warmup: true }), {
+		type: "START",
+		...warmup,
+	}).state;
+	const failed = step(starting, { type: "CAMERA_START_FAILED", reason: "x" }).state;
 
-  const lost = step(state, {
-    type: "CAMERA_READINESS",
-    readiness: "not_ready",
-  });
-  assert.deepEqual(lost.commands, [
-    { type: "pauseWarmupTimeout" },
-    { type: "renderFlow" },
-  ]);
+	for (const [state, warmupOn] of [
+		[starting, true],
+		[failed, true],
+		[cameraSetupState({ camera: true, warmup: true }), true],
+		[readyCameraState({ camera: true, warmup: false }), false],
+	]) {
+		const result = step(state, { type: "CONTINUE_WITHOUT_CAMERA", ...warmup });
+		assert.equal(result.state.captureMode, "no_camera");
+		assert.equal(result.state.trackingTrust, "disabled");
+		assert.equal(result.state.mode, warmupOn ? "warmup_running" : "workout_running");
+		assert.ok(result.commands.some((command) => command.type === "stopCamera"));
+		assert.deepEqual(segments(result.commands), [warmupOn ? "warmup" : "workout"]);
+	}
 
-  const stillLost = step(lost.state, {
-    type: "CAMERA_READINESS",
-    readiness: "not_ready",
-  });
-  assert.deepEqual(stillLost.commands, [{ type: "renderFlow" }]);
-
-  const stale = step(stillLost.state, {
-    type: "WARMUP_TIMEOUT",
-    step: "warmup",
-  });
-  assert.equal(stale.state.mode, "warmup_choice");
-  assert.deepEqual(stale.commands, []);
+	assert.deepEqual(
+		step(readyState({ camera: true, warmup: true }), {
+			type: "CONTINUE_WITHOUT_CAMERA",
+			...warmup,
+		}).commands,
+		[],
+	);
 });
 
 test("camera completion pre-fills detected count after absent frames", () => {
-  const result = step(cameraRunningState(), {
-    type: "SEGMENT_FINISHED",
-    result: {
-      burpeeCountDone: 99,
-      scheduledRepsDone: 5,
-      detectedReps: 4,
-      detectedDurationSec: 42,
-      cadenceMs: [8_000, 18_000, 29_000, 42_000],
-    },
-  });
+	const result = step(cameraRunningState(), {
+		type: "SEGMENT_FINISHED",
+		result: {
+			burpeeCountDone: 99,
+			scheduledRepsDone: 5,
+			detectedReps: 4,
+			detectedDurationSec: 42,
+			cadenceMs: [8_000, 18_000, 29_000, 42_000],
+		},
+	});
 
-  assert.equal(result.state.completion.scheduledRepsDone, 5);
-  assert.equal(result.state.completion.burpeeCountActual, 4);
-  assert.equal(result.state.completion.burpeeCountProvenance, "camera_confirmed");
-  assert.equal(result.state.completion.durationSecActual, 42);
-  assert.equal(result.state.completion.trackingTrust, "finished");
-  assert.deepEqual(result.state.completion.cadenceMs, [
-    8_000,
-    18_000,
-    29_000,
-    42_000,
-  ]);
-});
-
-test("session result waits for report-pending acknowledgement before completion review", () => {
-  const state = {
-    ...initialFlowState(),
-    mode: "workout_running",
-    captureMode: "no_camera",
-  };
-  const result = step(state, {
-    type: "SESSION_DONE",
-    result: {
-      burpeeCountDone: 12,
-      scheduledRepsDone: 12,
-      durationSec: 75,
-    },
-  });
-  assert.equal(result.state.mode, "reporting_completion");
-  assert.equal(result.state.completion.scheduledRepsDone, 12);
-  assert.equal(result.state.completion.burpeeCountActual, null);
-  assert.equal(result.state.completion.burpeeCountProvenance, "unresolved");
-  assert.equal(result.state.completion.durationSecActual, 75);
-  assert.deepEqual(result.commands, [
-    { type: "persistCompletionAndRequestPending" },
-    { type: "renderFlow" },
-  ]);
-
-  const acknowledged = step(result.state, { type: "REPORT_PENDING_ACKNOWLEDGED" });
-  assert.equal(acknowledged.state.mode, "completion_review");
+	assert.equal(result.state.completion.scheduledRepsDone, 5);
+	assert.equal(result.state.completion.burpeeCountActual, 4);
+	assert.equal(
+		result.state.completion.burpeeCountProvenance,
+		"camera_confirmed",
+	);
+	assert.equal(result.state.completion.durationSecActual, 42);
+	assert.equal(result.state.completion.trackingTrust, "finished");
+	assert.deepEqual(
+		result.state.completion.cadenceMs,
+		[8_000, 18_000, 29_000, 42_000],
+	);
 });
 
 test("explicit work durations plan 38 seconds while actual counts remain camera-only", () => {
-  const explicitTimeline = [
-    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 20 },
-    { kind: "rest", duration_sec: 5 },
-    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3, duration_sec: 13 },
-  ];
-  const legacyTimeline = [
-    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
-    { kind: "rest", duration_sec: 5 },
-    { kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
-  ];
+	const explicitTimeline = [
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 20,
+		},
+		{ kind: "rest", duration_sec: 5 },
+		{
+			kind: "work",
+			reps: 2,
+			sec_per_rep: 10,
+			sec_per_burpee: 3,
+			duration_sec: 13,
+		},
+	];
+	const legacyTimeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+		{ kind: "rest", duration_sec: 5 },
+		{ kind: "work", reps: 2, sec_per_rep: 10, sec_per_burpee: 3 },
+	];
 
-  const noCamera = step(
-    {
-      ...initialFlowState(),
-      mode: "workout_running",
-      captureMode: "no_camera",
-      workoutTimeline: explicitTimeline,
-    },
-    {
-      type: "SESSION_DONE",
-      result: { burpeeCountDone: 4, scheduledRepsDone: 4, durationSec: 38 },
-    },
-  );
-  assert.equal(noCamera.state.completion.durationSecPlanned, 38);
-  assert.equal(noCamera.state.completion.scheduledRepsDone, 4);
-  assert.equal(noCamera.state.completion.burpeeCountActual, null);
+	const noCamera = step(
+		{
+			...initialFlowState(),
+			mode: "workout_running",
+			captureMode: "no_camera",
+			workoutTimeline: explicitTimeline,
+		},
+		{
+			type: "SESSION_DONE",
+			result: { burpeeCountDone: 4, scheduledRepsDone: 4, durationSec: 38 },
+		},
+	);
+	assert.equal(noCamera.state.completion.durationSecPlanned, 38);
+	assert.equal(noCamera.state.completion.scheduledRepsDone, 4);
+	assert.equal(noCamera.state.completion.burpeeCountActual, 4);
+	assert.equal(noCamera.state.completion.burpeeCountProvenance, "scheduled");
 
-  const camera = step(
-    {
-      ...cameraRunningState(),
-      workoutTimeline: explicitTimeline,
-    },
-    {
-      type: "SEGMENT_FINISHED",
-      result: {
-        burpeeCountDone: 4,
-        scheduledRepsDone: 4,
-        detectedReps: 0,
-        detectedDurationSec: 38,
-      },
-    },
-  );
-  assert.equal(camera.state.completion.scheduledRepsDone, 4);
-  assert.equal(camera.state.completion.burpeeCountActual, 0);
-  assert.equal(camera.state.completion.burpeeCountProvenance, "camera_confirmed");
+	const camera = step(
+		{
+			...cameraRunningState(),
+			workoutTimeline: explicitTimeline,
+		},
+		{
+			type: "SEGMENT_FINISHED",
+			result: {
+				burpeeCountDone: 4,
+				scheduledRepsDone: 4,
+				detectedReps: 0,
+				detectedDurationSec: 38,
+			},
+		},
+	);
+	assert.equal(camera.state.completion.scheduledRepsDone, 4);
+	assert.equal(camera.state.completion.burpeeCountActual, 0);
+	assert.equal(
+		camera.state.completion.burpeeCountProvenance,
+		"camera_confirmed",
+	);
 
-  const legacy = step(
-    {
-      ...initialFlowState(),
-      mode: "workout_running",
-      workoutTimeline: legacyTimeline,
-    },
-    { type: "SESSION_DONE", result: { scheduledRepsDone: 4, durationSec: 45 } },
-  );
-  assert.equal(legacy.state.completion.durationSecPlanned, 45);
-});
-
-test("failed pending report retries without changing the completion draft", () => {
-  const completion = {
-    burpeeCountActual: 12,
-    burpeeCountPlanned: 12,
-    durationSecActual: 75,
-    durationSecPlanned: 75,
-  };
-  const failed = step(
-    { ...initialFlowState(), mode: "reporting_completion", completion },
-    { type: "REPORT_PENDING_FAILED" },
-  );
-
-  assert.equal(failed.state.mode, "completion_pending_failed");
-  assert.equal(failed.state.completion, completion);
-
-  const retried = step(failed.state, { type: "RETRY_REPORT_PENDING" });
-  assert.equal(retried.state.mode, "reporting_completion");
-  assert.equal(retried.state.completion, completion);
-  assert.deepEqual(retried.commands, [
-    { type: "requestPending" },
-    { type: "renderFlow" },
-  ]);
+	const legacy = step(
+		{
+			...initialFlowState(),
+			mode: "workout_running",
+			workoutTimeline: legacyTimeline,
+		},
+		{ type: "SESSION_DONE", result: { scheduledRepsDone: 4, durationSec: 45 } },
+	);
+	assert.equal(legacy.state.completion.durationSecPlanned, 45);
 });
 
 test("restored completion draft enters review without replaying workout", () => {
-  const restored = step(
-    step(initialFlowState(), {
-      type: "SESSION_READY",
-      workoutTimeline: [{ kind: "work", reps: 10, sec_per_rep: 5 }],
-    }).state,
-    {
-      type: "RESTORE_COMPLETION_DRAFT",
-      captureMode: "camera",
-      completion: {
-        burpeeCountActual: 9,
-        burpeeCountPlanned: 10,
-        durationSecActual: 52,
-        durationSecPlanned: 50,
-        detectedReps: 9,
-        detectedDurationSec: 52,
-        trackingTrust: "finished",
-        cadenceMs: [5_000, 10_000],
-        mood: 1,
-        tags: ["great_energy"],
-        notePost: "Strong finish",
-      },
-    },
-  );
+	const restored = step(
+		readyState({ camera: false, warmup: true }),
+		{
+			type: "RESTORE_COMPLETION_DRAFT",
+			captureMode: "camera",
+			completion: {
+				burpeeCountActual: 9,
+				burpeeCountPlanned: 10,
+				durationSecActual: 52,
+				durationSecPlanned: 50,
+				detectedReps: 9,
+				detectedDurationSec: 52,
+				trackingTrust: "finished",
+				cadenceMs: [5_000, 10_000],
+				mood: 1,
+				tags: ["great_energy"],
+				notePost: "Strong finish",
+			},
+		},
+	);
 
-  assert.equal(restored.state.mode, "completion_review");
-  assert.equal(restored.state.captureMode, "camera");
-  assert.equal(restored.state.trackingTrust, "finished");
-  assert.equal(restored.state.completion.notePost, "Strong finish");
-  assert.deepEqual(restored.commands, [{ type: "showCompletion", restored: true }]);
+	assert.equal(restored.state.mode, "completion_review");
+	assert.equal(restored.state.captureMode, "camera");
+	assert.equal(restored.state.trackingTrust, "finished");
+	assert.equal(restored.state.completion.notePost, "Strong finish");
+	assert.deepEqual(restored.commands, [
+		{ type: "showCompletion", restored: true },
+	]);
+
+	assert.deepEqual(step(restored.state, { type: "START", ...warmup }).commands, []);
+});
+
+test("acknowledged server completion freezes the exact submitted facts", () => {
+	const completion = {
+		burpeeCountActual: 10,
+		burpeeCountPlanned: 10,
+		durationSecActual: 55,
+		durationSecPlanned: 50,
+		mood: 1,
+		tags: ["great_energy"],
+		notePost: "Acknowledged",
+	};
+	const review = {
+		...initialFlowState(),
+		mode: "completion_review",
+		completion: { ...completion, notePost: "editable" },
+		saveStatus: "saving",
+	};
+
+	const acknowledged = step(review, {
+		type: "SERVER_COMPLETION_ACKNOWLEDGED",
+		completion,
+	}).state;
+	const forgedEdit = step(acknowledged, {
+		type: "COMPLETION_EDITED",
+		changes: {
+			burpeeCountActual: 999,
+			durationSecActual: 999,
+			mood: -1,
+			tags: ["tired"],
+			notePost: "not acknowledged",
+		},
+	});
+
+	assert.equal(acknowledged.completionLocked, true);
+	assert.deepEqual(acknowledged.completion, completion);
+	assert.deepEqual(forgedEdit.commands, []);
+	assert.equal(forgedEdit.state, acknowledged);
 });
 
 test("completion edits only change approved draft fields", () => {
-  const completed = step(
-    {
-      ...initialFlowState(),
-      mode: "workout_running",
-      captureMode: "camera",
-      trackingTrust: "observing",
-      workoutTimeline: [{ kind: "work", reps: 10, sec_per_rep: 5 }],
-    },
-    {
-      type: "SESSION_DONE",
-      result: {
-        burpeeCountDone: 9,
-        durationSec: 52,
-        detectedReps: 8,
-        detectedDurationSec: 49,
-        cadenceMs: [6100, 6200],
-      },
-    },
-  ).state;
-  const completedReview = step(completed, {
-    type: "REPORT_PENDING_ACKNOWLEDGED",
-  }).state;
+	const completed = step(
+		{
+			...initialFlowState(),
+			mode: "workout_running",
+			captureMode: "camera",
+			trackingTrust: "observing",
+			workoutTimeline: [{ kind: "work", reps: 10, sec_per_rep: 5 }],
+		},
+		{
+			type: "SESSION_DONE",
+			result: {
+				burpeeCountDone: 9,
+				durationSec: 52,
+				detectedReps: 8,
+				detectedDurationSec: 49,
+				cadenceMs: [6100, 6200],
+			},
+		},
+	).state;
+	const completedReview = step(completed, {
+		type: "REPORT_PENDING_ACKNOWLEDGED",
+	}).state;
 
-  const result = step(completedReview, {
-    type: "COMPLETION_EDITED",
-    changes: {
-      burpeeCountActual: 10,
-      durationSecActual: 55,
-      burpeeCountPlanned: 999,
-      durationSecPlanned: 999,
-      trackingTrust: "degraded",
-      detectedReps: 999,
-      detectedDurationSec: 999,
-      cadenceMs: [1],
-      mood: 1,
-      tags: ["great_energy"],
-      notePost: "Strong finish",
-    },
-  });
+	const result = step(completedReview, {
+		type: "COMPLETION_EDITED",
+		changes: {
+			burpeeCountActual: 10,
+			durationSecActual: 55,
+			burpeeCountPlanned: 999,
+			durationSecPlanned: 999,
+			trackingTrust: "degraded",
+			detectedReps: 999,
+			detectedDurationSec: 999,
+			cadenceMs: [1],
+			mood: 1,
+			tags: ["great_energy"],
+			contextLowEnergy: true,
+			contextHighEnergy: false,
+			contextHeatAffected: true,
+			primaryLimiter: "legs",
+			preferenceFeedback: "avoid",
+			notePost: "Strong finish",
+		},
+	});
 
-  assert.deepEqual(result.state.completion, {
-    scheduledRepsDone: 9,
-    burpeeCountActual: 10,
-    burpeeCountProvenance: "manual",
-    burpeeCountPlanned: 10,
-    durationSecActual: 55,
-    durationSecPlanned: 50,
-    detectedReps: 8,
-    detectedDurationSec: 49,
-    trackingTrust: "observing",
-    cadenceMs: [6100, 6200],
-    mood: 1,
-    tags: ["great_energy"],
-    notePost: "Strong finish",
-  });
+	assert.deepEqual(result.state.completion, {
+		scheduledRepsDone: 9,
+		burpeeCountActual: 10,
+		burpeeCountProvenance: "manual",
+		burpeeCountPlanned: 10,
+		durationSecActual: 52,
+		durationSecPlanned: 50,
+		detectedReps: 8,
+		detectedDurationSec: 49,
+		trackingTrust: "degraded",
+		cadenceMs: [6100, 6200],
+		mood: 1,
+		endedEarly: false,
+		tags: ["great_energy"],
+		contextLowEnergy: true,
+		contextHighEnergy: false,
+		contextHeatAffected: true,
+		primaryLimiter: "legs",
+		preferenceFeedback: "avoid",
+		notePost: "Strong finish",
+	});
+});
+
+test("a remembered camera on a device without one starts as camera off", () => {
+	for (const [cameraAvailable, mode] of [
+		[false, "warmup_running"],
+		[null, "camera_starting"],
+		[true, "camera_starting"],
+	]) {
+		const result = step(readyState({ camera: true, warmup: true }), {
+			type: "START",
+			cameraAvailable,
+			...warmup,
+		});
+		assert.equal(result.state.mode, mode, String(cameraAvailable));
+	}
+
+	const off = step(readyState({ camera: true, warmup: false }), {
+		type: "START",
+		cameraAvailable: false,
+		...warmup,
+	});
+	assert.equal(off.state.captureMode, "no_camera");
+	assert.equal(off.state.trackingTrust, "disabled");
+	assert.equal(off.state.mode, "workout_running");
+	assert.ok(!off.commands.some((command) => command.type === "startCamera"));
+});
+
+test("finishing early from the warmup goes to the finish screen, not the workout", () => {
+	const warmingUp = step(readyState({ camera: false, warmup: true }), {
+		type: "START",
+		...warmup,
+	}).state;
+	const result = step(warmingUp, {
+		type: "FINISH_EARLY",
+		result: { burpeeCountDone: 0, scheduledRepsDone: 0, durationSec: 0 },
+	});
+	assert.equal(result.state.mode, "completion_review");
+	assert.equal(result.state.completion.burpeeCountActual, 0);
+	assert.deepEqual(segments(result.commands), []);
+});
+
+test("the finish screen knows whether the workout ran out or ended early, and has no mood yet", () => {
+	const running = step(readyState({ camera: false, warmup: false }), {
+		type: "START",
+		...warmup,
+	}).state;
+	const result = { burpeeCountDone: 10, scheduledRepsDone: 10, durationSec: 50 };
+
+	const done = step(running, { type: "SESSION_DONE", result }).state;
+	assert.equal(done.completion.endedEarly, false);
+	assert.equal(done.completion.mood, null);
+
+	const segmentDone = step(running, { type: "SEGMENT_DONE", segment: "workout", result }).state;
+	assert.equal(segmentDone.completion.endedEarly, false);
+
+	const early = step(running, { type: "FINISH_EARLY", result }).state;
+	assert.equal(early.completion.endedEarly, true);
+	assert.equal(early.completion.mood, null);
+});
+
+test("the count's origin is the camera's count when it finished, else the plan's", () => {
+	assert.deepEqual(
+		countOrigin({ trackingTrust: "finished", detectedReps: 42, scheduledRepsDone: 40 }),
+		{ reps: 42, provenance: "camera_confirmed" },
+	);
+	assert.deepEqual(
+		countOrigin({ trackingTrust: "degraded", detectedReps: 12, scheduledRepsDone: 40 }),
+		{ reps: 40, provenance: "scheduled" },
+	);
+	assert.deepEqual(countOrigin({ trackingTrust: "disabled" }), {
+		reps: null,
+		provenance: "scheduled",
+	});
+});
+
+test("stepping the count back to its origin gives the origin back its provenance", () => {
+	const review = {
+		...initialFlowState(),
+		mode: "completion_review",
+		completion: {
+			burpeeCountActual: 42,
+			burpeeCountProvenance: "camera_confirmed",
+			trackingTrust: "finished",
+			detectedReps: 42,
+			scheduledRepsDone: 40,
+		},
+	};
+	const corrected = step(review, {
+		type: "COMPLETION_EDITED",
+		changes: { burpeeCountActual: 43 },
+	}).state;
+	assert.equal(corrected.completion.burpeeCountProvenance, "manual");
+
+	const back = step(corrected, {
+		type: "COMPLETION_EDITED",
+		changes: { burpeeCountActual: 42 },
+	}).state;
+	assert.equal(back.completion.burpeeCountProvenance, "camera_confirmed");
+});
+
+test("finishing early before the camera settled saves it as lost", () => {
+	for (const [mode, trust] of [
+		["warmup_running", "arming"],
+		["workout_running", "observing"],
+	]) {
+		const result = step(
+			{ ...initialFlowState(), mode, captureMode: "camera", trackingTrust: trust },
+			{ type: "FINISH_EARLY", result: { burpeeCountDone: 0, durationSec: 0 } },
+		).state;
+		assert.equal(result.trackingTrust, "degraded", mode);
+		assert.equal(result.trackingReason, "tracking_incomplete", mode);
+		assert.equal(result.completion.trackingTrust, "degraded", mode);
+	}
+	// Settled trust is kept, and no camera stays off.
+	for (const trust of ["disabled", "degraded", "finished"]) {
+		const result = step(
+			{ ...initialFlowState(), mode: "workout_running", trackingTrust: trust },
+			{ type: "FINISH_EARLY", result: { burpeeCountDone: 0, durationSec: 0 } },
+		).state;
+		assert.equal(result.completion.trackingTrust, trust);
+	}
 });

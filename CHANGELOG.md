@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-10-16 — Starting and finishing a workout with one tap
+
+- Home has camera and warmup toggles beside play, remembered per device (default: camera off, warmup on); play is the only tap before the workout.
+- The session no longer asks about the camera, the warmup, or being ready: it opens the 5-second countdown, or one camera screen ("Starting camera", "Step into frame", "Hand up or hold still", "Camera unavailable"); the warmup runs straight into the workout's countdown. A session left on its finish screen still reopens there.
+- On a device without a camera the camera toggle is off and disabled ("No camera on this device"), and a remembered camera choice starts the workout without it.
+- Pausing offers ← Back to Home under Finish early (the session stays resumable), and the finish screen can discard an unsaved session after an on-page confirmation; the server deletes only a started session and the device's draft and trace go with it.
+- Finish early works on any pause (warmup and countdowns too) without a browser confirm, so a session can always reach discard; the camera and warmup toggles also flank Resume.
+- The finish screen says "Ended early" after Finish early (from any pause, including mid-workout), starts with no mood chosen (a save without one stores none; tapping the chosen mood clears it), sits centred, and shows the trash as an outlined button.
+- The pose tracker holds a start sent while its code loads, so the camera cannot stall on "Starting camera".
+- The finish screen is save or discard: it shows the counted reps and time with no fields, with mood, tags and a note under it in Home's pill and field styles, and no leave-and-resume-later.
+- The count is corrected with − and + beside it (hold to keep counting; − stops at zero); the time is the timer's and no longer editable. A line under it says "Counted by camera" or "From your plan", and after a correction shows the original with Undo. The device draft keeps where the count came from.
+- Discard's question takes the place of the trash and ✓, with equal Keep and Discard buttons; Keep brings them back.
+- Finishing early from the warmup or the workout countdown with the camera on can be saved: a camera that never settled finishes as lost tracking (it was sent as "arming"/"observing", which the server refuses), and a draft holding one opens the same way.
+- − / + say the new count to a screen reader, end a hold when slid off or disabled, and hand focus to + when − or Undo goes away; the finish screen's own announcement no longer repeats on every edit. Older drafts that hold the camera's unchanged count say "Counted by camera".
+- Discard locks the finish screen while the server answers and gives up after 10 seconds.
+
+## 2026-10-04 — Coach/Home branch review fixes
+
+- Migration `20260829085005_rebuild_workout_library` now accepts the upstream-OIDC source/target schema fingerprints, so databases deployed from upstream (OIDC already applied) can migrate; the gate stays exact-match and fails closed for any other shape.
+- Coach prompt context keeps only the 12 most recent finalized-workout memories, so authoring no longer fails permanently with `authoring_context_too_large` as a user's library grows.
+- Approving a reviewed workout saves it as a new **published** workout (still provider-free, idempotent, and not selected); dismissing the saved notice no longer leaves it as an unreachable draft.
+- A completion retry after a lost save reply is acknowledged when it carries the session's own `client_session_id`; reopening an already-saved session settles retained local evidence (draft → trace upload queue) and returns Home instead of "Session not found".
+- Coach background tasks are no longer capped at two globally, so guidance reviews and workout memories are not silently dropped under load.
+- Saving guidance with unchanged text keeps its classification and spends no provider review.
+- Workout memories for approved reviews now include the user's instruction.
+
+## 2026-08-31 — Deletion-first workout library and immutable sessions
+
+- Rebuilt `workout_plans` as the canonical durable library with enforced `draft → published → archived` lifecycle semantics, immutable published content, copy-to-draft, and no manual block/set editor.
+- Added bounded one-request natural-language Create and Refine through `Req`; validated output persists as a draft only, invalid output persists nothing, and publishing always requires explicit acceptance.
+- Replaced lifecycle/outbox/authorization machinery with small recommendation pointers, a supervised transient reconciler, deterministic fallback/policy, and atomic candidate Use/Current-workout-better decisions.
+- Made `workout_sessions` the sole execution authority: Start creates the exact `started` row with immutable plan or video snapshots, Resume stays pinned, and completion updates the same row once.
+- Moved History and Stats to completed-session snapshots so plan archival and later catalog changes cannot rewrite completed workouts; retained confirmed feedback, pose evidence, video facts, and nil-count video semantics.
+- Added an atomic destructive migration with verified-backup restoration rehearsal, normalized disposable `/tmp` E2E fixtures, authenticated Firefox runbook, and deletion/reference/LOC gates.
+- Removed obsolete configured-workout, structured-editor, persisted execution-program, preparation, provider-delivery, execution-permission, and compatibility architecture while preserving all historical migrations.
+
 ## 2026-06-08 — Deterministic intelligence layer
 
 - Removed the MILP/HiGHS infrastructure and old `PlanSolver.Lp`; `PlanSolver` now uses deterministic candidate/rest placement with rich solution metadata, PaceModel-backed pace bounds, manual pace overrides, and human-shaped non-uniform set patterns.

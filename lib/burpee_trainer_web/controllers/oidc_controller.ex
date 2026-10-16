@@ -74,7 +74,7 @@ defmodule BurpeeTrainerWeb.OidcController do
     sub = Map.get(claims, "sub")
     username = Map.get(claims, "preferred_username")
 
-    case Accounts.resolve_oidc_identity(sub, username) do
+    case sign_in_user(sub, username, claims) do
       {:ok, user} ->
         conn
         |> clear_oidc_session()
@@ -123,4 +123,16 @@ defmodule BurpeeTrainerWeb.OidcController do
   end
 
   defp secure_compare(_a, _b), do: false
+
+  defp sign_in_user(sub, username, claims) do
+    with {:ok, user} <- Accounts.resolve_oidc_identity(sub, username),
+         do: Accounts.put_coach_enabled(user, coach_claim?(claims))
+  end
+
+  # The app's own coach is granted by a custom claim on a Pocket ID group (`true`, or the
+  # string "true"); without it the user coaches through Claude.
+  defp coach_claim?(claims) do
+    key = Application.get_env(:burpee_trainer, :coach_claim, "burpee_coach")
+    Map.get(claims, key) in [true, "true"]
+  end
 end

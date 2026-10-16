@@ -1,0 +1,662 @@
+defmodule BurpeeTrainer.Coach.ClientTest do
+  use BurpeeTrainer.DataCase, async: false
+
+  import ExUnit.CaptureLog
+
+  alias BurpeeTrainer.Coach.Client
+  alias BurpeeTrainer.Workouts.Error
+
+  test "oversized serialized request fails before HTTP" do
+    parent = self()
+
+    req =
+      Req.new(
+        adapter: fn request ->
+          send(parent, :unexpected_http)
+          {request, %Req.Response{status: 500, body: ""}}
+        end
+      )
+
+    assert {:error, %Error{code: :authoring_context_too_large}} =
+             structured_chat(
+               [%{role: "user", content: String.duplicate("x", 262_145)}],
+               req: req,
+               response_kind: :workout_request,
+               config: [
+                 enabled: true,
+                 url: "https://provider.test/v1",
+                 api_key: "test",
+                 model: "test"
+               ]
+             )
+
+    refute_received :unexpected_http
+  end
+
+  test "schema envelope pushes otherwise bounded messages over the request cap", %{
+    counter: counter
+  } do
+    messages = [%{role: "user", content: String.duplicate("x", 262_000)}]
+    assert byte_size(Jason.encode!(messages)) < 262_144
+    req = request(counter, fn conn -> json_response(conn, 200, %{}) end)
+
+    assert {:error, %Error{code: :authoring_context_too_large}} =
+             structured_chat(messages, opts(req))
+
+    assert requests(counter) == []
+  end
+
+  @max_response_bytes 262_144
+
+  setup do
+    counter = start_supervised!({Agent, fn -> %{count: 0, requests: []} end})
+    %{counter: counter}
+  end
+
+  test "workout request extraction uses the compact confirmed-constraints schema", %{
+    counter: counter
+  } do
+    answer = %{
+      "burpee_type" => "six_count",
+      "target_reps" => 140,
+      "target_duration_sec" => 1_200,
+      "pacing_style" => "unbroken",
+      "recovery" => "required",
+      "timed_rests" => [%{"start_sec" => 660, "duration_sec" => 60}],
+      "requested_pace_sec" => nil
+    }
+
+    req = request(counter, fn conn -> json_response(conn, 200, answer) end)
+
+    assert {:ok, ^answer} =
+             structured_chat([], Keyword.put(opts(req), :response_kind, :workout_request))
+
+    [recorded] = requests(counter)
+    schema = recorded.body["response_format"]["json_schema"]
+    assert schema["name"] == "workout_request"
+
+    assert schema["schema"] ==
+             BurpeeTrainer.Coach.WorkoutRequest.json_schema()
+             |> Jason.encode!()
+             |> Jason.decode!()
+  end
+
+  test "confirmed request uses the request-dependent workout layout schema", %{counter: counter} do
+    {:ok, confirmed} =
+      BurpeeTrainer.Coach.WorkoutRequest.new(%{
+        "burpee_type" => "six_count",
+        "target_reps" => 140,
+        "target_duration_sec" => 1_200,
+        "pacing_style" => "unbroken",
+        "recovery" => "required",
+        "timed_rests" => [
+          %{"start_sec" => 660, "duration_sec" => 60},
+          %{"start_sec" => 1_080, "duration_sec" => 30}
+        ],
+        "requested_pace_sec" => nil
+      })
+
+    layout = %{"name" => "layout", "rationale" => "fixture", "phases" => []}
+    req = request(counter, fn conn -> json_response(conn, 200, layout) end)
+
+    assert {:ok, ^layout} =
+             structured_chat(
+               [],
+               opts(req)
+               |> Keyword.put(:confirmed_request, confirmed)
+               |> Keyword.put(:response_kind, :workout_layout)
+             )
+
+    [recorded] = requests(counter)
+    response = recorded.body["response_format"]["json_schema"]
+    assert response["name"] == "workout_layout"
+    assert response["schema"]["required"] == ["name", "rationale", "phases"]
+    assert response["schema"]["properties"]["phases"]["minItems"] == 3
+    assert response["schema"]["properties"]["phases"]["maxItems"] == 3
+  end
+
+  test "OpenRouter requests require a provider supporting every requested parameter", %{
+    counter: counter
+  } do
+    definition = definition("Schema-capable route")
+    req = request(counter, fn conn -> json_response(conn, 200, definition) end)
+
+    options =
+      Keyword.update!(opts(req), :config, fn config ->
+        config
+        |> Keyword.put(:url, "https://openrouter.ai/api/v1/chat/completions")
+        |> Keyword.put(:model, "openai/gpt-6-luna-pro")
+      end)
+
+    assert {:ok, ^definition} = structured_chat([], options)
+
+    [recorded] = requests(counter)
+    assert recorded.body["model"] == "openai/gpt-6-luna-pro"
+    assert recorded.body["provider"] == %{"require_parameters" => true}
+    refute Map.has_key?(recorded.body, "temperature")
+    assert recorded.body["response_format"]["json_schema"]["strict"] == true
+  end
+
+  test "one request uses the fixed security and resource options", %{counter: counter} do
+    parent = self()
+    definition = definition("One call")
+
+    request =
+      request(counter, fn conn -> json_response(conn, 200, definition) end)
+      |> Req.Request.prepend_request_steps(
+        capture_boundary: fn request ->
+          send(parent, {:request_boundary, request})
+          request
+        end
+      )
+
+    boundary_opts =
+      request
+      |> opts()
+      |> Keyword.put(:max_tokens, 99_999)
+      |> Keyword.update!(:config, &Keyword.put(&1, :max_tokens, 88_888))
+
+    assert {:ok, ^definition} =
+             structured_chat(
+               [%{role: "user", content: "steady"}],
+               Keyword.put(boundary_opts, :response_kind, :workout_request)
+             )
+
+    assert request_count(counter) == 1
+
+    assert_receive {:request_boundary, captured}
+    assert captured.method == :post
+    assert captured.options.retry == false
+    assert captured.options.redirect == false
+    assert captured.options.decode_body == false
+    assert captured.options.receive_timeout == 12_345
+    assert is_function(captured.into, 2)
+
+    [recorded] = requests(counter)
+    assert recorded.method == "POST"
+    assert recorded.path == "/v1/chat/completions"
+    assert recorded.authorization == ["Bearer test-secret"]
+    assert recorded.body["model"] == "test/model"
+    assert recorded.body["max_tokens"] == 16_384
+    assert recorded.body["temperature"] == 0
+    refute Map.has_key?(recorded.body, "provider")
+
+    assert %{
+             "type" => "json_schema",
+             "json_schema" => %{
+               "name" => "workout_request",
+               "strict" => true,
+               "schema" => schema
+             }
+           } = recorded.body["response_format"]
+
+    assert schema ==
+             BurpeeTrainer.Coach.WorkoutRequest.json_schema()
+             |> Jason.encode!()
+             |> Jason.decode!()
+
+    assert recorded.body["messages"] == [%{"role" => "user", "content" => "steady"}]
+  end
+
+  test "missing structured content logs safe completion diagnostics", %{counter: counter} do
+    req =
+      request(counter, fn conn ->
+        Plug.Conn.send_resp(
+          conn,
+          200,
+          Jason.encode!(%{
+            "choices" => [
+              %{"finish_reason" => "length", "message" => %{"content" => nil}}
+            ]
+          })
+        )
+      end)
+
+    log =
+      capture_log([level: :warning], fn ->
+        assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
+                 structured_chat([%{role: "user", content: "private"}], opts(req))
+      end)
+
+    assert log =~ "llm_provider_response_rejected"
+    assert log =~ "stage=envelope"
+    assert log =~ "finish_reason=length"
+    assert log =~ "content_type=nil"
+    refute log =~ "private"
+  end
+
+  test "disabled configuration returns before credentials or request construction", %{
+    counter: counter
+  } do
+    req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
+
+    assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
+             structured_chat([],
+               req: req,
+               config: [enabled: false, url: nil, api_key: nil, model: nil]
+             )
+
+    assert request_count(counter) == 0
+  end
+
+  test "only literal true enables the provider and malformed values have safe empty context", %{
+    counter: counter
+  } do
+    req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
+
+    for enabled <- [nil, false, 1, 0, "true", %{}, []] do
+      assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
+               structured_chat([],
+                 req: req,
+                 config: [
+                   enabled: enabled,
+                   url: "https://provider.test/v1",
+                   api_key: "secret",
+                   model: "test/model"
+                 ]
+               )
+    end
+
+    assert request_count(counter) == 0
+  end
+
+  test "enabled configuration with missing credentials makes no request", %{counter: counter} do
+    req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
+
+    for config <- [
+          [enabled: true, url: "https://provider.test/v1", api_key: "secret"],
+          [enabled: true, url: "https://provider.test/v1", model: "test/model"],
+          [enabled: true, api_key: "secret", model: "test/model"],
+          [enabled: true, url: " ", api_key: "secret", model: "test/model"]
+        ] do
+      assert {:error, %Error{code: :provider_unavailable}} =
+               structured_chat([], req: req, config: config)
+    end
+
+    assert request_count(counter) == 0
+  end
+
+  test "timeouts and transport failures are safely normalized without raw reasons", %{
+    counter: counter
+  } do
+    timeout_req = request(counter, &Req.Test.transport_error(&1, :timeout))
+
+    assert {:error, %Error{code: :provider_timeout, context: %{}}} =
+             structured_chat([], opts(timeout_req))
+
+    transport_req = request(counter, &Req.Test.transport_error(&1, :econnrefused))
+
+    assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
+             structured_chat([], opts(transport_req))
+
+    assert request_count(counter) == 2
+  end
+
+  test "unexpected Req errors are normalized without leaking their message" do
+    req = %{
+      Req.new()
+      | adapter: fn request -> {request, RuntimeError.exception("raw-secret-error")} end
+    }
+
+    assert {:error, %Error{code: :provider_unavailable, context: %{}} = error} =
+             structured_chat([], opts(req))
+
+    refute inspect(error) =~ "raw-secret-error"
+  end
+
+  test "redirects and status failures are not followed or retried and leak no body", %{
+    counter: counter
+  } do
+    statuses = [201, 204, 301, 307, 400, 404, 429, 500, 503, 599]
+
+    for status <- statuses do
+      req =
+        request(counter, fn conn ->
+          conn
+          |> Plug.Conn.put_resp_header("location", "https://provider.test/second-request")
+          |> Plug.Conn.send_resp(status, "raw-secret-provider-body")
+        end)
+
+      assert {:error, %Error{code: :provider_unavailable, context: %{status: ^status}} = error} =
+               structured_chat([], opts(req))
+
+      refute inspect(error) =~ "raw-secret-provider-body"
+    end
+
+    assert request_count(counter) == length(statuses)
+  end
+
+  test "an inherited follow_redirects option cannot override redirect rejection", %{
+    counter: counter
+  } do
+    definition = definition("must not be reached")
+
+    req =
+      request(counter, fn conn ->
+        case conn.request_path do
+          "/v1/chat/completions" ->
+            conn
+            |> Plug.Conn.put_resp_header("location", "/redirected")
+            |> Plug.Conn.send_resp(302, "redirect body")
+
+          "/redirected" ->
+            json_response(conn, 200, definition)
+        end
+      end)
+      |> Req.merge(follow_redirects: true)
+
+    assert {:error, %Error{code: :provider_unavailable, context: %{status: 302}}} =
+             structured_chat([], opts(req))
+
+    assert request_count(counter) == 1
+  end
+
+  test "inherited http_errors cannot raise or leak a non-200 body" do
+    test_pid = self()
+
+    req =
+      Req.new(
+        http_errors: :raise,
+        adapter: fn request ->
+          send(test_pid, :provider_called)
+          {request, %Req.Response{status: 503, body: "raw-secret-provider-body"}}
+        end
+      )
+
+    assert {:error, %Error{code: :provider_unavailable, context: %{status: 503}} = error} =
+             structured_chat([], opts(req))
+
+    assert_receive :provider_called
+    refute inspect(error) =~ "raw-secret-provider-body"
+  end
+
+  test "the final body cap applies before every non-200 status" do
+    oversized_body = String.duplicate("raw-secret", div(@max_response_bytes, 10) + 1)
+
+    for status <- [302, 429, 503] do
+      req = %{
+        Req.new()
+        | adapter: fn request ->
+            {request, %Req.Response{status: status, body: oversized_body}}
+          end
+      }
+
+      assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
+               structured_chat([], opts(req))
+
+      refute inspect(error) =~ "raw-secret"
+    end
+  end
+
+  test "duplicate keys in provider envelopes and content are rejected", %{counter: counter} do
+    duplicate_bodies = [
+      ~s({"choices":[],"choices":[{"message":{"content":"{}"}}]}),
+      ~s({"choices":[{"message":{"content":"{}","content":"{}"}}]}),
+      ~s({"choices":[{"message":{"content":"{\\"version\\":1,\\"version\\":1}"}}]})
+    ]
+
+    for body <- duplicate_bodies do
+      req = request(counter, &Plug.Conn.send_resp(&1, 200, body))
+
+      assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
+               structured_chat([], opts(req))
+    end
+
+    assert request_count(counter) == length(duplicate_bodies)
+  end
+
+  test "malformed envelopes and invalid JSON are safely normalized", %{counter: counter} do
+    bodies = [
+      "not-json raw-secret",
+      Jason.encode!(%{}),
+      Jason.encode!(%{"choices" => []}),
+      Jason.encode!(%{"choices" => [%{"message" => %{}}]}),
+      Jason.encode!(%{"choices" => [%{"message" => %{"content" => 42}}]}),
+      Jason.encode!(%{"choices" => [%{"message" => %{"content" => "not-json raw-secret"}}]}),
+      Jason.encode!(%{"choices" => [%{"message" => %{"content" => "[]"}}]})
+    ]
+
+    for body <- bodies do
+      req = request(counter, &Plug.Conn.send_resp(&1, 200, body))
+
+      assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
+               structured_chat([], opts(req))
+
+      refute inspect(error) =~ "raw-secret"
+    end
+
+    assert request_count(counter) == length(bodies)
+  end
+
+  test "the fixed response cap accepts exactly 262144 bytes and rejects one byte more", %{
+    counter: counter
+  } do
+    definition = definition("At cap")
+    valid_body = provider_body(definition)
+    exact_body = valid_body <> String.duplicate(" ", @max_response_bytes - byte_size(valid_body))
+
+    exact_req = request(counter, &Plug.Conn.send_resp(&1, 200, exact_body))
+    assert {:ok, ^definition} = structured_chat([], opts(exact_req))
+
+    oversized_req = request(counter, &Plug.Conn.send_resp(&1, 200, exact_body <> " "))
+
+    assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
+             structured_chat([], opts(oversized_req))
+
+    assert request_count(counter) == 2
+  end
+
+  test "the final body cap rejects an adapter that ignores into" do
+    valid_body = provider_body(definition("adapter ignored into"))
+
+    oversized_body =
+      valid_body <> String.duplicate(" ", @max_response_bytes + 1 - byte_size(valid_body))
+
+    req = %{
+      Req.new()
+      | adapter: fn request ->
+          {request, %Req.Response{status: 200, body: oversized_body}}
+        end
+    }
+
+    assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
+             structured_chat([], opts(req))
+  end
+
+  test "the response cap also rejects a chunked body", %{counter: counter} do
+    chunk = String.duplicate("x", div(@max_response_bytes, 2) + 1)
+
+    req =
+      request(counter, fn conn ->
+        conn = Plug.Conn.send_chunked(conn, 200)
+        {:ok, conn} = Plug.Conn.chunk(conn, chunk)
+        {:ok, conn} = Plug.Conn.chunk(conn, chunk)
+        conn
+      end)
+
+    assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
+             structured_chat([], opts(req))
+
+    assert request_count(counter) == 1
+  end
+
+  test "custom adapter streaming halts when under-limit chunks aggregate to cap plus one" do
+    first_chunk = String.duplicate("first-secret", 11_916) |> binary_part(0, 131_072)
+    second_chunk = String.duplicate("second-secret", 11_916) |> binary_part(0, 131_073)
+    req = streaming_adapter(self(), [first_chunk, second_chunk])
+
+    assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
+             structured_chat([], opts(req))
+
+    assert_receive {:stream_outcomes, [:cont, :halt], {:error, :response_too_large}}
+    refute inspect(error) =~ "first-secret"
+    refute inspect(error) =~ "second-secret"
+  end
+
+  test "custom adapter streaming accepts an aggregate body at the exact cap" do
+    definition = definition("exact streamed cap")
+    valid_body = provider_body(definition)
+    exact_body = valid_body <> String.duplicate(" ", @max_response_bytes - byte_size(valid_body))
+    <<first_chunk::binary-size(131_072), second_chunk::binary>> = exact_body
+    req = streaming_adapter(self(), [first_chunk, second_chunk])
+
+    assert {:ok, ^definition} = structured_chat([], opts(req))
+    assert_receive {:stream_outcomes, [:cont, :cont], body}
+    assert byte_size(body) == @max_response_bytes
+  end
+
+  test "timeout environment parsing is startup-safe and bounded" do
+    for {value, expected} <- [
+          {nil, 20_000},
+          {"", 20_000},
+          {"not-an-integer", 20_000},
+          {"-1", 20_000},
+          {"0", 20_000},
+          {"999", 20_000},
+          {"60001", 20_000},
+          {"1000", 1_000},
+          {"60000", 60_000}
+        ] do
+      assert runtime_timeout(value) == expected
+    end
+  end
+
+  defp streaming_adapter(test_pid, chunks) do
+    %{
+      Req.new()
+      | adapter: fn request ->
+          {request, response, outcomes} =
+            Enum.reduce_while(
+              chunks,
+              {request, %Req.Response{status: 200, body: ""}, []},
+              fn chunk, {request, response, outcomes} ->
+                case request.into.({:data, chunk}, {request, response}) do
+                  {:cont, {request, response}} ->
+                    {:cont, {request, response, [:cont | outcomes]}}
+
+                  {:halt, {request, response}} ->
+                    {:halt, {request, response, [:halt | outcomes]}}
+                end
+              end
+            )
+
+          send(test_pid, {:stream_outcomes, Enum.reverse(outcomes), response.body})
+          {request, response}
+        end
+    }
+  end
+
+  defp request(counter, responder) do
+    Req.new(
+      plug: fn conn ->
+        Agent.update(counter, fn state ->
+          recorded = %{
+            method: conn.method,
+            path: conn.request_path,
+            authorization: Plug.Conn.get_req_header(conn, "authorization"),
+            body: conn.body_params
+          }
+
+          %{state | count: state.count + 1, requests: [recorded | state.requests]}
+        end)
+
+        responder.(conn)
+      end
+    )
+  end
+
+  defp structured_chat(messages, opts) do
+    format =
+      case Keyword.get(opts, :response_kind, :workout_request) do
+        :workout_request ->
+          {"workout_request", BurpeeTrainer.Coach.WorkoutRequest.json_schema()}
+
+        :workout_layout ->
+          {"workout_layout",
+           BurpeeTrainer.Coach.WorkoutLayout.json_schema(Keyword.fetch!(opts, :confirmed_request))}
+      end
+
+    scope = BurpeeTrainer.Fixtures.scope_fixture()
+
+    opts =
+      opts
+      |> Keyword.drop([:response_kind, :confirmed_request])
+      |> Keyword.put(:response_format, format)
+      |> Keyword.put(:ledger, %{scope: scope, purpose: "layout", run_id: Ecto.UUID.generate()})
+
+    case Client.chat(messages, opts) do
+      {:ok, %{content: content, tool_calls: []}} when is_map(content) -> {:ok, content}
+      {:ok, _} -> {:error, Error.new(:invalid_provider_response)}
+      error -> error
+    end
+  end
+
+  defp opts(req) do
+    [
+      req: req,
+      response_kind: :workout_request,
+      config: [
+        enabled: true,
+        url: "https://provider.test/v1/chat/completions",
+        api_key: "test-secret",
+        model: "test/model",
+        timeout_ms: 12_345
+      ]
+    ]
+  end
+
+  defp request_count(counter), do: Agent.get(counter, & &1.count)
+  defp requests(counter), do: Agent.get(counter, &Enum.reverse(&1.requests))
+
+  defp json_response(conn, status, definition) do
+    Plug.Conn.send_resp(conn, status, provider_body(definition))
+  end
+
+  defp provider_body(definition) do
+    Jason.encode!(%{
+      "choices" => [%{"message" => %{"content" => Jason.encode!(definition)}}]
+    })
+  end
+
+  defp definition(name) do
+    %{
+      "version" => 1,
+      "name" => name,
+      "burpee_type" => "six_count",
+      "target_reps" => 10,
+      "target_duration_sec" => 120,
+      "pacing_style" => "even",
+      "events" => [
+        %{
+          "kind" => "work",
+          "reps" => 10,
+          "sec_per_rep" => 12.0,
+          "sec_per_burpee" => 12.0
+        }
+      ],
+      "rationale" => "A deterministic provider fixture."
+    }
+  end
+
+  defp runtime_timeout(value) do
+    runtime = Path.expand("../../../config/runtime.exs", __DIR__)
+
+    script = """
+    config = Config.Reader.read!(#{inspect(runtime)}, env: :test)
+    provider = config |> Keyword.fetch!(:burpee_trainer) |> Keyword.fetch!(:llm_provider)
+    IO.write(Integer.to_string(Keyword.fetch!(provider, :timeout_ms)))
+    """
+
+    {output, 0} =
+      System.cmd(System.find_executable("elixir"), ["-e", script],
+        env: [
+          {"LLM_PROVIDER_TIMEOUT_MS", value},
+          {"LLM_PROVIDER_URL", nil},
+          {"LLM_PROVIDER_API_KEY", nil}
+        ],
+        stderr_to_stdout: true
+      )
+
+    output |> String.trim() |> String.to_integer()
+  end
+end
