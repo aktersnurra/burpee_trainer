@@ -31,6 +31,12 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   weekly_target_sec describe this week's training time.
   """
 
+  @doc "What the planner is asked to do; also the planning rules Claude coaches by."
+  def planner_task, do: @planner_task
+
+  @doc "How to read the context JSON."
+  def context_glossary, do: @context_glossary
+
   def context(scope, slot \\ nil) do
     {:ok, goals} = Tools.Goals.call(scope, %{}, %{})
     sessions = Workouts.list_recent_training_sessions(scope)

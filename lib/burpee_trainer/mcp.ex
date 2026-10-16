@@ -9,10 +9,11 @@ defmodule BurpeeTrainer.Mcp do
 
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Tool
+  alias BurpeeTrainer.Mcp.{CoachPrompt, Tools, WorkoutFormat}
 
   @protocol_versions ~w[2025-06-18 2025-03-26 2024-11-05]
 
-  @tools []
+  @tools [Tools.CoachContext]
 
   def tools, do: @tools
 
@@ -47,7 +48,11 @@ defmodule BurpeeTrainer.Mcp do
      %{
        "protocolVersion" =>
          if(requested in @protocol_versions, do: requested, else: latest_protocol_version()),
-       "capabilities" => %{"tools" => %{"listChanged" => false}},
+       "capabilities" => %{
+         "tools" => %{"listChanged" => false},
+         "prompts" => %{"listChanged" => false},
+         "resources" => %{"listChanged" => false}
+       },
        "serverInfo" => %{"name" => "burpee-trainer", "version" => version()}
      }}
   end
@@ -74,6 +79,56 @@ defmodule BurpeeTrainer.Mcp do
 
   defp dispatch(_scope, "tools/call", _params, _tools),
     do: {:error, -32602, "tools/call needs a tool name"}
+
+  defp dispatch(_scope, "prompts/list", _params, _tools),
+    do:
+      {:ok,
+       %{
+         "prompts" => [
+           %{"name" => CoachPrompt.name(), "description" => CoachPrompt.description()}
+         ]
+       }}
+
+  defp dispatch(_scope, "prompts/get", %{"name" => "coach"}, _tools),
+    do:
+      {:ok,
+       %{
+         "description" => CoachPrompt.description(),
+         "messages" => [
+           %{"role" => "user", "content" => %{"type" => "text", "text" => CoachPrompt.text()}}
+         ]
+       }}
+
+  defp dispatch(_scope, "prompts/get", _params, _tools), do: {:error, -32602, "Unknown prompt"}
+
+  defp dispatch(_scope, "resources/list", _params, _tools),
+    do:
+      {:ok,
+       %{
+         "resources" => [
+           %{
+             "uri" => WorkoutFormat.uri(),
+             "name" => "workout-format",
+             "title" => "How a workout is described",
+             "mimeType" => "text/markdown"
+           }
+         ]
+       }}
+
+  defp dispatch(_scope, "resources/read", %{"uri" => uri}, _tools) when is_binary(uri) do
+    if uri == WorkoutFormat.uri(),
+      do:
+        {:ok,
+         %{
+           "contents" => [
+             %{"uri" => uri, "mimeType" => "text/markdown", "text" => WorkoutFormat.text()}
+           ]
+         }},
+      else: {:error, -32602, "Unknown resource: #{uri}"}
+  end
+
+  defp dispatch(_scope, "resources/read", _params, _tools),
+    do: {:error, -32602, "resources/read needs a uri"}
 
   defp dispatch(_scope, method, _params, _tools),
     do: {:error, -32601, "Method not found: #{method}"}
