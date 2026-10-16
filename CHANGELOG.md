@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-17 — Agent tooling and a quality gate
+
+- `usage_rules` (dev only, pinned) writes AGENTS.md's dependency rules from an allowlist in `mix.exs`: its own rules with Elixir and OTP, and Phoenix's elixir, phoenix, ecto, html and liveview rules. Never `:all`, no package skills. AGENTS.md says those rules are reference material that the project's own guidance outranks.
+- VibeKit adds `mix ci`: warnings as errors, format check, tests, `credo --strict` with ExSlop, Dialyzer, ExDNA with no clones, and Reach. Credo and Dialyzer start from a baseline of what already failed (`.credo.exs`, `.dialyzer_ignore.exs`, by file), so new code is checked in full; Dialyzer's PLT includes `:mix`.
+- ExDNA's two clones are extracted: `PlanCompiler.CanonicalJson` and `BurpeeTrainerWeb.Params`.
+- Database tests run one at a time; the six that ran async against SQLite failed at random with "Database busy", and the sandbox now refuses an async database test.
+
 ## 2026-10-16 — Starting and finishing a workout with one tap
 
 - Home has camera and warmup toggles beside play, remembered per device (default: camera off, warmup on); play is the only tap before the workout.

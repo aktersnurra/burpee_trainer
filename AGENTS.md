@@ -15,6 +15,8 @@ This is a web application written using the Phoenix web framework.
 - `.credo.exs` holds a baseline: files that already broke a check when the gate was
   adopted. Never add a file to it to get a change through; fix the code. Removing a file
   you fixed is welcome. `.dialyzer_ignore.exs` works the same way for Dialyzer.
+- Tests that use `DataCase` or `ConnCase` run with `async: false`: SQLite has one writer,
+  and the sandbox refuses an async database test. Pure tests stay `async: true`.
 - Duplicated code fails ExDNA: extract it (see `BurpeeTrainer.PlanCompiler.CanonicalJson`,
   `BurpeeTrainerWeb.Params`) rather than raising `--max-clones`.
 

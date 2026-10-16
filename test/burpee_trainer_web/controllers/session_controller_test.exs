@@ -1,5 +1,5 @@
 defmodule BurpeeTrainerWeb.SessionControllerTest do
-  use BurpeeTrainerWeb.ConnCase, async: true
+  use BurpeeTrainerWeb.ConnCase
 
   import BurpeeTrainer.Fixtures
 

@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.Insights.StorageTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.Insights
 
