@@ -94,3 +94,7 @@ config :burpee_trainer, :oidc,
   client_id: System.get_env("OIDC_CLIENT_ID"),
   client_secret: System.get_env("OIDC_CLIENT_SECRET"),
   redirect_uri: "http://localhost:4000/auth/oidc/callback"
+
+# MCP for Claude: the client ID of Claude's BurpeeTrainer client in Pocket ID. Unset
+# means /mcp is off.
+config :burpee_trainer, :mcp, audience: System.get_env("MCP_OIDC_AUDIENCE")

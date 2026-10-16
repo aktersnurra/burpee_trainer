@@ -183,6 +183,10 @@ if config_env() == :prod do
     client_secret: oidc_client_secret,
     redirect_uri: oidc_redirect_uri
 
+  # MCP for Claude: the client ID of Claude's BurpeeTrainer client in Pocket ID. Unset
+  # means /mcp is off.
+  config :burpee_trainer, :mcp, audience: System.get_env("MCP_OIDC_AUDIENCE")
+
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :burpee_trainer, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
