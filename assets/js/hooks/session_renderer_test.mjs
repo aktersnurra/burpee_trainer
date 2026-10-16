@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { initialFlowState } from "./session_flow_fsm.mjs";
 import { SessionRenderer } from "./session_renderer.mjs";
 
 function classList() {
@@ -1017,6 +1018,55 @@ test("minus is off at zero and while the result is being saved", () => {
 	assert.equal(less.hasAttribute("disabled"), true);
 	renderer.renderCompletion(finished);
 	assert.equal(less.hasAttribute("disabled"), true);
+});
+
+test("focus on − at zero, or on Undo once used, moves to +", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	const more = (elements["#completion-reps-more"] = element());
+	const document = { activeElement: null };
+	for (const id of ["#completion-reps-less", "#completion-reps-undo"]) {
+		elements[id].ownerDocument = document;
+	}
+
+	document.activeElement = elements["#completion-reps-less"];
+	renderer.renderCompletion({ ...finished, burpeeCountActual: 0 });
+	assert.equal(more.focusCalls, 1);
+
+	const camera = { ...finished, trackingTrust: "finished", detectedReps: 41 };
+	renderer.renderCompletion({ ...camera, burpeeCountActual: 43, burpeeCountProvenance: "manual" });
+	document.activeElement = elements["#completion-reps-undo"];
+	renderer.renderCompletion({ ...camera, burpeeCountActual: 41, burpeeCountProvenance: "camera_confirmed" });
+	assert.equal(more.focusCalls, 2);
+
+	// Focus elsewhere is left alone.
+	document.activeElement = null;
+	renderer.renderCompletion({ ...finished, burpeeCountActual: 0 });
+	assert.equal(more.focusCalls, 2);
+});
+
+test("discard's answers are off while it waits on the server", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	elements["#session-discard-yes"] = element();
+	renderer.setDiscardBusy(true);
+	assert.equal(elements["#session-discard-keep"].hasAttribute("disabled"), true);
+	assert.equal(elements["#session-discard-yes"].hasAttribute("disabled"), true);
+	renderer.setDiscardBusy(false);
+	assert.equal(elements["#session-discard-keep"].hasAttribute("disabled"), false);
+});
+
+test("an edit on the finish screen does not repeat its announcement", () => {
+	const { renderer, elements } = harness();
+	const status = elements["#session-live-status"];
+	const review = { ...initialFlowState(), mode: "completion_review", saveStatus: "idle" };
+	renderer.renderFlowState(review);
+	assert.equal(status.textContent, "Workout complete");
+	renderer.announce("11 reps");
+	renderer.renderFlowState({ ...review });
+	assert.equal(status.textContent, "11 reps");
+	renderer.renderFlowState({ ...review, saveStatus: "saving" });
+	assert.equal(status.textContent, "Saving session");
 });
 
 test("the discard question replaces the trash and save buttons, and goes back", () => {

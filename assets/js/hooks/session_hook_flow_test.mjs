@@ -1593,10 +1593,11 @@ test("completion display and every stable edit queue the full draft", async () =
 			client_session_id: "client-1",
 			burpee_count_provenance: "scheduled",
 			scheduled_reps_done: 4,
+			// A camera still watching when the workout ends never finished counting.
 			tracking: {
 				enabled: true,
-				trust: "observing",
-				reason: null,
+				trust: "degraded",
+				reason: "tracking_incomplete",
 				detected_reps: 4,
 				detected_duration_sec: 9,
 				cadence_ms: [2_000, 4_000, 6_000, 8_000],
@@ -1632,6 +1633,36 @@ test("completion display and every stable edit queue the full draft", async () =
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).note_post, "Strong finish");
 	assert.equal(saved.length, 4);
+	ctx.destroyed();
+});
+
+test("an older camera draft that never says where its count came from is the camera's", async () => {
+	const draft = completionDraft();
+	delete draft.burpee_count_provenance;
+	draft.tracking = { ...draft.tracking, trust: "finished", detected_reps: 4 };
+	draft.burpee_count_actual = 4;
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({ loadDraft: async () => draft }),
+	});
+	await ctx.draftRestore;
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "camera_confirmed");
+	assert.equal(
+		ctx.el.querySelector("#session-count-source-text").textContent,
+		"Counted by camera",
+	);
+	ctx.destroyed();
+});
+
+test("a draft saved with an unsettled camera opens as one that lost tracking", async () => {
+	const draft = completionDraft();
+	draft.tracking = { ...draft.tracking, trust: "arming" };
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({ loadDraft: async () => draft }),
+	});
+	await ctx.draftRestore;
+	assert.equal(ctx.completionPayload().tracking.trust, "degraded");
 	ctx.destroyed();
 });
 
@@ -2553,6 +2584,30 @@ test("finishing early in the warmup opens the finish screen with nothing counted
 	assert.equal(ctx.flow.completion.durationSecActual, 0);
 	assert.equal(ctx.activeSegment, null);
 	assert.ok(stops.length > 0);
+	// The server takes only a settled camera: the count never started, so it was lost.
+	const { tracking } = ctx.completionPayload();
+	assert.equal(tracking.trust, "degraded");
+	assert.equal(tracking.reason, "tracking_incomplete");
+	ctx.destroyed();
+});
+
+test("finishing early in the workout countdown with the camera on can be saved", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: false },
+	});
+	await ctx.started;
+	trackerEvent(ctx, "pose-tracker:started");
+	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.flow.trackingTrust, "observing");
+	ctx.countdownPaused = true;
+
+	click(ctx, "finish-early-btn");
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.completionPayload().tracking.trust, "degraded");
 	ctx.destroyed();
 });
 
@@ -3424,6 +3479,78 @@ test("minus and plus correct the count by one, and it is saved", async () => {
 	ctx.destroyed();
 });
 
+test("a step is announced; a hold is announced once, when it ends", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const status = ctx.el.querySelector("#session-live-status");
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	click(ctx, "completion-reps-more");
+	assert.equal(status.textContent, "11 reps");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(status.textContent, "11 reps");
+	ctx.el.dispatchEvent({ type: "pointerup", target: more });
+	assert.equal(
+		status.textContent,
+		`${ctx.flow.completion.burpeeCountActual} reps`,
+	);
+
+	click(ctx, "completion-reps-undo");
+	assert.equal(status.textContent, "10 reps");
+	ctx.destroyed();
+});
+
+test("holding minus stops at zero, and the next key press still counts", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 3 });
+	const less = ctx.el.querySelector("#completion-reps-less");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: less, button: 0 });
+	for (let elapsed = 0; elapsed < 3_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	// The disabled button never sees the release or its click.
+	assert.equal(ctx.repHold?.timer ?? null, null);
+
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 1);
+	ctx.destroyed();
+});
+
+test("sliding off a held button stops it, and the next key press still counts", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	ctx.el.dispatchEvent({ type: "pointerout", target: more, relatedTarget: ctx.el });
+	const held = ctx.flow.completion.burpeeCountActual;
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(ctx.flow.completion.burpeeCountActual, held);
+
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountActual, held + 1);
+	ctx.destroyed();
+});
+
+test("a hold stops while the result is being saved", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	ctx.dispatchFlow({ type: "SAVE_STARTED" });
+	ctx.renderer.renderCompletionControls(ctx.flow);
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	ctx.dispatchFlow({ type: "SAVE_FAILED" });
+	ctx.renderer.renderCompletionControls(ctx.flow);
+	for (let elapsed = 0; elapsed < 1_000; elapsed += 10) t.mock.timers.tick(10);
+	assert.equal(ctx.flow.completion.burpeeCountActual, 10);
+	ctx.destroyed();
+});
+
 test("the count never goes below zero", async () => {
 	const ctx = await finishedWith();
 	ctx.editCompletion({ burpeeCountActual: 0 });
@@ -3573,6 +3700,42 @@ test("a refused discard keeps everything and says so", async () => {
 		ctx.destroyed();
 		globalThis.window = originalWindow;
 	}
+});
+
+test("while a discard is in flight nothing else can change or save", async () => {
+	const ctx = await finishedWithDiscardReply(null);
+	click(ctx, "session-discard-btn");
+	click(ctx, "session-discard-yes");
+	assert.ok(ctx.discarding);
+	const before = structuredClone(ctx.flow.completion);
+
+	click(ctx, "completion-reps-more");
+	const note = ctx.el.querySelector("#completion-note-input");
+	note.value = "too late";
+	ctx.el.dispatchEvent({ type: "input", target: note });
+	ctx.saveCompletion();
+
+	assert.deepEqual(ctx.flow.completion, before);
+	assert.equal(ctx.flow.saveStatus, "idle");
+	assert.equal(ctx.el.querySelector("#session-discard-keep").hasAttribute("disabled"), true);
+	assert.equal(ctx.el.querySelector("#session-discard-yes").hasAttribute("disabled"), true);
+	ctx.destroyed();
+});
+
+test("a discard with no answer gives up and says so", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWithDiscardReply(null);
+	click(ctx, "session-discard-btn");
+	click(ctx, "session-discard-yes");
+	t.mock.timers.tick(15_000);
+	await ctx.discarding;
+
+	assert.equal(ctx.discarding, null);
+	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+	assert.equal(ctx.el.querySelector("#session-discard-keep").hasAttribute("disabled"), false);
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
+	ctx.destroyed();
 });
 
 test("discard waits while a save is in flight", async () => {

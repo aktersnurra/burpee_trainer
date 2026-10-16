@@ -415,7 +415,7 @@ test("completion edits only change approved draft fields", () => {
 		durationSecPlanned: 50,
 		detectedReps: 8,
 		detectedDurationSec: 49,
-		trackingTrust: "observing",
+		trackingTrust: "degraded",
 		cadenceMs: [6100, 6200],
 		mood: 1,
 		endedEarly: false,
@@ -525,4 +525,27 @@ test("stepping the count back to its origin gives the origin back its provenance
 		changes: { burpeeCountActual: 42 },
 	}).state;
 	assert.equal(back.completion.burpeeCountProvenance, "camera_confirmed");
+});
+
+test("finishing early before the camera settled saves it as lost", () => {
+	for (const [mode, trust] of [
+		["warmup_running", "arming"],
+		["workout_running", "observing"],
+	]) {
+		const result = step(
+			{ ...initialFlowState(), mode, captureMode: "camera", trackingTrust: trust },
+			{ type: "FINISH_EARLY", result: { burpeeCountDone: 0, durationSec: 0 } },
+		).state;
+		assert.equal(result.trackingTrust, "degraded", mode);
+		assert.equal(result.trackingReason, "tracking_incomplete", mode);
+		assert.equal(result.completion.trackingTrust, "degraded", mode);
+	}
+	// Settled trust is kept, and no camera stays off.
+	for (const trust of ["disabled", "degraded", "finished"]) {
+		const result = step(
+			{ ...initialFlowState(), mode: "workout_running", trackingTrust: trust },
+			{ type: "FINISH_EARLY", result: { burpeeCountDone: 0, durationSec: 0 } },
+		).state;
+		assert.equal(result.completion.trackingTrust, trust);
+	}
 });

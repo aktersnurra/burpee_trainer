@@ -42,6 +42,26 @@ const LATE_REP_GRACE_MS = 2_000;
 const REP_HOLD_DELAY_MS = 400;
 const REP_HOLD_FASTEST_MS = 50;
 
+// How long discard waits for the server before it gives up and says so.
+const DISCARD_TIMEOUT_MS = 10_000;
+
+// Where a draft's count came from. Drafts from before this was stored are the camera's
+// when they still hold its count unchanged; otherwise they can't say.
+function restoredProvenance(draft) {
+  if (draft.burpee_count_provenance) {
+    return { burpeeCountProvenance: draft.burpee_count_provenance };
+  }
+  const tracking = draft.tracking || {};
+  if (
+    tracking.trust === "finished" &&
+    Number.isInteger(tracking.detected_reps) &&
+    tracking.detected_reps === draft.burpee_count_actual
+  ) {
+    return { burpeeCountProvenance: "camera_confirmed" };
+  }
+  return {};
+}
+
 // −1 or +1 for the finish screen's rep buttons, else null.
 function repStepFor(target) {
   if (target?.closest?.("#completion-reps-less")) return -1;
@@ -280,15 +300,19 @@ const SessionHook = {
       }
       if (repStep) {
         // The click that ends a hold is not one more rep.
-        const held = this.repHold?.repeated;
+        const held = this.repHoldEnded;
+        this.repHoldEnded = false;
         this.stopRepHold();
-        this.repHold = null;
-        if (!held) this.stepReps(repStep);
+        if (!held) {
+          this.stepReps(repStep);
+          this.announceReps();
+        }
       }
       if (repsUndo) {
         const origin = countOrigin(this.flow.completion);
         if (origin.reps !== null) {
           this.editCompletion({ burpeeCountActual: origin.reps });
+          this.announceReps();
         }
       }
       if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
@@ -300,12 +324,27 @@ const SessionHook = {
     // Holding − or + keeps counting, faster the longer it is held.
     this.onRepHoldStart = (e) => {
       const step = repStepFor(e.target);
-      if (step && (e.button ?? 0) === 0) this.startRepHold(step);
+      if (step && (e.button ?? 0) === 0) {
+        this.startRepHold(step, e.target.closest(step < 0 ? "#completion-reps-less" : "#completion-reps-more"));
+      }
     };
-    this.onRepHoldEnd = () => this.stopRepHold();
+    this.onRepHoldEnd = () => {
+      if (!this.endRepHold()) return;
+      // The release's own click follows in the same moment; it must not add a rep.
+      this.repHoldEnded = true;
+      setTimeout(() => {
+        this.repHoldEnded = false;
+      }, 0);
+    };
+    this.onRepHoldOut = (e) => {
+      const button = this.repHold?.button;
+      if (!button || e.relatedTarget?.closest?.(`#${button.id}`) === button) return;
+      this.endRepHold();
+    };
     this.el.addEventListener("pointerdown", this.onRepHoldStart);
     this.el.addEventListener("pointerup", this.onRepHoldEnd);
     this.el.addEventListener("pointercancel", this.onRepHoldEnd);
+    this.el.addEventListener("pointerout", this.onRepHoldOut);
 
     this.onCompletionInput = (event) => {
       const { id, value } = event.target;
@@ -509,6 +548,7 @@ const SessionHook = {
 
   saveCompletion() {
     if (
+      this.discarding ||
       this.flow.mode !== "completion_review" ||
       this.flow.saveStatus === "saving"
     )
@@ -664,9 +704,7 @@ const SessionHook = {
     const legacyTags = Array.isArray(draft.tags) ? draft.tags : [];
     const completion = {
       burpeeCountActual: draft.burpee_count_actual ?? 0,
-      ...(draft.burpee_count_provenance
-        ? { burpeeCountProvenance: draft.burpee_count_provenance }
-        : {}),
+      ...restoredProvenance(draft),
       ...(Number.isInteger(draft.scheduled_reps_done)
         ? { scheduledRepsDone: draft.scheduled_reps_done }
         : {}),
@@ -707,24 +745,51 @@ const SessionHook = {
     if (next !== count) this.editCompletion({ burpeeCountActual: next });
   },
 
-  startRepHold(step) {
+  // A disabled button (− at zero, or while saving) may never see its release, so the
+  // hold also ends itself there.
+  startRepHold(step, button) {
     this.stopRepHold();
     let wait = REP_HOLD_DELAY_MS;
     const repeat = () => {
+      if (!this.repHold) return;
+      if (!button || button.hasAttribute("disabled")) {
+        this.endRepHold();
+        return;
+      }
       this.repHold.repeated = true;
       this.stepReps(step);
+      if (button.hasAttribute("disabled")) {
+        this.endRepHold();
+        return;
+      }
       wait = Math.max(REP_HOLD_FASTEST_MS, wait * 0.8);
       this.repHold.timer = setTimeout(repeat, wait);
     };
-    this.repHold = { repeated: false, timer: setTimeout(repeat, wait) };
+    this.repHold = { button, repeated: false, timer: setTimeout(repeat, wait) };
+  },
+
+  // Ends a hold and says the count it reached; true when it had counted.
+  endRepHold() {
+    const repeated = this.repHold?.repeated === true;
+    this.stopRepHold();
+    if (repeated) this.announceReps();
+    return repeated;
   },
 
   stopRepHold() {
     if (this.repHold) clearTimeout(this.repHold.timer);
+    this.repHold = null;
+  },
+
+  announceReps() {
+    const count = this.flow.completion?.burpeeCountActual;
+    if (!Number.isInteger(count)) return;
+    this.renderer.announce(count === 1 ? "1 rep" : `${count} reps`);
   },
 
   editCompletion(changes) {
     if (
+      this.discarding ||
       this.flow.mode !== "completion_review" ||
       this.flow.saveStatus === "saving" ||
       this.flow.completionLocked ||
@@ -754,9 +819,12 @@ const SessionHook = {
   discardSession() {
     if (!this.canDiscard()) return;
     const generation = this.lifecycleGeneration;
+    let timer = null;
     const refused = () => {
+      clearTimeout(timer);
       if (!this.lifecycleActive(generation)) return;
       this.discarding = null;
+      this.renderer.setDiscardBusy(false);
       this.renderer.showDiscardConfirm(false);
       this.renderer.renderSaveErrors({
         field_errors: {},
@@ -764,10 +832,14 @@ const SessionHook = {
       });
     };
 
+    // Nothing else on the screen changes while the server answers; no answer gives up.
+    this.renderer.setDiscardBusy(true);
     this.discarding = new Promise((resolve) => {
+      timer = setTimeout(() => resolve({ status: "timeout" }), DISCARD_TIMEOUT_MS);
       this.pushEvent("discard_session", {}, resolve);
     }).then(
       async (reply) => {
+        clearTimeout(timer);
         if (!this.lifecycleActive(generation)) return;
         if (reply?.status !== "discarded") return refused();
         // The server has deleted it; the device copy goes too, best effort.
@@ -845,6 +917,7 @@ const SessionHook = {
     this.el.removeEventListener("pointerdown", this.onRepHoldStart);
     this.el.removeEventListener("pointerup", this.onRepHoldEnd);
     this.el.removeEventListener("pointercancel", this.onRepHoldEnd);
+    this.el.removeEventListener("pointerout", this.onRepHoldOut);
     this.stopRepHold();
     this.el.removeEventListener("keydown", this.onRootKeydown);
     this.el.removeEventListener("input", this.onCompletionInput);

@@ -12,6 +12,9 @@
 - The finish screen is save or discard: it shows the counted reps and time with no fields, with mood, tags and a note under it in Home's pill and field styles, and no leave-and-resume-later.
 - The count is corrected with − and + beside it (hold to keep counting; − stops at zero); the time is the timer's and no longer editable. A line under it says "Counted by camera" or "From your plan", and after a correction shows the original with Undo. The device draft keeps where the count came from.
 - Discard's question takes the place of the trash and ✓, with equal Keep and Discard buttons; Keep brings them back.
+- Finishing early from the warmup or the workout countdown with the camera on can be saved: a camera that never settled finishes as lost tracking (it was sent as "arming"/"observing", which the server refuses), and a draft holding one opens the same way.
+- − / + say the new count to a screen reader, end a hold when slid off or disabled, and hand focus to + when − or Undo goes away; the finish screen's own announcement no longer repeats on every edit. Older drafts that hold the camera's unchanged count say "Counted by camera".
+- Discard locks the finish screen while the server answers and gives up after 10 seconds.
 
 ## 2026-10-04 — Coach/Home branch review fixes
 

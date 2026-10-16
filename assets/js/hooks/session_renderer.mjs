@@ -9,6 +9,17 @@ const VISUAL_STATE_CLASSES = [
 	"is-count-in",
 ];
 
+function flowAnnouncement(state) {
+	if (state.mode === "camera_starting") return "Starting camera";
+	if (state.mode === "camera_error") return "Camera unavailable";
+	if (state.mode === "completion_review" && state.saveStatus === "saving") {
+		return "Saving session";
+	}
+	if (state.mode === "completion_review") return "Workout complete";
+	if (state.mode === "persisted") return "Session saved";
+	return null;
+}
+
 export class SessionRenderer {
 	constructor(root) {
 		this.root = root;
@@ -135,20 +146,13 @@ export class SessionRenderer {
 			this.visiblePanelId = visibleId;
 			this.focusPanelHeading(visibleId);
 		}
-		if (state.mode === "camera_starting") {
-			this.announce("Starting camera");
-		} else if (state.mode === "camera_error") {
-			this.announce("Camera unavailable");
-		} else if (
-			state.mode === "completion_review" &&
-			state.saveStatus === "saving"
-		) {
-			this.announce("Saving session");
-		} else if (state.mode === "completion_review") {
-			this.announce("Workout complete");
-		} else if (state.mode === "persisted") {
-			this.announce("Session saved");
+		// Said once when it changes, so an edit on the finish screen (which renders the
+		// flow again) does not repeat it over the edit's own announcement.
+		const announcement = flowAnnouncement(state);
+		if (announcement && announcement !== this.flowAnnouncement) {
+			this.announce(announcement);
 		}
+		this.flowAnnouncement = announcement;
 	}
 
 	// One camera screen: its heading is the status, from starting to "hand up".
@@ -274,13 +278,27 @@ export class SessionRenderer {
 		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
 	}
 
+	// While a discard waits on the server, its answers wait too.
+	setDiscardBusy(busy) {
+		for (const id of ["#session-discard-keep", "#session-discard-yes"]) {
+			this.root.querySelector(id)?.toggleAttribute("disabled", busy);
+		}
+	}
+
+	// A control about to be disabled or hidden hands its focus to +, beside the count.
+	keepFocusFrom(element) {
+		if (!element || element.ownerDocument?.activeElement !== element) return;
+		this.root.querySelector("#completion-reps-more")?.focus();
+	}
+
 	// − cannot take the count below zero.
 	renderRepsLess(completion) {
 		const count = completion?.burpeeCountActual;
 		const atZero = !Number.isInteger(count) || count <= 0;
-		this.root
-			.querySelector("#completion-reps-less")
-			?.toggleAttribute("disabled", atZero || this.completionFactsDisabled === true);
+		const less = this.root.querySelector("#completion-reps-less");
+		const disabled = atZero || this.completionFactsDisabled === true;
+		if (disabled) this.keepFocusFrom(less);
+		less?.toggleAttribute("disabled", disabled);
 	}
 
 	// Where the count came from; once corrected, the original stays in view with undo.
@@ -299,7 +317,11 @@ export class SessionRenderer {
 					: `From your plan: ${origin.reps}`;
 		}
 		if (text) text.textContent = label;
-		if (undo) undo.hidden = provenance !== "manual" || origin.reps === null;
+		if (undo) {
+			const hidden = provenance !== "manual" || origin.reps === null;
+			if (hidden) this.keepFocusFrom(undo);
+			undo.hidden = hidden;
+		}
 		if (line) line.hidden = label === "";
 	}
 

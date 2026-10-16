@@ -145,8 +145,21 @@ function startWorkout(state, commands = []) {
 	);
 }
 
+// The camera states a saved session can carry. A camera still waiting for a hand or
+// watching when the workout ends never finished counting, so it counts as lost.
+const SETTLED_TRUST = ["disabled", "degraded", "finished"];
+
+function settledTracking(trust, reason) {
+	if (SETTLED_TRUST.includes(trust)) return { trackingTrust: trust, trackingReason: reason };
+	return { trackingTrust: "degraded", trackingReason: "tracking_incomplete" };
+}
+
 function finishWorkout(state, result, endedEarly = false) {
 	const workoutResult = result || { burpeeCountDone: 0, durationSec: 0 };
+	state = {
+		...state,
+		...settledTracking(state.trackingTrust, state.trackingReason),
+	};
 	return moved(
 		state,
 		{
@@ -361,18 +374,21 @@ export function flowTransition(state, event) {
 			if (state.mode !== "starting" || !event.completion) {
 				return unchanged(state);
 			}
+			const tracking = settledTracking(
+				event.completion.trackingTrust || "disabled",
+				event.trackingReason || null,
+			);
 			return moved(
 				state,
 				{
 					mode: "completion_review",
 					captureMode: event.captureMode || "no_camera",
-					trackingTrust: event.completion.trackingTrust || "disabled",
-					trackingReason: event.trackingReason || null,
+					...tracking,
 					workoutResult: {
 						burpeeCountDone: event.completion.burpeeCountActual || 0,
 						durationSec: event.completion.durationSecActual || 0,
 					},
-					completion: event.completion,
+					completion: { ...event.completion, trackingTrust: tracking.trackingTrust },
 					completionLocked: false,
 					saveStatus: "idle",
 				},

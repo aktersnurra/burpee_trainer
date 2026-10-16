@@ -81,6 +81,11 @@ A finished workout is saved or discarded; the screen offers nothing else.
   (tracking finished) or "From your plan" (the reps scheduled up to the end). After a
   correction it shows the original ("Camera counted 42" / "From your plan: 40") with Undo;
   stepping back to the original makes it the camera's or the plan's count again.
+- A tap says the new count to a screen reader ("11 reps"); a hold says it once, when it
+  ends. A hold also ends when the button is slid off or disabled (− at zero, or while
+  saving). When − or Undo goes away under focus, focus moves to +.
+- A camera that never settled (still waiting for a hand in the warmup, or watching in the
+  countdown) finishes as lost tracking, so an early finish with the camera on can be saved.
 - The heading says "Workout complete" when the timer ran out and "Ended early" after
   Finish early (the reps are not compared: the camera can count fewer on a full workout).
 - Mood stays as three taps and is optional: nothing is chosen at first, tapping the
@@ -94,7 +99,8 @@ A finished workout is saved or discarded; the screen offers nothing else.
 - Two actions, at either end: discard (trash) and save (✓). A good day is one ✓.
 - Discard asks on the page, in place of the trash and ✓: "Discard this workout?",
   "Nothing will be saved.", and two equal buttons, Keep (outlined) and Discard (red).
-  Keep puts the trash and ✓ back. The server deletes it only while it is still started, and the device's draft
+  Keep puts the trash and ✓ back. While the server answers, nothing on the screen changes and
+  ✓ waits; with no answer in 10 seconds it gives up and says so. The server deletes it only while it is still started, and the device's draft
   and pose trace are cleared before going Home. Not while saving or once saved.
 - Closing the page still keeps the draft, so Home offers "Review & save" next time.
 
