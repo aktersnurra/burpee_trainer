@@ -2553,6 +2553,39 @@ defmodule BurpeeTrainer.Workouts do
     immediate_lifecycle_transaction(fn -> approved_workout(user, definition, text, key) end)
   end
 
+  @doc """
+  Publishes `definition` in place of an owned published plan, in one transaction: the new
+  plan is published, every Home selection of the old one moves to it (with a new Home
+  revision, so a stale screen cannot start the old one), and the old one is archived.
+  Sessions keep their own snapshot. Built-in plans are never replaced.
+  """
+  @spec replace_plan(Scope.t(), pos_integer(), map(), String.t()) ::
+          {:ok, WorkoutPlan.t()} | {:error, Error.t()}
+  def replace_plan(%Scope{user: %User{id: user_id} = user}, plan_id, definition, text)
+      when is_integer(plan_id) and is_map(definition) and is_binary(text) do
+    immediate_lifecycle_transaction(fn ->
+      with {:ok, old} <- published_plan_for_archive(user_id, plan_id),
+           {:ok, new} <- approved_workout(user, definition, text, Ecto.UUID.generate()) do
+        now = lifecycle_now()
+        owned = from(r in CoachRecommendation, where: r.user_id == ^user_id)
+
+        Repo.update_all(where(owned, [r], r.home_workout_plan_id == ^old.id),
+          set: [home_workout_plan_id: new.id, updated_at: now],
+          inc: [home_revision: 1]
+        )
+
+        Repo.update_all(where(owned, [r], r.selected_workout_plan_id == ^old.id),
+          set: [selected_workout_plan_id: new.id, updated_at: now]
+        )
+
+        with {:ok, _archived} <- archive_owned_plan(user, old.id), do: {:ok, new}
+      end
+    end)
+  end
+
+  def replace_plan(%Scope{}, plan_id, _definition, _text),
+    do: {:error, Error.new(:source_unavailable, %{plan_id: plan_id})}
+
   defp approved_workout(user, definition, text, key) do
     case Repo.get_by(WorkoutPlan, approval_key: key) do
       %WorkoutPlan{user_id: id, definition_json: ^definition} = plan when id == user.id ->

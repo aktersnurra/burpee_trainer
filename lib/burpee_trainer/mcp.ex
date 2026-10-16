@@ -24,7 +24,12 @@ defmodule BurpeeTrainer.Mcp do
     Tools.ListGoals,
     Tools.SetGoal,
     Tools.ConfirmGoal,
-    Tools.DismissGoal
+    Tools.DismissGoal,
+    Tools.ListWorkouts,
+    Tools.GetWorkout,
+    Tools.CreateWorkout,
+    Tools.EditWorkout,
+    Tools.ArchiveWorkout
   ]
 
   def tools, do: @tools
