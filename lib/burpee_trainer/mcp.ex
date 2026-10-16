@@ -18,7 +18,13 @@ defmodule BurpeeTrainer.Mcp do
     Tools.Week,
     Tools.Progress,
     Tools.QueryHistory,
-    Tools.HistoryStats
+    Tools.HistoryStats,
+    Tools.ListMemory,
+    Tools.UpdateMemory,
+    Tools.ListGoals,
+    Tools.SetGoal,
+    Tools.ConfirmGoal,
+    Tools.DismissGoal
   ]
 
   def tools, do: @tools
