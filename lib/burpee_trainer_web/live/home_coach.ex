@@ -7,7 +7,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
   alias BurpeeTrainer.Coach.{Agent, Exchange, Memory, MemoryJob}
-  alias BurpeeTrainer.{Goals, UserTime}
+  alias BurpeeTrainer.{Goals, WeekWindow}
 
   def initialize(socket) do
     socket
@@ -106,27 +106,9 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
   # What is done this week and what is left of its target, for the card's front.
   defp week_window(_scope, nil), do: []
+  defp week_window(scope, slot), do: WeekWindow.this_week(scope, slot.weekly_target_sec)
 
-  defp week_window(scope, slot) do
-    since = week_start_utc(scope)
-
-    scope
-    |> BurpeeTrainer.Workouts.list_sessions()
-    |> Enum.filter(&(&1.state == :completed and match?(%DateTime{}, &1.completed_at)))
-    |> Enum.filter(&(DateTime.compare(&1.completed_at, since) != :lt))
-    |> BurpeeTrainer.WeekWindow.lay_out(slot.weekly_target_sec)
-  end
-
-  defp week_start_utc(scope) do
-    now = DateTime.utc_now()
-
-    with {:ok, context} <- UserTime.context(scope.user, now),
-         {:ok, week_start, _week_end} <- UserTime.week_bounds_utc(context) do
-      week_start
-    else
-      _ -> DateTime.add(now, -7, :day)
-    end
-  end
+  defp week_start_utc(scope), do: WeekWindow.week_start_utc(scope)
 
   def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply} = result}}, socket) do
     # The exchange is kept so it is still there after a reload; failing to keep it loses

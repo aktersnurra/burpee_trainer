@@ -1733,6 +1733,7 @@ defmodule BurpeeTrainer.Workouts do
         limit: ^(limit + 1),
         preload: [:plan, :goal]
       )
+      |> filter_sessions(Keyword.get(opts, :filters, %{}))
 
     case Keyword.fetch(opts, :before) do
       :error ->
@@ -1750,6 +1751,32 @@ defmodule BurpeeTrainer.Workouts do
       {:ok, _malformed_cursor} ->
         {:error, :invalid_cursor}
     end
+  end
+
+  # Filters a caller has already validated: a UTC window, type, workout, tags (any of),
+  # capture mode and a reps range.
+  defp filter_sessions(query, filters) do
+    Enum.reduce(filters, query, fn
+      {:from, %DateTime{} = at}, q -> where(q, [s], s.completed_at >= ^at)
+      {:before, %DateTime{} = at}, q -> where(q, [s], s.completed_at < ^at)
+      {:burpee_type, type}, q -> where(q, [s], s.burpee_type == ^type)
+      {:capture_mode, mode}, q -> where(q, [s], s.capture_mode == ^mode)
+      {:plan_id, id}, q -> where(q, [s], s.plan_id == ^id)
+      {:name, name}, q -> where(q, [s], like(s.display_name_snapshot, ^"%#{name}%"))
+      {:min_reps, reps}, q -> where(q, [s], s.burpee_count_actual >= ^reps)
+      {:max_reps, reps}, q -> where(q, [s], s.burpee_count_actual <= ^reps)
+      {:tags, tags}, q -> where(q, [s], ^any_tag(tags))
+    end)
+  end
+
+  # Tags are stored comma-separated, e.g. "sore,heat".
+  defp any_tag(tags) do
+    Enum.reduce(tags, dynamic(false), fn tag, acc ->
+      dynamic(
+        [s],
+        ^acc or like(fragment("',' || replace(?, ' ', '') || ','", s.tags), ^"%,#{tag},%")
+      )
+    end)
   end
 
   defp session_page(query, limit) do

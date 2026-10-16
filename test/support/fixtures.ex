@@ -156,6 +156,7 @@ defmodule BurpeeTrainer.Fixtures do
       burpee_type: String.to_existing_atom(Map.get(attrs, "burpee_type", "six_count")),
       burpee_count_actual: Map.get(attrs, "burpee_count_actual", 25),
       duration_sec_actual: Map.get(attrs, "duration_sec_actual", 100),
+      tags: Map.get(attrs, "tags"),
       completed_at:
         Map.get(attrs, "completed_at", DateTime.add(DateTime.utc_now(:second), -1, :second))
     )

@@ -6,6 +6,9 @@ defmodule BurpeeTrainer.WeekWindow do
   not count.
   """
 
+  alias BurpeeTrainer.{UserTime, Workouts}
+  alias BurpeeTrainer.Accounts.Scope
+
   @session_sec 1_200
 
   @type item ::
@@ -16,6 +19,31 @@ defmodule BurpeeTrainer.WeekWindow do
             duration_sec: non_neg_integer()
           }
           | %{status: :left, burpee_type: atom(), duration_sec: pos_integer()}
+
+  @doc "This week's window for `scope`: its completed sessions since the local week began."
+  @spec this_week(Scope.t(), non_neg_integer()) :: [item()]
+  def this_week(%Scope{} = scope, target_sec) do
+    since = week_start_utc(scope)
+
+    scope
+    |> Workouts.list_sessions()
+    |> Enum.filter(&(&1.state == :completed and match?(%DateTime{}, &1.completed_at)))
+    |> Enum.filter(&(DateTime.compare(&1.completed_at, since) != :lt))
+    |> lay_out(target_sec)
+  end
+
+  @doc "When the scope's local week began, in UTC; a week ago when its timezone is unknown."
+  @spec week_start_utc(Scope.t()) :: DateTime.t()
+  def week_start_utc(%Scope{user: user}) do
+    now = DateTime.utc_now()
+
+    with {:ok, context} <- UserTime.context(user, now),
+         {:ok, week_start, _week_end} <- UserTime.week_bounds_utc(context) do
+      week_start
+    else
+      _ -> DateTime.add(now, -7, :day)
+    end
+  end
 
   @spec lay_out([map()], non_neg_integer()) :: [item()]
   def lay_out(week_sessions, target_sec) do

@@ -13,7 +13,13 @@ defmodule BurpeeTrainer.Mcp do
 
   @protocol_versions ~w[2025-06-18 2025-03-26 2024-11-05]
 
-  @tools [Tools.CoachContext]
+  @tools [
+    Tools.CoachContext,
+    Tools.Week,
+    Tools.Progress,
+    Tools.QueryHistory,
+    Tools.HistoryStats
+  ]
 
   def tools, do: @tools
 

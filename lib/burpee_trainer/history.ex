@@ -125,7 +125,8 @@ defmodule BurpeeTrainer.History do
     end
   end
 
-  defp credited_seconds(session) do
+  @doc "Seconds a session adds to its week: authoritative and not a warmup."
+  def credited_seconds(session) do
     if AuthoritativeSession.authoritative?(session) and session.tags != "warmup",
       do: max(session.duration_sec_actual || 0, 0),
       else: 0
