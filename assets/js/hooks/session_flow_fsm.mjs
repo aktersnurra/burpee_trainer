@@ -55,6 +55,22 @@ function plannedDurationSec(timeline) {
 	}, 0);
 }
 
+// Where the finish screen's count came from, before any correction: the camera's count
+// when tracking finished, otherwise the reps the plan scheduled up to the end.
+export function countOrigin(completion) {
+	if (
+		completion?.trackingTrust === "finished" &&
+		Number.isInteger(completion.detectedReps)
+	) {
+		return { reps: completion.detectedReps, provenance: "camera_confirmed" };
+	}
+	const scheduled = completion?.scheduledRepsDone;
+	return {
+		reps: Number.isInteger(scheduled) ? scheduled : null,
+		provenance: "scheduled",
+	};
+}
+
 function completionFor(state, result, endedEarly = false) {
 	const trackingFinished =
 		state.captureMode === "camera" && state.trackingTrust === "finished";
@@ -397,7 +413,11 @@ export function flowTransition(state, event) {
 				if (Object.hasOwn(changes, field)) completion[field] = changes[field];
 			}
 			if (Object.hasOwn(changes, "burpeeCountActual")) {
-				completion.burpeeCountProvenance = "manual";
+				const origin = countOrigin(completion);
+				completion.burpeeCountProvenance =
+					origin.reps === completion.burpeeCountActual
+						? origin.provenance
+						: "manual";
 			}
 			if (Object.hasOwn(changes, "tags")) {
 				completion.tags = [...changes.tags];

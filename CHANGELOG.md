@@ -9,7 +9,9 @@
 - Finish early works on any pause (warmup and countdowns too) without a browser confirm, so a session can always reach discard; the camera and warmup toggles also flank Resume.
 - The finish screen says "Ended early" after Finish early (from any pause, including mid-workout), starts with no mood chosen (a save without one stores none; tapping the chosen mood clears it), sits centred, and shows the trash as an outlined button.
 - The pose tracker holds a start sent while its code loads, so the camera cannot stall on "Starting camera".
-- The finish screen is save or discard: it shows the counted reps and time with no fields (tapping the count or the time opens it for correction, and Save opens any field it rejects), with mood, tags and a note under it in Home's pill and field styles, and no leave-and-resume-later.
+- The finish screen is save or discard: it shows the counted reps and time with no fields, with mood, tags and a note under it in Home's pill and field styles, and no leave-and-resume-later.
+- The count is corrected with − and + beside it (hold to keep counting; − stops at zero); the time is the timer's and no longer editable. A line under it says "Counted by camera" or "From your plan", and after a correction shows the original with Undo. The device draft keeps where the count came from.
+- Discard's question takes the place of the trash and ✓, with equal Keep and Discard buttons; Keep brings them back.
 
 ## 2026-10-04 — Coach/Home branch review fixes
 

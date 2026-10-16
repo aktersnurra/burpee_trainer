@@ -74,8 +74,13 @@ warmup skip, and their copy. The flow FSM loses `capture_choice`, `warmup_choice
 
 A finished workout is saved or discarded; the screen offers nothing else.
 
-- The reps and seconds inputs go. The big count and the "of N · m:ss" line show them;
-  tapping either opens it for correction.
+- The reps and seconds inputs go. The big count sits between − and + buttons, always
+  visible; holding one repeats, faster the longer it is held, and − stops at zero. The
+  time is what the timer measured and is not edited.
+- A small line under "of N · m:ss" says where the count came from: "Counted by camera"
+  (tracking finished) or "From your plan" (the reps scheduled up to the end). After a
+  correction it shows the original ("Camera counted 42" / "From your plan: 40") with Undo;
+  stepping back to the original makes it the camera's or the plan's count again.
 - The heading says "Workout complete" when the timer ran out and "Ended early" after
   Finish early (the reps are not compared: the camera can count fewer on a full workout).
 - Mood stays as three taps and is optional: nothing is chosen at first, tapping the
@@ -87,8 +92,9 @@ A finished workout is saved or discarded; the screen offers nothing else.
   and both optional; none chosen sends none.
 - No "leave and resume later".
 - Two actions, at either end: discard (trash) and save (✓). A good day is one ✓.
-- Discard asks on the page ("Discard this workout? Nothing will be saved.", Keep it /
-  Discard), the server deletes it only while it is still started, and the device's draft
+- Discard asks on the page, in place of the trash and ✓: "Discard this workout?",
+  "Nothing will be saved.", and two equal buttons, Keep (outlined) and Discard (red).
+  Keep puts the trash and ✓ back. The server deletes it only while it is still started, and the device's draft
   and pose trace are cleared before going Home. Not while saving or once saved.
 - Closing the page still keeps the draft, so Home offers "Review & save" next time.
 
@@ -103,5 +109,6 @@ A finished workout is saved or discarded; the screen offers nothing else.
   from the camera screen, and draft restore before start.
 - Hook flow tests: ▶ to running workout with no clicks for camera off.
 - Home LiveView test: both toggles render with `aria-pressed`, outside the expansion.
-- Finish screen: no reps or seconds input by default; tapping the count edits it; saving
+- Finish screen: no reps or seconds input; − / + and hold correct the count, undo returns
+  to the original; saving
   without touching anything saves the counted reps and time.

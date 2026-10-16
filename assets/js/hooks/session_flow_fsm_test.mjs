@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
+import {
+	countOrigin,
+	flowTransition,
+	initialFlowState,
+} from "./session_flow_fsm.mjs";
 
 const step = (state, event) => flowTransition(state, event);
 
@@ -481,4 +485,44 @@ test("the finish screen knows whether the workout ran out or ended early, and ha
 	const early = step(running, { type: "FINISH_EARLY", result }).state;
 	assert.equal(early.completion.endedEarly, true);
 	assert.equal(early.completion.mood, null);
+});
+
+test("the count's origin is the camera's count when it finished, else the plan's", () => {
+	assert.deepEqual(
+		countOrigin({ trackingTrust: "finished", detectedReps: 42, scheduledRepsDone: 40 }),
+		{ reps: 42, provenance: "camera_confirmed" },
+	);
+	assert.deepEqual(
+		countOrigin({ trackingTrust: "degraded", detectedReps: 12, scheduledRepsDone: 40 }),
+		{ reps: 40, provenance: "scheduled" },
+	);
+	assert.deepEqual(countOrigin({ trackingTrust: "disabled" }), {
+		reps: null,
+		provenance: "scheduled",
+	});
+});
+
+test("stepping the count back to its origin gives the origin back its provenance", () => {
+	const review = {
+		...initialFlowState(),
+		mode: "completion_review",
+		completion: {
+			burpeeCountActual: 42,
+			burpeeCountProvenance: "camera_confirmed",
+			trackingTrust: "finished",
+			detectedReps: 42,
+			scheduledRepsDone: 40,
+		},
+	};
+	const corrected = step(review, {
+		type: "COMPLETION_EDITED",
+		changes: { burpeeCountActual: 43 },
+	}).state;
+	assert.equal(corrected.completion.burpeeCountProvenance, "manual");
+
+	const back = step(corrected, {
+		type: "COMPLETION_EDITED",
+		changes: { burpeeCountActual: 42 },
+	}).state;
+	assert.equal(back.completion.burpeeCountProvenance, "camera_confirmed");
 });

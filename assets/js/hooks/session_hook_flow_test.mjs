@@ -250,16 +250,15 @@ function appendStablePanels(root) {
 		["session-discard-confirm", "div", ""],
 		["session-discard-keep", "button", "Keep it"],
 		["session-discard-yes", "button", "Discard"],
-		["completion-reps-edit", "button", ""],
-		["completion-duration-edit", "button", ""],
-		["completion-reps-field", "div", ""],
-		["completion-duration-field", "div", ""],
+		["session-completion-actions", "div", ""],
+		["completion-reps-less", "button", ""],
+		["completion-reps-more", "button", ""],
 		["session-actual-reps", "p", "0"],
 		["session-planned-reps", "span", "0"],
 		["session-actual-duration", "p", "0:00"],
 		["session-count-source", "p", ""],
-		["completion-reps-input", "input", ""],
-		["completion-duration-input", "input", ""],
+		["session-count-source-text", "span", ""],
+		["completion-reps-undo", "button", "Undo"],
 		["completion-note-input", "textarea", ""],
 		["completion-context-low-energy", "input", ""],
 		["completion-context-high-energy", "input", ""],
@@ -272,7 +271,6 @@ function appendStablePanels(root) {
 		["session-save-errors", "div", ""],
 		["session-live-status", "div", ""],
 		["completion-reps-error", "p", ""],
-		["completion-duration-error", "p", ""],
 		["completion-note-error", "p", ""],
 		["completion-context-low-energy-error", "p", ""],
 		["completion-context-high-energy-error", "p", ""],
@@ -1593,6 +1591,8 @@ test("completion display and every stable edit queue the full draft", async () =
 		saved[0],
 		completionDraft({
 			client_session_id: "client-1",
+			burpee_count_provenance: "scheduled",
+			scheduled_reps_done: 4,
 			tracking: {
 				enabled: true,
 				trust: "observing",
@@ -1613,22 +1613,11 @@ test("completion display and every stable edit queue the full draft", async () =
 		}),
 	);
 
-	const reps = ctx.el.querySelector("#completion-reps-input");
-	reps.value = "5";
-	ctx.el.dispatchEvent({ type: "input", target: reps });
+	click(ctx, "completion-reps-more");
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).burpee_count_actual, 5);
+	assert.equal(saved.at(-1).burpee_count_provenance, "manual");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "5");
-
-	const duration = ctx.el.querySelector("#completion-duration-input");
-	duration.value = "11";
-	ctx.el.dispatchEvent({ type: "input", target: duration });
-	await ctx.draftWrite;
-	assert.equal(saved.at(-1).duration_sec_actual, 11);
-	assert.equal(
-		ctx.el.querySelector("#session-actual-duration").textContent,
-		"0:11",
-	);
 
 	const mood = ctx.el
 		.querySelectorAll("[data-mood]")
@@ -1642,7 +1631,7 @@ test("completion display and every stable edit queue the full draft", async () =
 	ctx.el.dispatchEvent({ type: "input", target: note });
 	await ctx.draftWrite;
 	assert.equal(saved.at(-1).note_post, "Strong finish");
-	assert.equal(saved.length, 5);
+	assert.equal(saved.length, 4);
 	ctx.destroyed();
 });
 
@@ -1658,7 +1647,6 @@ test("exact session draft resumes while preserving the server client UUID", asyn
 	assert.equal(ctx.clientSessionId, "client-1");
 	assert.equal(ctx.el.dataset.clientSessionId, "client-1");
 	assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
-	assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
 	assert.equal(
 		ctx.el.querySelector("#completion-note-input").value,
 		"Strong finish",
@@ -2935,8 +2923,9 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 		);
 
 		for (const id of [
-			"completion-reps-input",
-			"completion-duration-input",
+			"completion-reps-less",
+			"completion-reps-more",
+			"completion-reps-undo",
 			"completion-note-input",
 			"completion-context-low-energy",
 			"completion-context-high-energy",
@@ -2954,9 +2943,7 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 			assert.equal(button.hasAttribute("disabled"), true);
 		}
 
-		const reps = ctx.el.querySelector("#completion-reps-input");
-		reps.value = "999";
-		ctx.el.dispatchEvent({ type: "input", target: reps });
+		click(ctx, "completion-reps-more");
 		const note = ctx.el.querySelector("#completion-note-input");
 		note.value = "not on server";
 		ctx.el.dispatchEvent({ type: "input", target: note });
@@ -2968,7 +2955,7 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 		await ctx.draftWrite;
 
 		assert.deepEqual(ctx.flow.completion, acknowledgedCompletion);
-		assert.equal(ctx.el.querySelector("#completion-reps-input").value, "4");
+		assert.equal(ctx.el.querySelector("#session-actual-reps").textContent, "4");
 		assert.equal(
 			ctx.el.querySelector("#completion-note-input").value,
 			"Strong finish",
@@ -3379,36 +3366,110 @@ test("finishing untouched saves the counted reps and time with one tap", async (
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 	ctx.completeWorkoutSegment();
 
-	for (const name of ["reps", "duration"]) {
-		assert.equal(ctx.el.querySelector(`#completion-${name}-field`).hidden, true);
-	}
 	const payload = ctx.completionPayload().workout_session;
 	assert.equal(payload.burpee_count_actual, 5);
 	assert.equal(payload.duration_sec_actual, 10);
 	ctx.destroyed();
 });
 
-test("tapping the count opens it for correction and the correction is saved", async () => {
+async function finishedWith({ trackingTrust = "disabled", detectedReps = null } = {}) {
 	const ctx = mountedFlowHarness({ poseTrackerReady: true });
 	await ctx.started;
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
 	ctx.startTime = 1;
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 	ctx.completeWorkoutSegment();
-
-	for (const [button, name] of [
-		["completion-reps-edit", "reps"],
-		["completion-duration-edit", "duration"],
-	]) {
-		click(ctx, button);
-		assert.equal(ctx.el.querySelector(`#completion-${name}-field`).hidden, false);
-		assert.equal(ctx.el.querySelector(`#completion-${name}-input`).focused, true);
+	if (trackingTrust !== "disabled") {
+		const completion = {
+			...ctx.flow.completion,
+			trackingTrust,
+			detectedReps,
+			burpeeCountActual: detectedReps,
+			burpeeCountProvenance: "camera_confirmed",
+		};
+		ctx.flow = { ...ctx.flow, completion };
+		ctx.renderer.renderCompletion(completion);
 	}
+	return ctx;
+}
 
-	const reps = ctx.el.querySelector("#completion-reps-input");
-	reps.value = "4";
-	ctx.el.dispatchEvent({ type: "input", target: reps });
-	assert.equal(ctx.completionPayload().workout_session.burpee_count_actual, 4);
+function sourceLine(ctx) {
+	return {
+		text: ctx.el.querySelector("#session-count-source-text").textContent,
+		undo: !ctx.el.querySelector("#completion-reps-undo").hidden,
+	};
+}
+
+test("minus and plus correct the count by one, and it is saved", async () => {
+	const ctx = await finishedWith();
+	const planned = ctx.flow.completion.burpeeCountActual;
+	assert.deepEqual(sourceLine(ctx), { text: "From your plan", undo: false });
+
+	click(ctx, "completion-reps-more");
+	click(ctx, "completion-reps-more");
+	click(ctx, "completion-reps-less");
+	assert.equal(ctx.flow.completion.burpeeCountActual, planned + 1);
+	assert.equal(
+		ctx.el.querySelector("#session-actual-reps").textContent,
+		String(planned + 1),
+	);
+	assert.equal(
+		ctx.completionPayload().workout_session.burpee_count_actual,
+		planned + 1,
+	);
+	assert.deepEqual(sourceLine(ctx), {
+		text: `From your plan: ${planned}`,
+		undo: true,
+	});
+	ctx.destroyed();
+});
+
+test("the count never goes below zero", async () => {
+	const ctx = await finishedWith();
+	ctx.editCompletion({ burpeeCountActual: 0 });
+	assert.equal(ctx.el.querySelector("#completion-reps-less").hasAttribute("disabled"), true);
+	click(ctx, "completion-reps-less");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	ctx.destroyed();
+});
+
+test("a camera count says so, and a correction keeps it in view with undo", async () => {
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 42 });
+	assert.deepEqual(sourceLine(ctx), { text: "Counted by camera", undo: false });
+
+	click(ctx, "completion-reps-more");
+	assert.deepEqual(sourceLine(ctx), { text: "Camera counted 42", undo: true });
+
+	click(ctx, "completion-reps-undo");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 42);
+	assert.equal(ctx.flow.completion.burpeeCountProvenance, "camera_confirmed");
+	assert.deepEqual(sourceLine(ctx), { text: "Counted by camera", undo: false });
+	ctx.destroyed();
+});
+
+test("holding plus keeps counting until it is let go", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const ctx = await finishedWith({ trackingTrust: "finished", detectedReps: 10 });
+	const more = ctx.el.querySelector("#completion-reps-more");
+
+	// Mocked timers don't run a timer set during the same tick, so time moves in steps.
+	const wait = (ms) => {
+		for (let elapsed = 0; elapsed < ms; elapsed += 10) t.mock.timers.tick(10);
+	};
+	ctx.el.dispatchEvent({ type: "pointerdown", target: more, button: 0 });
+	wait(2_000);
+	ctx.el.dispatchEvent({ type: "pointerup", target: more });
+	const held = ctx.flow.completion.burpeeCountActual;
+	assert.ok(held > 15, `held to ${held}`);
+
+	// The click that ends a hold is not one more rep.
+	click(ctx, "completion-reps-more");
+	wait(2_000);
+	assert.equal(ctx.flow.completion.burpeeCountActual, held);
+
+	// A plain tap after that is.
+	click(ctx, "completion-reps-more");
+	assert.equal(ctx.flow.completion.burpeeCountActual, held + 1);
 	ctx.destroyed();
 });
 
@@ -3457,10 +3518,16 @@ async function finishedWithDiscardReply(reply, discarded = []) {
 test("discard asks on the page before it deletes anything", async () => {
 	const ctx = await finishedWithDiscardReply(null);
 	const confirm = ctx.el.querySelector("#session-discard-confirm");
+	const actions = ctx.el.querySelector("#session-completion-actions");
 	click(ctx, "session-discard-btn");
+	// The question takes the place of the trash and save buttons.
 	assert.equal(confirm.hidden, false);
+	assert.equal(actions.hidden, true);
+	assert.equal(ctx.el.querySelector("#session-discard-keep").focused, true);
 	click(ctx, "session-discard-keep");
 	assert.equal(confirm.hidden, true);
+	assert.equal(actions.hidden, false);
+	assert.equal(ctx.el.querySelector("#session-discard-btn").focused, true);
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
@@ -3499,6 +3566,7 @@ test("a refused discard keeps everything and says so", async () => {
 		assert.deepEqual(discarded, []);
 		assert.deepEqual(navigations, []);
 		assert.equal(ctx.el.querySelector("#session-discard-confirm").hidden, true);
+		assert.equal(ctx.el.querySelector("#session-completion-actions").hidden, false);
 		assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
 		assert.equal(ctx.flow.mode, "completion_review");
 	} finally {

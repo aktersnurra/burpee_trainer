@@ -163,15 +163,13 @@ function harness() {
 		"#session-completion-review [data-session-heading]": element(),
 		"#session-save-errors": element(),
 		"#completion-reps-error": element(),
-		"#completion-duration-error": element(),
 		"#completion-note-error": element(),
 		"#completion-context-low-energy-error": element(),
 		"#completion-context-high-energy-error": element(),
 		"#completion-context-heat-affected-error": element(),
 		"#completion-primary-limiter-error": element(),
 		"#completion-preference-feedback-error": element(),
-		"#completion-reps-input": element(),
-		"#completion-duration-input": element(),
+		"#session-actual-reps": element(),
 		"#completion-note-input": element(),
 		"#completion-context-low-energy": element(),
 		"#completion-context-high-energy": element(),
@@ -809,25 +807,25 @@ test("structured Save errors reuse visible field and global targets", () => {
 
 	assert.equal(elements["#completion-reps-error"].textContent, "must be at least 0");
 	assert.equal(elements["#completion-reps-error"].hidden, false);
-	assert.equal(elements["#completion-duration-error"].textContent, "is invalid");
-	assert.equal(elements["#completion-duration-error"].hidden, false);
 	assert.equal(elements["#completion-note-error"].hidden, true);
-	assert.equal(elements["#session-live-status"].textContent, "Could not save. Try again.");
-	assert.equal(elements["#session-save-errors"].textContent, "Could not save. Try again.");
+	// The time has no field of its own any more, so its error is a page error.
+	assert.equal(
+		elements["#session-save-errors"].textContent,
+		"Could not save. Try again. is invalid",
+	);
 	assert.equal(elements["#session-save-errors"].hidden, false);
-	assert.equal(elements["#completion-reps-input"].getAttribute("aria-invalid"), "true");
+	assert.equal(elements["#session-actual-reps"].getAttribute("aria-invalid"), "true");
 
 	renderer.clearSaveErrors();
 	for (const selector of [
 		"#completion-reps-error",
-		"#completion-duration-error",
 		"#completion-note-error",
 		"#session-save-errors",
 	]) {
 		assert.equal(elements[selector].textContent, "");
 		assert.equal(elements[selector].hidden, true);
 	}
-	assert.equal(elements["#completion-reps-input"].hasAttribute("aria-invalid"), false);
+	assert.equal(elements["#session-actual-reps"].hasAttribute("aria-invalid"), false);
 });
 
 test("error for a removed field preserves the visible completion note", () => {
@@ -946,10 +944,19 @@ test("the pace announcement waits until both totals are known", () => {
 });
 
 function finishFields(elements) {
-	for (const name of ["reps", "duration"]) {
-		elements[`#completion-${name}-field`] = element();
-		elements[`#completion-${name}-field`].hidden = true;
+	for (const id of [
+		"#session-count-source",
+		"#session-count-source-text",
+		"#completion-reps-undo",
+		"#completion-reps-less",
+		"#session-discard-confirm",
+		"#session-completion-actions",
+		"#session-discard-keep",
+		"#session-discard-btn",
+	]) {
+		elements[id] = element();
 	}
+	elements["#session-discard-confirm"].hidden = true;
 	return elements;
 }
 
@@ -961,35 +968,69 @@ const finished = {
 	notePost: "",
 };
 
-test("the finish screen opens with the counted result and no fields to fill", () => {
+function source(elements) {
+	return {
+		text: elements["#session-count-source-text"].textContent,
+		line: !elements["#session-count-source"].hidden,
+		undo: !elements["#completion-reps-undo"].hidden,
+	};
+}
+
+test("the count says where it came from, and a correction shows the original", () => {
 	const { renderer, elements } = harness();
 	finishFields(elements);
-	renderer.renderCompletion(finished);
-	for (const name of ["reps", "duration"]) {
-		assert.equal(elements[`#completion-${name}-field`].hidden, true, name);
-	}
-});
+	const planned = { ...finished, scheduledRepsDone: 40 };
+	renderer.renderCompletion(planned);
+	assert.deepEqual(source(elements), { text: "From your plan", line: true, undo: false });
 
-test("tapping a number opens its field and focuses it", () => {
-	const { renderer, elements } = harness();
-	finishFields(elements);
-	elements["#completion-reps-input"] = element();
-	renderer.revealCompletionField("reps", true);
-	assert.equal(elements["#completion-reps-field"].hidden, false);
-	assert.equal(elements["#completion-reps-input"].focusCalls, 1);
-	assert.equal(elements["#completion-duration-field"].hidden, true);
-
-	renderer.revealCompletionField("anything");
-});
-
-test("a rejected field opens so its error can be read", () => {
-	const { renderer, elements } = harness();
-	finishFields(elements);
-	renderer.renderSaveErrors({
-		field_errors: { duration_sec_actual: ["must be at most 7200"] },
+	renderer.renderCompletion({ ...planned, burpeeCountActual: 38, burpeeCountProvenance: "manual" });
+	assert.deepEqual(source(elements), {
+		text: "From your plan: 40",
+		line: true,
+		undo: true,
 	});
-	assert.equal(elements["#completion-duration-field"].hidden, false);
-	assert.equal(elements["#completion-reps-field"].hidden, true);
+
+	const camera = { ...finished, trackingTrust: "finished", detectedReps: 41 };
+	renderer.renderCompletion({ ...camera, burpeeCountProvenance: "camera_confirmed" });
+	assert.deepEqual(source(elements), { text: "Counted by camera", line: true, undo: false });
+	renderer.renderCompletion({ ...camera, burpeeCountActual: 43, burpeeCountProvenance: "manual" });
+	assert.deepEqual(source(elements), { text: "Camera counted 41", line: true, undo: true });
+
+	// A count with nothing to go back to says nothing.
+	renderer.renderCompletion({ ...finished, burpeeCountProvenance: "manual" });
+	assert.deepEqual(source(elements), { text: "", line: false, undo: false });
+});
+
+test("minus is off at zero and while the result is being saved", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	const less = elements["#completion-reps-less"];
+	renderer.renderCompletion({ ...finished, burpeeCountActual: 0 });
+	assert.equal(less.hasAttribute("disabled"), true);
+	renderer.renderCompletion(finished);
+	assert.equal(less.hasAttribute("disabled"), false);
+	renderer.renderCompletionControls({
+		mode: "completion_review",
+		saveStatus: "saving",
+		completion: finished,
+	});
+	assert.equal(less.hasAttribute("disabled"), true);
+	renderer.renderCompletion(finished);
+	assert.equal(less.hasAttribute("disabled"), true);
+});
+
+test("the discard question replaces the trash and save buttons, and goes back", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	renderer.showDiscardConfirm(true);
+	assert.equal(elements["#session-discard-confirm"].hidden, false);
+	assert.equal(elements["#session-completion-actions"].hidden, true);
+	assert.equal(elements["#session-discard-keep"].focusCalls, 1);
+
+	renderer.showDiscardConfirm(false);
+	assert.equal(elements["#session-discard-confirm"].hidden, true);
+	assert.equal(elements["#session-completion-actions"].hidden, false);
+	assert.equal(elements["#session-discard-btn"].focusCalls, 1);
 });
 
 test("the heading says whether the workout was completed or ended early", () => {

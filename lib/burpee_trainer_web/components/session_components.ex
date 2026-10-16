@@ -247,38 +247,55 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           >
             Workout complete
           </h1>
-          <%!-- The count and the time are the result; tapping one opens it for correction. --%>
-          <button
-            id="completion-reps-edit"
-            type="button"
-            aria-label="Correct reps"
-            title="Correct reps"
-            aria-controls="completion-reps-field"
-            class="mt-7 rounded-2xl px-3"
-          >
+          <%!-- The count is the result; − and + correct it. Holding one keeps counting. --%>
+          <div class="session-reps-stepper mt-10">
+            <button
+              id="completion-reps-less"
+              type="button"
+              aria-label="One rep fewer"
+              title="One rep fewer"
+              aria-controls="session-actual-reps"
+              class="session-reps-step"
+            >
+              <.icon name="hero-minus" class="size-6" />
+            </button>
             <span
               id="session-actual-reps"
-              class="qs-tabular block text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
+              aria-describedby="completion-reps-error"
+              class="qs-tabular text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
             >
               0
             </span>
-          </button>
-          <%!-- What was planned and how long it took, in one line under the count. --%>
-          <p class="qs-tabular mt-4 text-lg text-[var(--session-muted)]">
-            of <span id="session-planned-reps">0</span>
-            ·
             <button
-              id="completion-duration-edit"
+              id="completion-reps-more"
               type="button"
-              aria-label="Correct time"
-              title="Correct time"
-              aria-controls="completion-duration-field"
-              class="underline-offset-4 hover:underline"
+              aria-label="One rep more"
+              title="One rep more"
+              aria-controls="session-actual-reps"
+              class="session-reps-step"
             >
-              <span id="session-actual-duration">0:00</span>
+              <.icon name="hero-plus" class="size-6" />
+            </button>
+          </div>
+          <%!-- What was planned and how long it took, in one line under the count. --%>
+          <p class="qs-tabular mt-5 text-lg text-[var(--session-muted)]">
+            of <span id="session-planned-reps">0</span>
+            · <span id="session-actual-duration">0:00</span>
+          </p>
+          <%!-- Where the count came from; after a correction, the original and a way back. --%>
+          <p id="session-count-source" class="mt-2 text-sm text-[var(--session-muted)]" hidden>
+            <span id="session-count-source-text"></span>
+            <button
+              id="completion-reps-undo"
+              type="button"
+              hidden
+              class="min-h-11 px-2 text-[var(--session-ink)] underline underline-offset-4"
+            >
+              Undo
             </button>
           </p>
-          <p id="session-count-source" class="mt-2 text-sm text-[var(--session-muted)]" hidden></p>
+          <p id="completion-reps-error" class="mt-2 text-sm text-[var(--session-error-ink)]" hidden>
+          </p>
         </section>
 
         <div
@@ -288,42 +305,14 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <.form for={@form} id="session-completion-form" class="mt-7 mb-auto">
-          <div class="grid grid-cols-2 gap-5">
-            <div id="completion-reps-field" hidden>
-              <.input
-                field={@form[:burpee_count_actual]}
-                id="completion-reps-input"
-                type="number"
-                label="Reps"
-                min="0"
-                inputmode="numeric"
-                aria-describedby="completion-reps-error"
-                class="qs-tabular min-h-12 w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 text-xl text-[var(--session-ink)]"
-              />
-              <p id="completion-reps-error" hidden></p>
-            </div>
-            <div id="completion-duration-field" hidden>
-              <.input
-                field={@form[:duration_sec_actual]}
-                id="completion-duration-input"
-                type="number"
-                label="Seconds"
-                min="0"
-                inputmode="numeric"
-                aria-describedby="completion-duration-error"
-                class="qs-tabular min-h-12 w-full border-0 border-b border-[var(--session-border)] bg-transparent px-0 text-xl text-[var(--session-ink)]"
-              />
-              <p id="completion-duration-error" hidden></p>
-            </div>
-          </div>
-          <div id="session-completion-mood" class="mt-8 flex border-y border-[var(--session-border)]">
+        <.form for={@form} id="session-completion-form" class="mt-12 mb-auto">
+          <div id="session-completion-mood" class="flex border-y border-[var(--session-border)]">
             <%= for {label, value} <- @mood_options do %>
               <button
                 type="button"
                 data-mood={value}
                 aria-pressed="false"
-                class="session-choice-toggle min-h-14 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
+                class="session-choice-toggle min-h-16 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
               >
                 {label}
               </button>
@@ -358,37 +347,8 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <.input field={@form[:client_session_id]} type="hidden" />
           </div>
 
-          <%!-- Discarding deletes the started session; it asks here, not in a dialog. --%>
-          <div
-            id="session-discard-confirm"
-            hidden
-            role="group"
-            aria-labelledby="session-discard-question"
-            class="mt-6 border-t border-[var(--session-border)] pt-5 text-center"
-          >
-            <p id="session-discard-question" class="text-base">
-              Discard this workout? Nothing will be saved.
-            </p>
-            <div class="mt-4 flex items-center justify-center gap-3">
-              <button
-                id="session-discard-keep"
-                type="button"
-                class="min-h-11 px-5 text-sm text-[var(--session-muted)] underline underline-offset-4"
-              >
-                Keep it
-              </button>
-              <button
-                id="session-discard-yes"
-                type="button"
-                class="min-h-11 rounded-full border border-red-700/60 px-5 text-sm font-medium text-red-700"
-              >
-                Discard
-              </button>
-            </div>
-          </div>
-
           <%!-- A finished workout is saved or discarded; nothing else. --%>
-          <div class="mt-6 flex items-center justify-between gap-3">
+          <div id="session-completion-actions" class="mt-12 flex items-center justify-between gap-3">
             <button
               id="session-discard-btn"
               type="button"
@@ -413,6 +373,37 @@ defmodule BurpeeTrainerWeb.SessionComponents do
                 <.icon name="hero-arrow-path" class="size-6" />
               </span>
             </button>
+          </div>
+
+          <%!-- Discarding deletes the started session. The question takes the buttons' place. --%>
+          <div
+            id="session-discard-confirm"
+            hidden
+            role="group"
+            aria-labelledby="session-discard-question"
+            aria-describedby="session-discard-consequence"
+            class="mt-12 text-center"
+          >
+            <p id="session-discard-question" class="text-lg font-medium">Discard this workout?</p>
+            <p id="session-discard-consequence" class="mt-1 text-sm text-[var(--session-muted)]">
+              Nothing will be saved.
+            </p>
+            <div class="mt-5 grid grid-cols-2 gap-3">
+              <button
+                id="session-discard-keep"
+                type="button"
+                class="min-h-14 rounded-full border border-[var(--session-border)] text-base font-medium text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
+              >
+                Keep
+              </button>
+              <button
+                id="session-discard-yes"
+                type="button"
+                class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white transition-opacity hover:opacity-90"
+              >
+                Discard
+              </button>
+            </div>
           </div>
         </.form>
       </div>

@@ -373,26 +373,35 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     end
 
     assert has_element?(view, "#session-completion-heading", "Workout complete")
-    assert has_element?(view, "#session-completion-form > .grid + #session-completion-mood")
+    assert has_element?(view, "#session-completion-form > #session-completion-mood:first-child")
     assert has_element?(view, "#session-completion-mood [data-mood='-1']", "Rough")
     assert has_element?(view, "#session-completion-mood [data-mood='0']", "OK")
     assert has_element?(view, "#session-completion-mood [data-mood='1']", "Good")
-    # The counted result is the answer; each field opens only when asked for, but stays in
-    # the form.
-    for name <- ~w[reps duration] do
-      assert has_element?(view, "#session-completion-form #completion-#{name}-field[hidden]")
-      assert has_element?(view, "#completion-#{name}-field #completion-#{name}-input")
+    # The count sits between − and +, always there; nothing opens a hidden field.
+    assert has_element?(
+             view,
+             "#completion-reps-less[type=button][aria-label='One rep fewer'] .hero-minus"
+           )
+
+    assert has_element?(
+             view,
+             "#completion-reps-less + #session-actual-reps + " <>
+               "#completion-reps-more[type=button][aria-label='One rep more'] .hero-plus"
+           )
+
+    assert has_element?(
+             view,
+             "#session-count-source[hidden] #completion-reps-undo[hidden]",
+             "Undo"
+           )
+
+    # The time is what the timer measured.
+    assert has_element?(view, "span#session-actual-duration")
+
+    for removed <- ~w[completion-reps-edit completion-duration-edit completion-reps-field
+                      completion-duration-field completion-reps-input completion-duration-input] do
+      refute has_element?(view, "##{removed}")
     end
-
-    assert has_element?(
-             view,
-             "#completion-reps-edit[type=button][aria-label='Correct reps'] #session-actual-reps"
-           )
-
-    assert has_element?(
-             view,
-             "#completion-duration-edit[type=button][aria-label='Correct time'] #session-actual-duration"
-           )
 
     # Save or discard: no leaving to come back later, and nothing behind a button.
     for removed <- ~w[completion-note-toggle completion-note-field session-leave-btn] do
@@ -434,7 +443,30 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert has_element?(view, "#session-save-icon-pending[hidden] .hero-arrow-path")
 
-    assert has_element?(view, "#session-discard-btn[aria-label='Discard session'] .hero-trash")
+    assert has_element?(
+             view,
+             "#session-completion-actions #session-discard-btn[aria-label='Discard session'] .hero-trash"
+           )
+
+    # The discard question takes the buttons' place, with its own two answers.
+    assert has_element?(
+             view,
+             "#session-completion-actions + #session-discard-confirm[hidden] #session-discard-question",
+             "Discard this workout?"
+           )
+
+    assert has_element?(
+             view,
+             "#session-discard-confirm #session-discard-keep[type=button]",
+             "Keep"
+           )
+
+    assert has_element?(
+             view,
+             "#session-discard-confirm #session-discard-yes[type=button]",
+             "Discard"
+           )
+
     refute has_element?(view, "#session-save-btn", "Save session")
     refute has_element?(view, "#session-report-pending-status")
     refute has_element?(view, "#session-report-pending-retry")

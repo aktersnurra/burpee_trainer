@@ -4,7 +4,11 @@ import {
   initialSegmentState,
   segmentTransition,
 } from "./session_segment_fsm.mjs";
-import { flowTransition, initialFlowState } from "./session_flow_fsm.mjs";
+import {
+  countOrigin,
+  flowTransition,
+  initialFlowState,
+} from "./session_flow_fsm.mjs";
 import {
   programBurpeeCount,
   warmupTimelineFromProgram,
@@ -33,6 +37,17 @@ import {
 // How long after a set or the workout ends a rep the camera sees still counts for it: the
 // camera sees a rep as you stand up, which can be a moment after the bell.
 const LATE_REP_GRACE_MS = 2_000;
+
+// Holding − or + on the finish screen: the wait before it repeats, and the fastest pace.
+const REP_HOLD_DELAY_MS = 400;
+const REP_HOLD_FASTEST_MS = 50;
+
+// −1 or +1 for the finish screen's rep buttons, else null.
+function repStepFor(target) {
+  if (target?.closest?.("#completion-reps-less")) return -1;
+  if (target?.closest?.("#completion-reps-more")) return 1;
+  return null;
+}
 
 // The first moments of a rest that follows work, when a set's last rep can still land.
 function justAfterWork(timeline, frame) {
@@ -228,10 +243,8 @@ const SessionHook = {
 
     this.onRootClick = (e) => {
       const retryCamera = e.target.closest("#camera-setup-retry");
-      const correct = [
-        ["#completion-reps-edit", "reps"],
-        ["#completion-duration-edit", "duration"],
-      ].find(([selector]) => e.target.closest(selector));
+      const repStep = repStepFor(e.target);
+      const repsUndo = e.target.closest("#completion-reps-undo");
       const discardAsk = e.target.closest("#session-discard-btn");
       const discardKeep = e.target.closest("#session-discard-keep");
       const discardYes = e.target.closest("#session-discard-yes");
@@ -265,21 +278,37 @@ const SessionHook = {
           mood: this.flow.completion?.mood === chosen ? null : chosen,
         });
       }
-      if (correct) this.renderer.revealCompletionField(correct[1], true);
+      if (repStep) {
+        // The click that ends a hold is not one more rep.
+        const held = this.repHold?.repeated;
+        this.stopRepHold();
+        this.repHold = null;
+        if (!held) this.stepReps(repStep);
+      }
+      if (repsUndo) {
+        const origin = countOrigin(this.flow.completion);
+        if (origin.reps !== null) {
+          this.editCompletion({ burpeeCountActual: origin.reps });
+        }
+      }
       if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
       if (discardKeep) this.renderer.showDiscardConfirm(false);
       if (discardYes) this.discardSession();
     };
     this.el.addEventListener("click", this.onRootClick);
 
+    // Holding − or + keeps counting, faster the longer it is held.
+    this.onRepHoldStart = (e) => {
+      const step = repStepFor(e.target);
+      if (step && (e.button ?? 0) === 0) this.startRepHold(step);
+    };
+    this.onRepHoldEnd = () => this.stopRepHold();
+    this.el.addEventListener("pointerdown", this.onRepHoldStart);
+    this.el.addEventListener("pointerup", this.onRepHoldEnd);
+    this.el.addEventListener("pointercancel", this.onRepHoldEnd);
+
     this.onCompletionInput = (event) => {
       const { id, value } = event.target;
-      if (id === "completion-reps-input") {
-        this.editCompletionNumber("burpeeCountActual", value);
-      }
-      if (id === "completion-duration-input") {
-        this.editCompletionNumber("durationSecActual", value);
-      }
       if (id === "completion-context-low-energy") {
         this.editCompletion({ contextLowEnergy: event.target.checked });
       }
@@ -399,6 +428,8 @@ const SessionHook = {
       content_hash: this.contentHash,
       client_session_id: this.clientSessionId,
       burpee_count_actual: completion.burpeeCountActual,
+      burpee_count_provenance: completion.burpeeCountProvenance ?? null,
+      scheduled_reps_done: completion.scheduledRepsDone ?? null,
       burpee_count_planned: completion.burpeeCountPlanned,
       duration_sec_actual: completion.durationSecActual,
       duration_sec_planned: completion.durationSecPlanned,
@@ -633,6 +664,12 @@ const SessionHook = {
     const legacyTags = Array.isArray(draft.tags) ? draft.tags : [];
     const completion = {
       burpeeCountActual: draft.burpee_count_actual ?? 0,
+      ...(draft.burpee_count_provenance
+        ? { burpeeCountProvenance: draft.burpee_count_provenance }
+        : {}),
+      ...(Number.isInteger(draft.scheduled_reps_done)
+        ? { scheduledRepsDone: draft.scheduled_reps_done }
+        : {}),
       burpeeCountPlanned: draft.burpee_count_planned ?? 0,
       durationSecActual: draft.duration_sec_actual ?? 0,
       durationSecPlanned: draft.duration_sec_planned ?? 0,
@@ -663,10 +700,27 @@ const SessionHook = {
     });
   },
 
-  editCompletionNumber(field, value) {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number < 0) return;
-    this.editCompletion({ [field]: number });
+  stepReps(step) {
+    const count = this.flow.completion?.burpeeCountActual;
+    const from = Number.isInteger(count) ? count : 0;
+    const next = Math.max(0, from + step);
+    if (next !== count) this.editCompletion({ burpeeCountActual: next });
+  },
+
+  startRepHold(step) {
+    this.stopRepHold();
+    let wait = REP_HOLD_DELAY_MS;
+    const repeat = () => {
+      this.repHold.repeated = true;
+      this.stepReps(step);
+      wait = Math.max(REP_HOLD_FASTEST_MS, wait * 0.8);
+      this.repHold.timer = setTimeout(repeat, wait);
+    };
+    this.repHold = { repeated: false, timer: setTimeout(repeat, wait) };
+  },
+
+  stopRepHold() {
+    if (this.repHold) clearTimeout(this.repHold.timer);
   },
 
   editCompletion(changes) {
@@ -788,6 +842,10 @@ const SessionHook = {
       this.onPoseTrackerTraceChunk,
     );
     this.el.removeEventListener("click", this.onRootClick);
+    this.el.removeEventListener("pointerdown", this.onRepHoldStart);
+    this.el.removeEventListener("pointerup", this.onRepHoldEnd);
+    this.el.removeEventListener("pointercancel", this.onRepHoldEnd);
+    this.stopRepHold();
     this.el.removeEventListener("keydown", this.onRootKeydown);
     this.el.removeEventListener("input", this.onCompletionInput);
     this.el.removeEventListener("submit", this.onCompletionSubmit);

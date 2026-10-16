@@ -1,4 +1,5 @@
 import { formatClock } from "./session_display_model.mjs";
+import { countOrigin } from "./session_flow_fsm.mjs";
 const VISUAL_STATE_CLASSES = [
 	"is-working",
 	"is-work-active",
@@ -197,8 +198,8 @@ export class SessionRenderer {
 			state.mode === "completion_review" && state.completionLocked === true;
 		const factsDisabled = saving || locked;
 		const factIds = [
-			"completion-reps-input",
-			"completion-duration-input",
+			"completion-reps-more",
+			"completion-reps-undo",
 			"completion-note-input",
 			"completion-context-low-energy",
 			"completion-context-high-energy",
@@ -206,8 +207,6 @@ export class SessionRenderer {
 			"completion-primary-limiter",
 			"completion-preference-feedback",
 			"workout_session_burpee_type",
-			"completion-reps-edit",
-			"completion-duration-edit",
 			"session-discard-btn",
 			"session-discard-yes",
 		];
@@ -222,6 +221,8 @@ export class SessionRenderer {
 			?.querySelectorAll?.("input, textarea, select") || []) {
 			input.toggleAttribute("disabled", factsDisabled);
 		}
+		this.completionFactsDisabled = factsDisabled;
+		this.renderRepsLess(state.completion);
 		for (const selector of ["[data-mood]", "[data-tag]"]) {
 			for (const button of this.root.querySelectorAll(selector)) {
 				button.toggleAttribute("disabled", factsDisabled);
@@ -261,20 +262,45 @@ export class SessionRenderer {
 			?.focus({ preventScroll: true });
 	}
 
-	// The finish screen shows the counted result; a field opens only when asked for, when
-	// it already holds a note, or when Save rejects it.
-	revealCompletionField(name, focus = false) {
-		const field = this.root.querySelector(`#completion-${name}-field`);
-		if (!field) return;
-		field.hidden = false;
-		if (focus) this.root.querySelector(`#completion-${name}-input`)?.focus();
-	}
-
+	// The discard question takes the place of the trash and save buttons while it is asked.
 	showDiscardConfirm(visible) {
 		const confirm = this.root.querySelector("#session-discard-confirm");
 		if (!confirm) return;
+		const actions = this.root.querySelector("#session-completion-actions");
+		const wasVisible = !confirm.hidden;
 		confirm.hidden = !visible;
+		if (actions) actions.hidden = visible;
 		if (visible) this.root.querySelector("#session-discard-keep")?.focus();
+		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
+	}
+
+	// − cannot take the count below zero.
+	renderRepsLess(completion) {
+		const count = completion?.burpeeCountActual;
+		const atZero = !Number.isInteger(count) || count <= 0;
+		this.root
+			.querySelector("#completion-reps-less")
+			?.toggleAttribute("disabled", atZero || this.completionFactsDisabled === true);
+	}
+
+	// Where the count came from; once corrected, the original stays in view with undo.
+	renderCountSource(completion, provenance) {
+		const text = this.root.querySelector("#session-count-source-text");
+		const undo = this.root.querySelector("#completion-reps-undo");
+		const line = this.root.querySelector("#session-count-source");
+		const origin = countOrigin(completion);
+		let label = "";
+		if (provenance === "camera_confirmed") label = "Counted by camera";
+		else if (provenance === "scheduled") label = "From your plan";
+		else if (origin.reps !== null) {
+			label =
+				origin.provenance === "camera_confirmed"
+					? `Camera counted ${origin.reps}`
+					: `From your plan: ${origin.reps}`;
+		}
+		if (text) text.textContent = label;
+		if (undo) undo.hidden = provenance !== "manual" || origin.reps === null;
+		if (line) line.hidden = label === "";
 	}
 
 	renderCompletion(completion) {
@@ -287,8 +313,6 @@ export class SessionRenderer {
 		const actualReps = this.root.querySelector("#session-actual-reps");
 		const plannedReps = this.root.querySelector("#session-planned-reps");
 		const duration = this.root.querySelector("#session-actual-duration");
-		const repsInput = this.root.querySelector("#completion-reps-input");
-		const durationInput = this.root.querySelector("#completion-duration-input");
 		const noteInput = this.root.querySelector("#completion-note-input");
 		const lowEnergyInput = this.root.querySelector(
 			"#completion-context-low-energy",
@@ -307,7 +331,6 @@ export class SessionRenderer {
 		const countProvenance =
 			completion.burpeeCountProvenance ??
 			(hasActualReps ? "manual" : "unresolved");
-		const countSource = this.root.querySelector("#session-count-source");
 		if (actualReps) {
 			actualReps.textContent = hasActualReps
 				? String(completion.burpeeCountActual)
@@ -317,15 +340,8 @@ export class SessionRenderer {
 			plannedReps.textContent = String(completion.burpeeCountPlanned);
 		if (duration)
 			duration.textContent = this.formatTime(completion.durationSecActual);
-		if (repsInput)
-			repsInput.value = hasActualReps ? String(completion.burpeeCountActual) : "";
-		// Only a camera count needs saying; otherwise the reps field below is the count.
-		if (countSource) {
-			const cameraCounted = countProvenance === "camera_confirmed";
-			countSource.textContent = cameraCounted ? "Counted by camera" : "";
-			countSource.hidden = !cameraCounted;
-		}
-		if (durationInput) durationInput.value = String(completion.durationSecActual);
+		this.renderCountSource(completion, countProvenance);
+		this.renderRepsLess(completion);
 		if (noteInput) noteInput.value = completion.notePost || "";
 		if (lowEnergyInput)
 			lowEnergyInput.checked = completion.contextLowEnergy ?? false;
@@ -352,8 +368,7 @@ export class SessionRenderer {
 
 	clearSaveErrors() {
 		const fields = [
-			["#completion-reps-error", "#completion-reps-input"],
-			["#completion-duration-error", "#completion-duration-input"],
+			["#completion-reps-error", "#session-actual-reps"],
 			["#completion-note-error", "#completion-note-input"],
 			[
 				"#completion-context-low-energy-error",
@@ -397,17 +412,8 @@ export class SessionRenderer {
 			? reply.global_errors.filter(Boolean)
 			: [];
 		const fields = {
-			burpee_count_actual: [
-				"#completion-reps-error",
-				"#completion-reps-input",
-				"reps",
-			],
-			duration_sec_actual: [
-				"#completion-duration-error",
-				"#completion-duration-input",
-				"duration",
-			],
-			note_post: ["#completion-note-error", "#completion-note-input", "note"],
+			burpee_count_actual: ["#completion-reps-error", "#session-actual-reps"],
+			note_post: ["#completion-note-error", "#completion-note-input"],
 		};
 
 		for (const [field, messages] of Object.entries(reply.field_errors || {})) {
@@ -422,7 +428,6 @@ export class SessionRenderer {
 			}
 			const error = this.root.querySelector(targets[0]);
 			const input = this.root.querySelector(targets[1]);
-			this.revealCompletionField(targets[2]);
 			if (error) {
 				error.textContent = text;
 				error.hidden = false;
