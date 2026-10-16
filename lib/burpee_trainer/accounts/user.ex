@@ -9,6 +9,7 @@ defmodule BurpeeTrainer.Accounts.User do
     field :oidc_sub, :string
     field :timezone, :string, default: "Etc/UTC"
     field :timezone_provisioned, :boolean, default: false
+    field :coach_enabled, :boolean, default: true
 
     timestamps(type: :utc_datetime)
   end

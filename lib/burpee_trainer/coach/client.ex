@@ -36,8 +36,10 @@ defmodule BurpeeTrainer.Coach.Client do
     model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
     attrs = %{purpose: ledger.purpose, run_id: ledger.run_id, model: model}
 
-    # A disabled provider makes no call, so it neither records nor spends budget.
+    # A disabled provider, or a user without the app's coach, makes no call, so it neither
+    # records nor spends budget.
     with true <- is_list(config) and require_enabled(config) == :ok,
+         true <- BurpeeTrainer.Coach.enabled?(ledger.scope),
          {:ok, call} <-
            BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
       record_chat(ledger, call, messages, opts, config)

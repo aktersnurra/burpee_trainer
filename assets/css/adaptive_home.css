@@ -85,7 +85,7 @@
   line-height: 1.2;
   letter-spacing: -0.9px;
 }
-.home-summary:hover .home-workout-name {
+button.home-summary:hover .home-workout-name {
   color: #55534c;
 }
 .home-workout-totals {

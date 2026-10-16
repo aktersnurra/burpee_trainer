@@ -187,6 +187,10 @@ if config_env() == :prod do
   # means /mcp is off.
   config :burpee_trainer, :mcp, audience: System.get_env("MCP_OIDC_AUDIENCE")
 
+  # The ID-token claim that grants the app's own coach: a custom claim on a Pocket ID
+  # group, set to true. Without it the user coaches through Claude.
+  config :burpee_trainer, :coach_claim, System.get_env("COACH_CLAIM") || "burpee_coach"
+
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :burpee_trainer, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")

@@ -61,7 +61,9 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           summary={@state.progress_summary}
           loading?={@state.progress_summary_loading?}
         />
-        <span :if={is_nil(@state.progress_summary) and not @state.progress_summary_loading?}>
+        <span :if={
+          coach?(@state) and is_nil(@state.progress_summary) and not @state.progress_summary_loading?
+        }>
           Tell me what you're training for, or how the last session felt.
         </span>
       </p>
@@ -123,63 +125,67 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           <p class="coach-exchange-you">{@state.coach_pending_message}</p>
         </li>
       </ol>
-      <div class="coach-quick-replies" role="group" aria-label="Quick replies">
-        <button
-          :for={{id, text} <- quick_replies(@state)}
-          id={"home-coach-quick-#{id}"}
-          type="button"
-          class="home-selection-pill"
-          phx-click="coach_quick_reply"
-          phx-value-text={text}
-          disabled={@state.coach_busy?}
+      <%!-- Talking to the app's coach needs it; without it the coach is Claude, and this
+           section shows only what Claude left. --%>
+      <%= if coach?(@state) do %>
+        <div class="coach-quick-replies" role="group" aria-label="Quick replies">
+          <button
+            :for={{id, text} <- quick_replies(@state)}
+            id={"home-coach-quick-#{id}"}
+            type="button"
+            class="home-selection-pill"
+            phx-click="coach_quick_reply"
+            phx-value-text={text}
+            disabled={@state.coach_busy?}
+          >
+            {text}
+          </button>
+        </div>
+        <.form
+          for={@state.coach_message_form}
+          id="home-coach-message-form"
+          phx-submit="coach_message"
+          phx-change="coach_message_change"
+          class="coach-message-form home-authoring-form coach-quiet-label"
         >
-          {text}
-        </button>
-      </div>
-      <.form
-        for={@state.coach_message_form}
-        id="home-coach-message-form"
-        phx-submit="coach_message"
-        phx-change="coach_message_change"
-        class="coach-message-form home-authoring-form coach-quiet-label"
-      >
-        <.input
-          field={@state.coach_message_form[:text]}
-          id="home-coach-message-text"
-          type="textarea"
-          label="Message the coach"
-          rows="1"
-          maxlength="1000"
-          placeholder="Message the coach"
-          class="home-authoring-input"
-          disabled={@state.coach_busy?}
-        />
-        <%!-- Send sits inside the field and shows once there is something to send. --%>
-        <button
-          id="home-coach-message-send"
-          type="submit"
-          class="home-primary-action coach-send"
-          disabled={@state.coach_busy?}
-          aria-label="Send"
-          title="Send"
+          <.input
+            field={@state.coach_message_form[:text]}
+            id="home-coach-message-text"
+            type="textarea"
+            label="Message the coach"
+            rows="1"
+            maxlength="1000"
+            placeholder="Message the coach"
+            class="home-authoring-input"
+            disabled={@state.coach_busy?}
+          />
+          <%!-- Send sits inside the field and shows once there is something to send. --%>
+          <button
+            id="home-coach-message-send"
+            type="submit"
+            class="home-primary-action coach-send"
+            disabled={@state.coach_busy?}
+            aria-label="Send"
+            title="Send"
+          >
+            <.icon name="hero-arrow-turn-down-left" class="size-5" />
+          </button>
+        </.form>
+        <p
+          :if={@state.coach_busy?}
+          id="home-coach-loading"
+          role="status"
+          class="coach-guidance-status"
         >
-          <.icon name="hero-arrow-turn-down-left" class="size-5" />
-        </button>
-      </.form>
-      <p
-        :if={@state.coach_busy?}
-        id="home-coach-loading"
-        role="status"
-        class="coach-guidance-status"
-      >
-        Sending to the coach
-      </p>
-      <p id="home-coach-reply" role="status" class="coach-guidance-status">
-        {@state.coach_reply}
-      </p>
-      <p id="home-coach-status" role="status" class="coach-guidance-status">
-        {@state.coach_status}
-      </p>
+          Sending to the coach
+        </p>
+        <p id="home-coach-reply" role="status" class="coach-guidance-status">
+          {@state.coach_reply}
+        </p>
+        <p id="home-coach-status" role="status" class="coach-guidance-status">
+          {@state.coach_status}
+        </p>
+      <% end %>
       <div id="home-coach-goals" phx-update="stream">
         <div
           :for={{dom_id, goal} <- @state.streams.coach_goals}
@@ -217,6 +223,17 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     </section>
     """
   end
+
+  @doc """
+  Whether Home has a coach section: always with the app's coach; without it, only once
+  there is something from Claude to read (a note, or a change to the memory).
+  """
+  def shown?(state),
+    do:
+      coach?(state) or not is_nil(state.progress_summary) or
+        Map.get(state, :coach_memory_changes, []) != []
+
+  defp coach?(state), do: BurpeeTrainer.Coach.enabled?(state.current_scope)
 
   defp series_class(type), do: type |> Atom.to_string() |> String.replace("_", "-")
 
