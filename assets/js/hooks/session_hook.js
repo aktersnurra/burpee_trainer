@@ -19,6 +19,7 @@ import {
 } from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 import { openSessionStore } from "./session_store.mjs";
+import { cameraAvailable } from "./camera_available.mjs";
 import { readStartChoices } from "./start_choices.mjs";
 import {
   finishTrackingObserver,
@@ -210,11 +211,21 @@ const SessionHook = {
     });
     // A session that was finishing reopens on its finish screen; anything else starts.
     const bootGeneration = this.lifecycleGeneration;
-    this.started = this.draftRestore.then(() => {
-      if (this.lifecycleActive(bootGeneration)) {
-        this.dispatchFlow({ type: "START", ...this.warmupStart() });
-      }
-    });
+    const cameraCheck =
+      this.flow.captureMode === "camera"
+        ? cameraAvailable(this.mediaDevices)
+        : Promise.resolve(null);
+    this.started = Promise.all([cameraCheck, this.draftRestore]).then(
+      ([available]) => {
+        if (this.lifecycleActive(bootGeneration)) {
+          this.dispatchFlow({
+            type: "START",
+            cameraAvailable: available,
+            ...this.warmupStart(),
+          });
+        }
+      },
+    );
 
     this.onRootClick = (e) => {
       const retryCamera = e.target.closest("#camera-setup-retry");

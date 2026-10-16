@@ -423,3 +423,28 @@ test("completion edits only change approved draft fields", () => {
 		notePost: "Strong finish",
 	});
 });
+
+test("a remembered camera on a device without one starts as camera off", () => {
+	for (const [cameraAvailable, mode] of [
+		[false, "warmup_running"],
+		[null, "camera_starting"],
+		[true, "camera_starting"],
+	]) {
+		const result = step(readyState({ camera: true, warmup: true }), {
+			type: "START",
+			cameraAvailable,
+			...warmup,
+		});
+		assert.equal(result.state.mode, mode, String(cameraAvailable));
+	}
+
+	const off = step(readyState({ camera: true, warmup: false }), {
+		type: "START",
+		cameraAvailable: false,
+		...warmup,
+	});
+	assert.equal(off.state.captureMode, "no_camera");
+	assert.equal(off.state.trackingTrust, "disabled");
+	assert.equal(off.state.mode, "workout_running");
+	assert.ok(!off.commands.some((command) => command.type === "startCamera"));
+});

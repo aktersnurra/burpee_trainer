@@ -11,8 +11,11 @@ function memoryStorage(entries = {}) {
   };
 }
 
-function mount(choice, storage) {
-  const attributes = { "aria-pressed": "false" };
+function mount(choice, storage, mediaDevices) {
+  const attributes = {
+    "aria-pressed": "false",
+    "aria-label": choice === "camera" ? "Camera tracking" : "Warmup",
+  };
   const listeners = {};
   const el = {
     dataset: { startChoice: choice },
@@ -27,7 +30,8 @@ function mount(choice, storage) {
       delete listeners[type];
     },
   };
-  const hook = { ...HomeStartChoice, el, storage };
+  el.disabled = false;
+  const hook = { ...HomeStartChoice, el, storage, mediaDevices };
   HomeStartChoice.mounted.call(hook);
   return { hook, attributes, click: () => listeners.click?.(), listeners };
 }
@@ -54,4 +58,63 @@ test("leaving Home drops the listener", () => {
   const { hook, listeners } = mount("camera", memoryStorage());
   HomeStartChoice.destroyed.call(hook);
   assert.equal(listeners.click, undefined);
+});
+
+function cameras(...kinds) {
+  const listeners = {};
+  return {
+    kinds,
+    enumerateDevices: async function () {
+      return this.kinds.map((kind) => ({ kind }));
+    },
+    addEventListener: (type, fn) => {
+      listeners[type] = fn;
+    },
+    removeEventListener: (type) => {
+      delete listeners[type];
+    },
+    listeners,
+  };
+}
+
+test("a device without a camera cannot choose it", async () => {
+  const storage = memoryStorage({ "burpee.start.camera": "1" });
+  const { hook, attributes } = mount("camera", storage, cameras("audioinput"));
+  await hook.cameraChecked;
+  assert.equal(hook.el.disabled, true);
+  assert.equal(attributes["aria-pressed"], "false");
+  assert.equal(attributes["aria-label"], "No camera on this device");
+  assert.equal(attributes.title, "No camera on this device");
+  // The remembered choice is this device's, and is left for when a camera appears.
+  assert.equal(storage.values.get("burpee.start.camera"), "1");
+});
+
+test("plugging in a camera brings the choice back", async () => {
+  const storage = memoryStorage({ "burpee.start.camera": "1" });
+  const media = cameras("audioinput");
+  const { hook, attributes } = mount("camera", storage, media);
+  await hook.cameraChecked;
+  media.kinds = ["videoinput"];
+  media.listeners.devicechange();
+  await hook.cameraChecked;
+  assert.equal(hook.el.disabled, false);
+  assert.equal(attributes["aria-pressed"], "true");
+  assert.equal(attributes["aria-label"], "Camera tracking");
+
+  HomeStartChoice.destroyed.call(hook);
+  assert.equal(media.listeners.devicechange, undefined);
+});
+
+test("a browser that cannot say leaves the camera choice alone", async () => {
+  const storage = memoryStorage({ "burpee.start.camera": "1" });
+  const { hook, attributes } = mount("camera", storage, {});
+  await hook.cameraChecked;
+  assert.equal(hook.el.disabled, false);
+  assert.equal(attributes["aria-pressed"], "true");
+});
+
+test("the warmup never asks about cameras", async () => {
+  const { hook } = mount("warmup", memoryStorage(), cameras());
+  assert.equal(hook.cameraChecked, undefined);
+  assert.equal(hook.el.disabled, false);
 });

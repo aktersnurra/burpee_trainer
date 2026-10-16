@@ -4,6 +4,7 @@
 
 - Home has camera and warmup toggles beside play, remembered per device (default: camera off, warmup on); play is the only tap before the workout.
 - The session no longer asks about the camera, the warmup, or being ready: it opens the 5-second countdown, or one camera screen ("Starting camera", "Step into frame", "Hand up or hold still", "Camera unavailable"); the warmup runs straight into the workout's countdown. A session left on its finish screen still reopens there.
+- On a device without a camera the camera toggle is off and disabled ("No camera on this device"), and a remembered camera choice starts the workout without it.
 - The pose tracker holds a start sent while its code loads, so the camera cannot stall on "Starting camera".
 - The finish screen shows the counted reps and time with no fields: tapping the count or the time opens it for correction, the note sits behind a pencil, and Save opens any field it rejects.
 

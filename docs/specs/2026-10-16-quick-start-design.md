@@ -25,6 +25,10 @@ The action row of the workout hero becomes:
   `burpee.start.warmup`): the camera depends on where the phone is, not on who you are.
   First use, or storage unavailable: camera off, warmup on.
 - The toggles are client-only. Home's server state does not change; ▶ is unchanged.
+- A device with no camera (no video input listed, or no media devices at all) shows the
+  camera toggle off and disabled, labelled "No camera on this device", and re-checks on
+  `devicechange`. The remembered choice is kept. A browser that cannot say leaves the
+  toggle as it is.
 
 ## The session
 
@@ -48,6 +52,8 @@ draft to restore (a resumed session that was finishing still opens on the finish
   skeleton the preview already draws shows what is in frame, so the sentence about
   shoulders, hips and knee goes. "Continue without camera" stays on it, and continues as camera off with the
   same warmup choice.
+- **No camera on the device:** a remembered "camera on" starts as camera off, straight to
+  the countdown.
 - **Camera fails:** the same screen shows "Camera unavailable", with retry and continue
   without camera. Nothing has started.
 

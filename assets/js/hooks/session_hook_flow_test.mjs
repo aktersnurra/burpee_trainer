@@ -314,9 +314,14 @@ function startChoiceStorage({ camera, warmup }) {
 	return { getItem: (key) => values[key] ?? null, setItem() {} };
 }
 
+const withCamera = {
+	enumerateDevices: async () => [{ kind: "videoinput", deviceId: "", label: "" }],
+};
+
 function buildHarness({
 	poseTrackerReady = false,
 	choices = { camera: false, warmup: false },
+	mediaDevices = withCamera,
 	openSessionStore,
 	setTimeout: hookSetTimeout,
 	clearTimeout: hookClearTimeout,
@@ -404,6 +409,7 @@ function buildHarness({
 		...SessionHook,
 		el: root,
 		startChoiceStorage: startChoiceStorage(choices),
+		mediaDevices,
 		...(openSessionStore ? { openSessionStore } : {}),
 		...(hookSetTimeout ? { setTimeout: hookSetTimeout } : {}),
 		...(hookClearTimeout ? { clearTimeout: hookClearTimeout } : {}),
@@ -3506,5 +3512,24 @@ test("tapping the count opens it for correction and the correction is saved", as
 	reps.value = "4";
 	ctx.el.dispatchEvent({ type: "input", target: reps });
 	assert.equal(ctx.completionPayload().workout_session.burpee_count_actual, 4);
+	ctx.destroyed();
+});
+
+test("a remembered camera on a device without one goes straight to the countdown", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: false },
+		mediaDevices: { enumerateDevices: async () => [{ kind: "audioinput" }] },
+	});
+	const starts = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:start", () => starts.push(true));
+	await ctx.started;
+
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.flow.captureMode, "no_camera");
+	assert.equal(ctx.countdownCount, 5);
+	assert.deepEqual(starts, []);
 	ctx.destroyed();
 });

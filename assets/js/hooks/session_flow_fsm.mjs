@@ -156,6 +156,10 @@ export function flowTransition(state, event) {
 
 		case "START":
 			if (state.mode !== "starting") return unchanged(state);
+			// A camera chosen on this device but not found now is skipped, not an error.
+			if (state.captureMode === "camera" && event.cameraAvailable === false) {
+				return beginAfterSetup({ ...state, captureMode: "no_camera" }, event);
+			}
 			if (state.captureMode === "camera") {
 				return moved(
 					state,

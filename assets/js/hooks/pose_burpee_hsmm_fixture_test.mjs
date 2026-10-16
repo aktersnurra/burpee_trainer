@@ -357,6 +357,7 @@ async function runControlledSessionFixture(frames) {
 		...SessionHook,
 		el: root,
 		openSessionStore: async () => null,
+		mediaDevices: { enumerateDevices: async () => [{ kind: "videoinput" }] },
 		startChoiceStorage: {
 			getItem: (key) => ({ "burpee.start.camera": "1", "burpee.start.warmup": "0" })[key] ?? null,
 			setItem() {},
