@@ -246,12 +246,14 @@ function appendStablePanels(root) {
 		["camera-setup-failure-detail", "p", ""],
 		["camera-setup-retry", "button", ""],
 		["camera-setup-continue", "button", "Continue without camera"],
+		["session-discard-btn", "button", ""],
+		["session-discard-confirm", "div", ""],
+		["session-discard-keep", "button", "Keep it"],
+		["session-discard-yes", "button", "Discard"],
 		["completion-reps-edit", "button", ""],
 		["completion-duration-edit", "button", ""],
-		["completion-note-toggle", "button", ""],
 		["completion-reps-field", "div", ""],
 		["completion-duration-field", "div", ""],
-		["completion-note-field", "div", ""],
 		["session-actual-reps", "p", "0"],
 		["session-planned-reps", "span", "0"],
 		["session-actual-duration", "p", "0:00"],
@@ -277,19 +279,19 @@ function appendStablePanels(root) {
 		["completion-context-heat-affected-error", "p", ""],
 		["completion-primary-limiter-error", "p", ""],
 		["completion-preference-feedback-error", "p", ""],
-		["session-leave-btn", "a", "Leave and resume later"],
 	];
 	for (const [id, tag, text] of stableElements) {
 		const element = new FakeElement(tag);
 		element.id = id;
 		element.textContent = text;
-		if (id.endsWith("-field")) element.hidden = true;
+		if (id.endsWith("-field") || id === "session-discard-confirm") {
+			element.hidden = true;
+		}
 		if (id === "camera-setup-retry") {
 			element.hidden = true;
 			element.setAttribute("inert", "");
 		}
 		if (id === "workout_session_burpee_type") element.value = "six_count";
-		if (id === "session-leave-btn") element.setAttribute("href", "/");
 		if (id.endsWith("-error") || id === "session-save-errors") {
 			element.hidden = true;
 		}
@@ -1785,97 +1787,6 @@ test("mismatched session, content hash, or client draft is ignored", async () =>
 	}
 });
 
-test("leave and resume later has no deadline and navigates only after trace and draft durability", async () => {
-	let resolveTraceWrite;
-	let resolveDraftWrite;
-	const traceWritePending = new Promise((resolve) => {
-		resolveTraceWrite = resolve;
-	});
-	const draftWritePending = new Promise((resolve) => {
-		resolveDraftWrite = resolve;
-	});
-	const scheduled = [];
-	const store = {
-		loadDraft: async () => completionDraft(),
-		appendTraceChunk: async () => traceWritePending,
-		saveDraft: async () => draftWritePending,
-	};
-	const originalWindow = globalThis.window;
-	const navigations = [];
-	globalThis.window = {
-		location: { assign: (path) => navigations.push(path) },
-	};
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => store,
-		setTimeout(callback) {
-			scheduled.push(callback);
-			return scheduled.length;
-		},
-	});
-	await ctx.draftRestore;
-	ctx.queueTraceChunk({ chunk_index: 0 });
-
-	try {
-		assert.equal(click(ctx, "session-leave-btn"), true);
-		await flushHookPromises();
-		scheduled.forEach((callback) => callback());
-		assert.deepEqual(navigations, []);
-
-		resolveTraceWrite();
-		await flushHookPromises();
-		scheduled.forEach((callback) => callback());
-		assert.deepEqual(navigations, []);
-
-		resolveDraftWrite();
-		await ctx.leaveWrite;
-
-		assert.equal(ctx.flow.mode, "completion_review");
-		assert.deepEqual(ctx.events, []);
-		assert.deepEqual(navigations, ["/"]);
-	} finally {
-		ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
-test("leave and resume later stays put when the current draft is not durable", async () => {
-	let rejectDraftWrite;
-	const draftWritePending = new Promise((_resolve, reject) => {
-		rejectDraftWrite = reject;
-	});
-	const originalWindow = globalThis.window;
-	const navigations = [];
-	globalThis.window = {
-		location: { assign: (path) => navigations.push(path) },
-	};
-	const ctx = mountedFlowHarness({
-		poseTrackerReady: true,
-		openSessionStore: async () => ({
-			loadDraft: async () => completionDraft(),
-			saveDraft: async () => draftWritePending,
-		}),
-	});
-	ctx.renderer.renderSaveErrors = (reply) => ctx.saveErrorReplies.push(reply);
-	await ctx.draftRestore;
-
-	try {
-		click(ctx, "session-leave-btn");
-		rejectDraftWrite(new Error("draft write failed"));
-		await ctx.leaveWrite;
-
-		assert.deepEqual(navigations, []);
-		assert.equal(ctx.traceRetentionAvailable, false);
-		assert.ok(ctx.inMemoryCompletionDraft);
-		assert.deepEqual(ctx.saveErrorReplies.at(-1).global_errors, [
-			"Could not save this session for resume. Stay on this page and try again.",
-		]);
-	} finally {
-		ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
 test("camera through completion review requires no server event", async () => {
 	const ctx = mountedFlowHarness({
 		poseTrackerReady: true,
@@ -2609,21 +2520,60 @@ test("running frames derive rest set progress from the hook timeline", () => {
 	assert.equal(warmupCtx.renderedModels[0].sessionProgress, null);
 });
 
-test("countdown pause keeps Finish early disabled", () => {
-	const ctx = buildHarness({ poseTrackerReady: null });
-	const actions = ctx.el.querySelector("#session-pause-actions");
-	const finishEarly = ctx.el.querySelector("#finish-early-btn");
-	ctx.activeSegment = "workout";
-	ctx.startTime = null;
+test("any pause can finish early, so a session can always reach discard", () => {
+	for (const [activeSegment, startTime, countdownPaused, paused] of [
+		["workout", null, true, false],
+		["warmup", null, true, false],
+		["warmup", 0, false, true],
+	]) {
+		const ctx = buildHarness({ poseTrackerReady: null });
+		const finishEarly = ctx.el.querySelector("#finish-early-btn");
+		Object.assign(ctx, { activeSegment, startTime, countdownPaused, paused });
+		ctx.updatePauseActionsVisibility();
+		assert.equal(finishEarly.hasAttribute("disabled"), false, activeSegment);
+	}
+});
+
+test("finishing early in the warmup opens the finish screen with nothing counted", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		choices: { camera: true, warmup: true },
+	});
+	const stops = [];
+	ctx.el
+		.querySelector("#pose-tracker")
+		.addEventListener("pose-tracker:stop", () => stops.push(true));
+	await ctx.started;
+	trackerEvent(ctx, "pose-tracker:started");
+	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
+	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
+	assert.equal(ctx.flow.mode, "warmup_running");
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.paused = true;
+
+	click(ctx, "finish-early-btn");
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	assert.equal(ctx.flow.completion.durationSecActual, 0);
+	assert.equal(ctx.activeSegment, null);
+	assert.ok(stops.length > 0);
+	ctx.destroyed();
+});
+
+test("finishing early during the countdown opens the finish screen too", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	assert.equal(ctx.countdownCount, 5);
 	ctx.countdownPaused = true;
 
-	assert.equal(actions.children.length, 1);
-	ctx.updatePauseActionsVisibility();
+	click(ctx, "finish-early-btn");
 
-	assert.equal(actions.hasAttribute("inert"), false);
-	assert.equal(actions.attributes.get("aria-hidden"), "false");
-	assert.equal(actions.style.pointerEvents, "auto");
-	assert.equal(finishEarly.hasAttribute("disabled"), true);
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
+	assert.equal(ctx.countdownCount, null);
+	ctx.destroyed();
 });
 
 function prepareTrustedCompletion(ctx) {
@@ -2884,7 +2834,7 @@ test("final Save excludes stale feedback and shows errors for removed fields", a
 	ctx.destroyed();
 });
 
-test("Leave is rejected until the delayed Save acknowledgement and local commit settle", async () => {
+test("a delayed Save acknowledgement finalizes once and never navigates after destroy", async () => {
 	let acknowledge;
 	let resolveFinalization;
 	let finalizationCalls = 0;
@@ -2913,23 +2863,9 @@ test("Leave is rejected until the delayed Save acknowledgement and local commit 
 	try {
 		submitCompletion(ctx);
 		assert.equal(ctx.flow.saveStatus, "saving");
-		assert.equal(
-			ctx.el.querySelector("#session-leave-btn").getAttribute("aria-disabled"),
-			"true",
-		);
-		assert.match(
-			ctx.el.querySelector("#session-leave-btn").getAttribute("aria-label"),
-			/Save in progress/,
-		);
-
-		click(ctx, "session-leave-btn");
 		await flushHookPromises();
 		assert.equal(finalizationCalls, 0);
 		assert.deepEqual(navigations, []);
-		assert.match(
-			ctx.el.querySelector("#session-save-errors").textContent,
-			/Save is still in progress/,
-		);
 
 		acknowledge({ status: "ok", session_id: 41, redirect_to: "/stats" });
 		await flushHookPromises();
@@ -3382,51 +3318,6 @@ test("retry after server completion retries every failed local step without anot
 	}
 });
 
-test("Leave after server completion points to the explicit local-only retry without navigating", async () => {
-	let finalizationAttempts = 0;
-	let serverCompletionCalls = 0;
-	const store = {
-		loadDraft: async () => null,
-		async finalizeServerCompletion() {
-			finalizationAttempts += 1;
-			if (finalizationAttempts === 1)
-				throw new Error("finalization unavailable");
-			return { traceReady: false };
-		},
-	};
-	const originalWindow = globalThis.window;
-	const navigations = [];
-	globalThis.window = {
-		location: { assign: (path) => navigations.push(path) },
-		dispatchEvent() {},
-	};
-	const ctx = mountedFlowHarness({ openSessionStore: async () => store });
-	prepareSaveReview(ctx);
-	ctx.pushEvent = (_name, _payload, callback) => {
-		serverCompletionCalls += 1;
-		callback({ status: "ok", session_id: 41, redirect_to: "/stats" });
-	};
-
-	try {
-		submitCompletion(ctx);
-		await ctx.saveCleanup;
-		assert.equal(ctx.flow.mode, "completion_review");
-
-		assert.equal(click(ctx, "session-leave-btn"), true);
-		await flushHookPromises();
-		assert.equal(serverCompletionCalls, 1);
-		assert.equal(finalizationAttempts, 1);
-		assert.deepEqual(navigations, []);
-		assert.match(
-			ctx.el.querySelector("#session-save-errors").textContent,
-			/Retry finalization/,
-		);
-	} finally {
-		ctx.destroyed();
-		globalThis.window = originalWindow;
-	}
-});
-
 test("a fake IndexedDB blocked open settles into actionable visible Save failure", async () => {
 	const database = { close() {} };
 	const indexedDB = {
@@ -3481,7 +3372,7 @@ test("finishing untouched saves the counted reps and time with one tap", async (
 	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
 	ctx.completeWorkoutSegment();
 
-	for (const name of ["reps", "duration", "note"]) {
+	for (const name of ["reps", "duration"]) {
 		assert.equal(ctx.el.querySelector(`#completion-${name}-field`).hidden, true);
 	}
 	const payload = ctx.completionPayload().workout_session;
@@ -3501,7 +3392,6 @@ test("tapping the count opens it for correction and the correction is saved", as
 	for (const [button, name] of [
 		["completion-reps-edit", "reps"],
 		["completion-duration-edit", "duration"],
-		["completion-note-toggle", "note"],
 	]) {
 		click(ctx, button);
 		assert.equal(ctx.el.querySelector(`#completion-${name}-field`).hidden, false);
@@ -3531,5 +3421,90 @@ test("a remembered camera on a device without one goes straight to the countdown
 	assert.equal(ctx.flow.captureMode, "no_camera");
 	assert.equal(ctx.countdownCount, 5);
 	assert.deepEqual(starts, []);
+	ctx.destroyed();
+});
+
+async function finishedWithDiscardReply(reply, discarded = []) {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => null,
+			saveDraft: async () => {},
+			discardSession: async (...args) => {
+				discarded.push(args);
+			},
+		}),
+	});
+	ctx.pushEvent = (name, payload, callback) => {
+		ctx.events.push({ name, payload });
+		if (reply) callback(reply);
+	};
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+	return ctx;
+}
+
+test("discard asks on the page before it deletes anything", async () => {
+	const ctx = await finishedWithDiscardReply(null);
+	const confirm = ctx.el.querySelector("#session-discard-confirm");
+	click(ctx, "session-discard-btn");
+	assert.equal(confirm.hidden, false);
+	click(ctx, "session-discard-keep");
+	assert.equal(confirm.hidden, true);
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("a confirmed discard deletes the session, clears the device copy, and goes Home", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	const discarded = [];
+	const ctx = await finishedWithDiscardReply({ status: "discarded" }, discarded);
+	try {
+		click(ctx, "session-discard-btn");
+		click(ctx, "session-discard-yes");
+		await ctx.discarding;
+
+		assert.deepEqual(ctx.events, [{ name: "discard_session", payload: {} }]);
+		assert.deepEqual(discarded, [[41, "hash-1"]]);
+		assert.deepEqual(navigations, ["/"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("a refused discard keeps everything and says so", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	const discarded = [];
+	const ctx = await finishedWithDiscardReply({ status: "error" }, discarded);
+	try {
+		click(ctx, "session-discard-btn");
+		click(ctx, "session-discard-yes");
+		await ctx.discarding;
+
+		assert.deepEqual(discarded, []);
+		assert.deepEqual(navigations, []);
+		assert.equal(ctx.el.querySelector("#session-discard-confirm").hidden, true);
+		assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
+		assert.equal(ctx.flow.mode, "completion_review");
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("discard waits while a save is in flight", async () => {
+	const ctx = await finishedWithDiscardReply({ status: "discarded" });
+	ctx.dispatchFlow({ type: "SAVE_STARTED" });
+	click(ctx, "session-discard-btn");
+	click(ctx, "session-discard-yes");
+	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });

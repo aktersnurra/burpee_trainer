@@ -334,7 +334,10 @@ export function flowTransition(state, event) {
 			return finishWorkout(state, event.result);
 
 		case "FINISH_EARLY":
-			if (state.mode !== "workout_running") return unchanged(state);
+			// From the warmup too: the finish screen is where an unwanted session is discarded.
+			if (!["workout_running", "warmup_running"].includes(state.mode)) {
+				return unchanged(state);
+			}
 			return finishWorkout(state, event.result);
 
 		case "RESTORE_COMPLETION_DRAFT":

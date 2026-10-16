@@ -88,6 +88,69 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
+  test "discarding a started session deletes it and nothing else", %{conn: conn, user: user} do
+    scope = Scope.for_user(user)
+    plan = plan_fixture(user)
+    {:ok, kept} = Workouts.start_plan(scope, plan.id, Ecto.UUID.generate())
+
+    {:ok, kept} =
+      Workouts.complete_session(
+        scope,
+        kept.id,
+        %{burpee_count_actual: 9, duration_sec_actual: 60},
+        :timed
+      )
+
+    {:ok, session} = Workouts.start_plan(scope, plan.id, Ecto.UUID.generate())
+
+    {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
+    assert has_element?(view, "#session-discard-btn[type=button][aria-label='Discard session']")
+    assert has_element?(view, "#session-discard-confirm[hidden]", "Nothing will be saved")
+
+    render_hook(view, "discard_session", %{})
+    assert_reply(view, %{status: "discarded"})
+
+    refute Repo.get(WorkoutSession, session.id)
+    assert Repo.get!(WorkoutSession, kept.id).state == :completed
+  end
+
+  test "a completed session cannot be discarded from the finish screen", %{
+    conn: conn,
+    user: user
+  } do
+    scope = Scope.for_user(user)
+    plan = plan_fixture(user)
+    {:ok, session} = Workouts.start_plan(scope, plan.id, Ecto.UUID.generate())
+    {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
+
+    {:ok, _} =
+      Workouts.complete_session(
+        scope,
+        session.id,
+        %{burpee_count_actual: 9, duration_sec_actual: 60},
+        :timed
+      )
+
+    render_hook(view, "discard_session", %{})
+    assert_reply(view, %{status: "error"})
+    assert Repo.get!(WorkoutSession, session.id).state == :completed
+  end
+
+  test "the paused workout can go back to Home and keep the session", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+    {:ok, session} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+    {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
+
+    assert has_element?(
+             view,
+             "#session-pause-actions #session-pause-leave[aria-label='Back to Home'][href='/'] .hero-arrow-left"
+           )
+
+    view |> element("#session-pause-leave") |> render_click()
+    assert_redirect(view, ~p"/")
+    assert Repo.get!(WorkoutSession, session.id).state == :started
+  end
+
   test "a started snapshot remains executable after its plan is archived", %{
     conn: conn,
     user: user
@@ -289,7 +352,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
           session-completion-review
           session-completion-form
           session-save-btn
-          session-leave-btn
+          session-discard-btn
           session-live-status
         ] do
       assert has_element?(view, "##{id}")
@@ -314,7 +377,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-completion-mood [data-mood='1']", "Good")
     # The counted result is the answer; each field opens only when asked for, but stays in
     # the form.
-    for name <- ~w[reps duration note] do
+    for name <- ~w[reps duration] do
       assert has_element?(view, "#session-completion-form #completion-#{name}-field[hidden]")
       assert has_element?(view, "#completion-#{name}-field #completion-#{name}-input")
     end
@@ -329,13 +392,11 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
              "#completion-duration-edit[type=button][aria-label='Correct time'] #session-actual-duration"
            )
 
-    assert has_element?(
-             view,
-             "#completion-note-toggle[type=button][aria-label='Add a note'] .hero-pencil"
-           )
+    # Save or discard: no note, no leaving to come back later.
+    for removed <- ~w[completion-note-toggle completion-note-input session-leave-btn] do
+      refute has_element?(view, "##{removed}")
+    end
 
-    assert has_element?(view, "#completion-note-input.border-b")
-    refute has_element?(view, "#completion-note-input.rounded-xl")
     refute has_element?(view, "#session-more-feedback")
     refute has_element?(view, "#session-typed-feedback")
 
@@ -346,13 +407,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert has_element?(view, "#session-save-icon-pending[hidden] .hero-arrow-path")
 
-    assert has_element?(
-             view,
-             "#session-leave-btn[aria-label='Leave and resume later'] .hero-arrow-left"
-           )
-
+    assert has_element?(view, "#session-discard-btn[aria-label='Discard session'] .hero-trash")
     refute has_element?(view, "#session-save-btn", "Save session")
-    refute has_element?(view, "#session-leave-btn", "Leave and resume later")
     refute has_element?(view, "#session-report-pending-status")
     refute has_element?(view, "#session-report-pending-retry")
     refute has_element?(view, "#session-abort-btn")

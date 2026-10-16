@@ -90,7 +90,6 @@ const SessionHook = {
     this.serverCompletion = null;
     this.pendingServerCompletionFacts = null;
     this.storageFailureMessage = null;
-    this.leaveWrite = Promise.resolve();
     this.saveCleanup = Promise.resolve();
     this.onPoseTrackerInitialized = () => this.reissuePendingArm();
     this.onPoseTrackerStarted = () =>
@@ -232,12 +231,13 @@ const SessionHook = {
       const correct = [
         ["#completion-reps-edit", "reps"],
         ["#completion-duration-edit", "duration"],
-        ["#completion-note-toggle", "note"],
       ].find(([selector]) => e.target.closest(selector));
+      const discardAsk = e.target.closest("#session-discard-btn");
+      const discardKeep = e.target.closest("#session-discard-keep");
+      const discardYes = e.target.closest("#session-discard-yes");
       const continueWithoutCamera = e.target.closest("#camera-setup-continue");
       const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
-      const leave = e.target.closest("#session-leave-btn");
       const mood = e.target.dataset?.mood;
 
       if (retryCamera) this.dispatchFlow({ type: "RETRY_CAMERA" });
@@ -249,12 +249,11 @@ const SessionHook = {
       }
       if (ringContainer && this.canTogglePause()) this.togglePause();
       if (finishEarly) this.onFinishEarly();
-      if (leave) {
-        e.preventDefault();
-        this.leaveAndResume(leave.getAttribute("href") || "/");
-      }
       if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
       if (correct) this.renderer.revealCompletionField(correct[1], true);
+      if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
+      if (discardKeep) this.renderer.showDiscardConfirm(false);
+      if (discardYes) this.discardSession();
     };
     this.el.addEventListener("click", this.onRootClick);
 
@@ -669,46 +668,45 @@ const SessionHook = {
     this.renderer.renderCompletion(this.flow.completion);
   },
 
-  leaveAndResume(path) {
-    if (this.flow.mode !== "completion_review") return;
-    if (this.serverCompletion) {
-      this.renderer.renderSaveErrors({
-        status: "pending",
-        field_errors: {},
-        global_errors: [
-          "Session saved. Use Retry finalization to finish local evidence before leaving.",
-        ],
-      });
-      return;
-    }
-    if (this.flow.saveStatus === "saving") {
-      this.renderer.renderSaveErrors({
-        status: "pending",
-        field_errors: {},
-        global_errors: ["Save is still in progress. Stay on this page."],
-      });
-      return;
-    }
-    const generation = this.lifecycleGeneration;
-    this.queueCompletionDraft();
+  // A finished workout that is not saved yet may be thrown away instead.
+  canDiscard() {
+    return (
+      this.flow.mode === "completion_review" &&
+      this.flow.saveStatus !== "saving" &&
+      !this.flow.completionLocked &&
+      !this.serverCompletion &&
+      !this.discarding
+    );
+  },
 
-    this.leaveWrite = Promise.all([this.traceWrite, this.draftWrite]).then(
-      ([traceDurable, draftDurable]) => {
-        if (traceDurable && draftDurable && this.lifecycleActive(generation)) {
-          window.location.assign(path);
-        } else if (this.lifecycleActive(generation)) {
-          this.renderStorageFailure(
-            "Could not save this session for resume. Stay on this page and try again.",
-          );
-        }
+  discardSession() {
+    if (!this.canDiscard()) return;
+    const generation = this.lifecycleGeneration;
+    const refused = () => {
+      if (!this.lifecycleActive(generation)) return;
+      this.discarding = null;
+      this.renderer.showDiscardConfirm(false);
+      this.renderer.renderSaveErrors({
+        field_errors: {},
+        global_errors: ["Could not discard the session. Try again."],
+      });
+    };
+
+    this.discarding = new Promise((resolve) => {
+      this.pushEvent("discard_session", {}, resolve);
+    }).then(
+      async (reply) => {
+        if (!this.lifecycleActive(generation)) return;
+        if (reply?.status !== "discarded") return refused();
+        // The server has deleted it; the device copy goes too, best effort.
+        await Promise.resolve(this.draftWrite).catch(() => undefined);
+        const store = await this.storeReady;
+        await Promise.resolve(
+          store?.discardSession?.(this.sessionId, this.contentHash),
+        ).catch(() => undefined);
+        if (this.lifecycleActive(generation)) window.location.assign("/");
       },
-      () => {
-        if (this.lifecycleActive(generation)) {
-          this.renderStorageFailure(
-            "Could not save this session for resume. Stay on this page and try again.",
-          );
-        }
-      },
+      refused,
     );
   },
 
@@ -1201,10 +1199,7 @@ const SessionHook = {
 
     const isPaused = this.paused || this.countdownPaused;
     const canFinishEarly =
-      this.paused &&
-      !this.countdownPaused &&
-      this.activeSegment === "workout" &&
-      this.startTime !== null;
+      isPaused && ["warmup", "workout"].includes(this.activeSegment);
     actions.style.opacity = isPaused ? "1" : "0";
     actions.style.transform = isPaused ? "translateY(0)" : "";
     actions.style.pointerEvents = isPaused ? "auto" : "none";
@@ -1359,15 +1354,23 @@ const SessionHook = {
     };
   },
 
+  // Nothing is saved until Save, so this asks nothing: the finish screen can still leave
+  // or discard. Before the workout's clock runs (warmup, countdown) nothing is counted.
   onFinishEarly() {
+    if (!(this.paused || this.countdownPaused)) return;
+    if (!["warmup", "workout"].includes(this.activeSegment)) return;
     if (
-      this.activeSegment !== "workout" ||
+      this.activeSegment === "warmup" ||
       this.countdownCount !== null ||
       this.startTime === null
-    )
+    ) {
+      this.dispatchTrackerCommand("pose-tracker:stop");
+      this.dispatchFlow({
+        type: "FINISH_EARLY",
+        result: { burpeeCountDone: 0, scheduledRepsDone: 0, durationSec: 0 },
+      });
       return;
-    if (!confirm("End the session now and log what you've done so far?"))
-      return;
+    }
     const elapsed = this.segment?.clock?.elapsedSec ?? 0;
     this.finishingEarly = true;
     this.dispatchSegment({ type: "FINISH_EARLY", elapsedSec: elapsed });

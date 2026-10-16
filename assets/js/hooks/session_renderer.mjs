@@ -208,7 +208,8 @@ export class SessionRenderer {
 			"workout_session_burpee_type",
 			"completion-reps-edit",
 			"completion-duration-edit",
-			"completion-note-toggle",
+			"session-discard-btn",
+			"session-discard-yes",
 		];
 
 		for (const id of factIds) {
@@ -244,19 +245,6 @@ export class SessionRenderer {
 				.querySelector("#session-save-icon-pending")
 				?.toggleAttribute("hidden", !saving && !locked);
 		}
-
-		const leave = this.root.querySelector("#session-leave-btn");
-		if (leave) {
-			const disabled = saving || locked;
-			let label = "Leave and resume later";
-			if (locked) label = "Session saved—finish local finalization";
-			else if (saving) label = "Save in progress—stay on this page";
-			leave.setAttribute("aria-disabled", String(disabled));
-			leave.setAttribute("aria-label", label);
-			leave.setAttribute("title", label);
-			leave.toggleAttribute("tabindex", disabled);
-			if (disabled) leave.setAttribute("tabindex", "-1");
-		}
 	}
 
 	announce(text) {
@@ -278,6 +266,13 @@ export class SessionRenderer {
 		if (!field) return;
 		field.hidden = false;
 		if (focus) this.root.querySelector(`#completion-${name}-input`)?.focus();
+	}
+
+	showDiscardConfirm(visible) {
+		const confirm = this.root.querySelector("#session-discard-confirm");
+		if (!confirm) return;
+		confirm.hidden = !visible;
+		if (visible) this.root.querySelector("#session-discard-keep")?.focus();
 	}
 
 	renderCompletion(completion) {
@@ -325,7 +320,6 @@ export class SessionRenderer {
 		}
 		if (durationInput) durationInput.value = String(completion.durationSecActual);
 		if (noteInput) noteInput.value = completion.notePost || "";
-		if (completion.notePost) this.revealCompletionField("note");
 		if (lowEnergyInput)
 			lowEnergyInput.checked = completion.contextLowEnergy ?? false;
 		if (highEnergyInput)

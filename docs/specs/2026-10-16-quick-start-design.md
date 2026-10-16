@@ -25,6 +25,8 @@ The action row of the workout hero becomes:
   `burpee.start.warmup`): the camera depends on where the phone is, not on who you are.
   First use, or storage unavailable: camera off, warmup on.
 - The toggles are client-only. Home's server state does not change; ▶ is unchanged.
+- The same toggles flank Resume: resuming starts the workout again, so its camera and warmup
+  can be changed before it.
 - A device with no camera (no video input listed, or no media devices at all) shows the
   camera toggle off and disabled, labelled "No camera on this device", and re-checks on
   `devicechange`. The remembered choice is kept. A browser that cannot say leaves the
@@ -57,18 +59,31 @@ draft to restore (a resumed session that was finishing still opens on the finish
 - **Camera fails:** the same screen shows "Camera unavailable", with retry and continue
   without camera. Nothing has started.
 
+- **Leaving:** the start screens' back arrow went with them, so the paused screen has ←
+  Back to Home under "Finish early" (tap the countdown or the workout to pause). The
+  session stays started and Home offers Resume.
+- **Finish early** is offered on any pause, warmup and countdowns included, and asks
+  nothing: nothing is saved until ✓, and the finish screen can leave or discard. Before
+  the workout's clock runs it finishes with nothing counted.
+
 Removed: the capture choice, warmup choice and workout-ready screens, the 4-second
 warmup skip, and their copy. The flow FSM loses `capture_choice`, `warmup_choice` and
 `workout_ready`; `SESSION_READY` carries the two choices.
 
 ## Finishing
 
+A finished workout is saved or discarded; the screen offers nothing else.
+
 - The reps and seconds inputs go. The big count and the "of N · m:ss" line show them;
   tapping either opens it for correction.
 - Mood stays as three taps, optional.
-- The note sits behind an icon (`hero-pencil`), opening the text field in place. It can
-  also be added later from Claude, since notes on a finished session are correctable.
-- Leave and save are unchanged. A good day is one ✓.
+- No note and no "leave and resume later". A note can be added afterwards from Claude,
+  since notes on a finished session are correctable.
+- Two actions, at either end: discard (trash) and save (✓). A good day is one ✓.
+- Discard asks on the page ("Discard this workout? Nothing will be saved.", Keep it /
+  Discard), the server deletes it only while it is still started, and the device's draft
+  and pose trace are cleared before going Home. Not while saving or once saved.
+- Closing the page still keeps the draft, so Home offers "Review & save" next time.
 
 ## Out of scope
 

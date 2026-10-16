@@ -200,6 +200,16 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               >
                 Finish early
               </button>
+              <%!-- Leaves the session started, as the start screens' back arrow did. --%>
+              <.link
+                id="session-pause-leave"
+                navigate={~p"/"}
+                aria-label="Back to Home"
+                title="Back to Home"
+                class="session-pause-leave inline-flex size-14 items-center justify-center rounded-full"
+              >
+                <.icon name="hero-arrow-left" class="size-6" />
+              </.link>
             </div>
           </div>
         </div>
@@ -310,19 +320,6 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               </button>
             <% end %>
           </div>
-          <div id="completion-note-field" hidden>
-            <.input
-              field={@form[:note_post]}
-              id="completion-note-input"
-              type="textarea"
-              label="Note"
-              rows="2"
-              placeholder="How did it go?"
-              aria-describedby="completion-note-error"
-              class="w-full resize-none border-b border-[var(--session-border)] bg-transparent px-0 py-3 text-sm text-[var(--session-ink)]"
-            />
-            <p id="completion-note-error" hidden></p>
-          </div>
 
           <div class="hidden">
             <.input field={@form[:burpee_type]} type="hidden" />
@@ -331,25 +328,46 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <.input field={@form[:client_session_id]} type="hidden" />
           </div>
 
-          <div class="mt-6 flex items-center justify-end gap-3">
-            <.link
-              id="session-leave-btn"
-              navigate={~p"/"}
-              aria-label="Leave and resume later"
-              title="Leave and resume later"
-              class="inline-flex size-14 items-center justify-center rounded-full text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
-            >
-              <.icon name="hero-arrow-left" class="size-6" />
-            </.link>
+          <%!-- Discarding deletes the started session; it asks here, not in a dialog. --%>
+          <div
+            id="session-discard-confirm"
+            hidden
+            role="group"
+            aria-labelledby="session-discard-question"
+            class="mt-6 border-t border-[var(--session-border)] pt-5 text-center"
+          >
+            <p id="session-discard-question" class="text-base">
+              Discard this workout? Nothing will be saved.
+            </p>
+            <div class="mt-4 flex items-center justify-center gap-3">
+              <button
+                id="session-discard-keep"
+                type="button"
+                class="min-h-11 px-5 text-sm text-[var(--session-muted)] underline underline-offset-4"
+              >
+                Keep it
+              </button>
+              <button
+                id="session-discard-yes"
+                type="button"
+                class="min-h-11 rounded-full border border-red-700/60 px-5 text-sm font-medium text-red-700"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+
+          <%!-- A finished workout is saved or discarded; nothing else. --%>
+          <div class="mt-6 flex items-center justify-between gap-3">
             <button
-              id="completion-note-toggle"
+              id="session-discard-btn"
               type="button"
-              aria-label="Add a note"
-              title="Add a note"
-              aria-controls="completion-note-field"
+              aria-label="Discard session"
+              title="Discard session"
+              aria-controls="session-discard-confirm"
               class="inline-flex size-14 items-center justify-center rounded-full text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
             >
-              <.icon name="hero-pencil" class="size-6" />
+              <.icon name="hero-trash" class="size-6" />
             </button>
             <button
               id="session-save-btn"

@@ -5,8 +5,10 @@
 - Home has camera and warmup toggles beside play, remembered per device (default: camera off, warmup on); play is the only tap before the workout.
 - The session no longer asks about the camera, the warmup, or being ready: it opens the 5-second countdown, or one camera screen ("Starting camera", "Step into frame", "Hand up or hold still", "Camera unavailable"); the warmup runs straight into the workout's countdown. A session left on its finish screen still reopens there.
 - On a device without a camera the camera toggle is off and disabled ("No camera on this device"), and a remembered camera choice starts the workout without it.
+- Pausing offers ← Back to Home under Finish early (the session stays resumable), and the finish screen can discard an unsaved session after an on-page confirmation; the server deletes only a started session and the device's draft and trace go with it.
+- Finish early works on any pause (warmup and countdowns too) without a browser confirm, so a session can always reach discard; the camera and warmup toggles also flank Resume.
 - The pose tracker holds a start sent while its code loads, so the camera cannot stall on "Starting camera".
-- The finish screen shows the counted reps and time with no fields: tapping the count or the time opens it for correction, the note sits behind a pencil, and Save opens any field it rejects.
+- The finish screen is save or discard: it shows the counted reps and time with no fields (tapping the count or the time opens it for correction, and Save opens any field it rejects), and has no note or leave-and-resume-later; a note can be added afterwards through Claude.
 
 ## 2026-10-04 — Coach/Home branch review fixes
 

@@ -513,6 +513,36 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
+  @start_choices %{
+    "camera" => {"Camera tracking", "hero-video-camera"},
+    "warmup" => {"Warmup", "hero-fire"}
+  }
+
+  attr(:choice, :string, required: true, values: Map.keys(@start_choices))
+
+  # A start toggle beside play or Resume. The device remembers it; the server renders it
+  # once and leaves it.
+  def start_choice(assigns) do
+    {label, icon} = Map.fetch!(@start_choices, assigns.choice)
+    assigns = assign(assigns, label: label, icon: icon)
+
+    ~H"""
+    <button
+      id={"home-start-#{@choice}"}
+      type="button"
+      phx-hook="HomeStartChoice"
+      phx-update="ignore"
+      data-start-choice={@choice}
+      aria-pressed="false"
+      aria-label={@label}
+      title={@label}
+      class="home-text-action home-start-choice"
+    >
+      <.icon name={@icon} class="size-5" />
+    </button>
+    """
+  end
+
   attr(:state, :map, required: true)
 
   def workspace(assigns) do
@@ -602,33 +632,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               class="home-workout-actions"
               data-expanded={to_string(@state.expanded?)}
             >
-              <%!-- The device remembers these; the server renders them once and leaves them. --%>
-              <button
-                id="home-start-camera"
-                type="button"
-                phx-hook="HomeStartChoice"
-                phx-update="ignore"
-                data-start-choice="camera"
-                aria-pressed="false"
-                aria-label="Camera tracking"
-                title="Camera tracking"
-                class="home-text-action home-start-choice"
-              >
-                <.icon name="hero-video-camera" class="size-5" />
-              </button>
-              <button
-                id="home-start-warmup"
-                type="button"
-                phx-hook="HomeStartChoice"
-                phx-update="ignore"
-                data-start-choice="warmup"
-                aria-pressed="false"
-                aria-label="Warmup"
-                title="Warmup"
-                class="home-text-action home-start-choice"
-              >
-                <.icon name="hero-fire" class="size-5" />
-              </button>
+              <.start_choice choice="camera" />
+              <.start_choice choice="warmup" />
               <button
                 id="home-edit-workout"
                 type="button"

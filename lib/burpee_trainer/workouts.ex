@@ -1967,6 +1967,20 @@ defmodule BurpeeTrainer.Workouts do
 
   def delete_session(%Scope{}, %WorkoutSession{}), do: {:error, :not_found}
 
+  @doc """
+  Discard a session the user started but does not want kept. Only a started session;
+  once completed it is history, deleted through `delete_session/2`.
+  """
+  @spec discard_started_session(Scope.t(), integer()) ::
+          {:ok, WorkoutSession.t()} | {:error, Ecto.Changeset.t() | :not_found}
+  def discard_started_session(%Scope{user: %User{id: user_id}} = scope, session_id)
+      when is_integer(session_id) do
+    case Repo.get_by(WorkoutSession, id: session_id, user_id: user_id, state: :started) do
+      nil -> {:error, :not_found}
+      session -> delete_session(scope, session)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------

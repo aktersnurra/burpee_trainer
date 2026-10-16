@@ -561,3 +561,24 @@ test("a blocked database upgrade rejects instead of hanging forever", async () =
     /blocked/i,
   );
 });
+
+test("a discarded session leaves no draft, trace, or upload behind, and touches no other", async () => {
+  const store = createSessionStore(memoryEngine());
+  for (const id of [11, 12]) {
+    await store.saveDraft({ session_id: id, content_hash: `hash-${id}`, client_session_id: "c" });
+    await store.appendTraceChunk(id, "c", { chunk_index: 0, payload: {} });
+    await store.appendTraceChunk(id, "c", { chunk_index: 1, payload: {} });
+    await store.finalizeServerCompletion(id, "unrelated-hash", "c");
+  }
+
+  await store.discardSession(11, "hash-11");
+
+  assert.equal(await store.loadDraft({ sessionId: 11, contentHash: "hash-11" }), null);
+  assert.deepEqual(await store.listTraceChunks(11), []);
+  assert.notEqual(await store.loadDraft({ sessionId: 12, contentHash: "hash-12" }), null);
+  assert.equal((await store.listTraceChunks(12)).length, 2);
+  assert.deepEqual(
+    (await store.listReadyTraceUploads()).map((upload) => upload.session_id),
+    [12],
+  );
+});

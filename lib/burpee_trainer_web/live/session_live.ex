@@ -108,6 +108,16 @@ defmodule BurpeeTrainerWeb.SessionLive do
     end
   end
 
+  def handle_event("discard_session", _payload, socket) do
+    case Workouts.discard_started_session(
+           socket.assigns.current_scope,
+           socket.assigns.workout_session.id
+         ) do
+      {:ok, _} -> {:reply, %{status: "discarded"}, socket}
+      {:error, _} -> {:reply, %{status: "error"}, socket}
+    end
+  end
+
   def handle_event("save_session", _payload, socket) do
     {:reply,
      %{

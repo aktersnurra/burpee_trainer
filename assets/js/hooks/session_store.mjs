@@ -70,6 +70,18 @@ export function createSessionStore(engine) {
     async settleAcknowledgedFinalUpload(sessionId, acceptedIndexes) {
       await engine.settleAcknowledgedFinalUpload(sessionId, acceptedIndexes);
     },
+
+    // The server deleted the session; nothing of it should be resumed or uploaded.
+    async discardSession(sessionId, contentHash) {
+      const chunks = await this.listTraceChunks(sessionId);
+      await Promise.all([
+        engine.delete(DRAFTS, [sessionId, contentHash]),
+        engine.delete(UPLOADS, sessionId),
+        ...chunks.map((chunk) =>
+          engine.delete(CHUNKS, [chunk.session_id, chunk.chunk_index]),
+        ),
+      ]);
+    },
   };
 }
 

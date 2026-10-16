@@ -134,18 +134,22 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 </h1>
                 <p class="home-result-meta home-resume-meta">{resume_meta(@started_session)}</p>
                 <p id="home-session-state" class="home-result-status">In progress</p>
-                <button
-                  id="resume-recommended-workout"
-                  data-primary-action="resume"
-                  type="button"
-                  phx-click="resume_recommendation"
-                  phx-value-session-id={@started_session.id}
-                  class="home-primary-action home-play-action"
-                >
-                  <.icon name="hero-play-solid" class="size-6" />
-                  <%!-- Named for screen readers; the hook says "Review & save" for a draft. --%>
-                  <span id="home-resume-action-label" class="sr-only">Resume</span>
-                </button>
+                <div class="home-resume-actions">
+                  <HomeWorkoutComponents.start_choice choice="camera" />
+                  <button
+                    id="resume-recommended-workout"
+                    data-primary-action="resume"
+                    type="button"
+                    phx-click="resume_recommendation"
+                    phx-value-session-id={@started_session.id}
+                    class="home-primary-action home-play-action"
+                  >
+                    <.icon name="hero-play-solid" class="size-6" />
+                    <%!-- Named for screen readers; the hook says "Review & save" for a draft. --%>
+                    <span id="home-resume-action-label" class="sr-only">Resume</span>
+                  </button>
+                  <HomeWorkoutComponents.start_choice choice="warmup" />
+                </div>
               </section>
             <% nil -> %>
               <section id="home-unavailable" class="home-result">

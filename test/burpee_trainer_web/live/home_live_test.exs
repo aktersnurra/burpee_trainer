@@ -750,6 +750,14 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     assert has_element?(view, "#home-session-state", "In progress")
 
+    # Resuming starts like a new workout, so its camera and warmup can be changed here.
+    for id <- ~w[home-start-camera home-start-warmup] do
+      assert has_element?(
+               view,
+               ".home-resume-actions ##{id}[phx-hook=HomeStartChoice][phx-update=ignore]"
+             )
+    end
+
     view |> element("#resume-recommended-workout") |> render_click()
     assert_redirect(view, ~p"/session/#{started.id}")
     assert Repo.aggregate(WorkoutSession, :count) == 1

@@ -194,37 +194,30 @@ function harness() {
 test("completion save controls keep icons while announcing save, pending and retry states", () => {
 	const { renderer, elements } = harness();
 	const save = (elements["#session-save-btn"] = element());
-	const leave = (elements["#session-leave-btn"] = element());
 	const readyIcon = (elements["#session-save-icon-ready"] = element());
 	const pendingIcon = (elements["#session-save-icon-pending"] = element());
 	pendingIcon.setAttribute("hidden", "");
 	save.appendChild(readyIcon);
 	save.appendChild(pendingIcon);
-	leave.appendChild(element());
 
 	renderer.renderCompletionControls({ mode: "completion_review", saveStatus: "idle", completionLocked: false });
 	assert.equal(save.getAttribute("aria-label"), "Save session");
 	assert.equal(readyIcon.hasAttribute("hidden"), false);
 	assert.equal(pendingIcon.hasAttribute("hidden"), true);
 	assert.equal(save.children.length, 2);
-	assert.equal(leave.children.length, 1);
 
 	renderer.renderCompletionControls({ mode: "completion_review", saveStatus: "saving", completionLocked: false });
 	assert.equal(save.getAttribute("aria-label"), "Saving session…");
 	assert.equal(save.hasAttribute("disabled"), true);
 	assert.equal(readyIcon.hasAttribute("hidden"), true);
 	assert.equal(pendingIcon.hasAttribute("hidden"), false);
-	assert.equal(leave.getAttribute("aria-disabled"), "true");
-	assert.equal(leave.getAttribute("aria-label"), "Save in progress—stay on this page");
 	assert.equal(save.children.length, 2);
 
 	renderer.renderCompletionControls({ mode: "completion_review", saveStatus: "failed", completionLocked: true });
 	assert.equal(save.getAttribute("aria-label"), "Retry finalization");
 	assert.equal(save.dataset.localOnly, "true");
 	assert.equal(save.hasAttribute("disabled"), false);
-	assert.equal(leave.getAttribute("aria-label"), "Session saved—finish local finalization");
 	assert.equal(save.children.length, 2);
-	assert.equal(leave.children.length, 1);
 });
 
 test("validation for removed fields is visible instead of silently blocking Save", () => {
@@ -953,7 +946,7 @@ test("the pace announcement waits until both totals are known", () => {
 });
 
 function finishFields(elements) {
-	for (const name of ["reps", "duration", "note"]) {
+	for (const name of ["reps", "duration"]) {
 		elements[`#completion-${name}-field`] = element();
 		elements[`#completion-${name}-field`].hidden = true;
 	}
@@ -972,33 +965,21 @@ test("the finish screen opens with the counted result and no fields to fill", ()
 	const { renderer, elements } = harness();
 	finishFields(elements);
 	renderer.renderCompletion(finished);
-	for (const name of ["reps", "duration", "note"]) {
+	for (const name of ["reps", "duration"]) {
 		assert.equal(elements[`#completion-${name}-field`].hidden, true, name);
 	}
 });
 
-test("tapping a number or the pencil opens its field and focuses it", () => {
+test("tapping a number opens its field and focuses it", () => {
 	const { renderer, elements } = harness();
 	finishFields(elements);
 	elements["#completion-reps-input"] = element();
 	renderer.revealCompletionField("reps", true);
 	assert.equal(elements["#completion-reps-field"].hidden, false);
 	assert.equal(elements["#completion-reps-input"].focusCalls, 1);
-
-	renderer.revealCompletionField("note", true);
-	assert.equal(elements["#completion-note-field"].hidden, false);
-	assert.equal(elements["#completion-note-input"].focusCalls, 1);
 	assert.equal(elements["#completion-duration-field"].hidden, true);
 
 	renderer.revealCompletionField("anything");
-});
-
-test("a note already written shows its field", () => {
-	const { renderer, elements } = harness();
-	finishFields(elements);
-	renderer.renderCompletion({ ...finished, notePost: "Legs heavy" });
-	assert.equal(elements["#completion-note-field"].hidden, false);
-	assert.equal(elements["#completion-note-input"].focusCalls, 0);
 });
 
 test("a rejected field opens so its error can be read", () => {

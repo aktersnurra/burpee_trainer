@@ -448,3 +448,17 @@ test("a remembered camera on a device without one starts as camera off", () => {
 	assert.equal(off.state.mode, "workout_running");
 	assert.ok(!off.commands.some((command) => command.type === "startCamera"));
 });
+
+test("finishing early from the warmup goes to the finish screen, not the workout", () => {
+	const warmingUp = step(readyState({ camera: false, warmup: true }), {
+		type: "START",
+		...warmup,
+	}).state;
+	const result = step(warmingUp, {
+		type: "FINISH_EARLY",
+		result: { burpeeCountDone: 0, scheduledRepsDone: 0, durationSec: 0 },
+	});
+	assert.equal(result.state.mode, "completion_review");
+	assert.equal(result.state.completion.burpeeCountActual, 0);
+	assert.deepEqual(segments(result.commands), []);
+});

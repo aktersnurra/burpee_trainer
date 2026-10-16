@@ -355,6 +355,11 @@ body {
   color: var(--session-active-bg);
 }
 
+/* Back to Home under Finish early: the quiet way out, in the session's ink. */
+.session-pause-leave {
+  color: var(--session-active-ink);
+}
+
 .session-choice-toggle[aria-pressed="true"] {
   border-color: var(--session-ink);
   background: var(--session-ink);
@@ -580,25 +585,15 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 #burpee-session #session-save-btn {
   border-radius: 999px;
 }
-#session-completion-review #session-completion-summary { border-bottom: 1px solid var(--session-border); padding-bottom: 28px; }
+/* No rule under the result: the mood row's line divides it, with or without open fields. */
+#session-completion-review #session-completion-summary { padding-bottom: 0; }
 #session-completion-review #session-completion-heading { font-size: clamp(34px, 6vw, 48px); }
 #session-completion-review #session-completion-form .fieldset { margin-bottom: 20px; }
-#session-completion-review :is(#completion-reps-input, #completion-duration-input, #completion-note-input) {
+#session-completion-review :is(#completion-reps-input, #completion-duration-input) {
   border: 0;
   border-bottom: 1px solid var(--session-border);
   border-radius: 0;
   box-shadow: none;
-}
-#session-completion-review #completion-note-input {
-  display: block;
-  background: transparent;
-  font-size: 16px;
-  line-height: 1.6;
-}
-#session-completion-review #completion-note-input:focus-visible {
-  outline: none;
-  border-bottom-color: var(--session-ink);
-  background: transparent;
 }
 #session-completion-review #session-typed-feedback { border-top: 1px solid var(--session-border); }
 @media (min-width: 800px) {
