@@ -86,6 +86,17 @@ defmodule BurpeeTrainer.Workouts do
 
   def current_home_selection(%Scope{}, _slot), do: nil
 
+  @doc "Who chose the slot's workout: `:owner`, `:claude`, `:coach`, or nil when no one has."
+  @spec planned_by(Scope.t(), Policy.slot()) :: :owner | :claude | :coach | nil
+  def planned_by(%Scope{user: %User{id: user_id}}, %{slot_key: key, slot_date: %Date{} = date}) do
+    Repo.one(
+      from(r in CoachRecommendation,
+        where: r.user_id == ^user_id and r.slot_key == ^key and r.slot_date == ^date,
+        select: r.planned_by
+      )
+    )
+  end
+
   @doc "Pins the first available Home workout without replacing a valid existing pin."
   @spec ensure_home_selection(Scope.t(), Policy.slot()) ::
           {:ok, HomeSelection.t()} | {:error, Error.t()}
@@ -119,7 +130,7 @@ defmodule BurpeeTrainer.Workouts do
            :ok <- verify_stored_draft(plan),
            {:ok, recommendation} <-
              recovery_recommendation(scope, current, recommendation, {:plan, plan.id}),
-           {:ok, pinned} <- write_home_pointer(recommendation, plan.id) do
+           {:ok, pinned} <- write_home_pointer(recommendation, plan.id, :owner) do
         {:ok, HomeSelection.new(pinned, plan)}
       end
     end)
@@ -147,7 +158,7 @@ defmodule BurpeeTrainer.Workouts do
                  :ok <- missing_ensurable_selection(user, current.burpee_type, recommendation),
                  {:ok, recommendation} <-
                    recovery_recommendation(scope, current, recommendation, {:video, video.id}),
-                 {:ok, _changed} <- write_home_pointer(recommendation, nil) do
+                 {:ok, _changed} <- write_home_pointer(recommendation, nil, :owner) do
               start_video(scope, video.id, token)
             end
 
@@ -239,7 +250,7 @@ defmodule BurpeeTrainer.Workouts do
       with {:ok, r} <- home_recommendation(user, expected),
            {:ok, plan} <- selectable_home_plan(user, r, id),
            :ok <- verify_stored_draft(plan),
-           {:ok, changed} <- write_home_pointer(r, plan.id) do
+           {:ok, changed} <- write_home_pointer(r, plan.id, :owner) do
         {:ok, HomeSelection.new(changed, plan)}
       end
     end)
@@ -255,20 +266,23 @@ defmodule BurpeeTrainer.Workouts do
           Scope.t(),
           HomeSelection.t(),
           {:plan, pos_integer()} | {:proposal, map(), String.t()},
-          String.t()
+          String.t(),
+          :coach | :claude
         ) :: {:ok, HomeSelection.t()} | {:error, Error.t()}
   def select_planned_workout(
         %Scope{user: %User{} = user},
         %HomeSelection{} = expected,
         target,
-        rationale
+        rationale,
+        planned_by \\ :coach
       )
-      when is_binary(rationale) and byte_size(rationale) <= 2400 do
+      when is_binary(rationale) and byte_size(rationale) <= 2400 and
+             planned_by in [:coach, :claude] do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
            {:ok, plan} <- planned_plan(user, r, target),
            :ok <- verify_stored_draft(plan),
-           {:ok, changed} <- write_home_pointer(r, plan.id),
+           {:ok, changed} <- write_home_pointer(r, plan.id, planned_by),
            {:ok, changed} <-
              changed |> Ecto.Changeset.change(rationale: rationale) |> Repo.update() do
         {:ok, HomeSelection.new(changed, plan)}
@@ -481,11 +495,14 @@ defmodule BurpeeTrainer.Workouts do
 
   defp selectable_home_plan(user, _r, id), do: get_library_plan(Scope.for_user(user), id)
 
-  defp write_home_pointer(r, id) do
+  # `planned_by` is who chose: the owner, Claude, the in-app planner, or nil for an
+  # automatic pick, which the planner may replace.
+  defp write_home_pointer(r, id, planned_by \\ nil) do
     case r
          |> Ecto.Changeset.change(
            home_workout_plan_id: id,
-           home_revision: r.home_revision + 1
+           home_revision: r.home_revision + 1,
+           planned_by: planned_by
          )
          |> Repo.update() do
       {:ok, changed} -> {:ok, changed}
@@ -2610,7 +2627,7 @@ defmodule BurpeeTrainer.Workouts do
            {:ok, content} <-
              canonical_draft_content(%{definition: definition, request_text: text}),
            {:ok, draft} <- save_authored_draft(user, source, content),
-           {:ok, changed} <- write_home_pointer(r, draft.id) do
+           {:ok, changed} <- write_home_pointer(r, draft.id, :owner) do
         {:ok, HomeSelection.new(changed, draft)}
       end
     end)

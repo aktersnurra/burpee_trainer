@@ -14,6 +14,7 @@ defmodule BurpeeTrainer.Workouts.CoachRecommendation do
     field(:rationale, :string)
     field(:ranked_plan_ids, :map, default: %{})
     field(:home_revision, :integer, default: 0)
+    field(:planned_by, Ecto.Enum, values: [:owner, :claude, :coach])
     belongs_to(:home_workout_plan, WorkoutPlan)
 
     belongs_to(:user, User)

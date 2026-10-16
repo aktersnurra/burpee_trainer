@@ -32,7 +32,8 @@ defmodule BurpeeTrainer.Mcp do
     Tools.ArchiveWorkout,
     Tools.LogSession,
     Tools.EditSession,
-    Tools.DeleteSession
+    Tools.DeleteSession,
+    Tools.PlanNextWorkout
   ]
 
   def tools, do: @tools
