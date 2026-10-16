@@ -991,3 +991,12 @@ test("a rejected field opens so its error can be read", () => {
 	assert.equal(elements["#completion-duration-field"].hidden, false);
 	assert.equal(elements["#completion-reps-field"].hidden, true);
 });
+
+test("the heading says whether the workout was completed or ended early", () => {
+	const { renderer, elements } = harness();
+	const heading = (elements["#session-completion-heading"] = element());
+	renderer.renderCompletion({ ...finished, endedEarly: false });
+	assert.equal(heading.textContent, "Workout complete");
+	renderer.renderCompletion({ ...finished, endedEarly: true });
+	assert.equal(heading.textContent, "Ended early");
+});

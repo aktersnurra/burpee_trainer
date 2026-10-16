@@ -277,6 +277,11 @@ export class SessionRenderer {
 
 	renderCompletion(completion) {
 		if (!completion) return;
+		this.setText(
+			this.root.querySelector("#session-completion-heading"),
+			completion.endedEarly ? "Ended early" : "Workout complete",
+			"completionHeading",
+		);
 		const actualReps = this.root.querySelector("#session-actual-reps");
 		const plannedReps = this.root.querySelector("#session-planned-reps");
 		const duration = this.root.querySelector("#session-actual-duration");

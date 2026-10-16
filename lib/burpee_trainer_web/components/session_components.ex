@@ -228,8 +228,9 @@ defmodule BurpeeTrainerWeb.SessionComponents do
 
     ~H"""
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
-      <div class="mx-auto h-dvh w-full max-w-[480px] overflow-y-auto px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))]">
-        <section id="session-completion-summary" class="text-center">
+      <%!-- Centred like the camera screen; the auto margins still let a tall form scroll. --%>
+      <div class="mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-y-auto px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))]">
+        <section id="session-completion-summary" class="mt-auto text-center">
           <h1
             id="session-completion-heading"
             data-session-heading
@@ -279,7 +280,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <.form for={@form} id="session-completion-form" class="mt-7">
+        <.form for={@form} id="session-completion-form" class="mt-7 mb-auto">
           <div class="grid grid-cols-2 gap-5">
             <div id="completion-reps-field" hidden>
               <.input
@@ -365,7 +366,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               aria-label="Discard session"
               title="Discard session"
               aria-controls="session-discard-confirm"
-              class="inline-flex size-14 items-center justify-center rounded-full text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
+              class="inline-flex size-14 items-center justify-center rounded-full border border-[var(--session-border)] text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
             >
               <.icon name="hero-trash" class="size-6" />
             </button>

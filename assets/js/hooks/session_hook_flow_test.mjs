@@ -1596,7 +1596,8 @@ test("completion display and every stable edit queue the full draft", async () =
 				detected_duration_sec: 9,
 				cadence_ms: [2_000, 4_000, 6_000, 8_000],
 			},
-			mood: 0,
+			mood: null,
+			ended_early: false,
 			tags: [],
 			context_low_energy: false,
 			context_high_energy: false,
@@ -3506,5 +3507,38 @@ test("discard waits while a save is in flight", async () => {
 	click(ctx, "session-discard-btn");
 	click(ctx, "session-discard-yes");
 	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("an untouched mood is not saved, and tapping the chosen mood again clears it", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	assert.equal("mood" in ctx.completionPayload().workout_session, false);
+	assert.equal(ctx.completionDraft().mood, null);
+
+	const good = ctx.el.querySelectorAll("[data-mood]").find((b) => b.dataset.mood === "1");
+	ctx.el.dispatchEvent({ type: "click", target: good, preventDefault() {} });
+	assert.equal(ctx.completionPayload().workout_session.mood, 1);
+	ctx.el.dispatchEvent({ type: "click", target: good, preventDefault() {} });
+	assert.equal("mood" in ctx.completionPayload().workout_session, false);
+	ctx.destroyed();
+});
+
+test("a restored draft keeps its early end and its missing mood", async () => {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => completionDraft({ mood: null, ended_early: true }),
+		}),
+	});
+	await ctx.started;
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.mood, null);
+	assert.equal(ctx.flow.completion.endedEarly, true);
 	ctx.destroyed();
 });

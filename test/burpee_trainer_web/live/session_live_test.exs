@@ -215,6 +215,8 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert completed.context_high_energy
     assert completed.primary_limiter == :legs
     assert completed.preference_feedback == :avoid
+    # No mood was chosen, so none is stored.
+    assert completed.mood == nil
 
     _html =
       render_hook(view, "save_session", %{

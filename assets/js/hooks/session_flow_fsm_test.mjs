@@ -414,6 +414,7 @@ test("completion edits only change approved draft fields", () => {
 		trackingTrust: "observing",
 		cadenceMs: [6100, 6200],
 		mood: 1,
+		endedEarly: false,
 		tags: ["great_energy"],
 		contextLowEnergy: true,
 		contextHighEnergy: false,
@@ -461,4 +462,23 @@ test("finishing early from the warmup goes to the finish screen, not the workout
 	assert.equal(result.state.mode, "completion_review");
 	assert.equal(result.state.completion.burpeeCountActual, 0);
 	assert.deepEqual(segments(result.commands), []);
+});
+
+test("the finish screen knows whether the workout ran out or ended early, and has no mood yet", () => {
+	const running = step(readyState({ camera: false, warmup: false }), {
+		type: "START",
+		...warmup,
+	}).state;
+	const result = { burpeeCountDone: 10, scheduledRepsDone: 10, durationSec: 50 };
+
+	const done = step(running, { type: "SESSION_DONE", result }).state;
+	assert.equal(done.completion.endedEarly, false);
+	assert.equal(done.completion.mood, null);
+
+	const segmentDone = step(running, { type: "SEGMENT_DONE", segment: "workout", result }).state;
+	assert.equal(segmentDone.completion.endedEarly, false);
+
+	const early = step(running, { type: "FINISH_EARLY", result }).state;
+	assert.equal(early.completion.endedEarly, true);
+	assert.equal(early.completion.mood, null);
 });

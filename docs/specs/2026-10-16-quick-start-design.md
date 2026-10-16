@@ -76,7 +76,12 @@ A finished workout is saved or discarded; the screen offers nothing else.
 
 - The reps and seconds inputs go. The big count and the "of N · m:ss" line show them;
   tapping either opens it for correction.
-- Mood stays as three taps, optional.
+- The heading says "Workout complete" when the timer ran out and "Ended early" after
+  Finish early (the reps are not compared: the camera can count fewer on a full workout).
+- Mood stays as three taps and is optional: nothing is chosen at first, tapping the
+  chosen one clears it, and a save without one stores none.
+- The result and actions sit centred on the screen, like the camera screen; the trash is
+  an outlined button the size of ✓.
 - No note and no "leave and resume later". A note can be added afterwards from Claude,
   since notes on a finished session are correctable.
 - Two actions, at either end: discard (trash) and save (✓). A good day is one ✓.

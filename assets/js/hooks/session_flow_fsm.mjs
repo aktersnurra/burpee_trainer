@@ -55,7 +55,7 @@ function plannedDurationSec(timeline) {
 	}, 0);
 }
 
-function completionFor(state, result) {
+function completionFor(state, result, endedEarly = false) {
 	const trackingFinished =
 		state.captureMode === "camera" && state.trackingTrust === "finished";
 	const scheduledRepsDone =
@@ -76,7 +76,8 @@ function completionFor(state, result) {
 		detectedDurationSec: result.detectedDurationSec ?? null,
 		trackingTrust: state.trackingTrust,
 		cadenceMs: result.cadenceMs || [],
-		mood: 0,
+		mood: null,
+		endedEarly,
 		tags: [],
 		contextLowEnergy: false,
 		contextHighEnergy: false,
@@ -128,14 +129,14 @@ function startWorkout(state, commands = []) {
 	);
 }
 
-function finishWorkout(state, result) {
+function finishWorkout(state, result, endedEarly = false) {
 	const workoutResult = result || { burpeeCountDone: 0, durationSec: 0 };
 	return moved(
 		state,
 		{
 			mode: "completion_review",
 			workoutResult,
-			completion: completionFor(state, workoutResult),
+			completion: completionFor(state, workoutResult, endedEarly),
 			completionLocked: false,
 			saveStatus: "idle",
 		},
@@ -338,7 +339,7 @@ export function flowTransition(state, event) {
 			if (!["workout_running", "warmup_running"].includes(state.mode)) {
 				return unchanged(state);
 			}
-			return finishWorkout(state, event.result);
+			return finishWorkout(state, event.result, true);
 
 		case "RESTORE_COMPLETION_DRAFT":
 			if (state.mode !== "starting" || !event.completion) {

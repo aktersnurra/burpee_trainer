@@ -249,7 +249,13 @@ const SessionHook = {
       }
       if (ringContainer && this.canTogglePause()) this.togglePause();
       if (finishEarly) this.onFinishEarly();
-      if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
+      // Mood is optional: tapping the chosen one again clears it.
+      if (mood !== undefined) {
+        const chosen = Number(mood);
+        this.editCompletion({
+          mood: this.flow.completion?.mood === chosen ? null : chosen,
+        });
+      }
       if (correct) this.renderer.revealCompletionField(correct[1], true);
       if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
       if (discardKeep) this.renderer.showDiscardConfirm(false);
@@ -395,7 +401,8 @@ const SessionHook = {
         detected_duration_sec: completion.detectedDurationSec,
         cadence_ms: [...(completion.cadenceMs || [])],
       },
-      mood: completion.mood ?? 0,
+      mood: completion.mood ?? null,
+      ended_early: completion.endedEarly === true,
       tags: [...(completion.tags || [])],
       context_low_energy: completion.contextLowEnergy ?? false,
       context_high_energy: completion.contextHighEnergy ?? false,
@@ -445,7 +452,7 @@ const SessionHook = {
         duration_sec_actual: completion.durationSecActual,
         duration_sec_planned: Math.round(completion.durationSecPlanned),
         client_session_id: this.clientSessionId,
-        mood: completion.mood ?? 0,
+        ...(completion.mood == null ? {} : { mood: completion.mood }),
         note_post: completion.notePost || "",
       },
       tracking: {
@@ -623,7 +630,8 @@ const SessionHook = {
       detectedDurationSec: tracking.detected_duration_sec ?? null,
       trackingTrust: tracking.trust || "disabled",
       cadenceMs: [...(tracking.cadence_ms || [])],
-      mood: draft.mood ?? 0,
+      mood: draft.mood ?? null,
+      endedEarly: draft.ended_early === true,
       tags: [...legacyTags],
       contextLowEnergy:
         draft.context_low_energy ?? legacyTags.includes("tired"),
