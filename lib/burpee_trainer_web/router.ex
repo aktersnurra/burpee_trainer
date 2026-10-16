@@ -42,6 +42,19 @@ defmodule BurpeeTrainerWeb.Router do
     get("/oauth-protected-resource/mcp", McpMetadataController, :show)
   end
 
+  pipeline :mcp do
+    plug(:accepts, ["json"])
+    plug(BurpeeTrainerWeb.McpAuth)
+  end
+
+  scope "/mcp", BurpeeTrainerWeb do
+    pipe_through(:mcp)
+
+    post("/", McpController, :create)
+    get("/", McpController, :unsupported)
+    delete("/", McpController, :unsupported)
+  end
+
   scope "/", BurpeeTrainerWeb do
     pipe_through([:browser, :redirect_if_authed])
 
