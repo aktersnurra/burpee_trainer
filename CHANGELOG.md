@@ -7,9 +7,9 @@
 - On a device without a camera the camera toggle is off and disabled ("No camera on this device"), and a remembered camera choice starts the workout without it.
 - Pausing offers ← Back to Home under Finish early (the session stays resumable), and the finish screen can discard an unsaved session after an on-page confirmation; the server deletes only a started session and the device's draft and trace go with it.
 - Finish early works on any pause (warmup and countdowns too) without a browser confirm, so a session can always reach discard; the camera and warmup toggles also flank Resume.
-- The finish screen says "Ended early" after Finish early, starts with no mood chosen (a save without one stores none; tapping the chosen mood clears it), sits centred, and shows the trash as an outlined button.
+- The finish screen says "Ended early" after Finish early (from any pause, including mid-workout), starts with no mood chosen (a save without one stores none; tapping the chosen mood clears it), sits centred, and shows the trash as an outlined button.
 - The pose tracker holds a start sent while its code loads, so the camera cannot stall on "Starting camera".
-- The finish screen is save or discard: it shows the counted reps and time with no fields (tapping the count or the time opens it for correction, and Save opens any field it rejects), and has no note or leave-and-resume-later; a note can be added afterwards through Claude.
+- The finish screen is save or discard: it shows the counted reps and time with no fields (tapping the count or the time opens it for correction, and Save opens any field it rejects), with mood, tags and a note under it in Home's pill and field styles, and no leave-and-resume-later.
 
 ## 2026-10-04 — Coach/Home branch review fixes
 

@@ -306,6 +306,11 @@ function appendStablePanels(root) {
 		button.dataset.mood = String(mood);
 		completion.append(button);
 	}
+	for (const tag of ["tired", "great_energy", "bad_sleep", "sick", "travel", "hot"]) {
+		const button = new FakeElement("button");
+		button.dataset.tag = tag;
+		completion.append(button);
+	}
 }
 
 function startChoiceStorage({ camera, warmup }) {
@@ -2793,6 +2798,7 @@ test("Save omits removed feedback even when an old draft has contradictory energ
 		duration_sec_planned: 10,
 		client_session_id: "client-save",
 		mood: 1,
+		tags: "tired,great_energy",
 		note_post: "Strong finish",
 	});
 	ctx.destroyed();
@@ -3540,5 +3546,64 @@ test("a restored draft keeps its early end and its missing mood", async () => {
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.flow.completion.mood, null);
 	assert.equal(ctx.flow.completion.endedEarly, true);
+	ctx.destroyed();
+});
+
+test("tags toggle with a tap and are saved with the note; none chosen sends none", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	assert.equal("tags" in ctx.completionPayload().workout_session, false);
+
+	const tag = (name) =>
+		ctx.el.querySelectorAll("[data-tag]").find((button) => button.dataset.tag === name);
+	const tap = (target) => ctx.el.dispatchEvent({ type: "click", target, preventDefault() {} });
+	tap(tag("tired"));
+	tap(tag("hot"));
+	tap(tag("travel"));
+	tap(tag("travel"));
+	assert.equal(ctx.completionPayload().workout_session.tags, "tired,hot");
+	assert.equal(tag("tired").getAttribute("aria-pressed"), "true");
+	assert.equal(tag("travel").getAttribute("aria-pressed"), "false");
+
+	const note = ctx.el.querySelector("#completion-note-input");
+	note.value = "Legs heavy";
+	ctx.el.dispatchEvent({ type: "input", target: note });
+	assert.equal(ctx.completionPayload().workout_session.note_post, "Legs heavy");
+	assert.deepEqual(ctx.completionDraft().tags, ["tired", "hot"]);
+	ctx.destroyed();
+});
+
+test("finishing early mid-workout says so on the finish screen", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 3 });
+	// As in the browser: the count-in is over and the workout's clock is running.
+	ctx.countdownCount = null;
+	ctx.paused = true;
+
+	click(ctx, "finish-early-btn");
+
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.endedEarly, true);
+	assert.equal(ctx.completionDraft().ended_early, true);
+	ctx.destroyed();
+});
+
+test("a workout whose timer runs out is complete, not ended early", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+	assert.equal(ctx.flow.mode, "completion_review");
+	assert.equal(ctx.flow.completion.endedEarly, false);
 	ctx.destroyed();
 });

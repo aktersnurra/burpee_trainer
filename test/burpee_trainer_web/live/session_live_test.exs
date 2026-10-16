@@ -394,10 +394,35 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
              "#completion-duration-edit[type=button][aria-label='Correct time'] #session-actual-duration"
            )
 
-    # Save or discard: no note, no leaving to come back later.
-    for removed <- ~w[completion-note-toggle completion-note-input session-leave-btn] do
+    # Save or discard: no leaving to come back later, and nothing behind a button.
+    for removed <- ~w[completion-note-toggle completion-note-field session-leave-btn] do
       refute has_element?(view, "##{removed}")
     end
+
+    # Tags and a note sit under mood, optional, in Home's pill and field styles.
+    for {tag, label} <- [
+          {"tired", "Tired"},
+          {"great_energy", "Great energy"},
+          {"bad_sleep", "Bad sleep"},
+          {"sick", "Sick"},
+          {"travel", "Travel"},
+          {"hot", "Hot"}
+        ] do
+      assert has_element?(
+               view,
+               "#session-completion-mood + #session-completion-tags[role=group][aria-label=Tags] " <>
+                 "button.session-tag-pill[type=button][data-tag=#{tag}][aria-pressed=false]",
+               label
+             )
+    end
+
+    assert has_element?(
+             view,
+             "#session-completion-tags + .session-note-field " <>
+               "textarea#completion-note-input.session-note-input[rows='1'][placeholder='How did it go?']"
+           )
+
+    assert has_element?(view, "label.sr-only[for=completion-note-input]", "Note")
 
     refute has_element?(view, "#session-more-feedback")
     refute has_element?(view, "#session-typed-feedback")

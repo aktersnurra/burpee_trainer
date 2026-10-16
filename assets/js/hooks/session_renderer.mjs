@@ -222,8 +222,10 @@ export class SessionRenderer {
 			?.querySelectorAll?.("input, textarea, select") || []) {
 			input.toggleAttribute("disabled", factsDisabled);
 		}
-		for (const button of this.root.querySelectorAll("[data-mood]")) {
-			button.toggleAttribute("disabled", factsDisabled);
+		for (const selector of ["[data-mood]", "[data-tag]"]) {
+			for (const button of this.root.querySelectorAll(selector)) {
+				button.toggleAttribute("disabled", factsDisabled);
+			}
 		}
 
 		const save = this.root.querySelector("#session-save-btn");
@@ -340,6 +342,10 @@ export class SessionRenderer {
 				"aria-pressed",
 				String(Number(button.dataset.mood) === completion.mood),
 			);
+		}
+		const tags = completion.tags || [];
+		for (const button of this.root.querySelectorAll("[data-tag]")) {
+			button.setAttribute("aria-pressed", String(tags.includes(button.dataset.tag)));
 		}
 
 	}

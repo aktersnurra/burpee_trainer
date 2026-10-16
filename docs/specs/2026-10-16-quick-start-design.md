@@ -82,8 +82,10 @@ A finished workout is saved or discarded; the screen offers nothing else.
   chosen one clears it, and a save without one stores none.
 - The result and actions sit centred on the screen, like the camera screen; the trash is
   an outlined button the size of ✓.
-- No note and no "leave and resume later". A note can be added afterwards from Claude,
-  since notes on a finished session are correctable.
+- Tags as Home's pills (Tired, Great energy, Bad sleep, Sick, Travel, Hot), toggled with a
+  tap, and a note as Home's one-line field that grows ("How did it go?"), both under mood
+  and both optional; none chosen sends none.
+- No "leave and resume later".
 - Two actions, at either end: discard (trash) and save (✓). A good day is one ✓.
 - Discard asks on the page ("Discard this workout? Nothing will be saved.", Keep it /
   Discard), the server deletes it only while it is still started, and the device's draft

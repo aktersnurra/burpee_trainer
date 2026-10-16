@@ -222,9 +222,17 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:form, :any, required: true)
 
   @mood_options [{"Rough", -1}, {"OK", 0}, {"Good", 1}]
+  @tag_options [
+    {"Tired", "tired"},
+    {"Great energy", "great_energy"},
+    {"Bad sleep", "bad_sleep"},
+    {"Sick", "sick"},
+    {"Travel", "travel"},
+    {"Hot", "hot"}
+  ]
 
   def completion_review(assigns) do
-    assigns = assign(assigns, mood_options: @mood_options)
+    assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
 
     ~H"""
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
@@ -320,6 +328,27 @@ defmodule BurpeeTrainerWeb.SessionComponents do
                 {label}
               </button>
             <% end %>
+          </div>
+          <%!-- Optional, like mood: tap to toggle. Pills as on Home. --%>
+          <div id="session-completion-tags" role="group" aria-label="Tags" class="session-tags">
+            <%= for {label, value} <- @tag_options do %>
+              <button type="button" data-tag={value} aria-pressed="false" class="session-tag-pill">
+                {label}
+              </button>
+            <% end %>
+          </div>
+          <%!-- One line that grows, underlined like Home's fields. --%>
+          <div class="session-note-field">
+            <label for="completion-note-input" class="sr-only">Note</label>
+            <textarea
+              id="completion-note-input"
+              name={@form[:note_post].name}
+              rows="1"
+              placeholder="How did it go?"
+              aria-describedby="completion-note-error"
+              class="session-note-input"
+            >{@form[:note_post].value}</textarea>
+            <p id="completion-note-error" hidden></p>
           </div>
 
           <div class="hidden">

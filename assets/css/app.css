@@ -596,6 +596,17 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   box-shadow: none;
 }
 #session-completion-review #session-typed-feedback { border-top: 1px solid var(--session-border); }
+/* Tags and the note use Home's pill and field, in the session's tokens. */
+#session-completion-review .session-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+#session-completion-review .session-tag-pill { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--session-border); border-radius: 999px; background: transparent; color: var(--session-muted); font: 400 var(--text-body)/1.2 var(--font-sans); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
+#session-completion-review .session-tag-pill[aria-pressed="true"] { background: var(--session-surface-alt); border-color: var(--session-soft-muted); color: var(--session-ink); }
+#session-completion-review .session-tag-pill:disabled { opacity: .45; }
+#session-completion-review .session-note-field { min-height: 60px; margin-top: 8px; padding: 12px 0; border-bottom: 1px solid var(--session-border); }
+#session-completion-review .session-note-input { display: block; width: 100%; min-height: 1.5em; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: var(--session-ink); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; box-shadow: none; }
+#session-completion-review .session-note-input::placeholder { color: var(--session-muted); opacity: 1; }
+#session-completion-review .session-note-input:focus-visible { outline: none; }
+#session-completion-review .session-note-field:focus-within { border-bottom-color: var(--session-ink); }
+@media (prefers-reduced-motion: reduce) { #session-completion-review .session-tag-pill { transition: none; } }
 @media (min-width: 800px) {
   #burpee-session [data-session-panel]:not(#session-runner-client):not(#session-completion-review) > div:first-child { max-width: 640px; }
   #burpee-session #session-completion-review > div:first-child { max-width: 680px; }

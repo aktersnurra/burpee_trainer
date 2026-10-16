@@ -239,6 +239,7 @@ const SessionHook = {
       const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
       const mood = e.target.dataset?.mood;
+      const tag = e.target.dataset?.tag;
 
       if (retryCamera) this.dispatchFlow({ type: "RETRY_CAMERA" });
       if (continueWithoutCamera) {
@@ -249,6 +250,14 @@ const SessionHook = {
       }
       if (ringContainer && this.canTogglePause()) this.togglePause();
       if (finishEarly) this.onFinishEarly();
+      if (tag !== undefined && this.flow.completion) {
+        const tags = this.flow.completion.tags || [];
+        this.editCompletion({
+          tags: tags.includes(tag)
+            ? tags.filter((chosen) => chosen !== tag)
+            : [...tags, tag],
+        });
+      }
       // Mood is optional: tapping the chosen one again clears it.
       if (mood !== undefined) {
         const chosen = Number(mood);
@@ -453,6 +462,7 @@ const SessionHook = {
         duration_sec_planned: Math.round(completion.durationSecPlanned),
         client_session_id: this.clientSessionId,
         ...(completion.mood == null ? {} : { mood: completion.mood }),
+        ...(completion.tags?.length ? { tags: completion.tags.join(",") } : {}),
         note_post: completion.notePost || "",
       },
       tracking: {
@@ -944,8 +954,9 @@ const SessionHook = {
           this.activeSegment === "workout"
             ? this.workoutCompletionResult(command.result)
             : command.result;
+        // Finish early ends the timer too; the finish screen should say which it was.
         this.dispatchFlow({
-          type: "SEGMENT_DONE",
+          type: this.finishingEarly ? "FINISH_EARLY" : "SEGMENT_DONE",
           segment: this.activeSegment,
           result,
         });
