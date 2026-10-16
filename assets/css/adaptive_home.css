@@ -850,7 +850,13 @@ button.home-summary:hover .home-workout-name {
    beneath it. The row takes no space while closed. */
 .home-workout-actions { display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto 0px; justify-content: center; justify-items: center; column-gap: 4px; margin: 26px auto 18px; align-items: start; }
 .home-workout-actions[data-expanded="true"] { grid-template-rows: auto auto; }
-.home-workout-actions #home-action { grid-column: 1 / -1; grid-row: 1; }
+.home-workout-actions #home-action { grid-column: 2; grid-row: 1; }
+/* Camera and warmup flank play: on is ink, off is muted and struck through. */
+.home-workout-actions #home-start-camera { grid-column: 1; grid-row: 1; }
+.home-workout-actions #home-start-warmup { grid-column: 3; grid-row: 1; }
+.home-start-choice { position: relative; min-width: 44px; padding-inline: 14px; }
+.home-start-choice[aria-pressed="true"] { color: #262722; }
+.home-start-choice[aria-pressed="false"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
 .home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
 .home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
 .home-workout-actions #home-new-workout { grid-column: 3; grid-row: 2; }

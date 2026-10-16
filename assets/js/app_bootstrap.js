@@ -6,6 +6,7 @@ import ChartHook from "./hooks/chart_hook";
 import HomeAdjustment from "./hooks/home_adjustment.mjs";
 import { registerHomeChooserFeedback } from "./hooks/home_chooser_feedback.mjs";
 import HomePendingSession from "./hooks/home_pending_session.mjs";
+import HomeStartChoice from "./hooks/home_start_choice.mjs";
 import SessionHook from "./hooks/session_hook";
 import SessionCompleted from "./hooks/session_completed.mjs";
 import VideoHook from "./hooks/video_hook";
@@ -28,6 +29,7 @@ export function startApp(PoseTracker) {
 			ChartHook,
 			HomeAdjustment,
 			HomePendingSession,
+			HomeStartChoice,
 			SessionHook,
 			SessionCompleted,
 			VideoHook,

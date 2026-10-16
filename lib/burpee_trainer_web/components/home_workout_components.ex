@@ -602,6 +602,33 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               class="home-workout-actions"
               data-expanded={to_string(@state.expanded?)}
             >
+              <%!-- The device remembers these; the server renders them once and leaves them. --%>
+              <button
+                id="home-start-camera"
+                type="button"
+                phx-hook="HomeStartChoice"
+                phx-update="ignore"
+                data-start-choice="camera"
+                aria-pressed="false"
+                aria-label="Camera tracking"
+                title="Camera tracking"
+                class="home-text-action home-start-choice"
+              >
+                <.icon name="hero-video-camera" class="size-5" />
+              </button>
+              <button
+                id="home-start-warmup"
+                type="button"
+                phx-hook="HomeStartChoice"
+                phx-update="ignore"
+                data-start-choice="warmup"
+                aria-pressed="false"
+                aria-label="Warmup"
+                title="Warmup"
+                class="home-text-action home-start-choice"
+              >
+                <.icon name="hero-fire" class="size-5" />
+              </button>
               <button
                 id="home-edit-workout"
                 type="button"

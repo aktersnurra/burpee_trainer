@@ -138,6 +138,36 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert recommendation.selected_workout_plan_id
   end
 
+  test "the camera and warmup toggles sit beside play, collapsed or expanded", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation_fixture(user)
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    for {id, choice, label, icon} <- [
+          {"home-start-camera", "camera", "Camera tracking", "hero-video-camera"},
+          {"home-start-warmup", "warmup", "Warmup", "hero-fire"}
+        ] do
+      selector =
+        ".home-workout-actions ##{id}[type=button][phx-hook=HomeStartChoice]" <>
+          "[phx-update=ignore][data-start-choice=#{choice}][aria-pressed]" <>
+          "[aria-label='#{label}'] .#{icon}"
+
+      assert has_element?(view, selector)
+      refute has_element?(view, "##{id}[inert]")
+      refute has_element?(view, "##{id}.home-expanded-action")
+    end
+
+    view |> element("#home-summary") |> render_click()
+    assert has_element?(view, "#home-start-camera")
+    assert has_element?(view, "#home-start-warmup")
+
+    view |> element("#home-new-workout") |> render_click()
+    refute has_element?(view, "#home-start-camera")
+    refute has_element?(view, "#home-start-warmup")
+  end
+
   test "Home replaces malformed pinned events before rendering inspection", %{
     conn: conn,
     user: user
