@@ -312,8 +312,28 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-completion-mood [data-mood='-1']", "Rough")
     assert has_element?(view, "#session-completion-mood [data-mood='0']", "OK")
     assert has_element?(view, "#session-completion-mood [data-mood='1']", "Good")
-    assert has_element?(view, "#completion-reps-input")
-    assert has_element?(view, "#completion-duration-input")
+    # The counted result is the answer; each field opens only when asked for, but stays in
+    # the form.
+    for name <- ~w[reps duration note] do
+      assert has_element?(view, "#session-completion-form #completion-#{name}-field[hidden]")
+      assert has_element?(view, "#completion-#{name}-field #completion-#{name}-input")
+    end
+
+    assert has_element?(
+             view,
+             "#completion-reps-edit[type=button][aria-label='Correct reps'] #session-actual-reps"
+           )
+
+    assert has_element?(
+             view,
+             "#completion-duration-edit[type=button][aria-label='Correct time'] #session-actual-duration"
+           )
+
+    assert has_element?(
+             view,
+             "#completion-note-toggle[type=button][aria-label='Add a note'] .hero-pencil"
+           )
+
     assert has_element?(view, "#completion-note-input.border-b")
     refute has_element?(view, "#completion-note-input.rounded-xl")
     refute has_element?(view, "#session-more-feedback")

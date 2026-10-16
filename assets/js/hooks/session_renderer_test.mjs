@@ -951,3 +951,62 @@ test("the pace announcement waits until both totals are known", () => {
 
 	assert.equal(elements["#total-reps-accessible"].textContent, "");
 });
+
+function finishFields(elements) {
+	for (const name of ["reps", "duration", "note"]) {
+		elements[`#completion-${name}-field`] = element();
+		elements[`#completion-${name}-field`].hidden = true;
+	}
+	return elements;
+}
+
+const finished = {
+	burpeeCountActual: 40,
+	burpeeCountPlanned: 40,
+	durationSecActual: 1_200,
+	burpeeCountProvenance: "scheduled",
+	notePost: "",
+};
+
+test("the finish screen opens with the counted result and no fields to fill", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	renderer.renderCompletion(finished);
+	for (const name of ["reps", "duration", "note"]) {
+		assert.equal(elements[`#completion-${name}-field`].hidden, true, name);
+	}
+});
+
+test("tapping a number or the pencil opens its field and focuses it", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	elements["#completion-reps-input"] = element();
+	renderer.revealCompletionField("reps", true);
+	assert.equal(elements["#completion-reps-field"].hidden, false);
+	assert.equal(elements["#completion-reps-input"].focusCalls, 1);
+
+	renderer.revealCompletionField("note", true);
+	assert.equal(elements["#completion-note-field"].hidden, false);
+	assert.equal(elements["#completion-note-input"].focusCalls, 1);
+	assert.equal(elements["#completion-duration-field"].hidden, true);
+
+	renderer.revealCompletionField("anything");
+});
+
+test("a note already written shows its field", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	renderer.renderCompletion({ ...finished, notePost: "Legs heavy" });
+	assert.equal(elements["#completion-note-field"].hidden, false);
+	assert.equal(elements["#completion-note-input"].focusCalls, 0);
+});
+
+test("a rejected field opens so its error can be read", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	renderer.renderSaveErrors({
+		field_errors: { duration_sec_actual: ["must be at most 7200"] },
+	});
+	assert.equal(elements["#completion-duration-field"].hidden, false);
+	assert.equal(elements["#completion-reps-field"].hidden, true);
+});

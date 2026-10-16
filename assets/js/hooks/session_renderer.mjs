@@ -206,6 +206,9 @@ export class SessionRenderer {
 			"completion-primary-limiter",
 			"completion-preference-feedback",
 			"workout_session_burpee_type",
+			"completion-reps-edit",
+			"completion-duration-edit",
+			"completion-note-toggle",
 		];
 
 		for (const id of factIds) {
@@ -268,6 +271,15 @@ export class SessionRenderer {
 			?.focus({ preventScroll: true });
 	}
 
+	// The finish screen shows the counted result; a field opens only when asked for, when
+	// it already holds a note, or when Save rejects it.
+	revealCompletionField(name, focus = false) {
+		const field = this.root.querySelector(`#completion-${name}-field`);
+		if (!field) return;
+		field.hidden = false;
+		if (focus) this.root.querySelector(`#completion-${name}-input`)?.focus();
+	}
+
 	renderCompletion(completion) {
 		if (!completion) return;
 		const actualReps = this.root.querySelector("#session-actual-reps");
@@ -313,6 +325,7 @@ export class SessionRenderer {
 		}
 		if (durationInput) durationInput.value = String(completion.durationSecActual);
 		if (noteInput) noteInput.value = completion.notePost || "";
+		if (completion.notePost) this.revealCompletionField("note");
 		if (lowEnergyInput)
 			lowEnergyInput.checked = completion.contextLowEnergy ?? false;
 		if (highEnergyInput)
@@ -379,12 +392,17 @@ export class SessionRenderer {
 			? reply.global_errors.filter(Boolean)
 			: [];
 		const fields = {
-			burpee_count_actual: ["#completion-reps-error", "#completion-reps-input"],
+			burpee_count_actual: [
+				"#completion-reps-error",
+				"#completion-reps-input",
+				"reps",
+			],
 			duration_sec_actual: [
 				"#completion-duration-error",
 				"#completion-duration-input",
+				"duration",
 			],
-			note_post: ["#completion-note-error", "#completion-note-input"],
+			note_post: ["#completion-note-error", "#completion-note-input", "note"],
 		};
 
 		for (const [field, messages] of Object.entries(reply.field_errors || {})) {
@@ -399,6 +417,7 @@ export class SessionRenderer {
 			}
 			const error = this.root.querySelector(targets[0]);
 			const input = this.root.querySelector(targets[1]);
+			this.revealCompletionField(targets[2]);
 			if (error) {
 				error.textContent = text;
 				error.hidden = false;

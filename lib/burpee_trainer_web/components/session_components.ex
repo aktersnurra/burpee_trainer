@@ -228,16 +228,36 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           >
             Workout complete
           </h1>
-          <p
-            id="session-actual-reps"
-            class="qs-tabular mt-7 text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
+          <%!-- The count and the time are the result; tapping one opens it for correction. --%>
+          <button
+            id="completion-reps-edit"
+            type="button"
+            aria-label="Correct reps"
+            title="Correct reps"
+            aria-controls="completion-reps-field"
+            class="mt-7 rounded-2xl px-3"
           >
-            0
-          </p>
+            <span
+              id="session-actual-reps"
+              class="qs-tabular block text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
+            >
+              0
+            </span>
+          </button>
           <%!-- What was planned and how long it took, in one line under the count. --%>
           <p class="qs-tabular mt-4 text-lg text-[var(--session-muted)]">
             of <span id="session-planned-reps">0</span>
-            · <span id="session-actual-duration">0:00</span>
+            ·
+            <button
+              id="completion-duration-edit"
+              type="button"
+              aria-label="Correct time"
+              title="Correct time"
+              aria-controls="completion-duration-field"
+              class="underline-offset-4 hover:underline"
+            >
+              <span id="session-actual-duration">0:00</span>
+            </button>
           </p>
           <p id="session-count-source" class="mt-2 text-sm text-[var(--session-muted)]" hidden></p>
         </section>
@@ -251,7 +271,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
 
         <.form for={@form} id="session-completion-form" class="mt-7">
           <div class="grid grid-cols-2 gap-5">
-            <div>
+            <div id="completion-reps-field" hidden>
               <.input
                 field={@form[:burpee_count_actual]}
                 id="completion-reps-input"
@@ -264,7 +284,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               />
               <p id="completion-reps-error" hidden></p>
             </div>
-            <div>
+            <div id="completion-duration-field" hidden>
               <.input
                 field={@form[:duration_sec_actual]}
                 id="completion-duration-input"
@@ -290,17 +310,19 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               </button>
             <% end %>
           </div>
-          <.input
-            field={@form[:note_post]}
-            id="completion-note-input"
-            type="textarea"
-            label="Note"
-            rows="2"
-            placeholder="How did it go?"
-            aria-describedby="completion-note-error"
-            class="w-full resize-none border-b border-[var(--session-border)] bg-transparent px-0 py-3 text-sm text-[var(--session-ink)]"
-          />
-          <p id="completion-note-error" hidden></p>
+          <div id="completion-note-field" hidden>
+            <.input
+              field={@form[:note_post]}
+              id="completion-note-input"
+              type="textarea"
+              label="Note"
+              rows="2"
+              placeholder="How did it go?"
+              aria-describedby="completion-note-error"
+              class="w-full resize-none border-b border-[var(--session-border)] bg-transparent px-0 py-3 text-sm text-[var(--session-ink)]"
+            />
+            <p id="completion-note-error" hidden></p>
+          </div>
 
           <div class="hidden">
             <.input field={@form[:burpee_type]} type="hidden" />
@@ -319,6 +341,16 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             >
               <.icon name="hero-arrow-left" class="size-6" />
             </.link>
+            <button
+              id="completion-note-toggle"
+              type="button"
+              aria-label="Add a note"
+              title="Add a note"
+              aria-controls="completion-note-field"
+              class="inline-flex size-14 items-center justify-center rounded-full text-[var(--session-muted)] transition-colors hover:bg-[var(--session-border)]/35"
+            >
+              <.icon name="hero-pencil" class="size-6" />
+            </button>
             <button
               id="session-save-btn"
               type="submit"

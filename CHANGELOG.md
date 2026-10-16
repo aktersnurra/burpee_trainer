@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-16 — Starting and finishing a workout with one tap
+
+- Home has camera and warmup toggles beside play, remembered per device (default: camera off, warmup on); play is the only tap before the workout.
+- The session no longer asks about the camera, the warmup, or being ready: it opens the 5-second countdown, or one camera screen ("Starting camera", "Step into frame", "Hand up or hold still", "Camera unavailable"); the warmup runs straight into the workout's countdown. A session left on its finish screen still reopens there.
+- The pose tracker holds a start sent while its code loads, so the camera cannot stall on "Starting camera".
+- The finish screen shows the counted reps and time with no fields: tapping the count or the time opens it for correction, the note sits behind a pencil, and Save opens any field it rejects.
+
 ## 2026-10-04 — Coach/Home branch review fixes
 
 - Migration `20260829085005_rebuild_workout_library` now accepts the upstream-OIDC source/target schema fingerprints, so databases deployed from upstream (OIDC already applied) can migrate; the gate stays exact-match and fails closed for any other shape.

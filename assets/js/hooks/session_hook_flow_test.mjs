@@ -246,6 +246,12 @@ function appendStablePanels(root) {
 		["camera-setup-failure-detail", "p", ""],
 		["camera-setup-retry", "button", ""],
 		["camera-setup-continue", "button", "Continue without camera"],
+		["completion-reps-edit", "button", ""],
+		["completion-duration-edit", "button", ""],
+		["completion-note-toggle", "button", ""],
+		["completion-reps-field", "div", ""],
+		["completion-duration-field", "div", ""],
+		["completion-note-field", "div", ""],
 		["session-actual-reps", "p", "0"],
 		["session-planned-reps", "span", "0"],
 		["session-actual-duration", "p", "0:00"],
@@ -277,6 +283,7 @@ function appendStablePanels(root) {
 		const element = new FakeElement(tag);
 		element.id = id;
 		element.textContent = text;
+		if (id.endsWith("-field")) element.hidden = true;
 		if (id === "camera-setup-retry") {
 			element.hidden = true;
 			element.setAttribute("inert", "");
@@ -3458,4 +3465,46 @@ test("a fake IndexedDB blocked open settles into actionable visible Save failure
 		ctx.destroyed();
 		globalThis.window = originalWindow;
 	}
+});
+
+test("finishing untouched saves the counted reps and time with one tap", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	for (const name of ["reps", "duration", "note"]) {
+		assert.equal(ctx.el.querySelector(`#completion-${name}-field`).hidden, true);
+	}
+	const payload = ctx.completionPayload().workout_session;
+	assert.equal(payload.burpee_count_actual, 5);
+	assert.equal(payload.duration_sec_actual, 10);
+	ctx.destroyed();
+});
+
+test("tapping the count opens it for correction and the correction is saved", async () => {
+	const ctx = mountedFlowHarness({ poseTrackerReady: true });
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 10 });
+	ctx.completeWorkoutSegment();
+
+	for (const [button, name] of [
+		["completion-reps-edit", "reps"],
+		["completion-duration-edit", "duration"],
+		["completion-note-toggle", "note"],
+	]) {
+		click(ctx, button);
+		assert.equal(ctx.el.querySelector(`#completion-${name}-field`).hidden, false);
+		assert.equal(ctx.el.querySelector(`#completion-${name}-input`).focused, true);
+	}
+
+	const reps = ctx.el.querySelector("#completion-reps-input");
+	reps.value = "4";
+	ctx.el.dispatchEvent({ type: "input", target: reps });
+	assert.equal(ctx.completionPayload().workout_session.burpee_count_actual, 4);
+	ctx.destroyed();
 });

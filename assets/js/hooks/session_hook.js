@@ -218,6 +218,11 @@ const SessionHook = {
 
     this.onRootClick = (e) => {
       const retryCamera = e.target.closest("#camera-setup-retry");
+      const correct = [
+        ["#completion-reps-edit", "reps"],
+        ["#completion-duration-edit", "duration"],
+        ["#completion-note-toggle", "note"],
+      ].find(([selector]) => e.target.closest(selector));
       const continueWithoutCamera = e.target.closest("#camera-setup-continue");
       const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
@@ -238,6 +243,7 @@ const SessionHook = {
         this.leaveAndResume(leave.getAttribute("href") || "/");
       }
       if (mood !== undefined) this.editCompletion({ mood: Number(mood) });
+      if (correct) this.renderer.revealCompletionField(correct[1], true);
     };
     this.el.addEventListener("click", this.onRootClick);
 
