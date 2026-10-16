@@ -562,17 +562,12 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#burpee-session :is(#session-capture-choice, #session-camera-status, #session-warmup-choice, #session-workout-ready) h1 {
-  font-size: clamp(2.25rem, 5vw, 2.75rem);
-}
 /* Headings take focus so screen readers announce each step; they are not controls, so
    no outline. */
 #burpee-session [data-session-panel]:not(#session-runner-client) [data-session-heading]:focus {
   outline: none;
 }
-#burpee-session [data-session-panel]:not(#session-runner-client) h1,
-#burpee-session #camera-status-error h2,
-#burpee-session #camera-setup-ready h2 {
+#burpee-session [data-session-panel]:not(#session-runner-client) h1 {
   font-family: var(--font-sans);
   font-weight: 400;
   letter-spacing: -.045em;
@@ -582,10 +577,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   outline-offset: 3px;
 }
 /* Session actions are pills, as on Home. */
-#burpee-session :is(#camera-choice-yes, #camera-status-retry, #warmup-yes-btn, #workout-ready-btn, #session-save-btn) {
-  border-radius: 999px;
-}
-#burpee-session :is(#camera-choice-no, #warmup-skip-btn) {
+#burpee-session #session-save-btn {
   border-radius: 999px;
 }
 #session-completion-review #session-completion-summary { border-bottom: 1px solid var(--session-border); padding-bottom: 28px; }

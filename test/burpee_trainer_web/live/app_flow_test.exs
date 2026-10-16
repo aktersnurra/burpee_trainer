@@ -47,11 +47,7 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
            )
 
     for id <- ~w[
-      session-capture-choice
-      session-camera-status
       session-camera-setup
-      session-warmup-choice
-      session-workout-ready
       session-runner-client
       session-completion-review
     ] do

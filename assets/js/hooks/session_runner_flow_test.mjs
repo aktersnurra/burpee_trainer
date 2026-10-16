@@ -250,10 +250,12 @@ test("a compiler-produced program runs through SessionHook countdown, rests, com
 			session_id: 71, content_hash: "other-hash", client_session_id: "other-client",
 		});
 
-		context.dispatchFlow({ type: "SESSION_READY", workoutTimeline: compiledProgram.events });
-		context.dispatchFlow({ type: "CHOOSE_NO_CAMERA" });
-		context.onWarmupSkip();
-		context.onWorkoutReady();
+		context.dispatchFlow({
+			type: "SESSION_READY",
+			workoutTimeline: compiledProgram.events,
+			choices: { camera: false, warmup: false },
+		});
+		context.dispatchFlow({ type: "START" });
 		assert.equal(context.flow.mode, "workout_running");
 		assert.equal(context.segment.mode, "countdown");
 		clock.advanceCountdownTo(5_000);

@@ -114,13 +114,10 @@ export class SessionRenderer {
 
 	renderFlowState(state) {
 		const visibleId = {
-			capture_choice: "session-capture-choice",
-			camera_starting: "session-camera-status",
-			camera_error: "session-camera-status",
+			camera_starting: "session-camera-setup",
+			camera_error: "session-camera-setup",
 			camera_setup: "session-camera-setup",
-			warmup_choice: "session-warmup-choice",
 			warmup_running: "session-runner-client",
-			workout_ready: "session-workout-ready",
 			workout_running: "session-runner-client",
 			completion_review: "session-completion-review",
 		}[state.mode];
@@ -131,9 +128,7 @@ export class SessionRenderer {
 			panel.toggleAttribute("inert", !visible);
 		}
 
-		this.renderCameraStatus(state);
 		this.renderCameraSetup(state);
-		this.renderCaptureControls(state);
 		this.renderCompletionControls(state);
 		if (visibleId !== this.visiblePanelId) {
 			this.visiblePanelId = visibleId;
@@ -155,34 +150,30 @@ export class SessionRenderer {
 		}
 	}
 
+	// One camera screen: its heading is the status, from starting to "hand up".
 	renderCameraSetup(state) {
-		const arming = this.root.querySelector("#camera-setup-arming");
-		const ready = this.root.querySelector("#camera-setup-ready");
-		const cameraReady = ["ready", "optimal"].includes(state.camera?.readiness);
-
-		if (arming) {
-			arming.hidden = cameraReady;
-			arming.toggleAttribute("inert", cameraReady);
-		}
-		if (ready) {
-			ready.hidden = !cameraReady;
-			ready.toggleAttribute("inert", !cameraReady);
-		}
-	}
-
-		renderCameraStatus(state) {
-		const starting = this.root.querySelector("#camera-status-starting");
-		const error = this.root.querySelector("#camera-status-error");
 		const failed = state.mode === "camera_error";
-		if (starting) {
-			starting.hidden = failed;
-			starting.toggleAttribute("inert", failed);
-		}
-		if (error) {
-			error.hidden = !failed;
-			error.toggleAttribute("inert", !failed);
-		}
-		const detail = this.root.querySelector("#camera-status-failure-detail");
+		const cameraReady = ["ready", "optimal"].includes(state.camera?.readiness);
+		let status = "Step into frame";
+		if (state.mode === "camera_starting") status = "Starting camera";
+		else if (failed) status = "Camera unavailable";
+		else if (cameraReady) status = "Hand up or hold still";
+
+		this.setText(
+			this.root.querySelector("#camera-setup-heading"),
+			status,
+			"cameraSetupStatus",
+		);
+		this.setHidden(
+			this.root.querySelector("#pose-tracker-preview-frame"),
+			failed,
+			"cameraPreviewHidden",
+		);
+		const retry = this.root.querySelector("#camera-setup-retry");
+		this.setHidden(retry, !failed, "cameraRetryHidden");
+		retry?.toggleAttribute("inert", !failed);
+
+		const detail = this.root.querySelector("#camera-setup-failure-detail");
 		const stage = {
 			webgl: "WebGL",
 			camera_stream: "Camera stream",
@@ -262,32 +253,6 @@ export class SessionRenderer {
 			leave.setAttribute("title", label);
 			leave.toggleAttribute("tabindex", disabled);
 			if (disabled) leave.setAttribute("tabindex", "-1");
-		}
-	}
-
-	renderCaptureControls(state) {
-		const manual = state.captureMode === "no_camera";
-		const manualWarmup = this.root.querySelector("#warmup-manual-controls");
-		const trackedWarmup = this.root.querySelector("#warmup-tracked-instruction");
-		const warmupCountdown = this.root.querySelector("#warmup-skip-countdown");
-		const manualStart = this.root.querySelector("#workout-ready-btn");
-		const trackedStart = this.root.querySelector("#workout-ready-instruction");
-		const cameraEscape = this.root.querySelector("#workout-ready-continue");
-
-		for (const element of [manualWarmup, manualStart]) {
-			if (!element) continue;
-			element.hidden = !manual;
-			element.toggleAttribute("inert", !manual);
-		}
-		for (const element of [
-			trackedWarmup,
-			warmupCountdown,
-			trackedStart,
-			cameraEscape,
-		]) {
-			if (!element) continue;
-			element.hidden = manual;
-			element.toggleAttribute("inert", manual);
 		}
 	}
 

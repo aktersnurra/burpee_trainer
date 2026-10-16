@@ -60,8 +60,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
 
-    for panel <-
-          ~w[session-capture-choice session-camera-status session-camera-setup session-warmup-choice session-workout-ready] do
+    for panel <- ~w[session-camera-setup] do
       assert has_element?(view, "##{panel} .session-preflight-workout-name", plan.name)
 
       assert has_element?(
@@ -83,7 +82,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
 
-    view |> element("#session-capture-choice-back") |> render_click()
+    view |> element("#session-camera-setup-back") |> render_click()
     assert_redirect(view, ~p"/")
     assert Repo.get!(WorkoutSession, session.id).state == :started
     assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -285,11 +284,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     for id <- ~w[
           burpee-session
-          session-capture-choice
-          session-camera-status
           session-camera-setup
-          session-warmup-choice
-          session-workout-ready
           session-runner-client
           session-completion-review
           session-completion-form
@@ -300,9 +295,18 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
       assert has_element?(view, "##{id}")
     end
 
-    assert has_element?(view, "#session-capture-choice:not([hidden]):not([inert])")
+    # Nothing asks before the workout: the client opens the camera or the countdown.
+    assert has_element?(view, "#session-camera-setup[hidden][inert]")
     assert has_element?(view, "#session-runner-client[hidden][inert]")
-    assert has_element?(view, "#session-capture-choice-heading", "Track burpees with the camera?")
+    assert has_element?(view, "#camera-setup-heading", "Starting camera")
+    assert has_element?(view, "#camera-setup-retry[hidden] .hero-arrow-path")
+    assert has_element?(view, "#camera-setup-continue", "Continue without camera")
+
+    for removed <- ~w[session-capture-choice session-camera-status session-warmup-choice
+                      session-workout-ready] do
+      refute has_element?(view, "##{removed}")
+    end
+
     assert has_element?(view, "#session-completion-heading", "Workout complete")
     assert has_element?(view, "#session-completion-form > .grid + #session-completion-mood")
     assert has_element?(view, "#session-completion-mood [data-mood='-1']", "Rough")

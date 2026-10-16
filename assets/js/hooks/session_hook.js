@@ -19,6 +19,7 @@ import {
 } from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 import { openSessionStore } from "./session_store.mjs";
+import { readStartChoices } from "./start_choices.mjs";
 import {
   finishTrackingObserver,
   initialTrackingObserver,
@@ -75,10 +76,6 @@ const SessionHook = {
     this.trackingCompletion = null;
     this.armedPoseStep = null;
     this.armedPoseHoldFramesRequired = 0;
-    this.warmupTimeoutRemainingMs = 0;
-    this.warmupTimeoutDeadline = null;
-    this.warmupTimeoutId = null;
-    this.warmupTimeoutRafId = null;
     this.trackerFinished = null;
     this.traceRetentionAvailable = true;
     this.store = null;
@@ -209,32 +206,30 @@ const SessionHook = {
     this.dispatchFlow({
       type: "SESSION_READY",
       workoutTimeline: workoutTimelineFromProgram(this.program),
+      choices: readStartChoices(this.startChoiceStorage),
+    });
+    // A session that was finishing reopens on its finish screen; anything else starts.
+    const bootGeneration = this.lifecycleGeneration;
+    this.started = this.draftRestore.then(() => {
+      if (this.lifecycleActive(bootGeneration)) {
+        this.dispatchFlow({ type: "START", ...this.warmupStart() });
+      }
     });
 
     this.onRootClick = (e) => {
-      const warmupYes = e.target.closest("#warmup-yes-btn");
-      const warmupSkip = e.target.closest("#warmup-skip-btn");
-      const workoutReady = e.target.closest("#workout-ready-btn");
-      const chooseCamera = e.target.closest("#camera-choice-yes");
-      const chooseNoCamera = e.target.closest("#camera-choice-no");
-      const retryCamera = e.target.closest("#camera-status-retry");
-      const continueWithoutCamera =
-        e.target.closest("#camera-status-continue") ||
-        e.target.closest("#camera-setup-continue") ||
-        e.target.closest("#workout-ready-continue");
+      const retryCamera = e.target.closest("#camera-setup-retry");
+      const continueWithoutCamera = e.target.closest("#camera-setup-continue");
       const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
       const leave = e.target.closest("#session-leave-btn");
       const mood = e.target.dataset?.mood;
 
-      if (warmupYes) this.onWarmupYes();
-      if (warmupSkip) this.onWarmupSkip();
-      if (workoutReady) this.onWorkoutReady();
-      if (chooseCamera) this.dispatchFlow({ type: "CHOOSE_CAMERA" });
-      if (chooseNoCamera) this.dispatchFlow({ type: "CHOOSE_NO_CAMERA" });
       if (retryCamera) this.dispatchFlow({ type: "RETRY_CAMERA" });
       if (continueWithoutCamera) {
-        this.dispatchFlow({ type: "CONTINUE_WITHOUT_CAMERA" });
+        this.dispatchFlow({
+          type: "CONTINUE_WITHOUT_CAMERA",
+          ...this.warmupStart(),
+        });
       }
       if (ringContainer && this.canTogglePause()) this.togglePause();
       if (finishEarly) this.onFinishEarly();
@@ -596,7 +591,7 @@ const SessionHook = {
       draft.session_id !== this.sessionId ||
       draft.content_hash !== this.contentHash ||
       draft.client_session_id !== this.clientSessionId ||
-      this.flow.mode !== "capture_choice"
+      this.flow.mode !== "starting"
     ) {
       return;
     }
@@ -719,7 +714,6 @@ const SessionHook = {
     if (this.countdownRafId) cancelAnimationFrame(this.countdownRafId);
     if (this.countdownTimeoutId) clearTimeout(this.countdownTimeoutId);
     if (this.finalRepGraceTimeoutId) clearTimeout(this.finalRepGraceTimeoutId);
-    this.cancelWarmupTimeout();
     this.renderer.clearTimers();
     this.audio.stop();
     document.removeEventListener("visibilitychange", this.onVisibility);
@@ -789,31 +783,15 @@ const SessionHook = {
         this.dispatchTrackerCommand("pose-tracker:stop");
         break;
       case "armGesture":
-        this.armPoseTrackerStep(
-          command.step,
-          command.step === "workout_start" ? 30 : 15,
-        );
+        this.armPoseTrackerStep(command.step, 15);
         break;
       case "disarmGesture":
         this.disarmPoseTrackerStep();
-        break;
-      case "startWarmupTimeout":
-        this.startWarmupTimeout();
-        break;
-      case "pauseWarmupTimeout":
-        this.pauseWarmupTimeout();
-        break;
-      case "resumeWarmupTimeout":
-        this.resumeWarmupTimeout();
-        break;
-      case "cancelWarmupTimeout":
-        this.cancelWarmupTimeout();
         break;
       case "startSegment":
         this.startSegment(command);
         break;
       case "showCompletion":
-        this.cancelWarmupTimeout();
         this.quiesceCompletedWorkout();
         this.queueCompletionDraft();
         this.renderer.renderCompletion(this.flow.completion);
@@ -847,92 +825,6 @@ const SessionHook = {
     this.el
       .querySelector("#pose-tracker")
       ?.dispatchEvent(new CustomEvent(type, { detail }));
-  },
-
-  startWarmupTimeout() {
-    this.cancelWarmupTimeout();
-    this.warmupTimeoutRemainingMs = 4_000;
-    this.warmupTimeoutDeadline = performance.now() + 4_000;
-    this.scheduleWarmupTimeout();
-    this.renderWarmupTimeoutContinuously();
-  },
-
-  renderWarmupTimeoutContinuously() {
-    this.renderWarmupTimeout();
-    if (this.warmupTimeoutDeadline === null) return;
-    this.warmupTimeoutRafId = requestAnimationFrame(() =>
-      this.renderWarmupTimeoutContinuously(),
-    );
-  },
-
-  scheduleWarmupTimeout() {
-    if (this.warmupTimeoutDeadline === null) return;
-    if (this.warmupTimeoutId) clearTimeout(this.warmupTimeoutId);
-    this.warmupTimeoutId = setTimeout(
-      () => this.finishWarmupTimeout(),
-      this.warmupTimeoutRemainingMs,
-    );
-  },
-
-  renderWarmupTimeout() {
-    if (this.warmupTimeoutDeadline !== null) {
-      this.warmupTimeoutRemainingMs = Math.min(
-        this.warmupTimeoutRemainingMs,
-        Math.max(this.warmupTimeoutDeadline - performance.now(), 0),
-      );
-    }
-    const seconds = Math.max(
-      1,
-      Math.ceil(this.warmupTimeoutRemainingMs / 1_000),
-    );
-    const output = this.el.querySelector("#warmup-skip-seconds");
-    if (output) output.textContent = String(seconds);
-  },
-
-  pauseWarmupTimeout() {
-    if (this.warmupTimeoutDeadline === null) return;
-    this.renderWarmupTimeout();
-    this.warmupTimeoutDeadline = null;
-    if (this.warmupTimeoutId) clearTimeout(this.warmupTimeoutId);
-    if (this.warmupTimeoutRafId) {
-      cancelAnimationFrame(this.warmupTimeoutRafId);
-    }
-    this.warmupTimeoutId = null;
-    this.warmupTimeoutRafId = null;
-  },
-
-  resumeWarmupTimeout() {
-    if (
-      this.flow.mode !== "warmup_choice" ||
-      this.warmupTimeoutDeadline !== null ||
-      this.warmupTimeoutRemainingMs <= 0
-    ) {
-      return;
-    }
-    this.warmupTimeoutDeadline =
-      performance.now() + this.warmupTimeoutRemainingMs;
-    this.scheduleWarmupTimeout();
-    this.renderWarmupTimeoutContinuously();
-  },
-
-  finishWarmupTimeout() {
-    if (this.flow.mode !== "warmup_choice") return;
-    this.renderWarmupTimeout();
-    this.dispatchFlow({
-      type: "WARMUP_TIMEOUT",
-      step: "warmup",
-    });
-  },
-
-  cancelWarmupTimeout() {
-    if (this.warmupTimeoutId) clearTimeout(this.warmupTimeoutId);
-    if (this.warmupTimeoutRafId) {
-      cancelAnimationFrame(this.warmupTimeoutRafId);
-    }
-    this.warmupTimeoutId = null;
-    this.warmupTimeoutRafId = null;
-    this.warmupTimeoutDeadline = null;
-    this.warmupTimeoutRemainingMs = 0;
   },
 
   dispatchSegment(event) {
@@ -1039,33 +931,17 @@ const SessionHook = {
     }
   },
 
-  onWarmupYes() {
+  warmupStart() {
     const warmupTimeline = warmupTimelineFromProgram(this.program);
-    this.dispatchFlow({
-      type: "WARMUP_READY",
+    return {
       warmupTimeline,
       burpeeCountTarget: programBurpeeCount(warmupTimeline),
-    });
-  },
-
-  onWarmupSkip() {
-    this.dispatchFlow({ type: "WARMUP_SKIP" });
-  },
-
-  onWorkoutReady() {
-    this.dispatchFlow({ type: "WORKOUT_READY" });
+    };
   },
 
   handlePoseGestureConfirm({ step }) {
     if (!step) return;
-    this.dispatchFlow({
-      type: "GESTURE_CONFIRM",
-      step,
-      warmupTimeline: warmupTimelineFromProgram(this.program),
-      burpeeCountTarget: programBurpeeCount(
-        warmupTimelineFromProgram(this.program),
-      ),
-    });
+    this.dispatchFlow({ type: "GESTURE_CONFIRM", step, ...this.warmupStart() });
   },
 
   startCountdown() {

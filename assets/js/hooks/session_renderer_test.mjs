@@ -156,7 +156,7 @@ function harness() {
 		"#total-plan": element(),
 		"#pause-icon": element(),
 		"#session-live-status": element(),
-		"#camera-status-failure-detail": element(),
+		"#camera-setup-failure-detail": element(),
 		"#session-begin-conflict": element(),
 		"#session-begin-conflict-message": element(),
 		"#session-begin-conflict-resolve": element(),
@@ -291,7 +291,7 @@ test("camera, count-in, pause, completion, save, and errors are announced", () =
 
 test("camera failure shows its stage and reason and clears them on retry", () => {
 	const { renderer, elements } = harness();
-	const detail = elements["#camera-status-failure-detail"];
+	const detail = elements["#camera-setup-failure-detail"];
 
 	renderer.renderFlowState({
 		mode: "camera_error",

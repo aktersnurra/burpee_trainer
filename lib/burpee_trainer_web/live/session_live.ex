@@ -162,11 +162,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         data-client-session-id={@workout_session.client_session_id}
         class="session-surface fixed inset-0 z-[60] min-h-dvh overflow-hidden bg-[var(--session-bg)] text-[var(--session-ink)]"
       >
-        <SessionComponents.capture_choice hidden={false} session={@workout_session} />
-        <SessionComponents.camera_status session={@workout_session} />
         <SessionComponents.camera_setup session={@workout_session} target_pace_sec={@target_pace_sec} />
-        <SessionComponents.warmup_choice session={@workout_session} />
-        <SessionComponents.workout_ready session={@workout_session} />
         <SessionComponents.runner summary={@summary} />
         <SessionComponents.completion_review form={@completion_form} />
 

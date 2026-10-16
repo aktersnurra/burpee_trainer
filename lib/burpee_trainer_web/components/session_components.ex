@@ -8,127 +8,31 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   alias BurpeeTrainerWeb.Fmt
 
   attr(:hidden, :boolean, default: true)
-  attr(:session, :map, required: true)
-
-  def capture_choice(assigns) do
-    ~H"""
-    <.panel
-      id="session-capture-choice"
-      heading_id="session-capture-choice-heading"
-      hidden={@hidden}
-    >
-      <.preflight_chrome id="session-capture-choice" session={@session} />
-      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
-        <h1
-          id="session-capture-choice-heading"
-          data-session-heading
-          tabindex="-1"
-          class="qs-heading-tight text-4xl font-medium leading-tight"
-        >
-          Track burpees with the camera?
-        </h1>
-        <p class="mt-4 max-w-sm text-base leading-relaxed text-[var(--session-muted)]">
-          The workout timer runs either way. Camera tracking adds a backup rep count.
-        </p>
-        <div class="mx-auto mt-10 grid w-full max-w-sm gap-3">
-          <button
-            id="camera-choice-yes"
-            type="button"
-            class="min-h-14 rounded-2xl bg-[var(--session-ink)] px-6 py-4 text-base font-semibold text-[var(--session-bg)] transition hover:opacity-90 active:scale-[0.99]"
-          >
-            Yes, use camera
-          </button>
-          <button
-            id="camera-choice-no"
-            type="button"
-            class="min-h-14 rounded-2xl border border-[var(--session-border)] px-6 py-4 text-base font-medium text-[var(--session-muted)] transition hover:border-[var(--session-ink)] hover:text-[var(--session-ink)] active:scale-[0.99]"
-          >
-            No, continue
-          </button>
-        </div>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
-  attr(:session, :map, required: true)
-
-  def camera_status(assigns) do
-    ~H"""
-    <.panel id="session-camera-status" heading_id="camera-status-heading" hidden={@hidden}>
-      <.preflight_chrome id="session-camera-status" session={@session} />
-      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
-        <div id="camera-status-starting">
-          <h1
-            id="camera-status-heading"
-            data-session-heading
-            tabindex="-1"
-            class="qs-heading-tight text-4xl font-medium leading-tight"
-          >
-            Starting camera
-          </h1>
-        </div>
-        <div id="camera-status-error" hidden inert="inert">
-          <h2 class="qs-heading-tight text-4xl font-medium leading-tight">Camera unavailable</h2>
-          <p class="mt-4 text-base text-[var(--session-muted)]">Nothing has started.</p>
-          <p
-            id="camera-status-failure-detail"
-            hidden
-            class="mt-4 break-words text-sm text-[var(--session-muted)]"
-          >
-          </p>
-          <div class="mx-auto mt-10 grid w-full max-w-sm gap-3">
-            <button
-              id="camera-status-retry"
-              type="button"
-              class="min-h-14 rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-            >
-              Try again
-            </button>
-            <button
-              id="camera-status-continue"
-              type="button"
-              class="min-h-14 px-6 py-4 text-[var(--session-muted)] underline underline-offset-4"
-            >
-              Continue without camera
-            </button>
-          </div>
-        </div>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
   attr(:target_pace_sec, :any, default: nil)
   attr(:session, :map, required: true)
 
+  # The one camera screen, from starting to "hand up". Its heading is the status line.
   def camera_setup(assigns) do
     ~H"""
     <.panel id="session-camera-setup" heading_id="camera-setup-heading" hidden={@hidden}>
       <.preflight_chrome id="session-camera-setup" session={@session} />
       <div class="session-camera-layout absolute inset-0 mx-auto grid w-full max-w-[640px] text-center">
         <div class="row-start-1 w-full max-w-[640px] place-self-center self-center px-5">
-          <div id="camera-setup-arming">
-            <h1
-              id="camera-setup-heading"
-              data-session-heading
-              tabindex="-1"
-              class="qs-heading-tight text-3xl font-medium leading-tight"
-            >
-              Step into frame
-            </h1>
-            <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
-              Keep shoulders, hips, and one knee visible.
-            </p>
-          </div>
-          <div id="camera-setup-ready" hidden inert="inert">
-            <h2 class="qs-heading-tight text-3xl font-medium leading-tight">Camera ready</h2>
-            <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--session-muted)]">
-              Hold one hand up or stay still.
-            </p>
-          </div>
+          <h1
+            id="camera-setup-heading"
+            data-session-heading
+            tabindex="-1"
+            aria-live="polite"
+            class="qs-heading-tight text-3xl font-medium leading-tight"
+          >
+            Starting camera
+          </h1>
+          <p
+            id="camera-setup-failure-detail"
+            hidden
+            class="mx-auto mt-2 max-w-md break-words text-sm text-[var(--session-muted)]"
+          >
+          </p>
         </div>
 
         <div
@@ -153,101 +57,26 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           </div>
         </div>
 
-        <button
-          id="camera-setup-continue"
-          type="button"
-          class="row-start-3 place-self-center px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
-        >
-          Continue without camera
-        </button>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
-  attr(:session, :map, required: true)
-
-  def warmup_choice(assigns) do
-    ~H"""
-    <.panel id="session-warmup-choice" heading_id="session-warmup-heading" hidden={@hidden}>
-      <.preflight_chrome id="session-warmup-choice" session={@session} />
-      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
-        <h1
-          id="session-warmup-heading"
-          data-session-heading
-          tabindex="-1"
-          class="qs-heading-tight text-4xl font-medium leading-tight"
-        >
-          Warm up first?
-        </h1>
-        <p id="warmup-tracked-instruction" class="mt-4 text-lg text-[var(--session-muted)]">
-          Raise one hand to warm up.
-        </p>
-        <p id="warmup-skip-countdown" class="qs-tabular mt-3 text-base text-[var(--session-muted)]">
-          Skipping in <span id="warmup-skip-seconds">4</span>
-        </p>
-        <div
-          id="warmup-manual-controls"
-          class="mx-auto mt-10 grid w-full max-w-sm gap-3"
-          hidden
-          inert="inert"
-        >
+        <div class="row-start-3 flex flex-col items-center gap-1 place-self-center">
           <button
-            id="warmup-yes-btn"
+            id="camera-setup-retry"
             type="button"
-            class="min-h-14 rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
+            hidden
+            inert="inert"
+            aria-label="Try the camera again"
+            title="Try the camera again"
+            class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)]"
           >
-            Warm up
+            <.icon name="hero-arrow-path" class="size-6" />
           </button>
           <button
-            id="warmup-skip-btn"
+            id="camera-setup-continue"
             type="button"
-            class="min-h-14 rounded-2xl border border-[var(--session-border)] px-6 py-4 text-[var(--session-muted)]"
+            class="px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
           >
-            Skip warmup
+            Continue without camera
           </button>
         </div>
-      </div>
-    </.panel>
-    """
-  end
-
-  attr(:hidden, :boolean, default: true)
-  attr(:session, :map, required: true)
-
-  def workout_ready(assigns) do
-    ~H"""
-    <.panel id="session-workout-ready" heading_id="session-workout-ready-heading" hidden={@hidden}>
-      <.preflight_chrome id="session-workout-ready" session={@session} />
-      <div class="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col items-center justify-center px-6 text-center">
-        <h1
-          id="session-workout-ready-heading"
-          data-session-heading
-          tabindex="-1"
-          class="qs-heading-tight text-4xl font-medium leading-tight"
-        >
-          Ready when you are
-        </h1>
-        <p id="workout-ready-instruction" class="mt-4 text-lg text-[var(--session-muted)]">
-          Hold one hand up to start.
-        </p>
-        <button
-          id="workout-ready-btn"
-          type="button"
-          hidden
-          inert="inert"
-          class="mt-10 min-h-14 w-full max-w-sm rounded-2xl bg-[var(--session-ink)] px-6 py-4 font-semibold text-[var(--session-bg)]"
-        >
-          Start workout
-        </button>
-        <button
-          id="workout-ready-continue"
-          type="button"
-          class="mt-6 min-h-11 px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
-        >
-          Continue without camera
-        </button>
       </div>
     </.panel>
     """

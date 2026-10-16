@@ -6,6 +6,7 @@ export function initialFlowState() {
 		trackingTrust: "disabled",
 		trackingReason: null,
 		armedStep: null,
+		warmup: true,
 		workoutTimeline: [],
 		warmupResult: { burpeeCountDone: 0, durationSec: 0 },
 		workoutResult: null,
@@ -86,35 +87,11 @@ function completionFor(state, result) {
 	};
 }
 
-function enterWarmupChoice(state, commands = []) {
-	if (state.captureMode === "camera") {
-		return moved(state, { mode: "warmup_choice", armedStep: "warmup" }, [
-			...commands,
-			{ type: "armGesture", step: "warmup" },
-			{ type: "startWarmupTimeout", step: "warmup" },
-			{ type: "renderFlow" },
-		]);
-	}
-
-	return moved(state, { mode: "warmup_choice", armedStep: null }, [
-		...commands,
-		{ type: "renderFlow" },
-	]);
-}
-
-function enterWorkoutReady(state, commands = []) {
-	if (state.captureMode === "camera") {
-		return moved(state, { mode: "workout_ready", armedStep: "workout_start" }, [
-			...commands,
-			{ type: "armGesture", step: "workout_start" },
-			{ type: "renderFlow" },
-		]);
-	}
-
-	return moved(state, { mode: "workout_ready", armedStep: null }, [
-		...commands,
-		{ type: "renderFlow" },
-	]);
+// After ▶, and after the camera sees a raised hand: the warmup when it is on, else the
+// workout. Each segment opens on its own countdown.
+function beginAfterSetup(state, event, commands = []) {
+	if (state.warmup) return startWarmup(state, event, commands);
+	return startWorkout(state, commands);
 }
 
 function startWarmup(state, event, commands = []) {
@@ -171,27 +148,31 @@ export function flowTransition(state, event) {
 		case "SESSION_READY":
 			if (state.mode !== "booting") return unchanged(state);
 			return moved(state, {
-				mode: "capture_choice",
+				mode: "starting",
+				warmup: event.choices?.warmup !== false,
+				captureMode: event.choices?.camera === true ? "camera" : "no_camera",
 				workoutTimeline: event.workoutTimeline || [],
 			});
 
-		case "CHOOSE_CAMERA":
-			if (state.mode !== "capture_choice") return unchanged(state);
-			return moved(
-				state,
-				{
-					mode: "camera_starting",
-					captureMode: "camera",
-					camera: {
-						status: "starting",
-						readiness: "not_ready",
-						reason: null,
+		case "START":
+			if (state.mode !== "starting") return unchanged(state);
+			if (state.captureMode === "camera") {
+				return moved(
+					state,
+					{
+						mode: "camera_starting",
+						camera: {
+							status: "starting",
+							readiness: "not_ready",
+							reason: null,
+						},
+						trackingTrust: "arming",
+						trackingReason: null,
 					},
-					trackingTrust: "arming",
-					trackingReason: null,
-				},
-				[{ type: "startCamera" }, { type: "renderFlow" }],
-			);
+					[{ type: "startCamera" }, { type: "renderFlow" }],
+				);
+			}
+			return beginAfterSetup(state, event);
 
 		case "RETRY_CAMERA":
 			if (state.mode !== "camera_error") return unchanged(state);
@@ -244,9 +225,21 @@ export function flowTransition(state, event) {
 				trackingReason: event.reason || null,
 			});
 
-		case "CHOOSE_NO_CAMERA":
-			if (state.mode !== "capture_choice") return unchanged(state);
-			return enterWarmupChoice(
+		case "CONTINUE_WITHOUT_CAMERA": {
+			if (
+				!["camera_starting", "camera_error", "camera_setup"].includes(
+					state.mode,
+				) ||
+				state.captureMode !== "camera"
+			) {
+				return unchanged(state);
+			}
+
+			const commands = [];
+			if (state.armedStep) commands.push({ type: "disarmGesture" });
+			commands.push({ type: "stopCamera" });
+
+			return beginAfterSetup(
 				{
 					...state,
 					captureMode: "no_camera",
@@ -257,61 +250,18 @@ export function flowTransition(state, event) {
 					},
 					trackingTrust: "disabled",
 					trackingReason: null,
+					armedStep: null,
 				},
-				[{ type: "stopCamera" }],
+				event,
+				commands,
 			);
-
-		case "CONTINUE_WITHOUT_CAMERA": {
-			if (
-				![
-					"camera_starting",
-					"camera_error",
-					"camera_setup",
-					"warmup_choice",
-					"workout_ready",
-				].includes(state.mode) ||
-				state.captureMode !== "camera"
-			) {
-				return unchanged(state);
-			}
-
-			const commands = [];
-			if (state.armedStep) commands.push({ type: "disarmGesture" });
-			if (state.mode === "warmup_choice") {
-				commands.push({ type: "cancelWarmupTimeout" });
-			}
-			commands.push({ type: "stopCamera" });
-
-			const nextState = {
-				...state,
-				captureMode: "no_camera",
-				camera: {
-					status: "idle",
-					readiness: "not_ready",
-					reason: null,
-				},
-				trackingTrust: "disabled",
-				trackingReason: null,
-				armedStep: null,
-			};
-
-			if (state.mode === "workout_ready") {
-				return moved(nextState, {}, [...commands, { type: "renderFlow" }]);
-			}
-			return enterWarmupChoice(nextState, commands);
 		}
 
-		case "CAMERA_READINESS": {
-			if (state.captureMode !== "camera") return unchanged(state);
-			if (
-				!["camera_setup", "warmup_choice", "workout_ready"].includes(state.mode)
-			) {
+		case "CAMERA_READINESS":
+			if (state.captureMode !== "camera" || state.mode !== "camera_setup") {
 				return unchanged(state);
 			}
-
-			const wasReady = cameraReady(state);
-			const nextState = {
-				...state,
+			return moved(state, {
 				camera: {
 					...state.camera,
 					status:
@@ -320,97 +270,23 @@ export function flowTransition(state, event) {
 							: "arming",
 					readiness: event.readiness,
 				},
-			};
-			const isReady = cameraReady(nextState);
-
-			if (state.mode === "warmup_choice") {
-				if (wasReady && !isReady) {
-					return moved(nextState, {}, [
-						{ type: "pauseWarmupTimeout" },
-						{ type: "renderFlow" },
-					]);
-				}
-				if (!wasReady && isReady) {
-					return moved(nextState, {}, [
-						{ type: "resumeWarmupTimeout" },
-						{ type: "renderFlow" },
-					]);
-				}
-			}
-
-			return moved(nextState, {});
-		}
+			});
 
 		case "GESTURE_CONFIRM":
-			if (state.mode === "camera_setup") {
-				if (!matchingArm(state, event, "camera_setup") || !cameraReady(state)) {
-					return unchanged(state);
-				}
-				return enterWarmupChoice({ ...state, armedStep: null }, [
-					{ type: "disarmGesture" },
-				]);
-			}
-
-			if (state.mode === "warmup_choice") {
-				if (!matchingArm(state, event, "warmup") || !cameraReady(state)) {
-					return unchanged(state);
-				}
-				return startWarmup(state, event, [
-					{ type: "disarmGesture" },
-					{ type: "cancelWarmupTimeout" },
-				]);
-			}
-
-			if (state.mode === "workout_ready") {
-				if (
-					!matchingArm(state, event, "workout_start") ||
-					!cameraReady(state)
-				) {
-					return unchanged(state);
-				}
-				return startWorkout(state, [{ type: "disarmGesture" }]);
-			}
-
-			return unchanged(state);
-
-		case "WARMUP_TIMEOUT_TICK":
 			if (
-				state.mode !== "warmup_choice" ||
-				!matchingArm(state, event, "warmup") ||
+				state.mode !== "camera_setup" ||
+				!matchingArm(state, event, "camera_setup") ||
 				!cameraReady(state)
 			) {
 				return unchanged(state);
 			}
-			return moved(state, {});
-
-		case "WARMUP_TIMEOUT":
-			if (
-				state.mode !== "warmup_choice" ||
-				!matchingArm(state, event, "warmup") ||
-				!cameraReady(state)
-			) {
-				return unchanged(state);
-			}
-			return enterWorkoutReady({ ...state, armedStep: null }, [
+			return beginAfterSetup({ ...state, armedStep: null }, event, [
 				{ type: "disarmGesture" },
-				{ type: "cancelWarmupTimeout" },
 			]);
-
-		case "WARMUP_READY":
-			if (state.mode !== "warmup_choice" || state.captureMode !== "no_camera") {
-				return unchanged(state);
-			}
-			return startWarmup(state, event);
-
-		case "WARMUP_SKIP":
-			if (state.mode !== "warmup_choice" || state.captureMode !== "no_camera") {
-				return unchanged(state);
-			}
-			return enterWorkoutReady(state);
 
 		case "SEGMENT_DONE":
 			if (event.segment === "warmup" && state.mode === "warmup_running") {
-				return enterWorkoutReady({
+				return startWorkout({
 					...state,
 					warmupResult: event.result || state.warmupResult,
 				});
@@ -419,12 +295,6 @@ export function flowTransition(state, event) {
 				return finishWorkout(state, event.result);
 			}
 			return unchanged(state);
-
-		case "WORKOUT_READY":
-			if (state.mode !== "workout_ready" || state.captureMode !== "no_camera") {
-				return unchanged(state);
-			}
-			return startWorkout(state);
 
 		case "TRACKING_DEGRADED":
 			if (state.captureMode !== "camera") return unchanged(state);
@@ -464,7 +334,7 @@ export function flowTransition(state, event) {
 			return finishWorkout(state, event.result);
 
 		case "RESTORE_COMPLETION_DRAFT":
-			if (state.mode !== "capture_choice" || !event.completion) {
+			if (state.mode !== "starting" || !event.completion) {
 				return unchanged(state);
 			}
 			return moved(
