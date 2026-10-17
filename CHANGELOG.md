@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-18 — Latest packages
+
+- Hex: every dependency at its latest, including Phoenix 1.8.15, LiveView 1.2, Ecto SQL 3.14, ecto_sqlite3 0.25, LiveDashboard 0.9, Req 0.7, Bandit 1.13, Oban 2.24.2, tzdata 1.2, Reach 2.8; `mix.exs` requirements raised where the old ones held them back.
+- Binaries: esbuild 0.28.2, Tailwind 4.3.3. npm: @mediapipe/tasks-vision 1.1.1 (same wasm files, copied by `prepare_pose_assets.sh`), date-fns 4.4, @fontsource/geist 5.3, prettier 3.9.
+- LiveView 1.2's formatter writes empty elements as `></tag>`; four templates reformatted, nothing else changed in the app.
+
 ## 2026-10-18 — Finish early or abort; the video page in the session's style
 
 - Paused, a workout offers Finish early or Abort; the back arrow is gone. Abort asks in place ("Abort this workout? Nothing will be saved.", Keep / Abort) and deletes the started session; resuming closes the question, and a refused abort stays paused and says so.

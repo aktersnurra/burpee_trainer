@@ -41,8 +41,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
                 class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
                 muted
                 playsinline
-              >
-              </video>
+              ></video>
               <canvas id="pose-debug-canvas" class="absolute inset-0 h-full w-full"></canvas>
             </div>
 

@@ -248,15 +248,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                   ]}
                   title={week_title(week)}
                   aria-label={week_title(week)}
-                >
-                </button>
+                ></button>
                 <span
                   :for={_ <- 1..(12 - length(row))//1}
                   :if={length(row) < 12}
                   class="home-history-week-placeholder"
                   aria-hidden="true"
-                >
-                </span>
+                ></span>
               </div>
             </div>
           </section>
@@ -520,8 +518,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               phx-click="history_density_mode"
               phx-value-mode="sessions"
               class="home-history-trend-open-sessions"
-            >
-            </button>
+            ></button>
             <svg
               viewBox="0 0 100 100"
               preserveAspectRatio="none"

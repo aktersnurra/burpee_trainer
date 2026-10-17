@@ -236,8 +236,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
             controls
             playsinline
             class="mt-6 aspect-video w-full rounded-2xl bg-black"
-          >
-          </video>
+          ></video>
           <%!-- As when a workout is paused: finish early, or abort it. --%>
           <div
             :if={!@confirm_discard?}

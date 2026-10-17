@@ -51,8 +51,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
               muted
               playsinline
-            >
-            </video>
+            ></video>
             <canvas id="pose-tracker-canvas" class="absolute inset-0 h-full w-full"></canvas>
           </div>
         </div>
@@ -167,8 +166,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               class="qs-tabular pointer-events-none text-[var(--session-active-ink)]"
               hidden
               aria-hidden="true"
-            >
-            </span>
+            ></span>
             <svg
               id="pause-icon"
               viewBox="0 0 48 48"

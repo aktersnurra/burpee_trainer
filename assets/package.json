@@ -12,13 +12,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@fontsource/geist": "^5.2.9",
-    "@mediapipe/tasks-vision": "^1.0.1",
+    "@fontsource/geist": "^5.3.0",
+    "@mediapipe/tasks-vision": "^1.1.1",
     "chart.js": "^4.5.1",
     "chartjs-adapter-date-fns": "^3.0.0",
-    "date-fns": "^4.1.0"
+    "date-fns": "^4.4.0"
   },
   "devDependencies": {
-    "prettier": "^3.8.3"
+    "prettier": "^3.9.10"
   }
 }
