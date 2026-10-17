@@ -68,6 +68,22 @@ defmodule BurpeeTrainer.Mcp.CoachTest do
     end
   end
 
+  test "the workout format's worked example fits to the rests its text gives" do
+    {args, expected_rests} = BurpeeTrainer.Mcp.WorkoutFormat.example()
+    text = BurpeeTrainer.Mcp.WorkoutFormat.text()
+
+    assert {:ok, definition} = BurpeeTrainer.Mcp.Workouts.definition(args)
+
+    assert for(%{"kind" => "rest", "duration_sec" => d} <- definition["events"], do: d) ==
+             expected_rests
+
+    assert text =~ "So the rests are 20 s and 60 s."
+
+    exact = put_in(args, ["phases", Access.at(0), "rests"], [%{"sec" => 20}, %{"sec" => 52}])
+    assert {:error, reason} = BurpeeTrainer.Mcp.Workouts.definition(exact)
+    assert reason =~ "8 s before"
+  end
+
   test "an unknown prompt or resource is a protocol error", %{scope: scope} do
     for {method, params} <- [
           {"prompts/get", %{"name" => "nope"}},

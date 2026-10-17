@@ -117,7 +117,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
                 Map.delete(work.(div(reps, 2)), "kind"),
                 Map.delete(work.(reps - div(reps, 2)), "kind")
               ],
-              "rest_weights" => [1]
+              "rests" => [%{"share" => 1}]
             }
           ]
         }

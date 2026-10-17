@@ -15,14 +15,17 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
 
   @training_rules """
   You design the structure of one burpee workout as a layout. You choose phases, sets, reps
-  per set, movement timing and relative rest weights; the application computes every rest
-  duration exactly, so never reason about cumulative time or exact rest seconds.
+  per set, movement timing and the rest at each gap between sets. Give each rest as
+  {"share": w} and the application computes its length exactly, so never reason about
+  cumulative time. Give {"sec": n} only for a rest the user stated in seconds, and keep at
+  least one share in every phase with more than one set, so the phase can still end exactly
+  on time.
 
   Phases: fixed pauses requested by the user split the workout into phases. Return exactly
   one phase per segment between fixed pauses, in order. Each phase contains its sets in order
-  and one positive weight per gap between consecutive sets. Equal weights give even rests;
-  larger weights give longer rests at that gap. Rest time saved for extended pauses comes out
-  of ordinary rests automatically.
+  and one rest per gap between consecutive sets. Equal shares give even rests; a larger share
+  gives a longer rest at that gap. Rest time saved for extended pauses comes out of ordinary
+  rests automatically.
 
   Sets and timing: the sum of reps over all sets equals target_reps. sec_per_burpee is active
   movement time per rep; sec_per_rep is start-to-start time per rep and is >= sec_per_burpee

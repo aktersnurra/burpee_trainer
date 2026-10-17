@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-18 — Exact rests
+
+- A layout gives each gap between sets `{"sec": n}`, exactly n seconds after the last rep's beat (0 runs the next set on the next beat), or `{"share": w}`, a share of the time left after the sets, cadence tails and exact rests. `rest_weights` are gone, for Claude and for the app's own coach.
+- Fixes an unchanged MCP edit changing a workout's rests: `editable` now gives the stored rests exactly (20 s and 60 s used to come back as 16.5 s and 63.5 s).
+- A phase with a gap ends exactly at its anchor; only a single-set phase keeps ±10 s.
+- Fitter errors name the phase, its anchor (a timed rest, or `target_duration_sec`), what its time is made of, by how much it is off and what to change; a single set short of the end explains that the tail after the last rep is not counted.
+- The MCP summary lists every rest; `burpee://workout-format` has a Timing section with a tested worked example.
+- Spec: `docs/specs/2026-10-18-exact-rests-design.md`.
+
 ## 2026-10-18 — Latest packages
 
 - Hex: every dependency at its latest, including Phoenix 1.8.15, LiveView 1.2, Ecto SQL 3.14, ecto_sqlite3 0.25, LiveDashboard 0.9, Req 0.7, Bandit 1.13, Oban 2.24.2, tzdata 1.2, Reach 2.8; `mix.exs` requirements raised where the old ones held them back.

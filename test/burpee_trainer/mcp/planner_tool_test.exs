@@ -76,7 +76,7 @@ defmodule BurpeeTrainer.Mcp.PlannerToolTest do
               %{"reps" => div(reps, 2), "sec_per_rep" => 15.0, "sec_per_burpee" => 5.0},
               2
             ),
-          "rest_weights" => [1]
+          "rests" => [%{"share" => 1}]
         }
       ]
     }

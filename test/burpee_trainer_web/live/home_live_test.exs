@@ -1815,7 +1815,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       "phases" => [
         %{
           "sets" => [%{"reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}],
-          "rest_weights" => []
+          "rests" => []
         }
       ]
     }

@@ -38,7 +38,7 @@ defmodule BurpeeTrainer.Mcp.WorkoutToolsTest do
           %{
             "sets" =>
               List.duplicate(%{"reps" => 15, "sec_per_rep" => 6.0, "sec_per_burpee" => 4.5}, 10),
-            "rest_weights" => List.duplicate(1, 9)
+            "rests" => List.duplicate(%{"share" => 1}, 9)
           }
         ]
       },
@@ -86,6 +86,110 @@ defmodule BurpeeTrainer.Mcp.WorkoutToolsTest do
     assert Repo.get!(WorkoutPlan, id).state == :archived
   end
 
+  # The sets as Claude writes them: `{reps, sec_per_rep, sec_per_burpee}`.
+  defp exact_workout(sets, rests, overrides) do
+    Map.merge(
+      %{
+        "name" => "Exact rests",
+        "rationale" => "Rests as the athlete asked.",
+        "burpee_type" => "six_count",
+        "target_reps" => sets |> Enum.map(&elem(&1, 0)) |> Enum.sum(),
+        "pacing_style" => "even",
+        "recovery" => "optional",
+        "timed_rests" => [],
+        "phases" => [
+          %{
+            "sets" =>
+              Enum.map(sets, fn {reps, cadence, active} ->
+                %{"reps" => reps, "sec_per_rep" => cadence, "sec_per_burpee" => active}
+              end),
+            "rests" => Enum.map(rests, &%{"sec" => &1})
+          }
+        ]
+      },
+      overrides
+    )
+  end
+
+  defp rests_of(workout),
+    do: for(%{"kind" => "rest", "duration_sec" => d} <- workout["definition"]["events"], do: d)
+
+  test "editing a workout unchanged keeps unequal rests exactly", %{scope: scope} do
+    # Three sets of 10 at 10 s per rep (3 s moving), rests of 20 and 60 s: 6:13 in all.
+    workout =
+      exact_workout(List.duplicate({10, 10.0, 3.0}, 3), [20, 60], %{
+        "target_duration_sec" => 373
+      })
+
+    {:ok, %{"workout" => %{"id" => id}}} = call(scope, "create_workout", workout)
+    {:ok, %{"workout" => before}} = call(scope, "get_workout", %{"id" => id})
+    assert rests_of(before) == [20.0, 60.0]
+    assert hd(before["editable"]["phases"])["rests"] == [%{"sec" => 20.0}, %{"sec" => 60.0}]
+
+    {:ok, %{"workout" => edited}} =
+      call(scope, "edit_workout", Map.put(before["editable"], "id", id))
+
+    {:ok, %{"workout" => after_edit}} = call(scope, "get_workout", %{"id" => edited["id"]})
+    assert after_edit["definition"] == before["definition"]
+    assert after_edit["summary"] =~ "rests 20, 60 s"
+  end
+
+  test "sets back to back read back as a rest of 0", %{scope: scope} do
+    workout = exact_workout([{4, 10.0, 3.0}, {3, 10.0, 3.0}], [0], %{"target_duration_sec" => 63})
+
+    {:ok, %{"workout" => %{"id" => id}}} = call(scope, "create_workout", workout)
+    {:ok, %{"workout" => read}} = call(scope, "get_workout", %{"id" => id})
+
+    assert rests_of(read) == []
+    assert hd(read["editable"]["phases"])["rests"] == [%{"sec" => 0}]
+    assert read["summary"] =~ "sets back to back"
+  end
+
+  describe "the workouts Claude tried to build" do
+    test "the Steady Sixty: one rep every 20 s ends at 19:44, and the error says so", %{
+      scope: scope
+    } do
+      workout = exact_workout([{60, 20.0, 4.0}], [], %{"target_duration_sec" => 1200})
+
+      assert {:error, reason} = call(scope, "create_workout", workout)
+      assert reason =~ "the 16 s after the last rep is not part of the workout"
+      assert reason =~ "target_duration_sec 1184"
+
+      {:ok, %{"workout" => created}} =
+        call(scope, "create_workout", Map.put(workout, "target_duration_sec", 1184))
+
+      assert created["summary"] =~ "1 set of 60, 20 s per rep (4 s moving)"
+    end
+
+    test "75 reps at a 15 s cadence with exact 20.5 s rests", %{scope: scope} do
+      # 5 × 15 at 15 s per rep (5 s moving): 5 × 3:35 of sets, 4 × 10 s tails, 4 × 20.5 s.
+      workout =
+        exact_workout(List.duplicate({15, 15.0, 5.0}, 5), List.duplicate(20.5, 4), %{
+          "target_duration_sec" => 1197
+        })
+
+      {:ok, %{"workout" => %{"id" => id}}} = call(scope, "create_workout", workout)
+      {:ok, %{"workout" => read}} = call(scope, "get_workout", %{"id" => id})
+
+      assert rests_of(read) == List.duplicate(20.5, 4)
+      assert read["summary"] =~ "20.5 s between sets"
+    end
+
+    test "150 six-counts with alternating 45 and 50 s rests", %{scope: scope} do
+      rests = [45, 50, 45, 50, 45, 50, 45, 50, 45]
+
+      # 10 × 15 at 5 s per rep (4 s moving): 10 × 74 s of sets, 9 × 1 s tails, 425 s of rests.
+      workout =
+        exact_workout(List.duplicate({15, 5.0, 4.0}, 10), rests, %{"target_duration_sec" => 1174})
+
+      {:ok, %{"workout" => %{"id" => id}}} = call(scope, "create_workout", workout)
+      {:ok, %{"workout" => read}} = call(scope, "get_workout", %{"id" => id})
+
+      assert rests_of(read) == Enum.map(rests, &(&1 * 1.0))
+      assert read["summary"] =~ "rests 45, 50, 45, 50, 45, 50, 45, 50, 45 s"
+    end
+  end
+
   test "a change to one field is all an edit needs", %{scope: scope} do
     {:ok, %{"workout" => %{"id" => id}}} = call(scope, "create_workout", ten_by_fifteen())
     {:ok, %{"workout" => before}} = call(scope, "get_workout", %{"id" => id})
@@ -108,13 +212,14 @@ defmodule BurpeeTrainer.Mcp.WorkoutToolsTest do
           %{
             "sets" =>
               List.duplicate(%{"reps" => 15, "sec_per_rep" => 9.0, "sec_per_burpee" => 4.5}, 10),
-            "rest_weights" => List.duplicate(1, 9)
+            "rests" => List.duplicate(%{"share" => 1}, 9)
           }
         ]
       })
 
     assert {:error, reason} = call(scope, "create_workout", too_slow)
-    assert reason =~ "movement"
+    assert reason =~ "phase 1 needs"
+    assert reason =~ "Take"
 
     assert {:error, _} = call(scope, "create_workout", ten_by_fifteen(%{"target_reps" => 140}))
 

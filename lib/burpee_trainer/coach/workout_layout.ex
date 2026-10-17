@@ -1,7 +1,46 @@
 defmodule BurpeeTrainer.Coach.WorkoutLayout do
-  @moduledoc "Strict JSON schema for the LLM's workout layout, without rest durations."
+  @moduledoc "Strict JSON schema for a workout layout: sets, and each rest exact or a share."
 
   alias BurpeeTrainer.Coach.WorkoutRequest
+
+  @doc """
+  One rest between two sets: `{"sec": n}` is exactly n seconds after the last rep's beat (0
+  starts the next set on the next beat); `{"share": w}` takes a share, by weight, of the
+  phase's time left after its sets, cadence tails and exact rests.
+  """
+  @spec rest_schema() :: map()
+  def rest_schema do
+    %{
+      "anyOf" => [
+        %{
+          "type" => "object",
+          "additionalProperties" => false,
+          "required" => ["sec"],
+          "properties" => %{
+            "sec" => %{
+              "type" => "number",
+              "minimum" => 0,
+              "description" =>
+                "Exactly this many seconds of rest after the last rep's beat; 0 starts the next set on the next beat."
+            }
+          }
+        },
+        %{
+          "type" => "object",
+          "additionalProperties" => false,
+          "required" => ["share"],
+          "properties" => %{
+            "share" => %{
+              "type" => "number",
+              "exclusiveMinimum" => 0,
+              "description" =>
+                "A share, by weight, of the phase's time left after its sets, cadence tails and exact rests."
+            }
+          }
+        }
+      ]
+    }
+  end
 
   @spec json_schema(WorkoutRequest.t()) :: map()
   def json_schema(%WorkoutRequest{} = request) do
@@ -28,14 +67,14 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
     phase = %{
       "type" => "object",
       "additionalProperties" => false,
-      "required" => ["sets", "rest_weights"],
+      "required" => ["sets", "rests"],
       "properties" => %{
         "sets" => %{"type" => "array", "minItems" => 1, "items" => set},
-        "rest_weights" => %{
+        "rests" => %{
           "type" => "array",
           "description" =>
-            "One positive relative weight per gap between sets; equal weights mean even rests.",
-          "items" => %{"type" => "number", "exclusiveMinimum" => 0}
+            "One rest per gap between sets, in order. Use share unless the athlete gave the rest's length.",
+          "items" => rest_schema()
         }
       }
     }

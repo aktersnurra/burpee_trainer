@@ -75,7 +75,7 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
               %{"reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 5},
               %{"reps" => 5, "sec_per_rep" => 5, "sec_per_burpee" => 5}
             ],
-            "rest_weights" => [1]
+            "rests" => [%{"share" => 1}]
           }
         ]
       }

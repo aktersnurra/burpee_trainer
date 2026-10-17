@@ -13,7 +13,7 @@ defmodule BurpeeTrainer.LayoutFixtures do
               Enum.map(sets, fn {reps, cadence, active} ->
                 %{"reps" => reps, "sec_per_rep" => cadence, "sec_per_burpee" => active}
               end),
-            "rest_weights" => List.duplicate(1, length(sets) - 1)
+            "rests" => List.duplicate(%{"share" => 1}, length(sets) - 1)
           }
         end)
     }

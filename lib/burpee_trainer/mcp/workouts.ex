@@ -1,14 +1,14 @@
 defmodule BurpeeTrainer.Mcp.Workouts do
   @moduledoc """
   Workouts as Claude reads and writes them. Claude writes the authoring form documented in
-  `burpee://workout-format` (what the workout asks for, and phases of sets with rest
-  weights); the app fits the rests, checks and compiles it exactly as it does for its own
-  coach, and stores the exact definition. Reading a workout gives the exact definition and
-  an `editable` authoring form whose rest weights are the stored rests, so sending it back
-  unchanged stores an equal workout.
+  `burpee://workout-format` (what the workout asks for, and phases of sets with their rests,
+  each exact or a share); the app fits the rests, checks and compiles it exactly as it does
+  for its own coach, and stores the exact definition. Reading a workout gives the exact
+  definition and an `editable` authoring form whose rests are the stored ones, exact, so
+  sending it back unchanged stores an equal workout.
   """
 
-  alias BurpeeTrainer.Coach.{Rationale, RestFitter, Voice, WorkoutRequest}
+  alias BurpeeTrainer.Coach.{Rationale, RestFitter, Voice, WorkoutLayout, WorkoutRequest}
   alias BurpeeTrainer.PlanCompiler
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
 
@@ -39,14 +39,14 @@ defmodule BurpeeTrainer.Mcp.Workouts do
       "type" => "object",
       "properties" => %{
         "sets" => %{"type" => "array", "minItems" => 1, "items" => set},
-        "rest_weights" => %{
+        "rests" => %{
           "type" => "array",
-          "items" => %{"type" => "number", "exclusiveMinimum" => 0},
+          "items" => WorkoutLayout.rest_schema(),
           "description" =>
-            "One weight per gap between the phase's sets; the app shares the phase's spare time between them by weight."
+            ~s(One rest per gap between the phase's sets, in order: {"sec": n} for exactly n seconds, or {"share": w} for a share of the time left.)
         }
       },
-      "required" => ~w[sets rest_weights],
+      "required" => ~w[sets rests],
       "additionalProperties" => false
     }
 
@@ -173,11 +173,10 @@ defmodule BurpeeTrainer.Mcp.Workouts do
   defp one([value]), do: value
   defp one(_values), do: nil
 
-  @doc "One plain line: sets, cadence, movement, rests and length."
+  @doc "One plain line: sets, cadence, movement, every rest between sets, and length."
   def summary(definition) do
     events = definition["events"]
     works = Enum.filter(events, &(&1["kind"] == "work"))
-    rests = events |> Enum.filter(&(&1["kind"] == "rest")) |> Enum.map(& &1["duration_sec"])
 
     sets =
       case works |> Enum.map(& &1["reps"]) |> Enum.uniq() do
@@ -192,13 +191,27 @@ defmodule BurpeeTrainer.Mcp.Workouts do
       end
 
     rest =
-      case Enum.uniq(rests) do
+      case events |> gaps() |> Enum.uniq() do
         [] -> "no rests"
+        [+0.0] -> "sets back to back"
         [one] -> "#{number(one)} s between sets"
-        many -> "#{number(Enum.min(many))}–#{number(Enum.max(many))} s rests"
+        _many -> "rests " <> Enum.map_join(gaps(events), ", ", &number/1) <> " s"
       end
 
     "#{sets}, #{cadence}, #{rest}, #{number(definition["target_duration_sec"] / 60)} min"
+  end
+
+  # The rest between each pair of sets, in order; 0.0 where they run back to back.
+  defp gaps(events) do
+    events
+    |> merge_rests()
+    |> Enum.drop_while(&(&1["kind"] == "rest"))
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.flat_map(fn
+      [%{"kind" => "work"}, %{"kind" => "work"}] -> [0.0]
+      [%{"kind" => "rest", "duration_sec" => seconds}, %{"kind" => "work"}] -> [seconds * 1.0]
+      _pair -> []
+    end)
   end
 
   defp plural(1, word), do: word
@@ -214,15 +227,15 @@ defmodule BurpeeTrainer.Mcp.Workouts do
 
   @doc """
   The authoring form of a stored definition: one phase, its sets in order, and the stored
-  rests as weights. Nil when the definition does not alternate sets and rests (a rest
-  first or last), which the authoring form cannot say.
+  rests as exact rests (0 where sets run back to back). Nil when the definition starts or
+  ends with a rest, which the authoring form cannot say.
   """
   def editable(definition) do
     events = merge_rests(definition["events"])
 
     with %{"kind" => "work"} <- List.first(events),
          %{"kind" => "work"} <- List.last(events),
-         {sets, weights} <- alternate(events, [], []) do
+         {sets, rests} <- alternate(events, [], []) do
       %{
         "name" => definition["name"],
         "rationale" => definition["rationale"],
@@ -233,7 +246,7 @@ defmodule BurpeeTrainer.Mcp.Workouts do
         "recovery" => "optional",
         "timed_rests" => [],
         "requested_pace_sec" => nil,
-        "phases" => [%{"sets" => sets, "rest_weights" => weights}]
+        "phases" => [%{"sets" => sets, "rests" => rests}]
       }
     else
       _ -> nil
@@ -257,22 +270,22 @@ defmodule BurpeeTrainer.Mcp.Workouts do
     end)
   end
 
-  defp alternate([], sets, weights), do: {Enum.reverse(sets), Enum.reverse(weights)}
+  defp alternate([], sets, rests), do: {Enum.reverse(sets), Enum.reverse(rests)}
 
-  defp alternate([%{"kind" => "work"} = work | rest], sets, weights) do
+  defp alternate([%{"kind" => "work"} = work | events], sets, rests) do
     set = Map.take(work, ~w[reps sec_per_rep sec_per_burpee])
 
-    case rest do
+    case events do
       [] ->
-        alternate([], [set | sets], weights)
+        alternate([], [set | sets], rests)
 
       [%{"kind" => "rest", "duration_sec" => d} | more] ->
-        alternate(more, [set | sets], [d | weights])
+        alternate(more, [set | sets], [%{"sec" => d} | rests])
 
-      _ ->
-        :error
+      [%{"kind" => "work"} | _] ->
+        alternate(events, [set | sets], [%{"sec" => 0} | rests])
     end
   end
 
-  defp alternate(_events, _sets, _weights), do: :error
+  defp alternate(_events, _sets, _rests), do: :error
 end

@@ -1,9 +1,13 @@
 defmodule BurpeeTrainer.Coach.RestFitter do
   @moduledoc """
-  Turns an LLM workout layout into an exact workout definition map.
+  Turns a workout layout into an exact workout definition map.
 
-  The fitter only distributes ordinary rest time. It never changes the submitted set order,
-  repetitions, or movement timing.
+  Each gap between sets is the tail of the last rep's beat (`sec_per_rep - sec_per_burpee`)
+  followed by a rest, and the layout gives every rest as `{"sec": n}`, exactly n seconds, or
+  `{"share": w}`, a share by weight of the phase's time left after its sets, tails and exact
+  rests. A phase with a gap ends exactly at its anchor (the next timed rest, or the workout's
+  length); a phase of one set may miss it by the request's timing tolerance. The fitter never
+  changes the set order, repetitions or movement timing.
   """
 
   alias BurpeeTrainer.Coach.WorkoutRequest
@@ -14,12 +18,11 @@ defmodule BurpeeTrainer.Coach.RestFitter do
   @type reason ::
           :invalid_layout
           | :wrong_phase_count
-          | :wrong_weight_count
-          | :non_positive_weight
+          | :wrong_rest_count
+          | :invalid_rest
           | :timing_not_whole_millisecond
           | :active_exceeds_cadence
           | :phase_overfull
-          | :rest_shorter_than_tail
           | :pause_shorter_than_tail
           | :phase_misses_anchor
           | :total_not_whole_second
@@ -51,29 +54,83 @@ defmodule BurpeeTrainer.Coach.RestFitter do
 
   def fit(%WorkoutRequest{}, _layout), do: {:error, {:invalid_layout, %{}}}
 
-  @doc "Returns a one-line explanation suitable for a layout correction prompt."
+  @doc "Returns what went wrong and what to change, for whoever wrote the layout."
   @spec describe({reason(), map()}) :: String.t()
-  def describe(
-        {:phase_overfull, %{phase: phase, movement_us: movement, available_us: available}}
-      ),
-      do:
-        "phase #{phase} needs #{clock(movement)} of movement but only #{clock(available)} is available"
+  def describe({:phase_overfull, %{phase: phase, needed_us: needed, available_us: available} = d}) do
+    "phase #{phase} needs #{clock(needed)} but ends at #{anchor(d)}, #{span(available)} after it starts: " <>
+      "#{span(d.movement_us)} of sets, #{span(d.tail_us)} of cadence tails and #{span(d.exact_us)} of exact rests. " <>
+      "Take #{span(needed - available)} out: fewer reps, a shorter sec_per_rep, shorter exact rests" <>
+      if(d.anchor == :timed_rest,
+        do: ", or a later timed rest.",
+        else: ", or a longer target_duration_sec."
+      )
+  end
 
-  def describe(
-        {:rest_shorter_than_tail, %{phase: phase, gap: gap, pause_us: pause, tail_us: tail}}
-      ),
-      do:
-        "phase #{phase} pause #{gap} would be #{seconds(pause)} s, shorter than its #{seconds(tail)} s cadence tail"
+  def describe({:phase_misses_anchor, %{adjustable: true} = d}) do
+    "phase #{d.phase}'s sets and exact rests end at #{clock(d.end_us)}, #{span(d.target_us - d.end_us)} before " <>
+      "#{anchor(d)}. Add #{span(d.target_us - d.end_us)} to its rests, or make one of them " <>
+      ~s({"share": 1} to take up the difference.)
+  end
+
+  def describe({:phase_misses_anchor, %{adjustable: false} = d}) do
+    difference = d.target_us - d.end_us
+    tolerance = WorkoutRequest.timing_tolerance_sec()
+
+    "phase #{d.phase} is one set, so nothing in it can stretch: it ends at #{clock(d.end_us)}, " <>
+      "#{span(abs(difference))} #{if difference > 0, do: "before", else: "after"} #{anchor(d)}, " <>
+      "and may be at most #{tolerance} s off. " <>
+      tail_note(d) <> fix_for_single_set(d)
+  end
 
   def describe({:pause_shorter_than_tail, %{phase: phase, pause_us: pause, tail_us: tail}}),
     do:
-      "the fixed pause after phase #{phase} (#{seconds(pause)} s) is shorter than its #{seconds(tail)} s cadence tail"
+      "the timed rest after phase #{phase} is #{seconds(pause)} s, but the last rep's beat before it " <>
+        "still has #{seconds(tail)} s to run (sec_per_rep - sec_per_burpee). Make the timed rest " <>
+        "longer than #{seconds(tail)} s, or end phase #{phase} with a smaller cadence tail."
 
-  def describe({:phase_misses_anchor, %{phase: phase, end_us: ending, target_us: target}}),
+  def describe({:wrong_rest_count, %{phase: phase, sets: sets, rests: rests}}),
     do:
-      "phase #{phase} has no pauses to adjust and ends at #{clock(ending)} instead of #{clock(target)} (±10 s)"
+      "phase #{phase} has #{sets} sets, so it needs #{sets - 1} rests (one per gap), not #{rests}."
+
+  def describe({:invalid_rest, %{phase: phase, gap: gap}}),
+    do: ~s(phase #{phase} rest #{gap} must be {"sec": n} with n >= 0, or {"share": w} with w > 0.)
+
+  def describe({:timing_not_whole_millisecond, %{phase: phase, value: value}}),
+    do:
+      "phase #{phase} has #{inspect(value)} s; times are whole milliseconds (at most three decimals)."
+
+  def describe({:active_exceeds_cadence, %{phase: phase}}),
+    do: "phase #{phase} has a set whose sec_per_burpee is longer than its sec_per_rep."
+
+  def describe({:wrong_phase_count, %{expected: expected, actual: actual}}),
+    do:
+      "the layout has #{actual} phases; with #{expected - 1} timed rests it needs #{expected} (one more than the timed rests)."
+
+  def describe({:total_not_whole_second, %{total_us: total}}),
+    do:
+      "the workout comes to #{seconds(total)} s; it must be whole seconds. Change a rest or the last set's timing by " <>
+        "#{seconds(rem(total, @us))} s."
 
   def describe({reason, details}), do: "#{reason} #{inspect(details)}"
+
+  defp anchor(%{anchor: :timed_rest, target_us: target}), do: "the timed rest at #{clock(target)}"
+  defp anchor(%{target_us: target}), do: "target_duration_sec (#{clock(target)})"
+
+  # A workout ends when its last rep's movement ends; the rest of that beat is not counted.
+  defp tail_note(%{anchor: :end, last_tail_us: tail, end_us: ending, target_us: target})
+       when tail > 0 and ending < target,
+       do:
+         "The workout ends when the last rep's movement ends: the #{span(tail)} after the last rep is not part of the workout. "
+
+  defp tail_note(_details), do: ""
+
+  defp fix_for_single_set(%{anchor: :end, end_us: ending}) when rem(ending, @us) == 0,
+    do: "Set target_duration_sec #{div(ending, @us)}, or change its reps or sec_per_rep."
+
+  defp fix_for_single_set(%{anchor: :timed_rest}),
+    do: "Move the timed rest, or change the set's reps or sec_per_rep."
+
+  defp fix_for_single_set(_details), do: "Change the set's reps or sec_per_rep."
 
   defp parse_phases(phases) do
     phases
@@ -87,21 +144,50 @@ defmodule BurpeeTrainer.Coach.RestFitter do
     |> reverse_ok()
   end
 
-  defp parse_phase(%{"sets" => [_ | _] = sets, "rest_weights" => weights}, index)
-       when is_list(weights) do
+  defp parse_phase(%{"sets" => [_ | _] = sets, "rests" => rests}, index) when is_list(rests) do
     with :ok <-
-           check(length(weights) == length(sets) - 1, :wrong_weight_count, %{
+           check(length(rests) == length(sets) - 1, :wrong_rest_count, %{
              phase: index,
              sets: length(sets),
-             weights: length(weights)
+             rests: length(rests)
            }),
-         {:ok, normalized_weights} <- normalize_weights(weights, index),
+         {:ok, parsed_rests} <- parse_rests(rests, index),
          {:ok, parsed_sets} <- parse_sets(sets, index) do
-      {:ok, %{index: index, sets: parsed_sets, weights: normalized_weights}}
+      {:ok, %{index: index, sets: parsed_sets, rests: parsed_rests}}
     end
   end
 
   defp parse_phase(_phase, index), do: {:error, {:invalid_layout, %{phase: index}}}
+
+  # Exact rests become {:sec, microseconds}; shares stay weights until the phase is fitted.
+  defp parse_rests(rests, phase) do
+    rests
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, []}, fn {rest, gap}, {:ok, parsed} ->
+      case parse_rest(rest, phase, gap) do
+        {:ok, value} -> {:cont, {:ok, [value | parsed]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> reverse_ok()
+  end
+
+  defp parse_rest(%{"sec" => seconds} = rest, phase, _gap)
+       when map_size(rest) == 1 and is_number(seconds) and seconds >= 0 do
+    case whole_milliseconds(seconds, phase) do
+      {:ok, microseconds} -> {:ok, {:sec, microseconds}}
+      error -> error
+    end
+  end
+
+  defp parse_rest(%{"share" => weight} = rest, phase, gap) when map_size(rest) == 1 do
+    case decimal_ratio(weight) do
+      {:ok, ratio} -> {:ok, {:share, ratio}}
+      :error -> {:error, {:invalid_rest, %{phase: phase, gap: gap}}}
+    end
+  end
+
+  defp parse_rest(_rest, phase, gap), do: {:error, {:invalid_rest, %{phase: phase, gap: gap}}}
 
   defp parse_sets(sets, phase) do
     sets
@@ -163,12 +249,14 @@ defmodule BurpeeTrainer.Coach.RestFitter do
 
     phases
     |> Enum.reduce_while({:ok, [], 0}, fn phase, {:ok, events, cursor} ->
-      phase_target =
+      {phase_target, anchor} =
         if phase.index < last_phase,
-          do: elem(Enum.at(anchors, phase.index - 1), 0),
-          else: target_us
+          do: {elem(Enum.at(anchors, phase.index - 1), 0), :timed_rest},
+          else: {target_us, :end}
 
-      with {:ok, phase_events, phase_end} <- fit_phase(phase, cursor, phase_target, tolerance_us),
+      target = %{target_us: phase_target, anchor: anchor}
+
+      with {:ok, phase_events, phase_end} <- fit_phase(phase, cursor, target, tolerance_us),
            {:ok, fixed_events, next_cursor} <- fixed_pause(phase, anchors, phase_end, last_phase) do
         {:cont, {:ok, events ++ phase_events ++ fixed_events, next_cursor}}
       else
@@ -182,56 +270,79 @@ defmodule BurpeeTrainer.Coach.RestFitter do
     end
   end
 
-  defp fit_phase(%{sets: [set], weights: []} = phase, cursor, target_end, tolerance_us) do
+  defp fit_phase(%{sets: [set], rests: []} = phase, cursor, target, tolerance_us) do
     phase_end = cursor + set.movement_us
 
-    if abs(phase_end - target_end) <= tolerance_us do
+    if abs(phase_end - target.target_us) <= tolerance_us do
       {:ok, [work(set)], phase_end}
     else
       {:error,
-       {:phase_misses_anchor, %{phase: phase.index, end_us: phase_end, target_us: target_end}}}
+       {:phase_misses_anchor,
+        Map.merge(target, %{
+          phase: phase.index,
+          end_us: phase_end,
+          adjustable: false,
+          last_tail_us: set.tail_us
+        })}}
     end
   end
 
-  defp fit_phase(%{sets: sets, weights: weights} = phase, cursor, target_end, _tolerance_us) do
+  defp fit_phase(%{sets: sets, rests: rests} = phase, cursor, target, _tolerance_us) do
     movement_us = Enum.sum(Enum.map(sets, & &1.movement_us))
-    available_us = target_end - cursor
-    budget_us = available_us - movement_us
+    tail_us = sets |> Enum.drop(-1) |> Enum.map(& &1.tail_us) |> Enum.sum()
+    exact_us = Enum.sum(for {:sec, microseconds} <- rests, do: microseconds)
+    needed_us = movement_us + tail_us + exact_us
+    available_us = target.target_us - cursor
+    spare_us = available_us - needed_us
+    shares = for {:share, ratio} <- rests, do: ratio
 
-    if budget_us <= 0 do
-      {:error,
-       {:phase_overfull,
-        %{phase: phase.index, movement_us: movement_us, available_us: available_us}}}
-    else
-      pauses_us = budget_us |> div(@ms) |> distribute(weights) |> Enum.map(&(&1 * @ms))
+    parts =
+      Map.merge(target, %{
+        phase: phase.index,
+        movement_us: movement_us,
+        tail_us: tail_us,
+        exact_us: exact_us
+      })
 
-      phase_events(sets, pauses_us, phase.index)
-      |> case do
-        {:ok, events} -> {:ok, events, target_end}
-        error -> error
-      end
+    cond do
+      spare_us < 0 ->
+        {:error,
+         {:phase_overfull, Map.merge(parts, %{needed_us: needed_us, available_us: available_us})}}
+
+      shares == [] and spare_us > 0 ->
+        {:error,
+         {:phase_misses_anchor,
+          Map.merge(parts, %{end_us: target.target_us - spare_us, adjustable: true})}}
+
+      true ->
+        rests_us = rest_durations(rests, spare_us, shares)
+        {:ok, phase_events(sets, rests_us), target.target_us}
     end
   end
 
-  defp phase_events(sets, pauses, phase) do
+  # Exact rests keep their length; the spare time is shared by weight, in whole milliseconds.
+  defp rest_durations(rests, _spare_us, []), do: Enum.map(rests, fn {:sec, us} -> us end)
+
+  defp rest_durations(rests, spare_us, shares) do
+    shared =
+      spare_us |> div(@ms) |> distribute(normalize_weights(shares)) |> Enum.map(&(&1 * @ms))
+
+    {durations, []} =
+      Enum.map_reduce(rests, shared, fn
+        {:sec, us}, remaining -> {us, remaining}
+        {:share, _ratio}, [us | remaining] -> {us, remaining}
+      end)
+
+    durations
+  end
+
+  # A rest of zero leaves the next set on the next beat: no rest event between them.
+  defp phase_events(sets, rests_us) do
     sets
-    |> Enum.zip(pauses ++ [nil])
-    |> Enum.with_index(1)
-    |> Enum.reduce_while({:ok, []}, fn
-      {{set, nil}, _gap}, {:ok, events} ->
-        {:cont, {:ok, events ++ [work(set)]}}
-
-      {{set, pause_us}, gap}, {:ok, events} ->
-        rest_us = pause_us - set.tail_us
-
-        if rest_us >= @ms do
-          {:cont, {:ok, events ++ [work(set), rest(rest_us)]}}
-        else
-          {:halt,
-           {:error,
-            {:rest_shorter_than_tail,
-             %{phase: phase, gap: gap, pause_us: pause_us, tail_us: set.tail_us}}}}
-        end
+    |> Enum.zip(rests_us ++ [0])
+    |> Enum.flat_map(fn
+      {set, 0} -> [work(set)]
+      {set, rest_us} -> [work(set), rest(rest_us)]
     end)
   end
 
@@ -251,39 +362,25 @@ defmodule BurpeeTrainer.Coach.RestFitter do
     end
   end
 
-  # Distributes a whole-millisecond budget proportionally; rounding remainder belongs to last gap.
-  # Weights are positive normalized integers, so this is exact even for decimal or extreme input.
+  # Distributes a whole-millisecond budget proportionally; rounding remainder belongs to the last
+  # share. Weights are positive normalized integers, so this is exact even for extreme input.
   defp distribute(total_ms, weights) do
     total_weight = Enum.sum(weights)
     floors = Enum.map(weights, &div(total_ms * &1, total_weight))
     List.update_at(floors, -1, &(&1 + total_ms - Enum.sum(floors)))
   end
 
-  defp normalize_weights([], _phase), do: {:ok, []}
+  # Shares are positive decimals; scaled to integers with no common factor, they divide exactly.
+  defp normalize_weights(ratios) do
+    scale = ratios |> Enum.map(&elem(&1, 1)) |> Enum.max()
 
-  defp normalize_weights(weights, phase) do
-    with {:ok, ratios} <- parse_weight_ratios(weights, phase) do
-      scale = ratios |> Enum.map(&elem(&1, 1)) |> Enum.max()
+    normalized =
+      Enum.map(ratios, fn {coefficient, decimal_scale} ->
+        coefficient * Integer.pow(10, scale - decimal_scale)
+      end)
 
-      normalized =
-        Enum.map(ratios, fn {coefficient, decimal_scale} ->
-          coefficient * Integer.pow(10, scale - decimal_scale)
-        end)
-
-      divisor = Enum.reduce(normalized, &Integer.gcd/2)
-      {:ok, Enum.map(normalized, &div(&1, divisor))}
-    end
-  end
-
-  defp parse_weight_ratios(weights, phase) do
-    weights
-    |> Enum.reduce_while({:ok, []}, fn weight, {:ok, ratios} ->
-      case decimal_ratio(weight) do
-        {:ok, ratio} -> {:cont, {:ok, [ratio | ratios]}}
-        :error -> {:halt, {:error, {:non_positive_weight, %{phase: phase}}}}
-      end
-    end)
-    |> reverse_ok()
+    divisor = Enum.reduce(normalized, &Integer.gcd/2)
+    Enum.map(normalized, &div(&1, divisor))
   end
 
   defp decimal_ratio(weight) when is_integer(weight) and weight > 0, do: {:ok, {weight, 0}}
@@ -337,7 +434,16 @@ defmodule BurpeeTrainer.Coach.RestFitter do
   defp check(false, reason, details), do: {:error, {reason, details}}
   defp reverse_ok({:ok, values}), do: {:ok, Enum.reverse(values)}
   defp reverse_ok(error), do: error
-  defp seconds(microseconds), do: :erlang.float_to_binary(microseconds / @us, decimals: 3)
+
+  defp seconds(microseconds) do
+    if rem(microseconds, @us) == 0,
+      do: Integer.to_string(div(microseconds, @us)),
+      else: :erlang.float_to_binary(microseconds / @us, [:short])
+  end
+
+  # Under a minute as "8 s", otherwise as a clock: "1:28".
+  defp span(microseconds) when microseconds < 60 * @us, do: "#{seconds(microseconds)} s"
+  defp span(microseconds), do: clock(microseconds)
 
   defp clock(microseconds) do
     seconds = div(microseconds, @us)

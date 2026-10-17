@@ -56,8 +56,9 @@ defmodule BurpeeTrainer.Mcp.Tools.CreateWorkout do
   def description,
     do:
       "Add a workout to the athlete's library. Give what it asks for and its phases of " <>
-        "sets with rest weights (see burpee://workout-format); the app fits the rests " <>
-        "exactly and refuses, with the reason, a workout it could not run. It does not " <>
+        "sets with a rest per gap, exact seconds or a share of the time left (see " <>
+        "burpee://workout-format); the app fits the shares and refuses, with what to change, " <>
+        "a workout it could not run. It does not " <>
         "change today's workout on Home."
 
   def schema, do: Tool.object(McpWorkouts.schema(), McpWorkouts.required())
