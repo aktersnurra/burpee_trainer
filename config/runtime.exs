@@ -183,8 +183,8 @@ if config_env() == :prod do
     client_secret: oidc_client_secret,
     redirect_uri: oidc_redirect_uri
 
-  # MCP for Claude: the client ID of Claude's BurpeeTrainer client in Pocket ID. Unset
-  # means /mcp is off.
+  # MCP for Claude: the resource of the Pocket ID API for /mcp, https://<PHX_HOST>/mcp.
+  # Unset means /mcp is off.
   config :burpee_trainer, :mcp, audience: System.get_env("MCP_OIDC_AUDIENCE")
 
   # The ID-token claim that grants the app's own coach: a custom claim on a Pocket ID

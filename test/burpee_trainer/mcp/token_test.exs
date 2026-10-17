@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.Mcp.TokenTest do
   alias BurpeeTrainer.Mcp.Token
 
   @issuer "https://id.example.test"
-  @audience "claude-burpee"
+  @audience "https://burpee.example.test/mcp"
 
   setup do
     key = JOSE.JWK.generate_key({:ec, "P-256"}) |> JOSE.JWK.merge(%{"kid" => "k1"})
@@ -53,10 +53,18 @@ defmodule BurpeeTrainer.Mcp.TokenTest do
     assert Token.validate(sign(ctx.key), ctx.context) == {:ok, "user-1"}
   end
 
+  test "a token that also names the issuer, as Pocket ID adds for /userinfo, is accepted",
+       ctx do
+    token = sign(ctx.key, %{"aud" => [@audience, @issuer]})
+    assert Token.validate(token, ctx.context) == {:ok, "user-1"}
+  end
+
   test "a token for another app, another issuer, or past its expiry is refused", ctx do
     for overrides <- [
           %{"aud" => "kcal-claude"},
           %{"aud" => [@audience, "kcal-claude"]},
+          %{"aud" => [@audience, @issuer, "kcal-claude"]},
+          %{"aud" => @issuer},
           %{"iss" => "https://elsewhere.test"},
           %{"exp" => System.system_time(:second) - 60},
           %{"sub" => nil},

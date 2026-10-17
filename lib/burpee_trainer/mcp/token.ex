@@ -2,8 +2,12 @@ defmodule BurpeeTrainer.Mcp.Token do
   @moduledoc """
   Verifies the Bearer tokens Claude sends to `/mcp`. Pocket ID is the authorization
   server; the app only checks what it issued: the signature against the issuer's keys
-  (cached by the login's provider worker, refetched on an unknown key), the issuer, an
-  audience that is exactly the MCP client's, expiry, and a subject.
+  (cached by the login's provider worker, refetched on an unknown key), the issuer, the
+  audience, expiry, and a subject.
+
+  The audience is the Pocket ID API's resource, `<host>/mcp`. A token that also asks for
+  `openid` carries the issuer as a second audience, so it works at `/userinfo` too; that
+  one extra value is allowed and nothing else.
 
   MCP is off until `config :burpee_trainer, :mcp, audience: ...` is set.
   """
@@ -47,7 +51,7 @@ defmodule BurpeeTrainer.Mcp.Token do
     opts =
       %{
         signing_algs: signing_algs(context),
-        trusted_audiences: []
+        trusted_audiences: [context.provider_configuration.issuer]
       }
       |> then(&if refresh_jwks, do: Map.put(&1, :refresh_jwks, refresh_jwks), else: &1)
 

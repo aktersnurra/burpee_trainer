@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-17 — Claude signs in through a Pocket ID API
+
+- `/mcp` is a Pocket ID API (resource `https://<host>/mcp`) that Claude registers with through CIMD, like Fund; Claude no longer needs a client of its own. `MCP_OIDC_AUDIENCE` is that resource.
+- A token that also carries the issuer as an audience, which Pocket ID adds when Claude asks for `openid`, is accepted; any other extra audience is still refused. Before, every such token was refused.
+- `docs/guides/mcp-setup.md` describes the API setup.
+
 ## 2026-10-17 — Agent tooling and a quality gate
 
 - `usage_rules` (dev only, pinned) writes AGENTS.md's dependency rules from an allowlist in `mix.exs`: its own rules with Elixir and OTP, and Phoenix's elixir, phoenix, ecto, html and liveview rules. Never `:all`, no package skills. AGENTS.md says those rules are reference material that the project's own guidance outranks.
