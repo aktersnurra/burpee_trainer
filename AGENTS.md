@@ -14,7 +14,11 @@ This is a web application written using the Phoenix web framework.
   clones, and Reach's smell checks.
 - `.credo.exs` holds a baseline: files that already broke a check when the gate was
   adopted. Never add a file to it to get a change through; fix the code. Removing a file
-  you fixed is welcome. `.dialyzer_ignore.exs` works the same way for Dialyzer.
+  you fixed is welcome. `.dialyzer_ignore.exs` lists only Dialyzer's known false
+  positives, each with its reason; a real warning gets fixed.
+- A map type that should accept a struct needs `optional(atom()) => any()`:
+  `%{timezone: String.t()}` alone means a map with no other keys, and Dialyzer then calls
+  every caller unreachable.
 - Tests that use `DataCase` or `ConnCase` run with `async: false`: SQLite has one writer,
   and the sandbox refuses an async database test. Pure tests stay `async: true`.
 - Duplicated code fails ExDNA: extract it (see `BurpeeTrainer.PlanCompiler.CanonicalJson`,

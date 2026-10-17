@@ -41,7 +41,8 @@ defmodule BurpeeTrainer.Mcp do
 
   def latest_protocol_version, do: hd(@protocol_versions)
 
-  @spec handle(Scope.t(), term(), [module()]) :: {:reply, map()} | :accepted
+  # No scope for a request refused before sign-in matters (a batch).
+  @spec handle(Scope.t() | nil, term(), [module()]) :: {:reply, map()} | :accepted
   def handle(scope, request, tools \\ tools())
 
   def handle(_scope, %{"jsonrpc" => "2.0", "method" => "notifications/" <> _} = request, _tools)

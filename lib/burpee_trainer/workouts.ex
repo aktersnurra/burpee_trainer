@@ -756,20 +756,6 @@ defmodule BurpeeTrainer.Workouts do
     :updated_at
   ]
 
-  @definition_keys ~w[
-    version name burpee_type target_duration_sec target_reps pacing_style rationale events
-  ]
-  @definition_atom_keys [
-    :version,
-    :name,
-    :burpee_type,
-    :target_duration_sec,
-    :target_reps,
-    :pacing_style,
-    :rationale,
-    :events
-  ]
-
   defp canonical_draft_content(attrs) do
     with {:ok, definition_attrs} <- draft_definition(attrs),
          {:ok, definition} <- WorkoutDefinition.new(definition_attrs),
@@ -777,7 +763,7 @@ defmodule BurpeeTrainer.Workouts do
       {:ok,
        %{
          name: definition.name,
-         request_text: draft_request_text(attrs),
+         request_text: attrs.request_text,
          definition_json: WorkoutDefinition.canonical_map(definition),
          program_json: ProgramHash.canonical_map(program),
          content_hash: ProgramHash.hash(program),
@@ -788,26 +774,11 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp draft_definition(attrs) do
-    definition =
-      Map.get(attrs, :definition) || Map.get(attrs, "definition") ||
-        Map.get(attrs, :definition_json) || Map.get(attrs, "definition_json")
+  defp draft_definition(%{definition: definition}) when is_map(definition),
+    do: {:ok, definition}
 
-    cond do
-      is_map(definition) ->
-        {:ok, definition}
-
-      Map.has_key?(attrs, :version) or Map.has_key?(attrs, "version") ->
-        {:ok, Map.take(attrs, @definition_keys ++ @definition_atom_keys)}
-
-      true ->
-        {:error, Error.new(:invalid_workout_definition, %{field: :definition})}
-    end
-  end
-
-  defp draft_request_text(attrs) do
-    Map.get(attrs, :request_text) || Map.get(attrs, "request_text")
-  end
+  defp draft_definition(_attrs),
+    do: {:error, Error.new(:invalid_workout_definition, %{field: :definition})}
 
   defp compare_expected_draft_revision(draft, attrs) do
     case Map.fetch(attrs, :expected_revision) do
@@ -1051,8 +1022,6 @@ defmodule BurpeeTrainer.Workouts do
       :error -> Map.get(map, Atom.to_string(key))
     end
   end
-
-  defp field_value(_value, _key), do: nil
 
   # ---------------------------------------------------------------------------
   # Pose capture
@@ -2435,7 +2404,7 @@ defmodule BurpeeTrainer.Workouts do
 
   defp pace_delta_sec(cadence_intervals, expected_intervals) do
     cadence_intervals
-    |> comparable_interval_pairs(expected_intervals, :work)
+    |> comparable_work_pairs(expected_intervals)
     |> average_interval_delta()
   end
 
@@ -2448,7 +2417,7 @@ defmodule BurpeeTrainer.Workouts do
   defp cadence_decline(cadence_intervals, expected_intervals) do
     work_intervals =
       cadence_intervals
-      |> comparable_interval_pairs(expected_intervals, :work)
+      |> comparable_work_pairs(expected_intervals)
       |> Enum.map(&elem(&1, 0))
 
     window_size = min(3, div(length(work_intervals), 2))
@@ -2464,12 +2433,12 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp comparable_interval_pairs(cadence_intervals, expected_intervals, kind) do
+  # Boundary intervals only keep the two lists in step; work intervals are compared.
+  defp comparable_work_pairs(cadence_intervals, expected_intervals) do
     cadence_intervals
     |> Enum.zip(expected_intervals)
     |> Enum.flat_map(fn
-      {actual, {:work, expected}} when kind == :work -> [{actual, expected}]
-      {actual, {:boundary, expected}} when kind == :boundary -> [{actual, expected}]
+      {actual, {:work, expected}} -> [{actual, expected}]
       _other -> []
     end)
   end

@@ -3,7 +3,7 @@ defmodule BurpeeTrainerWeb.HomeDayBoundary do
 
   alias BurpeeTrainer.UserTime
 
-  @spec delay_ms(%{timezone: String.t()}, DateTime.t()) ::
+  @spec delay_ms(%{:timezone => String.t(), optional(atom()) => any()}, DateTime.t()) ::
           {:ok, pos_integer()} | {:error, :invalid_timezone}
   def delay_ms(user, now) do
     with {:ok, context} <- UserTime.context(user, now),

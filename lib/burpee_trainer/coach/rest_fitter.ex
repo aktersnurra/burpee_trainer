@@ -294,10 +294,10 @@ defmodule BurpeeTrainer.Coach.RestFitter do
            :erlang.float_to_binary(weight, [:short])
          ) do
       [_, whole, fractional, exponent] ->
-        decimal_ratio_parts(whole, fractional || "", exponent || "0")
+        decimal_ratio_parts(whole, fractional, exponent)
 
       [_, whole, fractional] ->
-        decimal_ratio_parts(whole, fractional || "", "0")
+        decimal_ratio_parts(whole, fractional, "0")
 
       [_, whole] ->
         decimal_ratio_parts(whole, "", "0")

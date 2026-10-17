@@ -100,9 +100,6 @@ defmodule BurpeeTrainer.Coach do
       when is_list(opts) do
     with {:ok, _source} <- Workouts.verify_home_selection(scope, expected) do
       revise_home_workout(scope, expected, text, Keyword.put(opts, :confirmed_request, request))
-    else
-      {:error, %Error{} = error} -> {:error, error}
-      _ -> {:error, Error.new(:design_workspace_changed)}
     end
   end
 
@@ -470,13 +467,6 @@ defmodule BurpeeTrainer.Coach do
 
           {:error, %Error{} = error} ->
             reject_provider_definition(:schema, error)
-
-          {:error, reason, details} ->
-            {:error, Error.new(:invalid_workout_definition),
-             "validation #{inspect({reason, details})}"}
-
-          _ ->
-            {:error, Error.new(:invalid_workout_definition), "validation failed"}
         end
 
       {:error, reason} ->

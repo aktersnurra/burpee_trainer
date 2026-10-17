@@ -1,64 +1,10 @@
-# Dialyzer baseline: warnings present when the gate was adopted (2026-10-17), by file and
-# kind. Most follow from a few roots (Dialyzer decides `UserTime.context/2` cannot succeed,
-# so Coach.Policy, WeekWindow and their callers look dead). Fix a root and delete what it
-# clears; `list_unused_filters` reports entries that no longer match. Never add one to get
-# a change through.
+# Dialyzer warnings that are wrong, each with why. Never add one to get a change through;
+# `list_unused_filters` reports an entry once it no longer matches.
 [
+  # Oidcc types a token's id as `Id.t() | none`; in a typespec `none` is the empty type, not
+  # the atom `:none` it returns without an ID token, so the clause for that looks unreachable.
   {"lib/burpee_trainer/auth/oidc.ex", :pattern_match},
-  {"lib/burpee_trainer/coach.ex", :no_return},
-  {"lib/burpee_trainer/coach.ex", :pattern_match},
-  {"lib/burpee_trainer/coach.ex", :pattern_match_cov},
-  {"lib/burpee_trainer/coach.ex", :unused_fun},
-  {"lib/burpee_trainer/coach/plan_next_workout_job.ex", :invalid_contract},
-  {"lib/burpee_trainer/coach/plan_next_workout_job.ex", :no_return},
-  {"lib/burpee_trainer/coach/plan_next_workout_job.ex", :pattern_match},
-  {"lib/burpee_trainer/coach/plan_next_workout_job.ex", :pattern_match_cov},
-  {"lib/burpee_trainer/coach/policy.ex", :call},
-  {"lib/burpee_trainer/coach/policy.ex", :invalid_contract},
-  {"lib/burpee_trainer/coach/policy.ex", :no_return},
-  {"lib/burpee_trainer/coach/policy.ex", :unused_fun},
-  {"lib/burpee_trainer/coach/rest_fitter.ex", :guard_fail},
-  {"lib/burpee_trainer/coach/summary_job.ex", :call},
-  {"lib/burpee_trainer/coach/summary_job.ex", :invalid_contract},
-  {"lib/burpee_trainer/coach/summary_job.ex", :no_return},
-  {"lib/burpee_trainer/coach/summary_job.ex", :pattern_match},
-  {"lib/burpee_trainer/coach/summary_job.ex", :unused_fun},
-  {"lib/burpee_trainer/coach/workout_guidance.ex", :call},
-  {"lib/burpee_trainer/coach/workout_guidance.ex", :invalid_contract},
-  {"lib/burpee_trainer/coach/workout_guidance.ex", :no_return},
-  {"lib/burpee_trainer/coach/workout_request.ex", :unknown_type},
-  {"lib/burpee_trainer/evals/runner.ex", :pattern_match},
-  {"lib/burpee_trainer/history.ex", :invalid_contract},
-  {"lib/burpee_trainer/home.ex", :invalid_contract},
-  {"lib/burpee_trainer/home.ex", :no_return},
-  {"lib/burpee_trainer/home.ex", :unused_fun},
-  {"lib/burpee_trainer/insights/metrics.ex", :invalid_contract},
-  {"lib/burpee_trainer/insights/narrate_job.ex", :pattern_match},
-  {"lib/burpee_trainer/insights/narrator.ex", :pattern_match_cov},
-  {"lib/burpee_trainer/insights/narrator.ex", :unused_fun},
-  {"lib/burpee_trainer/mcp/tools/plan_next_workout.ex", :no_return},
-  {"lib/burpee_trainer/mcp/tools/plan_next_workout.ex", :pattern_match},
-  {"lib/burpee_trainer/mcp/tools/plan_next_workout.ex", :pattern_match_cov},
-  {"lib/burpee_trainer/mcp/tools/plan_next_workout.ex", :unused_fun},
-  {"lib/burpee_trainer/mcp/tools/week.ex", :unused_fun},
-  {"lib/burpee_trainer/week_window.ex", :call},
-  {"lib/burpee_trainer/week_window.ex", :invalid_contract},
-  {"lib/burpee_trainer/week_window.ex", :no_return},
-  {"lib/burpee_trainer/workouts.ex", :call},
-  {"lib/burpee_trainer/workouts.ex", :call_without_opaque},
-  {"lib/burpee_trainer/workouts.ex", :guard_fail},
-  {"lib/burpee_trainer/workouts.ex", :no_return},
-  {"lib/burpee_trainer/workouts.ex", :pattern_match},
-  {"lib/burpee_trainer/workouts.ex", :pattern_match_cov},
-  {"lib/burpee_trainer/workouts.ex", :unused_fun},
-  {"lib/burpee_trainer_web/controllers/mcp_controller.ex", :call},
-  {"lib/burpee_trainer_web/controllers/pose_trace_upload_controller.ex", :pattern_match},
-  {"lib/burpee_trainer_web/live/history_screen.ex", :pattern_match},
-  {"lib/burpee_trainer_web/live/history_screen.ex", :unused_fun},
-  {"lib/burpee_trainer_web/live/home_authoring.ex", :pattern_match},
-  {"lib/burpee_trainer_web/live/home_coach.ex", :call},
-  {"lib/burpee_trainer_web/live/home_coach.ex", :no_return},
-  {"lib/burpee_trainer_web/live/home_coach.ex", :unused_fun},
-  {"lib/burpee_trainer_web/live/home_live.ex", :no_return},
-  {"lib/burpee_trainer_web/live/home_live.ex", :unused_fun}
+  # Ecto.Multi keeps its names in a MapSet, whose opaque type Dialyzer trips over in
+  # `Multi.new() |> Multi.run(...)`.
+  {"lib/burpee_trainer/workouts.ex", :call_without_opaque}
 ]

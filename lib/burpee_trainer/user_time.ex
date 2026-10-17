@@ -8,7 +8,9 @@ defmodule BurpeeTrainer.UserTime do
           timezone: String.t()
         }
 
-  @spec context(%{timezone: String.t()}, DateTime.t()) ::
+  # Any map with a timezone, a `%User{}` included: `%{timezone: String.t()}` alone would
+  # mean a map with no other keys, which no user is.
+  @spec context(%{:timezone => String.t(), optional(atom()) => any()}, DateTime.t()) ::
           {:ok, context()} | {:error, :invalid_timezone}
   def context(%{timezone: timezone}, %DateTime{} = now) when is_binary(timezone) do
     case DateTime.shift_zone(now, timezone) do

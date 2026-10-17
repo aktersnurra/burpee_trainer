@@ -1,6 +1,7 @@
 defmodule BurpeeTrainer.Coach.WorkoutRequest do
   @moduledoc "Confirmed constraints for one user-initiated workout authoring attempt."
 
+  alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.Error
 
   @max_duration_sec 86_400
