@@ -278,9 +278,44 @@ export class SessionRenderer {
 		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
 	}
 
+	// Paused, the abort question takes the place of Finish early and Abort.
+	showAbortConfirm(visible) {
+		const confirm = this.root.querySelector("#session-abort-confirm");
+		if (!confirm) return;
+		const choices = this.root.querySelector("#session-pause-choices");
+		const wasVisible = !confirm.hidden;
+		confirm.hidden = !visible;
+		if (choices) choices.hidden = visible;
+		if (visible) {
+			this.showAbortError(null);
+			this.root.querySelector("#session-abort-keep")?.focus();
+		} else if (wasVisible) this.root.querySelector("#session-abort-btn")?.focus();
+	}
+
+	showAbortError(text) {
+		const error = this.root.querySelector("#session-abort-error");
+		if (!error) return;
+		error.textContent = text || "";
+		error.hidden = !text;
+	}
+
+	// Resuming puts the paused choices back as they were, without moving focus.
+	resetAbort() {
+		const confirm = this.root.querySelector("#session-abort-confirm");
+		if (confirm) confirm.hidden = true;
+		const choices = this.root.querySelector("#session-pause-choices");
+		if (choices) choices.hidden = false;
+		this.showAbortError(null);
+	}
+
 	// While a discard waits on the server, its answers wait too.
 	setDiscardBusy(busy) {
-		for (const id of ["#session-discard-keep", "#session-discard-yes"]) {
+		for (const id of [
+			"#session-discard-keep",
+			"#session-discard-yes",
+			"#session-abort-keep",
+			"#session-abort-yes",
+		]) {
 			this.root.querySelector(id)?.toggleAttribute("disabled", busy);
 		}
 	}

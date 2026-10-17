@@ -136,19 +136,24 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Repo.get!(WorkoutSession, session.id).state == :completed
   end
 
-  test "the paused workout can go back to Home and keep the session", %{conn: conn, user: user} do
+  test "paused, the workout is finished early or aborted, and Abort deletes it", %{
+    conn: conn,
+    user: user
+  } do
     plan = plan_fixture(user)
     {:ok, session} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
     {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
 
-    assert has_element?(
-             view,
-             "#session-pause-actions #session-pause-leave[aria-label='Back to Home'][href='/'] .hero-arrow-left"
-           )
+    assert has_element?(view, "#session-pause-choices #finish-early-btn", "Finish early")
+    assert has_element?(view, "#session-pause-choices #session-abort-btn", "Abort")
+    refute has_element?(view, "#session-pause-actions a")
+    assert has_element?(view, "#session-abort-confirm[hidden]", "Abort this workout?")
+    assert has_element?(view, "#session-abort-confirm #session-abort-keep", "Keep")
+    assert has_element?(view, "#session-abort-confirm #session-abort-yes", "Abort")
 
-    view |> element("#session-pause-leave") |> render_click()
-    assert_redirect(view, ~p"/")
-    assert Repo.get!(WorkoutSession, session.id).state == :started
+    render_hook(view, "discard_session", %{})
+    assert_reply(view, %{status: "discarded"})
+    refute Repo.get(WorkoutSession, session.id)
   end
 
   test "a started snapshot remains executable after its plan is archived", %{
@@ -470,7 +475,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     refute has_element?(view, "#session-save-btn", "Save session")
     refute has_element?(view, "#session-report-pending-status")
     refute has_element?(view, "#session-report-pending-retry")
-    refute has_element?(view, "#session-abort-btn")
+    refute has_element?(view, "#session-completion-review #session-abort-btn")
   end
 
   defp runner_events(program_json) do

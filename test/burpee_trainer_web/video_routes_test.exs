@@ -18,7 +18,7 @@ defmodule BurpeeTrainerWeb.VideoRoutesTest do
     end
   end
 
-  test "video sessions retain Home and History without catalog navigation", %{
+  test "a video session, like a plan session, shows no app navigation", %{
     conn: conn,
     user: user
   } do
@@ -33,8 +33,8 @@ defmodule BurpeeTrainerWeb.VideoRoutesTest do
 
     {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{session.id}")
 
-    assert has_element?(view, "#desktop-home-nav")
-    assert has_element?(view, "#mobile-history-nav")
+    refute has_element?(view, "#desktop-home-nav")
+    refute has_element?(view, "#mobile-history-nav")
     refute has_element?(view, "#desktop-library-nav")
     refute has_element?(view, "#desktop-videos-nav")
     refute has_element?(view, "#mobile-library-nav")

@@ -188,7 +188,9 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             aria-hidden="true"
             inert="inert"
           >
+            <%!-- Paused, a workout is finished early or aborted; nothing else. --%>
             <div
+              id="session-pause-choices"
               class="mx-auto flex w-full max-w-[360px] flex-col items-center gap-1.5"
               aria-label="Paused session actions"
             >
@@ -200,16 +202,45 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               >
                 Finish early
               </button>
-              <%!-- Leaves the session started, as the start screens' back arrow did. --%>
-              <.link
-                id="session-pause-leave"
-                navigate={~p"/"}
-                aria-label="Back to Home"
-                title="Back to Home"
-                class="session-pause-leave inline-flex size-14 items-center justify-center rounded-full"
+              <button
+                id="session-abort-btn"
+                type="button"
+                aria-controls="session-abort-confirm"
+                class="session-pause-abort min-h-14 px-6 text-base font-medium"
               >
-                <.icon name="hero-arrow-left" class="size-6" />
-              </.link>
+                Abort
+              </button>
+              <p id="session-abort-error" role="alert" class="text-sm" hidden></p>
+            </div>
+            <%!-- Aborting deletes the started session. The question takes the choices' place. --%>
+            <div
+              id="session-abort-confirm"
+              hidden
+              role="group"
+              aria-labelledby="session-abort-question"
+              aria-describedby="session-abort-consequence"
+              class="session-pause-abort mx-auto w-full max-w-[360px] text-center"
+            >
+              <p id="session-abort-question" class="text-lg font-medium">Abort this workout?</p>
+              <p id="session-abort-consequence" class="mt-1 text-sm opacity-80">
+                Nothing will be saved.
+              </p>
+              <div class="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  id="session-abort-keep"
+                  type="button"
+                  class="min-h-14 rounded-full border border-current text-base font-medium"
+                >
+                  Keep
+                </button>
+                <button
+                  id="session-abort-yes"
+                  type="button"
+                  class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white"
+                >
+                  Abort
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -217,9 +248,6 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     </.panel>
     """
   end
-
-  attr(:hidden, :boolean, default: true)
-  attr(:form, :any, required: true)
 
   @mood_options [{"Rough", -1}, {"OK", 0}, {"Good", 1}]
   @tag_options [
@@ -230,6 +258,15 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     {"Travel", "travel"},
     {"Hot", "hot"}
   ]
+
+  @doc "The finish screen's moods, as `{label, value}`; a video logs with the same ones."
+  def mood_options, do: @mood_options
+
+  @doc "The finish screen's tags, as `{label, value}`; a video logs with the same ones."
+  def tag_options, do: @tag_options
+
+  attr(:hidden, :boolean, default: true)
+  attr(:form, :any, required: true)
 
   def completion_review(assigns) do
     assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)

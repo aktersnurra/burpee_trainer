@@ -268,6 +268,9 @@ const SessionHook = {
       const discardAsk = e.target.closest("#session-discard-btn");
       const discardKeep = e.target.closest("#session-discard-keep");
       const discardYes = e.target.closest("#session-discard-yes");
+      const abortAsk = e.target.closest("#session-abort-btn");
+      const abortKeep = e.target.closest("#session-abort-keep");
+      const abortYes = e.target.closest("#session-abort-yes");
       const continueWithoutCamera = e.target.closest("#camera-setup-continue");
       const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
@@ -318,6 +321,9 @@ const SessionHook = {
       if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
       if (discardKeep) this.renderer.showDiscardConfirm(false);
       if (discardYes) this.discardSession();
+      if (abortAsk && this.canDiscard()) this.renderer.showAbortConfirm(true);
+      if (abortKeep) this.renderer.showAbortConfirm(false);
+      if (abortYes) this.discardSession();
     };
     this.el.addEventListener("click", this.onRootClick);
 
@@ -805,26 +811,36 @@ const SessionHook = {
     this.renderer.renderCompletion(this.flow.completion);
   },
 
-  // A finished workout that is not saved yet may be thrown away instead.
+  // A paused workout may be aborted, and a finished one not saved yet thrown away.
   canDiscard() {
+    if (this.discarding) return false;
+    if (this.flow.mode !== "completion_review") return this.isPaused();
     return (
-      this.flow.mode === "completion_review" &&
       this.flow.saveStatus !== "saving" &&
       !this.flow.completionLocked &&
-      !this.serverCompletion &&
-      !this.discarding
+      !this.serverCompletion
     );
+  },
+
+  isPaused() {
+    return Boolean(this.paused || this.countdownPaused);
   },
 
   discardSession() {
     if (!this.canDiscard()) return;
     const generation = this.lifecycleGeneration;
     let timer = null;
+    const aborting = this.flow.mode !== "completion_review";
     const refused = () => {
       clearTimeout(timer);
       if (!this.lifecycleActive(generation)) return;
       this.discarding = null;
       this.renderer.setDiscardBusy(false);
+      if (aborting) {
+        this.renderer.showAbortConfirm(false);
+        this.renderer.showAbortError("Could not abort the workout. Try again.");
+        return;
+      }
       this.renderer.showDiscardConfirm(false);
       this.renderer.renderSaveErrors({
         field_errors: {},
@@ -854,8 +870,12 @@ const SessionHook = {
     );
   },
 
+  // Once an abort is sent, the workout stays paused until the server answers.
   canTogglePause() {
-    return this.startTime !== null || this.countdownCount !== null;
+    return (
+      !this.discarding &&
+      (this.startTime !== null || this.countdownCount !== null)
+    );
   },
 
   activeRuntimeForFlow() {
@@ -1348,6 +1368,7 @@ const SessionHook = {
     if (!actions) return;
 
     const isPaused = this.paused || this.countdownPaused;
+    if (!isPaused) this.renderer.resetAbort();
     const canFinishEarly =
       isPaused && ["warmup", "workout"].includes(this.activeSegment);
     actions.style.opacity = isPaused ? "1" : "0";

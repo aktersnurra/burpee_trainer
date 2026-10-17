@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-18 — Finish early or abort; the video page in the session's style
+
+- Paused, a workout offers Finish early or Abort; the back arrow is gone. Abort asks in place ("Abort this workout? Nothing will be saved.", Keep / Abort) and deletes the started session; resuming closes the question, and a refused abort stays paused and says so.
+- The video page has no app navigation and no breadcrumb: the video, then Finish early or Abort. Finish early or the video's end opens the plan workout's finish screen: the count with − and + (typed too, since a video often has none), mood, tags and a note, trash or ✓. The time logged is how far the video got.
+- The video log's duration field and its feedback block (energy, heat, limiter, preference) are gone, as on the plan finish screen.
+
 ## 2026-10-17 — Claude signs in through a Pocket ID API
 
 - `/mcp` is a Pocket ID API (resource `https://<host>/mcp`) that Claude registers with through CIMD, like Fund; Claude no longer needs a client of its own. `MCP_OIDC_AUDIENCE` is that resource.

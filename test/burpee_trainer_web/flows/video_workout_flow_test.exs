@@ -17,12 +17,10 @@ defmodule BurpeeTrainerWeb.Flows.VideoWorkoutFlowTest do
     assert path =~ "/videos/#{video.id}/session/"
     [_, id] = Regex.run(~r{/session/(\d+)$}, path)
     {:ok, session, _} = live(init_test_session(conn, %{user_id: user.id}), path)
-    render_click(session, "video_ended")
+    render_click(session, "video_ended", %{"watched_sec" => 120})
 
     session
-    |> form("#video-log-form", %{
-      "workout_session" => %{"burpee_count_actual" => "10", "duration_min" => "2"}
-    })
+    |> form("#video-log-form", %{"workout_session" => %{"burpee_count_actual" => "10"}})
     |> render_submit()
 
     completed = Repo.get!(WorkoutSession, String.to_integer(id))

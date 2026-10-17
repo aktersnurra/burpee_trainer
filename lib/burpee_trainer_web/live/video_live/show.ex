@@ -5,25 +5,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
-  alias BurpeeTrainerWeb.Params
+  alias BurpeeTrainerWeb.{Fmt, Params, SessionComponents}
 
-  @mood_options [
-    {"hero-face-frown", "Tired", -1},
-    {"hero-minus-circle", "OK", 0},
-    {"hero-bolt", "Hyped", 1}
-  ]
-  @tag_options ~w[tired great_energy bad_sleep sick travel hot]
-  @completion_string_fields ~w[
-    burpee_count_actual
-    duration_min
-    note_pre
-    note_post
-    context_low_energy
-    context_high_energy
-    context_heat_affected
-    primary_limiter
-    preference_feedback
-  ]
+  # The plan session's finish screen choices, so a video logs the same way.
+  @mood_options SessionComponents.mood_options()
+  @tag_options SessionComponents.tag_options()
+  @tag_values Enum.map(@tag_options, &elem(&1, 1))
 
   @impl true
   def mount(%{"video_id" => video_id, "session_id" => session_id}, _session, socket) do
@@ -57,10 +44,13 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     socket
     |> assign(:video, video)
     |> assign(:workout_session, session)
-    |> assign(:log_visible, false)
-    |> assign(:mood, 0)
-    |> assign(:log_tags, [])
-    |> assign(:duration_min, Integer.to_string(div(video.duration_sec, 60)))
+    |> assign(:finished?, false)
+    |> assign(:watched_sec, video.duration_sec)
+    |> assign(:confirm_discard?, false)
+    |> assign(:reps, video.burpee_count || 0)
+    |> assign(:mood, nil)
+    |> assign(:tags, [])
+    |> assign(:note, "")
     |> assign(:form, to_form(Ecto.Changeset.change(session)))
   end
 
@@ -72,134 +62,148 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
   end
 
   @impl true
-  def handle_event(
-        "video_ended",
-        _params,
-        %{assigns: %{workout_session: %WorkoutSession{}}} = socket
-      ) do
-    {:noreply, assign(socket, :log_visible, true)}
-  end
+  # The hook sends how far the video got: its end, or where Finish early stopped it.
+  def handle_event("video_ended", params, socket) do
+    duration = socket.assigns.video.duration_sec
 
-  def handle_event("video_ended", _params, socket), do: {:noreply, socket}
-
-  def handle_event("set_mood", %{"mood" => mood_str}, socket) when is_binary(mood_str) do
-    mood =
-      case Integer.parse(mood_str) do
-        {mood, ""} when mood in [-1, 0, 1] -> mood
-        _invalid -> socket.assigns.mood
+    watched =
+      case params do
+        %{"watched_sec" => sec} when is_integer(sec) and sec in 0..duration//1 -> sec
+        _whole_video -> duration
       end
 
-    {:noreply, assign(socket, :mood, mood)}
+    {:noreply, assign(socket, finished?: true, confirm_discard?: false, watched_sec: watched)}
   end
 
-  def handle_event("set_mood", _params, socket), do: {:noreply, socket}
+  def handle_event("ask_discard", _params, socket),
+    do: {:noreply, assign(socket, :confirm_discard?, true)}
 
-  def handle_event("toggle_tag", %{"tag" => tag}, socket)
-      when is_binary(tag) and tag in @tag_options do
-    tags = socket.assigns.log_tags
-    tags = if tag in tags, do: List.delete(tags, tag), else: [tag | tags]
-    {:noreply, assign(socket, :log_tags, tags)}
-  end
+  def handle_event("keep", _params, socket),
+    do: {:noreply, assign(socket, :confirm_discard?, false)}
 
-  def handle_event("toggle_tag", _params, socket), do: {:noreply, socket}
-
-  def handle_event(
-        "validate",
-        %{"workout_session" => params},
-        %{
-          assigns: %{
-            current_scope: %{user: %{id: user_id}},
-            workout_session:
-              %WorkoutSession{state: :started, source_kind: :video} = workout_session
-          }
-        } = socket
-      )
-      when is_map(params) and workout_session.user_id == user_id do
-    {params, duration_min} = params |> normalize_completion_params() |> apply_duration_min()
-
-    changeset =
-      workout_session
-      |> WorkoutSession.completion_changeset(params, DateTime.utc_now(:second))
-      |> Map.put(:action, :validate)
-
-    {:noreply, assign(socket, form: to_form(changeset), duration_min: duration_min)}
-  end
-
-  def handle_event("validate", _params, socket), do: {:noreply, socket}
-
-  def handle_event(
-        "save",
-        %{"workout_session" => params},
-        %{
-          assigns: %{
-            current_scope: %{user: %{id: user_id}} = scope,
-            workout_session:
-              %WorkoutSession{state: :started, source_kind: :video} = workout_session
-          }
-        } = socket
-      )
-      when is_map(params) and workout_session.user_id == user_id do
-    {params, duration_min} = params |> normalize_completion_params() |> apply_duration_min()
-
-    params =
-      params
-      |> Map.put("mood", socket.assigns.mood)
-      |> Map.put("tags", socket.assigns.log_tags |> Enum.sort() |> Enum.join(","))
-
-    case Workouts.complete_session(
-           scope,
-           workout_session.id,
-           params,
-           :logged
-         ) do
-      {:ok, session} ->
-        _events = Workouts.session_milestones(socket.assigns.current_scope, session)
-
-        {:noreply,
-         socket
-         |> put_flash(:info, "Session logged.")
-         |> push_navigate(to: ~p"/")}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, form: to_form(changeset), duration_min: duration_min)}
+  def handle_event("discard", _params, socket) do
+    with {:ok, session} <- own_video_session(socket),
+         {:ok, _discarded} <-
+           Workouts.discard_started_session(socket.assigns.current_scope, session.id) do
+      {:noreply, socket |> put_flash(:info, "Workout discarded.") |> push_navigate(to: ~p"/")}
+    else
+      :refused ->
+        {:noreply, socket}
 
       {:error, _reason} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Could not log this session. Please try again.")
-         |> assign(duration_min: duration_min)}
+         |> assign(:confirm_discard?, false)
+         |> put_flash(:error, "Could not discard this workout. Please try again.")}
+    end
+  end
+
+  def handle_event("step_reps", %{"step" => step}, socket) when step in ["-1", "1"] do
+    reps = max(socket.assigns.reps + String.to_integer(step), 0)
+    {:noreply, assign(socket, :reps, reps)}
+  end
+
+  def handle_event("step_reps", _params, socket), do: {:noreply, socket}
+
+  def handle_event("set_mood", %{"mood" => mood}, socket) do
+    case Enum.find(@mood_options, fn {_label, value} -> Integer.to_string(value) == mood end) do
+      # Tapping the chosen mood again clears it: mood is optional.
+      {_label, value} when value == socket.assigns.mood -> {:noreply, assign(socket, :mood, nil)}
+      {_label, value} -> {:noreply, assign(socket, :mood, value)}
+      nil -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("set_mood", _params, socket), do: {:noreply, socket}
+
+  def handle_event("toggle_tag", %{"tag" => tag}, socket) when tag in @tag_values do
+    tags = socket.assigns.tags
+    tags = if tag in tags, do: List.delete(tags, tag), else: [tag | tags]
+    {:noreply, assign(socket, :tags, tags)}
+  end
+
+  def handle_event("toggle_tag", _params, socket), do: {:noreply, socket}
+
+  def handle_event("validate", %{"workout_session" => params}, socket) when is_map(params) do
+    case own_video_session(socket) do
+      {:ok, _session} ->
+        {:noreply,
+         socket
+         |> assign(:note, string_param(params, "note_post", socket.assigns.note))
+         |> assign(:reps, typed_reps(params, socket.assigns.reps))}
+
+      :refused ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("validate", _params, socket), do: {:noreply, socket}
+
+  def handle_event("save", %{"workout_session" => params}, socket) when is_map(params) do
+    case own_video_session(socket) do
+      {:ok, session} -> save(socket, session, completion_params(params, socket.assigns))
+      :refused -> {:noreply, socket}
     end
   end
 
   def handle_event("save", _params, socket), do: {:noreply, socket}
 
-  defp normalize_completion_params(params) do
-    Map.new(@completion_string_fields, fn field ->
-      value = Map.get(params, field, "")
-      {field, if(is_binary(value), do: value, else: "")}
-    end)
-  end
+  defp save(socket, session, params) do
+    scope = socket.assigns.current_scope
 
-  defp apply_duration_min(params) do
-    raw = Map.get(params, "duration_min", "")
+    case Workouts.complete_session(scope, session.id, params, :logged) do
+      {:ok, session} ->
+        _events = Workouts.session_milestones(scope, session)
+        {:noreply, socket |> put_flash(:info, "Session logged.") |> push_navigate(to: ~p"/")}
 
-    params =
-      case Integer.parse(String.trim(raw)) do
-        {minutes, ""} when minutes >= 0 -> Map.put(params, "duration_sec_actual", minutes * 60)
-        _invalid -> Map.put(params, "duration_sec_actual", "")
-      end
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset))}
 
-    {Map.delete(params, "duration_min"), raw}
-  end
-
-  defp duration_errors(form) do
-    field = form[:duration_sec_actual]
-
-    if Phoenix.Component.used_input?(field) do
-      Enum.map(field.errors, fn {message, _opts} -> message end)
-    else
-      []
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Could not log this session. Please try again.")}
     end
+  end
+
+  # Only the signed-in user's own started video session is completed or discarded here.
+  defp own_video_session(%{
+         assigns: %{
+           current_scope: %{user: %{id: user_id}},
+           workout_session:
+             %WorkoutSession{state: :started, source_kind: :video, user_id: user_id} = session
+         }
+       }),
+       do: {:ok, session}
+
+  defp own_video_session(_socket), do: :refused
+
+  # The time taken is how far the video got. The count is what was typed or stepped to;
+  # anything that is not a whole number goes to the changeset as given.
+  defp completion_params(params, assigns) do
+    %{
+      "burpee_count_actual" => Map.get(params, "burpee_count_actual", assigns.reps),
+      "duration_sec_actual" => assigns.watched_sec,
+      "note_post" => Map.get(params, "note_post", assigns.note),
+      "mood" => assigns.mood,
+      "tags" => assigns.tags |> Enum.sort() |> Enum.join(",")
+    }
+  end
+
+  defp typed_reps(params, reps) do
+    case Integer.parse(string_param(params, "burpee_count_actual", "")) do
+      {typed, ""} when typed >= 0 -> typed
+      _not_a_count -> reps
+    end
+  end
+
+  defp string_param(params, key, default) do
+    case Map.get(params, key) do
+      value when is_binary(value) -> value
+      _missing -> default
+    end
+  end
+
+  defp field_errors(form, field) do
+    Enum.map(form[field].errors, fn {message, _opts} -> message end)
   end
 
   @impl true
@@ -211,198 +215,232 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       flash={@flash}
       current_level={@current_level}
       current_scope={@current_scope}
-      current_page={:session}
+      navigation?={false}
     >
       <div
         id="video-session"
         data-session-id={@workout_session.id}
         data-client-session-id={@workout_session.client_session_id}
         data-content-hash={@workout_session.content_hash}
-        class="session-surface mx-auto max-w-lg space-y-6 pb-24 text-[var(--session-ink)]"
+        class="session-surface mx-auto w-full max-w-[480px] px-1 pb-10 pt-[max(2rem,env(safe-area-inset-top))] text-[var(--session-ink)]"
       >
-        <div class="flex items-center gap-3">
-          <.link
-            id="videos-back-link"
-            navigate={~p"/"}
-            class="text-sm font-medium text-[var(--session-muted)] transition hover:text-[var(--session-ink)]"
-          >
-            ← Home
-          </.link>
-          <span class="text-[var(--session-muted)]/40">/</span>
-          <h1 class="text-lg font-semibold tracking-[-0.03em] text-[var(--session-ink)]">
-            {@video.name}
-          </h1>
-        </div>
-
-        <div class="overflow-hidden rounded-xl border border-[var(--session-border)] bg-black">
+        <section :if={!@finished?} id="video-watch" aria-labelledby="video-heading">
+          <h1 id="video-heading" class="qs-heading-tight text-2xl font-medium">{@video.name}</h1>
+          <p class="qs-tabular mt-1 text-sm text-[var(--session-muted)]">
+            {Fmt.burpee_type(@video.burpee_type)} · {Fmt.duration_sec(@video.duration_sec)}
+          </p>
           <video
             id="workout-video"
             phx-hook="VideoHook"
             src={~p"/videos/stream/#{@video.filename}"}
             controls
-            class="w-full"
+            playsinline
+            class="mt-6 aspect-video w-full rounded-2xl bg-black"
           >
           </video>
-        </div>
-
-        <%= if not @log_visible do %>
-          <.qs_surface class="flex items-center justify-between gap-4 bg-[var(--session-surface)]/55 p-5">
-            <div>
-              <p class="text-sm font-medium text-[var(--session-ink)]">{@video.name}</p>
-              <p class="mt-0.5 text-xs text-[var(--session-muted)]">
-                {burpee_label(@video.burpee_type)} · {format_duration(@video.duration_sec)}
-              </p>
-            </div>
-            <p class="text-right text-xs text-[var(--session-muted)]">
-              Log form appears when video ends
-            </p>
-          </.qs_surface>
-        <% else %>
-          <.qs_surface class="space-y-5 bg-[var(--session-surface)]/55 p-6">
-            <div>
-              <h2 class="text-base font-semibold text-[var(--session-ink)]">Log this session</h2>
-              <p class="text-sm text-[var(--session-muted)]">
-                Confirm the reps and time you completed.
-              </p>
-            </div>
-
-            <.form
-              for={@form}
-              id="video-log-form"
-              phx-change="validate"
-              phx-submit="save"
-              class="space-y-5"
+          <%!-- As when a workout is paused: finish early, or abort it. --%>
+          <div
+            :if={!@confirm_discard?}
+            id="video-watch-actions"
+            class="mx-auto mt-10 flex max-w-[360px] flex-col items-center gap-1.5"
+          >
+            <button
+              id="video-finish-early"
+              type="button"
+              class="session-finish-early-action px-6 py-4 text-lg font-medium"
             >
-              <div
-                id="video-burpee-type"
-                class="rounded-lg border border-[var(--session-border)] px-4 py-3"
+              Finish early
+            </button>
+            <button
+              id="video-discard-btn"
+              type="button"
+              phx-click="ask_discard"
+              aria-controls="video-discard-confirm"
+              class="min-h-14 px-6 text-base font-medium text-[var(--session-muted)] transition-colors hover:text-[var(--session-ink)]"
+            >
+              Abort
+            </button>
+          </div>
+          <.discard_confirm :if={@confirm_discard?} verb="Abort" />
+        </section>
+
+        <section
+          :if={@finished?}
+          id="video-completion"
+          aria-labelledby="video-completion-heading"
+          class="pt-6"
+        >
+          <.form for={@form} id="video-log-form" phx-change="validate" phx-submit="save">
+            <div class="text-center">
+              <h1 id="video-completion-heading" class="qs-heading-tight text-3xl font-medium">
+                Workout complete
+              </h1>
+              <%!-- The count is the result: type it, or correct it with − and +. --%>
+              <div class="session-reps-stepper mt-10">
+                <button
+                  id="video-reps-less"
+                  type="button"
+                  phx-click="step_reps"
+                  phx-value-step="-1"
+                  disabled={@reps == 0}
+                  aria-label="One rep fewer"
+                  title="One rep fewer"
+                  aria-controls="video-actual-reps"
+                  class="session-reps-step"
+                >
+                  <.icon name="hero-minus" class="size-6" />
+                </button>
+                <label for="video-actual-reps" class="sr-only">Burpees done</label>
+                <input
+                  id="video-actual-reps"
+                  name={@form[:burpee_count_actual].name}
+                  value={@reps}
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  autocomplete="off"
+                  aria-describedby="video-reps-error"
+                  class="session-reps-input qs-tabular"
+                />
+                <button
+                  id="video-reps-more"
+                  type="button"
+                  phx-click="step_reps"
+                  phx-value-step="1"
+                  aria-label="One rep more"
+                  title="One rep more"
+                  aria-controls="video-actual-reps"
+                  class="session-reps-step"
+                >
+                  <.icon name="hero-plus" class="size-6" />
+                </button>
+              </div>
+              <p class="qs-tabular mt-5 text-lg text-[var(--session-muted)]">
+                <span :if={@video.burpee_count}>of {@video.burpee_count} · </span>{Fmt.duration_sec(
+                  @watched_sec
+                )}
+              </p>
+              <p
+                :for={message <- field_errors(@form, :burpee_count_actual)}
+                id="video-reps-error"
+                class="mt-2 text-sm text-[var(--session-error-ink)]"
               >
-                <p class="text-sm font-semibold text-[var(--session-ink)]">
-                  {burpee_label(@video.burpee_type)}
-                </p>
-              </div>
+                {message}
+              </p>
+            </div>
 
-              <div class="grid gap-4 sm:grid-cols-2">
-                <.input
-                  field={@form[:burpee_count_actual]}
-                  type="number"
-                  label="Burpees done"
-                  min="0"
-                />
-                <.input
-                  name="workout_session[duration_min]"
-                  value={@duration_min}
-                  type="number"
-                  label="Duration (minutes)"
-                  min="0"
-                  errors={duration_errors(@form)}
-                />
-              </div>
-
-              <fieldset
-                id="video-typed-feedback"
-                class="space-y-5 border-t border-[var(--session-border)] pt-5"
-              >
-                <legend class="text-sm font-semibold text-[var(--session-ink)]">
-                  Workout feedback
-                </legend>
-                <.input
-                  field={@form[:context_low_energy]}
-                  id="video-context-low-energy"
-                  type="checkbox"
-                  label="Low energy"
-                />
-                <.input
-                  field={@form[:context_high_energy]}
-                  id="video-context-high-energy"
-                  type="checkbox"
-                  label="High energy"
-                />
-                <.input
-                  field={@form[:context_heat_affected]}
-                  id="video-context-heat-affected"
-                  type="checkbox"
-                  label="Heat affected performance"
-                />
-                <.input
-                  field={@form[:primary_limiter]}
-                  id="video-primary-limiter"
-                  type="select"
-                  label="Primary limiter"
-                  prompt="No primary limiter"
-                  options={[
-                    {"Breathing", "breathing"},
-                    {"Whole-body recovery", "whole_body"},
-                    {"Upper body", "upper_body"},
-                    {"Legs", "legs"}
-                  ]}
-                />
-                <.input
-                  field={@form[:preference_feedback]}
-                  id="video-preference-feedback"
-                  type="select"
-                  label="Workout preference"
-                  prompt="No preference"
-                  options={[
-                    {"Would choose this workout again", "choose_again"},
-                    {"Would avoid this workout", "avoid"}
-                  ]}
-                />
-              </fieldset>
-
-              <div class="flex flex-wrap gap-2">
-                <%= for {icon, label, value} <- @mood_options do %>
-                  <button
-                    type="button"
-                    phx-click="set_mood"
-                    phx-value-mood={value}
-                    class="rounded-md border px-3 py-1.5 text-sm"
-                  >
-                    <.icon name={icon} class="size-4" /> {label}
-                  </button>
-                <% end %>
-              </div>
-
-              <div class="flex flex-wrap gap-2">
-                <%= for tag <- @tag_options do %>
-                  <button
-                    type="button"
-                    phx-click="toggle_tag"
-                    phx-value-tag={tag}
-                    class="rounded-md border px-3 py-1 text-xs"
-                  >
-                    {String.replace(tag, "_", " ")}
-                  </button>
-                <% end %>
-              </div>
-
-              <.input field={@form[:note_pre]} type="textarea" label="Pre-session notes (optional)" />
-              <.input
-                field={@form[:note_post]}
-                type="textarea"
-                label="Post-session notes (optional)"
-              />
-
+            <div id="video-completion-mood" class="mt-12 flex border-y border-[var(--session-border)]">
               <button
-                type="submit"
-                class="w-full rounded-md bg-[var(--session-ink)] px-4 py-2 text-sm font-medium text-[var(--session-bg)]"
+                :for={{label, value} <- @mood_options}
+                type="button"
+                phx-click="set_mood"
+                phx-value-mood={value}
+                aria-pressed={to_string(@mood == value)}
+                class="session-choice-toggle min-h-16 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
               >
-                Save session
+                {label}
               </button>
-            </.form>
-          </.qs_surface>
-        <% end %>
+            </div>
+            <div id="video-completion-tags" role="group" aria-label="Tags" class="session-tags">
+              <button
+                :for={{label, value} <- @tag_options}
+                type="button"
+                phx-click="toggle_tag"
+                phx-value-tag={value}
+                aria-pressed={to_string(value in @tags)}
+                class="session-tag-pill"
+              >
+                {label}
+              </button>
+            </div>
+            <div class="session-note-field">
+              <label for="video-note-input" class="sr-only">Note</label>
+              <textarea
+                id="video-note-input"
+                name={@form[:note_post].name}
+                rows="1"
+                placeholder="How did it go?"
+                class="session-note-input"
+              >{@note}</textarea>
+            </div>
+            <p
+              :for={message <- field_errors(@form, :note_post)}
+              class="mt-2 text-sm text-[var(--session-error-ink)]"
+            >
+              {message}
+            </p>
+
+            <%!-- A finished workout is saved or discarded; nothing else. --%>
+            <div
+              :if={!@confirm_discard?}
+              id="video-completion-actions"
+              class="mt-12 flex items-center justify-between gap-3"
+            >
+              <button
+                id="video-discard-btn"
+                type="button"
+                phx-click="ask_discard"
+                aria-label="Discard session"
+                title="Discard session"
+                aria-controls="video-discard-confirm"
+                class="inline-flex size-14 items-center justify-center rounded-full border border-[var(--session-border)] text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
+              >
+                <.icon name="hero-trash" class="size-6" />
+              </button>
+              <button
+                id="video-save-btn"
+                type="submit"
+                aria-label="Save session"
+                title="Save session"
+                phx-disable-with
+                class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
+              >
+                <.icon name="hero-check" class="size-6" />
+              </button>
+            </div>
+          </.form>
+          <.discard_confirm :if={@confirm_discard?} verb="Discard" />
+        </section>
       </div>
     </Layouts.app>
     """
   end
 
-  defp burpee_label(:six_count), do: "Six-count"
-  defp burpee_label(:navy_seal), do: "Navy SEAL"
+  attr(:verb, :string, required: true)
 
-  defp format_duration(seconds) do
-    minutes = div(seconds, 60)
-    remainder = rem(seconds, 60)
-    if remainder == 0, do: "#{minutes} min", else: "#{minutes}m #{remainder}s"
+  # The question takes the actions' place; Keep puts them back.
+  defp discard_confirm(assigns) do
+    ~H"""
+    <div
+      id="video-discard-confirm"
+      role="group"
+      aria-labelledby="video-discard-question"
+      aria-describedby="video-discard-consequence"
+      class="mt-12 text-center"
+    >
+      <p id="video-discard-question" class="text-lg font-medium">{@verb} this workout?</p>
+      <p id="video-discard-consequence" class="mt-1 text-sm text-[var(--session-muted)]">
+        Nothing will be saved.
+      </p>
+      <div class="mt-5 grid grid-cols-2 gap-3">
+        <button
+          id="video-discard-keep"
+          type="button"
+          phx-click="keep"
+          class="min-h-14 rounded-full border border-[var(--session-border)] text-base font-medium text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
+        >
+          Keep
+        </button>
+        <button
+          id="video-discard-yes"
+          type="button"
+          phx-click="discard"
+          class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white transition-opacity hover:opacity-90"
+        >
+          {@verb}
+        </button>
+      </div>
+    </div>
+    """
   end
 end

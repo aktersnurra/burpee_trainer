@@ -361,10 +361,30 @@ function buildHarness({
 	const pauseActions = new FakeElement("div");
 	pauseActions.id = "session-pause-actions";
 	pauseActions.setAttribute("inert", "");
+	const pauseChoices = new FakeElement("div");
+	pauseChoices.id = "session-pause-choices";
 	const finishEarly = new FakeElement("button");
 	finishEarly.id = "finish-early-btn";
 	finishEarly.setAttribute("disabled", "disabled");
-	pauseActions.append(finishEarly);
+	pauseChoices.append(finishEarly);
+	for (const [id, tag] of [
+		["session-abort-btn", "button"],
+		["session-abort-error", "p"],
+	]) {
+		const element = new FakeElement(tag);
+		element.id = id;
+		element.hidden = id === "session-abort-error";
+		pauseChoices.append(element);
+	}
+	const abortConfirm = new FakeElement("div");
+	abortConfirm.id = "session-abort-confirm";
+	abortConfirm.hidden = true;
+	for (const id of ["session-abort-keep", "session-abort-yes"]) {
+		const button = new FakeElement("button");
+		button.id = id;
+		abortConfirm.append(button);
+	}
+	pauseActions.append(pauseChoices, abortConfirm);
 	root.append(pauseActions);
 
 	const renderer = {
@@ -388,6 +408,7 @@ function buildHarness({
 			renderedModels.push(model);
 		},
 		updatePauseButton() {},
+		resetAbort() {},
 		clearTimers() {},
 		clearCountdown() {},
 		clearSaveErrors() {},
@@ -2493,7 +2514,7 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	ctx.startTime = 0;
 	ctx.paused = true;
 
-	assert.equal(actions.children.length, 1);
+	assert.equal(actions.children.length, 2);
 	ctx.updatePauseActionsVisibility();
 	assert.equal(actions.style.opacity, "1");
 	assert.equal(actions.style.pointerEvents, "auto");
@@ -3616,6 +3637,121 @@ test("a remembered camera on a device without one goes straight to the countdown
 	assert.equal(ctx.flow.captureMode, "no_camera");
 	assert.equal(ctx.countdownCount, 5);
 	assert.deepEqual(starts, []);
+	ctx.destroyed();
+});
+
+async function pausedWithAbortReply(reply, discarded = []) {
+	const ctx = mountedFlowHarness({
+		poseTrackerReady: true,
+		openSessionStore: async () => ({
+			loadDraft: async () => null,
+			saveDraft: async () => {},
+			discardSession: async (...args) => {
+				discarded.push(args);
+			},
+		}),
+	});
+	ctx.pushEvent = (name, payload, callback) => {
+		ctx.events.push({ name, payload });
+		if (reply) callback(reply);
+	};
+	await ctx.started;
+	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
+	ctx.startTime = 1;
+	// 3 s into a 10 s workout: still running.
+	ctx.dispatchSegment({ type: "TICK", elapsedSec: 3 });
+	ctx.togglePause();
+	assert.equal(ctx.flow.mode, "workout_running");
+	assert.equal(ctx.isPaused(), true);
+	ctx.events.length = 0;
+	return ctx;
+}
+
+test("paused, Abort asks in place of Finish early before it deletes anything", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	const confirm = ctx.el.querySelector("#session-abort-confirm");
+	const choices = ctx.el.querySelector("#session-pause-choices");
+	click(ctx, "session-abort-btn");
+	assert.equal(confirm.hidden, false);
+	assert.equal(choices.hidden, true);
+	assert.equal(ctx.el.querySelector("#session-abort-keep").focused, true);
+	click(ctx, "session-abort-keep");
+	assert.equal(confirm.hidden, true);
+	assert.equal(choices.hidden, false);
+	assert.equal(ctx.el.querySelector("#session-abort-btn").focused, true);
+	assert.deepEqual(ctx.events, []);
+	assert.equal(ctx.isPaused(), true);
+	ctx.destroyed();
+});
+
+test("a confirmed abort deletes the session, clears the device copy, and goes Home", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	const discarded = [];
+	const ctx = await pausedWithAbortReply({ status: "discarded" }, discarded);
+	try {
+		click(ctx, "session-abort-btn");
+		click(ctx, "session-abort-yes");
+		await ctx.discarding;
+
+		assert.deepEqual(ctx.events, [{ name: "discard_session", payload: {} }]);
+		assert.deepEqual(discarded, [[41, "hash-1"]]);
+		assert.deepEqual(navigations, ["/"]);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("a refused abort stays paused, puts the choices back and says so", async () => {
+	const originalWindow = globalThis.window;
+	const navigations = [];
+	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	const ctx = await pausedWithAbortReply({ status: "error" });
+	try {
+		click(ctx, "session-abort-btn");
+		click(ctx, "session-abort-yes");
+		await ctx.discarding;
+
+		assert.deepEqual(navigations, []);
+		assert.equal(ctx.isPaused(), true);
+		assert.equal(ctx.el.querySelector("#session-abort-confirm").hidden, true);
+		assert.equal(ctx.el.querySelector("#session-pause-choices").hidden, false);
+		const error = ctx.el.querySelector("#session-abort-error");
+		assert.equal(error.hidden, false);
+		assert.match(error.textContent, /Could not abort/);
+	} finally {
+		ctx.destroyed();
+		globalThis.window = originalWindow;
+	}
+});
+
+test("an abort in flight keeps the workout paused", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	click(ctx, "session-abort-btn");
+	click(ctx, "session-abort-yes");
+	assert.ok(ctx.discarding);
+	assert.equal(ctx.canTogglePause(), false);
+	assert.equal(ctx.el.querySelector("#session-abort-yes").hasAttribute("disabled"), true);
+	ctx.destroyed();
+});
+
+test("resuming closes an open abort question", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	click(ctx, "session-abort-btn");
+	ctx.togglePause();
+	assert.equal(ctx.isPaused(), false);
+	assert.equal(ctx.el.querySelector("#session-abort-confirm").hidden, true);
+	assert.equal(ctx.el.querySelector("#session-pause-choices").hidden, false);
+	ctx.destroyed();
+});
+
+test("running, not paused, Abort does nothing", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	ctx.togglePause();
+	click(ctx, "session-abort-btn");
+	assert.equal(ctx.el.querySelector("#session-abort-confirm").hidden, true);
 	ctx.destroyed();
 });
 
