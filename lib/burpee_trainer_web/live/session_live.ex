@@ -5,7 +5,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
 
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
-  alias BurpeeTrainerWeb.{CoreComponents, SessionComponents}
+  alias BurpeeTrainerWeb.{CoreComponents, Params, SessionComponents}
 
   @completion_integer_fields ~w[
     burpee_count_actual
@@ -30,7 +30,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   def mount(%{"session_id" => session_id}, _session, socket) do
     scope = socket.assigns.current_scope
 
-    with {:ok, id} <- parse_positive_id(session_id),
+    with {:ok, id} <- Params.positive_id(session_id),
          {:ok, %WorkoutSession{source_kind: :plan} = workout_session} <-
            Workouts.resume_session(scope, id) do
       {:ok, mount_session(socket, workout_session)}
@@ -188,15 +188,6 @@ defmodule BurpeeTrainerWeb.SessionLive do
     </Layouts.app>
     """
   end
-
-  defp parse_positive_id(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {id, ""} when id > 0 -> {:ok, id}
-      _other -> {:error, :invalid_id}
-    end
-  end
-
-  defp parse_positive_id(_forged), do: {:error, :invalid_id}
 
   defp validate_completion_attrs(attrs) do
     validators =

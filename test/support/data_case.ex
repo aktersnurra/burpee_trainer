@@ -36,7 +36,13 @@ defmodule BurpeeTrainer.DataCase do
   Sets up the sandbox based on the test tags.
   """
   def setup_sandbox(tags) do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(BurpeeTrainer.Repo, shared: not tags[:async])
+    # SQLite has one writer. Concurrent sandbox transactions deadlock on its lock and fail
+    # at random with "Database busy", so tests that touch the database run one at a time.
+    if tags[:async] do
+      raise "#{inspect(tags[:module])} uses the database with async: true; SQLite needs async: false"
+    end
+
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(BurpeeTrainer.Repo, shared: true)
 
     on_exit(fn ->
       if Process.alive?(pid) do

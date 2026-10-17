@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
   @moduledoc "Canonical semantic encoding and content hash for execution programs."
 
-  alias BurpeeTrainer.PlanCompiler.{Program, ProgramEvent}
+  alias BurpeeTrainer.PlanCompiler.{CanonicalJson, Program, ProgramEvent}
   alias BurpeeTrainer.Workouts.Error
 
   @video_keys MapSet.new(["name", "filename", "type", "duration", "count", "format"])
@@ -32,12 +32,12 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
   def encode!(%Program{} = program) do
     program
     |> canonical_map()
-    |> canonical_json()
+    |> CanonicalJson.encode()
   end
 
   @spec hash_canonical_map(map()) :: String.t()
   def hash_canonical_map(program_map) when is_map(program_map) do
-    :crypto.hash(:sha256, canonical_json(program_map))
+    :crypto.hash(:sha256, CanonicalJson.encode(program_map))
     |> Base.encode16(case: :lower)
   end
 
@@ -191,24 +191,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
   defp invalid_video(field, value) do
     {:error, Error.new(:invalid_video_snapshot, %{field: field, value: value})}
   end
-
-  defp canonical_json(value) when is_map(value) do
-    body =
-      value
-      |> Enum.map(fn {key, nested_value} -> {to_string(key), nested_value} end)
-      |> Enum.sort_by(fn {key, _value} -> key end)
-      |> Enum.map_join(",", fn {key, nested_value} ->
-        Jason.encode!(key) <> ":" <> canonical_json(nested_value)
-      end)
-
-    "{" <> body <> "}"
-  end
-
-  defp canonical_json(value) when is_list(value) do
-    "[" <> Enum.map_join(value, ",", &canonical_json/1) <> "]"
-  end
-
-  defp canonical_json(value), do: Jason.encode!(value)
 
   defp sec_to_ms(value), do: round(value * 1000)
   defp sec_to_us(value), do: round(value * 1_000_000)

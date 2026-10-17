@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.AccountsTest do
-  use BurpeeTrainer.DataCase, async: true
+  use BurpeeTrainer.DataCase
 
   import BurpeeTrainer.Fixtures
 

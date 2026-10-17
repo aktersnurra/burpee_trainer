@@ -1,5 +1,5 @@
 defmodule BurpeeTrainerWeb.AuthFlashTest do
-  use BurpeeTrainerWeb.ConnCase, async: true
+  use BurpeeTrainerWeb.ConnCase
 
   import Phoenix.LiveViewTest
 
