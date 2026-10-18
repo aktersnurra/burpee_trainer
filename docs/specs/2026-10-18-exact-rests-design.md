@@ -35,5 +35,6 @@ change, and the summary showed only a range of rests.
 
 ## Not changed
 
-A workout still ends when its last rep's movement ends. Counting the final tail would change the
-runner and every stored definition; it is a separate decision.
+A workout ends when its last rep's work ends: a rep is work + rest, but the final rep is only
+work. An even-paced workout therefore lasts `(reps − 1) × sec_per_rep + sec_per_burpee`, so 60
+reps at 20 s with 4 s of work is 19:44, not 20:00. This is deliberate and stays.
