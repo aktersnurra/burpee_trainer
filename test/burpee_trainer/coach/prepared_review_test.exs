@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.{Coach, LayoutFixtures, Repo, Workouts}
+  alias BurpeeTrainer.{Coach, LayoutFixtures, Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Coach.{Policy, WorkoutRequest}
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
@@ -327,26 +327,24 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
   defp provider(parent, responses) do
     responses = start_supervised!({Agent, fn -> responses end}, id: make_ref())
 
-    Req.default_options(
-      adapter: fn request ->
-        send(parent, :provider_call)
-        send(parent, {:provider_request, Jason.decode!(request.body)})
+    ReqStub.default(fn request ->
+      send(parent, :provider_call)
+      send(parent, {:provider_request, Jason.decode!(request.body)})
 
-        response =
-          Agent.get_and_update(responses, fn
-            [response | remaining] -> {response, remaining}
-            [] -> {%{}, []}
-          end)
+      response =
+        Agent.get_and_update(responses, fn
+          [response | remaining] -> {response, remaining}
+          [] -> {%{}, []}
+        end)
 
-        {request,
-         %Req.Response{
-           status: 200,
-           body:
-             Jason.encode!(%{
-               "choices" => [%{"message" => %{"content" => Jason.encode!(response)}}]
-             })
-         }}
-      end
-    )
+      {request,
+       %Req.Response{
+         status: 200,
+         body:
+           Jason.encode!(%{
+             "choices" => [%{"message" => %{"content" => Jason.encode!(response)}}]
+           })
+       }}
+    end)
   end
 end

@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
   import Phoenix.LiveViewTest
   import Ecto.Query
 
-  alias BurpeeTrainer.{Accounts, Repo, Workouts}
+  alias BurpeeTrainer.{Accounts, Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
@@ -34,12 +34,10 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     previous = Req.default_options()
     parent = self()
 
-    Req.default_options(
-      adapter: fn _ ->
-        send(parent, :unexpected_provider)
-        raise "unexpected provider"
-      end
-    )
+    ReqStub.default(fn _ ->
+      send(parent, :unexpected_provider)
+      raise "unexpected provider"
+    end)
 
     on_exit(fn -> Req.default_options(previous) end)
     %{user: user}

@@ -4,14 +4,16 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   import ExUnit.CaptureLog
 
   alias BurpeeTrainer.Coach.Client
+  alias BurpeeTrainer.ReqStub
   alias BurpeeTrainer.Workouts.Error
 
   test "oversized serialized request fails before HTTP" do
     parent = self()
 
     req =
-      Req.new(
-        adapter: fn request ->
+      ReqStub.attach(
+        Req.new(),
+        fn request ->
           send(parent, :unexpected_http)
           {request, %Req.Response{status: 500, body: ""}}
         end
@@ -293,10 +295,10 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   end
 
   test "unexpected Req errors are normalized without leaking their message" do
-    req = %{
-      Req.new()
-      | adapter: fn request -> {request, RuntimeError.exception("raw-secret-error")} end
-    }
+    req =
+      ReqStub.attach(Req.new(), fn request ->
+        {request, RuntimeError.exception("raw-secret-error")}
+      end)
 
     assert {:error, %Error{code: :provider_unavailable, context: %{}} = error} =
              structured_chat([], opts(req))
@@ -355,9 +357,9 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     test_pid = self()
 
     req =
-      Req.new(
-        http_errors: :raise,
-        adapter: fn request ->
+      ReqStub.attach(
+        Req.new(http_errors: :raise),
+        fn request ->
           send(test_pid, :provider_called)
           {request, %Req.Response{status: 503, body: "raw-secret-provider-body"}}
         end
@@ -374,12 +376,10 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     oversized_body = String.duplicate("raw-secret", div(@max_response_bytes, 10) + 1)
 
     for status <- [302, 429, 503] do
-      req = %{
-        Req.new()
-        | adapter: fn request ->
-            {request, %Req.Response{status: status, body: oversized_body}}
-          end
-      }
+      req =
+        ReqStub.attach(Req.new(), fn request ->
+          {request, %Req.Response{status: status, body: oversized_body}}
+        end)
 
       assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
                structured_chat([], opts(req))
@@ -452,12 +452,10 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     oversized_body =
       valid_body <> String.duplicate(" ", @max_response_bytes + 1 - byte_size(valid_body))
 
-    req = %{
-      Req.new()
-      | adapter: fn request ->
-          {request, %Req.Response{status: 200, body: oversized_body}}
-        end
-    }
+    req =
+      ReqStub.attach(Req.new(), fn request ->
+        {request, %Req.Response{status: 200, body: oversized_body}}
+      end)
 
     assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
              structured_chat([], opts(req))
@@ -522,28 +520,24 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   end
 
   defp streaming_adapter(test_pid, chunks) do
-    %{
-      Req.new()
-      | adapter: fn request ->
-          {request, response, outcomes} =
-            Enum.reduce_while(
-              chunks,
-              {request, %Req.Response{status: 200, body: ""}, []},
-              fn chunk, {request, response, outcomes} ->
-                case request.into.({:data, chunk}, {request, response}) do
-                  {:cont, {request, response}} ->
-                    {:cont, {request, response, [:cont | outcomes]}}
+    ReqStub.attach(Req.new(), fn request ->
+      {request, response, outcomes} =
+        Enum.reduce_while(
+          chunks,
+          {request, %Req.Response{status: 200, body: ""}, []},
+          &stream_chunk/2
+        )
 
-                  {:halt, {request, response}} ->
-                    {:halt, {request, response, [:halt | outcomes]}}
-                end
-              end
-            )
+      send(test_pid, {:stream_outcomes, Enum.reverse(outcomes), response.body})
+      {request, response}
+    end)
+  end
 
-          send(test_pid, {:stream_outcomes, Enum.reverse(outcomes), response.body})
-          {request, response}
-        end
-    }
+  defp stream_chunk(chunk, {request, response, outcomes}) do
+    case request.into.({:data, chunk}, {request, response}) do
+      {:cont, {request, response}} -> {:cont, {request, response, [:cont | outcomes]}}
+      {:halt, {request, response}} -> {:halt, {request, response, [:halt | outcomes]}}
+    end
   end
 
   defp request(counter, responder) do

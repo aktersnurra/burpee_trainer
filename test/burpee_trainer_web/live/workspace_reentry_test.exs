@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.{Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Memory
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
@@ -166,20 +166,18 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
         else: Application.delete_env(:burpee_trainer, :llm_provider)
     end)
 
-    Req.default_options(
-      adapter: fn request ->
-        send(parent, {:provider_waiting, self()})
+    ReqStub.default(fn request ->
+      send(parent, {:provider_waiting, self()})
 
-        receive do
-          :release ->
-            {request,
-             %Req.Response{
-               status: 200,
-               body: Jason.encode!(%{"choices" => [%{"message" => %{"content" => "not-json"}}]})
-             }}
-        end
+      receive do
+        :release ->
+          {request,
+           %Req.Response{
+             status: 200,
+             body: Jason.encode!(%{"choices" => [%{"message" => %{"content" => "not-json"}}]})
+           }}
       end
-    )
+    end)
 
     Application.put_env(:burpee_trainer, :llm_provider,
       enabled: true,

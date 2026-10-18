@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.HomeReturningMountTest do
   import Ecto.Query
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.{Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
@@ -13,7 +13,7 @@ defmodule BurpeeTrainerWeb.HomeReturningMountTest do
   setup do
     previous_req = Req.default_options()
     parent = self()
-    Req.default_options(adapter: fn _request -> send(parent, :unexpected_provider) end)
+    ReqStub.default(fn _request -> send(parent, :unexpected_provider) end)
     on_exit(fn -> Req.default_options(previous_req) end)
     :ok
   end

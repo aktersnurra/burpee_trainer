@@ -2,7 +2,7 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
   use BurpeeTrainerWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.{Repo, Workouts}
+  alias BurpeeTrainer.{Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.LayoutFixtures
@@ -21,15 +21,13 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
         else: Application.put_env(:burpee_trainer, :llm_provider, previous_provider)
     end)
 
-    Req.default_options(
-      adapter: fn request ->
-        send(parent, {:provider_waiting, self()})
+    ReqStub.default(fn request ->
+      send(parent, {:provider_waiting, self()})
 
-        receive do
-          {:respond, body} -> {request, %Req.Response{status: 200, body: body}}
-        end
+      receive do
+        {:respond, body} -> {request, %Req.Response{status: 200, body: body}}
       end
-    )
+    end)
 
     Application.put_env(:burpee_trainer, :llm_provider,
       enabled: true,
