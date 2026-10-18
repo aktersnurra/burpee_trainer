@@ -574,3 +574,69 @@ test("pause-only and visibility-only recovery retain their clock shifts", () => 
 	assert.equal(visible.clock.pauseTime, null);
 	assert.equal(visible.clock.hiddenAt, null);
 });
+
+const runningSegment = () => {
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline: [{ kind: "work", reps: 4, sec_per_rep: 5 }],
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_START", now: 0 }).state;
+	return segmentTransition(state, { type: "COUNTDOWN_DONE", now: 100 }).state;
+};
+
+test("a frame tick that arrives after pause changes nothing", () => {
+	let state = runningSegment();
+	state = segmentTransition(state, { type: "PAUSE", now: 1100 }).state;
+
+	const late = segmentTransition(state, { type: "TICK", elapsedSec: 15 });
+
+	assert.equal(late.state, state);
+	assert.deepEqual(late.commands, []);
+});
+
+test("pausing twice keeps the first pause time", () => {
+	let state = runningSegment();
+	state = segmentTransition(state, { type: "PAUSE", now: 1100 }).state;
+
+	const again = segmentTransition(state, { type: "PAUSE", now: 5000 });
+	assert.equal(again.state.clock.pauseTime, 1100);
+
+	const resumed = segmentTransition(again.state, { type: "RESUME", now: 6100 });
+	assert.equal(resumed.state.clock.startTime, 100 + 5000);
+});
+
+test("resume does nothing unless the segment is paused", () => {
+	const state = runningSegment();
+	const result = segmentTransition(state, { type: "RESUME", now: 9000 });
+
+	assert.equal(result.state, state);
+	assert.deepEqual(result.commands, []);
+});
+
+test("a countdown tick after pause is ignored and schedules nothing", () => {
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline: [{ kind: "work", reps: 1, sec_per_rep: 5 }],
+	}).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_START", now: 0 }).state;
+	state = segmentTransition(state, { type: "COUNTDOWN_PAUSE", now: 400 }).state;
+
+	const late = segmentTransition(state, {
+		type: "COUNTDOWN_TICK",
+		value: 4,
+		now: 1000,
+	});
+
+	assert.equal(late.state, state);
+	assert.deepEqual(late.commands, []);
+});
+
+test("ticks after the segment is done change nothing", () => {
+	let state = runningSegment();
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 20 }).state;
+	assert.equal(state.mode, "done");
+
+	const late = segmentTransition(state, { type: "TICK", elapsedSec: 21 });
+	assert.equal(late.state, state);
+	assert.deepEqual(late.commands, []);
+});

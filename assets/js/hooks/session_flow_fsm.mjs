@@ -446,11 +446,15 @@ export function flowTransition(state, event) {
 			return moved(state, { saveStatus: "saving" });
 
 		case "SAVE_FAILED":
-			if (state.mode !== "completion_review") return unchanged(state);
+			if (state.mode !== "completion_review" || state.saveStatus !== "saving") {
+				return unchanged(state);
+			}
 			return moved(state, { saveStatus: "failed" });
 
 		case "SAVE_SUCCEEDED":
-			if (state.mode !== "completion_review") return unchanged(state);
+			if (state.mode !== "completion_review" || state.saveStatus !== "saving") {
+				return unchanged(state);
+			}
 			return moved(state, { mode: "persisted", saveStatus: "saved" });
 
 		default:

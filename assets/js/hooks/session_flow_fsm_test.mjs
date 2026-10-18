@@ -549,3 +549,39 @@ test("finishing early before the camera settled saves it as lost", () => {
 		assert.equal(result.completion.trackingTrust, trust);
 	}
 });
+
+const reviewing = () => ({
+	...initialFlowState(),
+	mode: "completion_review",
+	completion: { burpeeCountActual: 40, burpeeCountProvenance: "scheduled" },
+});
+
+test("a save acknowledged after the facts were edited does not mark them saved", () => {
+	let state = step(reviewing(), { type: "SAVE_STARTED" }).state;
+	assert.equal(state.saveStatus, "saving");
+	state = step(state, {
+		type: "COMPLETION_EDITED",
+		changes: { burpeeCountActual: 41 },
+	}).state;
+	assert.equal(state.saveStatus, "idle");
+
+	const late = step(state, { type: "SAVE_SUCCEEDED" });
+
+	assert.equal(late.state, state);
+	assert.deepEqual(late.commands, []);
+});
+
+test("a save failure with no save in flight is ignored", () => {
+	const state = reviewing();
+	assert.equal(step(state, { type: "SAVE_FAILED" }).state, state);
+});
+
+test("a save settles only while it is in flight", () => {
+	const saving = step(reviewing(), { type: "SAVE_STARTED" }).state;
+
+	const saved = step(saving, { type: "SAVE_SUCCEEDED" }).state;
+	assert.equal(saved.mode, "persisted");
+
+	const failed = step(saving, { type: "SAVE_FAILED" }).state;
+	assert.equal(failed.saveStatus, "failed");
+});
