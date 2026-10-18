@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
   alias BurpeeTrainer.{Coach, Workouts}
+  alias BurpeeTrainerWeb.HomeAuthoring.Flow
 
   alias BurpeeTrainerWeb.{
     CreationParameters,
@@ -34,17 +35,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
           {:noreply,
            socket
-           |> assign(
-             authoring_stage: :editing,
-             authoring_returned?: false,
-             editing_source: source,
-             workout_parameters: params,
-             creation_key: "variation:#{Ecto.UUID.generate()}",
-             created_plan: nil,
-             pending_request: nil,
-             instruction: "",
-             local_error: nil
-           )
+           |> step({:edit_opened, source, params, "variation:#{Ecto.UUID.generate()}"})
            |> adjustment_form("")
            |> workout_form(params, %{})}
 
@@ -63,8 +54,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         %{assigns: %{authoring_stage: :editing, editing_source: source}} = socket
       )
       when not is_nil(source) and is_binary(text) do
-    {:noreply,
-     socket |> discard_preparation() |> assign(instruction: text) |> adjustment_form(text)}
+    {:noreply, socket |> step({:instruction_changed, text}) |> adjustment_form(text)}
   end
 
   def handle_event(
@@ -91,8 +81,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
         {:noreply,
          socket
-         |> discard_preparation()
-         |> assign(busy?: true, update_id: id, instruction: text)
+         |> step({:review_started, id, text})
          |> adjustment_form(text)
          |> start_async({:new_request, id}, fn ->
            with {:ok, interpreted} <- Coach.prepare_home_revision(scope, expected, text),
@@ -112,40 +101,23 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
       {:noreply,
        socket
-       |> assign(
-         authoring_stage: :new,
-         authoring_returned?: false,
-         editing_source: nil,
-         workout_parameters: params,
-         creation_key: "creator:#{Ecto.UUID.generate()}",
-         created_plan: nil,
-         pending_request: nil,
-         local_error: nil
-       )
+       |> step({:new_opened, params, "creator:#{Ecto.UUID.generate()}"})
        |> workout_form(params, %{})}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_event("abort_new_workout", _, socket) do
-    {:noreply,
-     socket
-     |> discard_preparation()
-     |> assign(
-       authoring_stage: :idle,
-       created_plan: nil,
-       local_error: nil,
-       # Only New takes the workout away; Edit keeps it in view, so nothing returns.
-       authoring_returned?: is_nil(socket.assigns.editing_source)
-     )}
-  end
+  def handle_event("abort_new_workout", _, socket),
+    do: {:noreply, step(socket, :aborted)}
 
   def handle_event("change_new_workout", %{"home_workout" => attrs}, socket) do
     if socket.assigns.authoring_stage in [:new, :editing],
       do:
         {:noreply,
-         socket |> discard_preparation() |> workout_form(socket.assigns.workout_parameters, attrs)},
+         socket
+         |> step(:preparation_discarded)
+         |> workout_form(socket.assigns.workout_parameters, attrs)},
       else: {:noreply, socket}
   end
 
@@ -155,7 +127,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       attrs = Map.put(socket.assigns.workout_form.params, field, value)
 
       {:noreply,
-       socket |> discard_preparation() |> workout_form(socket.assigns.workout_parameters, attrs)}
+       socket
+       |> step(:preparation_discarded)
+       |> workout_form(socket.assigns.workout_parameters, attrs)}
     else
       {:noreply, socket}
     end
@@ -175,8 +149,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
     {:noreply,
      socket
-     |> discard_preparation()
-     |> assign(authoring_stage: :editing)
+     |> step(:editing_resumed)
      |> workout_form(params, %{})}
   end
 
@@ -196,7 +169,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
            Workouts.select_home_workout(a.current_scope, a.home_selection, a.created_plan.id) do
       {:noreply,
        socket
-       |> assign(authoring_stage: :idle, created_plan: nil)
+       |> step(:created_selected)
        |> HomeWorkspace.show_selection(selected, true)}
     else
       _ ->
@@ -241,7 +214,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
           {:noreply,
            socket
-           |> assign(busy?: true, update_id: id, instruction: text, local_error: nil)
+           |> step({:adjustment_started, id, text})
            |> start_async({:home_revision_request, id}, fn ->
              Coach.prepare_home_revision(scope, expected, instruction)
            end)}
@@ -261,7 +234,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     if prepared && verify_edit_selection(socket) == :ok do
       {:noreply,
        socket
-       |> assign(busy?: true, update_id: id, local_error: nil)
+       |> step({:confirm_started, id})
        |> start_async({:new_plan, id}, fn -> Coach.approve_plan(scope, prepared) end)}
     else
       {:noreply, assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
@@ -279,7 +252,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
     {:noreply,
      socket
-     |> assign(busy?: true, update_id: id, local_error: nil)
+     |> step({:confirm_started, id})
      |> start_async({:home_revision, id}, fn ->
        Coach.confirm_home_revision(scope, prepared)
      end)}
@@ -288,202 +261,137 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   def handle_event("back_to_workout_request", _params, %{assigns: %{busy?: false}} = socket) do
     {:noreply,
      socket
-     |> assign(pending_request: nil, local_error: nil)
+     |> step(:request_reopened)
      |> adjustment_form(socket.assigns.instruction)}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
-  def handle_async(
-        {:new_request, id},
-        {:ok, {:ok, prepared}},
-        %{assigns: %{update_id: id}} = socket
-      ) do
+  # Each result is reported to the flow, which applies it only while it is the work in
+  # flight. A late answer to discarded or superseded work reaches no clause below.
+
+  def handle_async({kind, id}, result, socket) do
+    if Flow.current?(Flow.from_assigns(socket.assigns), id),
+      do: {:noreply, settle(kind, id, result, socket)},
+      else: {:noreply, socket}
+  end
+
+  defp settle(:new_request, id, {:ok, {:ok, prepared}}, socket) do
     if verify_edit_selection(socket) != :ok do
-      {:noreply,
-       assign(socket,
-         busy?: false,
-         update_id: nil,
-         pending_request: nil,
-         local_error: "That workout changed. Abort and open Edit again."
-       )}
+      step(socket, {:review_failed, id, "That workout changed. Abort and open Edit again."})
     else
       params =
         HomeWorkoutRequest.from_request(prepared.request, socket.assigns.workout_parameters)
 
-      {:noreply,
-       socket
-       |> assign(
-         authoring_stage: :review,
-         review_inspection_rows: prepared_inspection(prepared),
-         pending_request: prepared,
-         workout_parameters: params,
-         busy?: false,
-         update_id: nil
-       )
-       |> workout_form(params, %{})}
+      socket
+      |> step({:review_prepared, id, prepared, params, prepared_inspection(prepared)})
+      |> workout_form(params, %{})
     end
   end
 
-  def handle_async(
-        {:new_request, id},
-        {:ok, {:error, error}},
-        %{assigns: %{update_id: id}} = socket
-      ) do
+  defp settle(:new_request, id, {:ok, {:error, error}}, socket) do
     {message, field, field_message} = review_failure(error)
 
     socket =
-      assign(socket,
-        busy?: false,
-        update_id: nil,
-        pending_request: nil,
-        local_error:
-          if(socket.assigns.editing_source && field_message, do: field_message, else: message)
+      step(
+        socket,
+        {:review_failed, id,
+         if(socket.assigns.editing_source && field_message, do: field_message, else: message)}
       )
 
-    socket =
-      if field do
-        changeset =
-          Ecto.Changeset.add_error(socket.assigns.workout_form.source, field, field_message)
+    if field do
+      changeset =
+        Ecto.Changeset.add_error(socket.assigns.workout_form.source, field, field_message)
 
-        params =
-          Map.put(
-            changeset.params || %{},
-            Atom.to_string(field),
-            socket.assigns.workout_form[field].value
-          )
-
-        assign(socket,
-          workout_form:
-            to_form(%{changeset | action: :validate, params: params}, as: :home_workout)
+      params =
+        Map.put(
+          changeset.params || %{},
+          Atom.to_string(field),
+          socket.assigns.workout_form[field].value
         )
-      else
-        socket
-      end
 
-    {:noreply, socket}
-  end
-
-  def handle_async({:new_request, id}, _, %{assigns: %{update_id: id}} = socket),
-    do:
-      {:noreply,
-       assign(socket,
-         busy?: false,
-         update_id: nil,
-         pending_request: nil,
-         local_error: "Coach unavailable. Try again later; your current workout is unchanged."
-       )}
-
-  def handle_async({:new_plan, id}, {:ok, {:ok, plan}}, %{assigns: %{update_id: id}} = socket),
-    do:
-      {:noreply,
-       socket
-       |> assign(
-         busy?: false,
-         update_id: nil,
-         authoring_stage: :saved,
-         pending_request: nil,
-         created_plan: plan
-       )
-       |> HomeChooser.refresh_alternatives()}
-
-  def handle_async(
-        {:new_plan, id},
-        {:ok, {:error, %{code: code}}},
-        %{assigns: %{update_id: id}} = socket
+      assign(socket,
+        workout_form: to_form(%{changeset | action: :validate, params: params}, as: :home_workout)
       )
-      when code in [
-             :provider_unavailable,
-             :provider_timeout,
-             :provider_request_failed,
-             :invalid_provider_response
-           ] do
-    {:noreply,
-     assign(socket,
-       busy?: false,
-       update_id: nil,
-       local_error: "Coach unavailable. Try again later; your current workout is unchanged."
-     )}
+    else
+      socket
+    end
   end
 
-  def handle_async({:new_plan, id}, _, %{assigns: %{update_id: id}} = socket),
+  defp settle(:new_request, id, _, socket),
     do:
-      {:noreply,
-       assign(socket,
-         busy?: false,
-         update_id: nil,
-         local_error:
-           "Couldn’t produce a validated plan. Update the targets or recovery and try again; your current workout is unchanged."
-       )}
+      step(
+        socket,
+        {:review_failed, id,
+         "Coach unavailable. Try again later; your current workout is unchanged."}
+      )
 
-  def handle_async({kind, _}, _, socket) when kind in [:new_request, :new_plan],
-    do: {:noreply, socket}
+  defp settle(:new_plan, id, {:ok, {:ok, plan}}, socket),
+    do: step(socket, {:plan_saved, id, plan})
 
-  def handle_async(
-        {:home_revision_request, id},
-        {:ok, {:ok, prepared}},
-        %{assigns: %{update_id: id}} = socket
-      ) do
+  defp settle(:new_plan, id, {:ok, {:error, %{code: code}}}, socket)
+       when code in [
+              :provider_unavailable,
+              :provider_timeout,
+              :provider_request_failed,
+              :invalid_provider_response
+            ],
+       do:
+         step(
+           socket,
+           {:plan_failed, id,
+            "Coach unavailable. Try again later; your current workout is unchanged."}
+         )
+
+  defp settle(:new_plan, id, _, socket),
+    do:
+      step(
+        socket,
+        {:plan_failed, id,
+         "Couldn’t produce a validated plan. Update the targets or recovery and try again; your current workout is unchanged."}
+      )
+
+  defp settle(:home_revision_request, id, {:ok, {:ok, prepared}}, socket) do
     case Workouts.verify_home_selection(socket.assigns.current_scope, prepared.scope.expected) do
       {:ok, _plan} ->
-        {:noreply,
-         assign(socket, busy?: false, update_id: nil, pending_request: prepared, local_error: nil)}
+        step(socket, {:revision_prepared, id, prepared})
 
       {:error, _} ->
-        {:noreply,
-         assign(socket,
-           busy?: false,
-           update_id: nil,
-           pending_request: nil,
-           local_error: "The training day or workout changed. Reopen Home before updating."
-         )}
+        step(
+          socket,
+          {:revision_prepare_failed, id,
+           "The training day or workout changed. Reopen Home before updating."}
+        )
     end
   end
 
-  def handle_async(
-        {:home_revision_request, id},
-        _result,
-        %{assigns: %{update_id: id}} = socket
-      ) do
-    {:noreply,
-     socket
-     |> assign(
-       busy?: false,
-       update_id: nil,
-       pending_request: nil,
-       local_error: "Couldn’t interpret that request. Your workout is unchanged."
-     )
-     |> adjustment_form(socket.assigns.instruction)}
+  defp settle(:home_revision_request, id, _result, socket) do
+    socket
+    |> step(
+      {:revision_prepare_failed, id,
+       "Couldn’t interpret that request. Your workout is unchanged."}
+    )
+    |> adjustment_form(socket.assigns.instruction)
   end
 
-  def handle_async({:home_revision_request, _id}, _result, socket), do: {:noreply, socket}
-
-  def handle_async(
-        {:home_revision, id},
-        {:ok, {:ok, selected}},
-        %{assigns: %{update_id: id}} = socket
-      ) do
+  defp settle(:home_revision, id, {:ok, {:ok, selected}}, socket) do
     case Workouts.verify_home_selection(socket.assigns.current_scope, selected) do
       {:ok, _plan} ->
-        {:noreply,
-         socket
-         |> assign(busy?: false, update_id: nil)
-         |> HomeWorkspace.show_selection(selected, true)}
+        socket
+        |> step({:revision_applied, id})
+        |> HomeWorkspace.show_selection(selected, true)
 
       {:error, _} ->
-        {:noreply,
-         socket
-         |> assign(
-           busy?: false,
-           update_id: nil,
-           local_error:
-             "The training day or workout changed. Reopen Home before starting or updating."
-         )
-         |> adjustment_form(socket.assigns.instruction)}
+        socket
+        |> step(
+          {:revision_blocked, id,
+           "The training day or workout changed. Reopen Home before starting or updating."}
+        )
+        |> adjustment_form(socket.assigns.instruction)
     end
   end
 
-  def handle_async({:home_revision, id}, result, %{assigns: %{update_id: id}} = socket) do
+  defp settle(:home_revision, id, result, socket) do
     message =
       case result do
         {:ok, {:error, %{code: :authoring_context_too_large}}} ->
@@ -493,14 +401,10 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
           "Couldn’t update. Your previous workout is unchanged."
       end
 
-    {:noreply,
-     socket
-     |> assign(busy?: false, update_id: nil, pending_request: nil, local_error: message)
-     |> adjustment_form(socket.assigns.instruction)
-     |> HomeChooser.refresh_alternatives()}
+    socket
+    |> step({:revision_failed, id, message})
+    |> adjustment_form(socket.assigns.instruction)
   end
-
-  def handle_async({:home_revision, _id}, _result, socket), do: {:noreply, socket}
 
   defp workout_form(socket, params, attrs) do
     changeset = HomeWorkoutRequest.changeset(params, attrs)
@@ -544,19 +448,16 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       {"The returned plan did not meet your constraints. Check the sets and pauses you asked for, then Review again; your current workout is unchanged.",
        nil, nil}
 
-  def discard_preparation(socket) do
-    socket =
-      if socket.assigns.busy? && socket.assigns.update_id,
-        do: cancel_async(socket, {:new_request, socket.assigns.update_id}),
-        else: socket
+  def discard_preparation(socket), do: step(socket, :preparation_discarded)
 
-    assign(socket,
-      pending_request: nil,
-      busy?: false,
-      update_id: nil,
-      local_error: nil
-    )
+  # One authoring transition: the pure flow decides, the socket carries it out.
+  defp step(socket, event) do
+    {model, commands} = Flow.update(Flow.from_assigns(socket.assigns), event)
+    Enum.reduce(commands, assign(socket, Flow.to_assigns(model)), &run/2)
   end
+
+  defp run({:cancel_async, name}, socket), do: cancel_async(socket, name)
+  defp run(:refresh_alternatives, socket), do: HomeChooser.refresh_alternatives(socket)
 
   defp verify_edit_selection(%{assigns: %{editing_source: nil}}), do: :ok
 
@@ -588,9 +489,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
       {:noreply,
        socket
-       |> discard_preparation()
+       |> step({:review_started, id, text})
        |> workout_form(params, %{})
-       |> assign(busy?: true, update_id: id, instruction: text)
        |> start_async({:new_request, id}, fn ->
          with {:ok, request} <- Coach.prepare_new_request(scope, request, params.note || "") do
            Coach.prepare_plan(scope, text, request, workspace_key: key, edit_source: source)
