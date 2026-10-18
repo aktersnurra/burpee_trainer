@@ -128,12 +128,43 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       <%!-- Talking to the app's coach needs it; without it the coach is Claude, and this
            section shows only what Claude left. --%>
       <%= if coach?(@state) do %>
-        <div class="coach-quick-replies" role="group" aria-label="Quick replies">
+        <.form
+          for={@state.coach_message_form}
+          id="home-coach-message-form"
+          phx-submit="coach_message"
+          phx-change="coach_message_change"
+          class="coach-message-form home-authoring-form composer"
+        >
+          <.input
+            field={@state.coach_message_form[:text]}
+            id="home-coach-message-text"
+            type="textarea"
+            label="Message the coach"
+            rows="2"
+            maxlength="1000"
+            placeholder="Message the coach"
+            class="composer-input"
+            disabled={@state.coach_busy?}
+          />
+          <div class="composer-bar">
+            <button
+              id="home-coach-message-send"
+              type="submit"
+              class="composer-send"
+              disabled={@state.coach_busy?}
+              aria-label="Send"
+              title="Send"
+            >
+              <span><.icon name="hero-arrow-up" class="size-5" /></span>
+            </button>
+          </div>
+        </.form>
+        <div class="coach-quick-replies composer-suggestions" role="group" aria-label="Quick replies">
           <button
             :for={{id, text} <- quick_replies(@state)}
             id={"home-coach-quick-#{id}"}
             type="button"
-            class="home-selection-pill"
+            class="composer-suggestion"
             phx-click="coach_quick_reply"
             phx-value-text={text}
             disabled={@state.coach_busy?}
@@ -141,36 +172,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             {text}
           </button>
         </div>
-        <.form
-          for={@state.coach_message_form}
-          id="home-coach-message-form"
-          phx-submit="coach_message"
-          phx-change="coach_message_change"
-          class="coach-message-form home-authoring-form coach-quiet-label"
-        >
-          <.input
-            field={@state.coach_message_form[:text]}
-            id="home-coach-message-text"
-            type="textarea"
-            label="Message the coach"
-            rows="1"
-            maxlength="1000"
-            placeholder="Message the coach"
-            class="home-authoring-input"
-            disabled={@state.coach_busy?}
-          />
-          <%!-- Send sits inside the field and shows once there is something to send. --%>
-          <button
-            id="home-coach-message-send"
-            type="submit"
-            class="home-primary-action coach-send"
-            disabled={@state.coach_busy?}
-            aria-label="Send"
-            title="Send"
-          >
-            <.icon name="hero-arrow-turn-down-left" class="size-5" />
-          </button>
-        </.form>
         <p
           :if={@state.coach_busy?}
           id="home-coach-loading"

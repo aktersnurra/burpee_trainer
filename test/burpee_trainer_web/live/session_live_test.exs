@@ -433,7 +433,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(
              view,
              "#session-completion-tags + .session-note-field " <>
-               "textarea#completion-note-input.session-note-input[rows='1'][placeholder='How did it go?']"
+               "textarea#completion-note-input.session-note-input[rows='2'][placeholder='How did it go?']"
            )
 
     assert has_element?(view, "label.sr-only[for=completion-note-input]", "Note")

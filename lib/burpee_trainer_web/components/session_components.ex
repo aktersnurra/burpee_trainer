@@ -361,13 +361,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               </button>
             <% end %>
           </div>
-          <%!-- One line that grows, underlined like Home's fields. --%>
-          <div class="session-note-field">
+          <%!-- A composer like Home's; it grows with its text. --%>
+          <div class="session-note-field composer">
             <label for="completion-note-input" class="sr-only">Note</label>
             <textarea
               id="completion-note-input"
               name={@form[:note_post].name}
-              rows="1"
+              rows="2"
               placeholder="How did it go?"
               aria-describedby="completion-note-error"
               class="session-note-input"

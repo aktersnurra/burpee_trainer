@@ -137,26 +137,30 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     {field, _} = :binary.match(html, ~s(id="home-edit-form"))
     assert table < field
 
-    # The instruction is a New-form field: a visible label above it, an example inside it.
-    assert has_element?(view, "#home-edit-form.home-authoring-form textarea.home-authoring-input")
-
+    # The instruction is named by its placeholder; the label is for screen readers.
     assert has_element?(
              view,
              "label[for=home-edit-instruction] .label",
              "What do you want to change?"
            )
 
-    assert has_element?(view, "#home-edit-instruction[placeholder^='e.g.']")
-    assert has_element?(view, "#home-edit-form #home-request-abort[aria-label] .hero-x-mark")
-
-    assert has_element?(
-             view,
-             "#home-edit-send.home-primary-action[aria-label=Send] .hero-arrow-turn-down-left"
-           )
+    assert has_element?(view, "#home-edit-instruction[placeholder='What should change?']")
+    assert has_element?(view, "#home-edit-form #home-request-abort[aria-label]")
+    assert has_element?(view, "#home-edit-form #home-edit-send[aria-label=Send]")
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-edit-form")
     assert has_element?(view, ".home-workout-actions #home-edit-workout")
+  end
+
+  test "a suggested change is sent to the coach with one tap", %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-edit-workout") |> render_click()
+    view |> element("#home-edit-suggest-shorter", "Make it shorter") |> render_click()
+    render_async(view)
+
+    assert_receive {:provider_request, body}, 1_000
+    assert Enum.any?(body["messages"], &String.contains?(&1["content"], "Make it shorter"))
   end
 
   @tag hold_edit_plan: true

@@ -60,7 +60,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     # Sets and pauses are said in plain words in the note; there is no syntax to learn.
     refute has_element?(view, "#home_workout_sets, #home_workout_rests")
-    assert has_element?(view, "#home_workout_note[placeholder^='e.g.']")
+    assert has_element?(view, "#home_workout_note[placeholder^='Anything else?']")
   end
 
   test "the computed work and recovery is a caption under Duration, with the timing rule", %{

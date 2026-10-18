@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-18 — The composer
+
+- Every box you write words in is one soft card holding the text and its actions: Edit's instruction, the coach's message, New's "Anything else" and a finished session's note (plan and video). Send is a small arrow-up square, grey until there is text; Cancel sits at the card's bottom left.
+- Edit offers three common changes under the card (Split into sets, Longer rests, Make it shorter); one tap sends it, like the coach's predicted replies, which now sit under its card too.
+- `docs/ui.md` 4a1 describes the composer.
+
 ## 2026-10-18 — Exact rests
 
 - A layout gives each gap between sets `{"sec": n}`, exactly n seconds after the last rep's beat (0 runs the next set on the next beat), or `{"share": w}`, a share of the time left after the sets, cadence tails and exact rests. `rest_weights` are gone, for Claude and for the app's own coach.

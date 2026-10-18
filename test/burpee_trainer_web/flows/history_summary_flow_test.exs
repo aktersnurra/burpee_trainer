@@ -207,18 +207,15 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # The field is named by its placeholder; the label is for screen readers only.
     assert has_element?(
              view,
-             ".coach-quiet-label label[for='home-coach-message-text']",
+             "label[for='home-coach-message-text']",
              "Message the coach"
            )
 
     assert has_element?(view, "#home-coach-message-text[placeholder='Message the coach']")
-    # Coach's fields and actions are the New form's: underlined rows and one filled action.
-    assert has_element?(view, "#home-coach-message-form.home-authoring-form")
-    assert has_element?(view, "#home-coach-message-text.home-authoring-input")
-    # Send is the primary pill inside the field row, an arrow, not a row of its own.
+
     assert has_element?(
              view,
-             "#home-coach-message-form .fieldset + #home-coach-message-send.home-primary-action[aria-label=Send] .hero-arrow-turn-down-left"
+             "#home-coach-message-form #home-coach-message-send[aria-label=Send]"
            )
 
     # The week's window: today's session done, the rest of the 80 minutes left.

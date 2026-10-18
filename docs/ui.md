@@ -12,7 +12,8 @@
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
-- **No shadows, no gradients.** Flat surfaces separated by subtle borders and opacity.
+- **No shadows, no gradients.** Flat surfaces separated by subtle borders and opacity. The
+  composer (4a1) is the one exception: a faint lift that says "write here".
 - **Generous whitespace.** Breathing room is a feature, not waste.
 - **Typography carries the load.** Large numbers, small labels, clear contrast ratios.
 
@@ -127,13 +128,25 @@ Component gap inside card: 16px
 - One column edge per screen: the progress row, header and content share the 640px column.
 - A line marks an input (the underlined field row), a chosen tab, or data (the progress
   track, chart grid). Spacing separates everything else.
+
+## 4a1. The composer
+
+Every box you write words in (Edit's instruction, a message to the coach, New's "Anything
+else", a session's note) is the composer: one soft card (`--color-base-200`, a
+`--color-base-border` edge, 18px radius, a faint shadow) holding the text and its actions.
+Its placeholder names it; the label stays for screen readers. Cancel (x-mark) sits at its
+bottom left, Send at its bottom right: a small square with an arrow up, grey until there is
+text, then ink. Its border darkens while focused, so the text draws no ring of its own.
+Suggested words (Edit's common changes, the coach's predicted replies) are quiet chips
+under the card, and one tap sends them. Classes: `.composer`, `.composer-bar`,
+`.composer-icon`, `.composer-send`, `.composer-suggestions`, `.composer-suggestion`.
 - Meta never joins unlike things with middle dots; each goal is its own line.
 
 ## 4a2. Actions
 
 - One filled pill per view for the primary action, as an icon: Start and Resume are a
   play mark in a wide pill; Save, Approve and Use this workout a check; Review an arrow
-  right; sending words (to the coach, or Edit's instruction) the return mark ↵.
+  right; sending words is the composer's arrow up (4a1).
 - Every other action is a quiet icon from one set (heroicons), each with an `aria-label`
   and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
   switches or chooses a workout, plus adds or sets, trash deletes, x-mark cancels, closes,

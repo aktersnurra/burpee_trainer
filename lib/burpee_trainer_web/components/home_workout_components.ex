@@ -253,16 +253,18 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         disabled={@locked}
         class="home-authoring-input"
       />
-      <.input
-        field={@form[:note]}
-        type="textarea"
-        rows="1"
-        label="Anything else"
-        placeholder="e.g. two sets of 25, a minute's break at 10:00"
-        maxlength="300"
-        disabled={@locked}
-        class="home-authoring-input"
-      />
+      <div class="composer home-new-note">
+        <.input
+          field={@form[:note]}
+          type="textarea"
+          rows="2"
+          label="Anything else"
+          placeholder="Anything else? Two sets of 25, a minute's break at 10:00…"
+          maxlength="300"
+          disabled={@locked}
+          class="composer-input"
+        />
+      </div>
       <p :if={@busy} id="home-update-loading" role="status" class="home-budget-detail">
         {if(@locked, do: "Saving…", else: "Preparing and validating…")}
       </p>
@@ -375,6 +377,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do:
       "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
 
+  # Common edits, one tap each: the label on the chip, the instruction the coach receives.
+  defp edit_suggestions do
+    [
+      {"split", "Split into sets", "Split it into sets with a short rest between them"},
+      {"rests", "Longer rests", "Make the rests longer"},
+      {"shorter", "Make it shorter", "Make it shorter"}
+    ]
+  end
+
   attr(:state, :map, required: true)
 
   def current_edit(assigns) do
@@ -424,35 +435,52 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           aria-busy={to_string(@state.busy?)}
           phx-mounted={JS.focus(to: "#home-edit-instruction")}
         >
-          <.input
-            field={@state.adjustment_form[:instruction]}
-            id="home-edit-instruction"
-            type="textarea"
-            label="What do you want to change?"
-            placeholder="e.g. two sets of 25, a minute's rest between"
-            rows="1"
-            maxlength="500"
-            class="home-authoring-input"
-          />
-          <div class="home-review-actions">
+          <div class="composer">
+            <.input
+              field={@state.adjustment_form[:instruction]}
+              id="home-edit-instruction"
+              type="textarea"
+              label="What do you want to change?"
+              placeholder="What should change?"
+              rows="2"
+              maxlength="500"
+              class="composer-input"
+            />
+            <div class="composer-bar">
+              <button
+                type="button"
+                id="home-request-abort"
+                class="composer-icon"
+                aria-label="Cancel edit"
+                phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+                title="Cancel"
+              >
+                <.icon name="hero-x-mark" class="size-5" />
+              </button>
+              <button
+                type="submit"
+                id="home-edit-send"
+                class="composer-send"
+                aria-label="Send"
+                title="Send"
+              >
+                <span><.icon name="hero-arrow-up" class="size-5" /></span>
+              </button>
+            </div>
+          </div>
+          <div class="composer-suggestions" role="group" aria-label="Suggested changes">
             <button
+              :for={{id, label, instruction} <- edit_suggestions()}
+              id={"home-edit-suggest-#{id}"}
               type="button"
-              id="home-request-abort"
-              class="home-text-action home-icon-action"
-              aria-label="Cancel edit"
-              phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-              title="Cancel"
+              class="composer-suggestion"
+              phx-click={
+                JS.push("review_current_edit",
+                  value: %{"home_adjustment" => %{"instruction" => instruction}}
+                )
+              }
             >
-              <.icon name="hero-x-mark" class="size-5" />
-            </button>
-            <button
-              type="submit"
-              id="home-edit-send"
-              class="home-primary-action home-icon-action"
-              aria-label="Send"
-              title="Send"
-            >
-              <.icon name="hero-arrow-turn-down-left" class="size-5" />
+              {label}
             </button>
           </div>
         </.form>

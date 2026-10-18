@@ -926,12 +926,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-history-status { display: flex; gap: 40px; margin-top: 32px; }
 .home-history-streak-line { display: flex; align-items: baseline; gap: 8px; }
 .home-history-streak-line span { color: var(--home-muted); font-size: var(--text-body); }
-/* Coach's Send is the primary pill inside the field row, shown once there is something to send. */
-.coach-message-form { position: relative; }
-#home-coach-message-text { padding-right: 88px; }
-.coach-send { position: absolute; right: 0; bottom: 10px; min-height: 36px; padding: 0 16px; transition: opacity var(--motion-quick) ease, visibility 0s; }
-.coach-message-form:has(textarea:placeholder-shown) .coach-send { opacity: 0; visibility: hidden; transition: opacity var(--motion-quick) ease, visibility 0s linear var(--motion-quick); }
-.coach-send:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
 /* The progress row keeps the column's edges on wide screens, on Home and History alike. */
 @media (min-width: 601px) { #history-progress, #home-progress-history { max-width: 640px; margin-inline: auto; } }
 /* Sign in sits where Home's workout does, with the app's one primary button. */
@@ -939,12 +933,9 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .login .screen-heading { margin: 0; }
 .login-note { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
 .login-action { display: inline-flex; align-items: center; margin-top: 28px; text-decoration: none; }
-@media (prefers-reduced-motion: reduce) { .coach-send { transition: none; } }
 
 /* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
 .home-chooser-header .home-text-action { margin-right: -20px; padding-inline: 20px; }
-/* Coach's fields are named by their placeholder; the label stays for screen readers only. */
-.coach-quiet-label .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #home-workout-budget:empty, #home-workout-budget:not(:has(*)) { display: none; }
 /* The density readout sits under its heading like the streak and level pair. */
 .home-history-trend-readout { margin-top: 12px; }
@@ -1026,9 +1017,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* The coach's line: plain text and a chevron, no panel. */
 /* Other goals: one quiet row each under a hairline. */
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
-.coach-quick-replies { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-.coach-quick-replies .home-selection-pill { min-height: 40px; padding: 0 14px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; color: #262722; font: 400 var(--text-body)/1.2 var(--font-sans); }
-.coach-quick-replies .home-selection-pill:disabled { opacity: .45; }
 /* The course: weekly bests climbing to the target, the rest of the way dashed. */
 /* Coach is its own screen: the note leads, then the last exchange, the replies, the field. */
 .coach-note { margin: 0 0 24px; color: #262722; font-size: var(--text-body); line-height: 1.6; }
@@ -1054,7 +1042,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
 .adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
 .adaptive-home .home-primary-action.home-icon-action { width: 44px; }
-.adaptive-home .coach-send { display: inline-flex; align-items: center; justify-content: center; width: 36px; padding: 0; }
 .adaptive-home .home-workout-actions .home-expanded-action { padding-inline: 10px; }
 .adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 /* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */

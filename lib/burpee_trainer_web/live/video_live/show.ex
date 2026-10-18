@@ -352,12 +352,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
                 {label}
               </button>
             </div>
-            <div class="session-note-field">
+            <div class="session-note-field composer">
               <label for="video-note-input" class="sr-only">Note</label>
               <textarea
                 id="video-note-input"
                 name={@form[:note_post].name}
-                rows="1"
+                rows="2"
                 placeholder="How did it go?"
                 class="session-note-input"
               >{@note}</textarea>
