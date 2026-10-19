@@ -7,6 +7,8 @@ defmodule BurpeeTrainer.MixProject do
       version: "0.1.0",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
+      # Every compile of our code fails on a warning, not only precommit and CI.
+      elixirc_options: [warnings_as_errors: true],
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
@@ -149,11 +151,16 @@ defmodule BurpeeTrainer.MixProject do
         "esbuild burpee_trainer_pose_worker --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "test --warnings-as-errors"
+      ],
       ci: [
         "compile --warnings-as-errors",
         "format --check-formatted",
-        "test",
+        "test --warnings-as-errors",
         "credo --strict",
         "dialyzer",
         "ex_dna --max-clones 0",
