@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-19 — The planner picks before it designs
+
+- The next workout is planned by a decision model first (`typesafe/jev-1.14` on OpenRouter's Decisions API): it picks one of the saved or built-in workouts that fit the slot's burpee type, minutes and level band, or answers that none suits today. A pick at confidence 0.6 or more is selected with a template rationale; otherwise the coach designs one with `propose_workout` only. Without a decision model, or when the call fails, the full planner runs as before. `DECISIONS_MODEL`, `DECISIONS_URL` and `DECISIONS_ENABLED` configure it.
+- Automated LLM calls (planning, summary, memory, insight) and the ones you start have separate rolling-24-hour budgets, 25 and 40, so a long chat no longer leaves the overnight planner without calls. A $0.25 daily cost cap backstops both.
+- Fixes a planner run that chose nothing: it finished as a success, so Home kept the default workout and the slot was never planned again. The planner is now reminded once, then the run fails and the job retries.
+
 ## 2026-10-19 — Warnings fail the build; unused code removed
 
 - Every compile of the app fails on a warning (`elixirc_options: [warnings_as_errors: true]`), not only precommit and CI, and `mix test --warnings-as-errors` covers the test files.
