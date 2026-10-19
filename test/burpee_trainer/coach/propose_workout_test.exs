@@ -135,7 +135,32 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
              ProposeWorkout.call(scope, args(120, List.duplicate({10, 5.0, 5.0}, 12)), run)
 
     # 220 reps in 40 minutes is 110 per 20 minutes: level_1c, two levels up.
-    assert {:error, "reps must not exceed the next level"} =
+    assert {:error, "reps must not exceed the next level or 10% above the recent best"} =
              ProposeWorkout.call(scope, args(220, List.duplicate({10, 5.0, 5.0}, 22)), run)
+  end
+
+  test "a lapsed level does not cap the plan below the athlete's recent best" do
+    scope = scope_fixture(%{"timezone" => "Etc/UTC"})
+    three_weeks_ago = DateTime.add(DateTime.utc_now(:second), -21, :day)
+    completed!(scope, :six_count, 140, three_weeks_ago)
+    completed!(scope, :navy_seal, 70, three_weeks_ago)
+    assert BurpeeTrainer.Levels.current_level(Workouts.list_sessions(scope)) == :level_1a
+
+    slot = six_count_slot(scope, 1200)
+
+    # 140 recent reps allow up to 154: past level_1b, the next level up from level_1a.
+    assert {:ok, _, _} =
+             ProposeWorkout.call(
+               scope,
+               args(150, List.duplicate({10, 5.0, 5.0}, 15)),
+               run(scope, slot)
+             )
+
+    assert {:error, "reps must not exceed the next level or 10% above the recent best"} =
+             ProposeWorkout.call(
+               scope,
+               args(160, List.duplicate({10, 5.0, 5.0}, 16)),
+               run(scope, slot)
+             )
   end
 end
