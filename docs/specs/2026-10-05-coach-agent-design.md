@@ -45,8 +45,10 @@ Table `llm_calls`: `user_id`, `purpose` (`plan_next`, `coach_message`, `edit_req
 `layout`, `insight`), `run_id` (UUID shared by calls of one agent run), `model`,
 `prompt_tokens`, `completion_tokens`, `cost_usd` (from provider usage when present, else
 null), `outcome` (`ok`, `tool_calls`, `invalid_response`, `provider_error`, `timeout`),
-`duration_ms`, `inserted_at`. No prompt or response bodies are stored. **(default)** A per-user
-daily cap of 40 calls is enforced from this table before any call; over the cap returns
+`duration_ms`, `inserted_at`. No prompt or response bodies are stored. **(default)** Per-user
+rolling-24-hour caps are enforced from this table before any call, in two buckets: 25
+automated calls (`plan_next`, `summary`, `memory`, `insight`) and 40 calls the owner starts
+(every other purpose), plus a $0.25 cost cap across both. Over a cap returns
 `:llm_budget_exhausted` and callers fall back as below.
 
 ### Agent loop

@@ -65,6 +65,15 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Per-user rolling-24-hour LLM budgets; see BurpeeTrainer.Coach.Ledger. The cost cap is a
+# backstop against a runaway loop: a call reserves its estimate until the provider reports
+# its cost.
+config :burpee_trainer, :llm_budget,
+  automated_daily_cap: 25,
+  user_daily_cap: 40,
+  daily_cost_cap_usd: 0.25,
+  reservation_cost_usd: 0.01
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
