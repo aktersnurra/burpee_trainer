@@ -96,12 +96,15 @@ effect immediately for the next run. Agent writes compare `updated_at` and fail 
   which of the saved and built-in workouts that fit the slot's burpee type, minutes and
   level band suits the athlete, or `create_new`. A workout chosen with confidence at or
   above `min_confidence` (0.6) is selected with a `Coach.SelectionRationale` template, since
-  the model writes no text. `create_new` or a lower confidence runs the agent on the
-  `planner` surface with only `history`, `goals` and `propose_workout`. Without a decision
-  model, or when the decision call fails, the agent runs with all planner tools. Every
+  the model writes no text. `create_new` at that confidence runs the agent on the `planner`
+  surface with only `history`, `goals` and `propose_workout`. Without a decision model, when
+  the decision call fails, or below `min_confidence`, the agent runs with all planner tools.
+  The slot's selection is read before the decision call, and the planner never replaces a
+  selection the owner or Claude made (`select_planned_workout` refuses it), so a choice made
+  while the decision is out is kept. Every
   decision's probabilities are logged (`coach_selection_decided`) to tune the threshold.
-- A planner reply that chose nothing is reminded once, then fails with `:no_selection` so
-  the job retries. Success leaves the slot with a selection and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
+- A planner reply that chose nothing is reminded once, then fails with `:no_selection`, and
+  the job is cancelled rather than retried so it cannot spend the shared automated budget. Success leaves the slot with a selection and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
   hit, the existing deterministic fallback selection stays; Home never waits on the job.
 - **(default)** The planner may only choose reps within the owner's current level band
   (`Levels.level_for_count/2` of the proposed reps must equal the current level or the next

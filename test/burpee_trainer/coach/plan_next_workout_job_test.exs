@@ -100,7 +100,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJobTest do
     assert after_selection.plan.id == owned.id
   end
 
-  test "a run that chose nothing fails so Oban retries the slot" do
+  test "a run that still chose nothing after its reminder is cancelled, not retried" do
     previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
     previous_req = Req.default_options()
 
@@ -128,7 +128,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJobTest do
     Req.default_options(plug: {Req.Test, __MODULE__})
     args = %{"user_id" => scope.user.id, "slot_key" => slot.slot_key}
 
-    assert {:error, :no_selection} = perform_job(PlanNextWorkoutJob, args)
+    assert {:cancel, :no_selection} = perform_job(PlanNextWorkoutJob, args)
     assert Workouts.planned_by(scope, slot) == nil
   end
 

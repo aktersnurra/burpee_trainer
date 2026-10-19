@@ -94,18 +94,65 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
              Repo.get_by!(LlmCall, user_id: scope.user.id)
   end
 
-  for {choice, confidence} <- [{"create_new", 0.9}, {:fit, 0.4}] do
-    test "#{inspect(choice)} at #{confidence} has the coach design a workout instead" do
+  test "a confident create_new has the coach design a workout instead" do
+    {scope, slot, _fit, before} = fixture()
+    decide("create_new", 0.9)
+    chat_without_choice()
+
+    assert {:error, :no_selection} = Selector.plan(scope, slot, opts())
+    assert_received {:chat_tools, tools}
+    assert Enum.sort(tools) == ["goals", "history", "propose_workout"]
+    assert {:ok, ^before} = Workouts.ensure_home_selection(scope, slot)
+  end
+
+  for choice <- ["create_new", :fit] do
+    test "an unsure #{inspect(choice)} leaves the choice to the full planner" do
       {scope, slot, fit, before} = fixture()
       choice = if unquote(choice) == :fit, do: "workout_#{fit.id}", else: unquote(choice)
-      decide(choice, unquote(confidence))
+      decide(choice, 0.4)
       chat_without_choice()
 
       assert {:error, :no_selection} = Selector.plan(scope, slot, opts())
       assert_received {:chat_tools, tools}
-      assert Enum.sort(tools) == ["goals", "history", "propose_workout"]
+      assert "select_workout" in tools and "propose_workout" in tools
       assert {:ok, ^before} = Workouts.ensure_home_selection(scope, slot)
     end
+  end
+
+  test "the owner's choice made while the decision is out is kept" do
+    {scope, slot, fit, before} = fixture()
+    owners = plan_fixture(scope.user, %{target_reps: 31, target_duration_sec: slot.duration_sec})
+
+    Req.Test.stub(__MODULE__.Decisions, fn conn ->
+      {:ok, _} = Workouts.select_home_workout(scope, before, owners.id)
+
+      Req.Test.json(conn, %{
+        "answers" => %{
+          "workout" => %{
+            "type" => "choice",
+            "choice" => "workout_#{fit.id}",
+            "confidence" => 0.9,
+            "probabilities" => %{"workout_#{fit.id}" => 0.9}
+          }
+        },
+        "usage" => %{"input_tokens" => 900, "output_tokens" => 12, "cost" => 0.00004}
+      })
+    end)
+
+    assert {:error, %{code: :home_selection_changed}} = Selector.plan(scope, slot, opts())
+    assert {:ok, selection} = Workouts.ensure_home_selection(scope, slot)
+    assert selection.plan.id == owners.id
+    assert Workouts.planned_by(scope, slot) == :owner
+  end
+
+  test "the planner never replaces the owner's choice, even from a current selection" do
+    {scope, slot, fit, before} = fixture()
+    {:ok, owners} = Workouts.select_home_workout(scope, before, fit.id)
+
+    assert {:error, %{code: :home_selection_changed}} =
+             Workouts.select_planned_workout(scope, owners, {:plan, fit.id}, "A steady day.")
+
+    assert Workouts.planned_by(scope, slot) == :owner
   end
 
   test "a failed decision falls back to the full planner" do

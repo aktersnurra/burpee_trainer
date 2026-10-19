@@ -2,7 +2,8 @@ defmodule BurpeeTrainer.Coach.Selector do
   @moduledoc """
   Plans a slot with a decision model first. It picks one of the saved or built-in workouts
   that fit the slot, or answers that none suits today, and the coach then designs one with
-  `propose_workout` only. Without a decision model, or when it fails, the full planner runs.
+  `propose_workout` only. Without a decision model, when it fails, or when it is unsure, the
+  full planner runs.
   A chosen workout gets a `SelectionRationale`, since the decision model writes no text.
   """
 
@@ -30,10 +31,14 @@ defmodule BurpeeTrainer.Coach.Selector do
       Keyword.get(decision_opts, :config, Application.get_env(:burpee_trainer, :decisions, []))
 
     if Keyword.get(config, :enabled, false) === true do
-      case decide(scope, slot, config, decision_opts) do
-        {:select, plan} -> select(scope, slot, plan)
-        :create -> Agent.run(scope, :planner, nil, Keyword.put(agent_opts, :create_only, true))
-        :unavailable -> Agent.run(scope, :planner, nil, agent_opts)
+      # Read before the decision call, so a choice the owner or Claude makes while it is out
+      # changes the selection and is kept.
+      with {:ok, expected} <- Workouts.ensure_home_selection(scope, slot) do
+        case decide(scope, slot, config, decision_opts) do
+          {:select, plan} -> select(scope, expected, plan)
+          :create -> Agent.run(scope, :planner, nil, Keyword.put(agent_opts, :create_only, true))
+          :unavailable -> Agent.run(scope, :planner, nil, agent_opts)
+        end
       end
     else
       Agent.run(scope, :planner, nil, agent_opts)
@@ -75,23 +80,23 @@ defmodule BurpeeTrainer.Coach.Selector do
     end
   end
 
+  # An unsure answer, for a workout or for create_new, leaves the choice to the full planner.
   defp verdict(choice, confidence, candidates, config) do
-    min = Keyword.get(config, :min_confidence, @default_min_confidence)
+    sure? =
+      is_number(confidence) and
+        confidence >= Keyword.get(config, :min_confidence, @default_min_confidence)
 
-    case Enum.find(candidates, &(option(&1) == choice)) do
-      plan when is_number(confidence) and confidence >= min and not is_nil(plan) ->
-        {:select, plan}
-
-      _create_low_confidence_or_unknown ->
-        :create
+    case {sure?, choice, Enum.find(candidates, &(option(&1) == choice))} do
+      {true, @create, _} -> :create
+      {true, _choice, %{} = plan} -> {:select, plan}
+      _unsure_or_unknown -> :unavailable
     end
   end
 
-  defp select(scope, slot, plan) do
+  defp select(scope, expected, plan) do
     rationale = SelectionRationale.text(plan, Workouts.list_recent_training_sessions(scope))
 
-    with {:ok, expected} <- Workouts.ensure_home_selection(scope, slot),
-         {:ok, selection} <-
+    with {:ok, selection} <-
            Workouts.select_planned_workout(scope, expected, {:plan, plan.id}, rationale) do
       {:ok, %{reply: rationale, selection: selection}}
     end

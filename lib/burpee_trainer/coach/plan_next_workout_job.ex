@@ -38,6 +38,11 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
       when code in [:provider_unavailable, :llm_budget_exhausted, :home_selection_changed] ->
         {:cancel, code}
 
+      # The planner was already reminded once; another run would spend the automated budget
+      # the summary, memory and insight jobs share. Home keeps its fallback.
+      {:error, :no_selection} ->
+        {:cancel, :no_selection}
+
       {:error, error} ->
         {:error, error}
     end

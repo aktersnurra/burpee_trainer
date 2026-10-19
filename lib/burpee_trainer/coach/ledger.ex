@@ -4,7 +4,8 @@ defmodule BurpeeTrainer.Coach.Ledger do
   bodies are stored.
 
   Calls the app makes on its own (`@automated`) and calls the owner starts are counted in
-  separate buckets, so a long chat never leaves the overnight planner without budget.
+  separate buckets, so many chats never use up the overnight planner's calls. The daily cost
+  cap spans both buckets, so expensive chats can still reach it.
   """
   import Ecto.Query
   alias BurpeeTrainer.{Repo, Accounts.Scope}
