@@ -108,7 +108,7 @@ Production releases read their runtime configuration from environment variables.
 | --- | --- | --- |
 | `DATABASE_PATH` | Yes | Persistent SQLite database path outside the replaceable release directory. |
 | `SECRET_KEY_BASE` | Yes | Cookie and application secret. Generate with `mix phx.gen.secret`. |
-| `PHX_HOST` | Yes in practice | Public hostname used in generated URLs. |
+| `PHX_HOST` | Yes in practice | Public hostname used in generated URLs, and the app URL that names BurpeeTrainer in OpenRouter's logs (hidden from its public listings). |
 | `PHX_SERVER` | Yes for a release | Set to `true` so the Phoenix endpoint starts. |
 | `PORT` | No | HTTP port; defaults to `4000`. |
 | `POOL_SIZE` | No | SQLite connection pool size; defaults to `5`. |

@@ -114,6 +114,9 @@ unless adaptive_e2e_fixture? do
   provider_url = System.get_env("LLM_PROVIDER_URL")
   provider_api_key = System.get_env("LLM_PROVIDER_API_KEY")
 
+  # The app's URL, which OpenRouter needs to name the app in its logs.
+  app_url = if(host = System.get_env("PHX_HOST"), do: "https://#{host}")
+
   timeout_ms =
     case Integer.parse(System.get_env("LLM_PROVIDER_TIMEOUT_MS", "20000")) do
       {value, ""} when value >= 1_000 and value <= 60_000 -> value
@@ -127,7 +130,8 @@ unless adaptive_e2e_fixture? do
     url: provider_url,
     api_key: provider_api_key,
     model: System.get_env("LLM_PROVIDER_MODEL", "openai/gpt-6-luna"),
-    timeout_ms: timeout_ms
+    timeout_ms: timeout_ms,
+    app_url: app_url
 
   # The decision model that picks a saved workout before the planner designs a new one;
   # see BurpeeTrainer.Coach.Selector. On OpenRouter it shares the provider's key.
@@ -145,7 +149,8 @@ unless adaptive_e2e_fixture? do
     api_key: provider_api_key,
     model: System.get_env("DECISIONS_MODEL", "typesafe/jev-1.14"),
     min_confidence: 0.6,
-    timeout_ms: timeout_ms
+    timeout_ms: timeout_ms,
+    app_url: app_url
 end
 
 if config_env() == :prod do

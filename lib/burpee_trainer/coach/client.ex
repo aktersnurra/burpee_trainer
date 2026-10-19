@@ -133,6 +133,22 @@ defmodule BurpeeTrainer.Coach.Client do
         &parse_decision/1
       )
 
+  # OpenRouter names the app in its logs from these; without a URL a request is an unknown
+  # app. Hidden keeps it out of OpenRouter's public app listings.
+  defp attribution(config) do
+    case Keyword.get(config, :app_url) do
+      url when is_binary(url) and url != "" ->
+        [
+          {"http-referer", url},
+          {"x-openrouter-title", "BurpeeTrainer"},
+          {"x-openrouter-app-visibility", "hidden"}
+        ]
+
+      _no_url ->
+        []
+    end
+  end
+
   defp provider_request(config, opts, encode, parse) do
     with true <- is_list(config),
          :ok <- require_enabled(config),
@@ -152,7 +168,7 @@ defmodule BurpeeTrainer.Coach.Client do
              receive_timeout: timeout_ms(config),
              into: bounded_body(@max_response_bytes),
              body: encoded,
-             headers: [{"content-type", "application/json"}]
+             headers: [{"content-type", "application/json"} | attribution(config)]
            ),
          body when is_binary(body) <- response.body,
          :ok <- enforce_body_limit(body, @max_response_bytes),
