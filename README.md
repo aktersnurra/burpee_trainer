@@ -121,6 +121,9 @@ Production releases read their runtime configuration from environment variables.
 | `LLM_PROVIDER_API_KEY` | For LLM authoring | Provider credential. If either provider value is absent, LLM HTTP is disabled and deterministic fallback remains usable. |
 | `LLM_PROVIDER_MODEL` | No | Provider model; defaults to OpenRouter's `openai/gpt-6-luna`. |
 | `LLM_PROVIDER_TIMEOUT_MS` | No | Request timeout from 1,000–60,000 ms; defaults to 20,000. |
+| `DECISIONS_MODEL` | No | Decision model that picks the next workout before the planner designs one; defaults to `typesafe/jev-1.14`. |
+| `DECISIONS_URL` | No | Decisions API endpoint; defaults to `https://openrouter.ai/api/alpha/decisions` when `LLM_PROVIDER_URL` is on OpenRouter, and uses `LLM_PROVIDER_API_KEY`. |
+| `DECISIONS_ENABLED` | No | Set to `false` to plan with the LLM alone. |
 
 For OpenRouter authoring, set `LLM_PROVIDER_URL` to `https://openrouter.ai/api/v1/chat/completions` and provision `LLM_PROVIDER_API_KEY` from your secret store. Both values are required to enable LLM HTTP; the default Luna model alone does not send requests. Override `LLM_PROVIDER_MODEL` only to select a different model supported by your configured endpoint. Keep provider credentials out of the repository. The five-minute coach reconciliation scan only maintains local workout availability; it does not request LLM proposals. Provider calls require an explicit user Create or Adjust action.
 

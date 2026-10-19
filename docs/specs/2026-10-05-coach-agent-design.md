@@ -47,7 +47,7 @@ Table `llm_calls`: `user_id`, `purpose` (`plan_next`, `coach_message`, `edit_req
 null), `outcome` (`ok`, `tool_calls`, `invalid_response`, `provider_error`, `timeout`),
 `duration_ms`, `inserted_at`. No prompt or response bodies are stored. **(default)** Per-user
 rolling-24-hour caps are enforced from this table before any call, in two buckets: 25
-automated calls (`plan_next`, `summary`, `memory`, `insight`) and 40 calls the owner starts
+automated calls (`plan_next`, `select`, `summary`, `memory`, `insight`) and 40 calls the owner starts
 (every other purpose), plus a $0.25 cost cap across both. Over a cap returns
 `:llm_budget_exhausted` and callers fall back as below.
 
@@ -91,8 +91,17 @@ effect immediately for the next run. Agent writes compare `updated_at` and fail 
   `slot_key`. Enqueued after a session completes and at the day boundary when the new slot
   has no planner-made selection. Unique per `(user_id, slot_key)`; max 3 attempts with
   backoff.
-- The job runs the agent on the `planner` surface. Success leaves the slot with a selection
-  and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
+- The job runs `Coach.Selector`. When a decision model is configured (`:decisions`, default
+  `typesafe/jev-1.14` on OpenRouter's Decisions API), it first asks one Choice question:
+  which of the saved and built-in workouts that fit the slot's burpee type, minutes and
+  level band suits the athlete, or `create_new`. A workout chosen with confidence at or
+  above `min_confidence` (0.6) is selected with a `Coach.SelectionRationale` template, since
+  the model writes no text. `create_new` or a lower confidence runs the agent on the
+  `planner` surface with only `history`, `goals` and `propose_workout`. Without a decision
+  model, or when the decision call fails, the agent runs with all planner tools. Every
+  decision's probabilities are logged (`coach_selection_decided`) to tune the threshold.
+- A planner reply that chose nothing is reminded once, then fails with `:no_selection` so
+  the job retries. Success leaves the slot with a selection and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
   hit, the existing deterministic fallback selection stays; Home never waits on the job.
 - **(default)** The planner may only choose reps within the owner's current level band
   (`Levels.level_for_count/2` of the proposed reps must equal the current level or the next

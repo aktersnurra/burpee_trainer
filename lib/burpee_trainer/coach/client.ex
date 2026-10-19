@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.Coach.Client do
-  @moduledoc "Metered Req boundary for chat, strict output, and tool calls."
+  @moduledoc "Metered Req boundary for chat, strict output, tool calls, and typed decisions."
 
   alias BurpeeTrainer.Workouts.Error
 
@@ -42,7 +42,7 @@ defmodule BurpeeTrainer.Coach.Client do
          true <- BurpeeTrainer.Coach.enabled?(ledger.scope),
          {:ok, call} <-
            BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
-      record_chat(ledger, call, messages, opts, config)
+      record(ledger, call, fn -> chat_request(messages, opts, config) end)
     else
       false ->
         provider_unavailable()
@@ -52,11 +52,38 @@ defmodule BurpeeTrainer.Coach.Client do
     end
   end
 
-  defp record_chat(ledger, call, messages, opts, config) do
+  @doc """
+  Asks a decision model typed `questions` about `state` through the Decisions API: no text
+  comes back, only an answer per question. Metered like `chat/2`, from the `:decisions`
+  provider config.
+  """
+  @spec decide(map() | list() | String.t(), map(), keyword()) ::
+          {:ok, %{answers: map(), usage: map()}} | {:error, Error.t()}
+  def decide(state, questions, opts) when is_map(questions) and is_list(opts) do
+    ledger = Keyword.fetch!(opts, :ledger)
+    config = Keyword.get(opts, :config, Application.get_env(:burpee_trainer, :decisions, []))
+    model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
+    attrs = %{purpose: ledger.purpose, run_id: ledger.run_id, model: model}
+
+    with true <- is_list(config) and require_enabled(config) == :ok,
+         true <- BurpeeTrainer.Coach.enabled?(ledger.scope),
+         {:ok, call} <-
+           BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
+      record(ledger, call, fn -> decide_request(state, questions, opts, config) end)
+    else
+      false ->
+        provider_unavailable()
+
+      {:error, :llm_budget_exhausted} ->
+        {:error, Error.new(:llm_budget_exhausted)}
+    end
+  end
+
+  defp record(ledger, call, request) do
     started = System.monotonic_time(:millisecond)
 
     {result, error_usage} =
-      case chat_request(messages, opts, config) do
+      case request.() do
         {:error, error, usage} -> {{:error, error}, usage}
         result -> {result, %{}}
       end
@@ -70,11 +97,12 @@ defmodule BurpeeTrainer.Coach.Client do
         {:error, _} -> {"provider_error", error_usage}
       end
 
+    # Chat reports prompt and completion tokens; the Decisions API, input and output tokens.
     :ok =
       BurpeeTrainer.Coach.Ledger.finish(ledger.scope, call.id, %{
         outcome: outcome,
-        prompt_tokens: token_usage(usage["prompt_tokens"]),
-        completion_tokens: token_usage(usage["completion_tokens"]),
+        prompt_tokens: token_usage(usage["prompt_tokens"] || usage["input_tokens"]),
+        completion_tokens: token_usage(usage["completion_tokens"] || usage["output_tokens"]),
         cost_usd: cost_usage(usage["cost"]),
         duration_ms: System.monotonic_time(:millisecond) - started
       })
@@ -87,14 +115,32 @@ defmodule BurpeeTrainer.Coach.Client do
   defp cost_usage(value) when is_number(value) and value >= 0, do: value * 1.0
   defp cost_usage(_), do: nil
 
-  defp chat_request(messages, opts, config) do
+  defp chat_request(messages, opts, config),
+    do:
+      provider_request(
+        config,
+        opts,
+        &encode_chat(messages, &1, &2, opts),
+        &parse_chat_with_usage(&1, opts)
+      )
+
+  defp decide_request(state, questions, opts, config),
+    do:
+      provider_request(
+        config,
+        opts,
+        fn model, _url -> encode_decision(state, questions, model) end,
+        &parse_decision/1
+      )
+
+  defp provider_request(config, opts, encode, parse) do
     with true <- is_list(config),
          :ok <- require_enabled(config),
          {:ok, url} <- required(config, :url),
          :ok <- validate_url(url),
          {:ok, key} <- required(config, :api_key),
          {:ok, model} <- required(config, :model),
-         {:ok, encoded} <- encode_chat(messages, model, url, opts),
+         {:ok, encoded} <- encode.(model, url),
          {:ok, response} <-
            Req.post(req(opts),
              url: url,
@@ -111,7 +157,7 @@ defmodule BurpeeTrainer.Coach.Client do
          body when is_binary(body) <- response.body,
          :ok <- enforce_body_limit(body, @max_response_bytes),
          :ok <- chat_status(response.status, body),
-         {:ok, parsed} <- parse_chat_with_usage(body, opts) do
+         {:ok, parsed} <- parse.(body) do
       {:ok, parsed}
     else
       {:error, %Req.TransportError{reason: :timeout}} ->
@@ -164,7 +210,13 @@ defmodule BurpeeTrainer.Coach.Client do
   defp billing_usage(body) do
     case decode_unique_json(body) do
       {:ok, %{"usage" => usage}} when is_map(usage) ->
-        Map.take(usage, ["prompt_tokens", "completion_tokens", "cost"])
+        Map.take(usage, [
+          "prompt_tokens",
+          "completion_tokens",
+          "input_tokens",
+          "output_tokens",
+          "cost"
+        ])
 
       _ ->
         %{}
@@ -224,6 +276,25 @@ defmodule BurpeeTrainer.Coach.Client do
     if byte_size(encoded) <= @max_response_bytes,
       do: {:ok, encoded},
       else: {:error, Error.new(:authoring_context_too_large)}
+  end
+
+  defp encode_decision(state, questions, model) do
+    encoded = Jason.encode!(%{model: model, state: state, questions: questions})
+
+    if byte_size(encoded) <= @max_response_bytes,
+      do: {:ok, encoded},
+      else: {:error, Error.new(:authoring_context_too_large)}
+  end
+
+  defp parse_decision(body) do
+    case decode_unique_json(body) do
+      {:ok, %{"answers" => answers, "usage" => usage}} when is_map(answers) and is_map(usage) ->
+        {:ok, %{answers: answers, usage: usage}}
+
+      _ ->
+        Logger.warning("decision_provider_response_rejected stage=response_json")
+        {:error, Error.new(:invalid_provider_response), billing_usage(body)}
+    end
   end
 
   defp parse_chat(body, opts) do

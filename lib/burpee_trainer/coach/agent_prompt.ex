@@ -16,6 +16,15 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
   """
 
+  @planner_create_task """
+  Design the athlete's next session with propose_workout: none of their saved or built-in \
+  workouts suits them today. Never go above the level after their current one; easier \
+  sessions are fine. For a session longer than 20 minutes, compare its reps per 20 minutes \
+  with the landmarks. The rationale appears under the workout: one sentence in the voice \
+  above on why this session suits them now; why, not what, since the name, reps and minutes \
+  are shown above it. Finish with one sentence explaining your design.
+  """
+
   @coach_page_task """
   Answer what the athlete asked in at most three sentences. What they tell you about \
   themselves is noted for you after the conversation. Use propose_goal only when they ask for a goal; \
@@ -74,8 +83,14 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
 
     rule =
       case surface do
-        :planner -> Voice.text() <> "\n" <> @planner_task <> "\n" <> @context_glossary
-        :coach_page -> Voice.text() <> "\n" <> @coach_page_task <> "\n" <> @context_glossary
+        :planner ->
+          Voice.text() <> "\n" <> @planner_task <> "\n" <> @context_glossary
+
+        :planner_create ->
+          Voice.text() <> "\n" <> @planner_create_task <> "\n" <> @context_glossary
+
+        :coach_page ->
+          Voice.text() <> "\n" <> @coach_page_task <> "\n" <> @context_glossary
       end
 
     messages = [

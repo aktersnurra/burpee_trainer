@@ -1,0 +1,151 @@
+defmodule BurpeeTrainer.Coach.Selector do
+  @moduledoc """
+  Plans a slot with a decision model first. It picks one of the saved or built-in workouts
+  that fit the slot, or answers that none suits today, and the coach then designs one with
+  `propose_workout` only. Without a decision model, or when it fails, the full planner runs.
+  A chosen workout gets a `SelectionRationale`, since the decision model writes no text.
+  """
+
+  alias BurpeeTrainer.Accounts.Scope
+  alias BurpeeTrainer.Coach.{Agent, AgentPrompt, Client, SelectionRationale}
+  alias BurpeeTrainer.{Levels, Workouts}
+
+  require Logger
+
+  @create "create_new"
+  @default_min_confidence 0.6
+  # A Choice question takes at most 255 options; one is `create_new`.
+  @max_candidates 254
+
+  @doc """
+  Plans `slot`. `opts` pass to `Agent.run/4`, except `:decisions`: the `:config`, `:req` and
+  `:budget` for the decision call.
+  """
+  @spec plan(Scope.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
+  def plan(%Scope{} = scope, slot, opts \\ []) do
+    {decision_opts, agent_opts} = Keyword.pop(opts, :decisions, [])
+    agent_opts = Keyword.put(agent_opts, :slot, slot)
+
+    config =
+      Keyword.get(decision_opts, :config, Application.get_env(:burpee_trainer, :decisions, []))
+
+    if Keyword.get(config, :enabled, false) === true do
+      case decide(scope, slot, config, decision_opts) do
+        {:select, plan} -> select(scope, slot, plan)
+        :create -> Agent.run(scope, :planner, nil, Keyword.put(agent_opts, :create_only, true))
+        :unavailable -> Agent.run(scope, :planner, nil, agent_opts)
+      end
+    else
+      Agent.run(scope, :planner, nil, agent_opts)
+    end
+  end
+
+  defp decide(scope, slot, config, opts) do
+    context = AgentPrompt.context(scope, slot)
+    candidates = candidates(scope, slot, context.current_level)
+
+    if candidates == [] do
+      log(scope, @create, nil, %{})
+      :create
+    else
+      result =
+        Client.decide(context, %{"workout" => question(candidates)},
+          config: config,
+          req: Keyword.get(opts, :req),
+          budget: Keyword.get(opts, :budget, []),
+          ledger: %{scope: scope, purpose: "select", run_id: Ecto.UUID.generate()}
+        )
+
+      case result do
+        {:ok, %{answers: %{"workout" => %{"choice" => choice} = answer}}} ->
+          log(scope, choice, answer["confidence"], answer["probabilities"])
+          verdict(choice, answer["confidence"], candidates, config)
+
+        {:ok, _unexpected} ->
+          Logger.warning("coach_selection_unavailable user_id=#{scope.user.id} reason=no_answer")
+          :unavailable
+
+        {:error, error} ->
+          Logger.warning(
+            "coach_selection_unavailable user_id=#{scope.user.id} reason=#{inspect(Map.get(error, :code, error))}"
+          )
+
+          :unavailable
+      end
+    end
+  end
+
+  defp verdict(choice, confidence, candidates, config) do
+    min = Keyword.get(config, :min_confidence, @default_min_confidence)
+
+    case Enum.find(candidates, &(option(&1) == choice)) do
+      plan when is_number(confidence) and confidence >= min and not is_nil(plan) ->
+        {:select, plan}
+
+      _create_low_confidence_or_unknown ->
+        :create
+    end
+  end
+
+  defp select(scope, slot, plan) do
+    rationale = SelectionRationale.text(plan, Workouts.list_recent_training_sessions(scope))
+
+    with {:ok, expected} <- Workouts.ensure_home_selection(scope, slot),
+         {:ok, selection} <-
+           Workouts.select_planned_workout(scope, expected, {:plan, plan.id}, rationale) do
+      {:ok, %{reply: rationale, selection: selection}}
+    end
+  end
+
+  # Fitting workouts: the slot's burpee type and minutes, at most the level after the
+  # athlete's current one.
+  defp candidates(scope, slot, current_level) do
+    ceiling = level_index(current_level) - 1
+
+    scope
+    |> Workouts.list_library()
+    |> Enum.filter(fn plan ->
+      plan.burpee_type == slot.burpee_type and plan.target_duration_sec == slot.duration_sec and
+        level_index(Levels.level_for_count(plan.burpee_type, reps_per_20(plan))) >= ceiling
+    end)
+    |> Enum.take(@max_candidates)
+  end
+
+  # `Levels.all_levels/0` runs from highest to lowest, so a higher level has a lower index.
+  defp level_index(level), do: Enum.find_index(Levels.all_levels(), &(&1 == level))
+
+  defp reps_per_20(plan), do: round(plan.target_reps * 1200 / plan.target_duration_sec)
+
+  defp question(candidates) do
+    %{
+      "type" => "choice",
+      "instructions" =>
+        "Choose the athlete's next session from their saved and built-in workouts, given " <>
+          "their recent sessions, feedback, goals and level. Choose create_new when none " <>
+          "suits them today.",
+      "criteria" =>
+        candidates
+        |> Map.new(fn plan ->
+          {option(plan),
+           %{
+             "name" => plan.name,
+             "reps" => plan.target_reps,
+             "minutes" => div(plan.target_duration_sec, 60),
+             "reps_per_20_minutes" => reps_per_20(plan),
+             "saved_by" => if(plan.origin == :built_in, do: "app", else: "athlete")
+           }}
+        end)
+        |> Map.put(@create, "None of these suits the athlete today; design a new workout.")
+    }
+  end
+
+  defp option(plan), do: "workout_#{plan.id}"
+
+  # Probabilities are logged so the confidence threshold can be tuned from real decisions.
+  defp log(scope, choice, confidence, probabilities) do
+    Logger.info(
+      "coach_selection_decided user_id=#{scope.user.id} choice=#{choice} " <>
+        "confidence=#{inspect(confidence)} probabilities=#{Jason.encode!(probabilities || %{})}"
+    )
+  end
+end

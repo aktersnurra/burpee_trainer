@@ -10,7 +10,7 @@ defmodule BurpeeTrainer.Coach.Ledger do
   alias BurpeeTrainer.{Repo, Accounts.Scope}
   alias BurpeeTrainer.Coach.LlmCall
 
-  @automated ~w(plan_next summary memory insight)
+  @automated ~w(plan_next select summary memory insight)
   @default_caps %{automated: 25, user: 40}
 
   @doc "The budget bucket a call's purpose counts against."

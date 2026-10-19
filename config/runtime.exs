@@ -128,6 +128,24 @@ unless adaptive_e2e_fixture? do
     api_key: provider_api_key,
     model: System.get_env("LLM_PROVIDER_MODEL", "openai/gpt-6-luna"),
     timeout_ms: timeout_ms
+
+  # The decision model that picks a saved workout before the planner designs a new one;
+  # see BurpeeTrainer.Coach.Selector. On OpenRouter it shares the provider's key.
+  decisions_url =
+    System.get_env("DECISIONS_URL") ||
+      if(is_binary(provider_url) and URI.parse(provider_url).host == "openrouter.ai",
+        do: "https://openrouter.ai/api/alpha/decisions"
+      )
+
+  config :burpee_trainer, :decisions,
+    enabled:
+      config_env() != :test and is_binary(decisions_url) and is_binary(provider_api_key) and
+        provider_api_key != "" and System.get_env("DECISIONS_ENABLED") != "false",
+    url: decisions_url,
+    api_key: provider_api_key,
+    model: System.get_env("DECISIONS_MODEL", "typesafe/jev-1.14"),
+    min_confidence: 0.6,
+    timeout_ms: timeout_ms
 end
 
 if config_env() == :prod do

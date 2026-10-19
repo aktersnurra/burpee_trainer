@@ -11,7 +11,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
   alias BurpeeTrainer.{Accounts, UserTime, Repo}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Policy, Agent}
+  alias BurpeeTrainer.Coach.{Policy, Selector}
   @impl true
   def perform(%Oban.Job{args: %{"user_id" => id, "slot_key" => key}})
       when is_integer(id) and id > 0 and is_binary(key) do
@@ -21,7 +21,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
          true <- slot.slot_key == key and slot.home_state == :workout_needed,
          # The owner's or Claude's choice for the slot is theirs; the planner never replaces it.
          planner when planner in [nil, :coach] <- BurpeeTrainer.Workouts.planned_by(scope, slot),
-         {:ok, _} <- Agent.run(scope, :planner, nil, slot: slot) do
+         {:ok, _} <- Selector.plan(scope, slot) do
       :ok
     else
       nil ->
