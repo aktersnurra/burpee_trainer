@@ -30,9 +30,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @spec burpee_types() :: [:six_count | :navy_seal]
-  def burpee_types, do: @burpee_types
-
   @draft_content_fields [
     :name,
     :request_text,

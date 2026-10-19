@@ -27,12 +27,12 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramTest do
                metadata: %{pacing_style: :even}
              })
 
-    assert length(Program.events(program)) == 3
+    assert length(program.events) == 3
     assert Program.total_reps(program) == 20
     assert_in_delta Program.duration_sec(program), 300.0, 1.0e-6
     assert :ok = ProgramValidator.validate(program)
 
-    [first_work | _] = Program.events(program)
+    [first_work | _] = program.events
 
     assert Map.from_struct(first_work) == %{
              kind: :work,

@@ -24,9 +24,6 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
     timestamps(type: :utc_datetime)
   end
 
-  @spec segments() :: [:warmup | :main]
-  def segments, do: @segments
-
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(chunk, attrs) do
     chunk

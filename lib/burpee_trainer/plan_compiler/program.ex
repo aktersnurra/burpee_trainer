@@ -112,9 +112,6 @@ defmodule BurpeeTrainer.PlanCompiler.Program do
     end)
   end
 
-  @spec events(t()) :: [ProgramEvent.t()]
-  def events(%__MODULE__{events: events}), do: events
-
   @spec total_reps(t()) :: non_neg_integer()
   def total_reps(%__MODULE__{events: events}) do
     Enum.reduce(events, 0, fn

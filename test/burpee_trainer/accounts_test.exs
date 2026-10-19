@@ -4,7 +4,6 @@ defmodule BurpeeTrainer.AccountsTest do
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.{Accounts, Repo}
-  alias BurpeeTrainer.Accounts.User
 
   describe "get_user_by_oidc_sub/1" do
     test "returns the user with a matching sub" do
@@ -46,23 +45,6 @@ defmodule BurpeeTrainer.AccountsTest do
 
       assert {:error, changeset} = Accounts.link_oidc_sub(bob, "sub-abc-123")
       assert "has already been taken" in errors_on(changeset).oidc_sub
-    end
-  end
-
-  describe "list_users_page/1" do
-    test "returns users in fixed, id-ordered pages" do
-      insert_users(101)
-
-      first_page = Accounts.list_users_page(nil)
-      second_page = Accounts.list_users_page(List.last(first_page).id)
-      final_page = Accounts.list_users_page(List.last(second_page).id)
-
-      assert length(first_page) == 100
-      assert length(second_page) == 1
-      assert final_page == []
-      ids = Enum.map(first_page ++ second_page, & &1.id)
-      assert ids == Enum.sort(ids)
-      assert length(Enum.uniq(ids)) == 101
     end
   end
 
@@ -121,22 +103,5 @@ defmodule BurpeeTrainer.AccountsTest do
 
       assert Repo.aggregate(Oban.Job, :count) == 0
     end
-  end
-
-  defp insert_users(count) do
-    now = DateTime.utc_now(:second)
-
-    rows =
-      for number <- 1..count do
-        %{
-          username: "paged_user_#{number}",
-          timezone: "Etc/UTC",
-          timezone_provisioned: true,
-          inserted_at: now,
-          updated_at: now
-        }
-      end
-
-    Repo.insert_all(User, rows)
   end
 end

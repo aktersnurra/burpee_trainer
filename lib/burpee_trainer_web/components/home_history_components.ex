@@ -412,19 +412,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       Map.get(state, :progress_summary_loading?, false) or
         match?(%{review: review} when is_binary(review), Map.get(state, :progress_summary))
 
-  attr(:id, :string, required: true)
-  attr(:label, :string, required: true)
-  attr(:value, :any, required: true)
-
-  def kpi(assigns) do
-    ~H"""
-    <article id={"home-history-kpi-#{@id}"} class="home-history-kpi" data-history-kpi>
-      <p>{@label}</p>
-      <strong>{@value}</strong>
-    </article>
-    """
-  end
-
   attr(:points, :map, required: true)
   attr(:empty?, :boolean, required: true)
   attr(:period, :string, default: "twelve_weeks")

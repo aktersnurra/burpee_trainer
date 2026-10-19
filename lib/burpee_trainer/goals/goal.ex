@@ -24,9 +24,6 @@ defmodule BurpeeTrainer.Goals.Goal do
     timestamps(type: :utc_datetime)
   end
 
-  def burpee_types, do: @burpee_types
-  def statuses, do: @statuses
-
   @doc """
   Create changeset. `user_id` is set by the context.
   """

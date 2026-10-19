@@ -58,10 +58,6 @@ defmodule BurpeeTrainer.Milestones do
   @spec lifetime_milestones() :: [pos_integer]
   def lifetime_milestones, do: @lifetime_milestones
 
-  @doc "Minimum day gap that counts as a comeback."
-  @spec comeback_days() :: pos_integer
-  def comeback_days, do: @comeback_days
-
   # ---------------------------------------------------------------------------
   # Individual detectors — each returns an event map or nil
   # ---------------------------------------------------------------------------

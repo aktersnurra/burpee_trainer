@@ -20,9 +20,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutVideo do
     timestamps(updated_at: false)
   end
 
-  @spec formats() :: [format()]
-  def formats, do: @formats
-
   def changeset(video, attrs) do
     video
     |> cast(attrs, [

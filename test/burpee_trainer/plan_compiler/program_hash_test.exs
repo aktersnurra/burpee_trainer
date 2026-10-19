@@ -4,6 +4,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
   alias BurpeeTrainer.PlanCompiler
 
   alias BurpeeTrainer.PlanCompiler.{
+    CanonicalJson,
     CompileError,
     Program,
     ProgramEvent,
@@ -71,7 +72,7 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
   test "legacy encoding is deterministic and preserves the established fixture" do
     legacy_program = program(%{metadata: %{source: :plan_compiler}})
 
-    assert ProgramHash.encode!(legacy_program) ==
+    assert CanonicalJson.encode(ProgramHash.canonical_map(legacy_program)) ==
              "{\"burpee_type\":\"six_count\",\"events\":[{\"kind\":\"work\",\"reps\":10,\"sec_per_burpee_us\":5000000,\"sec_per_rep_us\":12000000},{\"duration_ms\":0,\"kind\":\"rest\"}],\"schema_version\":2,\"semantics\":{},\"solver_version\":4,\"target_duration_ms\":120000,\"target_reps\":10}"
 
     assert ProgramHash.hash(legacy_program) ==
@@ -188,7 +189,10 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHashTest do
     assert {:ok, program} = PlanCompiler.compile(definition)
 
     assert ProgramHash.canonical_map(program) == DeletionFirstFallback.program_json()
-    assert Jason.decode!(ProgramHash.encode!(program)) == DeletionFirstFallback.program_json()
+
+    assert Jason.decode!(CanonicalJson.encode(ProgramHash.canonical_map(program))) ==
+             DeletionFirstFallback.program_json()
+
     assert ProgramHash.hash(program) == DeletionFirstFallback.content_hash()
   end
 

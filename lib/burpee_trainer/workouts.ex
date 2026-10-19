@@ -1742,34 +1742,6 @@ defmodule BurpeeTrainer.Workouts do
   defp preload_session_execution_refs(sessions) when is_list(sessions), do: sessions
 
   @doc """
-  Return per-ISO-week training minutes for a user, excluding warmup sessions.
-  Weeks are Mon–Sun. Result is sorted descending by `week_start`.
-  """
-  @spec weekly_minutes(Scope.t()) :: [%{week_start: Date.t(), minutes: float, met_goal: bool}]
-  def weekly_minutes(%Scope{user: %User{id: user_id, timezone: timezone}}) do
-    sessions =
-      Repo.all(
-        from(s in WorkoutSession,
-          where:
-            s.user_id == ^user_id and s.state == :completed and
-              (is_nil(s.tags) or s.tags != "warmup"),
-          select: %{completed_at: s.completed_at, duration_sec_actual: s.duration_sec_actual}
-        )
-      )
-
-    sessions
-    |> Enum.group_by(fn %{completed_at: completed_at} ->
-      {:ok, local_date} = UserTime.local_date(completed_at, timezone)
-      Date.beginning_of_week(local_date, :monday)
-    end)
-    |> Enum.map(fn {week_start, rows} ->
-      minutes = Enum.sum_by(rows, & &1.duration_sec_actual) / 60.0
-      %{week_start: week_start, minutes: minutes, met_goal: minutes >= 79.0}
-    end)
-    |> Enum.sort_by(& &1.week_start, {:desc, Date})
-  end
-
-  @doc """
   Cursor-based paginated completed sessions. Returns `{sessions, has_more?}`.
 
   Pass `before: {completed_at, id}` using the final row from the prior page.

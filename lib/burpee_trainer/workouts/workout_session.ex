@@ -73,9 +73,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     timestamps(type: :utc_datetime)
   end
 
-  @spec burpee_types() :: [:six_count | :navy_seal]
-  def burpee_types, do: @burpee_types
-
   @doc "Validates a fully snapshotted session before its initial started insert."
   @spec start_changeset(t()) :: Ecto.Changeset.t()
   def start_changeset(%__MODULE__{} = session) do

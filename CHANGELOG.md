@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-19 — Warnings fail the build; unused code removed
+
+- Every compile of the app fails on a warning (`elixirc_options: [warnings_as_errors: true]`), not only precommit and CI, and `mix test --warnings-as-errors` covers the test files.
+- Removed public functions nothing called, found by tracing every call at compile time:
+  - the Phoenix generator's unused components (`button`, `header`, `table`, `list`, `qs_surface`, `translate_errors`) and History's `kpi`, with its CSS;
+  - weekly minutes (`Workouts.weekly_minutes/1`, `Stats.Series.weekly_minutes/1`);
+  - `Accounts.list_users_page`, `Exchange.latest/1`, `ProgramHash.encode!/1` and `Program.events/1`;
+  - `CreationParameters`' unused schema, changeset and request text;
+  - the schemas' enum accessors, `Milestones.comeback_days/0` and `PlanCompiler.schema_version/0`.
+
 ## 2026-10-18 — The composer
 
 - Every box you write words in is one soft card holding the text and its actions: Edit's instruction, the coach's message, New's "Anything else" and a finished session's note (plan and video). Send is a small arrow-up square, grey until there is text; Cancel sits at the card's bottom left.

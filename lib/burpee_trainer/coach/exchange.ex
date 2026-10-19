@@ -14,16 +14,6 @@ defmodule BurpeeTrainer.Coach.Exchange do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @spec latest(Scope.t()) :: t() | nil
-  def latest(%Scope{user: %{id: id}}),
-    do:
-      Repo.one(
-        from e in __MODULE__,
-          where: e.user_id == ^id,
-          order_by: [desc: e.inserted_at, desc: e.id],
-          limit: 1
-      )
-
   @doc "The owner's exchanges from `since` on, oldest first; at most the last `limit`."
   @spec since(Scope.t(), DateTime.t(), pos_integer()) :: [t()]
   def since(%Scope{user: %{id: id}}, %DateTime{} = since, limit \\ 20) do

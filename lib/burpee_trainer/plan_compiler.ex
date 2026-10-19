@@ -6,9 +6,6 @@ defmodule BurpeeTrainer.PlanCompiler do
   @schema_version 3
   @solver_version 1
 
-  @spec schema_version() :: pos_integer()
-  def schema_version, do: @schema_version
-
   @spec compile(WorkoutDefinition.t()) ::
           {:ok, Program.t()} | {:error, BurpeeTrainer.Workouts.Error.t()}
   def compile(%WorkoutDefinition{} = definition) do

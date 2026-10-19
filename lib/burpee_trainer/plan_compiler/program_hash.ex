@@ -28,13 +28,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
     }
   end
 
-  @spec encode!(Program.t()) :: String.t()
-  def encode!(%Program{} = program) do
-    program
-    |> canonical_map()
-    |> CanonicalJson.encode()
-  end
-
   @spec hash_canonical_map(map()) :: String.t()
   def hash_canonical_map(program_map) when is_map(program_map) do
     :crypto.hash(:sha256, CanonicalJson.encode(program_map))

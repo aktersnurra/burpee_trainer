@@ -24,9 +24,6 @@ defmodule BurpeeTrainer.Workouts.PoseCaptureRun do
     timestamps(type: :utc_datetime)
   end
 
-  @spec statuses() :: [:active | :completed | :aborted]
-  def statuses, do: @statuses
-
   @spec start_changeset(t(), map()) :: Ecto.Changeset.t()
   def start_changeset(run, attrs) do
     run

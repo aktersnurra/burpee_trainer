@@ -467,38 +467,11 @@ button.home-summary:hover .home-workout-name {
   background: #8d3d25;
   color: white;
 }
-.home-history-kpis {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(8rem, 1fr);
-  gap: 0.75rem;
-  overflow-x: auto;
-  padding: 0.125rem;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-}
-.home-history-kpi,
 .home-history-trend,
 .home-history-session-card > td {
   border: 1px solid var(--home-line);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--home-surface) 92%, white);
-}
-.home-history-kpi {
-  min-height: 6.5rem;
-  padding: 0.875rem;
-  scroll-snap-align: start;
-  font-variant-numeric: tabular-nums;
-}
-.home-history-kpi p {
-  color: var(--home-muted);
-  font-size: var(--text-small);
-}
-.home-history-kpi strong {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: var(--text-body);
-  line-height: 1.2;
 }
 .home-history-trend {
   padding: 1rem;
@@ -615,11 +588,6 @@ button.home-summary:hover .home-workout-name {
 @media (min-width: 640px) {
   .home-history {
     max-width: 56rem;
-  }
-  .home-history-kpis {
-    grid-auto-flow: initial;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    overflow: visible;
   }
 }
 @media (prefers-reduced-motion: reduce) {

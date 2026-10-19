@@ -205,7 +205,7 @@ defmodule BurpeeTrainer.PlanCompiler.WorkoutDefinitionTest do
   test "compiler emits the frozen terminal-active fallback at exactly 120 seconds" do
     assert {:ok, definition} = WorkoutDefinition.new(DeletionFirstFallback.definition_json())
     assert {:ok, program} = PlanCompiler.compile(definition)
-    assert [work] = Program.events(program)
+    assert [work] = program.events
 
     assert program.target_duration_sec == 120
     assert Program.duration_sec(program) == 120.0

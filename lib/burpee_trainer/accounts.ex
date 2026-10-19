@@ -10,28 +10,6 @@ defmodule BurpeeTrainer.Accounts do
   alias BurpeeTrainer.Accounts.User
   alias BurpeeTrainer.Repo
 
-  @users_page_limit 100
-
-  @doc """
-  List the next fixed-size page of users ordered by id.
-  """
-  @spec list_users_page(non_neg_integer() | nil) :: [User.t()]
-  def list_users_page(after_user_id \\ nil)
-
-  def list_users_page(nil) do
-    Repo.all(from(user in User, order_by: [asc: user.id], limit: @users_page_limit))
-  end
-
-  def list_users_page(after_user_id) when is_integer(after_user_id) and after_user_id >= 0 do
-    Repo.all(
-      from(user in User,
-        where: user.id > ^after_user_id,
-        order_by: [asc: user.id],
-        limit: @users_page_limit
-      )
-    )
-  end
-
   @doc """
   Fetch a user by id, returning nil if not found.
   """
