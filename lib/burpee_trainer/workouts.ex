@@ -280,6 +280,7 @@ defmodule BurpeeTrainer.Workouts do
              planned_by in [:coach, :claude] do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
+           :ok <- replaceable_by(r, planned_by),
            {:ok, plan} <- planned_plan(user, r, target),
            :ok <- verify_stored_draft(plan),
            {:ok, changed} <- write_home_pointer(r, plan.id, planned_by),
@@ -289,6 +290,12 @@ defmodule BurpeeTrainer.Workouts do
       end
     end)
   end
+
+  # The in-app planner never replaces a choice the owner or Claude made.
+  defp replaceable_by(%{planned_by: by}, :coach) when by in [:owner, :claude],
+    do: {:error, Error.new(:home_selection_changed)}
+
+  defp replaceable_by(_r, _planned_by), do: :ok
 
   defp planned_plan(user, r, {:plan, id}), do: selectable_home_plan(user, r, id)
 

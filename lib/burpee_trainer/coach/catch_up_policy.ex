@@ -1,11 +1,9 @@
 defmodule BurpeeTrainer.Coach.CatchUpPolicy do
-  @moduledoc "Exact rolling PB and integer catch-up prescription policy."
+  @moduledoc "The exact rolling personal best a catch-up slot reports."
 
   alias BurpeeTrainer.Coach.AuthoritativeSession
 
   @six_weeks_sec 42 * 24 * 60 * 60
-  @eligible_remaining_sec 2_400
-  @max_duration_min 80
 
   @spec rolling_pb([BurpeeTrainer.Workouts.WorkoutSession.t() | map()], atom(), DateTime.t()) ::
           {:ok, map()} | :none
@@ -30,38 +28,6 @@ defmodule BurpeeTrainer.Coach.CatchUpPolicy do
          }}
     end
   end
-
-  @spec prescription(non_neg_integer(), pos_integer(), map()) :: {:ok, map()} | {:error, atom()}
-  def prescription(remaining_sec, capacity_reps, facts)
-      when is_integer(remaining_sec) and remaining_sec >= 0 and is_integer(capacity_reps) and
-             capacity_reps > 0 and is_map(facts) do
-    cond do
-      remaining_sec < @eligible_remaining_sec ->
-        {:error, :not_eligible}
-
-      true ->
-        duration_min = min(@max_duration_min, div(remaining_sec + 59, 60))
-
-        if duration_min in 40..@max_duration_min do
-          factor_num = factor_num(duration_min)
-          ceiling_reps = div(factor_num * capacity_reps * duration_min, 100 * 20)
-
-          {:ok,
-           Map.merge(facts, %{
-             remaining_sec: remaining_sec,
-             duration_min: duration_min,
-             factor_num: factor_num,
-             ceiling_reps: ceiling_reps
-           })}
-        else
-          {:error, :duration_out_of_range}
-        end
-    end
-  end
-
-  defp factor_num(duration_min) when duration_min <= 40, do: 75
-  defp factor_num(duration_min) when duration_min <= 60, do: 60
-  defp factor_num(_duration_min), do: 50
 
   defp eligible_pb_session?(session, burpee_type, lower_bound, now) do
     AuthoritativeSession.prescribed_plan_pb_eligible?(session) and

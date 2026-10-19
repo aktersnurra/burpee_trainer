@@ -45,8 +45,10 @@ Table `llm_calls`: `user_id`, `purpose` (`plan_next`, `coach_message`, `edit_req
 `layout`, `insight`), `run_id` (UUID shared by calls of one agent run), `model`,
 `prompt_tokens`, `completion_tokens`, `cost_usd` (from provider usage when present, else
 null), `outcome` (`ok`, `tool_calls`, `invalid_response`, `provider_error`, `timeout`),
-`duration_ms`, `inserted_at`. No prompt or response bodies are stored. **(default)** A per-user
-daily cap of 40 calls is enforced from this table before any call; over the cap returns
+`duration_ms`, `inserted_at`. No prompt or response bodies are stored. **(default)** Per-user
+rolling-24-hour caps are enforced from this table before any call, in two buckets: 25
+automated calls (`plan_next`, `select`, `summary`, `memory`, `insight`) and 40 calls the owner starts
+(every other purpose), plus a $0.25 cost cap across both. Over a cap returns
 `:llm_budget_exhausted` and callers fall back as below.
 
 ### Agent loop
@@ -89,12 +91,26 @@ effect immediately for the next run. Agent writes compare `updated_at` and fail 
   `slot_key`. Enqueued after a session completes and at the day boundary when the new slot
   has no planner-made selection. Unique per `(user_id, slot_key)`; max 3 attempts with
   backoff.
-- The job runs the agent on the `planner` surface. Success leaves the slot with a selection
-  and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
+- The job runs `Coach.Selector`. When a decision model is configured (`:decisions`, default
+  `typesafe/jev-1.14` on OpenRouter's Decisions API), it first asks one Choice question:
+  which of the saved and built-in workouts that fit the slot's burpee type and minutes, and
+  stay within `Coach.RepCeiling`, suits the athlete, or `create_new`. A workout chosen with confidence at or
+  above `min_confidence` (0.6) is selected with a `Coach.SelectionRationale` template, since
+  the model writes no text. `create_new` at that confidence runs the agent on the `planner`
+  surface with only `history`, `goals` and `propose_workout`. Without a decision model, when
+  the decision call fails, or below `min_confidence`, the agent runs with all planner tools.
+  The slot's selection is read before the decision call, and the planner never replaces a
+  selection the owner or Claude made (`select_planned_workout` refuses it), so a choice made
+  while the decision is out is kept. Every
+  decision's probabilities are logged (`coach_selection_decided`) to tune the threshold.
+- A planner reply that chose nothing is reminded once, then fails with `:no_selection`, and
+  the job is cancelled rather than retried so it cannot spend the shared automated budget. Success leaves the slot with a selection and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
   hit, the existing deterministic fallback selection stays; Home never waits on the job.
-- **(default)** The planner may only choose reps within the owner's current level band
-  (`Levels.level_for_count/2` of the proposed reps must equal the current level or the next
-  one).
+- The planner's reps, designed or picked, stay within `Coach.RepCeiling`: the owner's recent
+  best decides, at most 10% above their best 20-minute pace for the type in the last eight
+  weeks, whatever their level. Only with no session of the type in that time does the level
+  after their current one cap it. A longer slot (weekend catch-up) is compared at its
+  20-minute-equivalent pace; easier is always allowed.
 
 ### Coach page conversation
 

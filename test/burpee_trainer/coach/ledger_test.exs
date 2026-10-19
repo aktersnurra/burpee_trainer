@@ -17,6 +17,24 @@ defmodule BurpeeTrainer.Coach.LedgerTest do
              Ledger.finish(scope_fixture(), call.id, %{outcome: "ok", duration_ms: 2})
   end
 
+  test "automated calls and the owner's calls are capped in separate buckets" do
+    previous = Application.get_env(:burpee_trainer, :llm_budget, [])
+    on_exit(fn -> Application.put_env(:burpee_trainer, :llm_budget, previous) end)
+    Application.put_env(:burpee_trainer, :llm_budget, automated_daily_cap: 2, user_daily_cap: 1)
+
+    scope = scope_fixture()
+    reserve = &Ledger.reserve(scope, %{purpose: &1, run_id: Ecto.UUID.generate(), model: "m"})
+
+    assert {:ok, _} = reserve.("coach_message")
+    assert {:error, :llm_budget_exhausted} = reserve.("layout")
+    assert {:ok, _} = reserve.("plan_next")
+    assert {:ok, _} = reserve.("summary")
+    assert {:error, :llm_budget_exhausted} = reserve.("memory")
+
+    assert {:ok, _} =
+             Ledger.reserve(scope_fixture(), %{purpose: "plan_next", run_id: "r", model: "m"})
+  end
+
   test "cost caps include in-flight reservations" do
     scope = scope_fixture()
     attrs = %{purpose: "layout", run_id: Ecto.UUID.generate(), model: "m"}

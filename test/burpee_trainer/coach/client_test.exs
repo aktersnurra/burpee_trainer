@@ -200,6 +200,24 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert recorded.body["messages"] == [%{"role" => "user", "content" => "steady"}]
   end
 
+  test "requests name the app to OpenRouter when its URL is configured", %{counter: counter} do
+    req = request(counter, fn conn -> json_response(conn, 200, definition("Named")) end)
+    named = Keyword.update!(opts(req), :config, &Keyword.put(&1, :app_url, "https://burpee.test"))
+
+    assert {:ok, _} = structured_chat([%{role: "user", content: "steady"}], named)
+    assert {:ok, _} = structured_chat([%{role: "user", content: "steady"}], opts(req))
+
+    assert [%{attribution: with_url}, %{attribution: without_url}] = requests(counter)
+
+    assert with_url == %{
+             "http-referer" => ["https://burpee.test"],
+             "x-openrouter-title" => ["BurpeeTrainer"],
+             "x-openrouter-app-visibility" => ["hidden"]
+           }
+
+    assert without_url["http-referer"] == []
+  end
+
   test "missing structured content logs safe completion diagnostics", %{counter: counter} do
     req =
       request(counter, fn conn ->
@@ -548,6 +566,11 @@ defmodule BurpeeTrainer.Coach.ClientTest do
             method: conn.method,
             path: conn.request_path,
             authorization: Plug.Conn.get_req_header(conn, "authorization"),
+            attribution:
+              Map.new(
+                ~w(http-referer x-openrouter-title x-openrouter-app-visibility),
+                &{&1, Plug.Conn.get_req_header(conn, &1)}
+              ),
             body: conn.body_params
           }
 

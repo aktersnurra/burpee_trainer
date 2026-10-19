@@ -249,6 +249,37 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
     assert id == plan.id
   end
 
+  test "a planner reply that chose nothing is reminded once and then selects" do
+    {scope, slot, plan, before} = fixture()
+
+    pid =
+      start_supervised!(
+        {Elixir.Agent, fn -> [final("Done"), selection_call(plan), final("Ready")] end}
+      )
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      Req.Test.json(conn, Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end))
+    end)
+
+    assert {:ok, %{reply: "Ready"}} = Agent.run(scope, :planner, nil, opts(slot))
+    assert {:ok, after_selection} = Workouts.ensure_home_selection(scope, slot)
+    assert after_selection.plan.id == plan.id
+    assert after_selection.home_revision == before.home_revision + 1
+  end
+
+  test "a planner that still chooses nothing after the reminder fails and leaves Home as it was" do
+    {scope, slot, _plan, before} = fixture()
+    pid = start_supervised!({Elixir.Agent, fn -> [final("Done"), final("Done")] end})
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      Req.Test.json(conn, Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end))
+    end)
+
+    assert {:error, :no_selection} = Agent.run(scope, :planner, nil, opts(slot))
+    assert Elixir.Agent.get(pid, & &1) == []
+    assert {:ok, ^before} = Workouts.ensure_home_selection(scope, slot)
+  end
+
   test "successful completion commits only the last staged selection" do
     {scope, slot, plan, before} = fixture()
 

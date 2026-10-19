@@ -1,8 +1,23 @@
 defmodule BurpeeTrainer.Coach.Ledger do
-  @moduledoc "Scoped rolling-24-hour budgets. Reservations serialize admission before network I/O. No bodies are stored."
+  @moduledoc """
+  Scoped rolling-24-hour budgets. Reservations serialize admission before network I/O. No
+  bodies are stored.
+
+  Calls the app makes on its own (`@automated`) and calls the owner starts are counted in
+  separate buckets, so many chats never use up the overnight planner's calls. The daily cost
+  cap spans both buckets, so expensive chats can still reach it.
+  """
   import Ecto.Query
   alias BurpeeTrainer.{Repo, Accounts.Scope}
   alias BurpeeTrainer.Coach.LlmCall
+
+  @automated ~w(plan_next select summary memory insight)
+  @default_caps %{automated: 25, user: 40}
+
+  @doc "The budget bucket a call's purpose counts against."
+  @spec bucket(String.t()) :: :automated | :user
+  def bucket(purpose) when purpose in @automated, do: :automated
+  def bucket(_purpose), do: :user
 
   @doc "Admit one call before transport. Optional run_cap counts every owned run reservation, not just successful calls. Caller caps may tighten, never relax application daily policy."
   @spec reserve(Scope.t(), map(), keyword()) ::
@@ -10,7 +25,9 @@ defmodule BurpeeTrainer.Coach.Ledger do
   def reserve(%Scope{user: %{id: id}} = scope, attrs, opts \\ []) do
     config = Application.get_env(:burpee_trainer, :llm_budget, [])
     opts = Keyword.merge(config, opts)
-    cap = min(Keyword.get(config, :daily_cap, 40), Keyword.get(opts, :daily_cap, 40))
+    bucket = bucket(Map.fetch!(attrs, :purpose))
+    configured = Keyword.get(config, :"#{bucket}_daily_cap", @default_caps[bucket])
+    cap = min(configured, Keyword.get(opts, :daily_cap, configured))
     run_cap = Keyword.get(opts, :run_cap)
     run_id = Map.fetch!(attrs, :run_id)
 
@@ -35,7 +52,7 @@ defmodule BurpeeTrainer.Coach.Ledger do
 
       run_calls = Repo.aggregate(from(c in owned(scope), where: c.run_id == ^run_id), :count)
 
-      if calls_today(scope) >= cap or (run_cap != nil and run_calls >= run_cap) or
+      if calls_today(scope, bucket) >= cap or (run_cap != nil and run_calls >= run_cap) or
            (cost_cap != nil and spent + estimate > cost_cap) do
         Repo.rollback(:llm_budget_exhausted)
       end
@@ -65,7 +82,11 @@ defmodule BurpeeTrainer.Coach.Ledger do
     if count == 1, do: :ok, else: {:error, :not_found}
   end
 
-  defp calls_today(scope), do: Repo.aggregate(window(scope), :count)
+  defp calls_today(scope, :automated),
+    do: Repo.aggregate(from(c in window(scope), where: c.purpose in @automated), :count)
+
+  defp calls_today(scope, :user),
+    do: Repo.aggregate(from(c in window(scope), where: c.purpose not in @automated), :count)
 
   defp owned(%Scope{user: %{id: id}}), do: from(c in LlmCall, where: c.user_id == ^id)
 

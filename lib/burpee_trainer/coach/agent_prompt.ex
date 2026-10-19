@@ -8,12 +8,22 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   select_workout; otherwise design one with propose_workout. Base it on their recent \
   sessions of this burpee type: stay near the reps they have been doing, and go easier only \
   when their feedback or memory gives a reason. A level that lapsed from missed weeks is no \
-  reason; they still have the fitness. Never go above the level after their current one or \
-  10% above their best 20-minute reps for this type in the last eight weeks, whichever is \
-  higher. For a session longer than 20 minutes, compare its reps per 20 minutes with the \
+  reason; they still have the fitness. Never go more than 10% above their best 20-minute reps \
+  for this type in the last eight weeks, whatever their level; only with no session of the \
+  type in that time does the level after their current one cap it. For a session longer than 20 minutes, compare its reps per 20 minutes with the \
   landmarks and their recent sessions. The \
   rationale appears under the workout: one sentence in the voice above on why this session \
   suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
+  """
+
+  @planner_create_task """
+  Design the athlete's next session with propose_workout: none of their saved or built-in \
+  workouts suits them today. Never go more than 10% above their best 20-minute reps for \
+  this type in the last eight weeks (with no recent session, above the level after their \
+  current one); easier sessions are fine. For a session longer than 20 minutes, compare its reps per 20 minutes \
+  with the landmarks. The rationale appears under the workout: one sentence in the voice \
+  above on why this session suits them now; why, not what, since the name, reps and minutes \
+  are shown above it. Finish with one sentence explaining your design.
   """
 
   @coach_page_task """
@@ -74,8 +84,14 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
 
     rule =
       case surface do
-        :planner -> Voice.text() <> "\n" <> @planner_task <> "\n" <> @context_glossary
-        :coach_page -> Voice.text() <> "\n" <> @coach_page_task <> "\n" <> @context_glossary
+        :planner ->
+          Voice.text() <> "\n" <> @planner_task <> "\n" <> @context_glossary
+
+        :planner_create ->
+          Voice.text() <> "\n" <> @planner_create_task <> "\n" <> @context_glossary
+
+        :coach_page ->
+          Voice.text() <> "\n" <> @coach_page_task <> "\n" <> @context_glossary
       end
 
     messages = [

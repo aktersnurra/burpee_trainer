@@ -5,6 +5,8 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
   alias BurpeeTrainer.{Workouts, LayoutFixtures}
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
 
+  @over_cap "reps must not exceed 10% above the recent best (the next level without a recent session)"
+
   defp run(scope, slot) do
     {:ok, expected} = Workouts.ensure_home_selection(scope, slot)
     %{slot: slot, run_id: Ecto.UUID.generate(), call_index: 1, expected_selection: expected}
@@ -125,6 +127,31 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
              )
   end
 
+  test "a recent best caps the plan below what the next level would allow" do
+    scope = scope_fixture(%{"timezone" => "Etc/UTC"})
+    two_days_ago = DateTime.add(DateTime.utc_now(:second), -2, :day)
+    completed!(scope, :six_count, 100, two_days_ago)
+    completed!(scope, :navy_seal, 40, two_days_ago)
+    assert BurpeeTrainer.Levels.current_level(Workouts.list_sessions(scope)) == :level_1c
+
+    slot = six_count_slot(scope, 1200)
+
+    # 100 recent reps allow up to 110, though level_1d, the next level up, starts at 150.
+    assert {:ok, _, _} =
+             ProposeWorkout.call(
+               scope,
+               args(110, List.duplicate({10, 5.0, 5.0}, 11)),
+               run(scope, slot)
+             )
+
+    assert {:error, @over_cap} =
+             ProposeWorkout.call(
+               scope,
+               args(140, List.duplicate({10, 5.0, 5.0}, 14)),
+               run(scope, slot)
+             )
+  end
+
   test "a long catch-up slot is held to the level band at a 20-minute-equivalent rate" do
     scope = scope_fixture()
     slot = six_count_slot(scope, 2400)
@@ -135,7 +162,7 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
              ProposeWorkout.call(scope, args(120, List.duplicate({10, 5.0, 5.0}, 12)), run)
 
     # 220 reps in 40 minutes is 110 per 20 minutes: level_1c, two levels up.
-    assert {:error, "reps must not exceed the next level or 10% above the recent best"} =
+    assert {:error, @over_cap} =
              ProposeWorkout.call(scope, args(220, List.duplicate({10, 5.0, 5.0}, 22)), run)
   end
 
@@ -156,7 +183,7 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
                run(scope, slot)
              )
 
-    assert {:error, "reps must not exceed the next level or 10% above the recent best"} =
+    assert {:error, @over_cap} =
              ProposeWorkout.call(
                scope,
                args(160, List.duplicate({10, 5.0, 5.0}, 16)),

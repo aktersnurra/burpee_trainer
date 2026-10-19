@@ -100,6 +100,38 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJobTest do
     assert after_selection.plan.id == owned.id
   end
 
+  test "a run that still chose nothing after its reminder is cancelled, not retried" do
+    previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
+    previous_req = Req.default_options()
+
+    on_exit(fn ->
+      Application.put_env(:burpee_trainer, :llm_provider, previous_provider)
+      Req.default_options(previous_req)
+    end)
+
+    Application.put_env(:burpee_trainer, :llm_provider,
+      enabled: true,
+      url: "https://provider.test/v1",
+      api_key: "k",
+      model: "m"
+    )
+
+    scope = scope_fixture()
+    {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      Req.Test.json(conn, %{
+        "choices" => [%{"message" => %{"content" => Jason.encode!(%{"reply" => "Ready."})}}]
+      })
+    end)
+
+    Req.default_options(plug: {Req.Test, __MODULE__})
+    args = %{"user_id" => scope.user.id, "slot_key" => slot.slot_key}
+
+    assert {:cancel, :no_selection} = perform_job(PlanNextWorkoutJob, args)
+    assert Workouts.planned_by(scope, slot) == nil
+  end
+
   test "next local boundary is resolved through real DST policy and UTC conversion" do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "America/Los_Angeles")

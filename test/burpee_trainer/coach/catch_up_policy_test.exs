@@ -115,29 +115,6 @@ defmodule BurpeeTrainer.Coach.CatchUpPolicyTest do
     end
   end
 
-  describe "prescription/3" do
-    test "uses the exact integer catch-up formulas across factor boundaries" do
-      assert {:ok, %{duration_min: 40, factor_num: 75, ceiling_reps: 150}} =
-               CatchUpPolicy.prescription(2_400, 100, %{})
-
-      assert {:ok, %{duration_min: 41, factor_num: 60, ceiling_reps: 123}} =
-               CatchUpPolicy.prescription(2_401, 100, %{})
-
-      assert {:ok, %{duration_min: 60, factor_num: 60, ceiling_reps: 180}} =
-               CatchUpPolicy.prescription(3_600, 100, %{})
-
-      assert {:ok, %{duration_min: 61, factor_num: 50, ceiling_reps: 152}} =
-               CatchUpPolicy.prescription(3_601, 100, %{})
-
-      assert {:ok, %{duration_min: 80, factor_num: 50, ceiling_reps: 200}} =
-               CatchUpPolicy.prescription(4_800, 100, %{})
-    end
-
-    test "rejects remaining seconds below the catch-up floor" do
-      assert {:error, :not_eligible} = CatchUpPolicy.prescription(2_399, 100, %{})
-    end
-  end
-
   defp session(attrs) do
     Map.merge(
       %{

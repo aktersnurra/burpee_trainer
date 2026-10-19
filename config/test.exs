@@ -68,3 +68,6 @@ config :burpee_trainer, :oidc,
 config :burpee_trainer, :oidc_start_worker, false
 
 config :burpee_trainer, Oban, testing: :manual
+
+# Tests set the budgets they exercise; recorded responses report no cost.
+config :burpee_trainer, :llm_budget, daily_cost_cap_usd: nil, reservation_cost_usd: 0.0

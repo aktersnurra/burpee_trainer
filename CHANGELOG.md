@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-19 — The planner picks before it designs
+
+- The next workout is planned by a decision model first (`typesafe/jev-1.14` on OpenRouter's Decisions API): it picks one of the saved or built-in workouts that fit the slot's burpee type, minutes and level band, or answers that none suits today. A pick at confidence 0.6 or more is selected with a template rationale, and a sure `create_new` has the coach design one with `propose_workout` only. Without a decision model, when the call fails, or when it is unsure, the full planner runs as before. The planner never replaces a workout you or Claude chose for the day, including one chosen while the decision is out. `DECISIONS_MODEL`, `DECISIONS_URL` and `DECISIONS_ENABLED` configure it.
+- Automated LLM calls (planning, summary, memory, insight) and the ones you start have separate rolling-24-hour budgets, 25 and 40, so many chats no longer use up the overnight planner's calls. A $0.25 daily cost cap spans both.
+- Your recent best decides how hard the planner may go: at most 10% above your best 20-minute pace for the type in the last eight weeks, whatever your level; the next level caps it only when you have no recent session of that type. One rule (`Coach.RepCeiling`) holds for the workouts the coach designs and the saved ones it may pick.
+- `CatchUpPolicy.prescription/3`, the old catch-up rep ceiling nothing used since the coach-first cull, is removed.
+- Requests to OpenRouter name the app (`https://PHX_HOST`, "BurpeeTrainer", hidden from public listings), so its logs no longer show them as an unknown app.
+- Fixes a planner run that chose nothing: it finished as a success, so Home kept the default workout and the slot was never planned again. The planner is now reminded once, then the job is cancelled so it cannot spend the automated budget on retries; Home keeps its fallback.
+
 ## 2026-10-19 — Warnings fail the build; unused code removed
 
 - Every compile of the app fails on a warning (`elixirc_options: [warnings_as_errors: true]`), not only precommit and CI, and `mix test --warnings-as-errors` covers the test files.
