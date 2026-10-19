@@ -3,7 +3,7 @@
 Spec: `docs/specs/2026-10-19-fatigue-insights-design.md`. Builds on the planner prompt in
 `planner-recent-best-cap`. Each step tests first, `mix precommit` green.
 
-1. **Metrics.** `BurpeeTrainer.Workouts.Fatigue` (pure, property tests): schedule, nearest
+1. **Metrics.** Done. `BurpeeTrainer.Workouts.Fatigue` (pure, property tests): schedule, nearest
    matching, coverage, the fields in the spec.
 2. **Persistence.** Migration for the new session fields; computed at completion in place of
    the zipped `cadence_decline`/`pace_delta_sec`; `recovery_delta_sec` filled.

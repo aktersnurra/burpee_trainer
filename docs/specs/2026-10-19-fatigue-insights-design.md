@@ -30,15 +30,19 @@ too low:
 | `coverage` | matched reps / planned reps |
 | `pace_delta_sec` | median (actual − planned) interval over work reps |
 | `decline` | median(actual/planned) of the last third of work reps − the first third |
-| `slip_at_sec` | start of the first set from which the lag, net of the first set's median lag, stays above 1.5 s; nil when they kept up |
+| `slip_at_sec` | start of the first segment (a set, split into at most 10 reps) from which every later segment slipped: median lag, net of the opening segment's, above 1.5 s, or over 30% of its reps missed; nil when they kept up |
 | `kept_up` | `slip_at_sec` is nil |
 | `recovery_delta_sec` | median (actual − planned) time across rests, last rep before to first rep after |
-| `free_slope_sec_per_10` | for unpaced (max-effort) work: Theil–Sen slope of interval on rep index, per 10 reps |
 
 1. Scheduled time of each rep from the snapshot (cumulative work intervals and rests).
 2. Match each detection to the nearest scheduled rep within half an interval; unmatched
-   schedule slots are misses, unmatched detections are dropped.
-3. Below 80% coverage, return only `coverage`.
+   schedule slots are misses, unmatched detections are dropped. A rep the athlete fell a
+   whole interval behind on reads as missed, so slipping shows as late lag, misses, or both.
+3. Below 80% coverage of the opening third, return only `coverage`: late misses can only be
+   read as slipping when the camera worked while the athlete was fresh.
+
+An unpaced (max-effort) work kind does not exist yet; when it does, add a Theil–Sen slope of
+interval on rep index for it.
 
 Properties: a detection list equal to the schedule gives zero deltas, `kept_up` and no
 slip; dropping or inserting one detection changes no metric of later sets; scaling a
