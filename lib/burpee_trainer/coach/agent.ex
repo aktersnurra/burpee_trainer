@@ -14,6 +14,7 @@ defmodule BurpeeTrainer.Coach.Agent do
     ],
     coach_page: [Tools.History, Tools.Goals, Tools.ProposeGoal]
   }
+  @selection_reminder "Nothing was chosen. Call select_workout or propose_workout for this slot, then reply."
   @spec run(Scope.t(), :planner | :coach_page, String.t() | nil, keyword()) ::
           {:ok, %{reply: String.t(), suggestions: [String.t()]}} | {:error, term()}
   def run(%Scope{} = scope, surface, input, opts \\ []) when surface in [:planner, :coach_page] do
@@ -25,7 +26,8 @@ defmodule BurpeeTrainer.Coach.Agent do
       slot: Keyword.get(opts, :slot),
       pending_selection: nil,
       proposals: 0,
-      call_index: 0
+      call_index: 0,
+      reminded?: false
     }
 
     if surface == :coach_page and
@@ -85,6 +87,21 @@ defmodule BurpeeTrainer.Coach.Agent do
 
             String.length(reply) > 600 ->
               {:error, :invalid_provider_response}
+
+            # A planner reply that chose nothing would leave the built-in on Home and
+            # report success; it is reminded once, then the job retries.
+            run.surface == :planner and is_nil(run.pending_selection) and run.reminded? ->
+              {:error, :no_selection}
+
+            run.surface == :planner and is_nil(run.pending_selection) ->
+              messages =
+                messages ++
+                  [
+                    %{role: "assistant", content: Jason.encode!(content)},
+                    %{role: "user", content: @selection_reminder}
+                  ]
+
+              loop(scope, messages, tools, %{run | reminded?: true}, calls + 1, opts)
 
             true ->
               with {:ok, result} <- finalize(scope, run, reply),

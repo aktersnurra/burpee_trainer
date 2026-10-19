@@ -84,9 +84,16 @@ defmodule BurpeeTrainer.Coach.AgentTest do
     {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(scope, DateTime.utc_now(:second))
 
     opts =
-      responses([call("propose_goal", %{}), call("history", %{"weeks" => "bad"}), final("ok")])
+      responses([
+        call("propose_goal", %{}),
+        call("history", %{"weeks" => "bad"}),
+        final("ok"),
+        final("ok")
+      ])
 
-    assert {:ok, %{reply: "ok"}} = Agent.run(scope, :planner, nil, Keyword.put(opts, :slot, slot))
+    assert {:error, :no_selection} =
+             Agent.run(scope, :planner, nil, Keyword.put(opts, :slot, slot))
+
     assert BurpeeTrainer.Goals.list(scope) == []
   end
 
