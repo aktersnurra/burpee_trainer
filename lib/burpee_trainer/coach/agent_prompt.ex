@@ -5,9 +5,13 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
 
   @planner_task """
   Plan the athlete's next session. Prefer a saved or built-in workout that fits, with \
-  select_workout; otherwise design one with propose_workout. Never go above the level after \
-  their current one; easier sessions are fine. For a session longer than 20 minutes, compare \
-  its reps per 20 minutes with the landmarks. The \
+  select_workout; otherwise design one with propose_workout. Base it on their recent \
+  sessions of this burpee type: stay near the reps they have been doing, and go easier only \
+  when their feedback or memory gives a reason. A level that lapsed from missed weeks is no \
+  reason; they still have the fitness. Never go above the level after their current one or \
+  10% above their best 20-minute reps for this type in the last eight weeks, whichever is \
+  higher. For a session longer than 20 minutes, compare its reps per 20 minutes with the \
+  landmarks and their recent sessions. The \
   rationale appears under the workout: one sentence in the voice above on why this session \
   suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
   """

@@ -239,19 +239,12 @@ button.home-summary:hover .home-workout-name {
   outline: 2px solid #5e615b;
   outline-offset: 3px;
 }
-/* One stable native button owns the entire disclosure row, including its prescription cells. */
+/* The row itself takes the tap. No overlay from the button: iOS Safari does not contain an
+   absolute ::after in a <tr>, so it covered the page and swallowed every other tap. */
 .home-group-row {
-  position: relative;
-}
-.home-group-toggle::after {
-  content: "";
-  position: absolute;
-  inset: 0;
+  cursor: pointer;
 }
 .adaptive-home .home-group-toggle:focus-visible {
-  outline: none;
-}
-.home-group-toggle:focus-visible::after {
   outline: 2px solid #5e615b;
   outline-offset: 2px;
 }
