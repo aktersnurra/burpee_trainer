@@ -8,8 +8,8 @@ defmodule BurpeeTrainer.Coach.Selector do
   """
 
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Agent, AgentPrompt, Client, SelectionRationale}
-  alias BurpeeTrainer.{Levels, Workouts}
+  alias BurpeeTrainer.Coach.{Agent, AgentPrompt, Client, RepCeiling, SelectionRationale}
+  alias BurpeeTrainer.Workouts
 
   require Logger
 
@@ -34,20 +34,25 @@ defmodule BurpeeTrainer.Coach.Selector do
       # Read before the decision call, so a choice the owner or Claude makes while it is out
       # changes the selection and is kept.
       with {:ok, expected} <- Workouts.ensure_home_selection(scope, slot) do
-        case decide(scope, slot, config, decision_opts) do
-          {:select, plan} -> select(scope, expected, plan)
-          :create -> Agent.run(scope, :planner, nil, Keyword.put(agent_opts, :create_only, true))
-          :unavailable -> Agent.run(scope, :planner, nil, agent_opts)
-        end
+        decided(scope, slot, expected, decide(scope, slot, config, decision_opts), agent_opts)
       end
     else
       Agent.run(scope, :planner, nil, agent_opts)
     end
   end
 
+  defp decided(scope, _slot, expected, {:select, plan}, _agent_opts),
+    do: select(scope, expected, plan)
+
+  defp decided(scope, _slot, _expected, :create, agent_opts),
+    do: Agent.run(scope, :planner, nil, Keyword.put(agent_opts, :create_only, true))
+
+  defp decided(scope, _slot, _expected, :unavailable, agent_opts),
+    do: Agent.run(scope, :planner, nil, agent_opts)
+
   defp decide(scope, slot, config, opts) do
     context = AgentPrompt.context(scope, slot)
-    candidates = candidates(scope, slot, context.current_level)
+    candidates = candidates(scope, slot)
 
     if candidates == [] do
       log(scope, @create, nil, %{})
@@ -102,24 +107,30 @@ defmodule BurpeeTrainer.Coach.Selector do
     end
   end
 
-  # Fitting workouts: the slot's burpee type and minutes, at most the level after the
-  # athlete's current one.
-  defp candidates(scope, slot, current_level) do
-    ceiling = level_index(current_level) - 1
+  # Fitting workouts: the slot's burpee type and minutes, within the same ceiling the coach's
+  # own designs must keep (`RepCeiling`).
+  defp candidates(scope, slot) do
+    case RepCeiling.for_type(scope, slot.burpee_type) do
+      {:ok, ceiling} ->
+        scope
+        |> Workouts.list_library()
+        |> Enum.filter(fn plan ->
+          plan.burpee_type == slot.burpee_type and plan.target_duration_sec == slot.duration_sec and
+            RepCeiling.allows?(
+              ceiling,
+              plan.burpee_type,
+              plan.target_reps,
+              plan.target_duration_sec
+            )
+        end)
+        |> Enum.take(@max_candidates)
 
-    scope
-    |> Workouts.list_library()
-    |> Enum.filter(fn plan ->
-      plan.burpee_type == slot.burpee_type and plan.target_duration_sec == slot.duration_sec and
-        level_index(Levels.level_for_count(plan.burpee_type, reps_per_20(plan))) >= ceiling
-    end)
-    |> Enum.take(@max_candidates)
+      {:error, :timezone_unavailable} ->
+        []
+    end
   end
 
-  # `Levels.all_levels/0` runs from highest to lowest, so a higher level has a lower index.
-  defp level_index(level), do: Enum.find_index(Levels.all_levels(), &(&1 == level))
-
-  defp reps_per_20(plan), do: round(plan.target_reps * 1200 / plan.target_duration_sec)
+  defp reps_per_20(plan), do: RepCeiling.pace(plan.target_reps, plan.target_duration_sec)
 
   defp question(candidates) do
     %{

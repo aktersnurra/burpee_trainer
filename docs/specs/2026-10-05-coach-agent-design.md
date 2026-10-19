@@ -93,8 +93,8 @@ effect immediately for the next run. Agent writes compare `updated_at` and fail 
   backoff.
 - The job runs `Coach.Selector`. When a decision model is configured (`:decisions`, default
   `typesafe/jev-1.14` on OpenRouter's Decisions API), it first asks one Choice question:
-  which of the saved and built-in workouts that fit the slot's burpee type, minutes and
-  level band suits the athlete, or `create_new`. A workout chosen with confidence at or
+  which of the saved and built-in workouts that fit the slot's burpee type and minutes, and
+  stay within `Coach.RepCeiling`, suits the athlete, or `create_new`. A workout chosen with confidence at or
   above `min_confidence` (0.6) is selected with a `Coach.SelectionRationale` template, since
   the model writes no text. `create_new` at that confidence runs the agent on the `planner`
   surface with only `history`, `goals` and `propose_workout`. Without a decision model, when
@@ -106,9 +106,11 @@ effect immediately for the next run. Agent writes compare `updated_at` and fail 
 - A planner reply that chose nothing is reminded once, then fails with `:no_selection`, and
   the job is cancelled rather than retried so it cannot spend the shared automated budget. Success leaves the slot with a selection and a rationale. If the job is exhausted, the provider is disabled, or the budget cap is
   hit, the existing deterministic fallback selection stays; Home never waits on the job.
-- **(default)** The planner may only choose reps within the owner's current level band
-  (`Levels.level_for_count/2` of the proposed reps must equal the current level or the next
-  one).
+- The planner's reps, designed or picked, stay within `Coach.RepCeiling`: the owner's recent
+  best decides, at most 10% above their best 20-minute pace for the type in the last eight
+  weeks, whatever their level. Only with no session of the type in that time does the level
+  after their current one cap it. A longer slot (weekend catch-up) is compared at its
+  20-minute-equivalent pace; easier is always allowed.
 
 ### Coach page conversation
 

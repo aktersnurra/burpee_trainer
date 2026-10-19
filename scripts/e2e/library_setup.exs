@@ -378,12 +378,9 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  defp candidate_reps(%{strategy: :catch_up, personal_best: %{reps: reps}} = slot) do
-    {:ok, prescription} =
-      BurpeeTrainer.Coach.CatchUpPolicy.prescription(slot.duration_sec, reps, %{})
-
-    prescription.ceiling_reps
-  end
+  # The personal best's 20-minute pace held over the whole slot: within Coach.RepCeiling.
+  defp candidate_reps(%{strategy: :catch_up, personal_best: %{reps: reps}} = slot),
+    do: div(reps * slot.duration_sec, 1_200)
 
   defp candidate_reps(slot), do: max(div(slot.duration_sec, 12), 1)
 

@@ -17,6 +17,7 @@
 | `BurpeeTrainer.Coach` | User-scoped workout authoring: layout request, fitting, review, and approval by approval key |
 | `BurpeeTrainer.Coach.{RestFitter, WorkoutLayout, WorkoutRequest, WorkoutConfiguration, WorkoutGuidance, AuthoringPrompt}` | LLM layout schema and prompt, confirmed requests, and the pure rest fitter that computes exact rests |
 | `BurpeeTrainer.Coach.{Agent, AgentPrompt, Tool, Tools.*}` | Bounded tool-using coach for the planner and Coach-page surfaces |
+| `BurpeeTrainer.Coach.RepCeiling` | The most reps the planner may plan, designed or picked: 10% above the recent best, or the next level without a recent session |
 | `BurpeeTrainer.Coach.{Selector, SelectionRationale}` | Plans a slot with a decision model first (pick a fitting workout or `create_new`, then the coach designs one), and the template rationale for a picked workout |
 | `BurpeeTrainer.Coach.{Voice, Rationale}` | The one athlete-facing voice every prompt starts with, and the check the planner tools apply to a rationale before it reaches Home |
 | `BurpeeTrainer.Coach.{Memory, Memory.Ops, MemoryJob, PlanNextWorkoutJob}` | The coach's notes about the owner (one fact per row, guarded by `Memory.Ops`, shared with Claude), the job that keeps them after an exchange or session, and the job that plans the next workout (never replacing a slot the owner or Claude planned: `planned_by`) |

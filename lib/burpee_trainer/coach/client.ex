@@ -88,14 +88,7 @@ defmodule BurpeeTrainer.Coach.Client do
         result -> {result, %{}}
       end
 
-    {outcome, usage} =
-      case result do
-        {:ok, %{tool_calls: [_ | _], usage: usage}} -> {"tool_calls", usage}
-        {:ok, %{usage: usage}} -> {"ok", usage}
-        {:error, %{code: :provider_timeout}} -> {"timeout", error_usage}
-        {:error, %{code: :invalid_provider_response}} -> {"invalid_response", error_usage}
-        {:error, _} -> {"provider_error", error_usage}
-      end
+    {outcome, usage} = outcome(result, error_usage)
 
     # Chat reports prompt and completion tokens; the Decisions API, input and output tokens.
     :ok =
@@ -109,6 +102,15 @@ defmodule BurpeeTrainer.Coach.Client do
 
     result
   end
+
+  defp outcome({:ok, %{tool_calls: [_ | _], usage: usage}}, _), do: {"tool_calls", usage}
+  defp outcome({:ok, %{usage: usage}}, _), do: {"ok", usage}
+  defp outcome({:error, %{code: :provider_timeout}}, usage), do: {"timeout", usage}
+
+  defp outcome({:error, %{code: :invalid_provider_response}}, usage),
+    do: {"invalid_response", usage}
+
+  defp outcome({:error, _}, usage), do: {"provider_error", usage}
 
   defp token_usage(value) when is_integer(value) and value >= 0, do: value
   defp token_usage(_), do: nil

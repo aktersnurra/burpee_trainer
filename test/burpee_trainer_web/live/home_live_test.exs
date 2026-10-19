@@ -1850,19 +1850,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   end
 
   defp definition_for(slot, name) do
-    reps =
-      if slot.strategy == :catch_up do
-        {:ok, prescription} =
-          BurpeeTrainer.Coach.CatchUpPolicy.prescription(
-            slot.duration_sec,
-            slot.personal_best.reps,
-            %{}
-          )
-
-        prescription.ceiling_reps
-      else
-        10
-      end
+    # A long catch-up slot gets one rep every 15 seconds; a standard one, ten reps.
+    reps = if slot.strategy == :catch_up, do: div(slot.duration_sec, 15), else: 10
 
     cadence = slot.duration_sec / reps
 

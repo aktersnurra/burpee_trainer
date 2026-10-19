@@ -94,6 +94,48 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
              Repo.get_by!(LlmCall, user_id: scope.user.id)
   end
 
+  test "only saved workouts within 10% of the athlete's recent best are offered" do
+    {scope, slot, _fit, _before} = fixture()
+    recent = DateTime.add(DateTime.utc_now(:second), -2, :day)
+
+    for {type, reps} <- [{slot.burpee_type, 100}, {other_type(slot.burpee_type), 40}] do
+      Repo.insert!(%Workouts.WorkoutSession{
+        user_id: scope.user.id,
+        state: :completed,
+        source_kind: :manual,
+        display_name_snapshot: "Logged",
+        workout_type_snapshot: type,
+        burpee_type: type,
+        burpee_count_actual: reps,
+        duration_sec_actual: 1200,
+        completed_at: recent,
+        capture_mode: :logged
+      })
+    end
+
+    pace = fn reps -> div(reps * slot.duration_sec, 1200) end
+
+    within =
+      plan_fixture(scope.user, %{target_reps: pace.(105), target_duration_sec: slot.duration_sec})
+
+    # The next level would allow it; 10% above a recent best of 100 does not.
+    over =
+      plan_fixture(scope.user, %{target_reps: pace.(140), target_duration_sec: slot.duration_sec})
+
+    decide("create_new", 0.9)
+    chat_without_choice()
+
+    Selector.plan(scope, slot, opts())
+
+    assert_received {:decision_request, %{"questions" => q}}
+    offered = Map.keys(q["workout"]["criteria"])
+    assert "workout_#{within.id}" in offered
+    refute "workout_#{over.id}" in offered
+  end
+
+  defp other_type(:six_count), do: :navy_seal
+  defp other_type(:navy_seal), do: :six_count
+
   test "a confident create_new has the coach design a workout instead" do
     {scope, slot, _fit, before} = fixture()
     decide("create_new", 0.9)

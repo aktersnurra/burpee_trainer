@@ -1,22 +1,24 @@
 defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
   @behaviour BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Coach.{Rationale, Tool, Voice, WorkoutRequest, WorkoutLayout, RestFitter}
-  alias BurpeeTrainer.{Levels, Workouts, PlanCompiler, UserTime}
+  alias BurpeeTrainer.Coach.{
+    Rationale,
+    RepCeiling,
+    Tool,
+    Voice,
+    WorkoutRequest,
+    WorkoutLayout,
+    RestFitter
+  }
+
+  alias BurpeeTrainer.PlanCompiler
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
   alias BurpeeTrainer.Workouts.HomeSelection
-
-  # Level landmarks are counts for a 20-minute session.
-  @landmark_duration_sec 1_200
-  # A lapsed level must not cut the load below what the athlete does: their best recent
-  # rate for the type, plus this headroom, is allowed whatever their level.
-  @recent_days 56
-  @recent_headroom_pct 110
 
   def name, do: "propose_workout"
 
   def description,
     do:
-      "Fit a workout for the fixed slot type and duration, at most one level above the current level or 10% above their best 20-minute rate for the type in the last eight weeks, whichever is higher. It becomes this run's selection and is saved only when the run finishes. Phases must equal timed_rests + 1."
+      "Fit a workout for the fixed slot type and duration, at most 10% above their best 20-minute rate for the type in the last eight weeks, whatever their level; with no session of the type in that time, at most one level above the current level. It becomes this run's selection and is saved only when the run finishes. Phases must equal timed_rests + 1."
 
   def schema do
     {:ok, request} =
@@ -66,7 +68,7 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
 
     with :ok <- plain_name(layout["name"]),
          {:ok, rationale} <- Rationale.validate(layout["rationale"]),
-         :ok <- within_level_band(scope, slot, reps),
+         :ok <- within_ceiling(scope, slot, reps),
          {:ok, request} <- WorkoutRequest.new(attrs),
          {:ok, canonical} <- RestFitter.fit(request, %{layout | "rationale" => rationale}),
          {:ok, definition} <- WorkoutDefinition.new(canonical),
@@ -88,45 +90,19 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
 
   def call(_, _, _), do: {:error, "invalid workout arguments or missing slot"}
 
-  # Easier sessions below the current level are allowed; the next level or the recent best
-  # rate plus headroom, whichever is higher, caps the plan. A longer slot (weekend catch-up)
-  # is compared at its 20-minute-equivalent rate.
-  defp within_level_band(scope, slot, reps) do
-    case UserTime.context(scope.user, DateTime.utc_now()) do
-      {:ok, %{date: today}} ->
-        ascending = Enum.reverse(Levels.all_levels())
-        rank = fn level -> Enum.find_index(ascending, &(&1 == level)) end
-        current = Levels.current_level(Workouts.list_sessions(scope), today)
-        rate = rate(reps, slot.duration_sec)
+  defp within_ceiling(scope, slot, reps) do
+    case RepCeiling.for_type(scope, slot.burpee_type) do
+      {:ok, ceiling} ->
+        if RepCeiling.allows?(ceiling, slot.burpee_type, reps, slot.duration_sec),
+          do: :ok,
+          else:
+            {:error,
+             "reps must not exceed 10% above the recent best (the next level without a recent session)"}
 
-        if rank.(Levels.level_for_count(slot.burpee_type, rate)) <= rank.(current) + 1 or
-             rate <= recent_cap(scope, slot.burpee_type),
-           do: :ok,
-           else: {:error, "reps must not exceed the next level or 10% above the recent best"}
-
-      {:error, _} ->
+      {:error, :timezone_unavailable} ->
         {:error, "owner timezone is unavailable"}
     end
   end
-
-  defp recent_cap(scope, burpee_type) do
-    since = DateTime.add(DateTime.utc_now(), -@recent_days, :day)
-
-    best =
-      scope
-      |> Workouts.list_sessions(burpee_type)
-      |> Enum.filter(
-        &(DateTime.compare(&1.completed_at, since) != :lt and
-            is_integer(&1.burpee_count_actual) and is_integer(&1.duration_sec_actual))
-      )
-      |> Enum.map(&rate(&1.burpee_count_actual, &1.duration_sec_actual))
-      |> Enum.max(fn -> 0 end)
-
-    div(best * @recent_headroom_pct, 100)
-  end
-
-  defp rate(reps, duration_sec),
-    do: div(reps * @landmark_duration_sec, max(duration_sec, @landmark_duration_sec))
 
   defp plain_name(name) when is_binary(name) do
     case Voice.internal_id(name) do
