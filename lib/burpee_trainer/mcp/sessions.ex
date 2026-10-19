@@ -7,6 +7,7 @@ defmodule BurpeeTrainer.Mcp.Sessions do
   alias BurpeeTrainer.{History, UserTime}
   alias BurpeeTrainer.Coach.AuthoritativeSession
   alias BurpeeTrainer.Stats.Series
+  alias BurpeeTrainer.Workouts.Fatigue
 
   @types %{"six_count" => :six_count, "navy_seal" => :navy_seal}
   @capture_modes %{"tracked" => :tracked, "timed" => :timed, "logged" => :logged}
@@ -146,6 +147,7 @@ defmodule BurpeeTrainer.Mcp.Sessions do
         if(measured?, do: hd(Series.progress([session]).points).normalized_reps),
       "pace_consistency" => session.pace_consistency,
       "sets_completed" => session.prescribed_sets_completed,
+      "fatigue" => Fatigue.summary(session),
       "mood" => session.mood,
       "primary_limiter" => session.primary_limiter && to_string(session.primary_limiter),
       "preference" => session.preference_feedback && to_string(session.preference_feedback),

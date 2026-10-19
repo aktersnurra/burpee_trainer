@@ -71,6 +71,25 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   end
 
   @doc """
+  A stored session's fatigue as the coach and Claude read it: nil without camera reps, only
+  the camera's coverage when it missed the start.
+  """
+  @spec summary(map()) :: map() | nil
+  def summary(%{fatigue_coverage: nil}), do: nil
+  def summary(%{fatigue_coverage: coverage, kept_up: nil}), do: %{"camera_coverage" => coverage}
+
+  def summary(session) do
+    %{
+      "camera_coverage" => session.fatigue_coverage,
+      "kept_up" => session.kept_up,
+      "slip_at_sec" => session.slip_at_sec,
+      "decline" => session.fatigue_decline,
+      "pace_delta_sec" => session.pace_delta_sec,
+      "recovery_delta_sec" => session.recovery_delta_sec
+    }
+  end
+
+  @doc """
   Fatigue for a stored session: its `cadence_ms` JSON and its compiled program snapshot
   (string or atom keys). Every field is nil without detected reps or a program.
   """

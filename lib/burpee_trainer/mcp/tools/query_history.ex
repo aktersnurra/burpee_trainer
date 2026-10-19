@@ -12,7 +12,8 @@ defmodule BurpeeTrainer.Mcp.Tools.QueryHistory do
     do:
       "Completed sessions, newest first, matching all the filters given. Each has reps and " <>
         "minutes (planned and done), pace, reps per 20 minutes, pace consistency, sets " <>
-        "completed, mood, limiter, preference, energy and heat, tags and notes. Pass " <>
+        "completed, mood, limiter, preference, energy and heat, tags and notes, and for " <>
+        "camera sessions fatigue (see the coach prompt's glossary). Pass " <>
         "next_cursor back as cursor for the next page."
 
   def schema,

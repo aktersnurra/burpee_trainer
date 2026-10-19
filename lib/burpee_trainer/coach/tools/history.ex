@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Coach.Tools.History do
   alias BurpeeTrainer.Coach.{Tool, AuthoritativeSession}
   import Ecto.Query
   alias BurpeeTrainer.{Repo, Accounts.Scope}
-  alias BurpeeTrainer.Workouts.WorkoutSession
+  alias BurpeeTrainer.Workouts.{Fatigue, WorkoutSession}
   def name, do: "history"
   def description, do: "Completed session summaries for 1 to 26 weeks."
 
@@ -46,6 +46,7 @@ defmodule BurpeeTrainer.Coach.Tools.History do
           do: s.duration_sec_actual / s.burpee_count_actual,
           else: nil
         ),
-      "feedback" => Map.take(s, [:mood, :primary_limiter, :preference_feedback])
+      "feedback" => Map.take(s, [:mood, :primary_limiter, :preference_feedback]),
+      "fatigue" => Fatigue.summary(s)
     }
 end

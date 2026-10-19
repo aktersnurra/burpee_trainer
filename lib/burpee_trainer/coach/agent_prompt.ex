@@ -40,6 +40,11 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \
+  fatigue is null without the camera; camera_coverage is the share of planned reps it caught, \
+  and when it missed the start that is all there is. kept_up: they stayed on the beat to the \
+  end; slip_at_sec: when they fell behind for good; decline: how much slower than planned \
+  the last third was than the first (0.08 is 8%); pace_delta_sec and recovery_delta_sec: \
+  median seconds slower than planned between reps and across rests. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   a longer weekend session that makes up missed minutes; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time.
