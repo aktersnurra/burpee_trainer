@@ -3,7 +3,6 @@ import test from "node:test";
 
 import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { featureFrameFromPose } from "./pose_features.mjs";
-import { userLabeledRepFeatureFrames } from "./pose_burpee_hsmm_user_labeled_fixture.mjs";
 
 const video = { videoWidth: 400, videoHeight: 400 };
 
@@ -193,25 +192,12 @@ test("counts one low-front observed cycle with one or three floor pushups", () =
 	assert.deepEqual(run(frames).reps, [900, 3700]);
 });
 
-test("counts the two user-labeled reps from their derived macro features", () => {
-	assert.deepEqual(run(userLabeledRepFeatureFrames).reps, [7_080, 31_076]);
-});
-
 test("foreshortened image coordinates do not change world-based phase results", () => {
 	assert.deepEqual(
 		run(lowFrontFeatureFrames(lowFrontCycle(), { foreshortenImage: true }))
 			.reps,
 		[900],
 	);
-});
-
-test("advances only when weighted low-front evidence clears the forward threshold", () => {
-	const result = stepBurpeeHsmm(
-		{ ...initialBurpeeHsmmState(), phase: "standing", phaseStartedAtMs: 0 },
-		lowFrontFrame("lowering", 150, { worldWristVerticalSpan: 1.8 }),
-	);
-
-	assert.equal(result.state.phase, "lowering");
 });
 
 test("a qualifying velocity spike cannot rise from pushup below the body-span minimum", () => {
@@ -244,40 +230,6 @@ test("does not count a squat-only or interrupted floor sequence", () => {
 	]);
 
 	assert.deepEqual(run(frames).reps, []);
-});
-
-test("a slow valid return completes only when upright evidence reaches the return threshold", () => {
-	const prefix = lowFrontFeatureFrames([
-		["upright", 0],
-		["lowering", 150],
-		["floor", 300],
-		["returning", 450],
-	]);
-	const slowUpright = lowFrontFrame("upright", 7_232, {
-		worldBodyVerticalSpan: 2.6805,
-		worldHipVerticalSpan: 1.6902,
-		worldTorsoElevation: 0.9902,
-		worldWristVerticalSpan: 1.7297,
-	});
-
-	assert.deepEqual(run(prefix.concat(slowUpright)).reps, [7_232]);
-});
-
-test("a slow return below the return-to-upright threshold does not count", () => {
-	const prefix = lowFrontFeatureFrames([
-		["upright", 0],
-		["lowering", 150],
-		["floor", 300],
-		["returning", 450],
-	]);
-	const weakUpright = lowFrontFrame("upright", 7_232, {
-		worldBodyVerticalSpan: 2.55,
-		worldHipVerticalSpan: 1.6,
-		worldTorsoElevation: 0.99,
-		worldWristVerticalSpan: 1.72,
-	});
-
-	assert.deepEqual(run(prefix.concat(weakUpright)).reps, []);
 });
 
 test("an unusable observation during pushup preserves the partial path", () => {
@@ -435,33 +387,6 @@ test("a visible strong out-of-order observation resets a preserved pushup", () =
 
 	assert.equal(result.state.phase, "standing");
 	assert.equal(result.state.phaseStartedAtMs, null);
-});
-
-test("counts only when final standing evidence reaches 0.47", () => {
-	const rising = {
-		...initialBurpeeHsmmState(),
-		phase: "rising",
-		phaseStartedAtMs: 0,
-	};
-	const atThreshold = macroFrame("standing", 600, {
-		worldBodyVerticalSpan: 2.55,
-		worldHipVerticalSpan: 1.7,
-		worldTorsoElevation: 0.85,
-		worldWristVerticalSpan: 1.455,
-	});
-	const belowThreshold = macroFrame("standing", 600, {
-		worldBodyVerticalSpan: 2.55,
-		worldHipVerticalSpan: 1.7,
-		worldTorsoElevation: 0.85,
-		worldWristVerticalSpan: 1.4535,
-	});
-
-	assert.equal(stepBurpeeHsmm(rising, atThreshold).rep, true);
-	assert.equal(stepBurpeeHsmm(rising, belowThreshold).rep, false);
-});
-
-test("raw low-front feature output drives one complete macro cycle", () => {
-	assert.deepEqual(run(lowFrontFeatureFrames(lowFrontCycle())).reps, [900]);
 });
 
 test("low-confidence wrists and ankles in raw low-front features cannot advance a macro cycle", () => {

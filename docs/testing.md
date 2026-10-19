@@ -31,7 +31,7 @@ The full-flow suite has one file for each user-visible behavior below:
 11. Session completion narrates an insight (validated or fallback) shown on Home and in History: `test/burpee_trainer_web/flows/insight_flow_test.exs`, `test/burpee_trainer_web/flows/insight_presentation_test.exs`
 12. A fresh user opens on a ready starter workout with Start as the one action, and the slot is planned at most once: `test/burpee_trainer_web/live/home_first_use_test.exs`
 13. The coach summary heads History and is the only way into Coach and back; a summary from an earlier week shows the loader until the refresh arrives; with nothing to summarize the line invites the owner to the coach instead: `test/burpee_trainer_web/flows/history_summary_flow_test.exs`
-14. A real recorded 20-minute session, replayed through the camera's rep detector (HSMM), counts exactly the 140 reps the athlete logged: `assets/js/hooks/pose_burpee_hsmm_session_fixture_test.mjs`. The fixture is every pose sample the camera recorded, gzipped.
+14. Real recorded 20-minute sessions, replayed through the camera's rep detector (HSMM), count exactly their reps: a steady one (140) and one that slipped with a long pause (135): `assets/js/hooks/pose_burpee_hsmm_session_fixture_test.mjs`. Each fixture is every pose sample the camera recorded, gzipped.
 
 ## Commands
 

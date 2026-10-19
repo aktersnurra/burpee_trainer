@@ -8,21 +8,26 @@ import {
 	stepBurpeeHsmm,
 } from "./pose_burpee_hsmm.mjs";
 
-// Every pose sample the camera recorded in one real 20-minute six-count session, in order.
-// The athlete logged 140 reps.
-const fixture = JSON.parse(
-	gunzipSync(
-		readFileSync(
-			new URL("./fixtures/pose_burpee_session_140_reps.json.gz", import.meta.url),
-		),
-	),
-);
+// Every pose sample the camera recorded in a real 20-minute six-count session, in order.
+const sessions = [
+	// Steady: 140 reps logged, every set on time.
+	{ file: "pose_burpee_session_140_reps.json.gz", reps: 140, kind: "a steady session" },
+	// Messy: 150 planned, slipped from the middle, with a pause of about 2.5 minutes. The
+	// athlete logged 131 by hand and thinks 135 is right.
+	{ file: "pose_burpee_session_135_reps.json.gz", reps: 135, kind: "a session that slipped" },
+];
 
-test("a real session counts exactly the reps the athlete logged", () => {
-	let state = initialBurpeeHsmmState();
-	for (const sample of fixture.samples) {
-		state = stepBurpeeHsmm(state, sample.features).state;
-	}
+for (const { file, reps, kind } of sessions) {
+	test(`${kind} counts exactly its ${reps} reps`, () => {
+		const fixture = JSON.parse(
+			gunzipSync(readFileSync(new URL(`./fixtures/${file}`, import.meta.url))),
+		);
 
-	assert.equal(state.cadenceMs.length, fixture.reps_logged);
-});
+		let state = initialBurpeeHsmmState();
+		for (const sample of fixture.samples) {
+			state = stepBurpeeHsmm(state, sample.features).state;
+		}
+
+		assert.equal(state.cadenceMs.length, reps);
+	});
+}

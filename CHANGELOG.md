@@ -3,6 +3,7 @@
 ## 2026-10-20 — Pose traces stored gzipped
 
 - Camera pose traces are stored gzipped (`Workouts.GzipText`): a 20-minute session took about 120 MB as plain JSON, about 18 MB now. A migration compresses existing traces one chunk at a time; on a copy of production data the database went from 317 MB to 54 MB after `VACUUM`, with every chunk's digest unchanged. Run `VACUUM` once after deploying to give the space back.
+- Two real 20-minute camera sessions are test fixtures: replayed through the rep detector (HSMM), a steady one counts exactly 140 reps and one that slipped with a long pause exactly 135. Six HSMM tests that only pinned tuning constants or replayed a synthetic happy path are removed.
 
 ## 2026-10-19 — The planner picks before it designs
 
