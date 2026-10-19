@@ -493,6 +493,7 @@ export function segmentTransition(state, event) {
 		}
 
 		case "COUNTDOWN_TICK": {
+			if (state.mode !== "countdown") return { state, commands: [] };
 			if (event.value >= 1) {
 				return {
 					state: {
@@ -547,6 +548,7 @@ export function segmentTransition(state, event) {
 			};
 
 		case "TICK":
+			if (state.mode !== "running") return { state, commands: [] };
 			return tickSegment(state, event);
 
 		case "DISPLAY_FRAME": {
@@ -612,6 +614,7 @@ export function segmentTransition(state, event) {
 		}
 
 		case "PAUSE":
+			if (state.mode !== "running") return { state, commands: [] };
 			return {
 				state: {
 					...state,
@@ -622,6 +625,7 @@ export function segmentTransition(state, event) {
 			};
 
 		case "RESUME": {
+			if (state.mode !== "paused") return { state, commands: [] };
 			const inactiveStart = [state.clock.hiddenAt, state.clock.pauseTime]
 				.filter((time) => time !== null)
 				.reduce(
