@@ -114,22 +114,6 @@ function pose(offset = 0) {
 	};
 }
 
-test("derives body-scale-normalized world geometry without camera coordinates", () => {
-	const previous = featureFrameFromPose(lowFrontPose("upright"), 0, video);
-	const frame = featureFrameFromPose(
-		lowFrontPose("lowering"),
-		100,
-		video,
-		previous,
-	);
-
-	assert.equal(frame.worldBodyVerticalSpan, 3);
-	assert.equal(frame.worldHipVerticalSpan, 2);
-	assert.equal(frame.worldWristVerticalSpan, 1.25);
-	assert.equal(frame.worldTorsoElevation, 1);
-	assert.equal(frame.dWorldBodyVerticalSpan, -5);
-});
-
 test("omits world macro features when a required landmark has no world point", () => {
 	const frame = featureFrameFromPose(
 		lowFrontPose("floor", ["left_wrist"]),

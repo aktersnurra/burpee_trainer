@@ -6,6 +6,8 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
   alias BurpeeTrainer.{History, Mcp, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
+  alias BurpeeTrainer.Workouts.WorkoutSession
+  import Ecto.Query
 
   defp call(scope, name, arguments \\ %{}) do
     {:reply, %{"result" => result}} =
@@ -143,6 +145,28 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
       assert session["date"] == Date.to_iso8601(Date.add(Date.utc_today(), -1))
       assert Map.has_key?(session, "note_post")
       assert Map.has_key?(session, "tags")
+    end
+
+    test "a camera session carries its fatigue; others carry none", %{user: user, scope: scope} do
+      camera = logged(user, 1, %{burpee_count_actual: 140, duration_sec_actual: 1200})
+      logged(user, 2, %{burpee_count_actual: 140, duration_sec_actual: 1200})
+
+      Repo.update_all(from(s in WorkoutSession, where: s.id == ^camera.id),
+        set: [fatigue_coverage: 0.97, kept_up: false, slip_at_sec: 720.0, fatigue_decline: 0.08]
+      )
+
+      {:ok, %{"sessions" => [tracked, plain]}} = call(scope, "query_history")
+
+      assert %{"kept_up" => false, "slip_at_sec" => 720.0, "decline" => 0.08} =
+               tracked["fatigue"]
+
+      assert plain["fatigue"] == nil
+      # The planner reads the same shape.
+      assert [%{"fatigue" => %{"slip_at_sec" => 720.0}}, %{"fatigue" => nil}] =
+               BurpeeTrainer.Coach.AgentPrompt.context(scope)
+               |> Jason.encode!()
+               |> Jason.decode!()
+               |> Map.fetch!("recent_sessions")
     end
 
     test "paging returns every session exactly once", %{user: user, scope: scope} do

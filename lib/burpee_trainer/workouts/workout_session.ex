@@ -52,9 +52,13 @@ defmodule BurpeeTrainer.Workouts.WorkoutSession do
     field(:prescribed_sets_completed, :integer)
     field(:reps_delta, :integer)
     field(:shortened, :boolean)
-    field(:recovery_delta_sec, :integer)
+    # Fatigue from `cadence_ms` against the program (`Workouts.Fatigue`); nil without both.
+    field(:recovery_delta_sec, :float)
     field(:pace_delta_sec, :float)
-    field(:cadence_decline, :float)
+    field(:fatigue_coverage, :float)
+    field(:fatigue_decline, :float)
+    field(:slip_at_sec, :float)
+    field(:kept_up, :boolean)
 
     # Derived fields — computed by Workouts context at save time, never from user input.
     field(:style_name, :string)

@@ -3,16 +3,23 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   alias BurpeeTrainer.Coach.{Memory, Tools, Policy, Voice}
   alias BurpeeTrainer.{Levels, Workouts}
 
+  # How the next session moves on from the last one of its type, designed or picked.
+  @progression "Progress from their last session of this type: when they kept up and their " <>
+                 "mood was not -1 (without fatigue: they did the planned reps in the planned " <>
+                 "time), add about 5 reps, or keep the reps and shorten the rests. When they " <>
+                 "slipped only in the last third, or their mood was -1, repeat it. When they " <>
+                 "slipped earlier or did fewer reps than planned, plan a little easier."
+
   @planner_task """
   Plan the athlete's next session. Prefer a saved or built-in workout that fits, with \
   select_workout; otherwise design one with propose_workout. Base it on their recent \
   sessions of this burpee type: stay near the reps they have been doing, and go easier only \
-  when their feedback or memory gives a reason. A level that lapsed from missed weeks is no \
+  when their feedback, fatigue or memory gives a reason. A level that lapsed from missed weeks is no \
   reason; they still have the fitness. Never go more than 10% above their best 20-minute reps \
   for this type in the last eight weeks, whatever their level; only with no session of the \
-  type in that time does the level after their current one cap it. For a session longer than 20 minutes, compare its reps per 20 minutes with the \
-  landmarks and their recent sessions. The \
-  rationale appears under the workout: one sentence in the voice above on why this session \
+  type in that time does the level after their current one cap it. For a session longer \
+  than 20 minutes, compare its reps per 20 minutes with the landmarks and their recent \
+  sessions. #{@progression} The rationale appears under the workout: one sentence in the voice above on why this session \
   suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
   """
 
@@ -20,8 +27,8 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   Design the athlete's next session with propose_workout: none of their saved or built-in \
   workouts suits them today. Never go more than 10% above their best 20-minute reps for \
   this type in the last eight weeks (with no recent session, above the level after their \
-  current one); easier sessions are fine. For a session longer than 20 minutes, compare its reps per 20 minutes \
-  with the landmarks. The rationale appears under the workout: one sentence in the voice \
+  current one); easier sessions are fine. For a session longer than 20 minutes, compare its \
+  reps per 20 minutes with the landmarks. #{@progression} The rationale appears under the workout: one sentence in the voice \
   above on why this session suits them now; why, not what, since the name, reps and minutes \
   are shown above it. Finish with one sentence explaining your design.
   """
@@ -39,7 +46,13 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   from earlier, oldest first. goals: \
   their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
-  sessions first, with reps, duration_sec, pace_sec (seconds per rep) and their feedback. \
+  sessions first, with reps and reps_planned, duration_sec and duration_sec_planned, pace_sec \
+  (seconds per rep) and their feedback (mood: -1 rough, 0 OK, 1 good). \
+  fatigue is null without the camera; camera_coverage is the share of planned reps it caught, \
+  and when it missed the start that is all there is. kept_up: they stayed on the beat to the \
+  end; slip_at_sec: when they fell behind for good; decline: how much slower than planned \
+  the last third was than the first (0.08 is 8%); pace_delta_sec and recovery_delta_sec: \
+  median seconds slower than planned between reps and across rests. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   a longer weekend session that makes up missed minutes; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time.
