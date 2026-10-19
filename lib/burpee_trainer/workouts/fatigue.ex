@@ -70,6 +70,48 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
     end
   end
 
+  @doc """
+  Fatigue for a stored session: its `cadence_ms` JSON and its compiled program snapshot
+  (string or atom keys). Every field is nil without detected reps or a program.
+  """
+  @spec for_session(String.t() | nil, map() | nil) :: t()
+  def for_session(cadence_json, program_snapshot)
+      when is_binary(cadence_json) and is_map(program_snapshot) do
+    with {:ok, [_ | _] = cadence} <- Jason.decode(cadence_json),
+         true <- Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) do
+      compute(cadence, snapshot_events(program_snapshot))
+    else
+      _ -> @empty
+    end
+  end
+
+  def for_session(_cadence_json, _program_snapshot), do: @empty
+
+  defp snapshot_events(snapshot) do
+    for event <- List.wrap(get(snapshot, :events)), is_map(event) do
+      case get(event, :kind) do
+        kind when kind in ["work", :work] ->
+          %{
+            kind: :work,
+            reps: get(event, :reps),
+            sec_per_rep: micros(get(event, :sec_per_rep_us))
+          }
+
+        kind when kind in ["rest", :rest] ->
+          %{kind: :rest, duration_sec: millis(get(event, :duration_ms))}
+
+        _other ->
+          %{kind: :unknown}
+      end
+    end
+  end
+
+  defp get(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
+  defp micros(us) when is_integer(us), do: us / 1_000_000
+  defp micros(_us), do: nil
+  defp millis(ms) when is_integer(ms), do: ms / 1_000
+  defp millis(_ms), do: nil
+
   # Every scheduled rep: when it is due to finish, its planned interval, and where it sits.
   defp schedule(events) do
     events
@@ -165,17 +207,25 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
     end
   end
 
+  # Each set in even segments of at most @segment_reps, so no short tail segment is left
+  # where one miss is a large fraction.
   defp segments(matched) do
     matched
     |> Enum.chunk_by(& &1.set)
-    |> Enum.flat_map(&Enum.chunk_every(&1, @segment_reps))
+    |> Enum.flat_map(fn set ->
+      count = ceil(length(set) / @segment_reps)
+      size = ceil(length(set) / count)
+      Enum.chunk_every(set, size)
+    end)
   end
 
+  # One miss is a camera blink, never a slip on its own.
   defp slipped?(segment, baseline) do
-    misses = Enum.count(segment, &is_nil(&1.t)) / length(segment)
+    misses = Enum.count(segment, &is_nil(&1.t))
     lag = segment |> lags() |> median()
 
-    misses > @slip_miss_fraction or (is_number(lag) and lag - baseline > @slip_lag_sec)
+    (misses >= 2 and misses / length(segment) > @slip_miss_fraction) or
+      (is_number(lag) and lag - baseline > @slip_lag_sec)
   end
 
   defp lags(segment), do: for(%{t: t, at: at} <- segment, is_number(t), do: t - at)

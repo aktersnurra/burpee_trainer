@@ -30,7 +30,7 @@ too low:
 | `coverage` | matched reps / planned reps |
 | `pace_delta_sec` | median (actual − planned) interval over work reps |
 | `decline` | median(actual/planned) of the last third of work reps − the first third |
-| `slip_at_sec` | start of the first segment (a set, split into at most 10 reps) from which every later segment slipped: median lag, net of the opening segment's, above 1.5 s, or over 30% of its reps missed; nil when they kept up |
+| `slip_at_sec` | start of the first segment (a set, split evenly into segments of at most 10 reps) from which every later segment slipped: median lag, net of the opening segment's, above 1.5 s, or at least two and over 30% of its reps missed; nil when they kept up |
 | `kept_up` | `slip_at_sec` is nil |
 | `recovery_delta_sec` | median (actual − planned) time across rests, last rep before to first rep after |
 

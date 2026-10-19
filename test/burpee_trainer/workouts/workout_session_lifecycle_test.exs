@@ -211,6 +211,34 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
                Workouts.resume_session(Scope.for_user(user), 2_147_483_647)
     end
 
+    test "a camera session stores its fatigue against the plan; a session without one stores none" do
+      user = user_fixture()
+      plan = plan_fixture(user, %{"target_reps" => 4, "target_duration_sec" => 20})
+      attrs = %{"burpee_count_actual" => 4, "duration_sec_actual" => 20}
+
+      {:ok, tracked} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
+      assert {:ok, completed} =
+               Workouts.complete_session(
+                 Scope.for_user(user),
+                 tracked.id,
+                 attrs,
+                 {:trusted, [5_000, 10_000, 15_000, 20_000], 5.0}
+               )
+
+      assert completed.fatigue_coverage == 1.0
+      assert completed.kept_up
+      assert completed.pace_delta_sec == 0.0
+      assert Repo.reload!(completed).kept_up
+
+      {:ok, timed} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
+      assert {:ok, completed} =
+               Workouts.complete_session(Scope.for_user(user), timed.id, attrs, :timed)
+
+      assert is_nil(completed.fatigue_coverage) and is_nil(completed.kept_up)
+    end
+
     test "completion updates the same row once and retains derived capture and typed feedback" do
       user = user_fixture()
       plan = plan_fixture(user)

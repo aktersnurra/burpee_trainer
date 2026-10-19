@@ -21,6 +21,7 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Milestones
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
+  alias BurpeeTrainer.Workouts.Fatigue
   alias BurpeeTrainer.Workouts.PaceConsistency
 
   alias BurpeeTrainer.Workouts.{
@@ -2288,16 +2289,30 @@ defmodule BurpeeTrainer.Workouts do
     actual_duration = Ecto.Changeset.get_field(changeset, :duration_sec_actual)
     target_reps = Ecto.Changeset.get_field(changeset, :burpee_count_planned)
     target_duration = Ecto.Changeset.get_field(changeset, :duration_sec_planned)
-    cadence_intervals = cadence_intervals_from_changeset(changeset)
-    expected_intervals = expected_program_intervals(program_snapshot)
+
+    fatigue =
+      changeset
+      |> Ecto.Changeset.get_field(:cadence_ms)
+      |> Fatigue.for_session(program_snapshot)
 
     %{
       reps_delta: reps_delta(actual_reps, target_reps),
       shortened: shortened?(actual_duration, target_duration),
-      prescribed_sets_completed: prescribed_sets_completed(program_snapshot, actual_reps),
-      recovery_delta_sec: recovery_delta_sec(cadence_intervals, expected_intervals),
-      pace_delta_sec: pace_delta_sec(cadence_intervals, expected_intervals),
-      cadence_decline: cadence_decline(cadence_intervals, expected_intervals)
+      prescribed_sets_completed: prescribed_sets_completed(program_snapshot, actual_reps)
+    }
+    |> Map.merge(fatigue_fields(fatigue))
+  end
+
+  @doc "A `Workouts.Fatigue` result as the session's columns."
+  @spec fatigue_fields(Fatigue.t()) :: map()
+  def fatigue_fields(fatigue) do
+    %{
+      recovery_delta_sec: fatigue.recovery_delta_sec,
+      pace_delta_sec: fatigue.pace_delta_sec,
+      fatigue_coverage: fatigue.coverage,
+      fatigue_decline: fatigue.decline,
+      slip_at_sec: fatigue.slip_at_sec,
+      kept_up: fatigue.kept_up
     }
   end
 
@@ -2328,115 +2343,6 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp prescribed_sets_completed(_program_snapshot, _actual_reps), do: nil
-
-  defp cadence_intervals_from_changeset(changeset) do
-    case Ecto.Changeset.get_field(changeset, :cadence_ms) do
-      cadence when is_binary(cadence) ->
-        with {:ok, timestamps} <- Jason.decode(cadence),
-             true <- valid_cadence_values?(timestamps) do
-          cadence_intervals(timestamps)
-        else
-          _other -> nil
-        end
-
-      _other ->
-        nil
-    end
-  end
-
-  defp cadence_intervals(timestamps) when is_list(timestamps) do
-    timestamps
-    |> Enum.reduce({0, []}, fn timestamp, {previous_timestamp, acc} ->
-      {timestamp, [(timestamp - previous_timestamp) / 1_000 | acc]}
-    end)
-    |> elem(1)
-    |> Enum.reverse()
-  end
-
-  defp expected_program_intervals(program_snapshot) when is_map(program_snapshot) do
-    program_snapshot
-    |> program_events()
-    |> Enum.reduce({[], nil}, fn
-      %{kind: :work, reps: reps, sec_per_rep: sec_per_rep}, {acc, pending_rest_sec}
-      when is_integer(reps) and reps > 0 ->
-        first_interval =
-          if is_integer(pending_rest_sec) and pending_rest_sec > 0 do
-            [{:boundary, pending_rest_sec + sec_per_rep}]
-          else
-            [{:work, sec_per_rep}]
-          end
-
-        work_intervals = List.duplicate({:work, sec_per_rep}, max(reps - 1, 0))
-        {acc ++ first_interval ++ work_intervals, nil}
-
-      %{kind: :rest, duration_sec: duration_sec}, {acc, _pending_rest_sec}
-      when is_integer(duration_sec) and duration_sec >= 0 ->
-        {acc, duration_sec}
-
-      _other, acc ->
-        acc
-    end)
-    |> elem(0)
-  end
-
-  defp pace_delta_sec(nil, _expected_intervals), do: nil
-
-  defp pace_delta_sec(cadence_intervals, expected_intervals) do
-    cadence_intervals
-    |> comparable_work_pairs(expected_intervals)
-    |> average_interval_delta()
-  end
-
-  defp recovery_delta_sec(nil, _expected_intervals), do: nil
-
-  defp recovery_delta_sec(_cadence_intervals, _expected_intervals), do: nil
-
-  defp cadence_decline(nil, _expected_intervals), do: nil
-
-  defp cadence_decline(cadence_intervals, expected_intervals) do
-    work_intervals =
-      cadence_intervals
-      |> comparable_work_pairs(expected_intervals)
-      |> Enum.map(&elem(&1, 0))
-
-    window_size = min(3, div(length(work_intervals), 2))
-
-    if window_size > 0 do
-      Float.round(
-        average(Enum.take(work_intervals, -window_size)) -
-          average(Enum.take(work_intervals, window_size)),
-        3
-      )
-    else
-      nil
-    end
-  end
-
-  # Boundary intervals only keep the two lists in step; work intervals are compared.
-  defp comparable_work_pairs(cadence_intervals, expected_intervals) do
-    cadence_intervals
-    |> Enum.zip(expected_intervals)
-    |> Enum.flat_map(fn
-      {actual, {:work, expected}} -> [{actual, expected}]
-      _other -> []
-    end)
-  end
-
-  defp average_interval_delta([]), do: nil
-
-  defp average_interval_delta(pairs) do
-    {actual_total, expected_total, count} =
-      Enum.reduce(pairs, {0.0, 0.0, 0}, fn {actual, expected},
-                                           {actual_acc, expected_acc, count} ->
-        {actual_acc + actual, expected_acc + expected, count + 1}
-      end)
-
-    Float.round(actual_total / count - expected_total / count, 3)
-  end
-
-  defp average(values) do
-    Enum.sum(values) / length(values)
-  end
 
   defp program_work_events(program_snapshot) when is_map(program_snapshot) do
     program_snapshot

@@ -31,9 +31,10 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
         prescribed_sets_completed: 4,
         reps_delta: -2,
         shortened: true,
-        recovery_delta_sec: 7,
+        recovery_delta_sec: 7.0,
         pace_delta_sec: 1.25,
-        cadence_decline: 0.15,
+        fatigue_decline: 0.15,
+        kept_up: false,
         completed_at: ~U[2025-01-02 03:04:05Z]
       })
 
