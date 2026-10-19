@@ -1097,10 +1097,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <% expanded? = row.count > 1 and MapSet.member?(@expanded, row.id) %>
           <% visible_units = if expanded?, do: Enum.take(row.units, 1), else: shared_units(row) %>
           <tbody id={row.id} data-expanded={row.count > 1 && to_string(expanded?)}>
-            <%!-- The existing utility bounds the hit target even when a reconnect retains older CSS. --%>
+            <%!-- A tap anywhere on a group row toggles it; the button keeps keyboard and screen-reader operation. --%>
             <tr
               id={"#{row.id}-event-#{hd(hd(row.units).paired).index}"}
-              class={row.count > 1 && "home-group-row relative"}
+              class={row.count > 1 && "home-group-row"}
+              phx-click={row.count > 1 && "toggle_group"}
+              phx-value-id={row.count > 1 && row.id}
             >
               <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
                 <button
