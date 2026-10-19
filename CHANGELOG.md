@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-20 — Pose traces stored gzipped
+
+- Camera pose traces are stored gzipped (`Workouts.GzipText`): a 20-minute session took about 120 MB as plain JSON, about 18 MB now. A migration compresses existing traces one chunk at a time; on a copy of production data the database went from 317 MB to 54 MB after `VACUUM`, with every chunk's digest unchanged. Run `VACUUM` once after deploying to give the space back.
+
 ## 2026-10-19 — The planner picks before it designs
 
 - The next workout is planned by a decision model first (`typesafe/jev-1.14` on OpenRouter's Decisions API): it picks one of the saved or built-in workouts that fit the slot's burpee type, minutes and level band, or answers that none suits today. A pick at confidence 0.6 or more is selected with a template rationale, and a sure `create_new` has the coach design one with `propose_workout` only. Without a decision model, when the call fails, or when it is unsure, the full planner runs as before. The planner never replaces a workout you or Claude chose for the day, including one chosen while the decision is out. `DECISIONS_MODEL`, `DECISIONS_URL` and `DECISIONS_ENABLED` configure it.

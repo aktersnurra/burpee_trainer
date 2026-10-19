@@ -491,9 +491,12 @@ defmodule BurpeeTrainer.SchemaMigrationTest do
     assert repo.query!("SELECT id, workout_session_id FROM pose_capture_runs ORDER BY id").rows ==
              [[facts.completed_run, facts.completed_plan], [3, nil]]
 
-    assert repo.query!("SELECT id, payload_json, payload_digest FROM pose_trace_chunks").rows == [
-             [facts.completed_chunk, "{\"rep\":1}", "digest"]
-           ]
+    # Pose traces are stored gzipped once that migration has run.
+    assert [[chunk_id, payload, "digest"]] =
+             repo.query!("SELECT id, payload_json, payload_digest FROM pose_trace_chunks").rows
+
+    assert chunk_id == facts.completed_chunk and
+             BurpeeTrainer.Workouts.GzipText.load(payload) == {:ok, "{\"rep\":1}"}
 
     assert repo.query!(
              "SELECT id, user_id, burpee_type, burpee_count_target, duration_sec_target, date_target, burpee_count_baseline, duration_sec_baseline, date_baseline, status FROM goals"

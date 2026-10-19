@@ -237,6 +237,25 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.all(PoseTraceChunk) == []
   end
 
+  test "an uploaded chunk is stored gzipped and reads back as it was sent", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+
+    conn
+    |> authenticated_json(user)
+    |> post(
+      ~p"/api/session-pose-traces",
+      upload_payload(session.id, session.client_session_id, [chunk(0)], true)
+    )
+    |> json_response(200)
+
+    [[stored]] = Repo.query!("SELECT payload_json FROM pose_trace_chunks").rows
+    assert :zlib.gunzip(stored) == Jason.encode!(chunk(0)["payload"])
+
+    assert [%PoseTraceChunk{payload_json: json}] = Repo.all(PoseTraceChunk)
+    assert Jason.decode!(json) == chunk(0)["payload"]
+  end
+
   defp completed_session(user) do
     plan = plan_fixture(user)
     {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())

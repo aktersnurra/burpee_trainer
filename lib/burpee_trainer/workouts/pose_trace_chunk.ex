@@ -16,7 +16,7 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
     field(:started_at_ms, :integer)
     field(:ended_at_ms, :integer)
     field(:sample_count, :integer)
-    field(:payload_json, :string)
+    field(:payload_json, BurpeeTrainer.Workouts.GzipText)
     field(:payload_digest, :string)
 
     belongs_to(:pose_capture_run, PoseCaptureRun)
