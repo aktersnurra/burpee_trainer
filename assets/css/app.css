@@ -633,6 +633,8 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .composer-icon:hover { color: var(--color-base-content); }
 .composer-send > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--color-base-300); color: #9A9489; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
 .composer:has(textarea:not(:placeholder-shown)) .composer-send > span { background: var(--color-base-content); color: var(--color-base-200); }
+/* Review needs no words (the note is optional), so its send is always ready. */
+.composer-send-ready > span { background: var(--color-base-content); color: var(--color-base-200); }
 .composer-send:disabled { cursor: default; }
 :is(.composer-icon, .composer-send):disabled { opacity: .45; }
 :is(.composer-icon, .composer-send):focus-visible { outline: 2px solid #5e615b; outline-offset: -4px; border-radius: 12px; }

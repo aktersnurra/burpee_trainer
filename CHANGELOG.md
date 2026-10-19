@@ -4,6 +4,7 @@
 
 - Every box you write words in is one soft card holding the text and its actions: Edit's instruction, the coach's message, New's "Anything else" and a finished session's note (plan and video). Send is a small arrow-up square, grey until there is text; Cancel sits at the card's bottom left.
 - Edit offers three common changes under the card (Split into sets, Longer rests, Make it shorter); one tap sends it, like the coach's predicted replies, which now sit under its card too.
+- New's "Anything else" holds its Cancel and Review like Edit's card, instead of a row under it.
 - `docs/ui.md` 4a1 describes the composer.
 
 ## 2026-10-18 — Exact rests

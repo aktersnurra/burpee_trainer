@@ -264,24 +264,46 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           disabled={@locked}
           class="composer-input"
         />
+        <%!-- Before review, cancel and review sit in the card, as in Edit's composer. --%>
+        <div :if={!@locked} class="composer-bar">
+          <button
+            id="home-request-abort"
+            type="button"
+            phx-click="abort_new_workout"
+            class="composer-icon"
+            aria-label="Cancel new workout"
+            title="Cancel"
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+          <button
+            id="home-new-review"
+            type="submit"
+            class="composer-send composer-send-ready"
+            aria-label="Review workout"
+            disabled={@busy}
+            title="Review"
+          >
+            <span><.icon name="hero-arrow-up" class="size-5" /></span>
+          </button>
+        </div>
       </div>
       <p :if={@busy} id="home-update-loading" role="status" class="home-budget-detail">
         {if(@locked, do: "Saving…", else: "Preparing and validating…")}
       </p>
-      <div class="home-review-actions">
+      <div :if={@locked} class="home-review-actions">
         <button
           id="home-request-abort"
           type="button"
           phx-click="abort_new_workout"
           class="home-text-action home-icon-action"
           aria-label="Cancel new workout"
-          disabled={@busy && @locked}
+          disabled={@busy}
           title="Cancel"
         >
           <.icon name="hero-x-mark" class="size-5" />
         </button>
         <button
-          :if={@locked}
           id="home-request-edit"
           type="button"
           phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-new-reps")}
@@ -293,7 +315,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <.icon name="hero-pencil-square" class="size-5" />
         </button>
         <button
-          :if={@locked}
           id="home-request-confirm"
           type="button"
           phx-click="confirm_workout_request"
@@ -303,17 +324,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           title="Save"
         >
           <.icon name="hero-check" class="size-5" />
-        </button>
-        <button
-          :if={!@locked}
-          id="home-new-review"
-          type="submit"
-          class="home-primary-action home-icon-action"
-          aria-label="Review workout"
-          disabled={@busy}
-          title="Review"
-        >
-          <.icon name="hero-arrow-right" class="size-5" />
         </button>
       </div>
       <section

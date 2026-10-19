@@ -29,12 +29,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     refute has_element?(view, "#home-workout-hero")
     refute has_element?(view, "#home-new-form h2")
 
-    assert has_element?(view, "#home-request-abort[aria-label] .hero-x-mark")
-
-    assert has_element?(
-             view,
-             "#home-new-review.home-primary-action[aria-label='Review workout'] .hero-arrow-right"
-           )
+    assert has_element?(view, ".home-new-note #home-request-abort[aria-label]")
+    assert has_element?(view, ".home-new-note #home-new-review[aria-label='Review workout']")
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")

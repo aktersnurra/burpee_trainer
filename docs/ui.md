@@ -136,7 +136,8 @@ else", a session's note) is the composer: one soft card (`--color-base-200`, a
 `--color-base-border` edge, 18px radius, a faint shadow) holding the text and its actions.
 Its placeholder names it; the label stays for screen readers. Cancel (x-mark) sits at its
 bottom left, Send at its bottom right: a small square with an arrow up, grey until there is
-text, then ink. Its border darkens while focused, so the text draws no ring of its own.
+text, then ink (New's Review is always ink, since its note is optional; once the workout is
+proposed, the review's own actions take over). Its border darkens while focused, so the text draws no ring of its own.
 Suggested words (Edit's common changes, the coach's predicted replies) are quiet chips
 under the card, and one tap sends them. Classes: `.composer`, `.composer-bar`,
 `.composer-icon`, `.composer-send`, `.composer-suggestions`, `.composer-suggestion`.
