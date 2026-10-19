@@ -14,7 +14,19 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     assert rule.content =~ "reps per 20 minutes"
     assert rule.content =~ "why, not what"
     refute rule.content =~ "scale them for a longer slot"
+    # The progression rule: up when they kept up, repeat on a late slip, down on an early one.
+    assert rule.content =~ "add about 5 reps"
+    assert rule.content =~ "repeat it"
+    assert rule.content =~ "plan a little easier"
     assert Map.has_key?(Jason.decode!(context.content), "recent_sessions")
+  end
+
+  test "a design the decision model asked for progresses from the last session too" do
+    [rule, _context] = AgentPrompt.messages(scope_fixture(), :planner_create, nil, nil)
+
+    assert rule.content =~ "add about 5 reps"
+    assert rule.content =~ "repeat it"
+    assert rule.content =~ "plan a little easier"
   end
 
   test "the coach page speaks in the voice, briefly, and ends with the athlete's message" do

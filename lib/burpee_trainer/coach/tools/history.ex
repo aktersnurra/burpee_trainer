@@ -40,7 +40,9 @@ defmodule BurpeeTrainer.Coach.Tools.History do
       "date" => DateTime.to_iso8601(s.completed_at),
       "type" => Atom.to_string(s.burpee_type),
       "reps" => s.burpee_count_actual,
+      "reps_planned" => s.burpee_count_planned,
       "duration_sec" => s.duration_sec_actual,
+      "duration_sec_planned" => s.duration_sec_planned,
       "pace_sec" =>
         if(s.burpee_count_actual > 0,
           do: s.duration_sec_actual / s.burpee_count_actual,

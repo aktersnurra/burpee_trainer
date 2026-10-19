@@ -60,8 +60,10 @@ plan's intervals and its detections together leaves `decline` unchanged.
 - Kept up, mood fine: next time about +5 reps, or the same reps with shorter rests.
 - Slipped in the last third, or rated hard: repeat.
 - Slipped early or stopped: one step back.
-- No camera data: use reps completed, whether the session was finished, and mood.
-- Occasionally end with a few unpaced minutes, so the ceiling stays measured.
+- No camera data: use reps and minutes done against planned, and mood. The planner's session
+  summaries carry the planned reps and minutes for this.
+- Ending sessions with a few unpaced minutes, so the ceiling stays measured, waits for an
+  unpaced work kind.
 
 ## Out of scope
 

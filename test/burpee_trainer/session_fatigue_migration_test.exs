@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.SessionFatigueMigrationTest do
   alias BurpeeTrainer.TestSupport.MigrationEquivalence, as: E
   alias BurpeeTrainer.Workouts.WorkoutSession
   import Ecto.Query
-  @migrations Path.expand("../../priv/repo/migrations", __DIR__)
+  @migrations Application.app_dir(:burpee_trainer, "priv/repo/migrations")
 
   test "backfills completed camera sessions and keeps their inputs locked" do
     path = Path.expand(".e2e-artifacts/parallel/db/fatigue-#{Ecto.UUID.generate()}.sqlite3")
