@@ -26,6 +26,32 @@ defmodule BurpeeTrainer.Analytics.AnalystTest do
     do:
       Keyword.merge([config: @config, req: Provider.request(responses), review_mode: :off], extra)
 
+  test "first-turn fabricated insufficient-data answer becomes code-owned abstention" do
+    scope = scope_fixture()
+
+    fabricated = %{
+      "action" => "final",
+      "output" => %{
+        "status" => "insufficient_data",
+        "interpretation" => "volume",
+        "answer" => "You completed 999999 reps.",
+        "findings" => [],
+        "limitations" => []
+      }
+    }
+
+    assert {:ok, output} = Analytics.analyze(scope, "volume", opts([fabricated]))
+    assert output["status"] == "insufficient_data"
+    assert output["answer"] == "The available evidence is insufficient to answer this question."
+    assert output["findings"] == []
+    assert output["evidence"] == []
+    assert llm_call_count(scope) == 1
+    assert {:ok, trace} = Trace.fetch(scope, output["trace_id"])
+    refute String.contains?(Jason.encode!(trace["final"]), "999999")
+    assert trace["review_mode"] == "off"
+    assert %{"kind" => "review", "status" => "disabled"} in trace["events"]
+  end
+
   test "real parser/query loop creates evidence and private inspectable trace" do
     scope = scope_fixture()
 

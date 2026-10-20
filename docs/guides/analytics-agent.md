@@ -181,3 +181,9 @@ reservation counts (including failed/timedout/inflight), not guessed one-call-pe
 allowances; unresolved accounting halts it. No paid calls were needed for integration.
 Final independent security/correctness review and exact-head gates remain required
 before production acceptance. No push or deployment is implied.
+
+### Final admission and non-answer safeguards
+
+The absolute provider deadline includes reservation admission. A responsive metering coordinator starts its timer before delegating admission (maximum eight pending admission tasks application-wide). Under a real SQLite writer lock, the default finite 2,000 ms busy wait can outlive a DBConnection timeout; the caller still receives timeout promptly while admission drains without being killed. Absolute deadline/cancellation checks bound retries and roll back uncommitted work. A genuine commit/cancellation race remains counted and is finalized once with timeout/cancelled and unknown billing; no late provider request starts. This is scheduler-tolerant cancellation, not atomic wall-clock SQLite commit control.
+
+Non-answer narratives contain only code-owned abstention/budget reasons or a generic metric/comparison-period clarification question, with empty interpretation/findings. Arbitrary model text is discarded from all non-answer fields, not merely filtered for digit characters. Answered evidence citations remain provenance, not semantic proof. Traces always retain the effective `review_mode`; `off` includes an explicit disabled event even without a proposed query.

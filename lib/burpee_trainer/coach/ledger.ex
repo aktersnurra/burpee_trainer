@@ -58,6 +58,11 @@ defmodule BurpeeTrainer.Coach.Ledger do
           Repo.rollback(:llm_budget_exhausted)
         end
 
+        case Keyword.get(opts, :admission_check, fn -> :ok end).() do
+          :ok -> :ok
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
         %LlmCall{
           user_id: id,
           inserted_at: DateTime.utc_now(),
@@ -68,7 +73,7 @@ defmodule BurpeeTrainer.Coach.Ledger do
         |> Ecto.Changeset.validate_required([:purpose, :run_id, :model])
         |> Repo.insert!()
       end,
-      timeout: Keyword.get(opts, :timeout, 15_000)
+      Keyword.take(opts, [:timeout, :deadline_ms, :admission_check])
     )
   end
 

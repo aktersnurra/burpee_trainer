@@ -3,6 +3,25 @@ defmodule BurpeeTrainer.Analytics.Output do
   alias BurpeeTrainer.Analytics.Limits
   @keys ~w(status interpretation answer findings limitations)
   @statuses ~w(answered needs_clarification insufficient_data budget_exhausted)
+  @non_answers %{
+    "needs_clarification" => [
+      "Which training metric and comparison period should be analyzed?",
+      "Reviewer selected clarification; define the intended comparison."
+    ],
+    "insufficient_data" => [
+      "The available evidence is insufficient to answer this question.",
+      "Snapshot coverage exceeds the bounded analysis limit; no subset was analyzed."
+    ],
+    "budget_exhausted" => [
+      "Analysis budget exhausted.",
+      "Analysis deadline exhausted.",
+      "Call allowance exhausted.",
+      "Query attempt limit reached.",
+      "Review call allowance exhausted.",
+      "Query deadline exhausted."
+    ]
+  }
+  @unreviewed "Query review unavailable; analysis is unreviewed."
 
   def narrative(map, ids) when is_map(map) do
     valid =
@@ -12,7 +31,7 @@ defmodule BurpeeTrainer.Analytics.Output do
         limitations?(map["limitations"]) and answered?(map, ids) and
         byte_size(Jason.encode!(map)) <= Limits.narrative_bytes()
 
-    if valid, do: {:ok, map}, else: invalid()
+    if valid, do: {:ok, safe_narrative(map)}, else: invalid()
   end
 
   def narrative(_, _), do: invalid()
@@ -21,7 +40,8 @@ defmodule BurpeeTrainer.Analytics.Output do
     with true <- Enum.sort(Map.keys(map)) == Enum.sort(@keys ++ ~w(evidence trace_id)),
          {:ok, _} <- Ecto.UUID.cast(map["trace_id"]),
          true <- evidence?(map["evidence"], ids),
-         {:ok, _} <- narrative(Map.take(map, @keys), ids),
+         narrative = Map.take(map, @keys),
+         {:ok, ^narrative} <- narrative(narrative, ids),
          true <- byte_size(Jason.encode!(map)) <= Limits.output_bytes() do
       {:ok, map}
     else
@@ -30,6 +50,24 @@ defmodule BurpeeTrainer.Analytics.Output do
   end
 
   def validate(_, _), do: invalid()
+
+  defp safe_narrative(%{"status" => "answered"} = map), do: map
+
+  # Non-answers are code-owned abstentions, not a second route for model claims.
+  # This covers every free-text field, including spelled-out numbers.
+  defp safe_narrative(map) do
+    reasons = Map.fetch!(@non_answers, map["status"])
+    reason = if map["answer"] in reasons, do: map["answer"], else: hd(reasons)
+    limitations = if @unreviewed in map["limitations"], do: [@unreviewed, reason], else: [reason]
+
+    %{
+      "status" => map["status"],
+      "interpretation" => "",
+      "answer" => reason,
+      "findings" => [],
+      "limitations" => limitations
+    }
+  end
 
   defp findings?(list, ids) when is_list(list) do
     Enum.count_until(list, 9) <= 8 and

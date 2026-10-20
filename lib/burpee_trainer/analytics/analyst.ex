@@ -16,6 +16,7 @@ defmodule BurpeeTrainer.Analytics.Analyst do
 
   def run(scope, prompt, opts, deadline, trace_id) do
     budget = Keyword.get_lazy(opts, :call_budget, fn -> CallBudget.new(scope, Limits.calls()) end)
+    mode = Review.mode(opts)
 
     state = %{
       scope: scope,
@@ -25,7 +26,7 @@ defmodule BurpeeTrainer.Analytics.Analyst do
       budget: budget,
       trace_id: trace_id,
       evidence: [],
-      events: [],
+      events: if(mode == :off, do: [%{"kind" => "review", "status" => "disabled"}], else: []),
       judgments: [],
       messages: [],
       queries: 0,
@@ -34,7 +35,7 @@ defmodule BurpeeTrainer.Analytics.Analyst do
       context_bytes: 0,
       interpretation: "",
       limitations: [],
-      mode: Review.mode(opts),
+      mode: mode,
       snapshot: nil,
       client_opts: []
     }
@@ -367,6 +368,13 @@ defmodule BurpeeTrainer.Analytics.Analyst do
     }
 
   defp finalize(state, narrative) do
+    case Output.narrative(narrative, evidence_ids(state)) do
+      {:ok, narrative} -> store_final(state, narrative)
+      {:error, reason} -> error(reason)
+    end
+  end
+
+  defp store_final(state, narrative) do
     narrative =
       Map.update!(narrative, "limitations", fn list ->
         Enum.take(Enum.uniq(state.limitations ++ list), 8)
@@ -378,6 +386,7 @@ defmodule BurpeeTrainer.Analytics.Analyst do
       "prompt" => state.prompt,
       "interpretation" => narrative["interpretation"],
       "schema_version" => 1,
+      "review_mode" => Atom.to_string(state.mode),
       "coverage" => coverage(state.snapshot),
       "ledger_run_id" => state.budget.ledger_run_id,
       "evidence" => state.evidence,

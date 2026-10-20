@@ -35,6 +35,26 @@ defmodule BurpeeTrainer.Analytics.ReviewTest do
       review: [config: @config, req: Provider.request(reviewer)]
     ]
 
+  test "traces distinguish off, shadow and enforce even when reviews proceed" do
+    for mode <- [:off, :shadow, :enforce] do
+      scope = scope_fixture()
+      reviews = if mode == :off, do: [], else: [judgment("proceed")]
+
+      assert {:ok, output} =
+               Analytics.analyze(scope, "count", opts(mode, [@query, @final], reviews))
+
+      assert {:ok, trace} = Trace.fetch(scope, output["trace_id"])
+      assert trace["review_mode"] == Atom.to_string(mode)
+
+      if mode == :off do
+        assert Enum.any?(trace["events"], &(&1 == %{"kind" => "review", "status" => "disabled"}))
+        assert trace["judgments"] == []
+      else
+        assert [%{"choice" => "proceed"}] = trace["judgments"]
+      end
+    end
+  end
+
   test "strict choice validation rejects unexpected questions, rationale and probabilities" do
     assert {:ok, %{"reason_source" => "code"}} = Review.validate(judgment("proceed")["answers"])
 

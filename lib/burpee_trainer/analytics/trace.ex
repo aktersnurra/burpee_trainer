@@ -95,7 +95,7 @@ defmodule BurpeeTrainer.Analytics.Trace do
 
     final = %{
       "status" => "budget_exhausted",
-      "interpretation" => payload["interpretation"] || "",
+      "interpretation" => "",
       "answer" => "Analysis deadline exhausted.",
       "findings" => [],
       "limitations" => ["Analysis deadline exhausted."]

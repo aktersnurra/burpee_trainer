@@ -15,6 +15,7 @@ defmodule BurpeeTrainer.Application do
         {DynamicSupervisor,
          name: BurpeeTrainer.Coach.Client.Deadline.Supervisor, strategy: :one_for_one},
         {Task.Supervisor, name: BurpeeTrainer.Coach.Client.Deadline.Transport},
+        {Task.Supervisor, name: BurpeeTrainer.Coach.Client.Deadline.Admission, max_children: 8},
         {Task.Supervisor, name: BurpeeTrainer.Analytics.RunSupervisor},
         {Ecto.Migrator,
          repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
