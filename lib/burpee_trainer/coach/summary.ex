@@ -9,7 +9,7 @@ defmodule BurpeeTrainer.Coach.Summary do
     field :user_id, :integer
     field :text, :string
     field :metric_ids, {:array, :string}, default: []
-    field :source, Ecto.Enum, values: [:llm, :fallback, :claude]
+    field :source, Ecto.Enum, values: [:llm, :fallback, :mcp]
     field :suggestions, {:array, :string}, default: []
     field :review, :string
     timestamps(type: :utc_datetime_usec)

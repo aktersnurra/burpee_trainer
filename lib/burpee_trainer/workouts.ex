@@ -87,8 +87,8 @@ defmodule BurpeeTrainer.Workouts do
 
   def current_home_selection(%Scope{}, _slot), do: nil
 
-  @doc "Who chose the slot's workout: `:owner`, `:claude`, `:coach`, or nil when no one has."
-  @spec planned_by(Scope.t(), Policy.slot()) :: :owner | :claude | :coach | nil
+  @doc "Who chose the slot's workout: `:owner`, `:mcp`, `:coach`, or nil when no one has."
+  @spec planned_by(Scope.t(), Policy.slot()) :: :owner | :mcp | :coach | nil
   def planned_by(%Scope{user: %User{id: user_id}}, %{slot_key: key, slot_date: %Date{} = date}) do
     Repo.one(
       from(r in CoachRecommendation,
@@ -268,7 +268,7 @@ defmodule BurpeeTrainer.Workouts do
           HomeSelection.t(),
           {:plan, pos_integer()} | {:proposal, map(), String.t()},
           String.t(),
-          :coach | :claude
+          :coach | :mcp
         ) :: {:ok, HomeSelection.t()} | {:error, Error.t()}
   def select_planned_workout(
         %Scope{user: %User{} = user},
@@ -278,7 +278,7 @@ defmodule BurpeeTrainer.Workouts do
         planned_by \\ :coach
       )
       when is_binary(rationale) and byte_size(rationale) <= 2400 and
-             planned_by in [:coach, :claude] do
+             planned_by in [:coach, :mcp] do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
            :ok <- replaceable_by(r, planned_by),
@@ -292,8 +292,8 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  # The in-app planner never replaces a choice the owner or Claude made.
-  defp replaceable_by(%{planned_by: by}, :coach) when by in [:owner, :claude],
+  # The in-app planner never replaces a choice the owner or the MCP client made.
+  defp replaceable_by(%{planned_by: by}, :coach) when by in [:owner, :mcp],
     do: {:error, Error.new(:home_selection_changed)}
 
   defp replaceable_by(_r, _planned_by), do: :ok

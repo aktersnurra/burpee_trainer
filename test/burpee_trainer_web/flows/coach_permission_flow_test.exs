@@ -83,7 +83,7 @@ defmodule BurpeeTrainerWeb.CoachPermissionFlowTest do
         }
       })
 
-    assert Summary.get(scope).source == :claude
+    assert Summary.get(scope).source == :mcp
 
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     assert has_element?(view, "#home-coach-note", "Two sessions left; keep Thursday easy.")
@@ -151,7 +151,7 @@ defmodule BurpeeTrainerWeb.CoachPermissionFlowTest do
       })
 
     assert {:cancel, :mcp_coach} = perform_job(SummaryJob, %{user_id: user.id})
-    assert %{source: :claude, text: "Keep Thursday easy."} = Summary.get(scope)
+    assert %{source: :mcp, text: "Keep Thursday easy."} = Summary.get(scope)
   end
 
   test "with the coach, Home still has the conversation", %{conn: conn, user: user} do

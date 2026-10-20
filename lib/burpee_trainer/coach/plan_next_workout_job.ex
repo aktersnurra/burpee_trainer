@@ -19,7 +19,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
          scope = Scope.for_user(user),
          {:ok, slot} <- Policy.required_slot(scope, DateTime.utc_now(:second)),
          true <- slot.slot_key == key and slot.home_state == :workout_needed,
-         # The owner's or Claude's choice for the slot is theirs; the planner never replaces it.
+         # The owner's or the MCP client's choice for the slot is theirs; the planner never replaces it.
          planner when planner in [nil, :coach] <- BurpeeTrainer.Workouts.planned_by(scope, slot),
          {:ok, _} <- Selector.plan(scope, slot) do
       :ok
@@ -30,7 +30,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
       false ->
         {:cancel, :slot_changed}
 
-      planner when planner in [:owner, :claude] ->
+      planner when planner in [:owner, :mcp] ->
         {:cancel, :already_planned}
 
       # A changed selection means the owner chose during the run; a retry would override them.

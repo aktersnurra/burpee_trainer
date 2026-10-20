@@ -136,7 +136,7 @@ The in-app coach runs on queued jobs. Without these rules they would undo Claude
 
 1. **The planner never replaces a planned slot.** `PlanNextWorkoutJob` is scheduled for
    midnight after a session and today replaces whatever Home shows. A slot whose selection
-   was set by Claude or the owner is marked (`planned_by`: `owner`, `claude`, `coach`);
+   was set by Claude or the owner is marked (`planned_by`: `owner`, `mcp`, `coach`);
    the job cancels with `:already_planned` unless the mark is `coach` or empty.
 2. **Claude's changes do not queue the memory job.** Sessions logged or edited through MCP
    skip `MemoryJob`; Claude keeps the memory itself. Sessions saved in the app still queue

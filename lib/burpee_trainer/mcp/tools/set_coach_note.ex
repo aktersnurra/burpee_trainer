@@ -34,7 +34,7 @@ defmodule BurpeeTrainer.Mcp.Tools.SetCoachNote do
            Summary.store(scope, %{
              text: text,
              review: review,
-             source: :claude,
+             source: :mcp,
              metric_ids: [],
              suggestions: []
            }) do

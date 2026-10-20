@@ -66,7 +66,7 @@ defmodule BurpeeTrainer.Mcp.Tools.CreateWorkout do
   def call(scope, args, _) when is_map(args) do
     with {:ok, definition} <- McpWorkouts.definition(args),
          {:ok, plan} <-
-           Workouts.commit_approved_workout(scope, definition, "Made with Claude",
+           Workouts.commit_approved_workout(scope, definition, "Made over MCP",
              approval_key: Ecto.UUID.generate()
            ) do
       {:ok, %{"workout" => McpWorkouts.entry(plan)}}
@@ -101,7 +101,7 @@ defmodule BurpeeTrainer.Mcp.Tools.EditWorkout do
 
   def call(scope, %{"id" => id} = args, _) when is_integer(id) do
     with {:ok, definition} <- McpWorkouts.definition(Map.delete(args, "id")),
-         {:ok, plan} <- Workouts.replace_plan(scope, id, definition, "Edited with Claude") do
+         {:ok, plan} <- Workouts.replace_plan(scope, id, definition, "Edited over MCP") do
       {:ok, %{"workout" => McpWorkouts.entry(plan), "replaced" => id}}
     else
       {:error, reason} when is_binary(reason) -> {:error, reason}

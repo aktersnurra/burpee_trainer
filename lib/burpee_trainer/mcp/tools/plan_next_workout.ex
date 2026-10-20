@@ -41,7 +41,7 @@ defmodule BurpeeTrainer.Mcp.Tools.PlanNextWorkout do
          :ok <- fits(workout, slot),
          {:ok, expected} <- Workouts.ensure_home_selection(scope, slot),
          {:ok, selection} <-
-           Workouts.select_planned_workout(scope, expected, target, rationale, :claude) do
+           Workouts.select_planned_workout(scope, expected, target, rationale, :mcp) do
       {:ok,
        %{
          "date" => Date.to_iso8601(slot.slot_date),

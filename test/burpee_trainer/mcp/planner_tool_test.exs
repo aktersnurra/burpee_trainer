@@ -54,7 +54,7 @@ defmodule BurpeeTrainer.Mcp.PlannerToolTest do
     selection = Workouts.current_home_selection(scope, slot)
     assert selection.plan.id == plan.id
     assert selection.rationale == "An easy one after two hard days."
-    assert recommendation(scope, slot).planned_by == :claude
+    assert recommendation(scope, slot).planned_by == :mcp
   end
 
   test "Claude can design the workout it plans", %{scope: scope, slot: slot} do
