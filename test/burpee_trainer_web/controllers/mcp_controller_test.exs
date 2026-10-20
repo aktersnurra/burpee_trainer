@@ -68,6 +68,63 @@ defmodule BurpeeTrainerWeb.McpControllerTest do
     assert is_list(body["result"]["tools"])
   end
 
+  test "analyze uses bearer owner for trace access, never arguments", %{conn: conn, user: user} do
+    previous = Application.get_env(:burpee_trainer, :llm_provider)
+    defaults = Req.default_options()
+
+    Application.put_env(:burpee_trainer, :llm_provider,
+      enabled: true,
+      url: "https://recorded.test/chat",
+      api_key: "local",
+      model: "recorded"
+    )
+
+    BurpeeTrainer.ReqStub.default(fn request ->
+      content = %{
+        "action" => "clarify",
+        "interpretation" => "ambiguous",
+        "question" => "Which metric?"
+      }
+
+      body = %{
+        "choices" => [%{"message" => %{"content" => Jason.encode!(content)}}],
+        "usage" => %{}
+      }
+
+      {request, Req.Response.new(status: 200, body: Jason.encode!(body))}
+    end)
+
+    on_exit(fn ->
+      Application.put_env(:burpee_trainer, :llm_provider, previous)
+      Application.delete_env(:burpee_trainer, BurpeeTrainer.ReqStub)
+      Req.default_options(defaults)
+    end)
+
+    body =
+      conn
+      |> post(
+        "/mcp",
+        Jason.encode!(%{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "tools/call",
+          "params" => %{"name" => "analyze", "arguments" => %{"prompt" => "improved?"}}
+        })
+      )
+      |> json_response(200)
+
+    refute body["result"]["isError"]
+    output = body["result"]["structuredContent"]
+    assert output["status"] == "needs_clarification"
+    scope = BurpeeTrainer.Accounts.Scope.for_user(user)
+    assert {:ok, _} = BurpeeTrainer.Analytics.Trace.fetch(scope, output["trace_id"])
+
+    assert {:error, :not_found} =
+             BurpeeTrainer.Analytics.Trace.fetch(scope_fixture(), output["trace_id"])
+
+    assert llm_call_count(scope) == 1
+  end
+
   test "a notification is accepted with no body", %{conn: conn} do
     conn =
       post(

@@ -8,6 +8,9 @@
 | `ui.md` | The visual system: palette, typography, spacing, and how screens connect. |
 | `testing.md` | Test policy and the core-flow suite. |
 
+Analytics: [MCP usage, runtime preflight and trace privacy](guides/analytics-agent.md) ·
+[opt-in evaluation](guides/analytics-evaluation.md).
+
 Local notes, reviews, evidence and scratch documents belong in the git-ignored `.docs/`
 at the repository root, not here. When the code a spec describes is removed, delete the
 spec.

@@ -9,11 +9,12 @@ defmodule BurpeeTrainer.Mcp do
 
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Mcp.{CoachPrompt, Tools, WorkoutFormat}
+  alias BurpeeTrainer.Mcp.{AnalyticsSchema, CoachPrompt, Tools, WorkoutFormat}
 
   @protocol_versions ~w[2025-06-18 2025-03-26 2024-11-05]
 
   @tools [
+    Tools.Analyze,
     Tools.CoachContext,
     Tools.Week,
     Tools.Progress,
@@ -88,7 +89,12 @@ defmodule BurpeeTrainer.Mcp do
        "tools" =>
          Enum.map(tools, fn module ->
            %{name: name, description: description, schema: schema} = Tool.definition(module)
-           %{"name" => name, "description" => description, "inputSchema" => schema}
+
+           tool_metadata(module, %{
+             "name" => name,
+             "description" => description,
+             "inputSchema" => schema
+           })
          end)
      }}
   end
@@ -134,20 +140,27 @@ defmodule BurpeeTrainer.Mcp do
              "name" => "workout-format",
              "title" => "How a workout is described",
              "mimeType" => "text/markdown"
+           },
+           %{
+             "uri" => AnalyticsSchema.uri(),
+             "name" => "analytics-schema",
+             "title" => "Training analytics schema and metric definitions",
+             "mimeType" => "text/markdown"
            }
          ]
        }}
 
   defp dispatch(_scope, "resources/read", %{"uri" => uri}, _tools) when is_binary(uri) do
-    if uri == WorkoutFormat.uri(),
-      do:
+    case Enum.find([WorkoutFormat, AnalyticsSchema], &(&1.uri() == uri)) do
+      nil ->
+        {:error, -32602, "Unknown resource: #{uri}"}
+
+      module ->
         {:ok,
          %{
-           "contents" => [
-             %{"uri" => uri, "mimeType" => "text/markdown", "text" => WorkoutFormat.text()}
-           ]
-         }},
-      else: {:error, -32602, "Unknown resource: #{uri}"}
+           "contents" => [%{"uri" => uri, "mimeType" => "text/markdown", "text" => module.text()}]
+         }}
+    end
   end
 
   defp dispatch(_scope, "resources/read", _params, _tools),
@@ -155,6 +168,16 @@ defmodule BurpeeTrainer.Mcp do
 
   defp dispatch(_scope, method, _params, _tools),
     do: {:error, -32601, "Method not found: #{method}"}
+
+  # Analyze alone has optional metadata; existing Coach.Tool callbacks stay unchanged.
+  defp tool_metadata(Tools.Analyze, metadata),
+    do:
+      Map.merge(metadata, %{
+        "outputSchema" => Tools.Analyze.output_schema(),
+        "annotations" => %{"readOnlyHint" => true}
+      })
+
+  defp tool_metadata(_module, metadata), do: metadata
 
   defp tool_result({:ok, result, _run_changes}), do: tool_result({:ok, result})
 
