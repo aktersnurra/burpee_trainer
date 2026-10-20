@@ -3,11 +3,18 @@ defmodule BurpeeTrainer.Accounts.User do
   import Ecto.Changeset
 
   @typedoc """
-  Who coaches the user: `:app`, the app's own model (granted by a Pocket ID claim), or
-  `:mcp`, through an MCP client (Claude or any other) with the app making no model call
-  for them.
+  Who coaches the user: `:app`, the app's own model (granted by membership of the coach
+  group in Pocket ID), or `:mcp`, through an MCP client (Claude or any other) with the app
+  making no model call for them.
   """
   @type coach :: :app | :mcp
+
+  @typedoc """
+  Whether the user may use the app, as Pocket ID provisions it: `:active`; `:disabled`
+  while blocked in Pocket ID; `:removed` once they lost access to the app's client. Only
+  `:active` signs in; the others keep their data.
+  """
+  @type access :: :active | :disabled | :removed
 
   @type t :: %__MODULE__{}
 
@@ -17,6 +24,8 @@ defmodule BurpeeTrainer.Accounts.User do
     field :timezone, :string, default: "Etc/UTC"
     field :timezone_provisioned, :boolean, default: false
     field :coach, Ecto.Enum, values: [:app, :mcp], default: :app
+    field :access, Ecto.Enum, values: [:active, :disabled, :removed], default: :active
+    field :scim_synced_at, :utc_datetime
 
     timestamps(type: :utc_datetime)
   end

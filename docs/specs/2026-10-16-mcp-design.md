@@ -161,21 +161,21 @@ broadcast on the same PubSub topics, so an open app updates live.
 ## Who has the in-app coach
 
 The in-app coach (the model behind the planner, the weekly note, memory upkeep and the
-chat) is a permission, granted in Pocket ID by a **custom claim on a group**, the way
-Pocket ID's own client examples grant app roles. Users without it coach through Claude
-instead, and the app never calls the model for them.
+chat) is a permission, granted in Pocket ID by **membership of a group**, `burpee-coach`,
+which Pocket ID provisions to the app over SCIM (`docs/specs/2026-10-20-scim-provisioning-design.md`).
+Users without it coach over MCP instead, and the app never calls the model for them.
 
-- **Pocket ID:** groups name who may use what: `burpee` (allowed on the app's client and
-  on Claude's BurpeeTrainer client), `burpee-coach` with the custom claim
-  `burpee_coach` = `true`. The app reads the claim, never a group name, so a group can be
-  renamed or a second group can grant the coach without touching the app.
-- **Config:** `COACH_CLAIM`, default `burpee_coach`.
+- **Pocket ID:** groups name who may use what: `burpee` and `burpee-coach`, both allowed
+  on the app's client (or Pocket ID never sends the coach group), and `burpee` on Claude's
+  BurpeeTrainer client.
+- **Config:** `COACH_GROUP_ID`, the coach group's Pocket ID id, so renaming it changes
+  nothing.
 - **Who coaches a user is a sum type,** `users.coach` :: `:app | :mcp`
-  (`Accounts.User.coach()`), never a flag. At sign-in the app sets `:app` when the ID
-  token's claim is `true` (the boolean or the string), else `:mcp`. The name is the
-  channel, not a vendor: nothing stops another MCP client from coaching through `/mcp`. It is re-read at
-  every sign-in; losing the claim takes effect at the next one. Existing users keep the
-  coach they had (the column replaced `coach_enabled`); a user created outside sign-in
+  (`Accounts.User.coach()`), never a flag: `:app` for the coach group's members, `:mcp`
+  for everyone else. The name is the channel, not a vendor: nothing stops another MCP
+  client from coaching through `/mcp`. A change reaches the app at Pocket ID's next sync
+  (about five minutes). Until the group is first provisioned, users keep the coach they
+  had (the column replaced `coach_enabled`); a user created outside sign-in and SCIM
   (seeds, tests) defaults to `:app`.
 - **Every app-coach flow matches on it,** so an `:mcp` user starts none of them:
   - `PlanNextWorkoutJob`, `SummaryJob`, `MemoryJob` and `NarrateJob` admit no job (their
@@ -222,8 +222,8 @@ instead, and the app never calls the model for them.
   whose reps cannot fit is refused with the reason.
 - The planner job cancels for a slot planned by Claude, and still plans an unmarked one.
 - A session logged through MCP queues the summary and planner jobs, not the memory job.
-- Sign-in with the claim `true`, `"true"`, absent or `false` sets `coach` to `:app` or
-  `:mcp` accordingly; `COACH_CLAIM` picks the key. The migration keeps each user's coach.
+- Writing the coach group over SCIM sets members to `:app` and everyone else to `:mcp`;
+  sign-in follows the stored group. The migration keeps each user's coach.
 - `Client.chat/2` makes no call and reserves no budget for an `:mcp` user; completing or
   logging a session queues none of the app's coach jobs for them.
 - An `:mcp` user: Home shows the section without the message box or replies, with

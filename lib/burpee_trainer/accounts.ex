@@ -97,15 +97,14 @@ defmodule BurpeeTrainer.Accounts do
 
   def resolve_oidc_identity(_sub, _username), do: {:error, :username_missing}
 
-  @doc """
-  Sets who coaches the user, from the identity provider's claim at sign-in. Writes only
-  when it changes.
-  """
-  @spec put_coach(User.t(), User.coach()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
-  def put_coach(%User{coach: coach} = user, coach), do: {:ok, user}
-
-  def put_coach(%User{} = user, coach) when coach in [:app, :mcp],
-    do: user |> Ecto.Changeset.change(coach: coach) |> Repo.update()
+  @doc "The user with this id while they may use the app (`access: :active`), else nil."
+  @spec get_active_user(integer) :: User.t() | nil
+  def get_active_user(id) do
+    case get_user(id) do
+      %User{access: :active} = user -> user
+      _absent_or_without_access -> nil
+    end
+  end
 
   @doc """
   Create a user. Users are normally provisioned in Pocket ID; this is for

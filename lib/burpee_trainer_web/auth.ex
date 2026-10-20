@@ -21,17 +21,36 @@ defmodule BurpeeTrainerWeb.Auth do
 
   @doc """
   Plug that loads the current user from the session into `conn.assigns`,
-  as `:current_scope`. Leaves `:current_scope` as `nil` when no session.
+  as `:current_scope`. Leaves `:current_scope` as `nil` when no session, or when
+  the user no longer has access (blocked or removed in Pocket ID).
   """
   def fetch_current_scope(conn, _opts) do
     user =
       case get_session(conn, @session_key) do
         nil -> nil
-        user_id -> Accounts.get_user(user_id)
+        user_id -> Accounts.get_active_user(user_id)
       end
 
-    assign(conn, :current_scope, Scope.for_user(user))
+    conn
+    |> assign(:current_scope, Scope.for_user(user))
+    |> put_live_socket_id(user)
   end
+
+  # Sessions from before the id existed get it on their next request.
+  defp put_live_socket_id(conn, nil), do: conn
+
+  defp put_live_socket_id(conn, user) do
+    case get_session(conn, :live_socket_id) do
+      nil -> put_session(conn, :live_socket_id, live_socket_id(user))
+      _id -> conn
+    end
+  end
+
+  defp live_socket_id(user), do: "users_sessions:#{user.id}"
+
+  @doc "Closes the user's open LiveViews; on reconnect they meet the access check."
+  def disconnect_user(user),
+    do: BurpeeTrainerWeb.Endpoint.broadcast(live_socket_id(user), "disconnect", %{})
 
   @doc """
   Plug that requires an authenticated user, redirecting to `/login` when no
@@ -76,6 +95,7 @@ defmodule BurpeeTrainerWeb.Auth do
     conn
     |> renew_session()
     |> put_session(@session_key, user.id)
+    |> put_session(:live_socket_id, live_socket_id(user))
     |> configure_session(renew: true)
   end
 
@@ -102,7 +122,7 @@ defmodule BurpeeTrainerWeb.Auth do
     user =
       case session[Atom.to_string(@session_key)] do
         nil -> nil
-        user_id -> Accounts.get_user(user_id)
+        user_id -> Accounts.get_active_user(user_id)
       end
 
     case user do

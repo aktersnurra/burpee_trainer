@@ -23,7 +23,8 @@
 | `BurpeeTrainer.Coach.{Memory, Memory.Ops, MemoryJob, PlanNextWorkoutJob}` | The coach's notes about the owner (one fact per row, guarded by `Memory.Ops`, shared with Claude), the job that keeps them after an exchange or session, and the job that plans the next workout (never replacing a slot the owner or the MCP client planned: `planned_by`) |
 | `BurpeeTrainer.Coach.{Summary, SummaryJob}` | The owner's two-sentence progress summary (validated against metrics, deterministic fallback) and the job that refreshes it after a completion or a confirmed goal, and when the app opens with a summary from an earlier week |
 | `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`, and `decide/3` for the Decisions API) and the per-call ledger with daily budgets for automated and owner-started calls |
-| `BurpeeTrainer.Accounts.User.coach()` / `BurpeeTrainerWeb.HomeCoachComponents.coach/1` | Who coaches a user, `:app` (the app's model, granted by a Pocket ID claim) or `:mcp` (through any MCP client, Claude or another), in `users.coach`; code matches on it, never a flag. For `:mcp` the app makes no model call, queues no coach job, and Home offers no authoring or chat, pointing to the MCP connection instead |
+| `BurpeeTrainer.Scim` / `BurpeeTrainer.Scim.Group` / `BurpeeTrainerWeb.{ScimAuth, ScimController, ScimJSON}` | Pocket ID's SCIM provisioning at `/scim/v2`: users' access (`users.access` :: `:active \| :disabled \| :removed`, soft delete) and the coach group that sets `users.coach`; see `docs/specs/2026-10-20-scim-provisioning-design.md` |
+| `BurpeeTrainer.Accounts.User.coach()` / `BurpeeTrainerWeb.HomeCoachComponents.coach/1` | Who coaches a user, `:app` (the app's model, for members of the Pocket ID coach group) or `:mcp` (through any MCP client, Claude or another), in `users.coach`; code matches on it, never a flag. For `:mcp` the app makes no model call, queues no coach job, and Home offers no authoring or chat, pointing to the MCP connection instead |
 | `BurpeeTrainer.Mcp` / `BurpeeTrainer.Mcp.{Token, Sessions, Workouts, CoachPrompt, WorkoutFormat}` | The MCP server Claude coaches through: JSON-RPC dispatch, Pocket ID token checks, and the history, workout, prompt and format shapes Claude reads and writes |
 | `BurpeeTrainer.Mcp.Tools.*` | The MCP tools, each a `Coach.Tool`; see `docs/specs/2026-10-16-mcp-design.md` and `docs/guides/mcp-setup.md` |
 | `BurpeeTrainerWeb.{McpAuth, McpController, McpMetadataController}` | Bearer sign-in for `/mcp`, the endpoint, and its protected-resource metadata |
@@ -50,6 +51,7 @@
 - A completed session keeps an immutable program or video snapshot; later edits or archival do not rewrite History.
 - Authoring proposals are reviewed before approval. Selection is distinct from approval.
 - Auth is OIDC-only. `Accounts.resolve_oidc_identity/2` resolves a subject first, adopts an unlinked matching username, and rejects a username bound to another subject. Setup is in `README.md` (Sign in).
+- Pocket ID decides access: only `users.access == :active` passes `Auth` and `McpAuth`, and SCIM keeps it current. Removing a user never deletes their data.
 - SQLite has no array column type; persisted collections use JSON text where the schema requires it.
 
 ## UI rules

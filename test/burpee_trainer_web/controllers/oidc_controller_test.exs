@@ -32,18 +32,8 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
     def fetch_claims("other-code", _verifier),
       do: {:ok, %{"sub" => "sub-other", "preferred_username" => "bob"}}
 
-    def fetch_claims("coach-" <> value, _verifier) do
-      claims = %{"sub" => "sub-coach", "preferred_username" => "coached"}
-
-      {:ok,
-       case value do
-         "absent" -> claims
-         "bool" -> Map.put(claims, "burpee_coach", true)
-         "string" -> Map.put(claims, "burpee_coach", "true")
-         "false" -> Map.put(claims, "burpee_coach", false)
-         "other-key" -> Map.put(claims, "kcal_coach", true)
-       end}
-    end
+    def fetch_claims("member-code", _verifier),
+      do: {:ok, %{"sub" => "sub-member", "preferred_username" => "member"}}
 
     def fetch_claims(_code, _verifier), do: {:error, :invalid_grant}
   end
@@ -195,33 +185,48 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
     end
   end
 
-  describe "the coach claim" do
+  describe "sign-in and Pocket ID provisioning" do
+    setup do
+      previous = Application.get_env(:burpee_trainer, :scim)
+      Application.put_env(:burpee_trainer, :scim, token: "t", coach_group: "pid-coach")
+      on_exit(fn -> Application.put_env(:burpee_trainer, :scim, previous) end)
+    end
+
     defp sign_in(conn, code) do
       conn
       |> init_test_session(%{oidc_state: "s", oidc_pkce_verifier: "v"})
       |> get(~p"/auth/oidc/callback", %{"code" => code, "state" => "s"})
     end
 
-    test "every sign-in sets the in-app coach from the Pocket ID claim", %{conn: conn} do
-      for {code, coach} <- [
-            {"coach-bool", :app},
-            {"coach-absent", :mcp},
-            {"coach-string", :app},
-            {"coach-false", :mcp},
-            {"coach-other-key", :mcp}
-          ] do
-        conn |> recycle() |> sign_in(code)
-        user = Accounts.get_user_by_oidc_sub("sub-coach")
-        assert user.coach == coach, "#{code} gave #{user.coach}"
-      end
+    defp member(sub, access) do
+      user = user_fixture(%{"username" => "member"})
+      {:ok, user} = Accounts.link_oidc_sub(user, sub)
+      user |> Ecto.Changeset.change(access: access, coach: :mcp) |> Repo.update!()
     end
 
-    test "the claim's key is configurable", %{conn: conn} do
-      Application.put_env(:burpee_trainer, :coach_claim, "kcal_coach")
-      on_exit(fn -> Application.delete_env(:burpee_trainer, :coach_claim) end)
+    test "a user Pocket ID lets sign in has access again", %{conn: conn} do
+      user = member("sub-member", :removed)
 
-      sign_in(conn, "coach-other-key")
-      assert Accounts.get_user_by_oidc_sub("sub-coach").coach == :app
+      conn = sign_in(conn, "member-code")
+      assert get_session(conn, :user_id) == user.id
+      assert Accounts.get_user(user.id).access == :active
+    end
+
+    test "sign-in gives the coach group's members the app's coach", %{conn: conn} do
+      user = member("sub-member", :active)
+
+      sign_in(conn, "member-code")
+      assert Accounts.get_user(user.id).coach == :mcp
+
+      Repo.insert!(%BurpeeTrainer.Scim.Group{
+        external_id: "pid-coach",
+        display_name: "Burpee coach",
+        member_ids: [user.id],
+        scim_synced_at: DateTime.utc_now(:second)
+      })
+
+      conn |> recycle() |> sign_in("member-code")
+      assert Accounts.get_user(user.id).coach == :app
     end
   end
 end

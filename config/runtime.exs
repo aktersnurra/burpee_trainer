@@ -210,9 +210,11 @@ if config_env() == :prod do
   # Unset means /mcp is off.
   config :burpee_trainer, :mcp, audience: System.get_env("MCP_OIDC_AUDIENCE")
 
-  # The ID-token claim that grants the app's own coach: a custom claim on a Pocket ID
-  # group, set to true. Without it the user coaches through Claude.
-  config :burpee_trainer, :coach_claim, System.get_env("COACH_CLAIM") || "burpee_coach"
+  # SCIM provisioning from Pocket ID: the token Pocket ID sends to /scim/v2 (unset means
+  # /scim/v2 is off), and the Pocket ID id of the group whose members get the app's coach.
+  config :burpee_trainer, :scim,
+    token: System.get_env("SCIM_TOKEN"),
+    coach_group: System.get_env("COACH_GROUP_ID")
 
   host = System.get_env("PHX_HOST") || "example.com"
 

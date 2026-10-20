@@ -73,6 +73,17 @@ defmodule BurpeeTrainerWeb.McpAuthTest do
     assert conn.assigns.current_scope.user.id == user.id
   end
 
+  test "a user blocked or removed in Pocket ID cannot use /mcp", %{conn: conn} do
+    user = user_fixture()
+    {:ok, user} = BurpeeTrainer.Accounts.link_oidc_sub(user, "sub-#{user.id}")
+
+    for access <- [:disabled, :removed] do
+      user |> Ecto.Changeset.change(access: access) |> BurpeeTrainer.Repo.update!()
+      conn = conn |> recycle() |> authenticate("Bearer valid:sub-#{user.id}")
+      assert conn.halted and conn.status == 401, "#{access} signed in"
+    end
+  end
+
   test "no token, a bad token, or a stranger is turned away with where to sign in",
        %{conn: conn} do
     for header <- [nil, "Basic abc", "Bearer ", "Bearer nope", "Bearer valid:nobody"] do

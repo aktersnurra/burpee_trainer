@@ -55,6 +55,23 @@ defmodule BurpeeTrainerWeb.Router do
     delete("/", McpController, :unsupported)
   end
 
+  # Pocket ID provisions users and groups here (BurpeeTrainer.Scim).
+  pipeline :scim do
+    plug(BurpeeTrainerWeb.ScimAuth)
+  end
+
+  scope "/scim/v2", BurpeeTrainerWeb do
+    pipe_through(:scim)
+
+    for {path, resource} <- [{"/Users", :users}, {"/Groups", :groups}] do
+      get(path, ScimController, :index, assigns: %{resource: resource})
+      post(path, ScimController, :create, assigns: %{resource: resource})
+      get(path <> "/:id", ScimController, :show, assigns: %{resource: resource})
+      put(path <> "/:id", ScimController, :update, assigns: %{resource: resource})
+      delete(path <> "/:id", ScimController, :delete, assigns: %{resource: resource})
+    end
+  end
+
   scope "/", BurpeeTrainerWeb do
     pipe_through([:browser, :redirect_if_authed])
 

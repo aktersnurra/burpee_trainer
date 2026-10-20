@@ -5,14 +5,13 @@ defmodule BurpeeTrainerWeb.CoachPermissionFlowTest do
   import BurpeeTrainer.Fixtures
   import Phoenix.LiveViewTest
 
-  alias BurpeeTrainer.{Accounts, Mcp, Workouts}
+  alias BurpeeTrainer.{Mcp, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.{Client, MemoryJob, PlanNextWorkoutJob, Summary, SummaryJob}
   alias BurpeeTrainer.Insights.NarrateJob
 
   defp coached_over_mcp(user) do
-    {:ok, user} = Accounts.put_coach(user, :mcp)
-    user
+    user |> Ecto.Changeset.change(coach: :mcp) |> Repo.update!()
   end
 
   setup %{conn: conn} do

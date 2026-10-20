@@ -13,13 +13,29 @@ Design: `docs/specs/2026-10-16-mcp-design.md`.
 
 A group says who may do what. One group per app, and one per paid-for feature:
 
-| Group | Members | Custom claim |
-|---|---|---|
-| `burpee` | everyone who may use BurpeeTrainer | none |
-| `burpee-coach` | whoever gets the app's own coach (its model costs money) | `burpee_coach` = `true` |
+| Group | Members |
+|---|---|
+| `burpee` | everyone who may use BurpeeTrainer |
+| `burpee-coach` | whoever gets the app's own coach (its model costs money) |
 
-The app reads the claim, never a group name, so renaming the group or granting the coach
-through a second group needs no change in the app.
+The app knows the coach group by its Pocket ID id (`COACH_GROUP_ID`), never its name, so
+renaming it needs no change in the app. A custom claim on it is no longer read.
+
+### SCIM provisioning
+
+Pocket ID pushes users and groups to the app, so blocking a user, removing them from
+`burpee`, or changing `burpee-coach` reaches the app within about five minutes. Design:
+`docs/specs/2026-10-20-scim-provisioning-design.md`.
+
+1. Generate a token, e.g. `openssl rand -base64 32`, and set it as `SCIM_TOKEN`.
+2. Set `COACH_GROUP_ID` to the `burpee-coach` group's id (the id in its URL in Pocket ID).
+3. Allow both `burpee` and `burpee-coach` on the BurpeeTrainer client: Pocket ID only
+   sends the client's allowed groups.
+4. BurpeeTrainer client → **SCIM Provisioning**: endpoint `https://<PHX_HOST>/scim/v2`,
+   the token, **Enable**, then **Sync now**.
+
+A blocked user is signed out of open pages at once and cannot sign in or use `/mcp`;
+removing them from the client keeps their data, and allowing them again restores it.
 
 ### The MCP API
 
@@ -44,7 +60,7 @@ The existing BurpeeTrainer client stays as it is, with `burpee` as its allowed g
 
 ### Order, so nobody is locked out
 
-1. Create the groups, add members, and put the claim on `burpee-coach`.
+1. Create the groups and add members.
 2. Switch the BurpeeTrainer client's allowed group to `burpee`.
 3. Sign in to the app once.
 4. Remove the old catch-all group.
@@ -54,7 +70,8 @@ The existing BurpeeTrainer client stays as it is, with `burpee` as its allowed g
 | Variable | Value |
 |---|---|
 | `MCP_OIDC_AUDIENCE` | the API's resource, `https://<PHX_HOST>/mcp`. Unset: `/mcp` and its metadata are 404. |
-| `COACH_CLAIM` | optional; the claim key, default `burpee_coach`. |
+| `SCIM_TOKEN` | the token Pocket ID sends to `/scim/v2`. Unset: `/scim/v2` is 404. |
+| `COACH_GROUP_ID` | the Pocket ID id of `burpee-coach`, whose members get the app's coach. |
 
 `OIDC_ISSUER` is the one login already uses.
 
@@ -62,12 +79,12 @@ A token's audience is that resource. When Claude also asks for `openid`, Pocket 
 the issuer as a second audience so the token works at `/userinfo`; the app allows that one
 extra value and refuses any other.
 
-Existing users keep the app's coach until their next sign-in, when the claim decides. Put
-the claim on the group before then.
+Existing users keep their coach until the first SCIM sync writes `burpee-coach`; from
+then on its members have the app's coach and everyone else coaches over MCP.
 
 Back up the database before deploying: two migrations change it (`coach_recommendations.
-planned_by`, `users.coach`) and one narrows the lock on completed sessions so
-their feedback can be corrected.
+planned_by`, `users.coach`, and SCIM's `users.access` and `scim_groups`) and one narrows
+the lock on completed sessions so their feedback can be corrected.
 
 ## Claude
 

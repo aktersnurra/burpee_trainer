@@ -22,7 +22,7 @@ defmodule BurpeeTrainerWeb.McpAuth do
          token = String.trim(token),
          true <- token != "",
          {:ok, sub} <- Token.impl().verify(token),
-         %Accounts.User{} = user <- Accounts.get_user_by_oidc_sub(sub) do
+         %Accounts.User{access: :active} = user <- Accounts.get_user_by_oidc_sub(sub) do
       assign(conn, :current_scope, Scope.for_user(user))
     else
       {:enabled, false} ->
@@ -45,5 +45,6 @@ defmodule BurpeeTrainerWeb.McpAuth do
   defp reason({:error, {reason, _, _}}) when is_atom(reason), do: reason
   defp reason({:error, _}), do: :invalid_token
   defp reason(nil), do: :unknown_subject
+  defp reason(%Accounts.User{access: access}), do: access
   defp reason(_), do: :missing_bearer
 end
