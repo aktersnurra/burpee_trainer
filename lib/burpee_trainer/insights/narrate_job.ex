@@ -31,13 +31,14 @@ defmodule BurpeeTrainer.Insights.NarrateJob do
 
   @impl true
   def perform(%Oban.Job{args: %{"user_id" => user_id, "session_id" => session_id}}) do
-    with %Accounts.User{} = user <- Accounts.get_user(user_id),
+    with %Accounts.User{coach: :app} = user <- Accounts.get_user(user_id),
          scope = Scope.for_user(user),
          %{state: :completed} = session <- Workouts.get_session(scope, session_id),
          {:ok, _} <- Narrator.narrate(scope, session) do
       :ok
     else
       nil -> {:cancel, :session_not_owned}
+      %Accounts.User{coach: :mcp} -> {:cancel, :mcp_coach}
       {:error, reason} -> {:cancel, reason}
       _ -> {:cancel, :session_not_completed}
     end

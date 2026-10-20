@@ -260,25 +260,16 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 >
                   <.icon name="hero-arrow-path" class="size-5" />
                 </a>
-                <BurpeeTrainerWeb.HomeCoachComponents.coach
+                <button
                   :if={is_nil(@local_error)}
-                  scope={@current_scope}
+                  id="retry-recommendation-button"
+                  phx-click="retry_recommendation"
+                  class="home-state-action min-h-11 focus-visible:outline-2 focus-visible:outline-offset-4 home-icon-action"
+                  aria-label="Retry"
+                  title="Retry"
                 >
-                  <:app>
-                    <button
-                      id="retry-recommendation-button"
-                      phx-click="retry_recommendation"
-                      class="home-state-action min-h-11 focus-visible:outline-2 focus-visible:outline-offset-4 home-icon-action"
-                      aria-label="Retry"
-                      title="Retry"
-                    >
-                      <.icon name="hero-arrow-path" class="size-5" />
-                    </button>
-                  </:app>
-                  <:mcp>
-                    <BurpeeTrainerWeb.HomeCoachComponents.mcp_hint id="home-unavailable-mcp" />
-                  </:mcp>
-                </BurpeeTrainerWeb.HomeCoachComponents.coach>
+                  <.icon name="hero-arrow-path" class="size-5" />
+                </button>
               </section>
           <% end %>
         </div>

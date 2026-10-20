@@ -184,14 +184,14 @@ instead, and the app never calls the model for them.
     `HomeLive` ignores those events if a stale page sends them. Starting, switching and
     deleting workouts, Progress and goals work as for everyone.
   - `Coach.Client.chat/2` and `decide/3`, the only places the app calls a model, refuse
-    with `:mcp_coach` before any budget is reserved; a job queued before the user's
-    coach changed makes no call.
+    with `:mcp_coach` before any budget is reserved. A job queued before the user's
+    coach changed to `:mcp` cancels itself, so it cannot replace the note written over
+    MCP with a fallback.
 - **Home for an `:mcp` user** keeps the coach section, without the message box or reply
   pills. It shows what Claude left: the note Claude wrote (`set_coach_note`), the
   workout Claude planned and its reason, this week's window, and memory changes as
   "Noted:" lines, and asks the user to use their MCP connection for coach updates. The
-  workout's expansion and the unavailable state say the same where the app's coach
-  would act.
+  workout's expansion says the same, where Edit and New would be.
 - **Claude tool:** `set_coach_note` writes the coach's note and look back
   (`Coach.Summary` `text` and `review`, same length limits as the summary job). It is
   available to every user; for a user with the in-app coach, the next summary job

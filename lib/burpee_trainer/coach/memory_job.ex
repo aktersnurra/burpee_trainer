@@ -84,6 +84,10 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
       nil ->
         {:cancel, :user_missing}
 
+      # The user's coach changed to MCP after this was queued; the client keeps the memory.
+      %Accounts.User{coach: :mcp} ->
+        {:cancel, :mcp_coach}
+
       user ->
         scope = Scope.for_user(user)
 

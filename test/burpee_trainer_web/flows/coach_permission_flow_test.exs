@@ -114,9 +114,44 @@ defmodule BurpeeTrainerWeb.CoachPermissionFlowTest do
     refute has_element?(view, "#home-edit-workout")
     refute has_element?(view, "#home-new-workout")
 
-    # A stale page's event changes nothing.
+    # A stale page's events ask nothing of the app's coach.
+    render_click(view, "toggle_summary", %{})
     render_click(view, "new_workout", %{})
     refute has_element?(view, "#home-new-reps")
+    render_click(view, "edit_current_workout", %{})
+    refute has_element?(view, "#home-edit-form")
+  end
+
+  test "a user coached over MCP cannot message the app's coach from a stale page",
+       %{conn: conn, user: user} do
+    user = coached_over_mcp(user)
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+
+    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
+    render_click(view, "coach_message", %{"coach_message" => %{"text" => "Harder please"}})
+    refute has_element?(view, "#home-coach-pending")
+    assert llm_call_count(Scope.for_user(user)) == 0
+  end
+
+  test "a summary queued before the coach changed to MCP keeps the note written over MCP",
+       %{user: user} do
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+    {:ok, _job} = SummaryJob.admit(Scope.for_user(user))
+    scope = Scope.for_user(coached_over_mcp(user))
+
+    {:reply, %{"result" => %{"isError" => false}}} =
+      Mcp.handle(scope, %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{
+          "name" => "set_coach_note",
+          "arguments" => %{"text" => "Keep Thursday easy."}
+        }
+      })
+
+    assert {:cancel, :mcp_coach} = perform_job(SummaryJob, %{user_id: user.id})
+    assert %{source: :claude, text: "Keep Thursday easy."} = Summary.get(scope)
   end
 
   test "with the coach, Home still has the conversation", %{conn: conn, user: user} do

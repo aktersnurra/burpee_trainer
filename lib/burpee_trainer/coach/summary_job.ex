@@ -52,6 +52,10 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   @impl true
   def perform(%Oban.Job{args: %{"user_id" => user_id}}) when is_integer(user_id) do
     case Accounts.get_user(user_id) do
+      # The user's coach changed to MCP after this was queued; their note is the client's.
+      %Accounts.User{coach: :mcp} ->
+        {:cancel, :mcp_coach}
+
       %Accounts.User{} = user ->
         scope = Scope.for_user(user)
 
