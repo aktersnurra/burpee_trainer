@@ -1,5 +1,8 @@
 defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
-  @moduledoc "Durable planning for an eligible slot; completed days schedule at the next local boundary."
+  @moduledoc """
+  Durable planning for an eligible slot. Planning follows events, never a visit: a completed
+  or logged session plans the next day at its local boundary, and Retry plans now.
+  """
   use Oban.Worker,
     queue: :coach,
     max_attempts: 3,
@@ -60,25 +63,6 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
     end)
     |> case do
       {:ok, :ok} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  @doc """
-  Plans the current slot automatically at most once: a later Home visit never re-plans a
-  slot whose first job already ran, failed or was cancelled. Retries use `enqueue/1`.
-  """
-  @spec enqueue_first(Scope.t()) :: :ok | {:error, term()}
-  def enqueue_first(%Scope{} = scope) do
-    with {:ok, slot} <- Policy.required_slot(scope, DateTime.utc_now(:second)),
-         :workout_needed <- slot.home_state,
-         {:ok, _} <-
-           %{"user_id" => scope.user.id, "slot_key" => slot.slot_key}
-           |> new(unique: [keys: [:user_id, :slot_key], period: :infinity, states: :all])
-           |> Oban.insert() do
-      :ok
-    else
-      state when state in [:week_complete, :done_today] -> :ok
       {:error, reason} -> {:error, reason}
     end
   end

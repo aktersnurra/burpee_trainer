@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-20 — Planning follows events
+
+- Opening the app never plans. The next workout is planned when something happens: a completed or logged session (at the next local day), Retry, or a choice by you or Claude. A day without training keeps the workout chosen before it while it still fits the day (same burpee type and minutes), so Home no longer falls back to Steady 10 and spends a decision call and a model call on a new day.
+
 ## 2026-10-20 — Pose traces stored gzipped
 
 - Camera pose traces are stored gzipped (`Workouts.GzipText`): a 20-minute session took about 120 MB as plain JSON, about 18 MB now. A migration compresses existing traces one chunk at a time; on a copy of production data the database went from 317 MB to 54 MB after `VACUUM`, with every chunk's digest unchanged. Run `VACUUM` once after deploying to give the space back.

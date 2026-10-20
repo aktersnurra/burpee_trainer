@@ -41,7 +41,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
       |> HomeCoach.initialize()
       |> assign(history_open?: false)
       |> schedule_home_day()
-      |> plan_slot_once()
       |> assign_progress_summary()
 
     {:ok, socket}
@@ -423,15 +422,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   defp enqueue_planner(socket),
     do: planning_result(socket, PlanNextWorkoutJob.enqueue(socket.assigns.current_scope))
-
-  # A built-in on Home stands in until the coach has planned the slot; that happens once.
-  defp plan_slot_once(socket) do
-    if connected?(socket) and
-         match?({:start, %{plan: %{origin: :built_in}}}, socket.assigns.home_state),
-       do:
-         planning_result(socket, PlanNextWorkoutJob.enqueue_first(socket.assigns.current_scope)),
-       else: socket
-  end
 
   # Opening the app refreshes a summary from an earlier week; the job's broadcast ends loading.
   defp assign_progress_summary(socket) do

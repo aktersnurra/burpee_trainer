@@ -26,6 +26,69 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
     assert {:ok, ^b} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
   end
 
+  # Yesterday's slot, chosen by `planned_by`, opened a day ago.
+  defp chose_yesterday(u, slot, plan, planned_by) do
+    date = Date.add(slot.slot_date, -1)
+    key = "#{Date.to_iso8601(date)}:#{slot.strategy}"
+
+    {:ok, r} =
+      Workouts.ensure_recommendation(Scope.for_user(u), %{slot_key: key, slot_date: date})
+
+    opened = DateTime.add(DateTime.utc_now(:second), -1, :day)
+
+    r
+    |> Ecto.Changeset.change(
+      home_workout_plan_id: plan.id,
+      home_revision: 1,
+      planned_by: planned_by,
+      rationale: "Hold yesterday's pace.",
+      inserted_at: opened
+    )
+    |> Repo.update!()
+  end
+
+  defp fitting_plan(u, slot),
+    do:
+      plan_fixture(u, %{
+        target_duration_sec: slot.duration_sec,
+        burpee_type: Atom.to_string(slot.burpee_type)
+      })
+
+  test "a day without training keeps the previous day's workout", %{user: u, slot: slot} do
+    plan = fitting_plan(u, slot)
+    chose_yesterday(u, slot, plan, :owner)
+
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
+    assert shown.plan.id == plan.id
+    assert Workouts.planned_by(Scope.for_user(u), slot) == :owner
+
+    assert Repo.get!(CoachRecommendation, shown.recommendation_id).rationale ==
+             "Hold yesterday's pace."
+  end
+
+  test "a session since the previous day's choice plans the day afresh", %{user: u, slot: slot} do
+    plan = fitting_plan(u, slot)
+    chose_yesterday(u, slot, plan, :coach)
+
+    free_form_session_fixture(u, %{
+      completed_at: DateTime.add(DateTime.utc_now(:second), -1, :hour)
+    })
+
+    {:ok, slot} = Policy.required_slot(Scope.for_user(u), DateTime.utc_now(:second))
+
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
+    assert shown.plan.origin == :built_in
+    assert Workouts.planned_by(Scope.for_user(u), slot) == nil
+  end
+
+  test "a previous workout that no longer fits the slot is not kept", %{user: u, slot: slot} do
+    plan = plan_fixture(u, %{target_duration_sec: slot.duration_sec + 60})
+    chose_yesterday(u, slot, plan, :owner)
+
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
+    assert shown.plan.origin == :built_in
+  end
+
   test "foreign selection is rejected without changing the pin", %{user: u, slot: slot} do
     {:ok, a} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
     foreign = plan_fixture(user_fixture())
