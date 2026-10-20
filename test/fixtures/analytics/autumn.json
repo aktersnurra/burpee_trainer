@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "id": "autumn",
+  "timezone": "America/New_York",
+  "now": "2026-11-03T12:00:00Z",
+  "columns": [
+    "session_id",
+    "completed_at",
+    "local_date",
+    "source_kind",
+    "burpee_type",
+    "capture_mode",
+    "reps_actual",
+    "reps_planned",
+    "duration_sec_actual",
+    "duration_sec_planned",
+    "credited_seconds",
+    "warmup",
+    "pace_sec",
+    "reps_per_20_min"
+  ],
+  "rows": [
+    [
+      201,
+      "2026-11-01T05:30:00Z",
+      "2026-11-01",
+      "manual",
+      "navy_seal",
+      "timed",
+      12,
+      30,
+      360,
+      600,
+      360,
+      0,
+      30.0,
+      40
+    ],
+    [
+      202,
+      "2026-11-01T06:30:00Z",
+      "2026-11-01",
+      "manual",
+      "six_count",
+      "logged",
+      15,
+      25,
+      300,
+      600,
+      300,
+      0,
+      20.0,
+      60
+    ],
+    [
+      203,
+      "2026-11-02T07:00:00Z",
+      "2026-11-02",
+      "manual",
+      "six_count",
+      "logged",
+      5,
+      10,
+      60,
+      120,
+      0,
+      1,
+      12.0,
+      100
+    ]
+  ],
+  "sentinel": {
+    "reps_actual": 999999,
+    "owner": "another-owner"
+  },
+  "rationale": "Hand-derived scalar facts. Manual source; capture methods differ. Warmup is exact tag equality. IDs are fixture-local; ownership is exercised through actual snapshot tests."
+}
