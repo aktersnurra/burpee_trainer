@@ -11,6 +11,7 @@ defmodule BurpeeTrainer.Application do
       [
         BurpeeTrainerWeb.Telemetry,
         BurpeeTrainer.Repo,
+        BurpeeTrainer.Analytics.HelperGuardian,
         {Ecto.Migrator,
          repos: Application.fetch_env!(:burpee_trainer, :ecto_repos), skip: skip_migrations?()},
         {Oban, Application.fetch_env!(:burpee_trainer, Oban)},
