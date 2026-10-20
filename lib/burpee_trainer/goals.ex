@@ -121,14 +121,10 @@ defmodule BurpeeTrainer.Goals do
   defp admit_summary(_scope, :abandoned, _goal), do: :ok
 
   defp admit_summary(scope, :active, goal) do
-    case SummaryJob.admit(scope) do
-      {:ok, _job} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.warning(
-          "coach_summary_not_admitted trigger=goal goal_id=#{goal.id} reason=#{inspect(reason)}"
-        )
+    with {:error, reason} <- SummaryJob.admit(scope) do
+      Logger.warning(
+        "coach_summary_not_admitted trigger=goal goal_id=#{goal.id} reason=#{inspect(reason)}"
+      )
     end
   end
 end

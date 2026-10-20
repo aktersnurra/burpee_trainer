@@ -10,7 +10,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
     ]
 
   alias BurpeeTrainer.{Accounts, UserTime, Repo}
-  alias BurpeeTrainer.Accounts.Scope
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.{Policy, Selector}
   @impl true
   def perform(%Oban.Job{args: %{"user_id" => id, "slot_key" => key}})
@@ -35,7 +35,12 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
       # A changed selection means the owner chose during the run; a retry would override them.
       {:error, %{code: code}}
-      when code in [:provider_unavailable, :llm_budget_exhausted, :home_selection_changed] ->
+      when code in [
+             :provider_unavailable,
+             :claude_coach,
+             :llm_budget_exhausted,
+             :home_selection_changed
+           ] ->
         {:cancel, code}
 
       # The planner was already reminded once; another run would spend the automated budget
@@ -50,7 +55,10 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
   def perform(%Oban.Job{}), do: {:cancel, :invalid_args}
 
+  # Claude plans for a user it coaches; the app queues nothing for them.
   @spec enqueue(Scope.t()) :: :ok | {:error, term()}
+  def enqueue(%Scope{user: %User{coach: :claude}}), do: :ok
+
   def enqueue(%Scope{} = scope) do
     Repo.immediate_transaction(fn ->
       case admit(scope) do
@@ -69,6 +77,8 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
   slot whose first job already ran, failed or was cancelled. Retries use `enqueue/1`.
   """
   @spec enqueue_first(Scope.t()) :: :ok | {:error, term()}
+  def enqueue_first(%Scope{user: %User{coach: :claude}}), do: :ok
+
   def enqueue_first(%Scope{} = scope) do
     with {:ok, slot} <- Policy.required_slot(scope, DateTime.utc_now(:second)),
          :workout_needed <- slot.home_state,
@@ -85,6 +95,8 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
   @doc "Admits the job inside the caller's transaction; a failure never rolls it back."
   @spec admit(Scope.t()) :: :ok | {:error, term()}
+  def admit(%Scope{user: %User{coach: :claude}}), do: :ok
+
   def admit(%Scope{} = scope) do
     with {:ok, slot, at} <- target_slot(scope, DateTime.utc_now(:second)),
          :workout_needed <- slot.home_state,

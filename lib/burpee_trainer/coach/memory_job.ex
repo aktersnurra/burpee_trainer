@@ -10,7 +10,7 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   require Logger
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
-  alias BurpeeTrainer.Accounts.Scope
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.{Client, Exchange, Memory}
   alias BurpeeTrainer.Coach.Tools.History
   alias BurpeeTrainer.Workouts.WorkoutSession
@@ -48,14 +48,21 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   events change nothing; then return no ops. The athlete reads every change.
   """
 
-  @doc "Admits a job for an exchange the owner just had with the coach."
-  @spec admit_exchange(Scope.t(), Exchange.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
+  @doc """
+  Admits a job for an exchange the owner just had with the coach. Claude keeps the memory
+  of a user it coaches (`update_memory`), so no job is admitted for them.
+  """
+  @spec admit_exchange(Scope.t(), Exchange.t()) :: {:ok, Oban.Job.t()} | :ok | {:error, term()}
+  def admit_exchange(%Scope{user: %User{coach: :claude}}, %Exchange{}), do: :ok
+
   def admit_exchange(%Scope{user: user}, %Exchange{id: id}),
     do: %{"user_id" => user.id, "exchange_id" => id} |> new() |> Oban.insert()
 
   @doc "Admits a job for a completed session that carries the owner's feedback; else none."
   @spec admit_session(Scope.t(), WorkoutSession.t()) ::
           {:ok, Oban.Job.t()} | :ok | {:error, term()}
+  def admit_session(%Scope{user: %User{coach: :claude}}, %WorkoutSession{}), do: :ok
+
   def admit_session(%Scope{user: user}, %WorkoutSession{id: id} = session) do
     if feedback?(session),
       do: %{"user_id" => user.id, "session_id" => id} |> new() |> Oban.insert(),

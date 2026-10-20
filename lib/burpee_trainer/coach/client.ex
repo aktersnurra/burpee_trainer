@@ -1,6 +1,7 @@
 defmodule BurpeeTrainer.Coach.Client do
   @moduledoc "Metered Req boundary for chat, strict output, tool calls, and typed decisions."
 
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Workouts.Error
 
   require Logger
@@ -36,16 +37,19 @@ defmodule BurpeeTrainer.Coach.Client do
     model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
     attrs = %{purpose: ledger.purpose, run_id: ledger.run_id, model: model}
 
-    # A disabled provider, or a user without the app's coach, makes no call, so it neither
-    # records nor spends budget.
+    # A disabled provider, or a user Claude coaches, makes no call, so it neither records
+    # nor spends budget.
     with true <- is_list(config) and require_enabled(config) == :ok,
-         true <- BurpeeTrainer.Coach.enabled?(ledger.scope),
+         :app <- coach(ledger.scope),
          {:ok, call} <-
            BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
       record(ledger, call, fn -> chat_request(messages, opts, config) end)
     else
       false ->
         provider_unavailable()
+
+      :claude ->
+        {:error, Error.new(:claude_coach)}
 
       {:error, :llm_budget_exhausted} ->
         {:error, Error.new(:llm_budget_exhausted)}
@@ -66,13 +70,16 @@ defmodule BurpeeTrainer.Coach.Client do
     attrs = %{purpose: ledger.purpose, run_id: ledger.run_id, model: model}
 
     with true <- is_list(config) and require_enabled(config) == :ok,
-         true <- BurpeeTrainer.Coach.enabled?(ledger.scope),
+         :app <- coach(ledger.scope),
          {:ok, call} <-
            BurpeeTrainer.Coach.Ledger.reserve(ledger.scope, attrs, Keyword.get(opts, :budget, [])) do
       record(ledger, call, fn -> decide_request(state, questions, opts, config) end)
     else
       false ->
         provider_unavailable()
+
+      :claude ->
+        {:error, Error.new(:claude_coach)}
 
       {:error, :llm_budget_exhausted} ->
         {:error, Error.new(:llm_budget_exhausted)}
@@ -524,6 +531,8 @@ defmodule BurpeeTrainer.Coach.Client do
       end
     end
   end
+
+  defp coach(%Scope{user: %User{coach: coach}}), do: coach
 
   defp provider_unavailable, do: {:error, Error.new(:provider_unavailable)}
   defp invalid_provider_response, do: {:error, Error.new(:invalid_provider_response)}

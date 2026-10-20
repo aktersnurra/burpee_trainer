@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.{Home, Repo, Workouts}
+  alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Coach.{PlanNextWorkoutJob, Policy, Summary, SummaryJob}
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutSession}
 
@@ -248,7 +249,29 @@ defmodule BurpeeTrainerWeb.HomeLive do
     end
   end
 
+  # What asks the app's coach. Claude coaches a user without it, so Home offers none of
+  # these to them and ignores them if they arrive.
+  @app_coach_events [
+    "coach_message",
+    "coach_quick_reply",
+    "new_workout",
+    "edit_current_workout",
+    "review_new_workout",
+    "review_current_edit",
+    "submit_home_action",
+    "confirm_workout_request",
+    "retry_recommendation"
+  ]
+
   @impl true
+  def handle_event(
+        event,
+        _params,
+        %{assigns: %{current_scope: %Scope{user: %User{coach: :claude}}}} = socket
+      )
+      when event in @app_coach_events,
+      do: {:noreply, socket}
+
   def handle_event(event, params, socket)
       when event in [
              "close_history",

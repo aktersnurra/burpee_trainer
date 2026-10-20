@@ -672,18 +672,24 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             >
               <.start_choice choice="camera" />
               <.start_choice choice="warmup" />
-              <button
-                id="home-edit-workout"
-                type="button"
-                phx-click="edit_current_workout"
-                aria-label="Edit current workout"
-                title="Edit workout"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-pencil-square" class="size-5" />
-              </button>
+              <%!-- Editing and designing workouts ask the app's coach; Claude does both for a
+                   user it coaches. --%>
+              <BurpeeTrainerWeb.HomeCoachComponents.coach scope={@state.current_scope}>
+                <:app>
+                  <button
+                    id="home-edit-workout"
+                    type="button"
+                    phx-click="edit_current_workout"
+                    aria-label="Edit current workout"
+                    title="Edit workout"
+                    class="home-text-action home-expanded-action"
+                    inert={!@state.expanded?}
+                    disabled={@state.authoring_stage != :idle}
+                  >
+                    <.icon name="hero-pencil-square" class="size-5" />
+                  </button>
+                </:app>
+              </BurpeeTrainerWeb.HomeCoachComponents.coach>
               <button
                 id="home-title-action"
                 type="button"
@@ -712,18 +718,24 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               >
                 <.icon name="hero-play-solid" class="size-6" />
               </button>
-              <button
-                id="home-new-workout"
-                type="button"
-                phx-click={leave_hero() |> JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
-                aria-label="New workout"
-                title="New workout"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-plus" class="size-5" />
-              </button>
+              <BurpeeTrainerWeb.HomeCoachComponents.coach scope={@state.current_scope}>
+                <:app>
+                  <button
+                    id="home-new-workout"
+                    type="button"
+                    phx-click={
+                      leave_hero() |> JS.push("new_workout") |> JS.focus(to: "#home-new-reps")
+                    }
+                    aria-label="New workout"
+                    title="New workout"
+                    class="home-text-action home-expanded-action"
+                    inert={!@state.expanded?}
+                    disabled={@state.authoring_stage != :idle}
+                  >
+                    <.icon name="hero-plus" class="size-5" />
+                  </button>
+                </:app>
+              </BurpeeTrainerWeb.HomeCoachComponents.coach>
             </div>
           </div>
           <div id="home-expansion" class="home-expansion" data-open={to_string(@state.expanded?)}>
@@ -741,6 +753,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 rows={@state.inspection_rows}
                 expanded={@state.expanded_groups}
               />
+              <BurpeeTrainerWeb.HomeCoachComponents.coach scope={@state.current_scope}>
+                <:claude>
+                  <BurpeeTrainerWeb.HomeCoachComponents.claude_hint id="home-workout-claude" />
+                </:claude>
+              </BurpeeTrainerWeb.HomeCoachComponents.coach>
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
                 <.request_confirmation
                   :if={@state.pending_request && @state.authoring_stage == :idle}

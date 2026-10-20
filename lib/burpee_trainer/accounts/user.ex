@@ -2,6 +2,12 @@ defmodule BurpeeTrainer.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @typedoc """
+  Who coaches the user: `:app`, the app's own model (granted by a Pocket ID claim), or
+  `:claude`, through the MCP connection, with the app making no model call for them.
+  """
+  @type coach :: :app | :claude
+
   @type t :: %__MODULE__{}
 
   schema "users" do
@@ -9,7 +15,7 @@ defmodule BurpeeTrainer.Accounts.User do
     field :oidc_sub, :string
     field :timezone, :string, default: "Etc/UTC"
     field :timezone_provisioned, :boolean, default: false
-    field :coach_enabled, :boolean, default: true
+    field :coach, Ecto.Enum, values: [:app, :claude], default: :app
 
     timestamps(type: :utc_datetime)
   end

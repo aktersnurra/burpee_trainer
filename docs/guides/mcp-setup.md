@@ -66,7 +66,7 @@ Existing users keep the app's coach until their next sign-in, when the claim dec
 the claim on the group before then.
 
 Back up the database before deploying: two migrations change it (`coach_recommendations.
-planned_by`, `users.coach_enabled`) and one narrows the lock on completed sessions so
+planned_by`, `users.coach`) and one narrows the lock on completed sessions so
 their feedback can be corrected.
 
 ## Claude

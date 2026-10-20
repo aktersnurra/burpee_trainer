@@ -170,20 +170,27 @@ instead, and the app never calls the model for them.
   `burpee_coach` = `true`. The app reads the claim, never a group name, so a group can be
   renamed or a second group can grant the coach without touching the app.
 - **Config:** `COACH_CLAIM`, default `burpee_coach`.
-- **At sign-in** the app sets `users.coach_enabled` = the ID token's claim is `true` (the
-  boolean or the string). It is re-read at every sign-in; losing the claim takes effect
-  at the next one. The migration sets existing users to `true`, so nobody loses the
-  coach before their next sign-in; the claim must be on the group before then.
-- **One gate:** `Coach.enabled?(scope)`, checked in `Coach.Client.chat/2`, the one place
-  the app calls the model. A user without the coach gets `:provider_unavailable` there,
-  before any budget is reserved, which every caller already handles: the planner cancels
-  and Home keeps its fallback workout (`Workouts.ensure_home_selection/2`), the summary,
-  memory and insight jobs change nothing, and workout design and the chat say the coach
-  is unavailable. Jobs may still be queued; they make no call.
-- **Home without the coach** keeps the coach section, without the message box or reply
+- **Who coaches a user is a sum type,** `users.coach` :: `:app | :claude`
+  (`Accounts.User.coach()`), never a flag. At sign-in the app sets `:app` when the ID
+  token's claim is `true` (the boolean or the string), else `:claude`. It is re-read at
+  every sign-in; losing the claim takes effect at the next one. Existing users keep the
+  coach they had (the column replaced `coach_enabled`); a user created outside sign-in
+  (seeds, tests) defaults to `:app`.
+- **Every app-coach flow matches on it,** so a `:claude` user starts none of them:
+  - `PlanNextWorkoutJob`, `SummaryJob`, `MemoryJob` and `NarrateJob` admit no job (their
+    `admit`/`enqueue` return `:ok`), and opening Home never refreshes the note.
+  - Home offers no New or Edit workout, no chat or reply pills, and no planner retry;
+    `HomeLive` ignores those events if a stale page sends them. Starting, switching and
+    deleting workouts, Progress and goals work as for everyone.
+  - `Coach.Client.chat/2` and `decide/3`, the only places the app calls a model, refuse
+    with `:claude_coach` before any budget is reserved; a job queued before the user's
+    coach changed makes no call.
+- **Home for a `:claude` user** keeps the coach section, without the message box or reply
   pills. It shows what Claude left: the note Claude wrote (`set_coach_note`), the
   workout Claude planned and its reason, this week's window, and memory changes as
-  "Noted:" lines. With nothing from Claude yet, the section is hidden.
+  "Noted:" lines, and asks the user to use their MCP connection for coach updates. The
+  workout's expansion and the unavailable state say the same where the app's coach
+  would act.
 - **Claude tool:** `set_coach_note` writes the coach's note and look back
   (`Coach.Summary` `text` and `review`, same length limits as the summary job). It is
   available to every user; for a user with the in-app coach, the next summary job
@@ -214,10 +221,12 @@ instead, and the app never calls the model for them.
   whose reps cannot fit is refused with the reason.
 - The planner job cancels for a slot planned by Claude, and still plans an unmarked one.
 - A session logged through MCP queues the summary and planner jobs, not the memory job.
-- Sign-in with the claim `true`, `"true"`, absent or `false` sets `coach_enabled`
-  accordingly; `COACH_CLAIM` picks the key.
-- `Client.chat/2` makes no call and reserves no budget for a user without the coach.
-- A user without the coach: Home shows the section without the message box or replies,
-  with Claude's note, and hides it (and the Done toggle) when there is nothing.
+- Sign-in with the claim `true`, `"true"`, absent or `false` sets `coach` to `:app` or
+  `:claude` accordingly; `COACH_CLAIM` picks the key. The migration keeps each user's coach.
+- `Client.chat/2` makes no call and reserves no budget for a `:claude` user; completing or
+  logging a session queues none of the app's coach jobs for them.
+- A `:claude` user: Home shows the section without the message box or replies, with
+  Claude's note and the pointer to the MCP connection, even before Claude wrote anything;
+  the workout has no New or Edit.
 - One flow test: Claude-style call sequence adds a goal and a memory note, and Home shows
   them.

@@ -17,17 +17,6 @@ defmodule BurpeeTrainer.Coach do
 
   require Logger
 
-  @doc """
-  Whether the app's own coach (its model) runs for the scope's user: granted by a Pocket
-  ID claim at sign-in. Without it the user coaches through Claude and no model call is
-  made for them (`Coach.Client.chat/2` refuses).
-  """
-  @spec enabled?(Accounts.Scope.t()) :: boolean()
-  def enabled?(%Accounts.Scope{user: %Accounts.User{coach_enabled: enabled?}}),
-    do: enabled? != false
-
-  def enabled?(_scope), do: false
-
   @authoring_max_graphemes 500
   @authoring_max_bytes 4_000
 

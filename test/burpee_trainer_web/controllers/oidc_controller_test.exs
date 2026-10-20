@@ -203,16 +203,16 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
     end
 
     test "every sign-in sets the in-app coach from the Pocket ID claim", %{conn: conn} do
-      for {code, enabled?} <- [
-            {"coach-bool", true},
-            {"coach-absent", false},
-            {"coach-string", true},
-            {"coach-false", false},
-            {"coach-other-key", false}
+      for {code, coach} <- [
+            {"coach-bool", :app},
+            {"coach-absent", :claude},
+            {"coach-string", :app},
+            {"coach-false", :claude},
+            {"coach-other-key", :claude}
           ] do
         conn |> recycle() |> sign_in(code)
         user = Accounts.get_user_by_oidc_sub("sub-coach")
-        assert user.coach_enabled == enabled?, "#{code} gave #{user.coach_enabled}"
+        assert user.coach == coach, "#{code} gave #{user.coach}"
       end
     end
 
@@ -221,7 +221,7 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
       on_exit(fn -> Application.delete_env(:burpee_trainer, :coach_claim) end)
 
       sign_in(conn, "coach-other-key")
-      assert Accounts.get_user_by_oidc_sub("sub-coach").coach_enabled
+      assert Accounts.get_user_by_oidc_sub("sub-coach").coach == :app
     end
   end
 end

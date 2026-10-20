@@ -126,13 +126,15 @@ defmodule BurpeeTrainerWeb.OidcController do
 
   defp sign_in_user(sub, username, claims) do
     with {:ok, user} <- Accounts.resolve_oidc_identity(sub, username),
-         do: Accounts.put_coach_enabled(user, coach_claim?(claims))
+         do: Accounts.put_coach(user, coach(claims))
   end
 
   # The app's own coach is granted by a custom claim on a Pocket ID group (`true`, or the
   # string "true"); without it the user coaches through Claude.
-  defp coach_claim?(claims) do
-    key = Application.get_env(:burpee_trainer, :coach_claim, "burpee_coach")
-    Map.get(claims, key) in [true, "true"]
+  defp coach(claims) do
+    case Map.get(claims, Application.get_env(:burpee_trainer, :coach_claim, "burpee_coach")) do
+      granted when granted in [true, "true"] -> :app
+      _ -> :claude
+    end
   end
 end
