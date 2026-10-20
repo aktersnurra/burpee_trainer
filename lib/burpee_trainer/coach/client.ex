@@ -31,6 +31,12 @@ defmodule BurpeeTrainer.Coach.Client do
           {:ok, %{tool_calls: [map()], content: map() | String.t() | nil, usage: map()}}
           | {:error, Error.t()}
   def chat(messages, opts) when is_list(messages) and is_list(opts) do
+    metered(opts, fn -> chat_metered(messages, opts) end, fn config ->
+      chat_request(messages, opts, config)
+    end)
+  end
+
+  defp chat_metered(messages, opts) do
     ledger = Keyword.fetch!(opts, :ledger)
     config = Keyword.get(opts, :config, Application.get_env(:burpee_trainer, :llm_provider, []))
     model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
@@ -60,6 +66,14 @@ defmodule BurpeeTrainer.Coach.Client do
   @spec decide(map() | list() | String.t(), map(), keyword()) ::
           {:ok, %{answers: map(), usage: map()}} | {:error, Error.t()}
   def decide(state, questions, opts) when is_map(questions) and is_list(opts) do
+    opts = Keyword.put_new(opts, :config, Application.get_env(:burpee_trainer, :decisions, []))
+
+    metered(opts, fn -> decide_metered(state, questions, opts) end, fn config ->
+      decide_request(state, questions, opts, config)
+    end)
+  end
+
+  defp decide_metered(state, questions, opts) do
     ledger = Keyword.fetch!(opts, :ledger)
     config = Keyword.get(opts, :config, Application.get_env(:burpee_trainer, :decisions, []))
     model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
@@ -79,33 +93,52 @@ defmodule BurpeeTrainer.Coach.Client do
     end
   end
 
-  defp record(ledger, call, request) do
-    started = System.monotonic_time(:millisecond)
+  defp metered(opts, legacy, transport) do
+    case Keyword.fetch(opts, :deadline_ms) do
+      :error ->
+        legacy.()
 
+      {:ok, deadline} when is_integer(deadline) ->
+        BurpeeTrainer.Coach.Client.Deadline.run(opts, transport)
+
+      _ ->
+        {:error, Error.new(:invalid_deadline)}
+    end
+  end
+
+  @doc false
+  def record_result(ledger, call, started, response, finish_opts \\ []) do
     {result, error_usage} =
-      case request.() do
+      case response do
         {:error, error, usage} -> {{:error, error}, usage}
         result -> {result, %{}}
       end
 
     {outcome, usage} = outcome(result, error_usage)
 
-    # Chat reports prompt and completion tokens; the Decisions API, input and output tokens.
-    :ok =
-      BurpeeTrainer.Coach.Ledger.finish(ledger.scope, call.id, %{
-        outcome: outcome,
-        prompt_tokens: token_usage(usage["prompt_tokens"] || usage["input_tokens"]),
-        completion_tokens: token_usage(usage["completion_tokens"] || usage["output_tokens"]),
-        cost_usd: cost_usage(usage["cost"]),
-        duration_ms: System.monotonic_time(:millisecond) - started
-      })
+    attrs = %{
+      outcome: outcome,
+      prompt_tokens: token_usage(usage["prompt_tokens"] || usage["input_tokens"]),
+      completion_tokens: token_usage(usage["completion_tokens"] || usage["output_tokens"]),
+      cost_usd: cost_usage(usage["cost"]),
+      duration_ms: System.monotonic_time(:millisecond) - started
+    }
 
-    result
+    case BurpeeTrainer.Coach.Ledger.finish(ledger.scope, call.id, attrs, finish_opts) do
+      :ok -> result
+      {:error, _} -> {:error, Error.new(:ledger_finalization_failed)}
+    end
+  end
+
+  defp record(ledger, call, request) do
+    started = System.monotonic_time(:millisecond)
+    record_result(ledger, call, started, request.())
   end
 
   defp outcome({:ok, %{tool_calls: [_ | _], usage: usage}}, _), do: {"tool_calls", usage}
   defp outcome({:ok, %{usage: usage}}, _), do: {"ok", usage}
   defp outcome({:error, %{code: :provider_timeout}}, usage), do: {"timeout", usage}
+  defp outcome({:error, %{code: :provider_cancelled}}, usage), do: {"cancelled", usage}
 
   defp outcome({:error, %{code: :invalid_provider_response}}, usage),
     do: {"invalid_response", usage}
@@ -167,7 +200,7 @@ defmodule BurpeeTrainer.Coach.Client do
              redirect: false,
              decode_body: false,
              http_errors: :return,
-             receive_timeout: timeout_ms(config),
+             finch: transport_options(opts, config),
              into: bounded_body(@max_response_bytes),
              body: encoded,
              headers: [{"content-type", "application/json"} | attribution(config)]
@@ -411,6 +444,38 @@ defmodule BurpeeTrainer.Coach.Client do
     end
   end
 
+  defp transport_options(opts, config) do
+    remaining = remaining_timeout(opts, config)
+    # Req 0.7 rejects connect_options together with finch. Its conn_opts is the
+    # equivalent pool connection configuration; no inherited timeout survives.
+    inherited =
+      case Keyword.get(opts, :req) do
+        %Req.Request{options: %{finch: options}} when is_list(options) ->
+          Keyword.take(options, [:size, :count])
+
+        _ ->
+          []
+      end
+
+    inherited ++
+      [
+        conn_opts: [timeout: remaining],
+        pool_timeout: remaining,
+        receive_timeout: remaining,
+        request_timeout: remaining
+      ]
+  end
+
+  defp remaining_timeout(opts, config) do
+    case Keyword.get(opts, :deadline_ms) do
+      deadline when is_integer(deadline) ->
+        max(1, min(timeout_ms(config), deadline - System.monotonic_time(:millisecond)))
+
+      _ ->
+        timeout_ms(config)
+    end
+  end
+
   defp req(opts) do
     request =
       case Keyword.get(opts, :req) do
@@ -419,9 +484,21 @@ defmodule BurpeeTrainer.Coach.Client do
       end
 
     request =
-      Enum.reduce(@inherited_response_options, request, fn option, request ->
-        Req.Request.delete_option(request, option)
-      end)
+      Enum.reduce(
+        @inherited_response_options ++
+          [
+            :connect_options,
+            :finch,
+            :pool_timeout,
+            :request_timeout,
+            :receive_timeout,
+            :finch_request
+          ],
+        request,
+        fn option, request ->
+          Req.Request.delete_option(request, option)
+        end
+      )
 
     %{request | into: nil}
   end

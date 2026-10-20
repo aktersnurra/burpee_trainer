@@ -25,7 +25,7 @@ defmodule BurpeeTrainer.Analytics.Snapshot do
     with %DateTime{} <- now,
          true <- is_binary(timezone),
          {:ok, _context} <- UserTime.context(user, now) do
-      build_transaction(id, now, timezone)
+      build_transaction(id, now, timezone, Keyword.get(opts, :timeout, 15_000))
     else
       _ -> {:error, :invalid_timezone}
     end
@@ -33,21 +33,25 @@ defmodule BurpeeTrainer.Analytics.Snapshot do
 
   def build(_scope, _opts), do: {:error, :invalid_input}
 
-  defp build_transaction(id, now, timezone) do
-    case Repo.transaction(fn -> read_rows(id, now, timezone) end) do
+  defp build_transaction(_id, _now, _timezone, timeout)
+       when not is_integer(timeout) or timeout <= 0, do: {:error, :invalid_timeout}
+
+  defp build_transaction(id, now, timezone, timeout) do
+    case Repo.transaction(fn -> read_rows(id, now, timezone, timeout) end, timeout: timeout) do
       {:ok, rows} -> {:ok, %__MODULE__{rows: rows, as_of: now, timezone: timezone}}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp read_rows(id, now, timezone) do
+  defp read_rows(id, now, timezone, timeout) do
     candidates =
       Repo.all(
         from(s in WorkoutSession,
           where: s.user_id == ^id and s.state == :completed and s.completed_at <= ^now,
           order_by: [asc: s.completed_at, asc: s.id],
           limit: 5001
-        )
+        ),
+        timeout: timeout
       )
 
     if Enum.count_until(candidates, 5001) > 5000, do: Repo.rollback(:snapshot_too_large)

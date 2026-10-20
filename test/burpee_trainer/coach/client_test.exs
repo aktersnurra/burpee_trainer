@@ -171,7 +171,10 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert captured.options.retry == false
     assert captured.options.redirect == false
     assert captured.options.decode_body == false
-    assert captured.options.receive_timeout == 12_345
+    assert captured.options.finch[:receive_timeout] == 12_345
+    assert captured.options.finch[:pool_timeout] == 12_345
+    assert captured.options.finch[:request_timeout] == 12_345
+    assert captured.options.finch[:conn_opts][:timeout] == 12_345
     assert is_function(captured.into, 2)
 
     [recorded] = requests(counter)

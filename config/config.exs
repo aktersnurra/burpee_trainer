@@ -81,4 +81,7 @@ import_config "#{config_env()}.exs"
 config :burpee_trainer, Oban,
   engine: Oban.Engines.Lite,
   repo: BurpeeTrainer.Repo,
-  queues: [coach: 2]
+  queues: [coach: 2],
+  plugins: [
+    {Oban.Plugins.Cron, crontab: [{"17 * * * *", BurpeeTrainer.Analytics.TraceCleanupJob}]}
+  ]

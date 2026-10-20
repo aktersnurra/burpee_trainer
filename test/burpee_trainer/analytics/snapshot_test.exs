@@ -130,4 +130,12 @@ defmodule BurpeeTrainer.Analytics.SnapshotTest do
     |> Ecto.Changeset.change(attrs)
     |> Repo.insert!()
   end
+
+  test "trusted timeout can tighten database waits but invalid or expired allowance refuses" do
+    scope = scope_fixture()
+    assert {:error, :invalid_timeout} = Snapshot.build(scope, timeout: 0)
+    assert {:error, :invalid_timeout} = Snapshot.build(scope, timeout: -1)
+    assert {:error, :invalid_timeout} = Snapshot.build(scope, timeout: :infinity)
+    assert {:ok, %Snapshot{rows: []}} = Snapshot.build(scope, timeout: 1000)
+  end
 end

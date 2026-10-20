@@ -42,44 +42,65 @@ defmodule BurpeeTrainer.Coach.Ledger do
         Keyword.get(opts, :reservation_cost_usd, 0.0)
       )
 
-    Repo.immediate_transaction(fn ->
-      spent =
-        Repo.one(
-          from c in window(scope),
-            select:
-              coalesce(sum(fragment("COALESCE(?, ?)", c.cost_usd, c.reserved_cost_usd)), 0.0)
-        )
+    Repo.immediate_transaction(
+      fn ->
+        spent =
+          Repo.one(
+            from c in window(scope),
+              select:
+                coalesce(sum(fragment("COALESCE(?, ?)", c.cost_usd, c.reserved_cost_usd)), 0.0)
+          )
 
-      run_calls = Repo.aggregate(from(c in owned(scope), where: c.run_id == ^run_id), :count)
+        run_calls = Repo.aggregate(from(c in owned(scope), where: c.run_id == ^run_id), :count)
 
-      if calls_today(scope, bucket) >= cap or (run_cap != nil and run_calls >= run_cap) or
-           (cost_cap != nil and spent + estimate > cost_cap) do
-        Repo.rollback(:llm_budget_exhausted)
-      end
+        if calls_today(scope, bucket) >= cap or (run_cap != nil and run_calls >= run_cap) or
+             (cost_cap != nil and spent + estimate > cost_cap) do
+          Repo.rollback(:llm_budget_exhausted)
+        end
 
-      %LlmCall{
-        user_id: id,
-        inserted_at: DateTime.utc_now(),
-        outcome: "inflight",
-        reserved_cost_usd: estimate
-      }
-      |> Ecto.Changeset.cast(attrs, [:purpose, :run_id, :model])
-      |> Ecto.Changeset.validate_required([:purpose, :run_id, :model])
-      |> Repo.insert!()
-    end)
+        %LlmCall{
+          user_id: id,
+          inserted_at: DateTime.utc_now(),
+          outcome: "inflight",
+          reserved_cost_usd: estimate
+        }
+        |> Ecto.Changeset.cast(attrs, [:purpose, :run_id, :model])
+        |> Ecto.Changeset.validate_required([:purpose, :run_id, :model])
+        |> Repo.insert!()
+      end,
+      timeout: Keyword.get(opts, :timeout, 15_000)
+    )
   end
 
   @spec finish(Scope.t(), pos_integer(), map()) :: :ok | {:error, :not_found}
-  def finish(%Scope{} = scope, id, attrs) do
+  def finish(%Scope{} = scope, id, attrs, opts \\ []) do
     attrs =
       Map.take(attrs, [:prompt_tokens, :completion_tokens, :cost_usd, :outcome, :duration_ms])
 
     {count, _} =
-      Repo.update_all(from(c in owned(scope), where: c.id == ^id and c.outcome == "inflight"),
-        set: Map.to_list(attrs)
+      Repo.update_all(
+        from(c in owned(scope), where: c.id == ^id and c.outcome == "inflight"),
+        [set: Map.to_list(attrs)],
+        opts
       )
 
     if count == 1, do: :ok, else: {:error, :not_found}
+  rescue
+    _error in [DBConnection.ConnectionError, Exqlite.Error] -> {:error, :ledger_unavailable}
+  end
+
+  @doc "Count all durable reservations and unresolved inflight calls for an owned run."
+  def reservation_count(%Scope{} = scope, run_id) when is_binary(run_id) do
+    query = from(c in owned(scope), where: c.run_id == ^run_id)
+
+    {:ok,
+     %{
+       reservations: Repo.aggregate(query, :count, timeout: 1000),
+       inflight:
+         Repo.aggregate(from(c in query, where: c.outcome == "inflight"), :count, timeout: 1000)
+     }}
+  rescue
+    _error in [DBConnection.ConnectionError, Exqlite.Error] -> {:error, :ledger_unavailable}
   end
 
   defp calls_today(scope, :automated),
