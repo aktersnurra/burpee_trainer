@@ -84,3 +84,28 @@ The summary has string keys and a sorted `by_type` list with the same totals plu
 All totals describe only the supplied sessions. Group boundaries, empty-period
 omission, partial-period markers, capture-mode context and range completeness remain
 Task 3 responsibilities, not inferred by this producer.
+
+## Integrated response contract (Task 3)
+
+`history_stats` defaults to `range` (empty periods); `day`, `week`, and `month`
+return only recorded groups and always an overall `summary`. Group totals consume
+HistorySummary unchanged. Mixed-type legacy overall pace now returns null, the
+necessary compatibility correction; explicit week/month legacy fields remain.
+Periods include calendar `start`/`end` and `partial`, computed against normalized
+UTC bounds and the single request clock, not against first/last recorded session.
+Weekly target fields read History.weeks (and thus Week policy), unfiltered across
+all owner types, with explicit `target_scope` and `target_seconds`.
+
+HistoryCoverage refuses any page with continuation at the 100000-row aggregate
+limit. Its optional limit is a lower-level pagination seam exercised with real
+scoped rows, not mocked forwarding or 100001 fixtures. Successful aggregate context
+is complete. Query context distinguishes continuation exhaustion from full range
+returned: a final cursor page is never complete_range, and matched_sessions is
+unknown/null except on a complete first page. Non-authoritative exclusions describe
+only retrieved rows. No counts are invented for rows excluded by filters.
+
+HistoryContext records requested filters and normalized applied predicates (workout
+normalizes to plan_id/name), default warmup, local boundaries, UTC bounds, effective
+cutoff inclusivity, timezone and as_of. This is not a repeatable multi-page snapshot.
+The static analytics resource embeds the committed user guide at compile time and
+contains no owner data; workout-format and unknown-resource errors are preserved.

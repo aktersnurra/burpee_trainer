@@ -38,6 +38,173 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
     {:ok, user: user, scope: Scope.for_user(user)}
   end
 
+  test "range summaries and page coverage describe only selected owner work", %{
+    user: user,
+    scope: scope
+  } do
+    logged(user_fixture(), 1, %{})
+    logged(user, 1, %{burpee_count_actual: 10, duration_sec_actual: 61})
+    logged(user, 2, %{burpee_type: "navy_seal", burpee_count_actual: 20, duration_sec_actual: 62})
+    {:ok, result} = call(scope, "history_stats")
+    assert result["group_by"] == "range"
+    assert result["periods"] == []
+    assert result["summary"]["actual_reps"] == 30
+    assert result["summary"]["elapsed_seconds"] == 123
+    assert result["summary"]["average_pace_sec"] == nil
+    assert result["context"]["matched_sessions"] == 2
+    assert result["context"]["complete_range"]
+    assert result["context"]["applied_filters"]["warmup"] == "include"
+    {:ok, first} = call(scope, "query_history", %{"limit" => 1})
+    refute first["context"]["complete_range"]
+    assert first["context"]["matched_sessions"] == nil
+    {:ok, last} = call(scope, "query_history", %{"limit" => 1, "cursor" => first["next_cursor"]})
+    assert last["next_cursor"] == nil
+    assert last["context"]["continuation_exhausted"]
+    refute last["context"]["complete_range"]
+    assert last["context"]["returned_sessions"] == 1
+  end
+
+  test "daily grouping marks requested and unfinished periods", %{user: user, scope: scope} do
+    logged(user, 0, %{burpee_count_actual: 10, duration_sec_actual: 61})
+    today = Date.to_iso8601(Date.utc_today())
+
+    {:ok, result} =
+      call(scope, "history_stats", %{"group_by" => "day", "from" => today, "to" => today})
+
+    assert [%{"start" => ^today, "partial" => true}] = result["periods"]
+    assert result["context"]["requested_local_boundaries"] == %{"from" => today, "to" => today}
+    assert result["context"]["as_of"] == result["context"]["effective_utc_cutoff"]
+  end
+
+  test "aggregate refuses a real overflowing page rather than returning partial totals", %{
+    user: user,
+    scope: scope
+  } do
+    logged(user, 1, %{})
+    logged(user, 2, %{})
+    assert {:error, message} = BurpeeTrainer.Mcp.HistoryCoverage.fetch(scope, %{}, 1)
+    assert message =~ "narrow"
+    assert {:ok, rows} = BurpeeTrainer.Mcp.HistoryCoverage.fetch(scope, %{}, 2)
+    assert [_, _] = rows
+  end
+
+  test "analytics resource is discoverable and static across owners", %{scope: scope} do
+    request = fn owner, method, params ->
+      {:reply, %{"result" => result}} =
+        Mcp.handle(owner, %{"jsonrpc" => "2.0", "id" => 1, "method" => method, "params" => params})
+
+      result
+    end
+
+    uri = "burpee://analytics-guide"
+    listed = request.(scope, "resources/list", %{})
+
+    assert Enum.any?(
+             listed["resources"],
+             &(&1["uri"] == uri and &1["mimeType"] == "text/markdown")
+           )
+
+    result = request.(scope, "resources/read", %{"uri" => uri})
+
+    assert %{"contents" => [%{"uri" => ^uri, "mimeType" => "text/markdown", "text" => text}]} =
+             result
+
+    assert byte_size(text) > 0
+    assert result == request.(Scope.for_user(user_fixture()), "resources/read", %{"uri" => uri})
+  end
+
+  test "filtered weeks keep whole-week targets and exact actual metrics", %{
+    user: user,
+    scope: scope
+  } do
+    free_form_session_fixture(user, %{
+      completed_at: ~U[2026-03-24 12:00:00Z],
+      burpee_type: "navy_seal",
+      duration_sec_actual: 4800
+    })
+
+    Repo.insert!(%WorkoutSession{
+      user_id: user.id,
+      state: :completed,
+      source_kind: :manual,
+      capture_mode: :logged,
+      burpee_type: :six_count,
+      duration_sec_actual: 61,
+      duration_sec_planned: 1200,
+      burpee_count_actual: 0,
+      completed_at: ~U[2026-03-25 12:00:00Z]
+    })
+
+    free_form_session_fixture(user, %{
+      completed_at: ~U[2026-03-25 13:00:00Z],
+      tags: "warmup",
+      burpee_count_actual: 10,
+      duration_sec_actual: 62
+    })
+
+    args = %{
+      "from" => "2026-03-25",
+      "to" => "2026-03-25",
+      "burpee_type" => "six_count",
+      "group_by" => "week"
+    }
+
+    {:ok, result} = call(scope, "history_stats", args)
+
+    assert [
+             %{
+               "target_met" => true,
+               "target_seconds" => 4800,
+               "partial" => true,
+               "target_scope" => "whole_week_all_types_unfiltered_owner_history"
+             }
+           ] = result["periods"]
+
+    assert %{
+             "actual_reps" => 10,
+             "elapsed_seconds" => 123,
+             "credited_seconds" => 61,
+             "missing_actual_reps" => 0,
+             "reps" => 0,
+             "measurement_samples" => 1
+           } = result["summary"]
+
+    {:ok, only} = call(scope, "history_stats", Map.put(args, "warmup", "only"))
+    assert only["summary"]["elapsed_seconds"] == 62
+    assert only["summary"]["credited_seconds"] == 0
+    {:ok, excluded} = call(scope, "history_stats", Map.put(args, "warmup", "exclude"))
+    assert excluded["summary"]["elapsed_seconds"] == 61
+    {:ok, empty} = call(scope, "history_stats", Map.put(args, "min_duration_sec", 63))
+    assert empty["periods"] == []
+    assert empty["summary"]["sessions"] == 0
+    assert empty["context"]["complete_range"]
+  end
+
+  test "DST local day metadata and grouping share exact boundaries", %{user: user} do
+    scope = Scope.for_user(%{user | timezone: "Europe/Stockholm"})
+
+    for at <- [
+          ~U[2026-03-28 22:59:59Z],
+          ~U[2026-03-28 23:00:00Z],
+          ~U[2026-03-29 21:59:59Z],
+          ~U[2026-03-29 22:00:00Z]
+        ] do
+      free_form_session_fixture(user, %{completed_at: at})
+    end
+
+    {:ok, result} =
+      call(scope, "history_stats", %{
+        "from" => "2026-03-29",
+        "to" => "2026-03-29",
+        "group_by" => "day"
+      })
+
+    assert [%{"start" => "2026-03-29", "partial" => false, "sessions" => 2}] = result["periods"]
+    assert result["context"]["from_utc_inclusive"] == "2026-03-28T23:00:00Z"
+    assert result["context"]["effective_utc_cutoff"] == "2026-03-29T22:00:00Z"
+    refute result["context"]["cutoff_inclusive"]
+  end
+
   describe "get_week" do
     test "the week's minutes, what is done and left, the streak and the level",
          %{user: user, scope: scope} do
