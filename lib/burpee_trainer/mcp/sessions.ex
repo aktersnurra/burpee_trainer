@@ -12,7 +12,7 @@ defmodule BurpeeTrainer.Mcp.Sessions do
   @types %{"six_count" => :six_count, "navy_seal" => :navy_seal}
   @capture_modes %{"tracked" => :tracked, "timed" => :timed, "logged" => :logged}
 
-  @filter_keys ~w[from to burpee_type workout tags capture_mode min_reps max_reps]
+  @filter_keys ~w[from to burpee_type workout tags capture_mode min_reps max_reps min_duration_sec max_duration_sec warmup]
 
   def filter_schema do
     %{
@@ -46,7 +46,23 @@ defmodule BurpeeTrainer.Mcp.Sessions do
           "tracked: counted by camera; timed: run with the timer; logged: entered by hand."
       },
       "min_reps" => %{"type" => "integer", "minimum" => 0},
-      "max_reps" => %{"type" => "integer", "minimum" => 0}
+      "max_reps" => %{"type" => "integer", "minimum" => 0},
+      "min_duration_sec" => %{
+        "type" => "integer",
+        "minimum" => 0,
+        "description" => "Minimum actual seconds, inclusive (never planned)."
+      },
+      "max_duration_sec" => %{
+        "type" => "integer",
+        "minimum" => 0,
+        "description" => "Maximum actual seconds, inclusive (never planned)."
+      },
+      "warmup" => %{
+        "type" => "string",
+        "enum" => ["include", "exclude", "only"],
+        "default" => "include",
+        "description" => "Canonical warmup: tags is exactly warmup."
+      }
     }
   end
 
@@ -55,15 +71,36 @@ defmodule BurpeeTrainer.Mcp.Sessions do
   @doc "Validates Claude's filters into `Workouts` filters, in the user's timezone."
   @spec filters(map(), map(), DateTime.t()) :: {:ok, map()} | {:error, String.t()}
   def filters(args, user, now) do
-    with {:ok, context} <- context(user, now) do
-      args
-      |> Map.take(@filter_keys)
-      |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
-        case filter(key, value, context.timezone) do
-          {:ok, key, value} -> {:cont, {:ok, Map.put(acc, key, value)}}
-          :error -> {:halt, {:error, "invalid #{key}: #{inspect(value)}"}}
-        end
-      end)
+    with {:ok, context} <- context(user, now),
+         {:ok, filters} <- normalize_filters(args, context.timezone),
+         :ok <- validate_bounds(filters) do
+      {:ok, filters |> Map.put_new(:warmup, "include") |> Map.put(:as_of, now)}
+    end
+  end
+
+  defp normalize_filters(args, timezone) do
+    args
+    |> Map.take(@filter_keys)
+    |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case filter(key, value, timezone) do
+        {:ok, key, value} -> {:cont, {:ok, Map.put(acc, key, value)}}
+        :error -> {:halt, {:error, "invalid #{key}: #{inspect(value)}"}}
+      end
+    end)
+  end
+
+  defp validate_bounds(filters) do
+    cond do
+      filters[:min_duration_sec] != nil and filters[:max_duration_sec] != nil and
+          filters.min_duration_sec > filters.max_duration_sec ->
+        {:error, "min_duration_sec must not exceed max_duration_sec"}
+
+      filters[:from] != nil and filters[:before] != nil and
+          DateTime.compare(filters.from, filters.before) != :lt ->
+        {:error, "from must not be after to"}
+
+      true ->
+        :ok
     end
   end
 
@@ -96,8 +133,13 @@ defmodule BurpeeTrainer.Mcp.Sessions do
     if tags != [] and Enum.all?(tags, &(&1 != "")), do: {:ok, :tags, tags}, else: :error
   end
 
-  defp filter(key, reps, _) when key in ~w[min_reps max_reps] and is_integer(reps) and reps >= 0,
-    do: {:ok, String.to_existing_atom(key), reps}
+  defp filter(key, reps, _)
+       when key in ~w[min_reps max_reps min_duration_sec max_duration_sec] and is_integer(reps) and
+              reps >= 0,
+       do: {:ok, String.to_existing_atom(key), reps}
+
+  defp filter("warmup", value, _) when value in ~w[include exclude only],
+    do: {:ok, :warmup, value}
 
   defp filter(_key, _value, _tz), do: :error
 
