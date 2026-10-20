@@ -65,15 +65,30 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
   end
 
   test "daily grouping marks requested and unfinished periods", %{user: user, scope: scope} do
-    logged(user, 0, %{burpee_count_actual: 10, duration_sec_actual: 61})
-    today = Date.to_iso8601(Date.utc_today())
+    session = logged(user, 0, %{burpee_count_actual: 10, duration_sec_actual: 61})
+    date = DateTime.to_date(session.completed_at)
+    selected_date = Date.to_iso8601(date)
+    day_end = date |> Date.add(1) |> DateTime.new!(~T[00:00:00], "Etc/UTC")
 
     {:ok, result} =
-      call(scope, "history_stats", %{"group_by" => "day", "from" => today, "to" => today})
+      call(scope, "history_stats", %{
+        "group_by" => "day",
+        "from" => selected_date,
+        "to" => selected_date
+      })
 
-    assert [%{"start" => ^today, "partial" => true}] = result["periods"]
-    assert result["context"]["requested_local_boundaries"] == %{"from" => today, "to" => today}
-    assert result["context"]["as_of"] == result["context"]["effective_utc_cutoff"]
+    {:ok, cutoff, 0} = DateTime.from_iso8601(result["context"]["effective_utc_cutoff"])
+    {:ok, as_of, 0} = DateTime.from_iso8601(result["context"]["as_of"])
+    partial? = DateTime.compare(cutoff, day_end) == :lt
+    expected_cutoff = if DateTime.compare(as_of, day_end) == :lt, do: as_of, else: day_end
+
+    assert DateTime.compare(cutoff, expected_cutoff) == :eq
+    assert [%{"start" => ^selected_date, "partial" => ^partial?}] = result["periods"]
+
+    assert result["context"]["requested_local_boundaries"] == %{
+             "from" => selected_date,
+             "to" => selected_date
+           }
   end
 
   test "aggregate refuses a real overflowing page rather than returning partial totals", %{
