@@ -47,3 +47,40 @@ request context, honest pagination and complete-aggregate cap refusal; preserves
 labels whole-week target policy; marks partial periods and explains omitted empty
 periods. It also adds the static analytics resource and user guide. No unrelated
 workout/session behavior changes are authorized.
+
+## Actual metrics producer (Task 2)
+
+`Mcp.HistorySummary.summarize(sessions, timezone)` returns `{:ok, summary}` or
+`{:error, :invalid_timezone}`, including for empty selections. Input is trusted,
+owner-scoped authoritative session structs/atom-keyed maps with completion timestamps;
+this pure producer neither queries nor infers authority, filters, or completeness.
+The summary has string keys and a sorted `by_type` list with the same totals plus
+`burpee_type`; nested entries do not recursively contain `by_type`.
+
+- `actual_reps` and `elapsed_seconds` sum nonnegative integer actual values,
+  including selected warmups. Zero is a measurement; NULL, negative and wrong-type
+  values are missing. Planned values are never substituted.
+- `actual_reps_samples` / `elapsed_seconds_samples` count valid values independently;
+  `missing_actual_reps` / `missing_elapsed_seconds` are their complements to `sessions`.
+- `credited_seconds` uses History credit (canonical warmups excluded), treating invalid
+  durations as missing; `minutes` floors total credit divided by 60, not each session.
+- `recorded_days` counts distinct selected local completion dates. `training_days`
+  counts those with positive credited work. Neither claims consecutive activity.
+- `measurement_samples` counts sessions with both positive integer actual reps and
+  seconds; `unmeasured_sessions` is its complement. `measured_average_pace_sec` is
+  their total seconds / total reps, rounded to two decimals, including warmups.
+  `best_normalized_reps_per_20_min` uses History/Series normalization (rounded integer
+  reps at the observed throughput), including warmups. It is NOT a prescribed PB;
+  manual, video and non-20-minute sessions can contribute.
+- Legacy `reps`, `best_reps_per_20_min`, and `average_pace_sec` retain History.points
+  eligibility AND canonical warmup exclusion. `legacy_measurement_samples` exposes
+  that denominator; `warmup_sessions` exposes the canonical warmup count.
+- Both average pace fields are null when selected sessions contain multiple burpee
+  types (`pace_comparability: mixed_burpee_types`); otherwise the marker is
+  `single_burpee_type`, and absent measurements still yield null pace/best metrics.
+  Per-type summaries remain comparable. The legacy best field remains available for
+  compatibility, but does not establish cross-type comparability or PB eligibility.
+
+All totals describe only the supplied sessions. Group boundaries, empty-period
+omission, partial-period markers, capture-mode context and range completeness remain
+Task 3 responsibilities, not inferred by this producer.
