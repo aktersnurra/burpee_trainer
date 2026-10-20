@@ -24,26 +24,18 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     refute has_element?(view, "#home-bootstrap-form")
   end
 
-  test "mounting plans the slot once, whatever happened to the first job", %{
-    conn: conn,
-    user: user
-  } do
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
+  # Planning follows events (a completed or logged session, Retry); opening the app is not
+  # one, even on a day that shows the fallback.
+  test "opening Home never plans", %{conn: conn, user: user} do
+    free_form_session_fixture(user, %{
+      completed_at: DateTime.add(DateTime.utc_now(:second), -2, :day)
+    })
+
+    {:ok, view, _html} = live(conn, ~p"/")
+    assert has_element?(view, "[data-home-state=start] [data-primary-action=start]")
     {:ok, _view, _html} = live(conn, ~p"/")
 
-    assert [%{args: %{"user_id" => user_id, "slot_key" => slot_key}}] =
-             all_enqueued(worker: PlanNextWorkoutJob)
-
-    assert {user_id, slot_key} == {user.id, slot.slot_key}
-
-    Repo.update_all(from(job in Oban.Job), set: [state: "cancelled"])
-    {:ok, _view, _html} = live(conn, ~p"/")
-
-    assert Repo.aggregate(
-             from(job in Oban.Job, where: job.worker == ^inspect(PlanNextWorkoutJob)),
-             :count
-           ) ==
-             1
+    assert all_enqueued(worker: PlanNextWorkoutJob) == []
   end
 
   test "Home shows the planner's reason under the workout", %{conn: conn, user: user} do

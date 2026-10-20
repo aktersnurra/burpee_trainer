@@ -110,13 +110,69 @@ defmodule BurpeeTrainer.Workouts do
             {:ok, HomeSelection.new(r, plan)}
 
           {:error, _} ->
-            with {:ok, plan} <- initial_home_plan(user, slot.burpee_type, r),
-                 {:ok, pinned} <- write_home_pointer(r, plan.id) do
-              {:ok, HomeSelection.new(pinned, plan)}
+            case previous_choice(user, slot, r) do
+              {:ok, previous, plan} ->
+                with {:ok, pinned} <- keep_previous_choice(r, previous, plan.id) do
+                  {:ok, HomeSelection.new(pinned, plan)}
+                end
+
+              :none ->
+                with {:ok, plan} <- initial_home_plan(user, slot.burpee_type, r),
+                     {:ok, pinned} <- write_home_pointer(r, plan.id) do
+                  {:ok, HomeSelection.new(pinned, plan)}
+                end
             end
         end
       end
     end)
+  end
+
+  # A day without training keeps the latest earlier choice while it still fits the slot, so
+  # the next day's Home neither falls back nor plans again.
+  defp previous_choice(user, slot, %CoachRecommendation{home_revision: 0, pending_draft_id: nil}) do
+    with %CoachRecommendation{planned_by: by} = previous when not is_nil(by) <-
+           Repo.one(
+             from(r in CoachRecommendation,
+               where: r.user_id == ^user.id and r.slot_date < ^slot.slot_date,
+               order_by: [desc: r.slot_date, desc: r.id],
+               limit: 1
+             )
+           ),
+         false <- completed_since?(user.id, previous.inserted_at),
+         {:ok, %{state: :published} = plan} <-
+           verified_home_plan(user, previous.home_workout_plan_id),
+         true <-
+           plan.burpee_type == slot.burpee_type and plan.target_duration_sec == slot.duration_sec do
+      {:ok, previous, plan}
+    else
+      _ -> :none
+    end
+  end
+
+  defp previous_choice(_user, _slot, _r), do: :none
+
+  defp completed_since?(user_id, since) do
+    Repo.exists?(
+      from(session in WorkoutSession,
+        where:
+          session.user_id == ^user_id and session.state == :completed and
+            session.completed_at >= ^since
+      )
+    )
+  end
+
+  defp keep_previous_choice(r, previous, id) do
+    case r
+         |> Ecto.Changeset.change(
+           home_workout_plan_id: id,
+           home_revision: r.home_revision + 1,
+           planned_by: previous.planned_by,
+           rationale: previous.rationale
+         )
+         |> Repo.update() do
+      {:ok, changed} -> {:ok, changed}
+      {:error, _} -> {:error, Error.new(:home_selection_changed)}
+    end
   end
 
   @doc "Recovers a genuinely missing Home selection after an explicit published plan choice."
