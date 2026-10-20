@@ -104,7 +104,7 @@ defmodule BurpeeTrainer.Accounts do
   @spec put_coach(User.t(), User.coach()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def put_coach(%User{coach: coach} = user, coach), do: {:ok, user}
 
-  def put_coach(%User{} = user, coach) when coach in [:app, :claude],
+  def put_coach(%User{} = user, coach) when coach in [:app, :mcp],
     do: user |> Ecto.Changeset.change(coach: coach) |> Repo.update()
 
   @doc """

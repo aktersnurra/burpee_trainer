@@ -49,11 +49,11 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   """
 
   @doc """
-  Admits a job for an exchange the owner just had with the coach. Claude keeps the memory
-  of a user it coaches (`update_memory`), so no job is admitted for them.
+  Admits a job for an exchange the owner just had with the coach. The MCP client keeps
+  the memory of a user it coaches (`update_memory`), so no job is admitted for them.
   """
   @spec admit_exchange(Scope.t(), Exchange.t()) :: {:ok, Oban.Job.t()} | :ok | {:error, term()}
-  def admit_exchange(%Scope{user: %User{coach: :claude}}, %Exchange{}), do: :ok
+  def admit_exchange(%Scope{user: %User{coach: :mcp}}, %Exchange{}), do: :ok
 
   def admit_exchange(%Scope{user: user}, %Exchange{id: id}),
     do: %{"user_id" => user.id, "exchange_id" => id} |> new() |> Oban.insert()
@@ -61,7 +61,7 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   @doc "Admits a job for a completed session that carries the owner's feedback; else none."
   @spec admit_session(Scope.t(), WorkoutSession.t()) ::
           {:ok, Oban.Job.t()} | :ok | {:error, term()}
-  def admit_session(%Scope{user: %User{coach: :claude}}, %WorkoutSession{}), do: :ok
+  def admit_session(%Scope{user: %User{coach: :mcp}}, %WorkoutSession{}), do: :ok
 
   def admit_session(%Scope{user: user}, %WorkoutSession{id: id} = session) do
     if feedback?(session),

@@ -275,9 +275,9 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                       <.icon name="hero-arrow-path" class="size-5" />
                     </button>
                   </:app>
-                  <:claude>
-                    <BurpeeTrainerWeb.HomeCoachComponents.claude_hint id="home-unavailable-claude" />
-                  </:claude>
+                  <:mcp>
+                    <BurpeeTrainerWeb.HomeCoachComponents.mcp_hint id="home-unavailable-mcp" />
+                  </:mcp>
                 </BurpeeTrainerWeb.HomeCoachComponents.coach>
               </section>
           <% end %>

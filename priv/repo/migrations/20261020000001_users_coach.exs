@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Repo.Migrations.UsersCoach do
   @moduledoc """
-  Who coaches the user, `app` (the app's own model) or `claude` (through MCP), replaces
+  Who coaches the user, `app` (the app's own model) or `mcp` (through an MCP client), replaces
   the `coach_enabled` flag; each user keeps the coach they had.
   """
   use Ecto.Migration
@@ -10,7 +10,7 @@ defmodule BurpeeTrainer.Repo.Migrations.UsersCoach do
       add :coach, :string, null: false, default: "app"
     end
 
-    execute "UPDATE users SET coach = CASE WHEN coach_enabled THEN 'app' ELSE 'claude' END"
+    execute "UPDATE users SET coach = CASE WHEN coach_enabled THEN 'app' ELSE 'mcp' END"
 
     alter table(:users) do
       remove :coach_enabled

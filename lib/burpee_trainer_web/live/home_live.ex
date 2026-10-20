@@ -249,7 +249,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     end
   end
 
-  # What asks the app's coach. Claude coaches a user without it, so Home offers none of
+  # What asks the app's coach. A user coached over MCP has none, so Home offers none of
   # these to them and ignores them if they arrive.
   @app_coach_events [
     "coach_message",
@@ -267,7 +267,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(
         event,
         _params,
-        %{assigns: %{current_scope: %Scope{user: %User{coach: :claude}}}} = socket
+        %{assigns: %{current_scope: %Scope{user: %User{coach: :mcp}}}} = socket
       )
       when event in @app_coach_events,
       do: {:noreply, socket}

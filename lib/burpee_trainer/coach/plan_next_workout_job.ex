@@ -37,7 +37,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
       {:error, %{code: code}}
       when code in [
              :provider_unavailable,
-             :claude_coach,
+             :mcp_coach,
              :llm_budget_exhausted,
              :home_selection_changed
            ] ->
@@ -55,9 +55,9 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
   def perform(%Oban.Job{}), do: {:cancel, :invalid_args}
 
-  # Claude plans for a user it coaches; the app queues nothing for them.
+  # The MCP client plans for a user it coaches; the app queues nothing for them.
   @spec enqueue(Scope.t()) :: :ok | {:error, term()}
-  def enqueue(%Scope{user: %User{coach: :claude}}), do: :ok
+  def enqueue(%Scope{user: %User{coach: :mcp}}), do: :ok
 
   def enqueue(%Scope{} = scope) do
     Repo.immediate_transaction(fn ->
@@ -77,7 +77,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
   slot whose first job already ran, failed or was cancelled. Retries use `enqueue/1`.
   """
   @spec enqueue_first(Scope.t()) :: :ok | {:error, term()}
-  def enqueue_first(%Scope{user: %User{coach: :claude}}), do: :ok
+  def enqueue_first(%Scope{user: %User{coach: :mcp}}), do: :ok
 
   def enqueue_first(%Scope{} = scope) do
     with {:ok, slot} <- Policy.required_slot(scope, DateTime.utc_now(:second)),
@@ -95,7 +95,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
 
   @doc "Admits the job inside the caller's transaction; a failure never rolls it back."
   @spec admit(Scope.t()) :: :ok | {:error, term()}
-  def admit(%Scope{user: %User{coach: :claude}}), do: :ok
+  def admit(%Scope{user: %User{coach: :mcp}}), do: :ok
 
   def admit(%Scope{} = scope) do
     with {:ok, slot, at} <- target_slot(scope, DateTime.utc_now(:second)),

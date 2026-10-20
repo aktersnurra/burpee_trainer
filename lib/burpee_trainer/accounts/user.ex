@@ -4,9 +4,10 @@ defmodule BurpeeTrainer.Accounts.User do
 
   @typedoc """
   Who coaches the user: `:app`, the app's own model (granted by a Pocket ID claim), or
-  `:claude`, through the MCP connection, with the app making no model call for them.
+  `:mcp`, through an MCP client (Claude or any other) with the app making no model call
+  for them.
   """
-  @type coach :: :app | :claude
+  @type coach :: :app | :mcp
 
   @type t :: %__MODULE__{}
 
@@ -15,7 +16,7 @@ defmodule BurpeeTrainer.Accounts.User do
     field :oidc_sub, :string
     field :timezone, :string, default: "Etc/UTC"
     field :timezone_provisioned, :boolean, default: false
-    field :coach, Ecto.Enum, values: [:app, :claude], default: :app
+    field :coach, Ecto.Enum, values: [:app, :mcp], default: :app
 
     timestamps(type: :utc_datetime)
   end

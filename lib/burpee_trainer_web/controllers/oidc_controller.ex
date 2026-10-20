@@ -130,11 +130,11 @@ defmodule BurpeeTrainerWeb.OidcController do
   end
 
   # The app's own coach is granted by a custom claim on a Pocket ID group (`true`, or the
-  # string "true"); without it the user coaches through Claude.
+  # string "true"); without it the user coaches over MCP.
   defp coach(claims) do
     case Map.get(claims, Application.get_env(:burpee_trainer, :coach_claim, "burpee_coach")) do
       granted when granted in [true, "true"] -> :app
-      _ -> :claude
+      _ -> :mcp
     end
   end
 end

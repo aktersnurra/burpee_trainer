@@ -30,7 +30,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   }
 
   @spec enqueue(Scope.t()) :: {:ok, Oban.Job.t()} | :ok | {:error, term()}
-  def enqueue(%Scope{user: %User{coach: :claude}}), do: :ok
+  def enqueue(%Scope{user: %User{coach: :mcp}}), do: :ok
 
   def enqueue(%Scope{} = scope) do
     Repo.immediate_transaction(fn ->
@@ -42,11 +42,11 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   end
 
   @doc """
-  Admits the job inside the caller's transaction; a failure never rolls it back. Claude
-  writes the note for a user it coaches (`set_coach_note`), so none is admitted for them.
+  Admits the job inside the caller's transaction; a failure never rolls it back. The MCP
+  client writes the note for a user it coaches (`set_coach_note`), so none is admitted for them.
   """
   @spec admit(Scope.t()) :: {:ok, Oban.Job.t()} | :ok | {:error, term()}
-  def admit(%Scope{user: %User{coach: :claude}}), do: :ok
+  def admit(%Scope{user: %User{coach: :mcp}}), do: :ok
   def admit(%Scope{user: user}), do: %{"user_id" => user.id} |> new() |> Oban.insert()
 
   @impl true
@@ -95,10 +95,10 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
 
   @doc """
   Opening the app refreshes a stale summary; `:refreshing` once a job is admitted. Only
-  Claude rewrites the note of a user it coaches.
+  the MCP client rewrites the note of a user it coaches.
   """
   @spec on_open(Scope.t(), DateTime.t()) :: {status() | :refreshing, Summary.t() | nil}
-  def on_open(%Scope{user: %User{coach: :claude}} = scope, %DateTime{} = now),
+  def on_open(%Scope{user: %User{coach: :mcp}} = scope, %DateTime{} = now),
     do: status(scope, now)
 
   def on_open(%Scope{} = scope, %DateTime{} = now),

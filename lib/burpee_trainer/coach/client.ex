@@ -37,7 +37,7 @@ defmodule BurpeeTrainer.Coach.Client do
     model = if is_list(config), do: Keyword.get(config, :model) || "unknown", else: "unknown"
     attrs = %{purpose: ledger.purpose, run_id: ledger.run_id, model: model}
 
-    # A disabled provider, or a user Claude coaches, makes no call, so it neither records
+    # A disabled provider, or a user coached over MCP, makes no call, so it neither records
     # nor spends budget.
     with true <- is_list(config) and require_enabled(config) == :ok,
          :app <- coach(ledger.scope),
@@ -48,8 +48,8 @@ defmodule BurpeeTrainer.Coach.Client do
       false ->
         provider_unavailable()
 
-      :claude ->
-        {:error, Error.new(:claude_coach)}
+      :mcp ->
+        {:error, Error.new(:mcp_coach)}
 
       {:error, :llm_budget_exhausted} ->
         {:error, Error.new(:llm_budget_exhausted)}
@@ -78,8 +78,8 @@ defmodule BurpeeTrainer.Coach.Client do
       false ->
         provider_unavailable()
 
-      :claude ->
-        {:error, Error.new(:claude_coach)}
+      :mcp ->
+        {:error, Error.new(:mcp_coach)}
 
       {:error, :llm_budget_exhausted} ->
         {:error, Error.new(:llm_budget_exhausted)}

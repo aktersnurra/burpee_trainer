@@ -10,7 +10,7 @@ defmodule BurpeeTrainer.UsersCoachMigrationTest do
     on_exit(fn -> Enum.each(["", "-wal", "-shm"], &File.rm(path <> &1)) end)
     Ecto.Migrator.run(Repo, E.migrations(@migrations), :up, to: 20_261_020_000_000, log: false)
 
-    for {username, enabled} <- [{"with-coach", 1}, {"with-claude", 0}] do
+    for {username, enabled} <- [{"with-coach", 1}, {"with-mcp", 0}] do
       Repo.query!(
         "INSERT INTO users (username,timezone,timezone_provisioned,coach_enabled,inserted_at,updated_at) VALUES (?,'Etc/UTC',1,?,datetime('now'),datetime('now'))",
         [username, enabled]
@@ -20,11 +20,11 @@ defmodule BurpeeTrainer.UsersCoachMigrationTest do
     Ecto.Migrator.run(Repo, E.migrations(@migrations), :up, all: true, log: false)
 
     assert Repo.query!("SELECT username, coach FROM users ORDER BY username").rows ==
-             [["with-claude", "claude"], ["with-coach", "app"]]
+             [["with-coach", "app"], ["with-mcp", "mcp"]]
 
     Ecto.Migrator.run(Repo, E.migrations(@migrations), :down, to: 20_261_020_000_001, log: false)
 
     assert Repo.query!("SELECT username, coach_enabled FROM users ORDER BY username").rows ==
-             [["with-claude", 0], ["with-coach", 1]]
+             [["with-coach", 1], ["with-mcp", 0]]
   end
 end

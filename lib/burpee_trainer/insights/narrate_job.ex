@@ -9,7 +9,7 @@ defmodule BurpeeTrainer.Insights.NarrateJob do
   alias BurpeeTrainer.Accounts.{Scope, User}
   alias BurpeeTrainer.Insights.Narrator
 
-  def enqueue(%Scope{user: %User{coach: :claude}}, _session), do: :ok
+  def enqueue(%Scope{user: %User{coach: :mcp}}, _session), do: :ok
 
   def enqueue(%Scope{} = scope, session) do
     Repo.immediate_transaction(fn ->
@@ -22,9 +22,9 @@ defmodule BurpeeTrainer.Insights.NarrateJob do
 
   @doc """
   Admits the job inside the caller's transaction; a failure never rolls it back. A user
-  Claude coaches gets no narration: the app makes no model call for them.
+  coached over MCP gets no narration: the app makes no model call for them.
   """
-  def admit(%Scope{user: %User{coach: :claude}}, _session), do: :ok
+  def admit(%Scope{user: %User{coach: :mcp}}, _session), do: :ok
 
   def admit(%Scope{user: user}, %{id: id, user_id: user_id}) when user.id == user_id,
     do: %{"user_id" => user.id, "session_id" => id} |> new() |> Oban.insert()

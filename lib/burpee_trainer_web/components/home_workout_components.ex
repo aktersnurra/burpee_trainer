@@ -672,7 +672,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             >
               <.start_choice choice="camera" />
               <.start_choice choice="warmup" />
-              <%!-- Editing and designing workouts ask the app's coach; Claude does both for a
+              <%!-- Editing and designing workouts ask the app's coach; the MCP client does both for a
                    user it coaches. --%>
               <BurpeeTrainerWeb.HomeCoachComponents.coach scope={@state.current_scope}>
                 <:app>
@@ -754,9 +754,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 expanded={@state.expanded_groups}
               />
               <BurpeeTrainerWeb.HomeCoachComponents.coach scope={@state.current_scope}>
-                <:claude>
-                  <BurpeeTrainerWeb.HomeCoachComponents.claude_hint id="home-workout-claude" />
-                </:claude>
+                <:mcp>
+                  <BurpeeTrainerWeb.HomeCoachComponents.mcp_hint id="home-workout-mcp" />
+                </:mcp>
               </BurpeeTrainerWeb.HomeCoachComponents.coach>
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
                 <.request_confirmation

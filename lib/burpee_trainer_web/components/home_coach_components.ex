@@ -7,26 +7,26 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   attr(:scope, Scope, required: true)
   slot(:app)
-  slot(:claude)
+  slot(:mcp)
 
   @doc """
   What Home shows for who coaches the scope's user: `app` with the app's own coach,
-  `claude` for a user Claude coaches through their MCP connection.
+  `mcp` for a user coached through their MCP connection (Claude or any other client).
   """
   def coach(%{scope: %Scope{user: %User{coach: :app}}} = assigns),
     do: ~H"{render_slot(@app)}"
 
-  def coach(%{scope: %Scope{user: %User{coach: :claude}}} = assigns),
-    do: ~H"{render_slot(@claude)}"
+  def coach(%{scope: %Scope{user: %User{coach: :mcp}}} = assigns),
+    do: ~H"{render_slot(@mcp)}"
 
   attr(:id, :string, required: true)
 
-  @doc "Where a user Claude coaches gets coach updates: their MCP connection."
-  def claude_hint(assigns) do
+  @doc "Where a user coached over MCP gets coach updates: their MCP connection."
+  def mcp_hint(assigns) do
     ~H"""
     <p id={@id} role="note" class="coach-guidance-status">
-      For coach updates, ask Claude through your BurpeeTrainer MCP connection: it plans
-      and changes your workouts and writes the coach's note.
+      For coach updates, use your assistant's BurpeeTrainer MCP connection: it plans and
+      changes your workouts and writes the coach's note.
     </p>
     """
   end
@@ -155,8 +155,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           <p class="coach-exchange-you">{@state.coach_pending_message}</p>
         </li>
       </ol>
-      <%!-- Talking to the app's coach needs it; a user Claude coaches reads what Claude
-           left, and is told where to ask for more. --%>
+      <%!-- Talking to the app's coach needs it; a user coached over MCP reads what
+           their assistant left, and is told where to ask for more. --%>
       <.coach scope={@state.current_scope}>
         <:app>
           <.form
@@ -222,9 +222,9 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             {@state.coach_status}
           </p>
         </:app>
-        <:claude>
-          <.claude_hint id="home-coach-claude" />
-        </:claude>
+        <:mcp>
+          <.mcp_hint id="home-coach-mcp" />
+        </:mcp>
       </.coach>
       <div id="home-coach-goals" phx-update="stream">
         <div

@@ -205,10 +205,10 @@ defmodule BurpeeTrainerWeb.OidcControllerTest do
     test "every sign-in sets the in-app coach from the Pocket ID claim", %{conn: conn} do
       for {code, coach} <- [
             {"coach-bool", :app},
-            {"coach-absent", :claude},
+            {"coach-absent", :mcp},
             {"coach-string", :app},
-            {"coach-false", :claude},
-            {"coach-other-key", :claude}
+            {"coach-false", :mcp},
+            {"coach-other-key", :mcp}
           ] do
         conn |> recycle() |> sign_in(code)
         user = Accounts.get_user_by_oidc_sub("sub-coach")
