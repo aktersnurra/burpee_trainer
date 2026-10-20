@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-21 — A goal is reps in 20 minutes
+
+- Setting a goal takes only the reps and the burpee type (and a date): every goal is one 20-minute session, the length levels are counted in. The coach's `propose_goal` and Claude's `set_goal` no longer take a duration. A migration makes open goals (active and proposed) 20-minute goals with the same reps; achieved and abandoned goals keep the duration they had.
+
 ## 2026-10-20 — Planning follows events
 
 - Opening the app never plans. The next workout is planned when something happens: a completed or logged session (at the next local day), Retry, or a choice by you or Claude. A day without training keeps the workout chosen before it while it still fits the day (same burpee type and minutes), so Home no longer falls back to Steady 10 and spends a decision call and a model call on a new day.

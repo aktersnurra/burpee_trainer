@@ -226,7 +226,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
              %{
                "burpee_type" => Atom.to_string(next.burpee_type),
                "burpee_count_target" => next.burpee_count_target,
-               "duration_sec_target" => next.duration_sec_target,
                "date_target" => Date.to_iso8601(next.date_target)
              },
              %{}

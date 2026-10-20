@@ -117,7 +117,13 @@ defmodule BurpeeTrainer.Mcp.MemoryGoalToolsTest do
       for args <- [
             %{"burpee_type" => "six_count", "reps" => 0, "date" => "2030-01-01"},
             %{"burpee_type" => "burpee", "reps" => 100, "date" => "2030-01-01"},
-            %{"burpee_type" => "six_count", "reps" => 100, "date" => "soon"}
+            %{"burpee_type" => "six_count", "reps" => 100, "date" => "soon"},
+            %{
+              "burpee_type" => "six_count",
+              "reps" => 100,
+              "date" => "2030-01-01",
+              "duration_sec" => 1800
+            }
           ] do
         assert {:error, _} = call(scope, "set_goal", args)
       end

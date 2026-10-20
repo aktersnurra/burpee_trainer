@@ -20,7 +20,6 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     args = %{
       "burpee_type" => "six_count",
       "burpee_count_target" => 150,
-      "duration_sec_target" => 1200,
       "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 42))
     }
 
@@ -83,7 +82,6 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     args = %{
       "burpee_type" => "six_count",
       "burpee_count_target" => 150,
-      "duration_sec_target" => 1200,
       "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 42))
     }
 
@@ -104,7 +102,6 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     args = %{
       "burpee_type" => "six_count",
       "burpee_count_target" => 400,
-      "duration_sec_target" => 1200,
       "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 42))
     }
 

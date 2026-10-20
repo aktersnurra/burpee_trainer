@@ -36,7 +36,7 @@ defmodule BurpeeTrainer.PoseTraceCompressionMigrationTest do
     assert :zlib.gunzip(stored) == @payload
     assert [%PoseTraceChunk{payload_json: @payload}] = Repo.all(PoseTraceChunk)
 
-    Ecto.Migrator.run(Repo, E.migrations(@migrations), :down, step: 1, log: false)
+    Ecto.Migrator.run(Repo, E.migrations(@migrations), :down, to: 20_261_020_000_000, log: false)
     assert Repo.query!("SELECT payload_json FROM pose_trace_chunks").rows == [[@payload]]
   end
 end
