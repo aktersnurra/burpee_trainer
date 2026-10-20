@@ -310,6 +310,104 @@ defmodule BurpeeTrainer.Coach.ClientDeadlineTest do
              BurpeeTrainer.Coach.Ledger.reservation_count(scope, run_id)
   end
 
+  test "effective Finch socket timeout tightens below every absolute allowance" do
+    owner = self()
+    scope = scope_fixture()
+    allowances = [200, 400, 800, 1600, 6400, 25_600, 60_000]
+
+    for allowance <- allowances do
+      req =
+        BurpeeTrainer.AnalyticsProviderPlug.request([%{"recorded" => true}])
+        |> Req.Request.prepend_request_steps(
+          effective_connection: fn request ->
+            pool_options =
+              Keyword.drop(request.options.finch, [
+                :pool_timeout,
+                :receive_timeout,
+                :request_timeout
+              ])
+
+            {:ok, effective} = Finch.cast_pool_opts(pool_options)
+
+            send(
+              owner,
+              {:effective_connection, effective.conn_opts[:transport_opts][:timeout],
+               request.options.finch}
+            )
+
+            request
+          end
+        )
+
+      config = Keyword.put(@config, :timeout_ms, 60_000)
+
+      assert {:ok, _} =
+               Client.chat([],
+                 config: config,
+                 req: req,
+                 deadline_ms: System.monotonic_time(:millisecond) + allowance,
+                 ledger: %{scope: scope, purpose: "analytics", run_id: Ecto.UUID.generate()}
+               )
+
+      assert_receive {:effective_connection, timeout, finch}
+      assert timeout > 0 and timeout <= allowance
+      assert timeout <= finch[:receive_timeout]
+      assert timeout in Enum.map(0..15, &Integer.pow(2, &1))
+      assert finch[:pool_timeout] <= allowance
+      assert finch[:request_timeout] <= allowance
+    end
+  end
+
+  test "varied absolute deadlines keep surviving local Finch instances bounded" do
+    {listener, port} = listener()
+    allowances = Enum.to_list(1150..1161) ++ Enum.to_list(3300..3311)
+
+    start_supervised!(
+      {Task,
+       fn ->
+         for _ <- allowances do
+           {:ok, socket} = :gen_tcp.accept(listener)
+           {:ok, _} = :gen_tcp.recv(socket, 0, 2000)
+           body = Jason.encode!(%{"choices" => [%{"message" => %{"content" => "local"}}]})
+
+           :ok =
+             :gen_tcp.send(
+               socket,
+               "HTTP/1.1 200 OK\r\ncontent-length: #{byte_size(body)}\r\nconnection: close\r\n\r\n" <>
+                 body
+             )
+
+           :gen_tcp.close(socket)
+         end
+       end}
+    )
+
+    scope = scope_fixture()
+    before_instances = finch_instances()
+
+    for allowance <- allowances do
+      assert {:ok, %{content: "local"}} =
+               Client.chat(
+                 [],
+                 deadline_opts(
+                   scope,
+                   "http://127.0.0.1:#{port}/",
+                   System.monotonic_time(:millisecond) + allowance
+                 )
+               )
+    end
+
+    new_instances = MapSet.difference(finch_instances(), before_instances)
+    assert MapSet.size(new_instances) <= 2
+    assert Repo.aggregate(LlmCall, :count) == 24
+  end
+
+  defp finch_instances do
+    Req.FinchSupervisor
+    |> DynamicSupervisor.which_children()
+    |> MapSet.new(fn {_, pid, _, _} -> pid end)
+  end
+
   defp drain_tls(socket) do
     case :gen_tcp.recv(socket, 0, 2000) do
       {:ok, _alert} -> drain_tls(socket)

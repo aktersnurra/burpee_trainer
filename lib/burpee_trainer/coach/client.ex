@@ -10,6 +10,7 @@ defmodule BurpeeTrainer.Coach.Client do
   @default_timeout_ms 20_000
   @minimum_timeout_ms 1_000
   @maximum_timeout_ms 60_000
+  @connection_timeout_buckets Enum.map(15..0//-1, &Integer.pow(2, &1))
   @inherited_response_options [
     :follow_redirects,
     :redirect,
@@ -446,8 +447,11 @@ defmodule BurpeeTrainer.Coach.Client do
 
   defp transport_options(opts, config) do
     remaining = remaining_timeout(opts, config)
-    # Req 0.7 rejects connect_options together with finch. Its conn_opts is the
-    # equivalent pool connection configuration; no inherited timeout survives.
+    # Finch passes only nested transport_opts to Mint's socket connection. Req
+    # hashes pool options into persistent instances, so round down to one of 16
+    # fixed connection timeouts instead of allocating a pool per remaining ms.
+    connection_timeout = Enum.find(@connection_timeout_buckets, 1, &(&1 <= remaining))
+
     inherited =
       case Keyword.get(opts, :req) do
         %Req.Request{options: %{finch: options}} when is_list(options) ->
@@ -459,7 +463,7 @@ defmodule BurpeeTrainer.Coach.Client do
 
     inherited ++
       [
-        conn_opts: [timeout: remaining],
+        conn_opts: [transport_opts: [timeout: connection_timeout]],
         pool_timeout: remaining,
         receive_timeout: remaining,
         request_timeout: remaining
