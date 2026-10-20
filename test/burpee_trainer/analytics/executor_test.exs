@@ -90,6 +90,106 @@ defmodule BurpeeTrainer.Analytics.ExecutorTest do
     end
   end
 
+  test "stalled large-frame input preserves its short deadline and another caller's cancellation" do
+    parent = self()
+
+    other =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Task,
+           fn ->
+             Executor.query(pressure_snapshot(), pressure_sql())
+           end},
+          id: :other,
+          restart: :temporary
+        )
+      )
+
+    state = await_active(1, System.monotonic_time(:millisecond) + 500)
+    [other_port] = Map.keys(state.active)
+    {:os_pid, other_launcher} = Port.info(other_port, :os_pid)
+    worker = find_worker(other_launcher, System.monotonic_time(:millisecond) + 500)
+    worker_monitor = monitor_worker(worker)
+    assert_receive {^worker_monitor, {:data, "ready\n"}}, 500
+
+    guardian = Process.whereis(HelperGuardian)
+    :erlang.trace_pattern({:erlang, :open_port, 2}, [{:_, [], [{:return_trace}]}], [])
+    :erlang.trace(guardian, true, [:call, {:tracer, self()}])
+
+    on_exit(fn ->
+      :erlang.trace(guardian, false, [:call])
+      :erlang.trace_pattern({:erlang, :open_port, 2}, false, [])
+    end)
+
+    large = %{pressure_snapshot() | rows: List.duplicate(hd(pressure_snapshot().rows), 5000)}
+
+    start_supervised!(
+      Supervisor.child_spec(
+        {Task,
+         fn ->
+           started = System.monotonic_time(:millisecond)
+           result = Executor.query(large, "SELECT count(*) AS n FROM sessions", timeout_ms: 50)
+           send(parent, {:stalled, result, System.monotonic_time(:millisecond) - started})
+         end},
+        id: :stalled,
+        restart: :temporary
+      )
+    )
+
+    assert_receive {:trace, ^guardian, :return_from, {:erlang, :open_port, 2}, stalled_port}, 500
+    assert_receive {:trace, ^guardian, :call, {:erlang, :open_port, _args}}, 0
+    {:os_pid, stalled_launcher} = Port.info(stalled_port, :os_pid)
+    assert {_, 0} = System.cmd("/usr/bin/kill", ["-STOP", Integer.to_string(stalled_launcher)])
+
+    on_exit(fn ->
+      case Port.info(stalled_port, :os_pid) do
+        {:os_pid, ^stalled_launcher} ->
+          System.cmd("/usr/bin/kill", ["-KILL", Integer.to_string(stalled_launcher)],
+            stderr_to_stdout: true
+          )
+
+        nil ->
+          :ok
+      end
+
+      await_active(0, System.monotonic_time(:millisecond) + 1500)
+    end)
+
+    :erlang.trace(guardian, false, [:call])
+    :erlang.trace_pattern({:erlang, :open_port, 2}, false, [])
+
+    await_busy_port(stalled_port, System.monotonic_time(:millisecond) + 40)
+    launcher_monitor = monitor_worker(stalled_launcher)
+    assert_receive {^launcher_monitor, {:data, "ready\n"}}, 100
+
+    # A stopped real launcher cannot consume its pipe. The large valid frame
+    # exceeds the port's busy watermark; let its 50ms deadline become due.
+    timer = Process.send_after(self(), :input_deadline_elapsed, 80)
+    assert_receive :input_deadline_elapsed, 200
+    Process.cancel_timer(timer)
+    ref = Process.monitor(other)
+    Process.exit(other, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^other, :killed}
+    assert_receive {^worker_monitor, {:data, "gone\n"}}, 250
+    assert_receive {^worker_monitor, {:exit_status, 0}}, 500
+    assert_receive {:stalled, {:error, :query_timeout}, elapsed}, 250
+    assert elapsed < 350
+    assert_receive {^launcher_monitor, {:data, "gone\n"}}, 250
+    assert_receive {^launcher_monitor, {:exit_status, 0}}, 500
+    await_active(0, System.monotonic_time(:millisecond) + 500)
+  end
+
+  defp await_busy_port(port, deadline) do
+    case Port.info(port, :queue_size) do
+      {:queue_size, bytes} when bytes > 0 ->
+        :ok
+
+      _ ->
+        assert System.monotonic_time(:millisecond) < deadline, "port input never backpressured"
+        await_busy_port(port, deadline)
+    end
+  end
+
   defp pressure_snapshot do
     %Snapshot{
       rows:

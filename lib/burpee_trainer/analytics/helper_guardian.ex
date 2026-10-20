@@ -8,7 +8,8 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: @name)
 
   def query(frame, timeout) do
-    GenServer.call(@name, {:query, frame, timeout}, 2500)
+    deadline = System.monotonic_time(:millisecond) + timeout
+    GenServer.call(@name, {:query, frame, deadline}, 2500)
   catch
     :exit, _reason -> {:error, :executor_unavailable}
   end
@@ -24,26 +25,47 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
   @impl true
   def handle_call(:health, _from, state), do: {:reply, state.healthy, state}
 
-  def handle_call({:query, _frame, _timeout}, _from, %{healthy: false} = state),
+  def handle_call({:query, _frame, _deadline}, _from, %{healthy: false} = state),
     do: {:reply, {:error, :executor_unavailable}, state}
 
-  def handle_call({:query, frame, timeout}, from, state) do
-    if map_size(state.active) >= 2 do
-      {:reply, {:error, :executor_busy}, state}
-    else
-      admit(frame, timeout, from, state)
+  def handle_call({:query, frame, deadline}, from, state) do
+    cond do
+      deadline <= System.monotonic_time(:millisecond) ->
+        {:reply, {:error, :query_timeout}, state}
+
+      map_size(state.active) >= 2 ->
+        {:reply, {:error, :executor_busy}, state}
+
+      true ->
+        admit(frame, deadline, from, state)
     end
   end
 
-  defp admit(frame, timeout, {caller, _tag} = from, state) do
-    case launch(frame) do
+  defp admit(frame, deadline, {caller, _tag} = from, state) do
+    token = make_ref()
+    monitor = Process.monitor(caller)
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+    timer = Process.send_after(self(), {:deadline, token}, remaining)
+
+    case launch() do
       {:ok, port} ->
-        monitor = Process.monitor(caller)
-        timer = Process.send_after(self(), {:deadline, port}, timeout)
-        entry = %{from: from, monitor: monitor, timer: timer, output: <<>>, error: nil}
+        entry = %{
+          from: from,
+          monitor: monitor,
+          timer: timer,
+          token: token,
+          deadline: deadline,
+          pending: frame,
+          output: <<>>,
+          error: nil
+        }
+
+        send(self(), {:submit, port})
         {:noreply, put_in(state.active[port], entry)}
 
       :error ->
+        Process.cancel_timer(timer)
+        Process.demonitor(monitor, [:flush])
         {:reply, {:error, :executor_unavailable}, state}
     end
   end
@@ -63,22 +85,25 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
     end
   end
 
-  def handle_info({port, {:exit_status, status}}, state) do
-    case Map.pop(state.active, port) do
-      {nil, _active} ->
-        {:noreply, state}
+  def handle_info({port, {:exit_status, status}}, state),
+    do: {:noreply, finish(state, port, status)}
 
-      {entry, active} ->
-        Process.cancel_timer(entry.timer)
-        Process.demonitor(entry.monitor, [:flush])
-        result = complete(entry, status)
-        GenServer.reply(entry.from, result)
-        {:noreply, %{state | active: active}}
+  def handle_info({:deadline, token}, state) do
+    case Enum.find(state.active, fn {_port, entry} -> entry.token == token end) do
+      {port, _entry} -> {:noreply, cancel(state, port, :query_timeout)}
+      nil -> {:noreply, state}
     end
   end
 
-  def handle_info({:deadline, port}, state),
-    do: {:noreply, cancel(state, port, :query_timeout)}
+  def handle_info({:submit, port}, state) do
+    case state.active do
+      %{^port => %{error: nil, pending: pending} = entry} when pending != <<>> ->
+        {:noreply, submit(state, port, entry)}
+
+      _ ->
+        {:noreply, state}
+    end
+  end
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state) do
     state =
@@ -94,11 +119,48 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
     {:noreply, state}
   end
 
-  def handle_info({:EXIT, _port, _reason}, state), do: {:noreply, state}
+  # Killing a launcher with pending stdin may close its port with :epipe instead
+  # of delivering :exit_status. Finish that cancellation rather than leaking admission.
+  def handle_info({:EXIT, port, _reason}, state), do: {:noreply, finish(state, port, 1)}
 
   @impl true
   def terminate(_reason, state) do
     Enum.each(state.active, fn {port, _entry} -> kill_launcher(port) end)
+  end
+
+  defp finish(state, port, status) do
+    case Map.pop(state.active, port) do
+      {nil, _active} ->
+        state
+
+      {entry, active} ->
+        Process.cancel_timer(entry.timer)
+        Process.demonitor(entry.monitor, [:flush])
+        result = complete(entry, status, System.monotonic_time(:millisecond))
+        GenServer.reply(entry.from, result)
+        %{state | active: active}
+    end
+  end
+
+  defp submit(state, port, entry) do
+    if System.monotonic_time(:millisecond) >= entry.deadline do
+      cancel(state, port, :query_timeout)
+    else
+      submit_chunk(state, port, entry.pending)
+    end
+  end
+
+  defp submit_chunk(state, port, pending) do
+    size = min(byte_size(pending), 4096)
+    <<chunk::binary-size(^size), rest::binary>> = pending
+
+    if safe_command(port, chunk) do
+      if rest != <<>>, do: send(self(), {:submit, port})
+      put_in(state.active[port].pending, rest)
+    else
+      Process.send_after(self(), {:submit, port}, 1)
+      state
+    end
   end
 
   defp cancel(state, port, error) do
@@ -127,16 +189,21 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
   end
 
   defp safe_command(port, frame) do
-    Port.command(port, frame)
+    # Never suspend the shared watchdog on a busy external process's input pipe.
+    Port.command(port, frame, [:nosuspend])
   rescue
     ArgumentError -> false
   end
 
-  defp complete(%{error: error}, _status) when not is_nil(error), do: {:error, error}
-  defp complete(%{output: output}, 0), do: {:ok, output}
-  defp complete(_entry, _status), do: {:error, :executor_unavailable}
+  defp complete(%{error: error}, _status, _now) when not is_nil(error), do: {:error, error}
 
-  defp launch(frame) do
+  defp complete(%{deadline: deadline}, _status, now) when now >= deadline,
+    do: {:error, :query_timeout}
+
+  defp complete(%{output: output}, 0, _now), do: {:ok, output}
+  defp complete(_entry, _status, _now), do: {:error, :executor_unavailable}
+
+  defp launch do
     path = Application.app_dir(:burpee_trainer, "priv/analytics/helper_launcher.py")
 
     with true <- trusted?(path),
@@ -154,7 +221,7 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
           {:args, [~c"-I", String.to_charlist(path), String.to_charlist(System.pid())]}
         ])
 
-      if safe_command(port, frame), do: {:ok, port}, else: :error
+      {:ok, port}
     else
       _ -> :error
     end
@@ -196,10 +263,17 @@ defmodule BurpeeTrainer.Analytics.HelperGuardian do
   defp probe_query(sql, expected) do
     data = Jason.encode!(%{version: 1, rows: [], sql: sql})
 
-    case launch(<<byte_size(data)::32, data::binary>>) do
+    deadline = System.monotonic_time(:millisecond) + 1000
+
+    case launch() do
       {:ok, port} ->
-        output = probe_output(port, <<>>, System.monotonic_time(:millisecond) + 1000)
-        match?({:ok, %{"version" => 1, "ok" => ^expected}}, Jason.decode(output))
+        if safe_command(port, <<byte_size(data)::32, data::binary>>) do
+          output = probe_output(port, <<>>, deadline)
+          match?({:ok, %{"version" => 1, "ok" => ^expected}}, Jason.decode(output))
+        else
+          kill_launcher(port)
+          false
+        end
 
       :error ->
         false
