@@ -3,10 +3,11 @@ defmodule BurpeeTrainer.Mcp.HistoryContext do
   alias BurpeeTrainer.Mcp.Sessions
   alias BurpeeTrainer.UserTime
 
-  @spec build(map(), map(), map(), non_neg_integer(), non_neg_integer(), boolean(), boolean()) ::
-          map()
-  def build(args, user, filters, returned, excluded, more?, cursor?) do
-    complete? = not more? and not cursor?
+  @doc "`page` is `more?:` (a later page remains) and `cursor?:` (this is a later page)."
+  @spec build(map(), map(), map(), non_neg_integer(), non_neg_integer(), keyword()) :: map()
+  def build(args, user, filters, returned, excluded, page \\ []) do
+    more? = Keyword.get(page, :more?, false)
+    complete? = not more? and not Keyword.get(page, :cursor?, false)
     cutoff = cutoff(filters)
 
     %{
@@ -16,20 +17,17 @@ defmodule BurpeeTrainer.Mcp.HistoryContext do
         |> Map.new(fn {key, value} -> {to_string(key), value} end),
       "requested_filters" => Map.take(args, Sessions.filter_keys()),
       "timezone" => user.timezone,
-      "requested_local_boundaries" => Map.new(["from", "to"], &{&1, args[&1]}),
       "from_utc_inclusive" => iso(filters[:from]),
       "to_utc_exclusive" => iso(filters[:before]),
       "effective_utc_cutoff" => iso(cutoff),
       "cutoff_inclusive" =>
         filters[:before] == nil or DateTime.compare(filters.before, filters.as_of) == :gt,
       "as_of" => iso(filters.as_of),
-      "repeatable_snapshot" => false,
       "returned_sessions" => returned,
       "matched_sessions" => if(complete?, do: returned),
       "excluded_non_authoritative_sessions" => excluded,
       "continuation_exhausted" => not more?,
-      "complete_range" => complete?,
-      "empty_periods" => "omitted: no matching recorded sessions, not proof of zero exercise"
+      "complete_range" => complete?
     }
   end
 

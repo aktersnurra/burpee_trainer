@@ -37,7 +37,7 @@ summary behavior belongs to the pure summary component.
 ## Remaining component contracts
 
 Task 2 supplies `HistorySummary.summarize(sessions, timezone)` over trusted selected
-authoritative sessions, with actual reps, elapsed/credited seconds, sample coverage,
+authoritative sessions, with actual reps, elapsed/credited seconds, measurement coverage,
 local recorded/training days and per-type measured weighted pace. Preserve legacy
 eligibility; do not compare mixed-type overall pace or confuse normalized throughput
 with prescribed personal bests.
@@ -50,20 +50,18 @@ workout/session behavior changes are authorized.
 
 ## Actual metrics producer (Task 2)
 
-`Mcp.HistorySummary.summarize(sessions, timezone)` returns `{:ok, summary}` or
-`{:error, :invalid_timezone}`, including for empty selections. Input is trusted,
+`Mcp.HistorySummary.summarize(sessions, timezone)` returns the summary; the caller
+has validated the timezone (`Sessions.filters` does). Input is trusted,
 owner-scoped authoritative session structs/atom-keyed maps with completion timestamps;
 this pure producer neither queries nor infers authority, filters, or completeness.
 The summary has string keys and a sorted `by_type` list with the same totals plus
 `burpee_type`; nested entries do not recursively contain `by_type`.
 
-- `actual_reps` and `elapsed_seconds` sum nonnegative integer actual values,
-  including selected warmups. Zero is a measurement; NULL, negative and wrong-type
-  values are missing. Planned values are never substituted.
-- `actual_reps_samples` / `elapsed_seconds_samples` count valid values independently;
-  `missing_actual_reps` / `missing_elapsed_seconds` are their complements to `sessions`.
-- `credited_seconds` uses History credit (canonical warmups excluded), treating invalid
-  durations as missing; `minutes` floors total credit divided by 60, not each session.
+- `actual_reps` and `elapsed_seconds` sum actual values, including selected warmups.
+  Zero counts. The schema requires both actuals on completed sessions; planned values
+  are never substituted.
+- `credited_seconds` uses History credit (canonical warmups excluded); `minutes`
+  floors total credit divided by 60, not each session.
 - `recorded_days` counts distinct selected local completion dates. `training_days`
   counts those with positive credited work. Neither claims consecutive activity.
 - `measurement_samples` counts sessions with both positive integer actual reps and
@@ -75,9 +73,10 @@ The summary has string keys and a sorted `by_type` list with the same totals plu
 - Legacy `reps`, `best_reps_per_20_min`, and `average_pace_sec` retain History.points
   eligibility AND canonical warmup exclusion. `legacy_measurement_samples` exposes
   that denominator; `warmup_sessions` exposes the canonical warmup count.
-- Both average pace fields are null when selected sessions contain multiple burpee
-  types (`pace_comparability: mixed_burpee_types`); otherwise the marker is
-  `single_burpee_type`, and absent measurements still yield null pace/best metrics.
+- Each average pace field is null when the sessions it is computed from (legacy or
+  measured) contain more than one burpee type. `pace_comparability` is
+  `mixed_burpee_types` when the measured sessions do, otherwise `single_burpee_type`;
+  absent measurements still yield null pace/best metrics.
   Per-type summaries remain comparable. The legacy best field remains available for
   compatibility, but does not establish cross-type comparability or PB eligibility.
 
@@ -96,7 +95,7 @@ UTC bounds and the single request clock, not against first/last recorded session
 Weekly target fields read History.weeks (and thus Week policy), unfiltered across
 all owner types, with explicit `target_scope` and `target_seconds`.
 
-HistoryCoverage refuses any page with continuation at the 100000-row aggregate
+`HistoryStats.fetch_all` refuses any page with continuation at the 100000-row aggregate
 limit. Its optional limit is a lower-level pagination seam exercised with real
 scoped rows, not mocked forwarding or 100001 fixtures. Successful aggregate context
 is complete. Query context distinguishes continuation exhaustion from full range
@@ -105,7 +104,7 @@ unknown/null except on a complete first page. Non-authoritative exclusions descr
 only retrieved rows. No counts are invented for rows excluded by filters.
 
 HistoryContext records requested filters and normalized applied predicates (workout
-normalizes to plan_id/name), default warmup, local boundaries, UTC bounds, effective
+normalizes to plan_id/name), default warmup, UTC bounds, effective
 cutoff inclusivity, timezone and as_of. This is not a repeatable multi-page snapshot.
 The static analytics resource embeds the committed user guide at compile time and
 contains no owner data; workout-format and unknown-resource errors are preserved.

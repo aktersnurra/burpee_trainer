@@ -95,6 +95,10 @@ defmodule BurpeeTrainer.Mcp.Sessions do
           filters.min_duration_sec > filters.max_duration_sec ->
         {:error, "min_duration_sec must not exceed max_duration_sec"}
 
+      filters[:min_reps] != nil and filters[:max_reps] != nil and
+          filters.min_reps > filters.max_reps ->
+        {:error, "min_reps must not exceed max_reps"}
+
       filters[:from] != nil and filters[:before] != nil and
           DateTime.compare(filters.from, filters.before) != :lt ->
         {:error, "from must not be after to"}

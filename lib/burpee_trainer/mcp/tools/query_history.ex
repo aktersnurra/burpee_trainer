@@ -57,8 +57,8 @@ defmodule BurpeeTrainer.Mcp.Tools.QueryHistory do
                  filters,
                  length(sessions),
                  length(rows) - length(sessions),
-                 more?,
-                 cursor != nil
+                 more?: more?,
+                 cursor?: cursor != nil
                )
            }}
 

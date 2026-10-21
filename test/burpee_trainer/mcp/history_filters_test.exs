@@ -70,6 +70,8 @@ defmodule BurpeeTrainer.Mcp.HistoryFiltersTest do
 
     assert {:error, _} =
              Sessions.filters(%{"from" => "2026-03-30", "to" => "2026-03-29"}, user, @now)
+
+    assert {:error, _} = Sessions.filters(%{"min_reps" => 11, "max_reps" => 10}, user, @now)
   end
 
   test "local inclusive dates span DST days without admitting neighboring dates", %{user: user} do

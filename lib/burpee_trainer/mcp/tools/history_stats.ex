@@ -2,7 +2,9 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
   @behaviour BurpeeTrainer.Coach.Tool
   alias BurpeeTrainer.{History, Workouts}
   alias BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Mcp.{HistoryContext, HistoryCoverage, HistorySummary, Sessions}
+  alias BurpeeTrainer.Mcp.{HistoryContext, HistorySummary, Sessions}
+
+  @max_sessions 100_000
 
   def name, do: "history_stats"
 
@@ -31,15 +33,14 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
     with [] <- Map.keys(args) -- ["group_by" | Sessions.filter_keys()],
          :ok <- validate_group(group_by),
          {:ok, filters} <- Sessions.filters(args, user, now),
-         {:ok, rows} <- HistoryCoverage.fetch(scope, filters),
-         sessions = Sessions.authoritative(rows),
-         {:ok, summary} <- HistorySummary.summarize(sessions, user.timezone) do
+         {:ok, rows} <- fetch_all(scope, filters) do
+      sessions = Sessions.authoritative(rows)
       targets = if group_by == "week", do: week_targets(scope, user, now), else: %{}
 
       {:ok,
        %{
          "group_by" => group_by,
-         "summary" => summary,
+         "summary" => HistorySummary.summarize(sessions, user.timezone),
          "periods" => periods(sessions, group_by, user.timezone, filters, targets),
          "context" =>
            HistoryContext.build(
@@ -47,19 +48,32 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
              user,
              filters,
              length(sessions),
-             length(rows) - length(sessions),
-             false,
-             false
+             length(rows) - length(sessions)
            )
        }}
     else
       unknown when is_list(unknown) -> {:error, "unknown arguments: #{Enum.join(unknown, ", ")}"}
-      {:error, reason} when is_binary(reason) -> {:error, reason}
-      {:error, _} -> {:error, "history is not available"}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   def call(_, _, _), do: {:error, "history_stats takes filters as an object"}
+
+  @doc "Every selected session, or an error rather than a truncated page."
+  @spec fetch_all(BurpeeTrainer.Accounts.Scope.t(), map(), pos_integer()) ::
+          {:ok, [map()]} | {:error, String.t()}
+  def fetch_all(scope, filters, limit \\ @max_sessions) do
+    case Workouts.list_sessions_page(scope, limit, filters: filters) do
+      {_rows, true} ->
+        {:error, "History exceeds #{limit} sessions; narrow your date range or filters."}
+
+      {rows, false} when is_list(rows) ->
+        {:ok, rows}
+
+      {:error, _} ->
+        {:error, "history is not available"}
+    end
+  end
 
   defp validate_group(group) when group in ~w[range day week month], do: :ok
   defp validate_group(_), do: {:error, "group_by must be range, day, week or month"}
@@ -71,10 +85,10 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
     |> Enum.group_by(&period_start(&1, group, timezone))
     |> Enum.sort_by(fn {start, _} -> start end, {:desc, Date})
     |> Enum.map(fn {start, selected} ->
-      {:ok, summary} = HistorySummary.summarize(selected, timezone)
       finish = period_end(start, group)
 
-      summary
+      selected
+      |> HistorySummary.summarize(timezone)
       |> Map.merge(%{
         "start" => Date.to_iso8601(start),
         "end" => Date.to_iso8601(finish),

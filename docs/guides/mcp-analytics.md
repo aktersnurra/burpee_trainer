@@ -19,17 +19,17 @@ and returns inspectable sessions; follow its opaque `next_cursor` unchanged.
   never planned. Dates use the owner's timezone, including DST. Missing warmup
   means `include`; `exclude`/`only` use exactly `tags == "warmup"`, not substrings.
   Type, workout id/name, tags, actual rep bounds and capture mode also filter.
-- `actual_reps` and `elapsed_seconds` sum known nonnegative actual values, including
-  selected warmups. Missing/invalid values count as missing, not zero measurements;
-  no planned fallback. Sample counts expose coverage; zero is valid but not pace-eligible.
+- `actual_reps` and `elapsed_seconds` sum actual values, including selected warmups,
+  never planned ones. Zero counts toward them but not toward pace.
 - `credited_seconds` uses the app's weekly credit rules, excluding canonical warmups.
   `minutes` floors total credited seconds / 60; use seconds for precise comparisons.
   `recorded_days` counts selected local dates; `training_days` counts dates with
   positive credited work. Neither is evidence of unrecorded activity.
 - `measured_average_pace_sec` is total seconds / total reps over positive measured
   pairs, rounded to two decimals. `measurement_samples` counts those pairs;
-  `unmeasured_sessions` counts the remainder. Both overall pace fields are null for
-  mixed burpee types; compare `by_type` instead. Keep capture mode comparable too:
+  `unmeasured_sessions` counts the remainder. Each overall pace field is null when the
+  sessions behind it mix burpee types (`pace_comparability` says whether the measured
+  ones do); compare `by_type` instead. Keep capture mode comparable too:
   camera tracking, timer sessions and manual logs have different measurement sources.
 - Legacy `reps`, `average_pace_sec`, and `best_reps_per_20_min` exclude warmups and
   require positive actual reps and seconds. `legacy_measurement_samples` exposes
@@ -46,8 +46,8 @@ and returns inspectable sessions; follow its opaque `next_cursor` unchanged.
 - Weekly `target_met` and `target_seconds` describe whole-week, all-type, unfiltered
   owner history as of this request, NOT the selected cohort. `target_scope` states
   this; target values come from existing Week policy including pro-rated signup weeks.
-- `context` records requested filters, normalized applied filters (including default
-  warmup), timezone, exact requested local dates, inclusive UTC start, exclusive
+- `context` records requested filters (including the exact local dates), normalized
+  applied filters (including default warmup), timezone, inclusive UTC start, exclusive
   UTC end, effective cutoff and whether that cutoff is inclusive. Future completions
   are excluded with the same captured `as_of` clock used in metadata.
 - Successful aggregates are complete for the applied filters; over 100000 selected

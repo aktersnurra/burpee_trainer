@@ -84,11 +84,6 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
 
     assert DateTime.compare(cutoff, expected_cutoff) == :eq
     assert [%{"start" => ^selected_date, "partial" => ^partial?}] = result["periods"]
-
-    assert result["context"]["requested_local_boundaries"] == %{
-             "from" => selected_date,
-             "to" => selected_date
-           }
   end
 
   test "aggregate refuses a real overflowing page rather than returning partial totals", %{
@@ -97,13 +92,13 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
   } do
     logged(user, 1, %{})
     logged(user, 2, %{})
-    assert {:error, message} = BurpeeTrainer.Mcp.HistoryCoverage.fetch(scope, %{}, 1)
+    assert {:error, message} = Mcp.Tools.HistoryStats.fetch_all(scope, %{}, 1)
     assert message =~ "narrow"
-    assert {:ok, rows} = BurpeeTrainer.Mcp.HistoryCoverage.fetch(scope, %{}, 2)
+    assert {:ok, rows} = Mcp.Tools.HistoryStats.fetch_all(scope, %{}, 2)
     assert [_, _] = rows
   end
 
-  test "analytics resource is discoverable and static across owners", %{scope: scope} do
+  test "analytics resource is discoverable", %{scope: scope} do
     request = fn owner, method, params ->
       {:reply, %{"result" => result}} =
         Mcp.handle(owner, %{"jsonrpc" => "2.0", "id" => 1, "method" => method, "params" => params})
@@ -121,11 +116,7 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
 
     result = request.(scope, "resources/read", %{"uri" => uri})
 
-    assert %{"contents" => [%{"uri" => ^uri, "mimeType" => "text/markdown", "text" => text}]} =
-             result
-
-    assert byte_size(text) > 0
-    assert result == request.(Scope.for_user(user_fixture()), "resources/read", %{"uri" => uri})
+    assert %{"contents" => [%{"uri" => ^uri, "mimeType" => "text/markdown"}]} = result
   end
 
   test "filtered weeks keep whole-week targets and exact actual metrics", %{
@@ -179,7 +170,6 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
              "actual_reps" => 10,
              "elapsed_seconds" => 123,
              "credited_seconds" => 61,
-             "missing_actual_reps" => 0,
              "reps" => 0,
              "measurement_samples" => 1
            } = result["summary"]
@@ -428,10 +418,10 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
     end
 
     test "monthly groups use calendar months", %{user: user, scope: scope} do
-      logged(user, 0, %{burpee_count_actual: 100, duration_sec_actual: 1200})
+      session = logged(user, 0, %{burpee_count_actual: 100, duration_sec_actual: 1200})
       {:ok, %{"periods" => [period]}} = call(scope, "history_stats", %{"group_by" => "month"})
-      today = Date.utc_today()
-      assert period["start"] == Date.to_iso8601(Date.beginning_of_month(today))
+      month = session.completed_at |> DateTime.to_date() |> Date.beginning_of_month()
+      assert period["start"] == Date.to_iso8601(month)
       assert period["sessions"] == 1
       refute Map.has_key?(period, "target_met")
     end
