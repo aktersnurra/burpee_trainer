@@ -1,0 +1,13 @@
+{
+  "name": "BurpeeTrainer",
+  "short_name": "BurpeeTrainer",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F2EE",
+  "theme_color": "#F4F2EE",
+  "icons": [
+    { "src": "/images/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

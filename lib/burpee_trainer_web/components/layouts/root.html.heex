@@ -7,6 +7,19 @@
       content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <meta name="csrf-token" content={get_csrf_token()} />
+    <%!-- base-100, so a home-screen launch opens on the app's background --%>
+    <meta name="theme-color" content="#F4F2EE" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BurpeeTrainer" />
+    <link rel="manifest" href={~p"/manifest.webmanifest"} />
+    <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
+    <link
+      :for={{width, height, ratio} <- startup_screens()}
+      rel="apple-touch-startup-image"
+      media={"(device-width: #{width}px) and (device-height: #{height}px) and (-webkit-device-pixel-ratio: #{ratio}) and (orientation: portrait)"}
+      href={~p"/images/startup/#{"iphone-#{width * ratio}x#{height * ratio}.png"}"}
+    />
     <.live_title default="BurpeeTrainer">
       {assigns[:page_title]}
     </.live_title>
