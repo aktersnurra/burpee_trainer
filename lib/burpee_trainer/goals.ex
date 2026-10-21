@@ -42,16 +42,17 @@ defmodule BurpeeTrainer.Goals do
     goal |> Goal.status_changeset(:achieved) |> Repo.update()
   end
 
-  @doc "Best scoped completed non-warmup session since a bound, optionally within the goal duration."
-  def best_session(%Scope{user: %{id: id}}, type, since, max_duration \\ 86400) do
+  @doc "Best scoped completed non-warmup 20-minute session since a bound."
+  def best_session(%Scope{user: %{id: id}}, type, since) do
     now = DateTime.utc_now()
+    shortest..longest//_ = Goal.session_duration_sec()
 
     Repo.one(
       from s in BurpeeTrainer.Workouts.WorkoutSession,
         where:
           s.user_id == ^id and s.state == :completed and s.burpee_type == ^type and
             s.completed_at >= ^since and s.completed_at <= ^now and s.burpee_count_actual > 0 and
-            s.duration_sec_actual > 0 and s.duration_sec_actual <= ^max_duration and
+            s.duration_sec_actual >= ^shortest and s.duration_sec_actual <= ^longest and
             (is_nil(s.tags) or s.tags != "warmup"),
         order_by: [desc: s.burpee_count_actual, asc: s.duration_sec_actual, desc: s.id],
         limit: 1
@@ -60,7 +61,7 @@ defmodule BurpeeTrainer.Goals do
 
   def progress(%Scope{} = scope, %Goal{user_id: user_id} = goal) when user_id == scope.user.id do
     since = DateTime.new!(goal.date_baseline, ~T[00:00:00], "Etc/UTC")
-    best = best_session(scope, goal.burpee_type, since, goal.duration_sec_target)
+    best = best_session(scope, goal.burpee_type, since)
     current = max(goal.burpee_count_baseline, if(best, do: best.burpee_count_actual, else: 0))
 
     fraction =

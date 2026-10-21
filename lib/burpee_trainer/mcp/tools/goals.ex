@@ -38,8 +38,8 @@ defmodule BurpeeTrainer.Mcp.Tools.SetGoal do
   def description,
     do:
       "Set the athlete's goal for a burpee type, active at once; it replaces that type's " <>
-        "current goal. A goal is reps in one session of duration_sec (levels are counted in " <>
-        "20-minute sessions, the default) by a date."
+        "current goal. A goal is reps in one 20-minute session (the length levels are counted " <>
+        "in) by a date."
 
   def schema,
     do:
@@ -47,23 +47,20 @@ defmodule BurpeeTrainer.Mcp.Tools.SetGoal do
         %{
           "burpee_type" => %{"type" => "string", "enum" => ["six_count", "navy_seal"]},
           "reps" => %{"type" => "integer", "minimum" => 1},
-          "date" => %{"type" => "string", "format" => "date", "description" => "YYYY-MM-DD"},
-          "duration_sec" => %{"type" => "integer", "minimum" => 60, "default" => 1200}
+          "date" => %{"type" => "string", "format" => "date", "description" => "YYYY-MM-DD"}
         },
         ["burpee_type", "reps", "date"]
       )
 
   def call(scope, %{"burpee_type" => type, "reps" => reps, "date" => date} = args, run)
-      when map_size(args) in [3, 4] do
-    with {:ok, duration} <- duration(args),
-         :ok <- date(date),
+      when map_size(args) == 3 do
+    with :ok <- date(date),
          {:ok, %{"goal_id" => id}} <-
            ProposeGoal.call(
              scope,
              %{
                "burpee_type" => type,
                "burpee_count_target" => reps,
-               "duration_sec_target" => duration,
                "date_target" => date
              },
              run
@@ -80,11 +77,7 @@ defmodule BurpeeTrainer.Mcp.Tools.SetGoal do
   end
 
   def call(_, _, _),
-    do: {:error, "set_goal takes burpee_type, reps, date and optionally duration_sec"}
-
-  defp duration(%{"duration_sec" => sec}) when is_integer(sec) and sec >= 60, do: {:ok, sec}
-  defp duration(%{"duration_sec" => _}), do: {:error, "duration_sec must be at least 60"}
-  defp duration(_), do: {:ok, 1200}
+    do: {:error, "set_goal takes burpee_type, reps and date; a goal is a 20-minute session"}
 
   defp date(date) when is_binary(date) do
     case Date.from_iso8601(date) do

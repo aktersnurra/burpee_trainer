@@ -20,7 +20,6 @@ defmodule BurpeeTrainer.ProgressGauges do
   @types [:six_count, :navy_seal]
   @reached_days 7
   @best_after 3
-  @duration_sec 1200
 
   @type gauge :: %{
           required(:kind) => atom(),
@@ -55,7 +54,7 @@ defmodule BurpeeTrainer.ProgressGauges do
           kind: :goal,
           burpee_type: goal.burpee_type,
           goal: goal,
-          best: Metrics.goal_best(sessions, goal),
+          best: Metrics.goal_best(sessions, goal.burpee_type),
           course: course(goal, typed, today)
         }
     end
@@ -72,7 +71,7 @@ defmodule BurpeeTrainer.ProgressGauges do
         nil
 
       {goal, on} ->
-        best = Metrics.goal_best(sessions, goal)
+        best = Metrics.goal_best(sessions, goal.burpee_type)
 
         %{
           kind: :reached,
@@ -93,7 +92,7 @@ defmodule BurpeeTrainer.ProgressGauges do
   end
 
   defp without_goal(type, _typed, sessions, today) do
-    best = Metrics.goal_best(sessions, %{burpee_type: type, duration_sec_target: @duration_sec})
+    best = Metrics.goal_best(sessions, type)
     %{kind: :best, burpee_type: type, best: best, next: NextGoal.for_best(type, best, today)}
   end
 

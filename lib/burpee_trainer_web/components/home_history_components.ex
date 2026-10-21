@@ -390,7 +390,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp gauge_number(%{best: best}), do: best
 
   defp gauge_label(%{kind: :goal, goal: goal}),
-    do: "of #{goal.burpee_count_target}#{goal_minutes(goal)} #{Fmt.goal_by(goal)}"
+    do: "of #{goal.burpee_count_target} #{Fmt.goal_by(goal)}"
 
   defp gauge_label(%{kind: :reached, reached_on: on}),
     do: "Reached #{Calendar.strftime(on, "%-d %b")}"
@@ -398,10 +398,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp gauge_label(%{kind: :best}), do: "Best in 20 min"
   defp gauge_label(%{kind: :first}), do: "First session"
   defp gauge_label(%{kind: :none}), do: "No sessions yet"
-
-  # Goals are in 20 minutes unless they say otherwise.
-  defp goal_minutes(%{duration_sec_target: 1200}), do: ""
-  defp goal_minutes(%{duration_sec_target: sec}), do: " in #{div(sec, 60)} min"
 
   defp type_sentence(:six_count), do: "Six-count"
   defp type_sentence(:navy_seal), do: "Navy SEAL"

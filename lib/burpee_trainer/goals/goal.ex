@@ -6,8 +6,14 @@ defmodule BurpeeTrainer.Goals.Goal do
 
   @burpee_types [:six_count, :navy_seal]
   @statuses [:active, :achieved, :abandoned, :proposed]
+  # A goal is reps in one 20-minute session, the length levels are counted in.
+  @duration_sec 1_200
+  @session_duration_sec 1_190..1_210
 
   @type t :: %__MODULE__{}
+
+  @doc "Session lengths that count toward a goal: 20 minutes, give or take ten seconds, as for levels."
+  def session_duration_sec, do: @session_duration_sec
 
   schema "goals" do
     field :burpee_type, Ecto.Enum, values: @burpee_types
@@ -32,24 +38,22 @@ defmodule BurpeeTrainer.Goals.Goal do
     |> cast(attrs, [
       :burpee_type,
       :burpee_count_target,
-      :duration_sec_target,
       :date_target,
       :burpee_count_baseline,
       :duration_sec_baseline,
       :date_baseline,
       :status
     ])
+    |> put_change(:duration_sec_target, @duration_sec)
     |> validate_required([
       :burpee_type,
       :burpee_count_target,
-      :duration_sec_target,
       :date_target,
       :burpee_count_baseline,
       :duration_sec_baseline,
       :date_baseline
     ])
     |> validate_number(:burpee_count_target, greater_than: 0)
-    |> validate_number(:duration_sec_target, greater_than: 0)
     |> validate_number(:burpee_count_baseline, greater_than_or_equal_to: 0)
     |> validate_number(:duration_sec_baseline, greater_than_or_equal_to: 0)
     |> validate_date_target_after_baseline()

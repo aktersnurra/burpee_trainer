@@ -14,6 +14,25 @@ defmodule BurpeeTrainer.GoalsTest do
     assert Repo.get!(BurpeeTrainer.Accounts.User, user.id).id == user.id
   end
 
+  test "a goal is reps in a 20-minute session, whatever duration is given" do
+    user = user_fixture()
+
+    goal =
+      %Goal{user_id: user.id}
+      |> Goal.changeset(%{
+        "burpee_type" => "six_count",
+        "burpee_count_target" => 200,
+        "duration_sec_target" => 1714,
+        "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 28)),
+        "burpee_count_baseline" => 140,
+        "duration_sec_baseline" => 1200,
+        "date_baseline" => Date.to_iso8601(Date.utc_today())
+      })
+      |> Repo.insert!()
+
+    assert Repo.reload!(goal).duration_sec_target == 1200
+  end
+
   test "get_active_goal scopes active goals to the actor and burpee type" do
     user = user_fixture()
     scope = Scope.for_user(user)
@@ -29,7 +48,6 @@ defmodule BurpeeTrainer.GoalsTest do
       |> Goal.changeset(%{
         "burpee_type" => "navy_seal",
         "burpee_count_target" => 40,
-        "duration_sec_target" => 300,
         "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 28)),
         "burpee_count_baseline" => 20,
         "duration_sec_baseline" => 240,

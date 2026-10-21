@@ -13,11 +13,14 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeGoal do
       Tool.object(
         %{
           "burpee_type" => %{"type" => "string", "enum" => ["six_count", "navy_seal"]},
-          "burpee_count_target" => %{"type" => "integer", "minimum" => 1},
-          "duration_sec_target" => %{"type" => "integer", "minimum" => 60},
+          "burpee_count_target" => %{
+            "type" => "integer",
+            "minimum" => 1,
+            "description" => "reps in one 20-minute session"
+          },
           "date_target" => %{"type" => "string"}
         },
-        ["burpee_type", "burpee_count_target", "duration_sec_target", "date_target"]
+        ["burpee_type", "burpee_count_target", "date_target"]
       )
 
   def call(
@@ -25,13 +28,12 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeGoal do
         %{
           "burpee_type" => type,
           "burpee_count_target" => reps,
-          "duration_sec_target" => duration,
           "date_target" => date
         } = args,
         _
       )
       when type in ["six_count", "navy_seal"] and is_integer(reps) and reps > 0 and
-             is_integer(duration) and duration >= 60 and is_binary(date) and map_size(args) == 4 do
+             is_binary(date) and map_size(args) == 3 do
     type_atom = if type == "six_count", do: :six_count, else: :navy_seal
     since = DateTime.add(DateTime.utc_now(), -42, :day)
 
@@ -55,5 +57,9 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeGoal do
     end
   end
 
-  def call(_, _, _), do: {:error, "invalid goal arguments"}
+  def call(_, _, _),
+    do:
+      {:error,
+       "propose_goal takes burpee_type, burpee_count_target and date_target; " <>
+         "a goal is a 20-minute session"}
 end

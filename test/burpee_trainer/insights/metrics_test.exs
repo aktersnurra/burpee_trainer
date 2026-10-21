@@ -218,7 +218,7 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
     assert m["goal.3.best_reps"] == %{
              value: 120,
              unit: :reps,
-             label: "best reps within goal time"
+             label: "best reps in a 20-minute session"
            }
 
     assert m["goal.3.target_reps"].value == 150

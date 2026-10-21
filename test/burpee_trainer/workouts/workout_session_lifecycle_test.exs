@@ -337,6 +337,30 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionLifecycleTest do
       assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :achieved
     end
 
+    test "a goal is reached by its reps in one 20-minute session, as its progress counts them" do
+      user = user_fixture()
+      scope = Scope.for_user(user)
+
+      goal =
+        goal_fixture(user, %{"burpee_count_target" => 200, "burpee_count_baseline" => 140})
+
+      for {reps, duration} <- [{205, 900}, {199, 1190}] do
+        assert {:ok, started} =
+                 Workouts.start_plan(scope, plan_fixture(user).id, Ecto.UUID.generate())
+
+        assert {:ok, %{goal_id: nil}} =
+                 Workouts.complete_session(
+                   scope,
+                   started.id,
+                   %{"burpee_count_actual" => reps, "duration_sec_actual" => duration},
+                   :timed
+                 )
+      end
+
+      assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :active
+      assert %{"current_reps" => 199} = BurpeeTrainer.Goals.progress(scope, goal)
+    end
+
     test "failed goal-achieving completion rolls back both session attribution and goal state" do
       user = user_fixture()
       plan = plan_fixture(user)
