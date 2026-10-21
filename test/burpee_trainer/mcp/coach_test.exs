@@ -47,7 +47,8 @@ defmodule BurpeeTrainer.Mcp.CoachTest do
 
   test "the workout format explains every field and value, and each level's reps",
        %{scope: scope} do
-    %{"resources" => [resource]} = handle(scope, "resources/list", %{})
+    %{"resources" => resources} = handle(scope, "resources/list", %{})
+    resource = Enum.find(resources, &(&1["uri"] == "burpee://workout-format"))
     assert resource["uri"] == "burpee://workout-format"
 
     %{"contents" => [%{"uri" => "burpee://workout-format", "text" => text}]} =

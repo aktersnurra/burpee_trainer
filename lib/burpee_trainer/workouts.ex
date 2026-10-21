@@ -1844,9 +1844,10 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   # Filters a caller has already validated: a UTC window, type, workout, tags (any of),
-  # capture mode and a reps range.
+  # capture mode, actual reps/duration ranges, canonical warmup and a trusted cutoff.
   defp filter_sessions(query, filters) do
     Enum.reduce(filters, query, fn
+      {:as_of, %DateTime{} = at}, q -> where(q, [s], s.completed_at <= ^at)
       {:from, %DateTime{} = at}, q -> where(q, [s], s.completed_at >= ^at)
       {:before, %DateTime{} = at}, q -> where(q, [s], s.completed_at < ^at)
       {:burpee_type, type}, q -> where(q, [s], s.burpee_type == ^type)
@@ -1855,6 +1856,11 @@ defmodule BurpeeTrainer.Workouts do
       {:name, name}, q -> where(q, [s], like(s.display_name_snapshot, ^"%#{name}%"))
       {:min_reps, reps}, q -> where(q, [s], s.burpee_count_actual >= ^reps)
       {:max_reps, reps}, q -> where(q, [s], s.burpee_count_actual <= ^reps)
+      {:min_duration_sec, seconds}, q -> where(q, [s], s.duration_sec_actual >= ^seconds)
+      {:max_duration_sec, seconds}, q -> where(q, [s], s.duration_sec_actual <= ^seconds)
+      {:warmup, "include"}, q -> q
+      {:warmup, "only"}, q -> where(q, [s], s.tags == "warmup")
+      {:warmup, "exclude"}, q -> where(q, [s], is_nil(s.tags) or s.tags != "warmup")
       {:tags, tags}, q -> where(q, [s], ^any_tag(tags))
     end)
   end

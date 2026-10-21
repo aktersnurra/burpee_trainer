@@ -9,7 +9,7 @@ defmodule BurpeeTrainer.Mcp do
 
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Mcp.{CoachPrompt, Tools, WorkoutFormat}
+  alias BurpeeTrainer.Mcp.{AnalyticsGuide, CoachPrompt, Tools, WorkoutFormat}
 
   @protocol_versions ~w[2025-06-18 2025-03-26 2024-11-05]
 
@@ -134,20 +134,29 @@ defmodule BurpeeTrainer.Mcp do
              "name" => "workout-format",
              "title" => "How a workout is described",
              "mimeType" => "text/markdown"
+           },
+           %{
+             "uri" => AnalyticsGuide.uri(),
+             "name" => "analytics-guide",
+             "title" => "Interpreting history analytics",
+             "mimeType" => "text/markdown"
            }
          ]
        }}
 
   defp dispatch(_scope, "resources/read", %{"uri" => uri}, _tools) when is_binary(uri) do
-    if uri == WorkoutFormat.uri(),
-      do:
+    case Enum.find([WorkoutFormat, AnalyticsGuide], &(&1.uri() == uri)) do
+      nil ->
+        {:error, -32602, "Unknown resource: #{uri}"}
+
+      resource ->
         {:ok,
          %{
            "contents" => [
-             %{"uri" => uri, "mimeType" => "text/markdown", "text" => WorkoutFormat.text()}
+             %{"uri" => uri, "mimeType" => "text/markdown", "text" => resource.text()}
            ]
-         }},
-      else: {:error, -32602, "Unknown resource: #{uri}"}
+         }}
+    end
   end
 
   defp dispatch(_scope, "resources/read", _params, _tools),

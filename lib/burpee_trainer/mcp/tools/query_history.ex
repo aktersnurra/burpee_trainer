@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Mcp.Tools.QueryHistory do
   @behaviour BurpeeTrainer.Coach.Tool
   alias BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Mcp.Sessions
+  alias BurpeeTrainer.Mcp.{HistoryContext, Sessions}
   alias BurpeeTrainer.Workouts
 
   @max_limit 100
@@ -32,23 +32,34 @@ defmodule BurpeeTrainer.Mcp.Tools.QueryHistory do
       )
 
   def call(%{user: user} = scope, args, _) when is_map(args) do
+    now = DateTime.utc_now()
     known = ["limit", "cursor" | Sessions.filter_keys()]
 
     with [] <- Map.keys(args) -- known,
          {:ok, limit} <- limit(Map.get(args, "limit", 50)),
          {:ok, cursor} <- Sessions.decode_cursor(Map.get(args, "cursor")),
-         {:ok, filters} <- Sessions.filters(args, user, DateTime.utc_now()) do
+         {:ok, filters} <- Sessions.filters(args, user, now) do
       opts = [filters: filters] ++ if(cursor, do: [before: cursor], else: [])
 
       case Workouts.list_sessions_page(scope, limit, opts) do
         {rows, more?} when is_list(rows) ->
+          sessions = Sessions.authoritative(rows)
           next = if more?, do: rows |> List.last() |> then(&{&1.completed_at, &1.id})
 
           {:ok,
            %{
-             "sessions" =>
-               rows |> Sessions.authoritative() |> Enum.map(&Sessions.encode(&1, user.timezone)),
-             "next_cursor" => Sessions.encode_cursor(next)
+             "sessions" => sessions |> Enum.map(&Sessions.encode(&1, user.timezone)),
+             "next_cursor" => Sessions.encode_cursor(next),
+             "context" =>
+               HistoryContext.build(
+                 args,
+                 user,
+                 filters,
+                 length(sessions),
+                 length(rows) - length(sessions),
+                 more?: more?,
+                 cursor?: cursor != nil
+               )
            }}
 
         {:error, _} ->
