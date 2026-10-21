@@ -3,6 +3,7 @@
 ## 2026-10-21 — A goal is reps in 20 minutes
 
 - Setting a goal takes only the reps and the burpee type (and a date): every goal is one 20-minute session, the length levels are counted in. The coach's `propose_goal` and Claude's `set_goal` no longer take a duration. A migration makes open goals (active and proposed) 20-minute goals with the same reps; achieved and abandoned goals keep the duration they had.
+- Only a 20-minute session counts toward a goal, as for levels (20 minutes, give or take ten seconds): its starting point, its progress on Progress and in the coach's summary, and reaching it. A longer session no longer sets the starting point, and a shorter one no longer fills the gauge without reaching the goal.
 
 ## 2026-10-20 — Planning follows events
 

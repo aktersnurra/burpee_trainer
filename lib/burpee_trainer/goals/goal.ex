@@ -8,8 +8,12 @@ defmodule BurpeeTrainer.Goals.Goal do
   @statuses [:active, :achieved, :abandoned, :proposed]
   # A goal is reps in one 20-minute session, the length levels are counted in.
   @duration_sec 1_200
+  @session_duration_sec 1_190..1_210
 
   @type t :: %__MODULE__{}
+
+  @doc "Session lengths that count toward a goal: 20 minutes, give or take ten seconds, as for levels."
+  def session_duration_sec, do: @session_duration_sec
 
   schema "goals" do
     field :burpee_type, Ecto.Enum, values: @burpee_types

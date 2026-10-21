@@ -173,7 +173,6 @@ defmodule BurpeeTrainer.Fixtures do
     defaults = %{
       "burpee_type" => "six_count",
       "burpee_count_target" => 70,
-      "duration_sec_target" => 300,
       "date_target" => Date.to_iso8601(Date.add(today, 28)),
       "burpee_count_baseline" => 50,
       "duration_sec_baseline" => 240,

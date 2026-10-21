@@ -19,7 +19,8 @@ defmodule BurpeeTrainer.GoalDurationMigrationTest do
     for {type, duration, status} <- [
           {"six_count", 1714, "active"},
           {"navy_seal", 1600, "proposed"},
-          {"six_count", 1846, "abandoned"}
+          {"six_count", 1846, "abandoned"},
+          {"navy_seal", 300, "achieved"}
         ] do
       Repo.query!(
         "INSERT INTO goals (user_id,burpee_type,burpee_count_target,duration_sec_target,date_target,burpee_count_baseline,duration_sec_baseline,date_baseline,status,inserted_at,updated_at) VALUES (?,?,200,?,'2026-11-01',140,1200,'2026-10-01',?,datetime('now'),datetime('now'))",
@@ -31,6 +32,11 @@ defmodule BurpeeTrainer.GoalDurationMigrationTest do
 
     assert Repo.query!(
              "SELECT status, burpee_count_target, duration_sec_target FROM goals ORDER BY id"
-           ).rows == [["active", 200, 1200], ["proposed", 200, 1200], ["abandoned", 200, 1846]]
+           ).rows == [
+             ["active", 200, 1200],
+             ["proposed", 200, 1200],
+             ["abandoned", 200, 1846],
+             ["achieved", 200, 300]
+           ]
   end
 end

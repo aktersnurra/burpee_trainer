@@ -67,8 +67,7 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
     test "one gauge per burpee type, as Progress shows them", %{user: user, scope: scope} do
       goal_fixture(user, %{
         burpee_type: "six_count",
-        burpee_count_target: 150,
-        duration_sec_target: 1200
+        burpee_count_target: 150
       })
 
       logged(user, 1, %{

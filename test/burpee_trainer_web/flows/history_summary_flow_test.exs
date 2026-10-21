@@ -20,7 +20,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     conn: conn,
     user: user
   } do
-    goal_fixture(user, %{burpee_count_target: 150, duration_sec_target: 1200})
+    goal_fixture(user, %{burpee_count_target: 150})
     free_form_session_fixture(user, %{duration_sec_actual: 1_500})
     summary_fixture(user, "Best so far 25 of 150 reps.", "Six-count held at 25 reps.")
 
@@ -43,17 +43,16 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     conn: conn,
     user: user
   } do
-    goal_fixture(user, %{burpee_count_target: 150, duration_sec_target: 1200})
+    goal_fixture(user, %{burpee_count_target: 150})
 
     goal_fixture(user, %{
       burpee_type: "navy_seal",
       burpee_count_target: 60,
-      duration_sec_target: 1200,
       date_target: Date.to_iso8601(Date.add(Date.utc_today(), 89))
     })
 
     free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 140})
-    # Longer than the goal's time, so it does not count toward it.
+    # Longer than 20 minutes, so it does not count toward the goal.
     free_form_session_fixture(user, %{duration_sec_actual: 1_500, burpee_count_actual: 149})
 
     free_form_session_fixture(user, %{
@@ -75,7 +74,6 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
   test "a goal on a rising line shows when it will be reached", %{conn: conn, user: user} do
     goal_fixture(user, %{
       burpee_count_target: 150,
-      duration_sec_target: 1200,
       date_target: Date.to_iso8601(Date.add(Date.utc_today(), 60))
     })
 

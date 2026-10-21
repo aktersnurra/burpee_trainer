@@ -57,5 +57,9 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeGoal do
     end
   end
 
-  def call(_, _, _), do: {:error, "invalid goal arguments"}
+  def call(_, _, _),
+    do:
+      {:error,
+       "propose_goal takes burpee_type, burpee_count_target and date_target; " <>
+         "a goal is a 20-minute session"}
 end

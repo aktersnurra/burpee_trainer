@@ -17,7 +17,6 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
         goal_fixture(scope.user, %{
           burpee_type: :six_count,
           burpee_count_target: 30,
-          duration_sec_target: 1200,
           date_target: Date.add(Date.utc_today(), 10),
           burpee_count_baseline: 10,
           duration_sec_baseline: 120,

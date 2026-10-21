@@ -48,7 +48,6 @@ defmodule BurpeeTrainer.GoalsTest do
       |> Goal.changeset(%{
         "burpee_type" => "navy_seal",
         "burpee_count_target" => 40,
-        "duration_sec_target" => 300,
         "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 28)),
         "burpee_count_baseline" => 20,
         "duration_sec_baseline" => 240,

@@ -1687,14 +1687,12 @@ defmodule BurpeeTrainer.Workouts do
          %DateTime{} = completed_at,
          timezone
        )
-       when is_integer(count) and count > 0 and is_integer(duration) and duration >= 1190 and
-              duration <= 1210 do
-    with {:ok, completed_date} <- UserTime.local_date(completed_at, timezone) do
-      Date.compare(completed_date, baseline) != :lt and
-        round(count / duration * 1200.0) >= target
-    else
-      {:error, _reason} -> false
-    end
+       when is_integer(count) and count >= target and is_integer(duration) do
+    duration in Goal.session_duration_sec() and
+      case UserTime.local_date(completed_at, timezone) do
+        {:ok, completed_date} -> Date.compare(completed_date, baseline) != :lt
+        {:error, _reason} -> false
+      end
   end
 
   defp goal_achieved_by_completion?(%Goal{}, _count, _duration, _completed_at, _timezone),
