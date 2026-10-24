@@ -30,9 +30,12 @@ function uploadStore(
 		async listReadyTraceUploads() {
 			return marker ? [{ client_session_id: "client-1", session_id: 99 }] : [];
 		},
-		async listTraceChunks(sessionId) {
+		async readTraceChunkBatch(sessionId, takeChunk) {
 			assert.equal(sessionId, 99);
-			return chunks.map((item) => structuredClone(item));
+			for (const item of chunks) {
+				if (!takeChunk(structuredClone(item))) return { hasMore: true };
+			}
+			return { hasMore: false };
 		},
 		async deleteTraceChunks(sessionId, indexes) {
 			assert.equal(sessionId, 99);
@@ -272,6 +275,116 @@ test("uploader splits ready chunks by serialized request bytes", async () => {
 	);
 	assert.deepEqual(store.remainingIndexes(), []);
 	assert.equal(store.uploadMarkerExists(), false);
+});
+
+test("uploading reads a bounded cursor batch with at most one extra chunk", async () => {
+	const chunks = new Map(Array.from({ length: 50 }, (_, index) => [index, {
+		...chunk(index), payload: { version: 1, samples: [{ padding: "x".repeat(190_000) }] },
+	}]));
+	let marker = true;
+	const pageReads = [];
+	const batches = [];
+	const store = {
+		listReadyTraceUploads: async () => marker ? [{ session_id: 99, client_session_id: "client-1" }] : [],
+		listTraceChunks: () => assert.fail("whole-trace read is forbidden"),
+		async readTraceChunkBatch(_sessionId, takeChunk) {
+			let reads = 0;
+			for (const value of chunks.values()) {
+				reads += 1;
+				if (!takeChunk(value)) { pageReads.push(reads); return { hasMore: true }; }
+			}
+			pageReads.push(reads);
+			return { hasMore: false };
+		},
+		async deleteTraceChunks(_sessionId, indexes) { for (const index of indexes) chunks.delete(index); },
+		async settleAcknowledgedFinalUpload(_sessionId, indexes) {
+			for (const index of indexes) chunks.delete(index);
+			marker = false;
+		},
+	};
+	const uploader = createPoseTraceUploader({
+		store,
+		csrfToken: "token",
+		fetch: async (_url, { body }) => {
+			assert.ok(new TextEncoder().encode(body).byteLength <= MAX_TRACE_REQUEST_BYTES);
+			const request = JSON.parse(body);
+			batches.push(request.chunks.map((value) => value.chunk_index));
+			return jsonResponse({ accepted_indexes: batches.at(-1), complete: request.complete });
+		},
+	});
+	assert.equal((await uploader.drain()).status, "complete");
+	assert.deepEqual(batches[0], [0, 1]);
+	assert.ok(pageReads.every((reads) => reads <= 3));
+	assert.equal(chunks.size, 0);
+	assert.equal(marker, false);
+});
+
+test("failed HTTP responses report the status and retain every queued frame", async () => {
+	for (const status of [401, 403, 422, 429, 500, 503]) {
+		const store = uploadStore([chunk(0)]);
+		const uploader = createPoseTraceUploader({
+			store,
+			fetch: async () => ({ ok: false, status }),
+			csrfToken: "token",
+		});
+
+		const result = await uploader.drain();
+		assert.equal(result.status, "pending");
+		assert.deepEqual(result.uploads, [{ sessionId: 99, status: "pending", reason: "http", httpStatus: status }]);
+		assert.deepEqual(store.remainingIndexes(), [0]);
+		assert.equal(store.uploadMarkerExists(), true);
+	}
+});
+
+test("a timed-out request reports failure without losing its frames", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const store = uploadStore([chunk(0)]);
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: (_url, { signal }) => new Promise((_resolve, reject) => {
+			signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+		}),
+		csrfToken: "token",
+		requestTimeoutMs: 30_000,
+	});
+
+	const pending = uploader.drain();
+	await new Promise((resolve) => setImmediate(resolve));
+	t.mock.timers.tick(30_000);
+	const result = await pending;
+	assert.equal(result.status, "pending");
+	assert.equal(result.uploads[0].reason, "timeout");
+	assert.deepEqual(store.remainingIndexes(), [0]);
+	assert.equal(store.uploadMarkerExists(), true);
+});
+
+test("one failed upload does not prevent another workout's frames from uploading", async () => {
+	const first = uploadStore([chunk(0)]);
+	const second = uploadStore([chunk(0)]);
+	const store = {
+		listReadyTraceUploads: async () => [
+			{ session_id: 99, client_session_id: "client-1" },
+			{ session_id: 100, client_session_id: "client-2" },
+		],
+		readTraceChunkBatch: (id, takeChunk) => (id === 99 ? first : second).readTraceChunkBatch(99, takeChunk),
+		deleteTraceChunks: (id, indexes) => (id === 99 ? first : second).deleteTraceChunks(99, indexes),
+		settleAcknowledgedFinalUpload: (id, indexes) => (id === 99 ? first : second).settleAcknowledgedFinalUpload(99, indexes),
+	};
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async (_url, { body }) => {
+			if (JSON.parse(body).session_id === 99) throw new TypeError("offline");
+			return jsonResponse({ accepted_indexes: [0], complete: true });
+		},
+		csrfToken: "token",
+	});
+
+	const result = await uploader.drain();
+	assert.equal(result.status, "pending");
+	assert.equal(result.uploads[0].reason, "network");
+	assert.equal(result.uploads[1].status, "uploaded");
+	assert.equal(first.uploadMarkerExists(), true);
+	assert.equal(second.uploadMarkerExists(), false);
 });
 
 test("concurrent drains share one in-flight request", async () => {

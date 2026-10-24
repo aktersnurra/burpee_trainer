@@ -460,6 +460,21 @@ export class SessionRenderer {
 			global.hidden = true;
 			global.classList.add("hidden");
 		}
+		const status = this.root.querySelector("#session-save-status");
+		if (status) {
+			status.textContent = "";
+			status.hidden = true;
+		}
+	}
+
+	renderSavePending(message) {
+		this.clearSaveErrors();
+		const status = this.root.querySelector("#session-save-status");
+		if (status) {
+			status.textContent = message;
+			status.hidden = false;
+		}
+		this.announce(message);
 	}
 
 	renderSaveErrors(reply = {}) {

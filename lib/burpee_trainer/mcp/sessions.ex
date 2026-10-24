@@ -89,24 +89,20 @@ defmodule BurpeeTrainer.Mcp.Sessions do
     end)
   end
 
-  defp validate_bounds(filters) do
-    cond do
-      filters[:min_duration_sec] != nil and filters[:max_duration_sec] != nil and
-          filters.min_duration_sec > filters.max_duration_sec ->
-        {:error, "min_duration_sec must not exceed max_duration_sec"}
+  defp validate_bounds(%{min_duration_sec: minimum, max_duration_sec: maximum})
+       when minimum > maximum,
+       do: {:error, "min_duration_sec must not exceed max_duration_sec"}
 
-      filters[:min_reps] != nil and filters[:max_reps] != nil and
-          filters.min_reps > filters.max_reps ->
-        {:error, "min_reps must not exceed max_reps"}
+  defp validate_bounds(%{min_reps: minimum, max_reps: maximum}) when minimum > maximum,
+    do: {:error, "min_reps must not exceed max_reps"}
 
-      filters[:from] != nil and filters[:before] != nil and
-          DateTime.compare(filters.from, filters.before) != :lt ->
-        {:error, "from must not be after to"}
-
-      true ->
-        :ok
-    end
+  defp validate_bounds(%{from: from, before: before}) do
+    if DateTime.compare(from, before) == :lt,
+      do: :ok,
+      else: {:error, "from must not be after to"}
   end
+
+  defp validate_bounds(_filters), do: :ok
 
   defp context(user, now) do
     case UserTime.context(user, now) do

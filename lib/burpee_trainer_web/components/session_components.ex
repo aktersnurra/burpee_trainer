@@ -333,6 +333,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           </p>
         </section>
 
+        <p id="session-save-status" hidden class="mt-8 text-sm text-[var(--session-muted)]"></p>
         <div
           id="session-save-errors"
           tabindex="-1"

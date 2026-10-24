@@ -72,9 +72,14 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
     {scope, slot, fit, before} = fixture()
 
     too_hard =
-      plan_fixture(scope.user, %{target_reps: 300, target_duration_sec: slot.duration_sec})
+      plan_fixture(scope.user, %{
+        target_reps: div(300 * slot.duration_sec, 1_200),
+        target_duration_sec: slot.duration_sec
+      })
 
-    too_short = plan_fixture(scope.user, %{target_reps: 30, target_duration_sec: 600})
+    too_short =
+      plan_fixture(scope.user, %{target_reps: 30, target_duration_sec: div(slot.duration_sec, 2)})
+
     decide("workout_#{fit.id}", 0.82)
     Req.Test.stub(__MODULE__.Chat, fn _conn -> flunk("the planner LLM was called") end)
 
@@ -83,7 +88,8 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
     assert_received {:decision_request, %{"model" => "typesafe/jev-1.14", "questions" => q}}
     offered = Map.keys(q["workout"]["criteria"])
     assert "workout_#{fit.id}" in offered and "create_new" in offered
-    refute "workout_#{too_hard.id}" in offered or "workout_#{too_short.id}" in offered
+    refute "workout_#{too_hard.id}" in offered
+    refute "workout_#{too_short.id}" in offered
 
     assert {:ok, selection} = Workouts.ensure_home_selection(scope, slot)
     assert selection.plan.id == fit.id

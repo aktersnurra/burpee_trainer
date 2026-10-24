@@ -600,10 +600,12 @@ test("preview sizing waits for a visible non-zero canvas", async () => {
 
 function deferred() {
 	let resolve;
-	const promise = new Promise((resolvePromise) => {
+	let reject;
+	const promise = new Promise((resolvePromise, rejectPromise) => {
 		resolve = resolvePromise;
+		reject = rejectPromise;
 	});
-	return { promise, resolve };
+	return { promise, resolve, reject };
 }
 
 async function settleAsyncWork() {
@@ -703,6 +705,38 @@ function mountedDeferredDetectorTracker(samples = []) {
 		},
 	};
 }
+
+test("detector failure flushes already-sampled poses before reporting tracking lost", async () => {
+	const subject = mountedDeferredDetectorTracker([upright(0)]);
+	let samplesWhenLost;
+	subject.tracker.addEventListener("pose-tracker:status", (event) => {
+		if (event.detail.reason === "detector_error") samplesWhenLost = subject.traceSampleTimes();
+	});
+	await subject.start();
+	subject.estimates[0].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	assert.deepEqual(subject.traceSampleTimes(), []);
+	subject.setNow(100);
+	subject.animationFrames.shift().callback();
+	await settleAsyncWork();
+	subject.estimates[1].reject(new Error("forced detector failure"));
+	await settleAsyncWork();
+	assert.deepEqual(samplesWhenLost, [0]);
+	subject.finish();
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:stop"));
+	assert.deepEqual(subject.traceSampleTimes(), [0]);
+});
+
+test("stopping capture flushes its pending tail exactly once", async () => {
+	const subject = mountedDeferredDetectorTracker([upright(0)]);
+	await subject.start();
+	subject.estimates[0].resolve([{ keypoints: [] }]);
+	await settleAsyncWork();
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:stop"));
+	subject.tracker.dispatchEvent(new CustomEvent("pose-tracker:stop"));
+	subject.finish();
+	assert.deepEqual(subject.traceSampleTimes(), [0]);
+});
 
 test("a pending inference settled while suspended cannot capture or revive its loop", async () => {
 	const subject = mountedDeferredDetectorTracker([

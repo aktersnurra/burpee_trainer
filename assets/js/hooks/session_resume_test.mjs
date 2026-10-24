@@ -30,6 +30,11 @@ function memoryEngine() {
     async all(name) {
       return [...bucket(name).values()].map((value) => structuredClone(value));
     },
+    async readTraceChunkBatch(sessionId, takeChunk) {
+      const chunks = [...bucket("pose_trace_chunks").values()].filter((chunk) => chunk.session_id === sessionId);
+      for (const chunk of chunks) if (!takeChunk(chunk)) return { hasMore: true };
+      return { hasMore: false };
+    },
     async finalizeServerCompletion(sessionId, contentHash, clientSessionId) {
       const chunks = [...bucket("pose_trace_chunks").values()];
       const traceReady = chunks.some((chunk) => chunk.session_id === sessionId);
@@ -95,7 +100,9 @@ test("stale chunks and upload markers for a missing session are not returned for
   });
   await store.finalizeServerCompletion(404, "missing", "missing-client");
 
-  assert.deepEqual(await store.listTraceChunks(41), []);
+  const chunks = [];
+  await store.readTraceChunkBatch(41, (chunk) => { chunks.push(chunk); return true; });
+  assert.deepEqual(chunks, []);
   assert.deepEqual(
     (await store.listReadyTraceUploads()).filter(
       (upload) => upload.session_id === 41,

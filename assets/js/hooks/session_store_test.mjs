@@ -28,6 +28,23 @@ function memoryEngine() {
     async all(name) {
       return [...bucket(name).values()].map((value) => structuredClone(value));
     },
+    async readTraceChunkBatch(sessionId, takeChunk) {
+      const chunks = [...bucket("pose_trace_chunks").values()]
+        .filter((chunk) => chunk.session_id === sessionId)
+        .sort((a, b) => a.chunk_index - b.chunk_index);
+      for (const chunk of chunks) if (!takeChunk(chunk)) return { hasMore: true };
+      return { hasMore: false };
+    },
+    async deleteTraceChunks(sessionId, indexes) {
+      for (const index of indexes) bucket("pose_trace_chunks").delete(normalize([sessionId, index]));
+    },
+    async discardSession(sessionId, contentHash) {
+      bucket("completion_drafts").delete(normalize([sessionId, contentHash]));
+      bucket("trace_uploads").delete(sessionId);
+      for (const [key, chunk] of bucket("pose_trace_chunks")) {
+        if (chunk.session_id === sessionId) bucket("pose_trace_chunks").delete(key);
+      }
+    },
     async finalizeServerCompletion(sessionId, contentHash, clientSessionId) {
       const chunks = [...bucket("pose_trace_chunks").values()];
       const traceReady = chunks.some((chunk) => chunk.session_id === sessionId);
@@ -47,6 +64,12 @@ function memoryEngine() {
       bucket("trace_uploads").delete(sessionId);
     },
   };
+}
+
+async function traceChunks(store, sessionId) {
+  const chunks = [];
+  await store.readTraceChunkBatch(sessionId, (chunk) => { chunks.push(chunk); return true; });
+  return chunks;
 }
 
 function fakeIndexedDbHarness({ oldVersion = 0, initialSchema = [] } = {}) {
@@ -86,7 +109,13 @@ function fakeIndexedDbHarness({ oldVersion = 0, initialSchema = [] } = {}) {
   };
 }
 
+const keyRanges = {
+  bound: (lower, upper) => ({ lower, upper }),
+};
+globalThis.IDBKeyRange = keyRanges;
+
 function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
+  const metrics = { cursorValues: 0, traceGetAll: 0, counts: [] };
   let remainingForcedFailures = failDeleteKey === null ? 0 : 1;
   const storeNames = [
     "completion_drafts",
@@ -120,7 +149,7 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
       throw new Error("version 2 schema must not be replaced");
     },
     transaction(requestedStoreNames, mode) {
-      assert.equal(mode, "readwrite");
+      assert.ok(["readonly", "readwrite"].includes(mode));
       const names = Array.isArray(requestedStoreNames)
         ? requestedStoreNames
         : [requestedStoreNames];
@@ -133,15 +162,40 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
 
       const transaction = {
         error: null,
+        abort() {
+          settled = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
         objectStore(name) {
           assert.equal(names.includes(name), true);
           const values = working.get(name);
 
           return {
             getAll() {
+              if (name === "pose_trace_chunks") {
+                metrics.traceGetAll += 1;
+                throw new Error("whole-store pose getAll is forbidden");
+              }
               return request(() =>
                 [...values.values()].map((value) => structuredClone(value)),
               );
+            },
+            count(range) {
+              metrics.counts.push(range);
+              return request(() => [...values.values()].filter((value) => inRange(value, range)).length);
+            },
+            openCursor(range) {
+              const entries = [...values.values()]
+                .filter((value) => inRange(value, range))
+                .sort((a, b) => a.chunk_index - b.chunk_index);
+              let index = 0;
+              const cursorRequest = { result: undefined, error: null };
+              const advance = () => request(() => index < entries.length ? {
+                get value() { metrics.cursorValues += 1; return structuredClone(entries[index]); },
+                continue() { index += 1; advance(); },
+              } : null, false, cursorRequest);
+              advance();
+              return cursorRequest;
             },
             put(value) {
               return request(() => {
@@ -156,7 +210,11 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
               const normalized = normalize(key);
               return request(
                 () => {
-                  values.delete(normalized);
+                  if (key?.lower) {
+                    for (const [entryKey, value] of values) {
+                      if (inRange(value, key)) values.delete(entryKey);
+                    }
+                  } else values.delete(normalized);
                   return undefined;
                 },
                 failDeleteKey === `${name}:${normalized}` &&
@@ -167,8 +225,13 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
         },
       };
 
-      function request(operation, fail = false) {
-        const indexedDbRequest = { result: undefined, error: null };
+      function inRange(value, range) {
+        return value.session_id === range.lower[0] &&
+          value.chunk_index >= range.lower[1] && value.chunk_index <= range.upper[1];
+      }
+
+      function request(operation, fail = false, existingRequest = null) {
+        const indexedDbRequest = existingRequest || { result: undefined, error: null };
         pending += 1;
         queueMicrotask(() => {
           if (settled) return;
@@ -209,6 +272,7 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
   };
 
   return {
+    metrics,
     indexedDB: {
       open() {
         const request = { result: database, error: null };
@@ -289,7 +353,7 @@ test("trace chunks and ready uploads carry the same server session and client ID
   await store.finalizeServerCompletion(11, "hash-11", "client-11");
 
   assert.deepEqual(
-    (await store.listTraceChunks(11)).map((chunk) => [
+    (await traceChunks(store, 11)).map((chunk) => [
       chunk.session_id,
       chunk.client_session_id,
       chunk.chunk_index,
@@ -305,7 +369,7 @@ test("trace chunks and ready uploads carry the same server session and client ID
 
   await store.deleteTraceChunks(11, [0]);
   assert.deepEqual(
-    (await store.listTraceChunks(11)).map((chunk) => chunk.chunk_index),
+    (await traceChunks(store, 11)).map((chunk) => chunk.chunk_index),
     [2],
   );
 });
@@ -562,6 +626,84 @@ test("a blocked database upgrade rejects instead of hanging forever", async () =
   );
 });
 
+test("a trace batch reads only its session and stops with one-chunk lookahead", async () => {
+  const fake = statefulIndexedDbHarness();
+  for (const [sessionId, index] of [[42, 0], [41, 2], [41, 0], [41, 3], [41, 1]]) {
+    fake.seed("pose_trace_chunks", { session_id: sessionId, chunk_index: index, payload: { frame: index } });
+  }
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  const selected = [];
+  const result = await store.readTraceChunkBatch(41, (chunk) => {
+    if (selected.length === 2) return false;
+    selected.push(chunk.chunk_index);
+    return true;
+  });
+  assert.deepEqual(selected, [0, 1]);
+  assert.deepEqual(result, { hasMore: true });
+  assert.equal(fake.metrics.cursorValues, 3);
+  assert.equal(fake.metrics.traceGetAll, 0);
+  assert.equal(fake.values("pose_trace_chunks").length, 5);
+});
+
+test("a final batch and an empty session report no further chunks", async () => {
+  const fake = statefulIndexedDbHarness();
+  fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: 5, payload: {} });
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  const selected = [];
+  assert.deepEqual(await store.readTraceChunkBatch(41, (chunk) => {
+    selected.push(chunk.chunk_index); return true;
+  }), { hasMore: false });
+  assert.deepEqual(selected, [5]);
+  assert.deepEqual(await store.readTraceChunkBatch(42, () => assert.fail("another session leaked")), { hasMore: false });
+});
+
+test("acknowledged chunk deletion uses exact keys without reading payloads", async () => {
+  const fake = statefulIndexedDbHarness();
+  for (const [sessionId, index] of [[41, 0], [41, 1], [41, 2], [42, 0]]) {
+    fake.seed("pose_trace_chunks", { session_id: sessionId, chunk_index: index, payload: {} });
+  }
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  await store.deleteTraceChunks(41, [0, 2, 2]);
+  assert.deepEqual(fake.values("pose_trace_chunks").map((chunk) => [chunk.session_id, chunk.chunk_index]), [[41, 1], [42, 0]]);
+  assert.equal(fake.metrics.traceGetAll, 0);
+  assert.equal(fake.metrics.cursorValues, 0);
+});
+
+test("a batch predicate failure rejects instead of leaving a stalled cursor", async () => {
+  const fake = statefulIndexedDbHarness();
+  fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: 0, payload: {} });
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  await assert.rejects(store.readTraceChunkBatch(41, () => { throw new Error("forced byte predicate failure"); }), /forced byte predicate failure/);
+  assert.equal(fake.values("pose_trace_chunks").length, 1);
+});
+
+test("aborted acknowledgement deletion preserves every chunk for retry", async () => {
+  const fake = statefulIndexedDbHarness({ failDeleteKey: "pose_trace_chunks:[41,1]" });
+  for (const index of [0, 1]) fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: index, payload: {} });
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  await assert.rejects(store.deleteTraceChunks(41, [0, 1]), /forced transaction abort/);
+  assert.deepEqual(fake.values("pose_trace_chunks").map((chunk) => chunk.chunk_index), [0, 1]);
+  await store.deleteTraceChunks(41, [0, 1]);
+  assert.deepEqual(fake.values("pose_trace_chunks"), []);
+  assert.equal(fake.metrics.traceGetAll, 0);
+});
+
+test("discard removes the exact session range without loading pose payloads", async () => {
+  const fake = statefulIndexedDbHarness();
+  for (const sessionId of [41, 42]) {
+    fake.seed("completion_drafts", { session_id: sessionId, content_hash: "hash" });
+    fake.seed("pose_trace_chunks", { session_id: sessionId, chunk_index: 0, payload: {} });
+    fake.seed("trace_uploads", { session_id: sessionId });
+  }
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  await store.discardSession(41, "hash");
+  for (const name of ["completion_drafts", "pose_trace_chunks", "trace_uploads"]) {
+    assert.deepEqual(fake.values(name).map((value) => value.session_id), [42]);
+  }
+  assert.equal(fake.metrics.traceGetAll, 0);
+  assert.equal(fake.metrics.cursorValues, 0);
+});
+
 test("a discarded session leaves no draft, trace, or upload behind, and touches no other", async () => {
   const store = createSessionStore(memoryEngine());
   for (const id of [11, 12]) {
@@ -574,9 +716,9 @@ test("a discarded session leaves no draft, trace, or upload behind, and touches 
   await store.discardSession(11, "hash-11");
 
   assert.equal(await store.loadDraft({ sessionId: 11, contentHash: "hash-11" }), null);
-  assert.deepEqual(await store.listTraceChunks(11), []);
+  assert.deepEqual(await traceChunks(store, 11), []);
   assert.notEqual(await store.loadDraft({ sessionId: 12, contentHash: "hash-12" }), null);
-  assert.equal((await store.listTraceChunks(12)).length, 2);
+  assert.equal((await traceChunks(store, 12)).length, 2);
   assert.deepEqual(
     (await store.listReadyTraceUploads()).map((upload) => upload.session_id),
     [12],

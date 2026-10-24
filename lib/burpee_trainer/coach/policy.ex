@@ -53,12 +53,18 @@ defmodule BurpeeTrainer.Coach.Policy do
 
       burpee_type = required_burpee_type(week_sessions)
 
+      day_of_week = Date.day_of_week(context.date)
+
       weekend_catch_up? =
-        Date.day_of_week(context.date) in week.catch_up_days and
+        day_of_week in week.catch_up_days and
           remaining_sec >= @catch_up_floor_sec
 
       duration_sec =
-        if weekend_catch_up?, do: remaining_sec, else: min(remaining_sec, @standard_duration_sec)
+        if weekend_catch_up? do
+          catch_up_duration(week.catch_up_days, day_of_week, remaining_sec)
+        else
+          min(remaining_sec, @standard_duration_sec)
+        end
 
       strategy = if weekend_catch_up?, do: :catch_up, else: :standard
 
@@ -89,6 +95,14 @@ defmodule BurpeeTrainer.Coach.Policy do
     else
       _invalid_timezone -> {:error, Error.new(:invalid_timezone)}
     end
+  end
+
+  # Share twenty-minute blocks over the catch-up days still available, rounding today's
+  # share up. Tomorrow is calculated from actual completions, not this suggestion.
+  defp catch_up_duration(catch_up_days, day_of_week, remaining_sec) do
+    days_left = Enum.count(catch_up_days, &(&1 >= day_of_week))
+    blocks_today = ceil(remaining_sec / (days_left * @standard_duration_sec))
+    min(remaining_sec, blocks_today * @standard_duration_sec)
   end
 
   defp completed_sessions(user_id, now) do

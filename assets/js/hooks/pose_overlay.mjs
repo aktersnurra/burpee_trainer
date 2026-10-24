@@ -23,7 +23,7 @@ export function resizePoseCanvas(
 	canvas.getContext("2d").setTransform(scale, 0, 0, scale, 0, 0);
 }
 
-export function drawPoseOverlay(canvas, pose, video, ink = poseOverlayInk()) {
+export function drawPoseOverlay(canvas, pose, video, ink = "#BFFF00") {
 	const context = canvas.getContext("2d");
 	const rect = canvas.getBoundingClientRect();
 	context.clearRect(0, 0, rect.width, rect.height);
@@ -36,8 +36,9 @@ export function drawPoseOverlay(canvas, pose, video, ink = poseOverlayInk()) {
 	context.save();
 	context.scale(-1, 1);
 	context.translate(-rect.width, 0);
-	context.lineWidth = 3;
-	context.strokeStyle = ink;
+	// Two-tone marks stay distinct from both bright and dark camera backgrounds.
+	context.lineCap = "round";
+	context.lineJoin = "round";
 
 	for (const [aName, bName] of EDGES) {
 		const a = points.get(aName);
@@ -47,6 +48,11 @@ export function drawPoseOverlay(canvas, pose, video, ink = poseOverlayInk()) {
 		context.beginPath();
 		context.moveTo(scaleX(a.x, video, rect), scaleY(a.y, video, rect));
 		context.lineTo(scaleX(b.x, video, rect), scaleY(b.y, video, rect));
+		context.lineWidth = 7;
+		context.strokeStyle = "#101820";
+		context.stroke();
+		context.lineWidth = 3;
+		context.strokeStyle = ink;
 		context.stroke();
 	}
 
@@ -63,18 +69,12 @@ export function drawPoseOverlay(canvas, pose, video, ink = poseOverlayInk()) {
 			Math.PI * 2,
 		);
 		context.fill();
+		context.lineWidth = 2;
+		context.strokeStyle = "#101820";
+		context.stroke();
 	}
 
 	context.restore();
-}
-
-function poseOverlayInk() {
-	return (
-		globalThis
-			.getComputedStyle?.(globalThis.document?.documentElement)
-			.getPropertyValue("--color-base-content")
-			.trim() || "#20201D"
-	);
 }
 
 function visible(point) {

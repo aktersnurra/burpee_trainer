@@ -663,13 +663,7 @@ const SessionHook = {
   },
 
   renderStoragePending() {
-    this.renderer.renderSaveErrors({
-      status: "pending",
-      field_errors: {},
-      global_errors: [
-        "Session saved. Finalizing local evidence—stay on this page.",
-      ],
-    });
+    this.renderer.renderSavePending("Session saved. Finishing up…");
   },
 
   renderStorageFailure(message) {

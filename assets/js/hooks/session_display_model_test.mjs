@@ -307,6 +307,21 @@ test("terminal explicit work duration leaves no trailing recovery frame", () => 
 	assert.equal(currentFrame(timeline, 38), null);
 });
 
+test("the completed timeline shows zero remaining and a full fill during final-rep grace", () => {
+	const timeline = [{ kind: "work", reps: 2, sec_per_rep: 4 }];
+	const model = runningDisplayModel({
+		timeline,
+		frame: currentFrame(timeline, 8),
+		timeLeftSec: 0,
+		sessionProgress: 1,
+		totalDone: 2,
+	});
+
+	assert.equal(model.primaryCount, 0);
+	assert.deepEqual(model.visual, { state: "work_active", progress: 1, pulse: null });
+	assert.equal(model.sessionProgress, 1);
+});
+
 test("the exact rest boundary enters work at zero per-rep progress", () => {
 	const boundarySec = 54;
 	const finalRestFrame = currentFrame(threeSetTimeline, boundarySec - 0.001);

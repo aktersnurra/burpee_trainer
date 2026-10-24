@@ -124,6 +124,27 @@ defmodule BurpeeTrainerWeb.Layouts do
       ]} />
     <% end %>
 
+    <aside
+      :if={@current_scope}
+      id="pose-upload-status"
+      phx-update="ignore"
+      hidden
+      role="status"
+      aria-live="polite"
+      aria-label="Pose uploads"
+      class="session-surface fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-[80] mx-auto max-w-xl rounded-2xl border border-[var(--session-border)] bg-[var(--session-bg)] px-4 py-3 text-sm text-[var(--session-ink)] shadow-lg"
+    >
+      <span id="pose-upload-message"></span>
+      <button
+        id="pose-upload-retry"
+        type="button"
+        hidden
+        class="mt-1 min-h-11 px-2 font-medium underline underline-offset-4"
+      >
+        Retry pose upload
+      </button>
+    </aside>
+
     <.flash_group :if={@flash?} flash={@flash} />
     """
   end

@@ -12,10 +12,7 @@ import SessionCompleted from "./hooks/session_completed.mjs";
 import VideoHook from "./hooks/video_hook";
 import PoseDebug from "./hooks/pose_debug";
 import PoseTraceButton from "./hooks/pose_trace_button";
-import {
-	canDrainPoseTraces,
-	createPoseTraceUploader,
-} from "./hooks/pose_trace_uploader.mjs";
+import { startPoseTraceSync } from "./hooks/pose_trace_sync.mjs";
 import { openSessionStore } from "./hooks/session_store.mjs";
 
 export function startApp(PoseTracker) {
@@ -39,34 +36,22 @@ export function startApp(PoseTracker) {
 		},
 	});
 
-	const traceUploaderReady = openSessionStore().then((store) =>
-		createPoseTraceUploader({
-			store,
-			fetch: window.fetch.bind(window),
-			csrfToken,
-		}),
-	);
-	const drainPoseTraces = () => {
-		if (!canDrainPoseTraces(document)) return;
-
-		void traceUploaderReady
-			.then((uploader) => uploader.drain())
-			.catch(() => undefined);
-	};
-
-	window.addEventListener("online", drainPoseTraces);
-	window.addEventListener("burpee:trace-upload-ready", drainPoseTraces);
+	startPoseTraceSync({
+		documentRoot: document,
+		windowRoot: window,
+		openStore: openSessionStore,
+		fetch: window.fetch.bind(window),
+		csrfToken: () => document.querySelector("meta[name='csrf-token']").getAttribute("content"),
+	});
 
 	topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
 	window.addEventListener("phx:page-loading-start", (_info) => topbar.show(300));
 	window.addEventListener("phx:page-loading-stop", (_info) => {
 		topbar.hide();
-		drainPoseTraces();
 	});
 
 	registerHomeChooserFeedback();
 	liveSocket.connect();
-	drainPoseTraces();
 	window.liveSocket = liveSocket;
 
 	if (process.env.NODE_ENV === "development") {

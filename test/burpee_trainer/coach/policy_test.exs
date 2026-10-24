@@ -56,15 +56,58 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
              Policy.required_slot(Scope.for_user(user), ~U[2025-09-08 00:00:00Z])
   end
 
-  test "weekend catch-up covers the full remainder at 2,400 seconds and is never exploration" do
+  test "Saturday splits a 2,400 second remainder and is never exploration" do
     user = user_fixture() |> provision_timezone("Etc/UTC")
     complete(user, ~U[2025-09-01 12:00:00Z], 2_400)
 
     assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-06 12:00:00Z])
-    assert slot.duration_sec == 2_400
+    assert slot.duration_sec == 1_200
     assert slot.remaining_sec == 2_400
     assert slot.strategy == :catch_up
     refute slot.exploration_allowed?
+  end
+
+  test "Saturday shares the remaining twenty-minute blocks with Sunday, taking the larger share" do
+    for {completed_sec, saturday_sec, sunday_sec} <- [
+          {0, 2_400, 2_400},
+          {1_200, 2_400, 1_200},
+          {2_400, 1_200, 1_200}
+        ] do
+      user = user_fixture() |> provision_timezone("Etc/UTC")
+      if completed_sec > 0, do: complete(user, ~U[2025-09-01 12:00:00Z], completed_sec)
+      scope = Scope.for_user(user)
+
+      assert {:ok, saturday} = Policy.required_slot(scope, ~U[2025-09-06 12:00:00Z])
+      assert saturday.duration_sec == saturday_sec
+      assert saturday.remaining_sec == saturday_sec + sunday_sec
+
+      complete(user, ~U[2025-09-06 13:00:00Z], saturday_sec)
+      assert {:ok, sunday} = Policy.required_slot(scope, ~U[2025-09-07 12:00:00Z])
+      assert sunday.duration_sec == sunday_sec
+      assert sunday.remaining_sec == sunday_sec
+    end
+  end
+
+  test "Sunday recalculates from actual Saturday training, not the planned share" do
+    user = user_fixture() |> provision_timezone("Etc/UTC")
+    complete(user, ~U[2025-09-01 12:00:00Z], 1_200)
+    scope = Scope.for_user(user)
+
+    assert {:ok, %{duration_sec: 2_400}} =
+             Policy.required_slot(scope, ~U[2025-09-06 12:00:00Z])
+
+    complete(user, ~U[2025-09-06 13:00:00Z], 1_200)
+
+    assert {:ok, %{duration_sec: 2_400, remaining_sec: 2_400}} =
+             Policy.required_slot(scope, ~U[2025-09-07 12:00:00Z])
+  end
+
+  test "Sunday can still use the full remainder if Saturday was skipped" do
+    user = user_fixture() |> provision_timezone("Etc/UTC")
+    complete(user, ~U[2025-09-01 12:00:00Z], 1_200)
+
+    assert {:ok, %{duration_sec: 3_600, remaining_sec: 3_600}} =
+             Policy.required_slot(Scope.for_user(user), ~U[2025-09-07 12:00:00Z])
   end
 
   test "PB uses same-type prescribed 20-minute completed sessions in the trailing six weeks" do
@@ -285,7 +328,7 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
       assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2026-10-10 09:00:00Z])
       assert slot.weekly_target_sec == 4_800
       assert slot.strategy == :catch_up
-      assert slot.duration_sec == 4_800
+      assert slot.duration_sec == 2_400
     end
 
     property "slots never exceed the remainder, and the sign-up week has no catch-up" do

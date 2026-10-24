@@ -256,6 +256,46 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Jason.decode!(json) == chunk(0)["payload"]
   end
 
+  test "real recorded pose frames survive a JSON upload and an exact retry", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+
+    samples =
+      "assets/js/hooks/fixtures/pose_burpee_session_140_reps.json.gz"
+      |> File.read!()
+      |> :zlib.gunzip()
+      |> Jason.decode!()
+      |> Map.fetch!("samples")
+      |> Enum.take(10)
+
+    recorded = %{
+      "segment" => "main",
+      "chunk_index" => 0,
+      "started_at_ms" => hd(samples)["tMs"],
+      "ended_at_ms" => List.last(samples)["tMs"],
+      "sample_count" => length(samples),
+      "payload" => %{"version" => 1, "samples" => samples}
+    }
+
+    body =
+      upload_payload(session.id, session.client_session_id, [recorded], true) |> Jason.encode!()
+
+    for _attempt <- 1..2 do
+      response =
+        conn
+        |> recycle()
+        |> authenticated_json(user)
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/session-pose-traces", body)
+
+      assert json_response(response, 200) == %{"accepted_indexes" => [0], "complete" => true}
+    end
+
+    assert [%PoseTraceChunk{payload_json: payload, sample_count: 10}] = Repo.all(PoseTraceChunk)
+    assert Jason.decode!(payload)["samples"] == samples
+    assert Repo.one!(PoseCaptureRun).status == :completed
+  end
+
   defp completed_session(user) do
     plan = plan_fixture(user)
     {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())

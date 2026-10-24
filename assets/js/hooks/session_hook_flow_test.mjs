@@ -268,6 +268,7 @@ function appendStablePanels(root) {
 		["workout_session_burpee_type", "input", ""],
 		["session-completion-form", "form", ""],
 		["session-save-btn", "button", "Save session"],
+		["session-save-status", "p", ""],
 		["session-save-errors", "div", ""],
 		["session-live-status", "div", ""],
 		["completion-reps-error", "p", ""],
@@ -290,7 +291,7 @@ function appendStablePanels(root) {
 			element.setAttribute("inert", "");
 		}
 		if (id === "workout_session_burpee_type") element.value = "six_count";
-		if (id.endsWith("-error") || id === "session-save-errors") {
+		if (id.endsWith("-error") || id === "session-save-errors" || id === "session-save-status") {
 			element.hidden = true;
 		}
 		let panelId = "session-completion-review";
@@ -3229,9 +3230,11 @@ test("successful Save keeps the real completion panel accessible while every loc
 				false,
 			);
 			const saveErrors = ctx.el.querySelector("#session-save-errors");
-			assert.equal(saveErrors.hidden, false);
-			assert.equal(saveErrors.classList.contains("hidden"), false);
-			assert.match(saveErrors.textContent, /Finalizing local evidence/);
+			const saveStatus = ctx.el.querySelector("#session-save-status");
+			assert.equal(saveErrors.hidden, true);
+			assert.equal(saveErrors.textContent, "");
+			assert.equal(saveStatus.hidden, false);
+			assert.match(saveStatus.textContent, /Session saved\. Finishing up/);
 
 			settlePending(
 				pendingStep === "finalize" ? { traceReady: true } : undefined,
@@ -3306,6 +3309,7 @@ test("successful Save keeps real completion evidence and errors visible when any
 			assert.equal(saveErrors.hidden, false);
 			assert.equal(saveErrors.classList.contains("hidden"), false);
 			assert.match(saveErrors.textContent, /local evidence is still pending/);
+			assert.equal(ctx.el.querySelector("#session-save-status").hidden, true);
 			assert.equal(ctx.traceRetentionAvailable, false);
 			assert.ok(ctx.inMemoryCompletionDraft);
 		} finally {

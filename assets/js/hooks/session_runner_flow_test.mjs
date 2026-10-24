@@ -98,6 +98,7 @@ function statefulIndexedDbHarness() {
 					return {
 						getAll: () =>
 							request(() => [...values.values()].map((value) => structuredClone(value))),
+						count: (range) => request(() => [...values.values()].filter((value) => value.session_id === range.lower[0]).length),
 						put: (value) =>
 							request(() => {
 								values.set(normalize(keyFor(name, value)), structuredClone(value));
@@ -204,7 +205,7 @@ function runnerHarness(store) {
 		traceRetentionAvailable: true,
 		renderer: {
 			renderFlowState() {}, renderCompletion() {}, clearSaveErrors() {},
-			renderSaveErrors() {}, clearCountdown() {}, updateTotalCounter() {},
+			renderSaveErrors() {}, renderSavePending() {}, clearCountdown() {}, updateTotalCounter() {},
 			updateTotalGoal() {}, renderTimer() {}, enterWorkPhase() {}, triggerDown() {},
 			updateCurrentSetRepCount() {}, updateWorkFill() {}, enterRestPhase() {},
 			renderRestProgress() {}, updatePauseButton() {}, resetAbort() {},
@@ -242,7 +243,9 @@ test("a compiler-produced program runs through SessionHook countdown, rests, com
 	globalThis.window = { dispatchEvent() {}, location: { assign() {} } };
 
 	try {
-		const store = await openSessionStore(statefulIndexedDbHarness().indexedDB);
+		const store = await openSessionStore(statefulIndexedDbHarness().indexedDB, {
+			bound: (lower, upper) => ({ lower, upper }),
+		});
 		const { context, renderedModels } = runnerHarness(store);
 		context.queueTraceChunk({ chunk_index: 0, payload: { sample: "evidence" } });
 		await context.traceWrite;

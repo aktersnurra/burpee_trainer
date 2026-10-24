@@ -55,7 +55,7 @@ export function runningDisplayModel({
 						? formatClock(remainingSec)
 						: isWork
 							? Math.max((event?.reps || 0) - doneInEvent, 0)
-							: (event?.reps ?? totalTarget ?? "—"),
+							: 0,
 		countdownDots: null,
 		restTimeLeftSec: isRest ? remainingSec : recoveryRemainingSec,
 		setProgress:
@@ -72,8 +72,9 @@ export function runningDisplayModel({
 function visualStateForFrame({ isRest, isWork, remainingSec, frame }) {
 	if (isWork) return workVisualState(frame);
 
+	// The timeline has ended, but the camera may still be settling its final rep.
 	if (!isRest) {
-		return { state: "work_active", progress: 0, activeRatio: 1, pulse: null };
+		return { state: "work_active", progress: 1, pulse: null };
 	}
 
 	if (remainingSec > 3) {

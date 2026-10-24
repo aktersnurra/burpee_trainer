@@ -371,6 +371,7 @@ export function createPoseTracker(hook, runtime = {}) {
 					return;
 				}
 				running = false;
+				flushCapture();
 				markLost("detector_error");
 				releaseResources();
 				return;
@@ -445,16 +446,15 @@ export function createPoseTracker(hook, runtime = {}) {
 		scheduleNextFrame();
 	}
 
-	function finish(event) {
-		if (!running) return;
-		const elapsedMs = startedAt === null ? 0 : now() - startedAt;
-		const flushed = flushPoseCaptureRecorder(captureRecorder, {
-			reason: "finish",
-			nowMs: elapsedMs,
-		});
+	function flushCapture() {
+		const flushed = flushPoseCaptureRecorder(captureRecorder);
 		captureRecorder = flushed.state;
 		flushed.chunks.forEach(dispatchCaptureChunk);
+	}
 
+	function finish(event) {
+		flushCapture();
+		if (!running) return;
 		try {
 			dispatchLocal(
 				"pose-tracker:finished",
@@ -470,6 +470,7 @@ export function createPoseTracker(hook, runtime = {}) {
 	}
 
 	function stop() {
+		flushCapture();
 		startGeneration += 1;
 		running = false;
 		suspended = false;

@@ -43,11 +43,8 @@ export function createSessionStore(engine) {
       });
     },
 
-    async listTraceChunks(sessionId) {
-      const chunks = await engine.all(CHUNKS);
-      return chunks
-        .filter((chunk) => chunk.session_id === sessionId)
-        .sort((left, right) => left.chunk_index - right.chunk_index);
+    readTraceChunkBatch(sessionId, takeChunk) {
+      return engine.readTraceChunkBatch(sessionId, takeChunk);
     },
 
     async listReadyTraceUploads() {
@@ -55,16 +52,8 @@ export function createSessionStore(engine) {
       return uploads.sort((left, right) => left.session_id - right.session_id);
     },
 
-    async deleteTraceChunks(sessionId, indexes) {
-      const chunks = await this.listTraceChunks(sessionId);
-      const selected = new Set(indexes);
-      await Promise.all(
-        chunks
-          .filter((chunk) => selected.has(chunk.chunk_index))
-          .map((chunk) =>
-            engine.delete(CHUNKS, [chunk.session_id, chunk.chunk_index]),
-          ),
-      );
+    deleteTraceChunks(sessionId, indexes) {
+      return engine.deleteTraceChunks(sessionId, indexes);
     },
 
     async settleAcknowledgedFinalUpload(sessionId, acceptedIndexes) {
@@ -72,26 +61,22 @@ export function createSessionStore(engine) {
     },
 
     // The server deleted the session; nothing of it should be resumed or uploaded.
-    async discardSession(sessionId, contentHash) {
-      const chunks = await this.listTraceChunks(sessionId);
-      await Promise.all([
-        engine.delete(DRAFTS, [sessionId, contentHash]),
-        engine.delete(UPLOADS, sessionId),
-        ...chunks.map((chunk) =>
-          engine.delete(CHUNKS, [chunk.session_id, chunk.chunk_index]),
-        ),
-      ]);
+    discardSession(sessionId, contentHash) {
+      return engine.discardSession(sessionId, contentHash);
     },
   };
 }
 
-export async function openSessionStore(indexedDB = globalThis.indexedDB) {
+export async function openSessionStore(
+  indexedDB = globalThis.indexedDB,
+  keyRanges = globalThis.IDBKeyRange,
+) {
   if (!indexedDB) {
     throw new Error("IndexedDB is unavailable");
   }
 
   const database = await openDatabase(indexedDB);
-  return createSessionStore(indexedDbEngine(database));
+  return createSessionStore(indexedDbEngine(database, keyRanges));
 }
 
 function openDatabase(indexedDB) {
@@ -140,21 +125,34 @@ function openDatabase(indexedDB) {
   });
 }
 
-function indexedDbEngine(database) {
-  const run = (storeName, mode, operation) =>
-    new Promise((resolve, reject) => {
-      const transaction = database.transaction(storeName, mode);
-      const store = transaction.objectStore(storeName);
-      const request = operation(store);
-      let result;
+function indexedDbEngine(database, keyRanges) {
+  const traceRange = (sessionId) =>
+    keyRanges.bound([sessionId, 0], [sessionId, Number.MAX_SAFE_INTEGER]);
 
-      request.onsuccess = () => {
-        result = request.result;
+  // Every result waits for transaction commit, not merely request success.
+  const transact = (stores, mode, work) =>
+    new Promise((resolve, reject) => {
+      const transaction = database.transaction(stores, mode);
+      let result;
+      const fail = (error) => {
+        transaction.abort();
+        reject(error);
       };
-      request.onerror = () => reject(request.error);
       transaction.oncomplete = () => resolve(result ?? null);
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => undefined;
+      transaction.onabort = () =>
+        reject(transaction.error || new Error("Session storage transaction aborted"));
+      try {
+        work(transaction, (value) => { result = value; }, fail);
+      } catch (error) {
+        fail(error);
+      }
+    });
+
+  const run = (store, mode, operation) =>
+    transact(store, mode, (transaction, complete) => {
+      const request = operation(transaction.objectStore(store));
+      request.onsuccess = () => complete(request.result);
     });
 
   return {
@@ -170,57 +168,62 @@ function indexedDbEngine(database) {
     all(store) {
       return run(store, "readonly", (objectStore) => objectStore.getAll());
     },
+    readTraceChunkBatch(sessionId, takeChunk) {
+      return transact(CHUNKS, "readonly", (transaction, complete, fail) => {
+        const request = transaction.objectStore(CHUNKS).openCursor(traceRange(sessionId));
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) {
+            complete({ hasMore: false });
+            return;
+          }
+          try {
+            // The caller's synchronous byte/count predicate stops with one lookahead.
+            if (takeChunk(cursor.value)) cursor.continue();
+            else complete({ hasMore: true });
+          } catch (error) {
+            fail(error);
+          }
+        };
+      });
+    },
+    deleteTraceChunks(sessionId, indexes) {
+      return transact(CHUNKS, "readwrite", (transaction) => {
+        deleteChunkKeys(transaction.objectStore(CHUNKS), sessionId, indexes);
+      });
+    },
+    discardSession(sessionId, contentHash) {
+      return transact([DRAFTS, CHUNKS, UPLOADS], "readwrite", (transaction) => {
+        transaction.objectStore(DRAFTS).delete([sessionId, contentHash]);
+        transaction.objectStore(CHUNKS).delete(traceRange(sessionId));
+        transaction.objectStore(UPLOADS).delete(sessionId);
+      });
+    },
     finalizeServerCompletion(sessionId, contentHash, clientSessionId) {
-      return new Promise((resolve, reject) => {
-        const transaction = database.transaction(
-          [DRAFTS, CHUNKS, UPLOADS],
-          "readwrite",
-        );
-        let traceReady = false;
-        const chunksRequest = transaction.objectStore(CHUNKS).getAll();
-
-        chunksRequest.onsuccess = () => {
-          traceReady = chunksRequest.result.some(
-            (chunk) => chunk.session_id === sessionId,
-          );
-
+      return transact([DRAFTS, CHUNKS, UPLOADS], "readwrite", (transaction, complete) => {
+        const request = transaction.objectStore(CHUNKS).count(traceRange(sessionId));
+        request.onsuccess = () => {
+          const traceReady = request.result > 0;
           if (traceReady) {
             transaction.objectStore(UPLOADS).put({
               session_id: sessionId,
               client_session_id: clientSessionId,
             });
           }
-
           transaction.objectStore(DRAFTS).delete([sessionId, contentHash]);
+          complete({ traceReady });
         };
-        transaction.oncomplete = () => resolve({ traceReady });
-        transaction.onerror = () => undefined;
-        transaction.onabort = () =>
-          reject(
-            transaction.error || new Error("Session finalization aborted"),
-          );
       });
     },
     settleAcknowledgedFinalUpload(sessionId, acceptedIndexes) {
-      return new Promise((resolve, reject) => {
-        const transaction = database.transaction(
-          [CHUNKS, UPLOADS],
-          "readwrite",
-        );
-        const chunkStore = transaction.objectStore(CHUNKS);
-
-        for (const index of new Set(acceptedIndexes)) {
-          chunkStore.delete([sessionId, index]);
-        }
+      return transact([CHUNKS, UPLOADS], "readwrite", (transaction) => {
+        deleteChunkKeys(transaction.objectStore(CHUNKS), sessionId, acceptedIndexes);
         transaction.objectStore(UPLOADS).delete(sessionId);
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => undefined;
-        transaction.onabort = () =>
-          reject(
-            transaction.error || new Error("Trace upload settlement aborted"),
-          );
       });
     },
   };
+}
+
+function deleteChunkKeys(store, sessionId, indexes) {
+  for (const index of new Set(indexes)) store.delete([sessionId, index]);
 }

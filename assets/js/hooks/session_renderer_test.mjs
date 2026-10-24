@@ -162,6 +162,7 @@ function harness() {
 		"#session-begin-conflict-message": element(),
 		"#session-begin-conflict-resolve": element(),
 		"#session-completion-review [data-session-heading]": element(),
+		"#session-save-status": element(),
 		"#session-save-errors": element(),
 		"#completion-reps-error": element(),
 		"#completion-note-error": element(),
@@ -217,6 +218,31 @@ test("completion save controls keep icons while announcing save, pending and ret
 	assert.equal(save.dataset.localOnly, "true");
 	assert.equal(save.hasAttribute("disabled"), false);
 	assert.equal(save.children.length, 2);
+});
+
+test("save progress is separate from errors and is cleared on failure or retry", () => {
+	const { renderer, elements } = harness();
+	const status = elements["#session-save-status"];
+	const errors = elements["#session-save-errors"];
+	const message = "Session saved. Finishing up…";
+
+	renderer.renderSaveErrors({ global_errors: ["Previous failure"] });
+	renderer.renderSavePending(message);
+	assert.equal(errors.hidden, true);
+	assert.equal(errors.textContent, "");
+	assert.equal(status.hidden, false);
+	assert.equal(status.textContent, message);
+	assert.equal(elements["#session-live-status"].textContent, message);
+
+	renderer.renderSaveErrors({ global_errors: ["Could not finish saving"] });
+	assert.equal(status.hidden, true);
+	assert.equal(errors.hidden, false);
+	assert.equal(errors.textContent, "Could not finish saving");
+
+	renderer.renderSavePending(message);
+	renderer.clearSaveErrors();
+	assert.equal(status.hidden, true);
+	assert.equal(status.textContent, "");
 });
 
 test("validation for removed fields is visible instead of silently blocking Save", () => {

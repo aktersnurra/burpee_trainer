@@ -54,7 +54,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   the last third was than the first (0.08 is 8%); pace_delta_sec and recovery_delta_sec: \
   median seconds slower than planned between reps and across rests. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
-  a longer weekend session that makes up missed minutes; completed_sec, remaining_sec and \
+  today's share of missed minutes across the remaining weekend days; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time.
   """
 
