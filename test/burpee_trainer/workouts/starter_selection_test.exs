@@ -24,10 +24,12 @@ defmodule BurpeeTrainer.Workouts.StarterSelectionTest do
     end
   end
 
-  test "a user with a completed session keeps the Steady 10 fallback", %{user: user} do
+  test "completing a workout does not downgrade the fallback to a short session", %{user: user} do
     session_from_plan_fixture(user, plan_fixture(user))
     {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
     {:ok, selection} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    assert %{origin: :built_in, name: "Built-in Steady 10"} = selection.plan
+    assert selection.plan.origin == :built_in
+    assert selection.plan.burpee_type == slot.burpee_type
+    assert selection.plan.target_duration_sec == 1200
   end
 end

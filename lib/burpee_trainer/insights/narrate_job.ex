@@ -28,6 +28,7 @@ defmodule BurpeeTrainer.Insights.NarrateJob do
          scope = Scope.for_user(user),
          %{state: :completed} = session <- Workouts.get_session(scope, session_id),
          {:ok, _} <- Narrator.narrate(scope, session) do
+      BurpeeTrainer.Home.broadcast_changed(scope)
       :ok
     else
       nil -> {:cancel, :session_not_owned}

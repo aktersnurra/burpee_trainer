@@ -6,6 +6,43 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   alias BurpeeTrainerWeb.Fmt
   alias Phoenix.LiveView.JS
 
+  attr(:decisions, :map, required: true)
+
+  def recent_performance(assigns) do
+    ~H"""
+    <section :if={@decisions != %{}} aria-label="Recent comparable training" class="my-5">
+      <p class="mb-2 text-sm opacity-60">Recent reps per 20 minutes</p>
+      <dl class="grid grid-cols-2 gap-4">
+        <div
+          :for={type <- [:six_count, :navy_seal]}
+          id={"progress-pace-#{type}"}
+          data-reps-per-20={@decisions[type].baseline_reps_per_20}
+          class="rounded-xl border border-current/10 p-3"
+        >
+          <dt class="text-sm opacity-70">{Fmt.burpee_type(type)}</dt>
+          <dd :if={is_nil(@decisions[type].baseline_reps_per_20)} class="mt-1 text-sm opacity-60">
+            No comparable sessions yet
+          </dd>
+          <dd :if={not is_nil(@decisions[type].baseline_reps_per_20)} class="mt-1">
+            <span class="text-2xl font-semibold tabular-nums">{@decisions[type].baseline_reps_per_20}</span>
+            <span :if={@decisions[type].previous_reps_per_20} class="mt-1 block text-xs opacity-60">
+              {pace_change(@decisions[type])} vs previous
+            </span>
+          </dd>
+        </div>
+      </dl>
+      <p class="sr-only">
+        Same movement, completed sessions from the last eight weeks. Rates use at least twenty minutes and retain planned time for early finishes.
+      </p>
+    </section>
+    """
+  end
+
+  defp pace_change(decision) do
+    delta = decision.baseline_reps_per_20 - decision.previous_reps_per_20
+    if delta > 0, do: "+#{delta}", else: to_string(delta)
+  end
+
   # Where the chart's top (each type's goal) and bottom lines sit, in percent of its height.
   @plot_top 12
   @plot_bottom 88
@@ -43,6 +80,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             <span aria-hidden="true">{@state.history_streak}</span>
           </span>
         </div>
+        <.recent_performance decisions={@state.history_performance} />
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>

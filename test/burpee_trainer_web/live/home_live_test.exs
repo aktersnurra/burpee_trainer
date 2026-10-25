@@ -276,7 +276,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
-  test "alternative rows carry real plan and video metadata without changing direct selection", %{
+  test "alternative rows carry real metadata and review before use or video start", %{
     conn: conn,
     user: user
   } do
@@ -301,6 +301,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            )
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
+    view |> element("#home-swap-confirm") |> render_click()
     assert has_element?(view, "#home-summary", plan.name)
     assert has_element?(view, "#home-alternatives-panel[hidden]")
     assert Repo.aggregate(WorkoutSession, :count) == 0
@@ -317,6 +318,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-alternative-video-#{unknown.id}")
     assert has_element?(view, "#home-summary", plan.name)
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
+    view |> element("#home-swap-confirm") |> render_click()
     session = Workouts.current_started_session(Scope.for_user(user))
     assert session.workout_video_id == video.id
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{session.id}")
@@ -392,7 +394,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert [
              ["set_attr", %{"attr" => ["hidden", ""], "to" => "#home-alternatives-panel"}],
              ["remove_attr", %{"attr" => "inert"}],
-             ["push", %{"event" => "select_alternative"}]
+             ["push", %{"event" => "preview_alternative"}]
            ] = Jason.decode!(selection)
   end
 
@@ -861,8 +863,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
-    assert has_element?(view, "#home-new-saved", "Confirmed adjustment")
-    assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
+    assert has_element?(view, "#home-summary", "Confirmed adjustment")
+    assert {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
+    refute selected.plan.id == original.plan.id
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
   end
 

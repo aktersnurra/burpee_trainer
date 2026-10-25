@@ -38,6 +38,28 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert hero_focus_target(view) == "#home-summary"
   end
 
+  test "New starts with the current workout's targets without pinning its movement pace", %{
+    conn: conn,
+    user: user,
+    selected: selected
+  } do
+    plan =
+      plan_fixture(user, %{burpee_type: "navy_seal", target_reps: 60, target_duration_sec: 1200})
+
+    {:ok, chosen} = Workouts.select_home_workout(Scope.for_user(user), selected, plan.id)
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-new-workout") |> render_click()
+
+    assert has_element?(view, "#home-pill-burpee_type-navy_seal[aria-pressed=true]")
+    assert has_element?(view, "#home-new-reps[value='60']")
+    assert has_element?(view, "#home_workout_duration[value='20:00']")
+    refute has_element?(view, "#home_workout_pace[value]:not([value=''])")
+
+    assert {:ok, ^chosen} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+  end
+
   test "New fields name their units beside the value", %{view: view} do
     view |> element("#home-summary") |> render_click()
     view |> element("#home-new-workout") |> render_click()
@@ -118,7 +140,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     end
   end
 
-  test "New reviews without a plan, approval publishes unselected, then Start completes into History",
+  test "New reviews without a plan, Use saves and selects, then Start completes into History",
        %{
          view: view,
          user: user,
@@ -142,7 +164,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
-    assert has_element?(view, "#home-new-saved")
+    refute has_element?(view, "#home-new-saved")
+    assert has_element?(view, "#home-action")
+    assert Repo.aggregate(WorkoutSession, :count) == 0
 
     [saved] =
       Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == layout["name"]))
@@ -153,10 +177,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert {:ok, unchanged} =
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
-    assert unchanged.plan.id == selected.plan.id
+    assert unchanged.plan.id == saved.id
+    refute unchanged.plan.id == selected.plan.id
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-
-    view |> element("#home-new-select") |> render_click()
 
     [token] =
       view
@@ -252,7 +275,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "##{group_id}[aria-expanded=true]")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
 
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-save") |> render_click()
     render_async(view)
 
     [saved] =

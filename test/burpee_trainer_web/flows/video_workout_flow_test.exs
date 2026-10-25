@@ -11,8 +11,11 @@ defmodule BurpeeTrainerWeb.Flows.VideoWorkoutFlowTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     render_click(view, "tab", %{"tab" => "videos"})
 
+    view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
+    assert Repo.aggregate(WorkoutSession, :count) == 0
+
     {:error, {:live_redirect, %{to: path}}} =
-      view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
+      view |> element("#home-swap-confirm[aria-label='Start video']") |> render_click()
 
     assert path =~ "/videos/#{video.id}/session/"
     [_, id] = Regex.run(~r{/session/(\d+)$}, path)

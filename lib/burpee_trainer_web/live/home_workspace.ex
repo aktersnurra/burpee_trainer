@@ -15,6 +15,7 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         expanded?: false,
         alternatives_open?: false,
         chooser_open?: false,
+        swap_preview: nil,
         filters_open?: false,
         active_tab: :workouts,
         filters: Catalog.default_filters(socket.assigns.current_level),
@@ -77,6 +78,8 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
     socket
     |> assign(
       home_selection: selected,
+      authoring_stage: :idle,
+      swap_preview: nil,
       expanded?: expanded?,
       instruction: "",
       pending_request: nil,

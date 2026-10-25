@@ -14,7 +14,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
         ] do
       html =
         render_component(&HomeWorkoutComponents.week_progress/1,
-          slot: %{completed_sec: completed, weekly_target_sec: target, week_start: ~D[2026-09-07]}
+          slot: %{
+            completed_sec: completed,
+            weekly_target_sec: target,
+            remaining_sec: max(0, target - completed),
+            week_start: ~D[2026-09-07]
+          }
         )
         |> LazyHTML.from_fragment()
 

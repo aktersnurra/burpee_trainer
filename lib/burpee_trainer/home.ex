@@ -6,6 +6,16 @@ defmodule BurpeeTrainer.Home do
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Home.{Facts, State}
 
+  @doc "Listen for completed background work that changes Home's persisted facts."
+  @spec subscribe(Scope.t()) :: :ok | {:error, term()}
+  def subscribe(%Scope{user: %{id: id}}),
+    do: Phoenix.PubSub.subscribe(BurpeeTrainer.PubSub, "home:#{id}")
+
+  @doc "Notify open Home screens after the new facts have been committed."
+  @spec broadcast_changed(Scope.t()) :: :ok | {:error, term()}
+  def broadcast_changed(%Scope{user: %{id: id}}),
+    do: Phoenix.PubSub.broadcast(BurpeeTrainer.PubSub, "home:#{id}", :home_changed)
+
   @spec facts(Scope.t(), DateTime.t()) :: {:ok, Facts.t()} | {:error, :invalid_timezone}
   def facts(%Scope{} = scope, %DateTime{} = now) do
     with {:ok, slot} <- slot(scope, now) do

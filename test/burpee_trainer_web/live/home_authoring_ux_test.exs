@@ -190,7 +190,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     view |> form("#home-new-form", home_workout: %{reps: 10, duration: "2:00"}) |> render_submit()
     render_async(view)
     assert_receive {:provider_request, _}
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-save") |> render_click()
     render_async(view)
     assert has_element?(view, "#home-new-saved")
     view |> element("#home-new-dismiss") |> render_click()
@@ -211,6 +211,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert has_element?(view, "#home-alternative-plan-#{saved.id}")
     assert has_element?(view, "#home-delete-workout-#{saved.id}")
     view |> element("#home-alternative-plan-#{saved.id}-select") |> render_click()
+    view |> element("#home-swap-confirm") |> render_click()
     assert has_element?(view, "#home-summary", "Independent new workout")
     refute_received {:provider_request, _}
   end

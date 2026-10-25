@@ -10,7 +10,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   one in flight, so a late answer to a discarded or superseded request changes nothing.
   """
 
-  @type stage :: :idle | :new | :editing | :review | :saved
+  @type stage :: :idle | :new | :editing | :review | :saved | :choosing
 
   @type command ::
           {:cancel_async, {:new_request, reference()}}
@@ -57,6 +57,19 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   def update(%__MODULE__{authoring_stage: :idle} = m, {:edit_opened, source, params, key}) do
     {%{open(m, :editing, params, key) | editing_source: source, instruction: ""}, []}
+  end
+
+  def update(
+        %__MODULE__{authoring_stage: :idle} = m,
+        {:duration_prepared, source, prepared, params, rows}
+      ) do
+    {%{
+       open(m, :review, params, prepared.approval_key)
+       | editing_source: source,
+         pending_request: prepared,
+         review_inspection_rows: rows,
+         instruction: ""
+     }, []}
   end
 
   def update(%__MODULE__{} = m, :aborted) do
@@ -123,6 +136,19 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     settle(m, id, fn m ->
       {%{m | authoring_stage: :saved, pending_request: nil, created_plan: plan},
        [:refresh_alternatives]}
+    end)
+  end
+
+  def update(%__MODULE__{} = m, {:plan_selected, id}) do
+    settle(m, id, fn m ->
+      {%{
+         m
+         | authoring_stage: :idle,
+           pending_request: nil,
+           created_plan: nil,
+           editing_source: nil,
+           authoring_returned?: true
+       }, []}
     end)
   end
 

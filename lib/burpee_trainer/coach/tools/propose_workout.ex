@@ -2,6 +2,7 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
   @behaviour BurpeeTrainer.Coach.Tool
   alias BurpeeTrainer.Coach.{
     Rationale,
+    Progression,
     RepCeiling,
     Tool,
     Voice,
@@ -91,13 +92,21 @@ defmodule BurpeeTrainer.Coach.Tools.ProposeWorkout do
   def call(_, _, _), do: {:error, "invalid workout arguments or missing slot"}
 
   defp within_ceiling(scope, slot, reps) do
+    decision = Progression.for_type(scope, slot.burpee_type)
+
     case RepCeiling.for_type(scope, slot.burpee_type) do
       {:ok, ceiling} ->
-        if RepCeiling.allows?(ceiling, slot.burpee_type, reps, slot.duration_sec),
-          do: :ok,
-          else:
+        cond do
+          not RepCeiling.allows?(ceiling, slot.burpee_type, reps, slot.duration_sec) ->
             {:error,
              "reps must not exceed 10% above the recent best (the next level without a recent session)"}
+
+          not Progression.allows?(decision, reps, slot.duration_sec) ->
+            {:error, Progression.explanation(decision)}
+
+          true ->
+            :ok
+        end
 
       {:error, :timezone_unavailable} ->
         {:error, "owner timezone is unavailable"}

@@ -53,6 +53,27 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     assert has_element?(view, "#home-planner-rationale", "An easy twenty minutes")
   end
 
+  test "a stale delete in the normal chooser reports the failure in place", %{
+    conn: conn,
+    user: user
+  } do
+    plan = plan_fixture(user, %{target_reps: 10})
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-title-action") |> render_click()
+    {:ok, _} = BurpeeTrainer.Workouts.archive_plan(Scope.for_user(user), plan.id)
+
+    view |> element("#home-delete-workout-#{plan.id}") |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-alternatives-panel:not([hidden]) #home-chooser-error[role=alert]"
+           )
+
+    assert_push_event(view, "home_chooser_rejected", %{})
+    assert has_element?(view, "#home-action")
+  end
+
   test "Start is the one filled action and the others are quiet icons", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
     assert has_element?(view, "#home-action.home-primary-action .hero-play-solid")

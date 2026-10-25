@@ -43,8 +43,8 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     end
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
-    assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
-    # New still holds the screen, and its working form survives the choice.
+    refute :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
+    # A working authoring form cannot be displaced by a late chooser click.
     assert has_element?(view, "#home-new-form")
     refute has_element?(view, "#home-title-action")
   end
@@ -65,6 +65,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     view |> element("#home-chooser-close") |> render_click()
     view |> element("#home-title-action") |> render_click()
     view |> element("#home-alternative-plan-#{owned.id}-select") |> render_click()
+    view |> element("#home-swap-confirm") |> render_click()
     assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == owned.id
     assert Repo.reload!(plan) == plan
   end
@@ -89,6 +90,8 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     end
 
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
+    view |> element("#home-swap-confirm") |> render_click()
     started = Workouts.current_started_session(Scope.for_user(user))
     assert started.workout_video_id == video.id
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{started.id}")

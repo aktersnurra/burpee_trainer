@@ -73,9 +73,10 @@ defmodule BurpeeTrainerWeb.Flows.InsightFlowTest do
       })
 
       assert_enqueued(worker: NarrateJob, args: %{user_id: user.id, session_id: started.id})
+      {:ok, home, _} = live(conn, ~p"/")
+      refute has_element?(home, "#home-insight-headline")
       assert :ok = perform_job(NarrateJob, %{user_id: user.id, session_id: started.id})
       assert Insights.for_session(scope, started.id).source == @source
-      {:ok, home, _} = live(conn, ~p"/")
       # The coach's line reads on Home; a stand-in leaves the day just done.
       if @source == "llm",
         do:

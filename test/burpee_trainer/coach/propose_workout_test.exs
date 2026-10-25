@@ -28,7 +28,7 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
     %{slot | burpee_type: :six_count, duration_sec: duration_sec}
   end
 
-  defp completed!(scope, type, reps, completed_at) do
+  defp completed!(scope, type, reps, completed_at, planned_reps \\ nil) do
     Repo.insert!(%WorkoutSession{
       user_id: scope.user.id,
       state: :completed,
@@ -37,6 +37,8 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
       workout_type_snapshot: type,
       burpee_type: type,
       burpee_count_actual: reps,
+      burpee_count_planned: planned_reps,
+      duration_sec_planned: 1200,
       duration_sec_actual: 1200,
       completed_at: completed_at,
       capture_mode: :logged
@@ -77,7 +79,15 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
     scope = scope_fixture()
     {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
     run = run(scope, slot)
-    plan_id = run.expected_selection.plan.id
+
+    plan =
+      plan_fixture(scope.user, %{
+        burpee_type: Atom.to_string(slot.burpee_type),
+        target_duration_sec: slot.duration_sec,
+        target_reps: 20
+      })
+
+    plan_id = plan.id
 
     for rationale <- [
           "   ",
@@ -110,13 +120,14 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
              )
   end
 
-  test "an easier workout below the current level is allowed" do
+  test "an easier workout below the current level is allowed after a failed prescription" do
     scope = scope_fixture(%{"timezone" => "Etc/UTC"})
     two_days_ago = DateTime.add(DateTime.utc_now(:second), -2, :day)
     completed!(scope, :six_count, 100, two_days_ago)
     completed!(scope, :navy_seal, 40, two_days_ago)
     assert BurpeeTrainer.Levels.current_level(Workouts.list_sessions(scope)) == :level_1c
 
+    completed!(scope, :six_count, 30, DateTime.add(DateTime.utc_now(:second), -1, :second), 100)
     slot = six_count_slot(scope, 1200)
 
     assert {:ok, _, _} =
@@ -136,11 +147,11 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
 
     slot = six_count_slot(scope, 1200)
 
-    # 100 recent reps allow up to 110, though level_1d, the next level up, starts at 150.
+    # Repeat 100 without positive feedback; the ceiling still rejects 140.
     assert {:ok, _, _} =
              ProposeWorkout.call(
                scope,
-               args(110, List.duplicate({10, 5.0, 5.0}, 11)),
+               args(100, List.duplicate({10, 5.0, 5.0}, 10)),
                run(scope, slot)
              )
 
@@ -175,11 +186,11 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
 
     slot = six_count_slot(scope, 1200)
 
-    # 140 recent reps allow up to 154: past level_1b, the next level up from level_1a.
+    # Repeat demonstrated 140 despite the lapsed maintained level.
     assert {:ok, _, _} =
              ProposeWorkout.call(
                scope,
-               args(150, List.duplicate({10, 5.0, 5.0}, 15)),
+               args(140, List.duplicate({10, 5.0, 5.0}, 14)),
                run(scope, slot)
              )
 

@@ -291,7 +291,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert Repo.aggregate(WorkoutPlan, :count) == count
     view |> element("#home-request-confirm") |> render_click()
     render_async(view)
-    assert has_element?(view, "#home-new-saved")
+    refute has_element?(view, "#home-new-saved")
+    assert has_element?(view, "#home-action")
 
     assert Repo.aggregate(
              from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
@@ -309,13 +310,16 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert saved.definition_json["target_reps"] == 150
     assert Repo.aggregate(WorkoutPlan, :count) == count + 1
     refute_received {:provider_request, _}
-    assert {:ok, ^pin} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
+    assert {:ok, chosen} =
+             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+
+    assert chosen.plan.id == saved.id
     assert Repo.get!(WorkoutPlan, original.id).definition_json == original.definition_json
 
     assert Repo.get!(BurpeeTrainer.Workouts.WorkoutSession, used.id).program_snapshot ==
              used.program_snapshot
 
-    view |> element("#home-new-select") |> render_click()
     {:ok, reopened, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     assert has_element?(reopened, "#home-ready-recommendation .home-workout-name", saved.name)
     assert Enum.any?(Workouts.list_library(Scope.for_user(user)), &(&1.id == original.id))

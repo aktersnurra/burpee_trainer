@@ -14,6 +14,36 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     assert SelectWorkout.schema()["properties"]["rationale"]["description"] =~ "why, not what"
   end
 
+  test "saved workout selection enforces the planner slot and recent performance ceiling" do
+    scope = scope_fixture()
+    logged(scope, 100, 1200, DateTime.add(DateTime.utc_now(:second), -7, :day))
+    {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(scope, DateTime.utc_now(:second))
+    slot = %{slot | burpee_type: :six_count, duration_sec: 1200}
+    {:ok, before} = BurpeeTrainer.Workouts.ensure_home_selection(scope, slot)
+    run = %{slot: slot, expected_selection: before}
+
+    for attrs <- [
+          %{burpee_type: "navy_seal", target_reps: 30, target_duration_sec: 1200},
+          %{target_reps: 100, target_duration_sec: 600},
+          %{target_reps: 111, target_duration_sec: 1200}
+        ] do
+      plan = plan_fixture(scope.user, attrs)
+
+      assert {:error, _reason} =
+               SelectWorkout.call(scope, %{"plan_id" => plan.id, "rationale" => "Ready"}, run)
+
+      assert {:ok, ^before} = BurpeeTrainer.Workouts.ensure_home_selection(scope, slot)
+    end
+
+    allowed = plan_fixture(scope.user, %{target_reps: 100, target_duration_sec: 1200})
+
+    assert {:ok, %{"selected" => id}, %{pending_selection: %{plan_id: id}}} =
+             SelectWorkout.call(scope, %{"plan_id" => allowed.id, "rationale" => "Ready"}, run)
+
+    assert id == allowed.id
+    assert {:ok, ^before} = BurpeeTrainer.Workouts.ensure_home_selection(scope, slot)
+  end
+
   test "goal proposal and confirmation are scoped" do
     scope = scope_fixture()
 

@@ -505,21 +505,20 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp verified_home_fallback(user, burpee_type) do
-    with {:ok, plan} <- starter_or_fallback(user, burpee_type),
+  defp verified_home_fallback(_user, burpee_type) do
+    # Prefer a full session of the requested type. The legacy short workout remains
+    # available only if the starter was removed, so catalog recovery can still work.
+    fallback =
+      case built_in(Map.fetch!(@starter_names, burpee_type)) do
+        {:error, %Error{code: :source_unavailable}} -> built_in_fallback()
+        result -> result
+      end
+
+    with {:ok, plan} <- fallback,
          :ok <- verify_stored_draft(plan) do
       {:ok, plan}
     end
   end
-
-  # Until the first completed session Home shows the starter for the slot's burpee type.
-  defp starter_or_fallback(%User{} = user, burpee_type),
-    do: built_in_for(completed_session?(Scope.for_user(user)), burpee_type)
-
-  defp built_in_for(false = _completed_session?, burpee_type),
-    do: built_in(Map.fetch!(@starter_names, burpee_type))
-
-  defp built_in_for(true = _completed_session?, _burpee_type), do: built_in_fallback()
 
   @doc "Whether the owner has completed at least one session."
   @spec completed_session?(Scope.t()) :: boolean()
@@ -566,7 +565,8 @@ defmodule BurpeeTrainer.Workouts do
          |> Ecto.Changeset.change(
            home_workout_plan_id: id,
            home_revision: r.home_revision + 1,
-           planned_by: planned_by
+           planned_by: planned_by,
+           rationale: nil
          )
          |> Repo.update() do
       {:ok, changed} -> {:ok, changed}

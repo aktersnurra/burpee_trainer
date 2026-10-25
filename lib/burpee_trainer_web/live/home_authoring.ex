@@ -23,6 +23,41 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   def handle_event("submit_home_action", _params, %{assigns: %{home_selection: nil}} = socket),
     do: {:noreply, socket}
 
+  def handle_event(
+        "choose_duration",
+        %{"seconds" => seconds},
+        %{assigns: %{authoring_stage: :idle, busy?: false, home_selection: %{plan: source}}} =
+          socket
+      )
+      when seconds in ["1200", "2400"] do
+    a = socket.assigns
+
+    case Coach.DurationChoice.prepare(
+           a.current_scope,
+           a.home_selection,
+           String.to_integer(seconds)
+         ) do
+      {:ok, prepared} ->
+        params = HomeWorkoutRequest.from_definition(prepared.definition)
+
+        {:noreply,
+         socket
+         |> assign(expanded?: true, expanded_groups: MapSet.new())
+         |> step({:duration_prepared, source, prepared, params, prepared_inspection(prepared)})
+         |> workout_form(params, %{})
+         |> adjustment_form("")}
+
+      {:error, _} ->
+        {:noreply,
+         assign(socket,
+           local_error:
+             "That duration is unavailable for this workout or week's remaining time. Your workout is unchanged."
+         )}
+    end
+  end
+
+  def handle_event("choose_duration", _, socket), do: {:noreply, socket}
+
   def handle_event("edit_current_workout", _, socket) do
     if not is_nil(socket.assigns.home_selection) and socket.assigns.expanded? and
          socket.assigns.authoring_stage == :idle do
@@ -96,8 +131,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   end
 
   def handle_event("new_workout", _, socket) do
-    if socket.assigns.expanded? and socket.assigns.authoring_stage == :idle do
-      params = %HomeWorkoutRequest{}
+    if socket.assigns.expanded? and socket.assigns.authoring_stage == :idle and
+         socket.assigns.home_selection do
+      current =
+        HomeWorkoutRequest.from_definition(socket.assigns.home_selection.plan.definition_json)
+
+      params = %{current | pace: nil}
 
       {:noreply,
        socket
@@ -108,8 +147,14 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
-  def handle_event("abort_new_workout", _, socket),
-    do: {:noreply, step(socket, :aborted)}
+  def handle_event("abort_new_workout", _, socket) do
+    {:noreply,
+     socket
+     |> step(:aborted)
+     |> assign(swap_preview: nil)
+     |> HomeLive.assign_home()
+     |> HomeWorkspace.refresh_projection()}
+  end
 
   def handle_event("change_new_workout", %{"home_workout" => attrs}, socket) do
     if socket.assigns.authoring_stage in [:new, :editing],
@@ -225,17 +270,24 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
-  def handle_event("confirm_workout_request", _, %{assigns: %{authoring_stage: :review}} = socket) do
+  def handle_event(event, _, %{assigns: %{authoring_stage: :review}} = socket)
+      when event in ["confirm_workout_request", "save_review_to_library"] do
     a = socket.assigns
     id = make_ref()
     scope = a.current_scope
     prepared = a.pending_request
+    expected = a.home_selection
+    kind = if event == "confirm_workout_request", do: :use_plan, else: :new_plan
 
     if prepared && verify_edit_selection(socket) == :ok do
       {:noreply,
        socket
        |> step({:confirm_started, id})
-       |> start_async({:new_plan, id}, fn -> Coach.approve_plan(scope, prepared) end)}
+       |> start_async({kind, id}, fn ->
+         if kind == :use_plan,
+           do: Coach.approve_and_select_plan(scope, prepared, expected),
+           else: Coach.approve_plan(scope, prepared)
+       end)}
     else
       {:noreply, assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
     end
@@ -324,6 +376,20 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         socket,
         {:review_failed, id,
          "Coach unavailable. Try again later; your current workout is unchanged."}
+      )
+
+  defp settle(:use_plan, id, {:ok, {:ok, selected}}, socket) do
+    socket
+    |> step({:plan_selected, id})
+    |> HomeWorkspace.show_selection(selected, true)
+  end
+
+  defp settle(:use_plan, id, _result, socket),
+    do:
+      step(
+        socket,
+        {:plan_failed, id,
+         "Couldn’t use this workout. Your selection may have changed; cancel and reopen the review."}
       )
 
   defp settle(:new_plan, id, {:ok, {:ok, plan}}, socket),

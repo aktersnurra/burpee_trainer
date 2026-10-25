@@ -31,7 +31,7 @@ defmodule BurpeeTrainer.HomeTest do
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
     assert %{recommendation_id: recommendation_id, plan: %{id: plan_id}} = facts.selection
 
-    assert [{^recommendation_id, ^plan_id, _home_plan_id, _pending_draft_id, _revision}] =
+    assert [{^recommendation_id, _recommendation_plan_id, ^plan_id, _pending_draft_id, _revision}] =
              recommendation_snapshot(user)
 
     assert {:start, %{recommendation_id: ^recommendation_id}} = Home.state(facts)

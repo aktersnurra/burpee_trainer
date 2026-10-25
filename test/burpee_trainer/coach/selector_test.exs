@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Coach.SelectorTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.Coach.{LlmCall, Policy, Rationale, SelectionRationale, Selector}
+  alias BurpeeTrainer.Coach.{LlmCall, Policy, Progression, Rationale, Selector}
   alias BurpeeTrainer.Workouts
 
   @chat [enabled: true, url: "https://provider.test/v1", api_key: "k", model: "m"]
@@ -100,7 +100,7 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
              Repo.get_by!(LlmCall, user_id: scope.user.id)
   end
 
-  test "only saved workouts within 10% of the athlete's recent best are offered" do
+  test "saved options obey the repeat decision, not just the recent-best ceiling" do
     {scope, slot, _fit, _before} = fixture()
     recent = DateTime.add(DateTime.utc_now(:second), -2, :day)
 
@@ -122,11 +122,11 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
     pace = fn reps -> div(reps * slot.duration_sec, 1200) end
 
     within =
-      plan_fixture(scope.user, %{target_reps: pace.(105), target_duration_sec: slot.duration_sec})
+      plan_fixture(scope.user, %{target_reps: pace.(100), target_duration_sec: slot.duration_sec})
 
-    # The next level would allow it; 10% above a recent best of 100 does not.
+    # The 10% ceiling allows 105, but missing feedback calls for repeating 100.
     over =
-      plan_fixture(scope.user, %{target_reps: pace.(140), target_duration_sec: slot.duration_sec})
+      plan_fixture(scope.user, %{target_reps: pace.(105), target_duration_sec: slot.duration_sec})
 
     decide("create_new", 0.9)
     chat_without_choice()
@@ -215,25 +215,9 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
   end
 
   test "every template rationale passes the check Home's rationales must pass" do
-    plan = %Workouts.WorkoutPlan{
-      burpee_type: :six_count,
-      target_reps: 100,
-      target_duration_sec: 1200
-    }
-
-    for last_reps <- [nil, 80, 100, 120] do
-      sessions =
-        if last_reps,
-          do: [
-            %Workouts.WorkoutSession{
-              burpee_type: :six_count,
-              burpee_count_actual: last_reps,
-              duration_sec_actual: 1200
-            }
-          ],
-          else: []
-
-      text = SelectionRationale.text(plan, sessions)
+    for action <- [:establish, :repeat, :progress, :ease] do
+      decision = %Progression{action: action, min_reps_per_20: 101, max_reps_per_20: 105}
+      text = Progression.explanation(decision)
       assert {:ok, ^text} = Rationale.validate(text)
     end
   end

@@ -249,6 +249,19 @@ defmodule BurpeeTrainer.Coach do
 
   def approve_plan(%Accounts.Scope{}, _, _), do: {:error, Error.new(:design_workspace_changed)}
 
+  @doc "Publish a reviewed workout and select it atomically; never starts a session."
+  def approve_and_select_plan(scope, prepared, expected) do
+    BurpeeTrainer.Repo.immediate_transaction(fn ->
+      with {:ok, _} <- Workouts.verify_home_selection(scope, expected),
+           {:ok, plan} <- approve_plan(scope, prepared),
+           {:ok, selected} <- Workouts.select_home_workout(scope, expected, plan.id) do
+        selected
+      else
+        {:error, error} -> BurpeeTrainer.Repo.rollback(error)
+      end
+    end)
+  end
+
   defp review_source(_user, nil), do: {:ok, nil, []}
 
   defp review_source(scope, %{id: id, content_hash: hash}) do

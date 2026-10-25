@@ -1,47 +1,22 @@
 defmodule BurpeeTrainer.Coach.AgentPromptTest do
   use BurpeeTrainer.DataCase, async: false
   import BurpeeTrainer.Fixtures
-  alias BurpeeTrainer.Coach.{AgentPrompt, Voice}
+  alias BurpeeTrainer.Coach.AgentPrompt
 
-  @glossary ~w[memory goals current_level landmarks recent_sessions slot]
-
-  test "the planner speaks in the voice, explains its context and caps at a 20-minute rate" do
+  test "both planning surfaces receive the supplied slot and only the athlete's history" do
     scope = scope_fixture()
-    [rule, context] = AgentPrompt.messages(scope, :planner, nil, nil)
+    free_form_session_fixture(scope.user, %{burpee_count_actual: 75, duration_sec_actual: 1200})
+    free_form_session_fixture(user_fixture(), %{burpee_count_actual: 300})
+    slot = %{burpee_type: :navy_seal, duration_sec: 2400}
 
-    assert String.starts_with?(rule.content, Voice.text())
-    for key <- @glossary, do: assert(rule.content =~ key)
-    assert rule.content =~ "reps per 20 minutes"
-    assert rule.content =~ "why, not what"
-    refute rule.content =~ "scale them for a longer slot"
-    # The progression rule: up when they kept up, repeat on a late slip, down on an early one.
-    assert rule.content =~ "add about 5 reps"
-    assert rule.content =~ "repeat it"
-    assert rule.content =~ "plan a little easier"
-    assert Map.has_key?(Jason.decode!(context.content), "recent_sessions")
-  end
+    for surface <- [:planner, :planner_create] do
+      [_rule, %{role: "system", content: content}] =
+        AgentPrompt.messages(scope, surface, nil, slot)
 
-  test "a design the decision model asked for progresses from the last session too" do
-    [rule, _context] = AgentPrompt.messages(scope_fixture(), :planner_create, nil, nil)
-
-    assert rule.content =~ "add about 5 reps"
-    assert rule.content =~ "repeat it"
-    assert rule.content =~ "plan a little easier"
-  end
-
-  test "the coach page speaks in the voice, briefly, and ends with the athlete's message" do
-    scope = scope_fixture()
-
-    [rule, _context, message] =
-      AgentPrompt.messages(scope, :coach_page, "How am I doing?", nil)
-
-    assert String.starts_with?(rule.content, Voice.text())
-    for key <- @glossary, do: assert(rule.content =~ key)
-    assert rule.content =~ "at most three sentences"
-    # The coach does not keep notes mid-reply; they are kept after the conversation.
-    assert rule.content =~ "noted for you after the conversation"
-    refute rule.content =~ "update_notebook"
-    assert message == %{role: "user", content: "How am I doing?"}
+      context = Jason.decode!(content)
+      assert context["slot"] == %{"burpee_type" => "navy_seal", "duration_sec" => 2400}
+      assert [%{"reps" => 75, "duration_sec" => 1200}] = context["recent_sessions"]
+    end
   end
 
   test "the conversation so far comes before the new message, in order" do

@@ -4,11 +4,11 @@ defmodule BurpeeTrainer.Coach.Selector do
   that fit the slot, or answers that none suits today, and the coach then designs one with
   `propose_workout` only. Without a decision model, when it fails, or when it is unsure, the
   full planner runs.
-  A chosen workout gets a `SelectionRationale`, since the decision model writes no text.
+  A chosen workout gets the deterministic progression explanation, since the decision model writes no text.
   """
 
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Agent, AgentPrompt, Client, RepCeiling, SelectionRationale}
+  alias BurpeeTrainer.Coach.{Agent, AgentPrompt, Client, Progression, RepCeiling}
   alias BurpeeTrainer.Workouts
 
   require Logger
@@ -99,7 +99,7 @@ defmodule BurpeeTrainer.Coach.Selector do
   end
 
   defp select(scope, expected, plan) do
-    rationale = SelectionRationale.text(plan, Workouts.list_recent_training_sessions(scope))
+    rationale = scope |> Progression.for_type(plan.burpee_type) |> Progression.explanation()
 
     with {:ok, selection} <-
            Workouts.select_planned_workout(scope, expected, {:plan, plan.id}, rationale) do
@@ -110,6 +110,8 @@ defmodule BurpeeTrainer.Coach.Selector do
   # Fitting workouts: the slot's burpee type and minutes, within the same ceiling the coach's
   # own designs must keep (`RepCeiling`).
   defp candidates(scope, slot) do
+    decision = Progression.for_type(scope, slot.burpee_type)
+
     case RepCeiling.for_type(scope, slot.burpee_type) do
       {:ok, ceiling} ->
         scope
@@ -121,7 +123,7 @@ defmodule BurpeeTrainer.Coach.Selector do
               plan.burpee_type,
               plan.target_reps,
               plan.target_duration_sec
-            )
+            ) and Progression.allows?(decision, plan.target_reps, plan.target_duration_sec)
         end)
         |> Enum.take(@max_candidates)
 
@@ -137,8 +139,10 @@ defmodule BurpeeTrainer.Coach.Selector do
       "type" => "choice",
       "instructions" =>
         "Choose the athlete's next session from their saved and built-in workouts, given " <>
-          "their recent sessions, feedback, goals and level. Choose create_new when none " <>
-          "suits them today.",
+          "their recent sessions, feedback, goals and level. " <>
+          AgentPrompt.progression_guidance() <>
+          " Choose create_new when none fits the appropriate progression or recovery. " <>
+          "A saved workout is not preferable merely because it already exists.",
       "criteria" =>
         candidates
         |> Map.new(fn plan ->

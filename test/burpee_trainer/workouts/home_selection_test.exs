@@ -26,6 +26,35 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
     assert {:ok, ^b} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
   end
 
+  test "switching away from a coached workout drops its explanation", %{user: u, slot: slot} do
+    scope = Scope.for_user(u)
+    {:ok, original} = Workouts.ensure_home_selection(scope, slot)
+    coached = fitting_plan(u, slot)
+
+    {:ok, selected} =
+      Workouts.select_planned_workout(scope, original, {:plan, coached.id}, "Repeat this pace.")
+
+    replacement = fitting_plan(u, slot)
+    assert {:ok, switched} = Workouts.select_home_workout(scope, selected, replacement.id)
+    assert switched.rationale == nil
+    assert {:ok, ^switched} = Workouts.ensure_home_selection(scope, slot)
+  end
+
+  for type <- [:six_count, :navy_seal] do
+    test "an established athlete gets a twenty-minute #{type} fallback", %{user: u, slot: slot} do
+      free_form_session_fixture(u, %{
+        completed_at: DateTime.add(DateTime.utc_now(:second), -8, :day)
+      })
+
+      slot = %{slot | burpee_type: unquote(type), duration_sec: 1200}
+      assert {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
+      assert selected.plan.target_duration_sec == 1200
+      assert selected.plan.burpee_type == unquote(type)
+      assert :ok = Workouts.verify_plan_content(selected.plan)
+      assert {:ok, ^selected} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
+    end
+  end
+
   # Yesterday's slot, chosen by `planned_by`, opened a day ago.
   defp chose_yesterday(u, slot, plan, planned_by) do
     date = Date.add(slot.slot_date, -1)

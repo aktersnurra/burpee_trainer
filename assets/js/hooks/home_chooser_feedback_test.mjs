@@ -11,7 +11,7 @@ function fixture() {
   };
   let current = alert;
   const root = { querySelector(selector) {
-    assert.equal(selector, '#home-page[data-home-state="choose"] #home-alternatives-panel:not([hidden]):not([inert]) #home-chooser-error[role="alert"]');
+    assert.equal(selector, '#home-page #home-alternatives-panel:not([hidden]):not([inert]) #home-chooser-error[role="alert"]');
     return current;
   }};
   const target = { addEventListener(name, callback) {
@@ -22,7 +22,7 @@ function fixture() {
   return { target, root, calls, emit: () => events.get("phx:home_chooser_rejected")(), absent: () => { current = null; } };
 }
 
-test("server rejection focuses then scrolls on first AND identical repeat", () => {
+test("server rejection focuses the visible chooser alert in any Home state, including repeats", () => {
   const f = fixture();
   registerHomeChooserFeedback(f.target, f.root);
   f.emit();
@@ -35,7 +35,7 @@ test("server rejection focuses then scrolls on first AND identical repeat", () =
   ]);
 });
 
-test("absent hidden inert or stale non-Choose alert is a no-op", () => {
+test("an absent, hidden or inert chooser alert is a no-op", () => {
   const f = fixture();
   f.absent();
   registerHomeChooserFeedback(f.target, f.root);

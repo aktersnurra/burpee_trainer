@@ -97,6 +97,18 @@ defmodule BurpeeTrainerWeb.Flows.PlannedNextWorkoutFlowTest do
 
     Req.default_options(plug: {Req.Test, __MODULE__})
 
+    {:ok, home, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
+    assert has_element?(home, "#home-summary", before.plan.name)
+    home |> element("#home-summary") |> render_click()
+    home |> element("#home-title-action") |> render_click()
+    {:ok, editor, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
+    editor |> element("#home-summary") |> render_click()
+    editor |> element("#home-edit-workout") |> render_click()
+
+    editor
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Add five reps"})
+    |> render_change()
+
     assert :ok =
              perform_job(PlanNextWorkoutJob, %{"user_id" => user.id, "slot_key" => slot.slot_key})
 
@@ -107,10 +119,15 @@ defmodule BurpeeTrainerWeb.Flows.PlannedNextWorkoutFlowTest do
     assert Repo.get!(CoachRecommendation, after_selection.recommendation_id).rationale ==
              "Shorter sets after a tough week."
 
-    {:ok, home, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     assert has_element?(home, "#home-summary", plan.name)
     assert has_element?(home, "#home-planner-rationale", "Shorter sets after a tough week.")
     assert has_element?(home, "#home-action")
+    assert has_element?(home, "#home-alternative-plan-#{plan.id}-select[aria-current=true]")
+
+    assert has_element?(editor, "#home-edit-instruction", "Add five reps")
+    assert has_element?(editor, "#home-summary", before.plan.name)
+    editor |> element("#home-request-abort") |> render_click()
+    assert has_element?(editor, "#home-summary", plan.name)
   end
 
   test "an eligible boundary does not replan an already owned selection", %{conn: conn} do

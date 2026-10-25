@@ -100,6 +100,24 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_info({:coach_summary, summary}, socket),
     do: {:noreply, assign(socket, progress_summary: summary, progress_summary_loading?: false)}
 
+  def handle_info(:home_changed, socket) do
+    a = socket.assigns
+
+    # A prepared review belongs to the athlete; background planning must not replace it.
+    if a.busy? or not is_nil(a.pending_request) or a.authoring_stage != :idle do
+      {:noreply, socket}
+    else
+      socket = refresh_home_facts(socket, a.home_now.())
+
+      socket =
+        if a.chooser_open? and not is_nil(socket.assigns.home_selection),
+          do: HomeChooser.refresh_alternatives(socket),
+          else: socket
+
+      {:noreply, socket}
+    end
+  end
+
   # The coach noted or forgot something about the owner; the thread says so.
   def handle_info(:coach_memory, socket), do: {:noreply, HomeCoach.refresh(socket)}
 
@@ -323,6 +341,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "filter",
              "reset_filters",
              "select_alternative",
+             "preview_alternative",
              "delete_workout"
            ] do
     HomeChooser.handle_event(event, params, socket)
@@ -340,6 +359,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "change_current_edit",
              "change_new_workout",
              "choose_workout_value",
+             "choose_duration",
              "confirm_workout_request",
              "edit_current_workout",
              "edit_workout_request",
@@ -347,6 +367,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "review_current_edit",
              "review_new_workout",
              "save_workout_request",
+             "save_review_to_library",
              "select_created_workout",
              "submit_home_action"
            ] do
@@ -361,6 +382,8 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "open_chooser",
              "reset_filters",
              "select_alternative",
+             "preview_alternative",
+             "use_alternative",
              "tab",
              "toggle_filters",
              "toggle_group",
@@ -430,6 +453,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
     {status, summary} =
       if connected?(socket) do
+        Home.subscribe(scope)
         Summary.subscribe(scope)
         BurpeeTrainer.Coach.Memory.subscribe(scope)
         SummaryJob.on_open(scope, now)
@@ -514,6 +538,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when kind in [
              :new_request,
              :new_plan,
+             :use_plan,
              :home_revision_request,
              :home_revision
            ] do

@@ -25,6 +25,7 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
          # The owner's or Claude's choice for the slot is theirs; the planner never replaces it.
          planner when planner in [nil, :coach] <- BurpeeTrainer.Workouts.planned_by(scope, slot),
          {:ok, _} <- Selector.plan(scope, slot) do
+      BurpeeTrainer.Home.broadcast_changed(scope)
       :ok
     else
       nil ->

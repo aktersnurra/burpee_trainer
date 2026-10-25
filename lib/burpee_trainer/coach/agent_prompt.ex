@@ -4,11 +4,14 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   alias BurpeeTrainer.{Levels, Workouts}
 
   # How the next session moves on from the last one of its type, designed or picked.
-  @progression "Progress from their last session of this type: when they kept up and their " <>
-                 "mood was not -1 (without fatigue: they did the planned reps in the planned " <>
-                 "time), add about 5 reps, or keep the reps and shorten the rests. When they " <>
-                 "slipped only in the last third, or their mood was -1, repeat it. When they " <>
-                 "slipped earlier or did fewer reps than planned, plan a little easier."
+  @progression "The progression decision in context is authoritative: follow its action and " <>
+                 "min_reps_per_20/max_reps_per_20 range as well as the rep ceiling. " <>
+                 "It derives repeat, progress or ease from comparable completed sessions, " <>
+                 "feedback and fatigue. Missing feedback is not evidence of an easy session. " <>
+                 "Arrange sets and explain the evidence; do not invent a different progression " <>
+                 "decision. Keep the full slot duration. Shorter rests at unchanged reps and " <>
+                 "duration are not greater density. A missed maintenance week alone is not " <>
+                 "evidence of lost capacity."
 
   @planner_task """
   Plan the athlete's next session. Prefer a saved or built-in workout that fits, with \
@@ -55,8 +58,13 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   median seconds slower than planned between reps and across rests. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   today's share of missed minutes across the remaining weekend days; completed_sec, remaining_sec and \
-  weekly_target_sec describe this week's training time.
+  weekly_target_sec describe this week's training time. progression: the deterministic rate \
+  decision, its reason and evidence_ids; limits are reps per 20 minutes, not total reps \
+  in a longer session. A null maximum means establish a baseline within the rep ceiling.
   """
+
+  @doc "Progression guidance shared by saved-workout selection and workout design."
+  def progression_guidance, do: @progression
 
   @doc "What the planner is asked to do; also the planning rules Claude coaches by."
   def planner_task, do: @planner_task
@@ -73,6 +81,8 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
       goals: goals["goals"] |> Enum.take(20),
       current_level: Levels.current_level(Workouts.list_sessions(scope)),
       slot: slot,
+      progression:
+        slot && Map.from_struct(BurpeeTrainer.Coach.Progression.for_type(scope, slot.burpee_type)),
       recent_sessions: sessions |> Enum.take(10) |> Enum.map(&Tools.History.summary/1),
       landmarks:
         Enum.map(Levels.all_levels(), fn level ->
