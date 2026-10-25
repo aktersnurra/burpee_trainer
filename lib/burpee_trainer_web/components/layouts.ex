@@ -143,6 +143,14 @@ defmodule BurpeeTrainerWeb.Layouts do
       >
         Retry pose upload
       </button>
+      <button
+        id="pose-upload-dismiss"
+        type="button"
+        hidden
+        class="mt-1 min-h-11 px-2 font-medium underline underline-offset-4"
+      >
+        Dismiss
+      </button>
     </aside>
 
     <.flash_group :if={@flash?} flash={@flash} />

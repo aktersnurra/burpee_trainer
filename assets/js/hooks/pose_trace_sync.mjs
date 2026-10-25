@@ -18,6 +18,8 @@ export function startPoseTraceSync({
 	let retryTimer = null;
 	let retryDelay = FIRST_RETRY_MS;
 	let stopped = false;
+	let blockedSessionId = null;
+	const dismissedBlockedUploads = new Set();
 
 	function render(state, message = "") {
 		if (stopped) return;
@@ -25,10 +27,13 @@ export function startPoseTraceSync({
 		if (!status) return;
 		status.hidden = state === "idle" || !canDrainPoseTraces(documentRoot);
 		status.dataset.state = state;
+		if (state !== "blocked") blockedSessionId = null;
 		const text = documentRoot.querySelector("#pose-upload-message");
 		if (text) text.textContent = message;
 		const button = documentRoot.querySelector("#pose-upload-retry");
 		if (button) button.hidden = state !== "pending";
+		const dismiss = documentRoot.querySelector("#pose-upload-dismiss");
+		if (dismiss) dismiss.hidden = state !== "blocked";
 	}
 
 	function scheduleRetry() {
@@ -58,6 +63,15 @@ export function startPoseTraceSync({
 		if (result.status === "complete") {
 			retryDelay = FIRST_RETRY_MS;
 			render("idle");
+		} else if (result.status === "blocked") {
+			retryDelay = FIRST_RETRY_MS;
+			const blocked = result.uploads.find((upload) => upload.status === "blocked" && !dismissedBlockedUploads.has(upload.sessionId));
+			if (blocked) {
+				blockedSessionId = blocked.sessionId;
+				render("blocked", `No local pose frames are available for workout ${blocked.sessionId}. There is nothing to retry.`);
+			} else {
+				render("idle");
+			}
 		} else {
 			render("pending", pendingMessage(result));
 			if (result.reason === "storage" || result.uploads.some((upload) => upload.reason === "storage")) {
@@ -94,6 +108,10 @@ export function startPoseTraceSync({
 	const onRetry = () => { void retry(); };
 	const onClick = (event) => {
 		if (event.target.closest?.("#pose-upload-retry")) onRetry();
+		if (event.target.closest?.("#pose-upload-dismiss") && blockedSessionId !== null) {
+			dismissedBlockedUploads.add(blockedSessionId);
+			render("idle");
+		}
 	};
 	const events = ["online", "burpee:trace-upload-ready", "phx:page-loading-stop"];
 	for (const name of events) windowRoot.addEventListener(name, onRetry);
@@ -119,9 +137,6 @@ function pendingMessage(result) {
 		return "Cannot access pose storage. Uploads are not confirmed. Retrying automatically.";
 	}
 	const failed = result.uploads.find((upload) => upload.status === "pending");
-	if (failed.reason === "missing_chunks") {
-		return `Pose upload for workout ${failed.sessionId} has no local frames. Its upload record is retained.`;
-	}
 	if (failed.reason === "http") {
 		return `Pose upload failed (HTTP ${failed.httpStatus}). Poses remain on this device. Retrying automatically.`;
 	}

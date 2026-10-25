@@ -451,6 +451,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-save-errors.hidden")
     assert has_element?(view, "#pose-upload-status[hidden][phx-update=ignore][role=status]")
     assert has_element?(view, "#pose-upload-retry[hidden]", "Retry pose upload")
+    assert has_element?(view, "#pose-upload-dismiss[hidden][type=button]", "Dismiss")
 
     assert has_element?(
              view,

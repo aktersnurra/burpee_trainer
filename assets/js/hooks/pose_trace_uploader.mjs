@@ -55,7 +55,10 @@ export function createPoseTraceUploader({
 				batch.push(candidate.at(-1));
 				return true;
 			});
-			if (batch.length === 0) return pendingUpload(upload, hasMore ? "oversized_chunk" : "missing_chunks");
+			if (batch.length === 0) {
+				if (hasMore) return pendingUpload(upload, "oversized_chunk");
+				return { sessionId: upload.session_id, status: "blocked", reason: "missing_chunks" };
+			}
 
 			const finalBatch = !hasMore;
 			const posted = await postBatch(traceRequest(upload, batch, finalBatch));
@@ -93,10 +96,9 @@ export function createPoseTraceUploader({
 				uploads.push(pendingUpload(upload, "storage"));
 			}
 		}
-		return {
-			status: uploads.every((upload) => upload.status === "uploaded") ? "complete" : "pending",
-			uploads,
-		};
+		if (uploads.some((upload) => upload.status === "pending")) return { status: "pending", uploads };
+		if (uploads.some((upload) => upload.status === "blocked")) return { status: "blocked", uploads };
+		return { status: "complete", uploads };
 	}
 
 	return {

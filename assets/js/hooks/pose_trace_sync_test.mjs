@@ -2,8 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startPoseTraceSync } from "./pose_trace_sync.mjs";
 
-function harness({ fetch, failOpenOnce = false } = {}) {
-	let queued = true;
+function queuedChunk(sessionId) {
+	return {
+		session_id: sessionId, client_session_id: `client-${sessionId}`,
+		chunk_index: 0, segment: "main", started_at_ms: 0, ended_at_ms: 1,
+		sample_count: 1, payload: { version: 1, samples: [{ tMs: 0 }] },
+	};
+}
+
+function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessionIds = [56] } = {}) {
+	const queues = new Map([
+		...emptySessionIds.map((id) => [id, []]),
+		...frameSessionIds.map((id) => [id, [queuedChunk(id)]]),
+	]);
 	let activeWorkout = false;
 	let opens = 0;
 	let requests = 0;
@@ -17,21 +28,24 @@ function harness({ fetch, failOpenOnce = false } = {}) {
 	const message = { textContent: "" };
 	const retry = new EventTarget();
 	retry.hidden = true;
+	const dismiss = { hidden: true };
 	const nodes = {
 		"#pose-upload-status": status,
 		"#pose-upload-message": message,
 		"#pose-upload-retry": retry,
+		"#pose-upload-dismiss": dismiss,
 	};
 	documentRoot.querySelector = (selector) => selector === "#burpee-session"
 		? (activeWorkout ? {} : null)
 		: (nodes[selector] || null);
 	const store = {
-		listReadyTraceUploads: async () => queued ? [{ session_id: 56, client_session_id: "client-56" }] : [],
-		readTraceChunkBatch: async (_sessionId, takeChunk) => {
-			takeChunk({ chunk_index: 0, payload: { version: 1, samples: [{ tMs: 0 }] } });
+		listReadyTraceUploads: async () => [...queues.keys()].sort((a, b) => a - b)
+			.map((id) => ({ session_id: id, client_session_id: `client-${id}` })),
+		readTraceChunkBatch: async (sessionId, takeChunk) => {
+			for (const chunk of queues.get(sessionId)) if (!takeChunk(chunk)) return { hasMore: true };
 			return { hasMore: false };
 		},
-		settleAcknowledgedFinalUpload: async () => { queued = false; },
+		settleAcknowledgedFinalUpload: async (sessionId) => { queues.delete(sessionId); },
 	};
 	const sync = startPoseTraceSync({
 		documentRoot,
@@ -54,15 +68,17 @@ function harness({ fetch, failOpenOnce = false } = {}) {
 		clearTimeout: (id) => timers.delete(id),
 	});
 	return {
-		sync, status, message, retry, events, documentRoot, timers,
-		get queued() { return queued; },
+		sync, status, message, retry, dismiss, events, documentRoot, timers,
+		get queued() { return queues.has(56); },
+		get queuedSessionIds() { return [...queues.keys()].sort((a, b) => a - b); },
+		enqueueFrames: (sessionId) => queues.set(sessionId, [queuedChunk(sessionId)]),
 		get requests() { return requests; },
 		get opens() { return opens; },
 		setActiveWorkout: (value) => { activeWorkout = value; },
 		setCsrfToken: (value) => { csrfToken = value; },
-		clickRetry() {
+		click(selector) {
 			const event = new Event("click");
-			Object.defineProperty(event, "target", { value: { closest: (selector) => selector === "#pose-upload-retry" ? retry : null } });
+			Object.defineProperty(event, "target", { value: { closest: (match) => match === selector ? nodes[selector] : null } });
 			documentRoot.dispatchEvent(event);
 		},
 		async runRetryTimer() {
@@ -158,6 +174,71 @@ test("retry uses the current CSRF token and stops after disposal", async () => {
 	assert.equal(subject.requests, 2);
 });
 
+test("an empty queue shows a dismissible notice without futile retry timers", async () => {
+	const subject = harness({ emptySessionIds: [54], frameSessionIds: [] });
+	try {
+		await subject.sync.retry();
+		assert.equal(subject.status.dataset.state, "blocked");
+		assert.equal(subject.status.hidden, false);
+		assert.match(subject.message.textContent, /54/);
+		assert.equal(subject.retry.hidden, true);
+		assert.equal(subject.dismiss.hidden, false);
+		assert.equal(subject.timers.size, 0);
+		assert.equal(subject.requests, 0);
+		assert.deepEqual(subject.queuedSessionIds, [54]);
+	} finally { subject.sync.stop(); }
+});
+
+test("dismissing an empty queue notice retains its record and stays quiet across navigation", async () => {
+	const subject = harness({ emptySessionIds: [54], frameSessionIds: [] });
+	try {
+		await subject.sync.retry();
+		subject.click("#pose-upload-dismiss");
+		assert.equal(subject.status.hidden, true);
+		subject.events.dispatchEvent(new Event("phx:page-loading-stop"));
+		await subject.sync.retry();
+		assert.equal(subject.status.hidden, true);
+		assert.equal(subject.timers.size, 0);
+		assert.equal(subject.requests, 0);
+		assert.deepEqual(subject.queuedSessionIds, [54]);
+	} finally { subject.sync.stop(); }
+});
+
+test("an older empty queue does not hide or stop another workout's retry", async () => {
+	const subject = harness({ emptySessionIds: [54], fetch: async (_url, _options, attempt) => {
+		if (attempt === 1) return { ok: false, status: 503 };
+		return { ok: true, json: async () => ({ accepted_indexes: [0], complete: true }) };
+	} });
+	try {
+		await subject.sync.retry();
+		assert.equal(subject.status.dataset.state, "pending");
+		assert.match(subject.message.textContent, /503/);
+		assert.equal(subject.retry.hidden, false);
+		assert.equal(subject.timers.size, 1);
+		await subject.runRetryTimer();
+		assert.equal(subject.requests, 2);
+		assert.deepEqual(subject.queuedSessionIds, [54]);
+		assert.equal(subject.status.dataset.state, "blocked");
+		assert.equal(subject.timers.size, 0);
+	} finally { subject.sync.stop(); }
+});
+
+test("dismissing a blocked notice does not suppress a later workout's upload error", async () => {
+	const subject = harness({ emptySessionIds: [54], frameSessionIds: [], fetch: async () => ({ ok: false, status: 503 }) });
+	try {
+		await subject.sync.retry();
+		subject.click("#pose-upload-dismiss");
+		subject.enqueueFrames(56);
+		subject.events.dispatchEvent(new Event("burpee:trace-upload-ready"));
+		await subject.sync.retry();
+		assert.equal(subject.status.hidden, false);
+		assert.equal(subject.status.dataset.state, "pending");
+		assert.match(subject.message.textContent, /503/);
+		assert.equal(subject.timers.size, 1);
+		assert.deepEqual(subject.queuedSessionIds, [54, 56]);
+	} finally { subject.sync.stop(); }
+});
+
 test("the visible retry button starts another attempt", async () => {
 	const subject = harness({ fetch: async (_url, _options, attempt) => {
 		if (attempt === 1) return { ok: false, status: 503 };
@@ -166,7 +247,7 @@ test("the visible retry button starts another attempt", async () => {
 	try {
 		await subject.sync.retry();
 		// The document-level listener survives LiveView replacing the layout nodes.
-		subject.clickRetry();
+		subject.click("#pose-upload-retry");
 		await new Promise((resolve) => setImmediate(resolve));
 		assert.equal(subject.requests, 2);
 		assert.equal(subject.queued, false);

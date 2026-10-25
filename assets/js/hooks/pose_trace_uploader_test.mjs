@@ -319,6 +319,15 @@ test("uploading reads a bounded cursor batch with at most one extra chunk", asyn
 	assert.equal(marker, false);
 });
 
+test("an empty queue is blocked rather than retryable and retains its upload record", async () => {
+	const store = uploadStore([]);
+	const uploader = createPoseTraceUploader({ store, csrfToken: "token", fetch: () => assert.fail("no frames must not create an empty completed server run") });
+	const result = await uploader.drain();
+	assert.equal(result.status, "blocked");
+	assert.deepEqual(result.uploads, [{ sessionId: 99, status: "blocked", reason: "missing_chunks" }]);
+	assert.equal(store.uploadMarkerExists(), true);
+});
+
 test("failed HTTP responses report the status and retain every queued frame", async () => {
 	for (const status of [401, 403, 422, 429, 500, 503]) {
 		const store = uploadStore([chunk(0)]);
