@@ -3,9 +3,13 @@ import test from "node:test";
 
 import {
 	canDrainPoseTraces,
-	createPoseTraceUploader,
+	createPoseTraceUploader as productionUploader,
 	MAX_TRACE_REQUEST_BYTES,
 } from "./pose_trace_uploader.mjs";
+
+function createPoseTraceUploader(options) {
+	return productionUploader({ CompressionStream: null, ...options });
+}
 
 function chunk(index) {
 	return {
@@ -338,11 +342,27 @@ test("failed HTTP responses report the status and retain every queued frame", as
 		});
 
 		const result = await uploader.drain();
-		assert.equal(result.status, "pending");
-		assert.deepEqual(result.uploads, [{ sessionId: 99, status: "pending", reason: "http", httpStatus: status }]);
+		const expected = [401, 403, 422].includes(status) ? "blocked" : "pending";
+		assert.equal(result.status, expected);
+		assert.deepEqual(result.uploads, [{ sessionId: 99, status: expected, reason: "http", httpStatus: status }]);
 		assert.deepEqual(store.remainingIndexes(), [0]);
 		assert.equal(store.uploadMarkerExists(), true);
 	}
+});
+
+test("an upload refused for sign-in is retried on the next drain without a reload", async () => {
+	const store = uploadStore([chunk(0)]);
+	let status = 401;
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async () => (status === 200 ? { ok: true, status, json: async () => ({ accepted_indexes: [0], complete: true }) } : { ok: false, status }),
+		csrfToken: "token",
+	});
+
+	assert.equal((await uploader.drain()).status, "blocked");
+	status = 200;
+	assert.equal((await uploader.drain()).status, "complete");
+	assert.equal(store.uploadMarkerExists(), false);
 });
 
 test("a timed-out request reports failure without losing its frames", async (t) => {
@@ -418,4 +438,30 @@ test("concurrent drains share one in-flight request", async () => {
 	resolveRequest(jsonResponse({ accepted_indexes: [0], complete: true }));
 	await Promise.all([first, second]);
 	assert.equal(store.uploadMarkerExists(), false);
+});
+
+test("final upload declares the expected total, including previously acknowledged indexes", async () => {
+  const store = uploadStore([chunk(7)]);
+  let sent;
+  const uploader = createPoseTraceUploader({ store, csrfToken: "token", fetch: async (_url, {body}) => {
+    sent = JSON.parse(body);
+    return jsonResponse({ accepted_indexes: [7], complete: true });
+  } });
+  await uploader.drain();
+  assert.equal(sent.expected_chunk_count, 8);
+});
+
+test("gzip-capable browsers send compressed JSON with the final manifest", async () => {
+  const store = uploadStore([chunk(0)]);
+  let received;
+  const uploader = productionUploader({ store, csrfToken: "token", fetch: async (_url, options) => {
+    assert.equal(options.headers["content-encoding"], "gzip");
+    const decompressed = new Blob([options.body]).stream().pipeThrough(new DecompressionStream("gzip"));
+    received = await new Response(decompressed).json();
+    return jsonResponse({ accepted_indexes: [0], complete: true });
+  } });
+  assert.equal((await uploader.drain()).status, "complete");
+  assert.equal(received.expected_chunk_count, 1);
+  assert.equal(received.chunks[0].payload.samples[0].tMs, 0);
+  assert.deepEqual(store.remainingIndexes(), []);
 });

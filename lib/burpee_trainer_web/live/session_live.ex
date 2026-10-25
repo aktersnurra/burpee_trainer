@@ -137,9 +137,11 @@ defmodule BurpeeTrainerWeb.SessionLive do
       navigation?={false}
       flash?={false}
     >
-      <p
+      <button
+        type="button"
         id="session-already-saved"
         phx-hook="SessionCompleted"
+        phx-update="ignore"
         data-session-id={@workout_session.id}
         data-content-hash={@workout_session.content_hash}
         data-client-session-id={@workout_session.client_session_id}
@@ -147,7 +149,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         role="status"
       >
         Session saved. Returning Home…
-      </p>
+      </button>
     </Layouts.app>
     """
   end

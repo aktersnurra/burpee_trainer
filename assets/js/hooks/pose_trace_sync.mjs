@@ -9,6 +9,7 @@ export function startPoseTraceSync({
 	openStore,
 	fetch,
 	csrfToken,
+	CompressionStream = globalThis.CompressionStream,
 	setTimeout: schedule = globalThis.setTimeout,
 	clearTimeout: cancel = globalThis.clearTimeout,
 }) {
@@ -18,6 +19,7 @@ export function startPoseTraceSync({
 	let retryTimer = null;
 	let retryDelay = FIRST_RETRY_MS;
 	let stopped = false;
+	let rescanRequested = false;
 	let blockedSessionId = null;
 	const dismissedBlockedUploads = new Set();
 
@@ -48,7 +50,7 @@ export function startPoseTraceSync({
 	async function drain() {
 		if (!store) {
 			store = await openStore();
-			uploader = createPoseTraceUploader({ store, fetch, csrfToken });
+			uploader = createPoseTraceUploader({ store, fetch, csrfToken, CompressionStream });
 		}
 		const ready = await store.listReadyTraceUploads();
 		if (stopped) return;
@@ -68,7 +70,7 @@ export function startPoseTraceSync({
 			const blocked = result.uploads.find((upload) => upload.status === "blocked" && !dismissedBlockedUploads.has(upload.sessionId));
 			if (blocked) {
 				blockedSessionId = blocked.sessionId;
-				render("blocked", `No local pose frames are available for workout ${blocked.sessionId}. There is nothing to retry.`);
+				render("blocked", blockedMessage(blocked));
 			} else {
 				render("idle");
 			}
@@ -94,7 +96,14 @@ export function startPoseTraceSync({
 			render("idle");
 			return Promise.resolve();
 		}
-		inFlight = drain()
+		inFlight = (async () => {
+			do {
+				rescanRequested = false;
+				if (retryTimer !== null) cancel(retryTimer);
+				retryTimer = null;
+				await drain();
+			} while (rescanRequested && !stopped && canDrainPoseTraces(documentRoot) && documentRoot.visibilityState !== "hidden");
+		})()
 			.catch(() => {
 				store = null;
 				uploader = null;
@@ -105,7 +114,10 @@ export function startPoseTraceSync({
 		return inFlight;
 	}
 
-	const onRetry = () => { void retry(); };
+	const onRetry = () => {
+		if (inFlight) rescanRequested = true;
+		else void retry();
+	};
 	const onClick = (event) => {
 		if (event.target.closest?.("#pose-upload-retry")) onRetry();
 		if (event.target.closest?.("#pose-upload-dismiss") && blockedSessionId !== null) {
@@ -141,4 +153,17 @@ function pendingMessage(result) {
 		return `Pose upload failed (HTTP ${failed.httpStatus}). Poses remain on this device. Retrying automatically.`;
 	}
 	return "Poses are still on this device, not confirmed on the server yet. Retrying automatically.";
+}
+
+function blockedMessage(upload) {
+	if (upload.reason === "http") {
+		const action = [401, 403].includes(upload.httpStatus)
+			? "Sign in again, then reload to retry."
+			: "Automatic retries stopped; dismiss this notice or reload after resolving the rejection.";
+		return `Pose upload for workout ${upload.sessionId} was rejected (HTTP ${upload.httpStatus}). Poses remain on this device. ${action}`;
+	}
+	if (upload.reason === "oversized_chunk") {
+		return `Pose upload for workout ${upload.sessionId} exceeds the request limit. Poses remain on this device; automatic retries stopped.`;
+	}
+	return `No local pose frames are available for workout ${upload.sessionId}. There is nothing to retry.`;
 }

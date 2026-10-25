@@ -19,7 +19,8 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadController do
            parse_session_id(session_id),
            client_session_id,
            chunks,
-           complete?
+           complete?,
+           params["expected_chunk_count"]
          ) do
       {:ok, result} ->
         json(conn, result)

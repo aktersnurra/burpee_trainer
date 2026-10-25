@@ -1106,12 +1106,32 @@ defmodule BurpeeTrainer.Workouts do
         ) ::
           {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
           | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
+  @spec ingest_pose_trace_batch(
+          Scope.t(),
+          pos_integer(),
+          Ecto.UUID.t(),
+          [map()],
+          boolean(),
+          non_neg_integer() | nil
+        ) ::
+          {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
+          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
+  def ingest_pose_trace_batch(
+        scope,
+        session_id,
+        client_session_id,
+        chunks,
+        complete?,
+        expected_count \\ nil
+      )
+
   def ingest_pose_trace_batch(
         %Scope{user: %User{id: user_id}},
         session_id,
         client_session_id,
         chunks,
-        complete?
+        complete?,
+        expected_count
       )
       when is_integer(session_id) and session_id > 0 and is_binary(client_session_id) and
              is_list(chunks) and is_boolean(complete?) do
@@ -1134,7 +1154,9 @@ defmodule BurpeeTrainer.Workouts do
       insert_deferred_pose_chunks(repo, run, chunks)
     end)
     |> Multi.run(:completion, fn repo, %{run: run, session: session} ->
-      complete_deferred_pose_run(repo, run, session, complete?)
+      with :ok <- verify_pose_chunk_coverage(repo, run, complete?, expected_count) do
+        complete_deferred_pose_run(repo, run, session, complete?)
+      end
     end)
     |> Repo.transaction()
     |> case do
@@ -1151,7 +1173,8 @@ defmodule BurpeeTrainer.Workouts do
         _session_id,
         _client_session_id,
         _chunks,
-        _complete?
+        _complete?,
+        _expected_count
       ),
       do: {:error, :invalid_batch}
 
@@ -1302,6 +1325,33 @@ defmodule BurpeeTrainer.Workouts do
 
   defp chunk_value(attrs, key) do
     Map.get(attrs, key) || Map.get(attrs, String.to_existing_atom(key))
+  end
+
+  defp verify_pose_chunk_coverage(_repo, _run, false, _expected_count), do: :ok
+
+  defp verify_pose_chunk_coverage(repo, run, true, expected_count) do
+    {count, first, last} =
+      repo.one(
+        from(chunk in PoseTraceChunk,
+          where: chunk.pose_capture_run_id == ^run.id,
+          select: {count(chunk.id), min(chunk.chunk_index), max(chunk.chunk_index)}
+        )
+      )
+
+    # A manifest says where the capture ended: the last chunk must be present and nothing
+    # extra stored. Interior gaps are chunks the device failed to write; they can never be
+    # re-sent, so rejecting them would strand the whole trace. Legacy clients lack a
+    # manifest and must still be contiguous.
+    ok? =
+      case expected_count do
+        nil ->
+          count > 0 and first == 0 and last == count - 1
+
+        expected ->
+          is_integer(expected) and expected > 0 and count <= expected and last == expected - 1
+      end
+
+    if ok?, do: :ok, else: {:error, :invalid_batch}
   end
 
   defp complete_deferred_pose_run(

@@ -53,6 +53,13 @@ defmodule BurpeeTrainerWeb.Auth do
     end
   end
 
+  @doc "Require authentication without disguising an API failure as a successful login page."
+  def require_authenticated_json_user(%{assigns: %{current_scope: nil}} = conn, _opts) do
+    conn |> put_status(:unauthorized) |> json(%{error: "authentication_required"}) |> halt()
+  end
+
+  def require_authenticated_json_user(conn, _opts), do: conn
+
   @doc """
   Plug that redirects already-authenticated users away from pages that
   only make sense when logged out (like `/login`).

@@ -9,7 +9,7 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
 
   test "requires an authenticated user", %{conn: conn} do
     conn = post(conn, ~p"/api/session-pose-traces", %{"session_id" => 1})
-    assert redirected_to(conn) == ~p"/login"
+    assert json_response(conn, 401) == %{"error" => "authentication_required"}
   end
 
   test "requires one exact owned session ID and client ID", %{conn: conn} do
@@ -294,6 +294,143 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert [%PoseTraceChunk{payload_json: payload, sample_count: 10}] = Repo.all(PoseTraceChunk)
     assert Jason.decode!(payload)["samples"] == samples
     assert Repo.one!(PoseCaptureRun).status == :completed
+  end
+
+  test "final completion requires the declared last chunk and no extras", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+    scope = Scope.for_user(user)
+
+    assert {:ok, _} =
+             Workouts.ingest_pose_trace_batch(
+               scope,
+               session.id,
+               session.client_session_id,
+               [chunk(0)],
+               false
+             )
+
+    for {chunks, total} <- [{[chunk(1)], 3}, {[chunk(1)], 1}] do
+      payload =
+        upload_payload(session.id, session.client_session_id, chunks, true)
+        |> Map.put("expected_chunk_count", total)
+
+      response =
+        conn
+        |> recycle()
+        |> authenticated_json(user)
+        |> post(~p"/api/session-pose-traces", payload)
+
+      assert json_response(response, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
+      assert Repo.one!(PoseCaptureRun).status == :active
+      assert Repo.aggregate(PoseTraceChunk, :count) == 1
+    end
+
+    payload =
+      upload_payload(session.id, session.client_session_id, [chunk(1)], true)
+      |> Map.put("expected_chunk_count", 2)
+
+    response =
+      conn |> recycle() |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
+
+    assert json_response(response, 200) == %{"accepted_indexes" => [1], "complete" => true}
+    assert Repo.aggregate(PoseTraceChunk, :count) == 2
+  end
+
+  test "a manifest completes despite chunks the device never wrote", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+
+    payload =
+      upload_payload(session.id, session.client_session_id, [chunk(0), chunk(2)], true)
+      |> Map.put("expected_chunk_count", 3)
+
+    response =
+      conn |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
+
+    assert json_response(response, 200) == %{"accepted_indexes" => [0, 2], "complete" => true}
+    assert Repo.one!(PoseCaptureRun).status == :completed
+  end
+
+  test "legacy completion also refuses gaps", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+
+    response =
+      conn
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(session.id, session.client_session_id, [chunk(2)], true)
+      )
+
+    assert json_response(response, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
+    assert Repo.all(PoseCaptureRun) == []
+  end
+
+  test "gzip JSON uploads are decoded before validation and stored normally", %{conn: conn} do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+
+    body =
+      upload_payload(session.id, session.client_session_id, [chunk(0)], true)
+      |> Map.put("expected_chunk_count", 1)
+      |> Jason.encode!()
+      |> :zlib.gzip()
+
+    response =
+      conn
+      |> authenticated_json(user)
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("content-encoding", "gzip")
+      |> post(~p"/api/session-pose-traces", body)
+
+    assert json_response(response, 200) == %{"accepted_indexes" => [0], "complete" => true}
+    assert Repo.one!(PoseCaptureRun).status == :completed
+    assert Jason.decode!(Repo.one!(PoseTraceChunk).payload_json) == chunk(0)["payload"]
+  end
+
+  test "gzip decoding rejects malformed, truncated and oversized decompressed bodies", %{
+    conn: conn
+  } do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+
+    valid =
+      upload_payload(session.id, session.client_session_id, [chunk(0)], true)
+      |> Jason.encode!()
+      |> :zlib.gzip()
+
+    for body <- ["not gzip", binary_part(valid, 0, byte_size(valid) - 4)] do
+      assert_error_sent 400, fn ->
+        conn
+        |> recycle()
+        |> authenticated_json(user)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("content-encoding", "gzip")
+        |> post(~p"/api/session-pose-traces", body)
+      end
+    end
+
+    for {body, encoding} <- [
+          {String.duplicate("x", 524_289), nil},
+          {String.duplicate("x", 524_289) |> :zlib.gzip(), "gzip"}
+        ] do
+      assert_error_sent 413, fn ->
+        request =
+          conn
+          |> recycle()
+          |> authenticated_json(user)
+          |> put_req_header("content-type", "application/json")
+
+        request =
+          if encoding, do: put_req_header(request, "content-encoding", encoding), else: request
+
+        post(request, ~p"/api/session-pose-traces", body)
+      end
+    end
+
+    assert Repo.all(PoseCaptureRun) == []
   end
 
   defp completed_session(user) do

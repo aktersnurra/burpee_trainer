@@ -15,20 +15,32 @@ export function createPoseTraceUploader({
 	batchSize = DEFAULT_BATCH_SIZE,
 	endpoint = DEFAULT_ENDPOINT,
 	requestTimeoutMs = 30_000,
+	CompressionStream: Compression = globalThis.CompressionStream,
 }) {
 	let inFlight = null;
+	const blockedUploads = new Map();
 
 	async function postBatch(body) {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 		try {
+			const headers = {
+				"content-type": "application/json",
+				"x-csrf-token": typeof csrfToken === "function" ? csrfToken() : csrfToken,
+			};
+			let encoded = JSON.stringify(body);
+			if (Compression) {
+				const compressed = await new Response(new Blob([encoded]).stream().pipeThrough(new Compression("gzip"))).arrayBuffer();
+				// Incompressible small payloads can grow; keep both wire and decoded size bounded.
+				if (compressed.byteLength < new TextEncoder().encode(encoded).byteLength) {
+					encoded = compressed;
+					headers["content-encoding"] = "gzip";
+				}
+			}
 			const response = await fetch(endpoint, {
 				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					"x-csrf-token": typeof csrfToken === "function" ? csrfToken() : csrfToken,
-				},
-				body: JSON.stringify(body),
+				headers,
+				body: encoded,
 				signal: controller.signal,
 			});
 			if (!response.ok) return { reason: "http", httpStatus: response.status };
@@ -91,7 +103,12 @@ export function createPoseTraceUploader({
 		const uploads = [];
 		for (const upload of ready) {
 			try {
-				uploads.push(await drainUpload(upload));
+				const result = blockedUploads.get(upload.session_id) || await drainUpload(upload);
+				// Missing chunks and sign-in errors can clear without a reload, so they are retried on the next drain.
+				if (result.status === "blocked" && result.reason !== "missing_chunks" && ![401, 403].includes(result.httpStatus)) {
+					blockedUploads.set(upload.session_id, result);
+				}
+				uploads.push(result);
 			} catch {
 				uploads.push(pendingUpload(upload, "storage"));
 			}
@@ -113,13 +130,16 @@ export function createPoseTraceUploader({
 }
 
 function pendingUpload(upload, reason, httpStatus) {
-	const pending = { sessionId: upload.session_id, status: "pending", reason };
+	const permanent = reason === "oversized_chunk" ||
+		(reason === "http" && httpStatus >= 400 && httpStatus < 500 && ![408, 429].includes(httpStatus));
+	const pending = { sessionId: upload.session_id, status: permanent ? "blocked" : "pending", reason };
 	if (httpStatus !== undefined) pending.httpStatus = httpStatus;
 	return pending;
 }
 
 function traceRequest(upload, chunks, complete) {
 	return {
+		expected_chunk_count: upload.expected_chunk_count ?? (chunks.at(-1)?.chunk_index + 1),
 		session_id: upload.session_id,
 		client_session_id: upload.client_session_id,
 		chunks,

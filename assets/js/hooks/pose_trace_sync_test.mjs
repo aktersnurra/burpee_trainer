@@ -60,6 +60,7 @@ function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessi
 			return fetch ? fetch(url, options, requests) : { ok: true, json: async () => ({ accepted_indexes: [0], complete: true }) };
 		},
 		csrfToken: () => csrfToken,
+		CompressionStream: null,
 		setTimeout: (callback, delay) => {
 			const id = ++timerId;
 			timers.set(id, { callback, delay });
@@ -112,12 +113,12 @@ test("a failed upload is visible and automatically retries without another page 
 });
 
 test("HTTP rejection is shown with its status, not treated as a successful upload", async () => {
-	const subject = harness({ fetch: async () => ({ ok: false, status: 422 }) });
+	const subject = harness({ fetch: async () => ({ ok: false, status: 503 }) });
 	try {
 		await subject.sync.retry();
 		assert.equal(subject.queued, true);
 		assert.equal(subject.status.hidden, false);
-		assert.match(subject.message.textContent, /422/);
+		assert.match(subject.message.textContent, /503/);
 		assert.match(subject.message.textContent, /device/i);
 	} finally { subject.sync.stop(); }
 });
@@ -252,4 +253,48 @@ test("the visible retry button starts another attempt", async () => {
 		assert.equal(subject.requests, 2);
 		assert.equal(subject.queued, false);
 	} finally { subject.sync.stop(); }
+});
+
+test("a ready notification during a drain rescans before going idle", async () => {
+  let release;
+  let entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const pending = new Promise(resolve => { release = resolve; });
+  const ids = [];
+  const subject = harness({ fetch: async (_url, options) => {
+    const body = JSON.parse(options.body);
+    ids.push(body.session_id);
+    if (body.session_id === 56) { entered(); await pending; }
+    return { ok: true, json: async () => ({ accepted_indexes: [0], complete: true }) };
+  } });
+  try {
+    await started;
+    subject.enqueueFrames(57);
+    subject.events.dispatchEvent(new Event("burpee:trace-upload-ready"));
+    const draining = subject.sync.retry();
+    release();
+    await draining;
+    assert.deepEqual(ids, [56, 57]);
+    assert.deepEqual(subject.queuedSessionIds, []);
+  } finally { subject.sync.stop(); }
+});
+
+test("permanent rejection is dismissible, retained, and does not schedule retries", async () => {
+  for (const status of [400, 401, 403, 404, 413, 422]) {
+    const subject = harness({ fetch: async () => ({ ok: false, status }) });
+    try {
+      await subject.sync.retry();
+      assert.equal(subject.status.dataset.state, "blocked");
+      assert.equal(subject.timers.size, 0);
+      assert.equal(subject.dismiss.hidden, false);
+      assert.match(subject.message.textContent, new RegExp(String(status)));
+      assert.equal(subject.queued, true);
+      subject.click("#pose-upload-dismiss");
+      assert.equal(subject.status.hidden, true);
+      subject.events.dispatchEvent(new Event("phx:page-loading-stop"));
+      await subject.sync.retry();
+      // Sign-in errors are retried on the next event; every other rejection stays blocked.
+      assert.equal(subject.requests, [401, 403].includes(status) ? 2 : 1);
+    } finally { subject.sync.stop(); }
+  }
 });

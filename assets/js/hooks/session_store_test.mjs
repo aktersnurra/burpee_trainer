@@ -184,10 +184,10 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
               metrics.counts.push(range);
               return request(() => [...values.values()].filter((value) => inRange(value, range)).length);
             },
-            openCursor(range) {
+            openCursor(range, direction) {
               const entries = [...values.values()]
                 .filter((value) => inRange(value, range))
-                .sort((a, b) => a.chunk_index - b.chunk_index);
+                .sort((a, b) => direction === "prev" ? b.chunk_index - a.chunk_index : a.chunk_index - b.chunk_index);
               let index = 0;
               const cursorRequest = { result: undefined, error: null };
               const advance = () => request(() => index < entries.length ? {
@@ -488,7 +488,7 @@ test("server completion finalization atomically publishes the exact marker and d
     },
   ]);
   assert.deepEqual(fake.values("trace_uploads"), [
-    { session_id: 41, client_session_id: "client-41" },
+    { session_id: 41, client_session_id: "client-41", expected_chunk_count: 1 },
   ]);
   assert.deepEqual(
     fake
@@ -723,4 +723,31 @@ test("a discarded session leaves no draft, trace, or upload behind, and touches 
     (await store.listReadyTraceUploads()).map((upload) => upload.session_id),
     [12],
   );
+});
+
+test("new capture attempts append after retained chunks and retry idempotently", async () => {
+  const fake = statefulIndexedDbHarness();
+  fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: 0, payload: { samples: [{ tMs: 10 }] } });
+  fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: 1, payload: { samples: [{ tMs: 20 }] } });
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  const first = { chunk_index: 0, payload: { samples: [{ tMs: 5 }] } };
+  await store.appendTraceChunk(41, "client", first, "new-capture");
+  await store.appendTraceChunk(41, "client", first, "new-capture");
+  await store.appendTraceChunk(41, "client", { ...first, chunk_index: 1 }, "new-capture");
+  const rows = await traceChunks(store, 41);
+  assert.deepEqual(rows.map(c => c.chunk_index), [0, 1, 2, 3]);
+  assert.equal(rows[0].payload.samples[0].tMs, 10);
+  assert.equal(rows[1].payload.samples[0].tMs, 20);
+  assert.equal(rows[2].payload.capture_id, "new-capture");
+  assert.equal(rows[2].payload.samples[0].tMs, 5);
+  assert.equal(fake.metrics.traceGetAll, 0);
+});
+
+test("finalization retains an expected count even if the local chunk sequence has gaps", async () => {
+  const fake = statefulIndexedDbHarness();
+  fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: 0 });
+  fake.seed("pose_trace_chunks", { session_id: 41, chunk_index: 2 });
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  await store.finalizeServerCompletion(41, "hash", "client");
+  assert.equal(fake.values("trace_uploads")[0].expected_chunk_count, 3);
 });

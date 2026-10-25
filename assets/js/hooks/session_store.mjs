@@ -5,6 +5,7 @@ const CHUNKS = "pose_trace_chunks";
 const UPLOADS = "trace_uploads";
 
 export function createSessionStore(engine) {
+  const captureOffsets = new Map();
   return {
     async saveDraft(draft) {
       await engine.put(DRAFTS, {
@@ -35,7 +36,23 @@ export function createSessionStore(engine) {
       );
     },
 
-    async appendTraceChunk(sessionId, clientSessionId, chunk) {
+    async appendTraceChunk(sessionId, clientSessionId, chunk, captureId) {
+      if (captureId) {
+        const key = `${sessionId}:${captureId}`;
+        if (!captureOffsets.has(key)) {
+          const offset = engine.nextTraceChunkIndex(sessionId).catch((error) => {
+            captureOffsets.delete(key);
+            throw error;
+          });
+          captureOffsets.set(key, offset);
+        }
+        chunk = {
+          ...chunk,
+          chunk_index: chunk.chunk_index + await captureOffsets.get(key),
+          // A reload starts a new camera clock, not a seamless continuation.
+          payload: { ...chunk.payload, capture_id: captureId },
+        };
+      }
       await engine.put(CHUNKS, {
         ...chunk,
         session_id: sessionId,
@@ -168,6 +185,12 @@ function indexedDbEngine(database, keyRanges) {
     all(store) {
       return run(store, "readonly", (objectStore) => objectStore.getAll());
     },
+    nextTraceChunkIndex(sessionId) {
+      return transact(CHUNKS, "readonly", (transaction, complete) => {
+        const request = transaction.objectStore(CHUNKS).openCursor(traceRange(sessionId), "prev");
+        request.onsuccess = () => complete(request.result ? request.result.value.chunk_index + 1 : 0);
+      });
+    },
     readTraceChunkBatch(sessionId, takeChunk) {
       return transact(CHUNKS, "readonly", (transaction, complete, fail) => {
         const request = transaction.objectStore(CHUNKS).openCursor(traceRange(sessionId));
@@ -205,10 +228,14 @@ function indexedDbEngine(database, keyRanges) {
         request.onsuccess = () => {
           const traceReady = request.result > 0;
           if (traceReady) {
-            transaction.objectStore(UPLOADS).put({
-              session_id: sessionId,
-              client_session_id: clientSessionId,
-            });
+            const last = transaction.objectStore(CHUNKS).openCursor(traceRange(sessionId), "prev");
+            last.onsuccess = () => {
+              transaction.objectStore(UPLOADS).put({
+                session_id: sessionId,
+                client_session_id: clientSessionId,
+                expected_chunk_count: last.result.value.chunk_index + 1,
+              });
+            };
           }
           transaction.objectStore(DRAFTS).delete([sessionId, contentHash]);
           complete({ traceReady });

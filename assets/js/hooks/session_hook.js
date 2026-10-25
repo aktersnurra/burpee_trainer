@@ -120,6 +120,7 @@ const SessionHook = {
     this.draftWrite = Promise.resolve(true);
     this.draftRestore = Promise.resolve();
     this.pendingTraceChunks = new Map();
+    this.traceCaptureId = crypto.randomUUID();
     this.completionDraftPending = false;
     this.inMemoryCompletionDraft = null;
     this.serverCompletion = null;
@@ -451,7 +452,7 @@ const SessionHook = {
       .then(async (priorWritesDurable) => {
         const store = await this.storeReady;
         if (!store || !this.lifecycleActive(generation)) return false;
-        await store.appendTraceChunk(this.sessionId, clientSessionId, chunk);
+        await store.appendTraceChunk(this.sessionId, clientSessionId, chunk, this.traceCaptureId);
         if (this.pendingTraceChunks.get(chunkKey) === chunk) {
           this.pendingTraceChunks.delete(chunkKey);
         }

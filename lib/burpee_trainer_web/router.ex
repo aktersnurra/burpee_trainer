@@ -28,7 +28,7 @@ defmodule BurpeeTrainerWeb.Router do
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
     plug(:fetch_current_scope)
-    plug(:require_authenticated_user)
+    plug(:require_authenticated_json_user)
   end
 
   pipeline :mcp_metadata do

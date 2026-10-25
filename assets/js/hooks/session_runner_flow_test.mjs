@@ -99,6 +99,11 @@ function statefulIndexedDbHarness() {
 						getAll: () =>
 							request(() => [...values.values()].map((value) => structuredClone(value))),
 						count: (range) => request(() => [...values.values()].filter((value) => value.session_id === range.lower[0]).length),
+						openCursor: (range) => request(() => {
+							const value = [...values.values()].filter(value => value.session_id === range.lower[0])
+								.sort((a, b) => b.chunk_index - a.chunk_index)[0];
+							return value ? { value } : null;
+						}),
 						put: (value) =>
 							request(() => {
 								values.set(normalize(keyFor(name, value)), structuredClone(value));
@@ -287,7 +292,7 @@ test("a compiler-produced program runs through SessionHook countdown, rests, com
 		assert.equal(await store.loadDraft({ sessionId: 71, contentHash: compiledProgram.program_hash }), null);
 		assert.ok(await store.loadDraft({ sessionId: 71, contentHash: "other-hash" }));
 		assert.deepEqual(await store.listReadyTraceUploads(), [
-			{ session_id: 71, client_session_id: "client-compiled-flow" },
+			{ session_id: 71, client_session_id: "client-compiled-flow", expected_chunk_count: 1 },
 		]);
 	} finally {
 		Object.assign(globalThis, original);
