@@ -37,11 +37,16 @@ function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessi
 	const retry = new EventTarget();
 	retry.hidden = true;
 	const dismiss = { hidden: true };
+	const attributes = new Map();
+	const progress = { hidden: true, setAttribute: (name, value) => attributes.set(name, value), attributes };
+	const progressBar = { style: { width: "" } };
 	const nodes = {
 		"#pose-upload-status": status,
 		"#pose-upload-message": message,
 		"#pose-upload-retry": retry,
 		"#pose-upload-dismiss": dismiss,
+		"#pose-upload-progress": progress,
+		"#pose-upload-progress-bar": progressBar,
 	};
 	documentRoot.querySelector = (selector) => selector === "#burpee-session"
 		? (activeWorkout ? {} : null)
@@ -49,9 +54,13 @@ function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessi
 	const store = {
 		listReadyTraceUploads: async () => [...queues.keys()].sort((a, b) => a - b)
 			.map((id) => ({ session_id: id, client_session_id: `client-${id}` })),
+		countTraceChunks: async (sessionId) => queues.get(sessionId).length,
 		readTraceChunkBatch: async (sessionId, takeChunk) => {
 			for (const chunk of queues.get(sessionId)) if (!takeChunk(chunk)) return { hasMore: true };
 			return { hasMore: false };
+		},
+		deleteTraceChunks: async (sessionId, indexes) => {
+			queues.set(sessionId, queues.get(sessionId).filter((chunk) => !indexes.includes(chunk.chunk_index)));
 		},
 		settleAcknowledgedFinalUpload: async (sessionId) => { queues.delete(sessionId); },
 	};
@@ -78,7 +87,7 @@ function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessi
 		clearTimeout: (id) => timers.delete(id),
 	});
 	return {
-		sync, status, message, retry, dismiss, events, documentRoot, timers,
+		sync, status, message, retry, dismiss, progress, progressBar, events, documentRoot, timers, queues,
 		get queued() { return queues.has(56); },
 		get queuedSessionIds() { return [...queues.keys()].sort((a, b) => a - b); },
 		enqueueFrames: (sessionId) => queues.set(sessionId, [queuedChunk(sessionId)]),
@@ -334,4 +343,30 @@ test("permanent rejection is dismissible, retained, and does not schedule retrie
       assert.equal(subject.requests, [401, 403].includes(status) ? 2 : 1);
     } finally { subject.sync.stop(); }
   }
+});
+
+test("an upload shows how many parts the server has accepted", async () => {
+	let release;
+	const held = new Promise((resolve) => { release = resolve; });
+	const seen = [];
+	const subject = harness({ frameSessionIds: [], fetch: async (_url, options) => {
+		const body = JSON.parse(options.body);
+		seen.push({ message: subject.message.textContent, width: subject.progressBar.style.width, hidden: subject.progress.hidden });
+		if (body.chunks[0].chunk_index === 1) await held;
+		return { ok: true, json: async () => ({ accepted_indexes: body.chunks.map((chunk) => chunk.chunk_index), complete: body.complete }) };
+	} });
+	try {
+		subject.queues.set(56, [0, 1].map((index) => ({ ...queuedChunk(56), chunk_index: index, payload: { version: 1, samples: [{ tMs: index }], pad: "x".repeat(3 * 1024 * 1024) } })));
+		const draining = subject.sync.retry();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.deepEqual(seen.map(({ message }) => message.match(/(\d+) of (\d+)/)?.slice(1)), [["0", "2"], ["1", "2"]]);
+		assert.equal(seen[1].width, "50%");
+		assert.equal(seen[1].hidden, false);
+		assert.equal(subject.progress.attributes.get("aria-valuenow"), "50");
+		release();
+		await draining;
+		assert.equal(subject.status.hidden, true);
+		assert.equal(subject.progress.hidden, true);
+	} finally { subject.sync.stop(); }
 });

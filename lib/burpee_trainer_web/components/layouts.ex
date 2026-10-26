@@ -135,6 +135,22 @@ defmodule BurpeeTrainerWeb.Layouts do
       class="session-surface fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-[80] mx-auto max-w-xl rounded-2xl border border-[var(--session-border)] bg-[var(--session-bg)] px-4 py-3 text-sm text-[var(--session-ink)] shadow-lg"
     >
       <span id="pose-upload-message"></span>
+      <div
+        id="pose-upload-progress"
+        hidden
+        role="progressbar"
+        aria-label="Pose upload progress"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        class="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--session-track)]"
+      >
+        <div
+          id="pose-upload-progress-bar"
+          class="h-full w-0 rounded-full bg-[var(--session-progress)] transition-[width] motion-reduce:transition-none"
+        >
+        </div>
+      </div>
       <button
         id="pose-upload-retry"
         type="button"

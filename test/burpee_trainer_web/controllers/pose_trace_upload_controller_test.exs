@@ -413,8 +413,8 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     end
 
     for {body, encoding} <- [
-          {String.duplicate("x", 524_289), nil},
-          {String.duplicate("x", 524_289) |> :zlib.gzip(), "gzip"}
+          {String.duplicate("x", 4 * 1024 * 1024 + 1), nil},
+          {String.duplicate("x", 4 * 1024 * 1024 + 1) |> :zlib.gzip(), "gzip"}
         ] do
       assert_error_sent 413, fn ->
         request =

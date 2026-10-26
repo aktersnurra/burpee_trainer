@@ -30,6 +30,15 @@ function memoryEngine() {
     async all(name) {
       return [...bucket(name).values()].map((value) => structuredClone(value));
     },
+    async listReadyTraceUploads() {
+      const uploads = [...bucket("trace_uploads").values()].map((value) => structuredClone(value));
+      for (const chunk of bucket("pose_trace_chunks").values()) {
+        if (!uploads.some((upload) => upload.session_id === chunk.session_id)) {
+          uploads.push({ session_id: chunk.session_id, client_session_id: chunk.client_session_id });
+        }
+      }
+      return uploads;
+    },
     async readTraceChunkBatch(sessionId, takeChunk) {
       const chunks = [...bucket("pose_trace_chunks").values()].filter((chunk) => chunk.session_id === sessionId);
       for (const chunk of chunks) if (!takeChunk(chunk)) return { hasMore: true };

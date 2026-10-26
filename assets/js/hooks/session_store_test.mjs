@@ -28,6 +28,15 @@ function memoryEngine() {
     async all(name) {
       return [...bucket(name).values()].map((value) => structuredClone(value));
     },
+    async listReadyTraceUploads() {
+      const uploads = [...bucket("trace_uploads").values()].map((value) => structuredClone(value));
+      for (const chunk of bucket("pose_trace_chunks").values()) {
+        if (!uploads.some((upload) => upload.session_id === chunk.session_id)) {
+          uploads.push({ session_id: chunk.session_id, client_session_id: chunk.client_session_id });
+        }
+      }
+      return uploads;
+    },
     async readTraceChunkBatch(sessionId, takeChunk) {
       const chunks = [...bucket("pose_trace_chunks").values()]
         .filter((chunk) => chunk.session_id === sessionId)
@@ -186,13 +195,19 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
             },
             openCursor(range, direction) {
               const entries = [...values.values()]
-                .filter((value) => inRange(value, range))
-                .sort((a, b) => direction === "prev" ? b.chunk_index - a.chunk_index : a.chunk_index - b.chunk_index);
+                .filter((value) => range === undefined || inRange(value, range))
+                .sort((a, b) => (a.session_id - b.session_id) || (direction === "prev" ? b.chunk_index - a.chunk_index : a.chunk_index - b.chunk_index));
               let index = 0;
               const cursorRequest = { result: undefined, error: null };
+              const before = (value, [sessionId, chunkIndex]) =>
+                value.session_id < sessionId || (value.session_id === sessionId && value.chunk_index < chunkIndex);
               const advance = () => request(() => index < entries.length ? {
                 get value() { metrics.cursorValues += 1; return structuredClone(entries[index]); },
-                continue() { index += 1; advance(); },
+                continue(key) {
+                  index += 1;
+                  if (key) while (index < entries.length && before(entries[index], key)) index += 1;
+                  advance();
+                },
               } : null, false, cursorRequest);
               advance();
               return cursorRequest;
@@ -750,4 +765,22 @@ test("finalization retains an expected count even if the local chunk sequence ha
   const store = await openSessionStore(fake.indexedDB, keyRanges);
   await store.finalizeServerCompletion(41, "hash", "client");
   assert.equal(fake.values("trace_uploads")[0].expected_chunk_count, 3);
+});
+
+test("chunks saved for a session that was never queued are listed for upload once", async () => {
+  const fake = statefulIndexedDbHarness();
+  fake.seed("trace_uploads", { session_id: 41, client_session_id: "client-41", expected_chunk_count: 2 });
+  for (const [sessionId, index] of [[41, 0], [41, 1], [57, 0], [57, 1], [57, 2], [60, 4]]) {
+    fake.seed("pose_trace_chunks", {
+      session_id: sessionId, client_session_id: `client-${sessionId}`, chunk_index: index, payload: {},
+    });
+  }
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  assert.deepEqual(await store.listReadyTraceUploads(), [
+    { session_id: 41, client_session_id: "client-41", expected_chunk_count: 2 },
+    { session_id: 57, client_session_id: "client-57" },
+    { session_id: 60, client_session_id: "client-60" },
+  ]);
+  // One chunk read per unqueued session, not the whole trace.
+  assert.equal(fake.metrics.cursorValues, 3);
 });

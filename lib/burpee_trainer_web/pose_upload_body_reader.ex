@@ -1,6 +1,7 @@
 defmodule BurpeeTrainerWeb.PoseUploadBodyReader do
   @moduledoc "Bounded request gzip decoding for the pose-upload endpoint only."
-  @max_bytes 512 * 1024
+  # Decoded JSON per request; the client's MAX_TRACE_REQUEST_BYTES fills up to the same.
+  @max_bytes 4 * 1024 * 1024
 
   def read_body(%Plug.Conn{request_path: "/api/session-pose-traces"} = conn, opts) do
     opts = Keyword.merge(opts, length: @max_bytes, read_length: 64 * 1024)

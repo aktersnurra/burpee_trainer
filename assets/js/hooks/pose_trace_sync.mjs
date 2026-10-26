@@ -41,6 +41,8 @@ export function startPoseTraceSync({
 	let stopped = false;
 	let rescanRequested = false;
 	let blockedSessionId = null;
+	// Chunks this drain started with, and how many the server has accepted so far.
+	const progress = { total: 0, done: 0 };
 	const dismissedBlockedUploads = loadDismissed(storage);
 
 	function render(state, message = "") {
@@ -56,6 +58,21 @@ export function startPoseTraceSync({
 		if (button) button.hidden = state !== "pending";
 		const dismiss = documentRoot.querySelector("#pose-upload-dismiss");
 		if (dismiss) dismiss.hidden = state !== "blocked";
+		renderProgress(state === "uploading");
+	}
+
+	function renderProgress(visible) {
+		const track = documentRoot.querySelector("#pose-upload-progress");
+		if (!track) return;
+		track.hidden = !visible;
+		const percent = progress.total > 0 ? Math.round((100 * progress.done) / progress.total) : 0;
+		track.setAttribute?.("aria-valuenow", String(percent));
+		const bar = documentRoot.querySelector("#pose-upload-progress-bar");
+		if (bar) bar.style.width = `${percent}%`;
+	}
+
+	function uploadingMessage() {
+		return `Uploading poses: ${progress.done} of ${progress.total} parts. Keep this page open until it finishes.`;
 	}
 
 	function scheduleRetry() {
@@ -70,7 +87,16 @@ export function startPoseTraceSync({
 	async function drain() {
 		if (!store) {
 			store = await openStore();
-			uploader = createPoseTraceUploader({ store, fetch, csrfToken, CompressionStream });
+			uploader = createPoseTraceUploader({
+				store,
+				fetch,
+				csrfToken,
+				CompressionStream,
+				onProgress(accepted) {
+					progress.done = Math.min(progress.total, progress.done + accepted);
+					render("uploading", uploadingMessage());
+				},
+			});
 		}
 		const ready = await store.listReadyTraceUploads();
 		if (stopped) return;
@@ -79,7 +105,12 @@ export function startPoseTraceSync({
 			render("idle");
 			return;
 		}
-		render("uploading", "Uploading poses… Keep this page open until it finishes.");
+		const counts = await Promise.all(
+			ready.map((upload) => store.countTraceChunks(upload.session_id)),
+		);
+		progress.total = counts.reduce((sum, count) => sum + count, 0);
+		progress.done = 0;
+		render("uploading", uploadingMessage());
 		const result = await uploader.drain();
 		if (stopped) return;
 		if (result.status === "complete") {

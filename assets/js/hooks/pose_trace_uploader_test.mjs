@@ -251,7 +251,7 @@ test("uploader sends bounded batches and completes only the final batch", async 
 test("uploader splits ready chunks by serialized request bytes", async () => {
 	const largeChunks = [chunk(0), chunk(1)].map((item) => ({
 		...item,
-		payload: { version: 1, samples: ["x".repeat(300_000)] },
+		payload: { version: 1, samples: ["x".repeat(Math.floor(MAX_TRACE_REQUEST_BYTES * 0.6))] },
 	}));
 	const store = uploadStore(largeChunks);
 	const requests = [];
@@ -282,8 +282,8 @@ test("uploader splits ready chunks by serialized request bytes", async () => {
 });
 
 test("uploading reads a bounded cursor batch with at most one extra chunk", async () => {
-	const chunks = new Map(Array.from({ length: 50 }, (_, index) => [index, {
-		...chunk(index), payload: { version: 1, samples: [{ padding: "x".repeat(190_000) }] },
+	const chunks = new Map(Array.from({ length: 10 }, (_, index) => [index, {
+		...chunk(index), payload: { version: 1, samples: [{ padding: "x".repeat(Math.floor(MAX_TRACE_REQUEST_BYTES * 0.37)) }] },
 	}]));
 	let marker = true;
 	const pageReads = [];

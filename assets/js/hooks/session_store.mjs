@@ -64,8 +64,12 @@ export function createSessionStore(engine) {
       return engine.readTraceChunkBatch(sessionId, takeChunk);
     },
 
+    countTraceChunks(sessionId) {
+      return engine.countTraceChunks(sessionId);
+    },
+
     async listReadyTraceUploads() {
-      const uploads = await engine.all(UPLOADS);
+      const uploads = await engine.listReadyTraceUploads();
       return uploads.sort((left, right) => left.session_id - right.session_id);
     },
 
@@ -189,6 +193,35 @@ function indexedDbEngine(database, keyRanges) {
       return transact(CHUNKS, "readonly", (transaction, complete) => {
         const request = transaction.objectStore(CHUNKS).openCursor(traceRange(sessionId), "prev");
         request.onsuccess = () => complete(request.result ? request.result.value.chunk_index + 1 : 0);
+      });
+    },
+    countTraceChunks(sessionId) {
+      return run(CHUNKS, "readonly", (objectStore) => objectStore.count(traceRange(sessionId)));
+    },
+    // Queued uploads, plus every session whose chunks were saved but never queued:
+    // finishing the workout failed locally. The server accepts those only once the
+    // session is completed there.
+    listReadyTraceUploads() {
+      return transact([CHUNKS, UPLOADS], "readonly", (transaction, complete) => {
+        const queued = transaction.objectStore(UPLOADS).getAll();
+        queued.onsuccess = () => {
+          const uploads = queued.result;
+          const known = new Set(uploads.map((upload) => upload.session_id));
+          const cursor = transaction.objectStore(CHUNKS).openCursor();
+          cursor.onsuccess = () => {
+            const current = cursor.result;
+            if (!current) {
+              complete(uploads);
+              return;
+            }
+            const { session_id: sessionId, client_session_id: clientSessionId } = current.value;
+            if (!known.has(sessionId)) {
+              uploads.push({ session_id: sessionId, client_session_id: clientSessionId });
+            }
+            // One chunk per session: skip to the next session's first chunk.
+            current.continue([sessionId, Infinity]);
+          };
+        };
       });
     },
     readTraceChunkBatch(sessionId, takeChunk) {

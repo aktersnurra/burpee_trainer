@@ -1,8 +1,10 @@
 import { serializedJsonBytes } from "./pose_capture_recorder.mjs";
 
-const DEFAULT_BATCH_SIZE = 20;
+// A 20-minute session is a few hundred chunks; a handful of requests should carry it.
+const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_ENDPOINT = "/api/session-pose-traces";
-export const MAX_TRACE_REQUEST_BYTES = 512 * 1024;
+// Decoded JSON per request; the server's PoseUploadBodyReader accepts the same.
+export const MAX_TRACE_REQUEST_BYTES = 4 * 1024 * 1024;
 
 export function canDrainPoseTraces(documentRoot) {
 	return !documentRoot.querySelector("#burpee-session");
@@ -14,8 +16,10 @@ export function createPoseTraceUploader({
 	csrfToken,
 	batchSize = DEFAULT_BATCH_SIZE,
 	endpoint = DEFAULT_ENDPOINT,
-	requestTimeoutMs = 30_000,
+	requestTimeoutMs = 60_000,
 	CompressionStream: Compression = globalThis.CompressionStream,
+	// Called with the number of chunks the server accepted, after each batch.
+	onProgress = () => {},
 }) {
 	let inFlight = null;
 	const blockedUploads = new Map();
@@ -82,6 +86,7 @@ export function createPoseTraceUploader({
 				? [...new Set(result.accepted_indexes.filter((index) => batchIndexes.has(index)))]
 				: [];
 			if (acceptedIndexes.length === 0) return pendingUpload(upload, "invalid_acknowledgement");
+			onProgress(acceptedIndexes.length);
 
 			if (finalBatch && acceptedIndexes.length === batch.length && result.complete !== true) {
 				return pendingUpload(upload, "incomplete_acknowledgement");
