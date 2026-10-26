@@ -219,7 +219,7 @@ function indexedDbEngine(database, keyRanges) {
               uploads.push({ session_id: sessionId, client_session_id: clientSessionId });
             }
             // One chunk per session: skip to the next session's first chunk.
-            current.continue([sessionId, Infinity]);
+            current.continue([sessionId, Number.MAX_SAFE_INTEGER]);
           };
         };
       });

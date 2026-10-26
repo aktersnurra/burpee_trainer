@@ -1,4 +1,4 @@
-import { canDrainPoseTraces, createPoseTraceUploader } from "./pose_trace_uploader.mjs";
+import { canDrainPoseTraces, createPoseTraceUploader, describeError } from "./pose_trace_uploader.mjs";
 
 const FIRST_RETRY_MS = 5_000;
 const MAX_RETRY_MS = 30_000;
@@ -155,10 +155,10 @@ export function startPoseTraceSync({
 				await drain();
 			} while (rescanRequested && !stopped && canDrainPoseTraces(documentRoot) && documentRoot.visibilityState !== "hidden");
 		})()
-			.catch(() => {
+			.catch((error) => {
 				store = null;
 				uploader = null;
-				render("pending", "Cannot access pose storage. Uploads are not confirmed. Retrying automatically.");
+				render("pending", storageMessage(describeError(error)));
 				scheduleRetry();
 			})
 			.finally(() => { inFlight = null; });
@@ -204,11 +204,14 @@ function safeLocalStorage() {
 	}
 }
 
+function storageMessage(error) {
+	return `Cannot access pose storage (${error}). Uploads are not confirmed. Retrying automatically.`;
+}
+
 function pendingMessage(result) {
-	if (result.reason === "storage") {
-		return "Cannot access pose storage. Uploads are not confirmed. Retrying automatically.";
-	}
+	if (result.reason === "storage") return storageMessage(result.error);
 	const failed = result.uploads.find((upload) => upload.status === "pending");
+	if (failed.reason === "storage") return storageMessage(failed.error);
 	if (failed.reason === "http") {
 		return `Pose upload failed (HTTP ${failed.httpStatus}). Poses remain on this device. Retrying automatically.`;
 	}

@@ -114,8 +114,8 @@ export function createPoseTraceUploader({
 					blockedUploads.set(upload.session_id, result);
 				}
 				uploads.push(result);
-			} catch {
-				uploads.push(pendingUpload(upload, "storage"));
+			} catch (error) {
+				uploads.push({ ...pendingUpload(upload, "storage"), error: describeError(error) });
 			}
 		}
 		if (uploads.some((upload) => upload.status === "pending")) return { status: "pending", uploads };
@@ -127,11 +127,16 @@ export function createPoseTraceUploader({
 		drain() {
 			if (inFlight) return inFlight;
 			inFlight = drainReadyUploads()
-				.catch(() => ({ status: "pending", reason: "storage", uploads: [] }))
+				.catch((error) => ({ status: "pending", reason: "storage", error: describeError(error), uploads: [] }))
 				.finally(() => { inFlight = null; });
 			return inFlight;
 		},
 	};
+}
+
+// Shown in the upload notice, so a storage failure on a phone says what it was.
+export function describeError(error) {
+	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
 function pendingUpload(upload, reason, httpStatus) {

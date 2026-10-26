@@ -147,6 +147,8 @@ test("temporarily unavailable storage is reopened on the next retry", async () =
 		await subject.sync.retry();
 		assert.equal(subject.status.hidden, false);
 		assert.match(subject.message.textContent, /storage/i);
+		// The notice names the failure, so a phone that cannot read its poses says why.
+		assert.match(subject.message.textContent, /Error: storage temporarily blocked/);
 		assert.equal(subject.timers.size, 1);
 		await subject.runRetryTimer();
 		assert.equal(subject.opens, 2);
