@@ -1,8 +1,13 @@
 const DATABASE = "burpee-session-runtime";
-const VERSION = 2;
+const VERSION = 3;
 const DRAFTS = "completion_drafts";
 const CHUNKS = "pose_trace_chunks";
 const UPLOADS = "trace_uploads";
+const SCHEMA = [
+  [DRAFTS, ["session_id", "content_hash"]],
+  [CHUNKS, ["session_id", "chunk_index"]],
+  [UPLOADS, "session_id"],
+];
 
 export function createSessionStore(engine) {
   const captureOffsets = new Map();
@@ -107,23 +112,17 @@ function openDatabase(indexedDB) {
 
     request.onupgradeneeded = (event) => {
       const database = request.result;
-      if (event.oldVersion < VERSION) {
-        for (const name of [DRAFTS, CHUNKS, UPLOADS]) {
-          if (database.objectStoreNames.contains(name)) {
-            database.deleteObjectStore(name);
-          }
+      for (const [name, keyPath] of SCHEMA) {
+        // Version 1 stores predate the session runtime; nothing in them is resumable.
+        if (event.oldVersion < 2 && database.objectStoreNames.contains(name)) {
+          database.deleteObjectStore(name);
+        }
+        if (!database.objectStoreNames.contains(name)) {
+          database.createObjectStore(name, { keyPath });
+        } else if (!sameKeyPath(request.transaction.objectStore(name).keyPath, keyPath)) {
+          rekeyStore(database, request.transaction, name, keyPath);
         }
       }
-
-      database.createObjectStore(DRAFTS, {
-        keyPath: ["session_id", "content_hash"],
-      });
-      database.createObjectStore(CHUNKS, {
-        keyPath: ["session_id", "chunk_index"],
-      });
-      database.createObjectStore(UPLOADS, {
-        keyPath: "session_id",
-      });
     };
     request.onblocked = () => {
       abandoned = true;
@@ -143,6 +142,53 @@ function openDatabase(indexedDB) {
     request.onerror = () => {
       if (!abandoned) reject(request.error);
     };
+  });
+}
+
+function sameKeyPath(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+// Version 2 databases created before server session IDs keyed every store by client
+// ID. Records are copied one at a time through a scratch store (a trace is large), then
+// back under the current key path. Records from that era carry only the client ID;
+// uploads find their sessions by it. A record that still has no key is dropped.
+function rekeyStore(database, transaction, name, keyPath) {
+  const scratchName = `${name}_rekey`;
+  const scratch = database.createObjectStore(scratchName, { autoIncrement: true });
+  copyRecords(transaction.objectStore(name), scratch, (record) => record, () => {
+    database.deleteObjectStore(name);
+    const target = database.createObjectStore(name, { keyPath });
+    copyRecords(
+      transaction.objectStore(scratchName),
+      target,
+      (record) => {
+        const rekeyed = { ...record, session_id: record.session_id ?? record.client_session_id };
+        return keyable(rekeyed, keyPath) ? rekeyed : null;
+      },
+      () => database.deleteObjectStore(scratchName),
+    );
+  });
+}
+
+function copyRecords(source, target, convert, done) {
+  const cursor = source.openCursor();
+  cursor.onsuccess = () => {
+    const current = cursor.result;
+    if (!current) {
+      done();
+      return;
+    }
+    const record = convert(current.value);
+    if (record) target.put(record);
+    current.continue();
+  };
+}
+
+function keyable(record, keyPath) {
+  return [keyPath].flat().every((field) => {
+    const value = record[field];
+    return typeof value === "string" || (typeof value === "number" && !Number.isNaN(value));
   });
 }
 

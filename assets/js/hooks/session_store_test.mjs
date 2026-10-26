@@ -803,3 +803,121 @@ test("a database with the older client-ID key paths lists its traces by client I
   ]);
   assert.deepEqual((await traceChunks(store, "client-57")).map((chunk) => chunk.chunk_index), [0, 1]);
 });
+
+// An IndexedDB that runs one version upgrade over existing stores and records.
+function upgradeHarness({ oldVersion, stores }) {
+  const schema = new Map(
+    stores.map(([name, keyPath, records]) => [name, { keyPath, records: [...records] }]),
+  );
+  const keyOf = (store, record, index) =>
+    store.keyPath === undefined ? index : JSON.stringify([store.keyPath].flat().map((field) => record[field]));
+  const request = { error: null };
+  const later = (callback) => queueMicrotask(callback);
+  const transaction = {
+    objectStore(name) {
+      const store = schema.get(name);
+      assert.ok(store, `missing store ${name}`);
+      return {
+        keyPath: store.keyPath,
+        put(record) { store.records.push(structuredClone(record)); },
+        openCursor() {
+          const records = [...store.records];
+          let index = 0;
+          const cursorRequest = {};
+          const step = () => later(() => {
+            cursorRequest.result = index < records.length
+              ? { value: structuredClone(records[index]), continue() { index += 1; step(); } }
+              : null;
+            cursorRequest.onsuccess?.();
+          });
+          step();
+          return cursorRequest;
+        },
+      };
+    },
+  };
+  const database = {
+    objectStoreNames: { contains: (name) => schema.has(name) },
+    createObjectStore(name, options = {}) {
+      schema.set(name, { keyPath: options.keyPath, records: [] });
+      return transaction.objectStore(name);
+    },
+    deleteObjectStore(name) { schema.delete(name); },
+    // The upgraded store opens normally afterwards; these tests read the schema.
+    transaction() { throw new Error("upgrade tests read the schema directly"); },
+  };
+  request.result = database;
+  request.transaction = transaction;
+  let settled = 0;
+  return {
+    indexedDB: {
+      open() {
+        later(() => {
+          request.onupgradeneeded?.({ oldVersion });
+          // Let every cursor step finish before the upgrade commits.
+          const finish = () => (settled++ < 200 ? later(finish) : request.onsuccess?.());
+          finish();
+        });
+        return request;
+      },
+    },
+    stores: () =>
+      new Map([...schema].map(([name, store]) => [
+        name,
+        {
+          keyPath: store.keyPath,
+          keys: store.records.map((record, index) => keyOf(store, record, index)).sort(),
+        },
+      ])),
+  };
+}
+
+test("a version 2 database with the older client-ID key paths keeps every record, rekeyed", async () => {
+  const fake = upgradeHarness({
+    oldVersion: 2,
+    stores: [
+      ["completion_drafts", "client_session_id", [
+        { session_id: 57, content_hash: "hash-57", client_session_id: "client-57" },
+        // An older draft with no content hash can never be resumed.
+        { client_session_id: "client-12" },
+      ]],
+      ["pose_trace_chunks", ["client_session_id", "chunk_index"], [
+        { session_id: 57, client_session_id: "client-57", chunk_index: 0, payload: {} },
+        { session_id: 57, client_session_id: "client-57", chunk_index: 1, payload: {} },
+        // Recorded before server session IDs: only the client ID is known.
+        { client_session_id: "client-12", chunk_index: 0, payload: {} },
+      ]],
+      ["trace_uploads", "client_session_id", [
+        { session_id: 57, client_session_id: "client-57", expected_chunk_count: 2 },
+      ]],
+    ],
+  });
+
+  await openSessionStore(fake.indexedDB, keyRanges);
+
+  assert.deepEqual(fake.stores(), new Map([
+    ["completion_drafts", { keyPath: ["session_id", "content_hash"], keys: ['[57,"hash-57"]'] }],
+    ["pose_trace_chunks", {
+      keyPath: ["session_id", "chunk_index"],
+      keys: ['["client-12",0]', "[57,0]", "[57,1]"],
+    }],
+    ["trace_uploads", { keyPath: "session_id", keys: ["[57]"] }],
+  ]));
+});
+
+test("a version 2 database already on the current key paths is left as it is", async () => {
+  const chunk = { session_id: 57, client_session_id: "client-57", chunk_index: 0, payload: {} };
+  const fake = upgradeHarness({
+    oldVersion: 2,
+    stores: [
+      ["completion_drafts", ["session_id", "content_hash"], []],
+      ["pose_trace_chunks", ["session_id", "chunk_index"], [chunk]],
+      ["trace_uploads", "session_id", []],
+    ],
+  });
+
+  await openSessionStore(fake.indexedDB, keyRanges);
+
+  assert.deepEqual([...fake.stores().keys()], ["completion_drafts", "pose_trace_chunks", "trace_uploads"]);
+  assert.deepEqual(fake.stores().get("pose_trace_chunks").keys, ["[57,0]"]);
+});
