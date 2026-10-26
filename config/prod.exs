@@ -31,5 +31,11 @@ config :logger, :default_handler,
     max_no_files: 5
   ]
 
+# A file, not a terminal: no ANSI colours.
+config :logger, :default_formatter, colors: [enabled: false]
+
+# Time zone data ships with each release; the release directory is read-only.
+config :tzdata, :autoupdate, :disabled
+
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.
