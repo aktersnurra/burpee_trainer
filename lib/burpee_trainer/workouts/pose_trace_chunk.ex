@@ -5,7 +5,9 @@ defmodule BurpeeTrainer.Workouts.PoseTraceChunk do
   alias BurpeeTrainer.Workouts.PoseCaptureRun
 
   @segments [:warmup, :main]
-  @max_payload_json_bytes 250_000
+  # A chunk fits in one upload request (PoseUploadBodyReader); older clients recorded
+  # chunks larger than today's 200 KB.
+  @max_payload_json_bytes 4 * 1024 * 1024
   @max_sample_count 600
 
   @type t :: %__MODULE__{}

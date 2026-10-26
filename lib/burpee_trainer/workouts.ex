@@ -42,16 +42,6 @@ defmodule BurpeeTrainer.Workouts do
   # Built-in workouts are identified by name (migrations 20261005000000, 20261010000000).
   @fallback_name "Built-in Steady 10"
   @starter_names %{six_count: "Starter Six-Count", navy_seal: "Starter Navy Seal"}
-  @pose_chunk_identity_fields [
-    :segment,
-    :chunk_index,
-    :started_at_ms,
-    :ended_at_ms,
-    :sample_count,
-    :payload_json,
-    :payload_digest
-  ]
-
   # ---------------------------------------------------------------------------
   # Plans
   # ---------------------------------------------------------------------------
@@ -1154,7 +1144,7 @@ defmodule BurpeeTrainer.Workouts do
       insert_deferred_pose_chunks(repo, run, chunks)
     end)
     |> Multi.run(:completion, fn repo, %{run: run, session: session} ->
-      with :ok <- verify_pose_chunk_coverage(repo, run, complete?, expected_count) do
+      with :ok <- verify_pose_chunk_coverage(repo, run, complete?) do
         complete_deferred_pose_run(repo, run, session, complete?)
       end
     end)
@@ -1163,20 +1153,44 @@ defmodule BurpeeTrainer.Workouts do
       {:ok, %{chunks: accepted_indexes, completion: run}} ->
         {:ok, %{accepted_indexes: accepted_indexes, complete: run.status == :completed}}
 
-      {:error, _step, reason, _changes} ->
+      {:error, step, reason, _changes} ->
+        # The device keeps a rejected trace; the log is the only place that says why.
+        Logger.warning(
+          "pose_trace_batch_rejected session_id=#{session_id} step=#{step} chunks=#{length(chunks)} " <>
+            "first_index=#{inspect(chunks |> List.first() |> chunk_index())} complete=#{complete?} " <>
+            "expected_count=#{inspect(expected_count)} reason=#{rejection_reason(reason)}"
+        )
+
         {:error, reason}
     end
   end
 
   def ingest_pose_trace_batch(
         %Scope{},
-        _session_id,
-        _client_session_id,
-        _chunks,
-        _complete?,
+        session_id,
+        client_session_id,
+        chunks,
+        complete?,
         _expected_count
-      ),
-      do: {:error, :invalid_batch}
+      ) do
+    Logger.warning(
+      "pose_trace_batch_rejected step=shape session_id=#{inspect(session_id)} " <>
+        "client_session_id=#{inspect(client_session_id)} chunks_list=#{is_list(chunks)} complete=#{inspect(complete?)}"
+    )
+
+    {:error, :invalid_batch}
+  end
+
+  defp chunk_index(%{} = chunk), do: chunk_value(chunk, "chunk_index")
+  defp chunk_index(_chunk), do: nil
+
+  defp rejection_reason(%Ecto.Changeset{} = changeset) do
+    errors = Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
+
+    "#{inspect(changeset.data.__struct__)} index=#{inspect(changeset.changes[:chunk_index])} errors=#{inspect(errors)}"
+  end
+
+  defp rejection_reason(reason), do: inspect(reason)
 
   defp get_or_insert_deferred_pose_run(repo, user_id, session) do
     case repo.get_by(PoseCaptureRun,
@@ -1211,93 +1225,36 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp insert_deferred_pose_chunks(
-         repo,
-         %PoseCaptureRun{status: :completed} = run,
-         chunks
-       ) do
-    with {:ok, prepared} <- prepare_deferred_pose_chunks(run, chunks) do
-      indexes = prepared |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> Enum.sort()
-
-      persisted_by_index =
-        if indexes == [] do
-          %{}
-        else
-          repo.all(
-            from(chunk in PoseTraceChunk,
-              where: chunk.pose_capture_run_id == ^run.id and chunk.chunk_index in ^indexes
-            )
-          )
-          |> Map.new(&{&1.chunk_index, &1})
-        end
-
-      if Enum.all?(prepared, fn {index, changeset} ->
-           case Map.get(persisted_by_index, index) do
-             %PoseTraceChunk{} = persisted -> pose_chunk_matches?(persisted, changeset)
-             nil -> false
-           end
-         end) do
-        {:ok, indexes}
-      else
-        {:error, :invalid_batch}
-      end
-    end
-  end
-
-  defp insert_deferred_pose_chunks(repo, %PoseCaptureRun{status: :active} = run, chunks) do
-    with {:ok, prepared} <- prepare_deferred_pose_chunks(run, chunks) do
-      Enum.reduce_while(prepared, {:ok, []}, fn {index, changeset}, {:ok, indexes} ->
-        case repo.insert(changeset,
-               on_conflict: :nothing,
-               conflict_target: [:pose_capture_run_id, :chunk_index]
-             ) do
-          {:ok, _chunk} ->
-            case repo.get_by(PoseTraceChunk,
-                   pose_capture_run_id: run.id,
-                   chunk_index: index
-                 ) do
-              %PoseTraceChunk{} = persisted ->
-                if pose_chunk_matches?(persisted, changeset) do
-                  {:cont, {:ok, [index | indexes]}}
-                else
-                  {:halt, {:error, :invalid_batch}}
-                end
-
-              nil ->
-                {:halt, {:error, :invalid_batch}}
-            end
-
-          {:error, changeset} ->
-            {:halt, {:error, changeset}}
-        end
-      end)
-      |> case do
-        {:ok, indexes} -> {:ok, indexes |> Enum.reverse() |> Enum.uniq() |> Enum.sort()}
-        {:error, reason} -> {:error, reason}
-      end
-    end
-  end
-
-  defp pose_chunk_matches?(%PoseTraceChunk{} = persisted, changeset) do
-    Enum.all?(@pose_chunk_identity_fields, fn field ->
-      Map.fetch!(persisted, field) == Ecto.Changeset.get_field(changeset, field)
-    end)
-  end
-
-  defp prepare_deferred_pose_chunks(run, chunks) do
+  # Every chunk the device sends is settled, so a trace can always finish uploading:
+  # stored, already stored (the first copy of an index wins), or unstorable. The
+  # device can never repair or re-send a chunk; an unstorable one is logged and
+  # acknowledged instead of rejecting the batch around it.
+  defp insert_deferred_pose_chunks(repo, run, chunks) do
     chunks
-    |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, prepared} ->
+    |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, indexes} ->
       changeset = deferred_pose_chunk_changeset(run, attrs)
+      index = Ecto.Changeset.get_field(changeset, :chunk_index)
 
-      if changeset.valid? do
-        index = Ecto.Changeset.get_field(changeset, :chunk_index)
-        {:cont, {:ok, [{index, changeset} | prepared]}}
-      else
-        {:halt, {:error, changeset}}
+      cond do
+        not changeset.valid? ->
+          Logger.warning(
+            "pose_trace_chunk_dropped run_id=#{run.id} reason=#{rejection_reason(changeset)}"
+          )
+
+          {:cont, {:ok, if(is_integer(index), do: [index | indexes], else: indexes)}}
+
+        true ->
+          case repo.insert(changeset,
+                 on_conflict: :nothing,
+                 conflict_target: [:pose_capture_run_id, :chunk_index]
+               ) do
+            {:ok, _chunk} -> {:cont, {:ok, [index | indexes]}}
+            {:error, changeset} -> {:halt, {:error, changeset}}
+          end
       end
     end)
     |> case do
-      {:ok, prepared} -> {:ok, Enum.reverse(prepared)}
+      {:ok, indexes} -> {:ok, indexes |> Enum.uniq() |> Enum.sort()}
       {:error, changeset} -> {:error, changeset}
     end
   end
@@ -1327,31 +1284,15 @@ defmodule BurpeeTrainer.Workouts do
     Map.get(attrs, key) || Map.get(attrs, String.to_existing_atom(key))
   end
 
-  defp verify_pose_chunk_coverage(_repo, _run, false, _expected_count), do: :ok
+  defp verify_pose_chunk_coverage(_repo, _run, false), do: :ok
 
-  defp verify_pose_chunk_coverage(repo, run, true, expected_count) do
-    {count, first, last} =
-      repo.one(
-        from(chunk in PoseTraceChunk,
-          where: chunk.pose_capture_run_id == ^run.id,
-          select: {count(chunk.id), min(chunk.chunk_index), max(chunk.chunk_index)}
-        )
-      )
-
-    # A manifest says where the capture ended: the last chunk must be present and nothing
-    # extra stored. Interior gaps are chunks the device failed to write; they can never be
-    # re-sent, so rejecting them would strand the whole trace. Legacy clients lack a
-    # manifest and must still be contiguous.
-    ok? =
-      case expected_count do
-        nil ->
-          count > 0 and first == 0 and last == count - 1
-
-        expected ->
-          is_integer(expected) and expected > 0 and count <= expected and last == expected - 1
-      end
-
-    if ok?, do: :ok, else: {:error, :invalid_batch}
+  # The final batch completes whatever the device kept. Gaps, a missing tail, or
+  # chunks written after the workout finished can never be re-sent; refusing them
+  # would strand the whole trace.
+  defp verify_pose_chunk_coverage(repo, run, true) do
+    if repo.exists?(from(chunk in PoseTraceChunk, where: chunk.pose_capture_run_id == ^run.id)),
+      do: :ok,
+      else: {:error, :invalid_batch}
   end
 
   defp complete_deferred_pose_run(

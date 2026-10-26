@@ -1,6 +1,8 @@
 defmodule BurpeeTrainerWeb.PoseTraceUploadController do
   use BurpeeTrainerWeb, :controller
 
+  require Logger
+
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainerWeb.CoreComponents
 
@@ -45,7 +47,13 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadController do
     end
   end
 
-  def create(conn, _params), do: invalid_batch(conn)
+  def create(conn, params) do
+    Logger.warning(
+      "pose_trace_batch_rejected step=request keys=#{inspect(params |> Map.keys() |> Enum.sort())}"
+    )
+
+    invalid_batch(conn)
+  end
 
   defp parse_session_id(value) when is_integer(value), do: value
 

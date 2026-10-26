@@ -102,14 +102,14 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert json_response(repeated, 200)["accepted_indexes"] == [0, 1]
     assert json_response(final, 200) == %{"accepted_indexes" => [2], "complete" => true}
     assert json_response(final_replay, 200) == %{"accepted_indexes" => [2], "complete" => true}
-    assert json_response(new_after_final, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
+    assert json_response(new_after_final, 200) == %{"accepted_indexes" => [3], "complete" => true}
 
     assert [run] = Repo.all(PoseCaptureRun)
     assert run.user_id == user.id
     assert run.workout_session_id == session.id
     assert run.status == :completed
     assert run.completed_at == finalized_at
-    assert Repo.aggregate(PoseTraceChunk, :count) == 3
+    assert Repo.aggregate(PoseTraceChunk, :count) == 4
 
     for stored <- Repo.all(PoseTraceChunk) do
       expected =
@@ -120,7 +120,9 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     end
   end
 
-  test "active runs accept exact retry and reject conflicting same-index content", %{conn: conn} do
+  test "active runs keep the first copy of an index and acknowledge a conflicting resend", %{
+    conn: conn
+  } do
     user = user_fixture()
     {_plan, session} = completed_session(user)
     payload = upload_payload(session.id, session.client_session_id, [chunk(0)])
@@ -149,11 +151,11 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
 
     assert json_response(first, 200)["accepted_indexes"] == [0]
     assert json_response(exact_retry, 200)["accepted_indexes"] == [0]
-    assert json_response(conflict, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
+    assert json_response(conflict, 200)["accepted_indexes"] == [0]
     assert immutable_chunk_fields(Repo.reload(stored)) == immutable_chunk_fields(stored)
   end
 
-  test "completed runs accept exact retry and reject conflicting immutable metadata", %{
+  test "completed runs keep their chunks and acknowledge resends and late chunks", %{
     conn: conn
   } do
     user = user_fixture()
@@ -185,11 +187,23 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
         upload_payload(session.id, session.client_session_id, [conflicting], true)
       )
 
+    # A chunk the device flushed after the trace completed.
+    late =
+      conn
+      |> recycle()
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(session.id, session.client_session_id, [chunk(1)], true)
+      )
+
     assert json_response(first, 200) == %{"accepted_indexes" => [0], "complete" => true}
     assert json_response(exact_retry, 200) == %{"accepted_indexes" => [0], "complete" => true}
-    assert json_response(conflict, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
+    assert json_response(conflict, 200) == %{"accepted_indexes" => [0], "complete" => true}
+    assert json_response(late, 200) == %{"accepted_indexes" => [1], "complete" => true}
     assert Repo.one!(PoseCaptureRun).completed_at == completed_at
     assert immutable_chunk_fields(Repo.reload(stored)) == immutable_chunk_fields(stored)
+    assert Repo.aggregate(PoseTraceChunk, :count) == 2
   end
 
   test "client payload digest is ignored in favor of the server-computed digest", %{conn: conn} do
@@ -210,28 +224,53 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     refute stored.payload_digest == "client-supplied"
   end
 
-  test "invalid chunk rolls back run creation and leaves the completed session unchanged", %{
+  test "an unstorable chunk is acknowledged without blocking the chunks around it", %{
     conn: conn
   } do
     user = user_fixture()
     {_plan, session} = completed_session(user)
-    before = Repo.reload(session)
 
-    oversized =
-      chunk(0)
-      |> put_in(["payload", "samples"], [
-        %{"tMs" => 0, "blob" => String.duplicate("x", 250_001)}
-      ])
+    # The device can never repair this chunk; it must not strand chunks 0 and 2.
+    miscounted = chunk(1) |> Map.put("sample_count", 2)
 
     response =
       conn
       |> authenticated_json(user)
       |> post(
         ~p"/api/session-pose-traces",
-        upload_payload(session.id, session.client_session_id, [oversized])
+        upload_payload(
+          session.id,
+          session.client_session_id,
+          [chunk(0), miscounted, chunk(2)],
+          true
+        )
       )
 
-    assert %{"errors" => %{"payload_json" => ["is too large"]}} = json_response(response, 422)
+    assert json_response(response, 200) == %{"accepted_indexes" => [0, 1, 2], "complete" => true}
+    assert PoseTraceChunk |> Repo.all() |> Enum.map(& &1.chunk_index) |> Enum.sort() == [0, 2]
+  end
+
+  test "a final batch with nothing storable rolls back and leaves the session unchanged", %{
+    conn: conn
+  } do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+    before = Repo.reload(session)
+
+    response =
+      conn
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(
+          session.id,
+          session.client_session_id,
+          [chunk(0) |> Map.put("sample_count", 2)],
+          true
+        )
+      )
+
+    assert json_response(response, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
     assert Repo.reload(session) == before
     assert Repo.all(PoseCaptureRun) == []
     assert Repo.all(PoseTraceChunk) == []
@@ -296,44 +335,20 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.one!(PoseCaptureRun).status == :completed
   end
 
-  test "final completion requires the declared last chunk and no extras", %{conn: conn} do
+  test "final completion keeps whatever the device sent, whatever count it declared", %{
+    conn: conn
+  } do
     user = user_fixture()
     {_plan, session} = completed_session(user)
-    scope = Scope.for_user(user)
-
-    assert {:ok, _} =
-             Workouts.ingest_pose_trace_batch(
-               scope,
-               session.id,
-               session.client_session_id,
-               [chunk(0)],
-               false
-             )
-
-    for {chunks, total} <- [{[chunk(1)], 3}, {[chunk(1)], 1}] do
-      payload =
-        upload_payload(session.id, session.client_session_id, chunks, true)
-        |> Map.put("expected_chunk_count", total)
-
-      response =
-        conn
-        |> recycle()
-        |> authenticated_json(user)
-        |> post(~p"/api/session-pose-traces", payload)
-
-      assert json_response(response, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
-      assert Repo.one!(PoseCaptureRun).status == :active
-      assert Repo.aggregate(PoseTraceChunk, :count) == 1
-    end
 
     payload =
-      upload_payload(session.id, session.client_session_id, [chunk(1)], true)
-      |> Map.put("expected_chunk_count", 2)
+      upload_payload(session.id, session.client_session_id, [chunk(0), chunk(1)], true)
+      |> Map.put("expected_chunk_count", 1)
 
-    response =
-      conn |> recycle() |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
+    response = conn |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
 
-    assert json_response(response, 200) == %{"accepted_indexes" => [1], "complete" => true}
+    assert json_response(response, 200) == %{"accepted_indexes" => [0, 1], "complete" => true}
+    assert Repo.one!(PoseCaptureRun).status == :completed
     assert Repo.aggregate(PoseTraceChunk, :count) == 2
   end
 
@@ -352,7 +367,7 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.one!(PoseCaptureRun).status == :completed
   end
 
-  test "legacy completion also refuses gaps", %{conn: conn} do
+  test "legacy completion without a manifest keeps a trace with gaps", %{conn: conn} do
     user = user_fixture()
     {_plan, session} = completed_session(user)
 
@@ -364,8 +379,8 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
         upload_payload(session.id, session.client_session_id, [chunk(2)], true)
       )
 
-    assert json_response(response, 422) == %{"errors" => %{"batch" => ["is invalid"]}}
-    assert Repo.all(PoseCaptureRun) == []
+    assert json_response(response, 200) == %{"accepted_indexes" => [2], "complete" => true}
+    assert Repo.one!(PoseCaptureRun).status == :completed
   end
 
   test "gzip JSON uploads are decoded before validation and stored normally", %{conn: conn} do
