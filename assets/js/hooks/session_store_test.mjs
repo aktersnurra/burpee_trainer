@@ -773,7 +773,7 @@ test("finalization retains an expected count even if the local chunk sequence ha
 test("chunks saved for a session that was never queued are listed for upload once", async () => {
   const fake = statefulIndexedDbHarness();
   fake.seed("trace_uploads", { session_id: 41, client_session_id: "client-41", expected_chunk_count: 2 });
-  for (const [sessionId, index] of [[41, 0], [41, 1], [57, 0], [57, 1], [57, 2], [60, 4]]) {
+  for (const [sessionId, index] of [[41, 0], [41, 1], [57, 0], [57, 1], [57, 2], [60, 4], ["3b56ac5d-legacy", 0]]) {
     fake.seed("pose_trace_chunks", {
       session_id: sessionId, client_session_id: `client-${sessionId}`, chunk_index: index, payload: {},
     });
