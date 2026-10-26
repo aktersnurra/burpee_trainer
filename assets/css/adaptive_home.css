@@ -654,7 +654,7 @@ button.home-summary:hover .home-workout-name {
     transform: translate(-50%, -50%);
   }
 }
-.home-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.home-chooser-header { display: flex; align-items: center; gap: 8px; }
 .home-chooser-header h2 { font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -.02em; }
 .home-chooser-header button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .home-loading-animation { width: 142px; height: 142px; border: 0; border-radius: 0; animation: none; object-fit: contain; }
@@ -835,6 +835,9 @@ button.home-summary:hover .home-workout-name {
 .home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
 /* New form actions are words: a quiet Cancel or Edit, and one filled primary action. */
 .home-review-actions:has(.home-text-action, .home-primary-action) { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
+/* Cancel sits at the left edge of every New, Edit, Swap and review step; the rest group at the right. */
+.home-review-actions-split { justify-content: space-between; }
+.home-review-actions-group { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
 .home-text-action { background: transparent; border: 0; color: var(--home-muted); }
 .home-text-action:hover { color: #262722; }
@@ -896,7 +899,7 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .login-action { display: inline-flex; align-items: center; margin-top: 28px; text-decoration: none; }
 
 /* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
-.home-chooser-header .home-text-action { margin-right: -20px; padding-inline: 20px; }
+.home-chooser-header .home-text-action { margin-left: -12px; }
 #home-workout-budget:empty, #home-workout-budget:not(:has(*)) { display: none; }
 /* The density readout sits under its heading like the streak and level pair. */
 .home-history-trend-readout { margin-top: 12px; }

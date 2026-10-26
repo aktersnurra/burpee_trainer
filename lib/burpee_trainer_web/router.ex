@@ -100,6 +100,12 @@ defmodule BurpeeTrainerWeb.Router do
       live_dashboard("/dashboard", metrics: BurpeeTrainerWeb.Telemetry)
     end
 
+    scope "/dev", BurpeeTrainerWeb do
+      pipe_through(:browser)
+
+      get("/login", DevSessionController, :create)
+    end
+
     scope "/", BurpeeTrainerWeb do
       pipe_through([:browser, :require_auth])
 

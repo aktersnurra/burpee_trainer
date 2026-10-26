@@ -29,8 +29,18 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     refute has_element?(view, "#home-workout-hero")
     refute has_element?(view, "#home-new-form h2")
 
-    assert has_element?(view, ".home-new-note #home-request-abort[aria-label]")
-    assert has_element?(view, ".home-new-note #home-new-review[aria-label='Review workout']")
+    # Cancel and review sit in the action row, not inside the note's text box.
+    assert has_element?(
+             view,
+             "#home-new-form .home-review-actions #home-request-abort[aria-label]"
+           )
+
+    assert has_element?(
+             view,
+             "#home-new-form .home-review-actions #home-new-review[aria-label='Review workout']"
+           )
+
+    refute has_element?(view, ".home-new-note #home-request-abort")
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-authoring-heading")

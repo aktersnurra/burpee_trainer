@@ -88,7 +88,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </li>
         </ul>
       </div>
-      <div class="home-review-actions">
+      <div class="home-review-actions home-review-actions-split">
         <button
           :if={@editable}
           id="home-request-abort"
@@ -100,40 +100,78 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         >
           <.icon name="hero-x-mark" class="size-5" />
         </button>
-        <button
-          :if={@editable}
-          id="home-request-edit"
-          type="button"
-          phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-review-reps")}
-          class="home-text-action home-icon-action"
-          aria-label="Edit"
-          title="Edit"
-        >
-          <.icon name="hero-pencil-square" class="size-5" />
-        </button>
-        <button
-          id="home-request-confirm"
-          type="button"
-          phx-click="confirm_workout_request"
-          class="home-primary-action home-icon-action"
-          aria-label="Approve"
-          title="Approve"
-        >
-          <.icon name="hero-check" class="size-5" />
-        </button>
-        <button
-          :if={!@editable}
-          id="home-request-back"
-          type="button"
-          phx-click="back_to_workout_request"
-          class="home-text-action home-icon-action"
-          aria-label="Edit"
-          title="Edit"
-        >
-          <.icon name="hero-pencil-square" class="size-5" />
-        </button>
+        <div class="home-review-actions-group">
+          <button
+            :if={@editable}
+            id="home-request-edit"
+            type="button"
+            phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-review-reps")}
+            class="home-text-action home-icon-action"
+            aria-label="Edit"
+            title="Edit"
+          >
+            <.icon name="hero-pencil-square" class="size-5" />
+          </button>
+          <button
+            :if={!@editable}
+            id="home-request-back"
+            type="button"
+            phx-click="back_to_workout_request"
+            class="home-text-action home-icon-action"
+            aria-label="Edit"
+            title="Edit"
+          >
+            <.icon name="hero-pencil-square" class="size-5" />
+          </button>
+          <button
+            id="home-request-confirm"
+            type="button"
+            phx-click="confirm_workout_request"
+            class="home-primary-action home-icon-action"
+            aria-label="Approve"
+            title="Approve"
+          >
+            <.icon name="hero-check" class="size-5" />
+          </button>
+        </div>
       </div>
     </section>
+    """
+  end
+
+  attr(:cancel_id, :string, required: true)
+  attr(:cancel_label, :string, required: true)
+  attr(:send_id, :string, required: true)
+  attr(:send_label, :string, required: true)
+  attr(:busy, :boolean, default: false)
+
+  # The row under New's and Edit's text box, in the place Cancel and confirm hold in review.
+  defp authoring_actions(assigns) do
+    ~H"""
+    <div class="home-review-actions home-review-actions-split">
+      <button
+        id={@cancel_id}
+        type="button"
+        phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+        class="home-text-action home-icon-action"
+        aria-label={@cancel_label}
+        title="Cancel"
+      >
+        <.icon name="hero-x-mark" class="size-5" />
+      </button>
+      <div class="home-review-actions-group">
+        <button
+          id={@send_id}
+          type="submit"
+          class="home-primary-action home-icon-action"
+          aria-label={@send_label}
+          title={@send_label}
+          disabled={@busy}
+        >
+          <.icon name="hero-arrow-up" class="size-5" />
+        </button>
+      </div>
+    </div>
     """
   end
 
@@ -264,30 +302,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           disabled={@locked}
           class="composer-input"
         />
-        <%!-- Before review, cancel and review sit in the card, as in Edit's composer. --%>
-        <div :if={!@locked} class="composer-bar">
-          <button
-            id="home-request-abort"
-            type="button"
-            phx-click="abort_new_workout"
-            class="composer-icon"
-            aria-label="Cancel new workout"
-            title="Cancel"
-          >
-            <.icon name="hero-x-mark" class="size-5" />
-          </button>
-          <button
-            id="home-new-review"
-            type="submit"
-            class="composer-send composer-send-ready"
-            aria-label="Review workout"
-            disabled={@busy}
-            title="Review"
-          >
-            <span><.icon name="hero-arrow-up" class="size-5" /></span>
-          </button>
-        </div>
       </div>
+      <.authoring_actions
+        :if={!@locked}
+        cancel_id="home-request-abort"
+        cancel_label="Cancel new workout"
+        send_id="home-new-review"
+        send_label="Review workout"
+        busy={@busy}
+      />
       <p :if={@busy} id="home-update-loading" role="status" class="home-budget-detail">
         {if(@locked, do: "Saving…", else: "Preparing and validating…")}
       </p>
@@ -388,7 +411,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           )}
         </span>
       </div>
-      <div :if={@state.authoring_stage == :editing} class="home-review-actions">
+      <div
+        :if={@state.authoring_stage == :editing}
+        class="home-review-actions home-review-actions-split"
+      >
         <button
           id="home-request-abort"
           type="button"
@@ -422,27 +448,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               maxlength="500"
               class="composer-input"
             />
-            <div class="composer-bar">
-              <button
-                type="button"
-                id="home-request-abort"
-                class="composer-icon"
-                aria-label="Cancel edit"
-                phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-                title="Cancel"
-              >
-                <.icon name="hero-x-mark" class="size-5" />
-              </button>
-              <button
-                type="submit"
-                id="home-edit-send"
-                class="composer-send"
-                aria-label="Send"
-                title="Send"
-              >
-                <span><.icon name="hero-arrow-up" class="size-5" /></span>
-              </button>
-            </div>
           </div>
           <div class="composer-suggestions" role="group" aria-label="Suggested changes">
             <button
@@ -459,6 +464,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               {label}
             </button>
           </div>
+          <.authoring_actions
+            cancel_id="home-request-abort"
+            cancel_label="Cancel edit"
+            send_id="home-edit-send"
+            send_label="Send"
+          />
         </.form>
       <% else %>
         <section
@@ -495,46 +506,55 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   def review_actions(assigns) do
     ~H"""
-    <div class="home-review-actions flex-wrap">
+    <div class="home-review-actions home-review-actions-split">
       <button
         id={@prefix <> "-abort"}
         type="button"
         phx-click={@cancel}
         class="home-text-action home-icon-action"
         aria-label="Cancel review"
+        title="Cancel"
         disabled={@busy}
       >
         <.icon name="hero-x-mark" class="size-5" />
       </button>
-      <button
-        :if={@authoring}
-        id={@prefix <> "-edit"}
-        type="button"
-        phx-click="edit_workout_request"
-        class="home-text-action home-icon-action"
-        aria-label="Edit workout"
-        disabled={@busy}
-      >
-        <.icon name="hero-pencil-square" class="size-5" />
-      </button>
-      <button
-        :if={@authoring}
-        id={@prefix <> "-save"}
-        type="button"
-        phx-click="save_review_to_library"
-        class="home-text-action px-2"
-        disabled={@busy}
-      >Save to library</button>
-      <button
-        id={@prefix <> "-confirm"}
-        type="button"
-        phx-click={@confirm}
-        class="home-primary-action px-4 gap-2"
-        aria-label={@confirm_label}
-        disabled={@busy}
-      >
-        <.icon name="hero-check" class="size-5" /> {@confirm_label}
-      </button>
+      <div class="home-review-actions-group">
+        <button
+          :if={@authoring}
+          id={@prefix <> "-edit"}
+          type="button"
+          phx-click="edit_workout_request"
+          class="home-text-action home-icon-action"
+          aria-label="Edit workout"
+          title="Edit"
+          disabled={@busy}
+        >
+          <.icon name="hero-pencil-square" class="size-5" />
+        </button>
+        <button
+          :if={@authoring}
+          id={@prefix <> "-save"}
+          type="button"
+          phx-click="save_review_to_library"
+          class="home-text-action home-icon-action"
+          aria-label="Save to library"
+          title="Save to library"
+          disabled={@busy}
+        >
+          <.icon name="hero-bookmark" class="size-5" />
+        </button>
+        <button
+          id={@prefix <> "-confirm"}
+          type="button"
+          phx-click={@confirm}
+          class="home-primary-action home-icon-action"
+          aria-label={@confirm_label}
+          title={@confirm_label}
+          disabled={@busy}
+        >
+          <.icon name="hero-check" class="size-5" />
+        </button>
+      </div>
     </div>
     """
   end
@@ -626,21 +646,28 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     <span class="home-workout-name">
                       <.changed
                         value={hero_name(@state)}
-                        was={@state.home_selection.plan.name}
+                        was={
+                          if swap_review?(@state),
+                            do: hero_name(@state),
+                            else: @state.home_selection.plan.name
+                        }
                       />
                     </span>
                   </button>
                 </h1>
               </div>
-              <span class="home-workout-totals">
+              <span :if={swap_video?(@state)} class="home-workout-totals">
+                {duration_label(@state.swap_preview.source.duration_sec)} · Video
+              </span>
+              <span :if={!swap_video?(@state)} class="home-workout-totals">
                 <.changed
                   value={duration_label(hero_totals(@state).target_duration_sec)}
-                  was={duration_label(@state.home_selection.plan.target_duration_sec)}
+                  was={duration_label(hero_was(@state).target_duration_sec)}
                 /> ·
                 <span id={edit_review?(@state) && "home-edit-review-reps"}>
                   <.changed
                     value={"#{hero_totals(@state).target_reps}"}
-                    was={"#{@state.home_selection.plan.target_reps}"}
+                    was={"#{hero_was(@state).target_reps}"}
                   />
                 </span>
                 reps
@@ -712,29 +739,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               >
                 <.icon name="hero-plus" class="size-5" />
               </button>
-              <div
-                :if={
-                  (@state.expanded? or @state.slot.strategy == :catch_up) and
-                    BurpeeTrainer.Coach.DurationChoice.options(@state.slot) != []
-                }
-                id="home-duration-choices"
-                role="group"
-                aria-label="Choose time today"
-                class="col-span-full row-start-3 mt-3 flex items-center gap-2 text-sm"
-              >
-                <span class="opacity-60">Time today</span>
-                <button
-                  :for={seconds <- BurpeeTrainer.Coach.DurationChoice.options(@state.slot)}
-                  id={"home-duration-#{seconds}"}
-                  type="button"
-                  phx-click="choose_duration"
-                  phx-value-seconds={seconds}
-                  aria-label={"Review #{div(seconds, 60)}-minute workout"}
-                  class="home-text-action min-h-11 rounded-full border border-current/20 px-4 transition-colors hover:bg-current/5"
-                >
-                  {div(seconds, 60)} min
-                </button>
-              </div>
             </div>
           </div>
           <div id="home-expansion" class="home-expansion" data-open={to_string(@state.expanded?)}>
@@ -760,20 +764,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   aria-label="Review workout"
                   phx-mounted={JS.focus(to: "#home-swap-confirm")}
                 >
-                  <h2 class="home-review-heading">{@state.swap_preview.source.name}</h2>
-                  <%= if @state.swap_preview.kind == "plan" do %>
-                    <p class="home-workout-totals">
-                      {duration_label(@state.swap_preview.source.target_duration_sec)} · {@state.swap_preview.source.target_reps} reps
-                    </p>
-                    <.inspection
-                      rows={@state.review_inspection_rows}
-                      expanded={@state.expanded_groups}
-                    />
-                  <% else %>
-                    <p class="home-workout-totals">
-                      {duration_label(@state.swap_preview.source.duration_sec)} · Video
-                    </p>
-                  <% end %>
+                  <.inspection
+                    :if={@state.swap_preview.kind == "plan"}
+                    rows={@state.review_inspection_rows}
+                    expanded={@state.expanded_groups}
+                  />
                   <.review_actions
                     prefix="home-swap"
                     authoring={false}
@@ -810,7 +805,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 >
                   <h2 class="home-review-heading">{@state.created_plan.name}</h2>
                   <p class="home-local-message">Saved. Your current workout is unchanged.</p>
-                  <div class="home-review-actions">
+                  <div class="home-review-actions home-review-actions-split">
                     <button
                       id="home-new-dismiss"
                       phx-click="abort_new_workout"
@@ -863,7 +858,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         phx-mounted={@state.chooser_open? && JS.focus(to: "#home-chooser-close")}
       >
         <header class="home-chooser-header">
-          <h2>Choose a workout</h2>
           <button
             id="home-chooser-close"
             type="button"
@@ -874,6 +868,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           >
             <.icon name="hero-x-mark" class="size-5" />
           </button>
+          <h2>Choose a workout</h2>
         </header>
         <p
           :if={Phoenix.Flash.get(@state.flash, :error)}
@@ -1266,16 +1261,30 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do: not is_nil(state.editing_source) and state.authoring_stage == :review
 
   defp hero_name(state) do
-    if edit_review?(state),
-      do: state.pending_request.definition["name"],
-      else: state.home_selection.plan.name
+    cond do
+      edit_review?(state) -> state.pending_request.definition["name"]
+      swap_review?(state) -> state.swap_preview.source.name
+      true -> state.home_selection.plan.name
+    end
   end
 
   defp hero_totals(state) do
-    if edit_review?(state),
-      do: state.pending_request.request,
-      else: state.home_selection.plan
+    cond do
+      edit_review?(state) -> state.pending_request.request
+      swap_review?(state) and state.swap_preview.kind == "plan" -> state.swap_preview.source
+      true -> state.home_selection.plan
+    end
   end
+
+  # What the hero is marked against: only an edit shows what it changed. A swap is another
+  # workout, so it reads plain.
+  defp hero_was(state),
+    do: if(swap_review?(state), do: hero_totals(state), else: state.home_selection.plan)
+
+  defp swap_review?(state),
+    do: state.authoring_stage == :choosing and not is_nil(state.swap_preview)
+
+  defp swap_video?(state), do: swap_review?(state) and state.swap_preview.kind == "video"
 
   defp shared_units(row), do: Enum.take(row.units, div(length(row.units), row.count))
 
