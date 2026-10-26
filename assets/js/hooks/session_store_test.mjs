@@ -773,7 +773,7 @@ test("finalization retains an expected count even if the local chunk sequence ha
 test("chunks saved for a session that was never queued are listed for upload once", async () => {
   const fake = statefulIndexedDbHarness();
   fake.seed("trace_uploads", { session_id: 41, client_session_id: "client-41", expected_chunk_count: 2 });
-  for (const [sessionId, index] of [[41, 0], [41, 1], [57, 0], [57, 1], [57, 2], [60, 4], ["3b56ac5d-legacy", 0]]) {
+  for (const [sessionId, index] of [[41, 0], [41, 1], [57, 0], [57, 1], [57, 2], [60, 4]]) {
     fake.seed("pose_trace_chunks", {
       session_id: sessionId, client_session_id: `client-${sessionId}`, chunk_index: index, payload: {},
     });
@@ -787,4 +787,19 @@ test("chunks saved for a session that was never queued are listed for upload onc
   // One chunk read per unqueued session, not the whole trace.
   assert.equal(fake.metrics.gets, 2);
   assert.equal(fake.metrics.cursorValues, 0);
+});
+
+test("a database with the older client-ID key paths lists its traces by client ID", async () => {
+  const fake = statefulIndexedDbHarness();
+  // Same version, key paths from before server session IDs: the chunk key is its client ID.
+  for (const index of [0, 1]) {
+    fake.seed("pose_trace_chunks", {
+      session_id: "client-57", client_session_id: "client-57", chunk_index: index, payload: {},
+    });
+  }
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  assert.deepEqual(await store.listReadyTraceUploads(), [
+    { session_id: "client-57", client_session_id: "client-57" },
+  ]);
+  assert.deepEqual((await traceChunks(store, "client-57")).map((chunk) => chunk.chunk_index), [0, 1]);
 });

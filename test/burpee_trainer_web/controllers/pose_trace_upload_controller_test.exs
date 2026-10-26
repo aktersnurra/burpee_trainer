@@ -206,6 +206,42 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.aggregate(PoseTraceChunk, :count) == 2
   end
 
+  test "a device that knows only the client ID uploads to that session, and only its own", %{
+    conn: conn
+  } do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+    {_plan, other_session} = completed_session(user_fixture())
+
+    # A phone storage created before server session IDs sends its key, the client ID.
+    response =
+      conn
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(session.client_session_id, session.client_session_id, [chunk(0)], true)
+      )
+
+    someone_elses =
+      conn
+      |> recycle()
+      |> authenticated_json(user)
+      |> post(
+        ~p"/api/session-pose-traces",
+        upload_payload(
+          other_session.client_session_id,
+          other_session.client_session_id,
+          [chunk(0)],
+          true
+        )
+      )
+
+    assert json_response(response, 200) == %{"accepted_indexes" => [0], "complete" => true}
+    assert json_response(someone_elses, 404) == %{"error" => "not_found"}
+    assert [run] = Repo.all(PoseCaptureRun)
+    assert run.workout_session_id == session.id
+  end
+
   test "client payload digest is ignored in favor of the server-computed digest", %{conn: conn} do
     user = user_fixture()
     {_plan, session} = completed_session(user)

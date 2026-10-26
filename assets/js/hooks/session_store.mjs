@@ -219,14 +219,12 @@ function indexedDbEngine(database, keyRanges) {
           const known = new Set(uploads.map((upload) => upload.session_id));
           const keys = chunks.getAllKeys();
           keys.onsuccess = guarded(() => {
-            // Keys only; one chunk is read per unqueued session, for its client ID. Older
-            // builds keyed chunks by a client UUID; the server cannot place those.
+            // Keys only; one chunk is read per unqueued session, for its client ID. A
+            // database created before server session IDs (same version, older key paths)
+            // keys every chunk by its client ID; the server finds those sessions by it.
             const firstKeys = new Map();
             for (const key of keys.result) {
-              const sessionId = key[0];
-              if (Number.isInteger(sessionId) && !known.has(sessionId) && !firstKeys.has(sessionId)) {
-                firstKeys.set(sessionId, key);
-              }
+              if (!known.has(key[0]) && !firstKeys.has(key[0])) firstKeys.set(key[0], key);
             }
             for (const [sessionId, key] of firstKeys) {
               const chunk = chunks.get(key);

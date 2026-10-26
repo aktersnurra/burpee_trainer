@@ -1098,7 +1098,7 @@ defmodule BurpeeTrainer.Workouts do
           | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
   @spec ingest_pose_trace_batch(
           Scope.t(),
-          pos_integer(),
+          pos_integer() | nil,
           Ecto.UUID.t(),
           [map()],
           boolean(),
@@ -1123,16 +1123,17 @@ defmodule BurpeeTrainer.Workouts do
         complete?,
         expected_count
       )
-      when is_integer(session_id) and session_id > 0 and is_binary(client_session_id) and
-             is_list(chunks) and is_boolean(complete?) do
+      when (is_nil(session_id) or (is_integer(session_id) and session_id > 0)) and
+             is_binary(client_session_id) and is_list(chunks) and is_boolean(complete?) do
+    # Devices whose storage predates server session IDs know only the client ID, which
+    # is unique per user.
+    session_clauses =
+      [user_id: user_id, client_session_id: client_session_id, state: :completed] ++
+        if(session_id, do: [id: session_id], else: [])
+
     Multi.new()
     |> Multi.run(:session, fn repo, _changes ->
-      case repo.get_by(WorkoutSession,
-             id: session_id,
-             user_id: user_id,
-             client_session_id: client_session_id,
-             state: :completed
-           ) do
+      case repo.get_by(WorkoutSession, session_clauses) do
         %WorkoutSession{state: :completed} = session -> {:ok, session}
         nil -> {:error, :not_found}
       end
