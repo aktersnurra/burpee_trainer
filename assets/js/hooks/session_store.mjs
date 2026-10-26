@@ -202,26 +202,36 @@ function indexedDbEngine(database, keyRanges) {
     // finishing the workout failed locally. The server accepts those only once the
     // session is completed there.
     listReadyTraceUploads() {
-      return transact([CHUNKS, UPLOADS], "readonly", (transaction, complete) => {
-        const queued = transaction.objectStore(UPLOADS).getAll();
-        queued.onsuccess = () => {
-          const uploads = queued.result;
-          const known = new Set(uploads.map((upload) => upload.session_id));
-          const cursor = transaction.objectStore(CHUNKS).openCursor();
-          cursor.onsuccess = () => {
-            const current = cursor.result;
-            if (!current) {
-              complete(uploads);
-              return;
-            }
-            const { session_id: sessionId, client_session_id: clientSessionId } = current.value;
-            if (!known.has(sessionId)) {
-              uploads.push({ session_id: sessionId, client_session_id: clientSessionId });
-            }
-            // One chunk per session: skip to the next session's first chunk.
-            current.continue([sessionId, Number.MAX_SAFE_INTEGER]);
-          };
+      return transact([CHUNKS, UPLOADS], "readonly", (transaction, complete, fail) => {
+        // An exception in a handler aborts the transaction with a generic error; report the real one.
+        const guarded = (handler) => () => {
+          try {
+            handler();
+          } catch (error) {
+            fail(error);
+          }
         };
+        const chunks = transaction.objectStore(CHUNKS);
+        const queued = transaction.objectStore(UPLOADS).getAll();
+        queued.onsuccess = guarded(() => {
+          const uploads = queued.result;
+          complete(uploads);
+          const known = new Set(uploads.map((upload) => upload.session_id));
+          const keys = chunks.getAllKeys();
+          keys.onsuccess = guarded(() => {
+            // Keys only; one chunk is read per unqueued session, for its client ID.
+            const firstKeys = new Map();
+            for (const key of keys.result) {
+              if (!known.has(key[0]) && !firstKeys.has(key[0])) firstKeys.set(key[0], key);
+            }
+            for (const [sessionId, key] of firstKeys) {
+              const chunk = chunks.get(key);
+              chunk.onsuccess = guarded(() => {
+                uploads.push({ session_id: sessionId, client_session_id: chunk.result.client_session_id });
+              });
+            }
+          });
+        });
       });
     },
     readTraceChunkBatch(sessionId, takeChunk) {

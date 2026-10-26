@@ -99,34 +99,13 @@ function statefulIndexedDbHarness() {
 						getAll: () =>
 							request(() => [...values.values()].map((value) => structuredClone(value))),
 						count: (range) => request(() => [...values.values()].filter((value) => value.session_id === range.lower[0]).length),
-						openCursor: (range) => {
-							if (range) {
-								return request(() => {
-									const value = [...values.values()].filter(value => value.session_id === range.lower[0])
-										.sort((a, b) => b.chunk_index - a.chunk_index)[0];
-									return value ? { value } : null;
-								});
-							}
-							// Every chunk in key order; continue(key) skips ahead like IndexedDB.
-							const entries = [...values.values()]
-								.sort((a, b) => (a.session_id - b.session_id) || (a.chunk_index - b.chunk_index));
-							const before = (value, [sessionId, chunkIndex]) =>
-								value.session_id < sessionId || (value.session_id === sessionId && value.chunk_index < chunkIndex);
-							const cursorAt = (index) => index < entries.length ? {
-								value: structuredClone(entries[index]),
-								continue(key) {
-									let next = index + 1;
-									if (key) while (next < entries.length && before(entries[next], key)) next += 1;
-									const advanced = request(() => cursorAt(next));
-									advanced.onsuccess = () => {
-										cursorRequest.result = advanced.result;
-										cursorRequest.onsuccess?.();
-									};
-								},
-							} : null;
-							const cursorRequest = request(() => cursorAt(0));
-							return cursorRequest;
-						},
+						getAllKeys: () => request(() => [...values.values()].map((value) => keyFor(name, value))),
+						get: (key) => request(() => structuredClone(values.get(normalize(key)))),
+						openCursor: (range) => request(() => {
+							const value = [...values.values()].filter(value => value.session_id === range.lower[0])
+								.sort((a, b) => b.chunk_index - a.chunk_index)[0];
+							return value ? { value } : null;
+						}),
 						put: (value) =>
 							request(() => {
 								values.set(normalize(keyFor(name, value)), structuredClone(value));

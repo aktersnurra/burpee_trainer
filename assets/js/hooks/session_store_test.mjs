@@ -124,7 +124,7 @@ const keyRanges = {
 globalThis.IDBKeyRange = keyRanges;
 
 function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
-  const metrics = { cursorValues: 0, traceGetAll: 0, counts: [] };
+  const metrics = { cursorValues: 0, traceGetAll: 0, gets: 0, counts: [] };
   let remainingForcedFailures = failDeleteKey === null ? 0 : 1;
   const storeNames = [
     "completion_drafts",
@@ -189,25 +189,28 @@ function statefulIndexedDbHarness({ failDeleteKey = null } = {}) {
                 [...values.values()].map((value) => structuredClone(value)),
               );
             },
+            getAllKeys() {
+              return request(() => [...values.values()]
+                .map((value) => keyFor(name, value))
+                .sort((a, b) => (a[0] - b[0]) || (a[1] - b[1])));
+            },
+            get(key) {
+              metrics.gets += 1;
+              return request(() => structuredClone(values.get(normalize(key))));
+            },
             count(range) {
               metrics.counts.push(range);
               return request(() => [...values.values()].filter((value) => inRange(value, range)).length);
             },
             openCursor(range, direction) {
               const entries = [...values.values()]
-                .filter((value) => range === undefined || inRange(value, range))
-                .sort((a, b) => (a.session_id - b.session_id) || (direction === "prev" ? b.chunk_index - a.chunk_index : a.chunk_index - b.chunk_index));
+                .filter((value) => inRange(value, range))
+                .sort((a, b) => direction === "prev" ? b.chunk_index - a.chunk_index : a.chunk_index - b.chunk_index);
               let index = 0;
               const cursorRequest = { result: undefined, error: null };
-              const before = (value, [sessionId, chunkIndex]) =>
-                value.session_id < sessionId || (value.session_id === sessionId && value.chunk_index < chunkIndex);
               const advance = () => request(() => index < entries.length ? {
                 get value() { metrics.cursorValues += 1; return structuredClone(entries[index]); },
-                continue(key) {
-                  index += 1;
-                  if (key) while (index < entries.length && before(entries[index], key)) index += 1;
-                  advance();
-                },
+                continue() { index += 1; advance(); },
               } : null, false, cursorRequest);
               advance();
               return cursorRequest;
@@ -782,5 +785,6 @@ test("chunks saved for a session that was never queued are listed for upload onc
     { session_id: 60, client_session_id: "client-60" },
   ]);
   // One chunk read per unqueued session, not the whole trace.
-  assert.equal(fake.metrics.cursorValues, 3);
+  assert.equal(fake.metrics.gets, 2);
+  assert.equal(fake.metrics.cursorValues, 0);
 });
