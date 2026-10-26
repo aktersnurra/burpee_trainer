@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-26 — One action row for New, Edit and Swap
+
+- New, Edit, review and Swap share one action row under their content: Cancel (X) at the left, confirm at the right, and the extras (Edit, Save to library) as icons beside confirm. Cancel no longer sits inside the text box. Swap shows the previewed workout as the Home title, and the chooser's close is at the left.
+- The Time today (20/40 min) row is removed from Home, with `Coach.DurationChoice` and its `choose_duration` event.
+- A dismissed pose-upload notice stays dismissed across app opens (kept in `localStorage`), instead of returning on every load.
+- Development only: `/dev/login` signs in a local `dev` user without Pocket ID, routed only when `dev_routes` is on.
+
 ## 2026-10-21 — A goal is reps in 20 minutes
 
 - Setting a goal takes only the reps and the burpee type (and a date): every goal is one 20-minute session, the length levels are counted in. The coach's `propose_goal` and Claude's `set_goal` no longer take a duration. A migration makes open goals (active and proposed) 20-minute goals with the same reps; achieved and abandoned goals keep the duration they had.

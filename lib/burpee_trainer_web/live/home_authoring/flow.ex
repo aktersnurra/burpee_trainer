@@ -59,19 +59,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     {%{open(m, :editing, params, key) | editing_source: source, instruction: ""}, []}
   end
 
-  def update(
-        %__MODULE__{authoring_stage: :idle} = m,
-        {:duration_prepared, source, prepared, params, rows}
-      ) do
-    {%{
-       open(m, :review, params, prepared.approval_key)
-       | editing_source: source,
-         pending_request: prepared,
-         review_inspection_rows: rows,
-         instruction: ""
-     }, []}
-  end
-
   def update(%__MODULE__{} = m, :aborted) do
     {discarded, commands} = discard(m)
 

@@ -23,41 +23,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   def handle_event("submit_home_action", _params, %{assigns: %{home_selection: nil}} = socket),
     do: {:noreply, socket}
 
-  def handle_event(
-        "choose_duration",
-        %{"seconds" => seconds},
-        %{assigns: %{authoring_stage: :idle, busy?: false, home_selection: %{plan: source}}} =
-          socket
-      )
-      when seconds in ["1200", "2400"] do
-    a = socket.assigns
-
-    case Coach.DurationChoice.prepare(
-           a.current_scope,
-           a.home_selection,
-           String.to_integer(seconds)
-         ) do
-      {:ok, prepared} ->
-        params = HomeWorkoutRequest.from_definition(prepared.definition)
-
-        {:noreply,
-         socket
-         |> assign(expanded?: true, expanded_groups: MapSet.new())
-         |> step({:duration_prepared, source, prepared, params, prepared_inspection(prepared)})
-         |> workout_form(params, %{})
-         |> adjustment_form("")}
-
-      {:error, _} ->
-        {:noreply,
-         assign(socket,
-           local_error:
-             "That duration is unavailable for this workout or week's remaining time. Your workout is unchanged."
-         )}
-    end
-  end
-
-  def handle_event("choose_duration", _, socket), do: {:noreply, socket}
-
   def handle_event("edit_current_workout", _, socket) do
     if not is_nil(socket.assigns.home_selection) and socket.assigns.expanded? and
          socket.assigns.authoring_stage == :idle do

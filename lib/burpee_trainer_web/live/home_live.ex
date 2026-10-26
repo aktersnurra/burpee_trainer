@@ -359,7 +359,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "change_current_edit",
              "change_new_workout",
              "choose_workout_value",
-             "choose_duration",
              "confirm_workout_request",
              "edit_current_workout",
              "edit_workout_request",
