@@ -10,7 +10,15 @@ function queuedChunk(sessionId) {
 	};
 }
 
-function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessionIds = [56] } = {}) {
+function memoryStorage() {
+	const values = new Map();
+	return {
+		getItem: (key) => values.has(key) ? values.get(key) : null,
+		setItem: (key, value) => { values.set(key, String(value)); },
+	};
+}
+
+function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessionIds = [56], storage = memoryStorage() } = {}) {
 	const queues = new Map([
 		...emptySessionIds.map((id) => [id, []]),
 		...frameSessionIds.map((id) => [id, [queuedChunk(id)]]),
@@ -60,6 +68,7 @@ function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessi
 			return fetch ? fetch(url, options, requests) : { ok: true, json: async () => ({ accepted_indexes: [0], complete: true }) };
 		},
 		csrfToken: () => csrfToken,
+		storage,
 		CompressionStream: null,
 		setTimeout: (callback, delay) => {
 			const id = ++timerId;
@@ -202,6 +211,34 @@ test("dismissing an empty queue notice retains its record and stays quiet across
 		assert.equal(subject.timers.size, 0);
 		assert.equal(subject.requests, 0);
 		assert.deepEqual(subject.queuedSessionIds, [54]);
+	} finally { subject.sync.stop(); }
+});
+
+test("a dismissed notice stays dismissed the next time the app opens", async () => {
+	const storage = memoryStorage();
+	const first = harness({ emptySessionIds: [54], frameSessionIds: [], storage });
+	try {
+		await first.sync.retry();
+		assert.equal(first.status.hidden, false);
+		first.click("#pose-upload-dismiss");
+	} finally { first.sync.stop(); }
+
+	const reopened = harness({ emptySessionIds: [54], frameSessionIds: [], storage });
+	try {
+		await reopened.sync.retry();
+		assert.equal(reopened.status.hidden, true);
+		assert.deepEqual(reopened.queuedSessionIds, [54]);
+	} finally { reopened.sync.stop(); }
+});
+
+test("a broken storage still shows the notice and dismisses it for this visit", async () => {
+	const storage = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+	const subject = harness({ emptySessionIds: [54], frameSessionIds: [], storage });
+	try {
+		await subject.sync.retry();
+		assert.equal(subject.status.hidden, false);
+		subject.click("#pose-upload-dismiss");
+		assert.equal(subject.status.hidden, true);
 	} finally { subject.sync.stop(); }
 });
 

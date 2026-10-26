@@ -2,6 +2,25 @@ import { canDrainPoseTraces, createPoseTraceUploader } from "./pose_trace_upload
 
 const FIRST_RETRY_MS = 5_000;
 const MAX_RETRY_MS = 30_000;
+const DISMISSED_KEY = "burpee:dismissed-pose-uploads";
+
+// A dismissed notice stays dismissed on this device; a blocked queue keeps its poses either way.
+function loadDismissed(storage) {
+	try {
+		const ids = JSON.parse(storage?.getItem(DISMISSED_KEY) ?? "[]");
+		return new Set(Array.isArray(ids) ? ids : []);
+	} catch {
+		return new Set();
+	}
+}
+
+function saveDismissed(storage, ids) {
+	try {
+		storage?.setItem(DISMISSED_KEY, JSON.stringify([...ids]));
+	} catch {
+		// Without storage the dismissal lasts this visit only.
+	}
+}
 
 export function startPoseTraceSync({
 	documentRoot,
@@ -9,6 +28,7 @@ export function startPoseTraceSync({
 	openStore,
 	fetch,
 	csrfToken,
+	storage = safeLocalStorage(),
 	CompressionStream = globalThis.CompressionStream,
 	setTimeout: schedule = globalThis.setTimeout,
 	clearTimeout: cancel = globalThis.clearTimeout,
@@ -21,7 +41,7 @@ export function startPoseTraceSync({
 	let stopped = false;
 	let rescanRequested = false;
 	let blockedSessionId = null;
-	const dismissedBlockedUploads = new Set();
+	const dismissedBlockedUploads = loadDismissed(storage);
 
 	function render(state, message = "") {
 		if (stopped) return;
@@ -122,6 +142,7 @@ export function startPoseTraceSync({
 		if (event.target.closest?.("#pose-upload-retry")) onRetry();
 		if (event.target.closest?.("#pose-upload-dismiss") && blockedSessionId !== null) {
 			dismissedBlockedUploads.add(blockedSessionId);
+			saveDismissed(storage, dismissedBlockedUploads);
 			render("idle");
 		}
 	};
@@ -142,6 +163,14 @@ export function startPoseTraceSync({
 			documentRoot.removeEventListener("click", onClick);
 		},
 	};
+}
+
+function safeLocalStorage() {
+	try {
+		return globalThis.localStorage;
+	} catch {
+		return undefined;
+	}
 }
 
 function pendingMessage(result) {
