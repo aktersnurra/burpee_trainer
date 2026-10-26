@@ -8,7 +8,16 @@ defmodule BurpeeTrainer.Coach.Selector do
   """
 
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Agent, AgentPrompt, Client, Progression, RepCeiling}
+
+  alias BurpeeTrainer.Coach.{
+    Agent,
+    AgentPrompt,
+    Client,
+    Progression,
+    RepCeiling,
+    WorkoutPreference
+  }
+
   alias BurpeeTrainer.Workouts
 
   require Logger
@@ -59,7 +68,9 @@ defmodule BurpeeTrainer.Coach.Selector do
       :create
     else
       result =
-        Client.decide(context, %{"workout" => question(candidates)},
+        Client.decide(
+          context,
+          %{"workout" => question(candidates, WorkoutPreference.for_scope(scope))},
           config: config,
           req: Keyword.get(opts, :req),
           budget: Keyword.get(opts, :budget, []),
@@ -108,16 +119,18 @@ defmodule BurpeeTrainer.Coach.Selector do
   end
 
   # Fitting workouts: the slot's burpee type and minutes, within the same ceiling the coach's
-  # own designs must keep (`RepCeiling`).
+  # own designs must keep (`RepCeiling`), and not one the athlete asked to avoid.
   defp candidates(scope, slot) do
     decision = Progression.for_type(scope, slot.burpee_type)
+    preferences = WorkoutPreference.for_scope(scope)
 
     case RepCeiling.for_type(scope, slot.burpee_type) do
       {:ok, ceiling} ->
         scope
         |> Workouts.list_library()
         |> Enum.filter(fn plan ->
-          plan.burpee_type == slot.burpee_type and plan.target_duration_sec == slot.duration_sec and
+          Map.get(preferences, plan.id) != :avoid and plan.burpee_type == slot.burpee_type and
+            plan.target_duration_sec == slot.duration_sec and
             RepCeiling.allows?(
               ceiling,
               plan.burpee_type,
@@ -134,7 +147,7 @@ defmodule BurpeeTrainer.Coach.Selector do
 
   defp reps_per_20(plan), do: RepCeiling.pace(plan.target_reps, plan.target_duration_sec)
 
-  defp question(candidates) do
+  defp question(candidates, preferences) do
     %{
       "type" => "choice",
       "instructions" =>
@@ -153,11 +166,17 @@ defmodule BurpeeTrainer.Coach.Selector do
              "minutes" => div(plan.target_duration_sec, 60),
              "reps_per_20_minutes" => reps_per_20(plan),
              "saved_by" => if(plan.origin == :built_in, do: "app", else: "athlete")
-           }}
+           }
+           |> put_wants_again(Map.get(preferences, plan.id))}
         end)
         |> Map.put(@create, "None of these suits the athlete today; design a new workout.")
     }
   end
+
+  defp put_wants_again(criteria, :choose_again),
+    do: Map.put(criteria, "athlete_feedback", "wants to do it again")
+
+  defp put_wants_again(criteria, _), do: criteria
 
   defp option(plan), do: "workout_#{plan.id}"
 

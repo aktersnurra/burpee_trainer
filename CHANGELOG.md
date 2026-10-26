@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-26 — The debrief shapes the next pick
+
+- "Avoid" and "choose again" now belong to the workout they were said about (`Coach.WorkoutPreference`): the latest answer for a workout counts, a later session without an answer changes nothing, and an answer lapses after four weeks. A workout you asked to avoid is no longer offered to the decision model and the planner's `select_workout` refuses it; picking it yourself is unchanged. A "choose again" workout is marked to the decision model as one you want to repeat.
+- A recent limiter (legs, upper body, breathing, whole body) is part of the progression guidance the planner and decision model share: arrange sets to spare it, with shorter sets and fuller recovery inside the same reps and duration.
+
 ## 2026-10-26 — One action row for New, Edit and Swap
 
 - New, Edit, review and Swap share one action row under their content: Cancel (X) at the left, confirm at the right, and the extras (Edit, Save to library) as icons beside confirm. Cancel no longer sits inside the text box. Swap shows the previewed workout as the Home title, and the chooser's close is at the left.

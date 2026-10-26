@@ -11,7 +11,9 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
                  "Arrange sets and explain the evidence; do not invent a different progression " <>
                  "decision. Keep the full slot duration. Shorter rests at unchanged reps and " <>
                  "duration are not greater density. A missed maintenance week alone is not " <>
-                 "evidence of lost capacity."
+                 "evidence of lost capacity. When their feedback names a recent limiter " <>
+                 "(legs, upper body, breathing or the whole body), arrange the sets to spare " <>
+                 "it with shorter sets and fuller recovery inside the same reps and duration."
 
   @planner_task """
   Plan the athlete's next session. Prefer a saved or built-in workout that fits, with \

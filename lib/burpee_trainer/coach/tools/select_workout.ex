@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Coach.Tools.SelectWorkout do
   @behaviour BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Coach.{Progression, Rationale, RepCeiling, Tool}
+  alias BurpeeTrainer.Coach.{Progression, Rationale, RepCeiling, Tool, WorkoutPreference}
   alias BurpeeTrainer.Workouts
   def name, do: "select_workout"
   def description, do: "Select an owned or built-in published workout fitting the current slot."
@@ -51,6 +51,9 @@ defmodule BurpeeTrainer.Coach.Tools.SelectWorkout do
 
           not Progression.allows?(decision, plan.target_reps, duration) ->
             {:error, Progression.explanation(decision)}
+
+          Map.get(WorkoutPreference.for_scope(scope), plan.id) == :avoid ->
+            {:error, "the athlete asked to avoid this workout; choose another"}
 
           true ->
             :ok
