@@ -123,7 +123,7 @@ class FixtureElement {
 }
 
 const LOW_FRONT_GEOMETRY = Object.freeze({
-	upright: { body: 3.2, hip: 2.35, torso: 0.85, wrist: 1.5 },
+	upright: { body: 2.75, hip: 1.78, torso: 0.96, wrist: 1.87 },
 	lowering: { body: 2.1, hip: 1.65, torso: 0.45, wrist: 0.7 },
 	floor: { body: 1.05, hip: 0.7, torso: 0.35, wrist: 0.45 },
 	returning: { body: 1.65, hip: 1.1, torso: 0.55, wrist: 0.8 },
@@ -190,14 +190,55 @@ function lowFrontFrame(phase, tMs, { missingWorld = [] } = {}) {
 	};
 }
 
-function lowFrontCycle(startMs) {
-	return [
-		lowFrontFrame("upright", startMs),
-		lowFrontFrame("lowering", startMs + 100),
-		lowFrontFrame("floor", startMs + 200),
-		lowFrontFrame("returning", startMs + 300),
-		lowFrontFrame("upright", startMs + 400),
+// Derived world features of each phase, as in the recorded sessions.
+const DERIVED_PHASES = Object.freeze({
+	standing: [2.75, 1.78, 0.96, 1.87, 0, 0],
+	lowering: [1.9, 1.62, 0.4, 0.88, -3, -3.3],
+	pushup: [0.93, 0.94, 0.2, 0.23, 0, 0.2],
+	rising: [2.15, 1.56, 0.59, 1.1, 3.2, 3.9],
+});
+
+function derivedFrame(phase, tMs) {
+	const [body, hip, torso, wrist, dBody, dWrist] = DERIVED_PHASES[phase];
+	return {
+		tMs,
+		poseConfidence: 0.9,
+		macroLandmarkConfidence: 0.9,
+		visibleFraction: 1,
+		hasFullWorldLandmarkCoverage: true,
+		worldBodyVerticalSpan: body,
+		worldHipVerticalSpan: hip,
+		worldTorsoElevation: torso,
+		worldWristVerticalSpan: wrist,
+		dWorldBodyVerticalSpan: dBody,
+		dWorldWristVerticalSpan: dWrist,
+	};
+}
+
+// One rep sampled every 100 ms over 3 s, ending in the standing the counter's lag needs.
+function derivedCycle(startMs) {
+	const phases = [
+		["lowering", 400],
+		["pushup", 800],
+		["rising", 400],
+		["standing", 1_400],
 	];
+	const frames = [];
+	let tMs = startMs;
+	for (const [phase, durationMs] of phases) {
+		for (const end = tMs + durationMs; tMs < end; tMs += 100) {
+			frames.push(derivedFrame(phase, tMs));
+		}
+	}
+	return frames;
+}
+
+// The camera keeps sampling after the last rep, for the counter to decide it.
+function standingAfter(frames, durationMs = 1_000) {
+	const last = frames.at(-1).tMs;
+	return Array.from({ length: durationMs / 100 }, (_, index) =>
+		derivedFrame("standing", last + (index + 1) * 100),
+	);
 }
 
 function absentFrames(startMs, durationMs) {
@@ -490,7 +531,10 @@ test("the production tracker cannot activate a browser fixture from mutable glob
 });
 
 test("the user-labeled derived feature fixture renders two actual reps", async () => {
-	const root = await runControlledSessionFixture(userLabeledRepFeatureFrames);
+	const root = await runControlledSessionFixture([
+		...userLabeledRepFeatureFrames,
+		...standingAfter(userLabeledRepFeatureFrames),
+	]);
 
 	assert.equal(
 		root.querySelector("#session-actual-reps").textContent,
@@ -501,9 +545,9 @@ test("the user-labeled derived feature fixture renders two actual reps", async (
 
 test("fixture absence between macro-cycles leaves the rendered session warning-free and Save enabled", async () => {
 	const root = await runControlledSessionFixture([
-		...lowFrontCycle(0),
-		...absentFrames(500, 2000),
-		...lowFrontCycle(3500),
+		...derivedCycle(0),
+		...absentFrames(3_000, 2_000),
+		...derivedCycle(5_000),
 	]);
 
 	assert.equal(

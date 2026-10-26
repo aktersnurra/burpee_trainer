@@ -611,6 +611,25 @@ test("a rep the camera sees just after a set ends counts for it; later in the re
 	assert.deepEqual(ctx.tracking.cadenceMs, [9_000]);
 });
 
+test("a rep the counter decides late is dated, and judged, when it happened", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+		{ kind: "rest", duration_sec: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+	]);
+	const at = (elapsedSec) => {
+		ctx.segment = { ...ctx.segment, clock: { ...ctx.segment.clock, elapsedSec } };
+	};
+
+	at(5.7);
+	ctx.observePoseRep({ index: 1, lagMs: 700 });
+	// Decided 2.5 s into the rest, but it happened 1.8 s after the set ended.
+	at(10.5);
+	ctx.observePoseRep({ index: 2, lagMs: 700 });
+
+	assert.deepEqual(ctx.tracking.cadenceMs, [5_000, 9_800]);
+});
+
 test("with the camera, the workout waits briefly for its last rep before the count is final", () => {
 	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
 	ctx.draftWrite = Promise.resolve();

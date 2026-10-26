@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-26 — A proper HSMM counts camera reps
+
+- The camera's rep counter is an explicit-duration HSMM (`pose_burpee_hsmm.mjs`): standing, lowering, pushup, rising, and an "other" phase for bending or squatting during rests, on a 100 ms clock where an unusable frame is a missing observation. It is decoded by Viterbi with a 600 ms lag, so a rep is decided about 0.7 s after you stand up; the session dates it when it happened (`lagMs` on `pose-tracker:rep`). Its parameters (`pose_burpee_hsmm_model.mjs`) are fitted, not hand-tuned. Before, one bad frame while lowering lost the rep. On the recorded sessions (140 and 135 reps) it still counts exactly, and with dropouts it holds where the old counter did not: 1% bursts of 830 ms leave 138–140 of 140 (was 108–120).
+- Traces are replayable (payload version 2): the tracker records every frame the counter saw, with unusable frames and resets as markers, and the reps it emitted. A replay reproduces the live count exactly.
+- `mix burpee_trainer.export_pose_corpus OUT_DIR [--database copy.db]` exports recorded sessions; `node assets/js/tools/pose_corpus_report.mjs` replays them against logged counts and the schedule; `node assets/js/tools/fit_burpee_hsmm.mjs` refits the model from them. See `docs/guides/pose-corpus.md`.
+- `/tracking-test` runs the session counter (it ran an older, separate one); the old decoder modules are deleted.
+- Pose uploads show a progress bar and "N of M parts" while they run, and send up to 4 MB of JSON per request (was 512 KB), so a 20-minute session goes up in a handful of requests instead of about 45.
+
 ## 2026-10-26 — The debrief shapes the next pick
 
 - "Avoid" and "choose again" now belong to the workout they were said about (`Coach.WorkoutPreference`): the latest answer for a workout counts, a later session without an answer changes nothing, and an answer lapses after four weeks. A workout you asked to avoid is no longer offered to the decision model and the planner's `select_workout` refuses it; picking it yourself is unchanged. A "choose again" workout is marked to the decision model as one you want to repeat.

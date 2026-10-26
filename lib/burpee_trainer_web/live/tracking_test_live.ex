@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
           </p>
           <h1 class="text-3xl font-bold tracking-tight">Camera + pose overlay</h1>
           <p class="text-sm text-[var(--session-muted)]">
-            Local-only diagnostic view for BlazePose full keypoints, pose features, and rep counting.
+            Local-only diagnostic view for BlazePose full keypoints, pose features, and the session rep counter (phase shown about 0.6 s behind).
           </p>
         </div>
 
@@ -52,37 +52,6 @@ defmodule BurpeeTrainerWeb.TrackingTestLive do
               <.debug_stat label="Signal" value_id="pose-debug-signal" value="—" />
               <.debug_stat label="Phase" value_id="pose-debug-phase" value="—" />
               <.debug_stat label="Reps" value_id="pose-debug-reps" value="0" />
-            </div>
-
-            <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">
-              <div>
-                <p class="text-sm font-medium text-[var(--session-muted)]">
-                  Decoder diagnostics
-                </p>
-                <p class="mt-1 text-xs text-[var(--session-muted)]">
-                  Debug-only HMM/HSMM phase loop output. This does not drive workout rep counting yet.
-                </p>
-              </div>
-              <div class="grid grid-cols-2 gap-2 text-sm">
-                <.debug_stat label="Decoded phase" value_id="pose-debug-decoder-phase" value="—" />
-                <.debug_stat label="Candidates" value_id="pose-debug-decoder-candidates" value="0" />
-                <.debug_stat
-                  label="Illegal transitions"
-                  value_id="pose-debug-decoder-illegal-transitions"
-                  value="0"
-                />
-                <.debug_stat
-                  label="Unknown span"
-                  value_id="pose-debug-decoder-max-unknown"
-                  value="0ms"
-                />
-              </div>
-              <p
-                id="pose-debug-decoder-segments"
-                class="text-xs text-[var(--session-muted)] break-words"
-              >
-                []
-              </p>
             </div>
 
             <div class="rounded-xl border border-[var(--session-border)] bg-[var(--session-track)]/30 p-3 space-y-3">

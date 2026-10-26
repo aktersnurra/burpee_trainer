@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
 import { createPoseTracker } from "./pose_tracker_impl.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 
@@ -92,10 +93,10 @@ const LOW_FRONT_FEATURES = Object.freeze({
 		hipToKnee: 0.9,
 		dWristToAnkle: 0,
 		dShoulderToAnkle: 0,
-		worldBodyVerticalSpan: 3.2,
-		worldHipVerticalSpan: 2.35,
-		worldWristVerticalSpan: 1.5,
-		worldTorsoElevation: 0.85,
+		worldBodyVerticalSpan: 2.75,
+		worldHipVerticalSpan: 1.78,
+		worldWristVerticalSpan: 1.87,
+		worldTorsoElevation: 0.96,
 		dWorldBodyVerticalSpan: 0,
 		dWorldWristVerticalSpan: 0,
 	},
@@ -106,12 +107,12 @@ const LOW_FRONT_FEATURES = Object.freeze({
 		hipToKnee: 0.6,
 		dWristToAnkle: -1.4,
 		dShoulderToAnkle: -1.1,
-		worldBodyVerticalSpan: 2.1,
-		worldHipVerticalSpan: 1.65,
-		worldWristVerticalSpan: 0.7,
-		worldTorsoElevation: 0.45,
-		dWorldBodyVerticalSpan: -1,
-		dWorldWristVerticalSpan: -1,
+		worldBodyVerticalSpan: 1.9,
+		worldHipVerticalSpan: 1.62,
+		worldWristVerticalSpan: 0.88,
+		worldTorsoElevation: 0.4,
+		dWorldBodyVerticalSpan: -3,
+		dWorldWristVerticalSpan: -3.3,
 	},
 	floor: {
 		wristToAnkle: 0.16,
@@ -120,12 +121,12 @@ const LOW_FRONT_FEATURES = Object.freeze({
 		hipToKnee: 0.52,
 		dWristToAnkle: 0,
 		dShoulderToAnkle: 0,
-		worldBodyVerticalSpan: 1.05,
-		worldHipVerticalSpan: 0.7,
-		worldWristVerticalSpan: 0.45,
-		worldTorsoElevation: 0.35,
+		worldBodyVerticalSpan: 0.93,
+		worldHipVerticalSpan: 0.94,
+		worldWristVerticalSpan: 0.23,
+		worldTorsoElevation: 0.2,
 		dWorldBodyVerticalSpan: 0,
-		dWorldWristVerticalSpan: 0,
+		dWorldWristVerticalSpan: 0.2,
 	},
 	returning: {
 		wristToAnkle: 0.48,
@@ -134,12 +135,12 @@ const LOW_FRONT_FEATURES = Object.freeze({
 		hipToKnee: 0.3,
 		dWristToAnkle: 1.2,
 		dShoulderToAnkle: 1.4,
-		worldBodyVerticalSpan: 1.65,
-		worldHipVerticalSpan: 1.1,
-		worldWristVerticalSpan: 0.8,
-		worldTorsoElevation: 0.55,
-		dWorldBodyVerticalSpan: 1,
-		dWorldWristVerticalSpan: 1,
+		worldBodyVerticalSpan: 2.15,
+		worldHipVerticalSpan: 1.56,
+		worldWristVerticalSpan: 1.1,
+		worldTorsoElevation: 0.59,
+		dWorldBodyVerticalSpan: 3.2,
+		dWorldWristVerticalSpan: 3.9,
 	},
 });
 
@@ -173,14 +174,21 @@ function returning(tMs) {
 	return lowFrontFrame("returning", tMs);
 }
 
+// One rep sampled every 100 ms over 4 s; its return to standing starts at 2.6 s.
 function lowFrontCycle(startMs) {
-	return [
-		upright(startMs),
-		lowering(startMs + 150),
-		floorWork(startMs + 300),
-		returning(startMs + 750),
-		upright(startMs + 900),
+	const phases = [
+		[upright, 1_000],
+		[lowering, 400],
+		[floorWork, 800],
+		[returning, 400],
+		[upright, 1_400],
 	];
+	const frames = [];
+	let tMs = startMs;
+	for (const [frame, durationMs] of phases) {
+		for (const end = tMs + durationMs; tMs < end; tMs += 100) frames.push(frame(tMs));
+	}
+	return frames;
 }
 
 function completeCycle(startMs) {
@@ -338,9 +346,7 @@ function mountedTrackerWithSamples(
 		traceSampleTimes: () =>
 			events
 				.filter((event) => event.type === "pose-tracker:trace-chunk")
-				.flatMap((event) =>
-					event.detail.chunk.payload.samples.map((sample) => sample.tMs),
-				),
+				.flatMap((event) => event.detail.chunk.payload.samples.map(traceEntry)),
 		finish(detail) {
 			tracker.dispatchEvent(new CustomEvent("pose-tracker:finish", { detail }));
 		},
@@ -348,6 +354,10 @@ function mountedTrackerWithSamples(
 			events
 				.filter((event) => event.type === "pose-tracker:rep")
 				.map((event) => event.detail.index),
+		repLags: () =>
+			events
+				.filter((event) => event.type === "pose-tracker:rep")
+				.map((event) => event.detail.lagMs),
 		statusEvents: () =>
 			events
 				.filter((event) => event.type === "pose-tracker:status")
@@ -355,7 +365,14 @@ function mountedTrackerWithSamples(
 	};
 }
 
-test("does not emit a candidate or persist an isolated frame without required world landmarks", async () => {
+// A trace entry: a sample's time, "<tMs>:unusable" for a dropout marker, "reset" for a reset.
+function traceEntry(sample) {
+	if (sample.reset) return "reset";
+	if (sample.usable === false) return `${sample.tMs}:unusable`;
+	return sample.tMs;
+}
+
+test("an isolated frame without required world landmarks emits no rep and is traced as unusable", async () => {
 	const tracker = mountedTrackerWithSamples(
 		[lowFrontFrame("lowering", 150, { missingWorld: ["left_wrist"] })],
 		{ captureSegment: "workout" },
@@ -364,11 +381,11 @@ test("does not emit a candidate or persist an isolated frame without required wo
 	await tracker.run();
 
 	assert.deepEqual(tracker.repIndexes(), []);
-	assert.equal(tracker.traceChunkCount(), 0);
+	assert.deepEqual(tracker.traceSampleTimes(), ["150:unusable"]);
 	assert.equal(tracker.statusEvents().includes("lost"), false);
 });
 
-test("raw missing knee or foot world frames are silent and unpersisted", async () => {
+test("raw missing knee or foot world frames are silent and traced as unusable", async () => {
 	for (const missingWorld of ["left_knee", "right_foot_index"]) {
 		const frames = [rawLowFrontFrame(0, { missingWorld: [missingWorld] })];
 		const tracker = mountedTrackerWithSamples(frames, {
@@ -380,12 +397,12 @@ test("raw missing knee or foot world frames are silent and unpersisted", async (
 		await tracker.run();
 
 		assert.deepEqual(tracker.repIndexes(), []);
-		assert.equal(tracker.traceChunkCount(), 0);
+		assert.deepEqual(tracker.traceSampleTimes(), ["0:unusable"]);
 		assert.equal(tracker.statusEvents().includes("lost"), false);
 	}
 });
 
-test("raw low-confidence nose or foot frames are silent and unpersisted", async () => {
+test("raw low-confidence nose or foot frames are silent and traced as unusable", async () => {
 	for (const lowConfidence of ["nose", "right_foot_index"]) {
 		const frames = [
 			rawLowFrontFrame(0, { lowConfidence: [lowConfidence] }),
@@ -400,12 +417,12 @@ test("raw low-confidence nose or foot frames are silent and unpersisted", async 
 		await tracker.run();
 
 		assert.deepEqual(tracker.repIndexes(), []);
-		assert.equal(tracker.traceChunkCount(), 0);
+		assert.deepEqual(tracker.traceSampleTimes(), ["0:unusable", "100:unusable"]);
 		assert.equal(tracker.statusEvents().includes("lost"), false);
 	}
 });
 
-test("persists only usable world frames from a mixed low-front sequence", async () => {
+test("traces usable frames in full and unusable ones as markers, in order", async () => {
 	const tracker = mountedTrackerWithSamples(
 		[
 			lowFrontFrame("upright", 0),
@@ -417,20 +434,63 @@ test("persists only usable world frames from a mixed low-front sequence", async 
 
 	await tracker.run();
 
-	assert.deepEqual(tracker.traceSampleTimes(), [0, 300]);
+	assert.deepEqual(tracker.traceSampleTimes(), [0, "150:unusable", 300]);
 });
 
 test("keeps counting after absent low-front frames without image-plane fallback", async () => {
 	const tracker = mountedTrackerWithSamples([
 		...lowFrontCycle(0),
-		...absentFrames(1000, 2000),
-		...lowFrontCycle(3500),
+		...absentFrames(4_000, 2_000),
+		...lowFrontCycle(6_000),
 	]);
 
 	await tracker.run();
 
 	assert.deepEqual(tracker.repIndexes(), [1, 2]);
 	assert.deepEqual(tracker.statusEvents(), ["live"]);
+});
+
+test("a rep event says how long after the rep it was decided", async () => {
+	const tracker = mountedTrackerWithSamples(lowFrontCycle(0));
+
+	await tracker.run();
+
+	const [lagMs] = tracker.repLags();
+	assert.ok(lagMs >= 600 && lagMs <= 800, `lag ${lagMs}`);
+});
+
+test("a recorded trace replays to exactly the reps the tracker emitted", async () => {
+	const dropout = lowFrontCycle(4_000).map((frame, index) =>
+		index >= 11 && index < 13 ? absent(frame.tMs) : frame,
+	);
+	const tracker = mountedTrackerWithSamples(
+		[
+			...lowFrontCycle(0),
+			...dropout,
+			...absentFrames(8_000, 1_500),
+			...lowFrontCycle(9_500),
+		],
+		{ captureSegment: "workout" },
+	);
+
+	await tracker.run();
+
+	const payloads = tracker.traceChunks().map((event) => event.detail.chunk.payload);
+	let state = initialBurpeeHsmmState();
+	const replayed = [];
+	for (const sample of payloads.flatMap((payload) => payload.samples)) {
+		if (sample.reset) {
+			state = initialBurpeeHsmmState();
+			continue;
+		}
+		const result = stepBurpeeHsmm(state, sample.features ?? sample);
+		state = result.state;
+		replayed.push(...result.reps);
+	}
+
+	assert.equal(tracker.repIndexes().length, 3);
+	assert.deepEqual(replayed, payloads.flatMap((payload) => payload.reps));
+	assert.equal(replayed.length, 3);
 });
 
 test("runs raw controlled frames through sampleFromPose with the prior feature", async () => {
@@ -469,14 +529,14 @@ test("does not emit a lost status for a low-confidence frame", async () => {
 	assert.equal(tracker.statusEvents().includes("lost"), false);
 });
 
-test("does not persist an absent observation to a pose trace", async () => {
+test("an absent observation is traced as unusable", async () => {
 	const tracker = mountedTrackerWithSamples([absent(0)], {
 		captureSegment: "workout",
 	});
 
 	await tracker.run();
 
-	assert.deepEqual(tracker.traceChunks(), []);
+	assert.deepEqual(tracker.traceSampleTimes(), ["0:unusable"]);
 });
 
 test("invalid finish data does not report a tracker loss", async () => {
@@ -680,9 +740,7 @@ function mountedDeferredDetectorTracker(samples = []) {
 		previousFeatures,
 		repIndexes,
 		traceSampleTimes() {
-			return traceChunks.flatMap((chunk) =>
-				chunk.payload.samples.map((sample) => sample.tMs),
-			);
+			return traceChunks.flatMap((chunk) => chunk.payload.samples.map(traceEntry));
 		},
 		setNow(value) {
 			nowMs = value;
@@ -787,7 +845,7 @@ test("a pending inference settled while suspended cannot capture or revive its l
 	assert.equal(subject.previousFeatures[0], null);
 	assert.equal(subject.previousFeatures[1], null);
 	assert.deepEqual(subject.repIndexes, []);
-	assert.deepEqual(subject.traceSampleTimes(), [0, 200, 300, 400]);
+	assert.deepEqual(subject.traceSampleTimes(), [0, "reset", 200, 300, 400]);
 });
 
 test("resume waits for a pending inference before starting another detector call", async () => {

@@ -1,7 +1,8 @@
 const DEFAULT_FLUSH_INTERVAL_MS = 3000;
 export const MAX_TRACE_CHUNK_BYTES = 200_000;
+const PAYLOAD_VERSION = 2;
 const EMPTY_PAYLOAD_BYTES = new TextEncoder().encode(
-	JSON.stringify({ version: 1, samples: [] }),
+	JSON.stringify({ version: PAYLOAD_VERSION, samples: [], reps: [] }),
 ).byteLength;
 
 export function serializedJsonBytes(value) {
@@ -17,8 +18,14 @@ export function initialPoseCaptureRecorder(options = {}) {
 		pendingStartedAtMs: null,
 		pendingSamples: [],
 		pendingSamplesByteLength: 0,
+		pendingReps: [],
 		diagnostics: [],
 	};
+}
+
+// A rep the counter emitted; it travels with the next chunk flushed.
+export function recordPoseRep(state, tMs) {
+	return { ...state, pendingReps: [...state.pendingReps, tMs] };
 }
 
 export function recordPoseSample(state, sample, { segment, nowMs }) {
@@ -93,10 +100,13 @@ export function flushPoseCaptureRecorder(state, _options = {}) {
 	return { state: flushed.state, chunks: [flushed.chunk] };
 }
 
-function payloadFor(samples) {
+// Version 2: samples hold every frame the counter saw (unusable ones as
+// `{ tMs, usable: false }`, resets as `{ tMs, reset: true }`); reps are the rep times it emitted.
+function payloadFor(samples, reps) {
 	return {
-		version: 1,
+		version: PAYLOAD_VERSION,
 		samples,
+		reps,
 	};
 }
 
@@ -112,7 +122,7 @@ function flushPending(state) {
 		started_at_ms: state.pendingStartedAtMs,
 		ended_at_ms: samples[samples.length - 1].tMs,
 		sample_count: samples.length,
-		payload: payloadFor(samples),
+		payload: payloadFor(samples, state.pendingReps),
 	};
 
 	return {
@@ -124,6 +134,7 @@ function flushPending(state) {
 			pendingStartedAtMs: null,
 			pendingSamples: [],
 			pendingSamplesByteLength: 0,
+			pendingReps: [],
 		},
 	};
 }

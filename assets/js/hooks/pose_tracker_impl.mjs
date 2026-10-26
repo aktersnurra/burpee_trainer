@@ -1,5 +1,9 @@
 import { createWorkerPoseDetector } from "./pose_worker_detector.mjs";
-import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
+import {
+	initialBurpeeHsmmState,
+	stepBurpeeHsmm,
+	usableBurpeeHsmmFrame,
+} from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
 import {
 	initialStartGesture,
@@ -13,14 +17,13 @@ import { waitForVideoFrame, webglAvailable } from "./pose_video.mjs";
 import {
 	flushPoseCaptureRecorder,
 	initialPoseCaptureRecorder,
+	recordPoseRep,
 	recordPoseSample,
 } from "./pose_capture_recorder.mjs";
 
 export { drawPoseOverlay, resizePoseCanvas };
 
 const CAMERA_SETUP_AUTO_CONFIRM_MS = 1500;
-const MIN_HSMM_CONFIDENCE = 0.5;
-const MIN_HSMM_VISIBLE_FRACTION = 0.35;
 
 export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
@@ -133,6 +136,9 @@ export function createPoseTracker(hook, runtime = {}) {
 		state = initialBurpeeHsmmState();
 		lastFeature = null;
 		lastPoseMs = -Infinity;
+		if (startedAt !== null) {
+			recordCapture({ tMs: Math.round(now() - startedAt), reset: true });
+		}
 	};
 
 	const samplingIsCurrent = (generation, epoch) =>
@@ -419,15 +425,6 @@ export function createPoseTracker(hook, runtime = {}) {
 			if (startGesture.satisfied && !wasSatisfied) confirmArmedStep(step);
 		}
 
-		if (captureSegment && usableBurpeeHsmmFrame(sample.features)) {
-			const recorded = recordPoseSample(captureRecorder, sample, {
-				segment: captureSegment,
-				nowMs: sample.tMs,
-			});
-			captureRecorder = recorded.state;
-			recorded.chunks.forEach(dispatchCaptureChunk);
-		}
-
 		if (sample.confidence >= 0.5 && trackingState !== "live") {
 			trackingState = "live";
 			dispatchLocal("pose-tracker:status", { state: "live" });
@@ -435,15 +432,34 @@ export function createPoseTracker(hook, runtime = {}) {
 
 		const result = stepBurpeeHsmm(state, sample.features);
 		state = result.state;
-		if (result.rep) {
+		for (const repMs of result.reps) {
+			if (captureSegment) captureRecorder = recordPoseRep(captureRecorder, repMs);
 			candidateIndex += 1;
 			dispatchLocal("pose-tracker:rep", {
 				index: candidateIndex,
 				confidence: sample.confidence,
+				lagMs: Math.max(0, sample.tMs - repMs),
 			});
 		}
 
+		// The trace keeps every frame the counter saw, so a replay counts what it counted.
+		recordCapture(
+			usableBurpeeHsmmFrame(sample.features)
+				? sample
+				: { tMs: sample.tMs, usable: false },
+		);
+
 		scheduleNextFrame();
+	}
+
+	function recordCapture(entry) {
+		if (!captureSegment) return;
+		const recorded = recordPoseSample(captureRecorder, entry, {
+			segment: captureSegment,
+			nowMs: entry.tMs,
+		});
+		captureRecorder = recorded.state;
+		recorded.chunks.forEach(dispatchCaptureChunk);
 	}
 
 	function flushCapture() {
@@ -519,34 +535,4 @@ export function createPoseTracker(hook, runtime = {}) {
 	}
 
 	return { mounted: mountedHook, start, stop, destroyed };
-}
-
-function usableBurpeeHsmmFrame(frame) {
-	const worldFeatures = [
-		frame?.worldBodyVerticalSpan,
-		frame?.worldHipVerticalSpan,
-		frame?.worldWristVerticalSpan,
-		frame?.worldTorsoElevation,
-		frame?.dWorldBodyVerticalSpan,
-		frame?.dWorldWristVerticalSpan,
-	];
-
-	return (
-		Number.isFinite(frame?.tMs) &&
-		frame?.hasFullWorldLandmarkCoverage === true &&
-		worldFeatures.every(Number.isFinite) &&
-		confidenceAndVisibilityAreUsable(frame)
-	);
-}
-
-function confidenceAndVisibilityAreUsable(frame) {
-	return (
-		finiteOr(frame?.poseConfidence, frame?.confidence) >= MIN_HSMM_CONFIDENCE &&
-		finiteOr(frame?.macroLandmarkConfidence, 0) >= MIN_HSMM_CONFIDENCE &&
-		finiteOr(frame?.visibleFraction, 0) >= MIN_HSMM_VISIBLE_FRACTION
-	);
-}
-
-function finiteOr(value, fallback) {
-	return Number.isFinite(value) ? value : fallback;
 }

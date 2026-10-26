@@ -3,7 +3,11 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 
-import { initialBurpeeHsmmState, stepBurpeeHsmm } from "./pose_burpee_hsmm.mjs";
+import {
+	flushBurpeeHsmm,
+	initialBurpeeHsmmState,
+	stepBurpeeHsmm,
+} from "./pose_burpee_hsmm.mjs";
 import { featureFrameFromPose } from "./pose_features.mjs";
 
 // Every pose sample the camera recorded in a real 20-minute six-count session, in order.
@@ -41,7 +45,7 @@ function load(file) {
 function count(frames) {
 	let state = initialBurpeeHsmmState();
 	for (const frame of frames) state = stepBurpeeHsmm(state, frame).state;
-	return state.cadenceMs.length;
+	return flushBurpeeHsmm(state).state.cadenceMs.length;
 }
 
 // The detector's pose, rebuilt from a recorded sample's keypoints. Image coordinates were
@@ -71,6 +75,18 @@ function poseFrom(keypoints) {
 for (const { file, reps, kind } of sessions) {
 	test(`${kind} counts exactly its ${reps} reps`, () => {
 		assert.equal(count(load(file).map((sample) => sample.features)), reps);
+	});
+
+	// The recorder keeps only usable frames, so live dropouts are missing from the fixture.
+	// Marking every 30th frame unusable puts them back: short losses keep the rep.
+	test(`${kind} still counts ${reps} reps with a dropped frame every 2.5 s`, () => {
+		const frames = load(file).map((sample, index) =>
+			index % 30 === 29
+				? { ...sample.features, hasFullWorldLandmarkCoverage: false }
+				: sample.features,
+		);
+
+		assert.equal(count(frames), reps);
 	});
 
 	// Velocities are not compared: unusable frames were never recorded, so a recorded

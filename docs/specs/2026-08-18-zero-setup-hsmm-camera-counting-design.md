@@ -2,6 +2,9 @@
 
 **Status:** Approved for planning
 
+> **Counting model:** the rep counter itself (phases, emissions, dropouts, decoding) is now
+> [Burpee HSMM](2026-10-26-burpee-hsmm-design.md); this document's counting details are historical.
+
 **Supersedes:** `2026-08-06-calibrated-camera-counting-design.md` for camera-counting behavior. Deferred pose-trace upload boundaries remain unchanged.
 
 ## Goal

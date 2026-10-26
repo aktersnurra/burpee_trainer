@@ -31,7 +31,8 @@ The full-flow suite has one file for each user-visible behavior below:
 11. Session completion narrates an insight (validated or fallback) shown on Home and in History: `test/burpee_trainer_web/flows/insight_flow_test.exs`, `test/burpee_trainer_web/flows/insight_presentation_test.exs`
 12. A fresh user opens on a ready starter workout with Start as the one action, and opening Home never plans; planning follows a completed or logged session or Retry: `test/burpee_trainer_web/live/home_first_use_test.exs`
 13. The coach summary heads History and is the only way into Coach and back; a summary from an earlier week shows the loader until the refresh arrives; with nothing to summarize the line invites the owner to the coach instead: `test/burpee_trainer_web/flows/history_summary_flow_test.exs`
-14. Real recorded 20-minute sessions, replayed through the camera's rep detector (HSMM), count exactly their reps: a steady one (140) and one that slipped with a long pause (135): `assets/js/hooks/pose_burpee_hsmm_session_fixture_test.mjs`. Their features are also rebuilt from the recorded keypoints, must match the recorded ones (within the stored rounding) and still count exactly. Each fixture is every pose sample the camera recorded, gzipped.
+14. Real recorded 20-minute sessions, replayed through the camera's rep detector (HSMM), count exactly their reps: a steady one (140) and one that slipped with a long pause (135): `assets/js/hooks/pose_burpee_hsmm_session_fixture_test.mjs`. Their features are also rebuilt from the recorded keypoints, must match the recorded ones (within the stored rounding) and still count exactly, and with one frame in 30 made unusable they still count exactly. Each fixture is every usable pose sample the camera recorded, gzipped.
+15. A trace the tracker records replays through the counter to exactly the reps it emitted, dropouts included: `assets/js/hooks/pose_tracker_impl_test.mjs`.
 
 ## Commands
 

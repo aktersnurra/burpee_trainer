@@ -1,59 +1,127 @@
+import { BURPEE_HSMM_MODEL } from "./pose_burpee_hsmm_model.mjs";
+
+// An explicit-duration HSMM over burpee phases, decoded online by fixed-lag Viterbi.
+// See docs/specs/2026-10-26-burpee-hsmm-design.md.
+
 const PHASES = Object.freeze([
 	"standing",
 	"lowering",
 	"pushup",
 	"rising",
+	"other",
 ]);
 
 const NEXT = Object.freeze({
-	standing: ["standing", "lowering"],
-	lowering: ["lowering", "pushup"],
-	pushup: ["pushup", "rising"],
-	rising: ["rising", "standing"],
+	standing: ["lowering", "other"],
+	lowering: ["pushup"],
+	pushup: ["rising"],
+	rising: ["standing"],
+	other: ["standing"],
 });
 
-const REFRACTORY_MS = 900;
+export const BURPEE_HSMM_FEATURES = Object.freeze([
+	"worldBodyVerticalSpan",
+	"worldHipVerticalSpan",
+	"worldTorsoElevation",
+	"worldWristVerticalSpan",
+	"dWorldBodyVerticalSpan",
+	"dWorldWristVerticalSpan",
+]);
+
 const MIN_CONFIDENCE = 0.5;
 const MIN_MACRO_LANDMARK_CONFIDENCE = 0.5;
 const MIN_VISIBLE_FRACTION = 0.35;
-const FORWARD_EMISSION = 0.72;
-const RETURN_TO_STANDING_EMISSION = 0.47;
-const RISING_MIN_BODY_VERTICAL_SPAN = 1.1;
+// Phases a counted cycle must have been seen in, at least two of them.
+const REP_PHASE_BITS = Object.freeze({ lowering: 1, pushup: 2, rising: 4 });
+const MIN_SEEN_REP_PHASES = 2;
+const LOG_SQRT_2PI = 0.5 * Math.log(2 * Math.PI);
 
-export function initialBurpeeHsmmState() {
+const topologies = new WeakMap();
+
+export function initialBurpeeHsmmState(model = BURPEE_HSMM_MODEL) {
+	const { states, start } = topologyFor(model);
 	return {
+		model,
 		phase: "standing",
-		phaseStartedAtMs: null,
-		lastRepAtMs: null,
+		tick: null,
+		pending: null,
+		delta: states.map((_, index) => (index === start ? 0 : -Infinity)),
+		history: [],
+		cycle: idleCycle(),
 		cadenceMs: [],
 	};
 }
 
+// Feeds one frame; returns the reps (ms) committed by it, which lag it by the model's lag.
 export function stepBurpeeHsmm(state, frame) {
-	if (!usable(frame)) {
-		return { state: preservePushupCandidate(state), rep: false, repAtMs: null };
+	if (!Number.isFinite(frame?.tMs)) return { state, reps: [] };
+
+	const tick = Math.floor(frame.tMs / state.model.tickMs);
+	let current = state.tick === null ? { ...state, tick } : state;
+	const reps = [];
+
+	while (tick > current.tick) {
+		const closed = closeTick(current);
+		current = { ...closed.state, tick: current.tick + 1, pending: null };
+		reps.push(...closed.reps);
 	}
 
-	const emissions = scoreMacroEmissions(frame);
-	if (strongOutOfOrderEmission(state, emissions)) {
-		return { state: resetCandidate(state), rep: false, repAtMs: null };
-	}
+	return { state: addToPending(current, frame), reps };
+}
 
-	const phase = nextPhase(state, emissions, frame);
-	const next = transition(state, phase, frame.tMs);
-	const rep =
-		state.phase === "rising" &&
-		phase === "standing" &&
-		outsideRefractory(state, frame.tMs);
+// Commits every tick still inside the lag, as at the end of a recording.
+export function flushBurpeeHsmm(state) {
+	if (state.tick === null) return { state, reps: [] };
+
+	const closed = closeTick(state);
+	const { states } = topologyFor(state.model);
+	let current = closed.state;
+	const reps = [...closed.reps];
+	const path = traceBack(current.delta, current.history);
+
+	current.history.forEach((entry, index) => {
+		const committed = commit(current, entry, states[path[index]].phase);
+		current = committed.state;
+		reps.push(...committed.reps);
+	});
 
 	return {
-		state: rep ? recordRep(next, frame.tMs) : next,
-		rep,
-		repAtMs: rep ? frame.tMs : null,
+		state: { ...current, tick: null, pending: null, history: [] },
+		reps,
 	};
 }
 
-function usable(frame) {
+// Offline Viterbi over a whole recording: the phase of every tick, and the reps it counts.
+export function segmentBurpeeHsmm(frames, model = BURPEE_HSMM_MODEL) {
+	const { states, preds, start } = topologyFor(model);
+	const ticks = evidenceByTick(frames, model);
+	let delta = states.map((_, index) => (index === start ? 0 : -Infinity));
+	const backs = [];
+
+	for (const { evidence } of ticks) {
+		const stepped = viterbiStep(delta, evidence, states, preds);
+		delta = stepped.delta;
+		backs.push(stepped.back);
+	}
+
+	const path = new Array(ticks.length);
+	let index = argmax(delta);
+	for (let t = ticks.length - 1; t >= 0; t--) {
+		path[t] = index;
+		index = backs[t][index];
+	}
+
+	let counter = initialBurpeeHsmmState(model);
+	const phases = ticks.map(({ tick, evidence }, t) => {
+		const phase = states[path[t]].phase;
+		counter = commit(counter, { tick, observed: evidence !== null }, phase).state;
+		return { tMs: tick * model.tickMs, phase, observed: evidence !== null };
+	});
+
+	return { phases, reps: counter.cadenceMs };
+}
+
+export function usableBurpeeHsmmFrame(frame) {
 	return (
 		Number.isFinite(frame?.tMs) &&
 		frame?.hasFullWorldLandmarkCoverage === true &&
@@ -61,132 +129,216 @@ function usable(frame) {
 		finiteOr(frame.macroLandmarkConfidence, 0) >=
 			MIN_MACRO_LANDMARK_CONFIDENCE &&
 		finiteOr(frame.visibleFraction, 0) >= MIN_VISIBLE_FRACTION &&
-		[
-			frame.worldBodyVerticalSpan,
-			frame.worldHipVerticalSpan,
-			frame.worldTorsoElevation,
-			frame.worldWristVerticalSpan,
-			frame.dWorldBodyVerticalSpan,
-			frame.dWorldWristVerticalSpan,
-		].every(Number.isFinite)
+		BURPEE_HSMM_FEATURES.every((name) => Number.isFinite(frame[name]))
 	);
 }
 
-function scoreMacroEmissions(frame) {
-	return {
-		standing: weightedScore([
-			[rises(frame.worldBodyVerticalSpan, 2.8, 3.2), 0.35],
-			[rises(frame.worldHipVerticalSpan, 1.6, 2.0), 0.2],
-			[rises(frame.worldTorsoElevation, 0.75, 0.85), 0.25],
-			[rises(frame.worldWristVerticalSpan, 1.2, 1.5), 0.2],
-		]),
-		lowering: weightedScore([
-			[band(frame.worldBodyVerticalSpan, 1.1, 2.1, 3.2), 0.35],
-			[falls(frame.worldTorsoElevation, 0.8, 0.45), 0.2],
-			[falls(frame.worldWristVerticalSpan, 1.6, 0.7), 0.15],
-			[falls(frame.dWorldBodyVerticalSpan, -0.25, -0.8), 0.3],
-		]),
-		pushup: weightedScore([
-			[falls(frame.worldBodyVerticalSpan, 1.5, 1.1), 0.3],
-			[falls(frame.worldHipVerticalSpan, 1.0, 0.7), 0.2],
-			[falls(frame.worldTorsoElevation, 0.5, 0.35), 0.3],
-			[falls(frame.worldWristVerticalSpan, 0.8, 0.45), 0.2],
-		]),
-		rising: weightedScore([
-			[
-				band(
-					frame.worldBodyVerticalSpan,
-					RISING_MIN_BODY_VERTICAL_SPAN,
-					2.1,
-					3.2,
-				),
-				0.25,
-			],
-			[band(frame.worldTorsoElevation, 0.3, 0.55, 0.85), 0.2],
-			[rises(frame.worldHipVerticalSpan, 0.7, 1.1), 0.15],
-			[rises(frame.dWorldBodyVerticalSpan, 0.25, 0.8), 0.4],
-		]),
-	};
+export function phaseLogLikelihoods(model, frame) {
+	const logInlier = Math.log(1 - model.outlierWeight);
+	const logOutlier = Math.log(model.outlierWeight) + model.outlierLogDensity;
+
+	return PHASES.map((phase) => {
+		const { mean, sd } = model.emissions[phase];
+		let gaussian = logInlier;
+		BURPEE_HSMM_FEATURES.forEach((name, index) => {
+			const z = (frame[name] - mean[index]) / sd[index];
+			gaussian -= 0.5 * z * z + Math.log(sd[index]) + LOG_SQRT_2PI;
+		});
+		return logAddExp(gaussian, logOutlier);
+	});
 }
 
-function rises(value, zeroAt, fullAt) {
-	return clamp01((value - zeroAt) / (fullAt - zeroAt));
+function addToPending(state, frame) {
+	if (!usableBurpeeHsmmFrame(frame)) return state;
+
+	const likelihoods = phaseLogLikelihoods(state.model, frame);
+	const pending = state.pending
+		? {
+				sum: state.pending.sum.map((value, index) => value + likelihoods[index]),
+				count: state.pending.count + 1,
+			}
+		: { sum: likelihoods, count: 1 };
+
+	return { ...state, pending };
 }
 
-function falls(value, zeroAt, fullAt) {
-	return clamp01((zeroAt - value) / (zeroAt - fullAt));
+// A tick's evidence is the mean phase log-likelihood of its usable frames, so the weight of
+// a tick does not depend on the frame rate.
+function pendingEvidence(pending) {
+	return pending ? pending.sum.map((value) => value / pending.count) : null;
 }
 
-function band(value, low, center, high) {
-	return value <= center
-		? rises(value, low, center)
-		: falls(value, high, center);
+function closeTick(state) {
+	const { states, preds } = topologyFor(state.model);
+	const evidence = pendingEvidence(state.pending);
+	const { delta, back } = viterbiStep(state.delta, evidence, states, preds);
+	const history = [
+		...state.history,
+		{ tick: state.tick, observed: evidence !== null, back },
+	];
+	let current = { ...state, delta, history };
+
+	if (history.length <= state.model.lagTicks) return { state: current, reps: [] };
+
+	const path = traceBack(delta, history);
+	const committed = commit(current, history[0], states[path[0]].phase);
+	current = { ...committed.state, history: history.slice(1) };
+	return { state: current, reps: committed.reps };
 }
 
-function weightedScore(entries) {
-	return entries.reduce((total, [score, weight]) => total + score * weight, 0);
+function viterbiStep(delta, evidence, states, preds) {
+	const next = new Array(states.length);
+	const back = new Int16Array(states.length);
+
+	for (let index = 0; index < states.length; index++) {
+		let best = -Infinity;
+		let from = 0;
+		for (const [pred, logProbability] of preds[index]) {
+			const score = delta[pred] + logProbability;
+			if (score > best) {
+				best = score;
+				from = pred;
+			}
+		}
+		next[index] = best + (evidence ? evidence[states[index].phaseIndex] : 0);
+		back[index] = from;
+	}
+
+	const top = Math.max(...next);
+	return { delta: next.map((value) => value - top), back };
 }
 
-function clamp01(value) {
-	if (value < 0) return 0;
-	if (value > 1) return 1;
-	return value;
+// The best path's state at each history entry, oldest first.
+function traceBack(delta, history) {
+	const path = new Array(history.length);
+	let index = argmax(delta);
+	for (let entry = history.length - 1; entry >= 0; entry--) {
+		path[entry] = index;
+		index = history[entry].back[index];
+	}
+	return path;
 }
 
-function strongOutOfOrderEmission(state, emissions) {
-	const [current, following] = NEXT[state.phase] || NEXT.standing;
+// Commits one tick's phase; `state.phase` is the latest committed phase.
+function commit(previous, { tick, observed }, phase) {
+	const state = { ...previous, phase };
+	const cycle = state.cycle;
 
-	return PHASES.some(
-		(phase) =>
-			phase !== current &&
-			phase !== following &&
-			emissions[phase] >= FORWARD_EMISSION,
-	);
-}
+	if (phase === "standing") {
+		if (!cycle.active) return { state, reps: [] };
+		const returnTick = cycle.returnTick ?? tick;
+		if (!observed) return { state: { ...state, cycle: { ...cycle, returnTick } }, reps: [] };
 
-function nextPhase(state, emissions, frame) {
-	const [current, following] = NEXT[state.phase] || NEXT.standing;
-	const threshold =
-		state.phase === "rising" && following === "standing"
-			? RETURN_TO_STANDING_EMISSION
-			: FORWARD_EMISSION;
-	const risingAllowed =
-		state.phase !== "pushup" ||
-		following !== "rising" ||
-		frame.worldBodyVerticalSpan >= RISING_MIN_BODY_VERTICAL_SPAN;
-
-	return emissions[following] >= threshold && risingAllowed ? following : current;
-}
-
-function preservePushupCandidate(state) {
-	return state.phase === "pushup" ? state : resetCandidate(state);
-}
-
-function resetCandidate(state) {
-	return { ...state, phase: "standing", phaseStartedAtMs: null };
-}
-
-function transition(state, phase, tMs) {
-	if (phase === state.phase) {
+		const counted = cycle.rose && seenCount(cycle.seen) >= MIN_SEEN_REP_PHASES;
+		const repMs = returnTick * state.model.tickMs;
 		return {
-			...state,
-			phaseStartedAtMs: state.phaseStartedAtMs ?? tMs,
+			state: {
+				...state,
+				cycle: idleCycle(),
+				cadenceMs: counted ? state.cadenceMs.concat(repMs) : state.cadenceMs,
+			},
+			reps: counted ? [repMs] : [],
 		};
 	}
 
-	return { ...state, phase, phaseStartedAtMs: tMs };
-}
+	if (phase === "other") return { state: { ...state, cycle: idleCycle() }, reps: [] };
 
-function outsideRefractory(state, tMs) {
-	return state.lastRepAtMs == null || tMs - state.lastRepAtMs >= REFRACTORY_MS;
-}
-
-function recordRep(state, tMs) {
+	const base = cycle.returnTick === null ? cycle : idleCycle();
 	return {
-		...state,
-		lastRepAtMs: tMs,
-		cadenceMs: state.cadenceMs.concat(tMs),
+		state: {
+			...state,
+			cycle: {
+				active: true,
+				rose: base.rose || phase === "rising",
+				seen: observed ? base.seen | REP_PHASE_BITS[phase] : base.seen,
+				returnTick: null,
+			},
+		},
+		reps: [],
 	};
+}
+
+function idleCycle() {
+	return { active: false, rose: false, seen: 0, returnTick: null };
+}
+
+function seenCount(bits) {
+	let count = 0;
+	for (let rest = bits; rest; rest >>= 1) count += rest & 1;
+	return count;
+}
+
+function evidenceByTick(frames, model) {
+	const ticks = [];
+	let state = { model, tick: null, pending: null };
+
+	for (const frame of frames) {
+		if (!Number.isFinite(frame?.tMs)) continue;
+		const tick = Math.floor(frame.tMs / model.tickMs);
+		if (state.tick === null) state = { ...state, tick };
+		while (tick > state.tick) {
+			ticks.push({ tick: state.tick, evidence: pendingEvidence(state.pending) });
+			state = { ...state, tick: state.tick + 1, pending: null };
+		}
+		state = addToPending(state, frame);
+	}
+	if (state.tick !== null) {
+		ticks.push({ tick: state.tick, evidence: pendingEvidence(state.pending) });
+	}
+
+	return ticks;
+}
+
+// Each phase is a chain of minTicks sub-states; the last one loops, then leaves along NEXT.
+function topologyFor(model) {
+	const cached = topologies.get(model);
+	if (cached) return cached;
+
+	const states = PHASES.flatMap((phase, phaseIndex) =>
+		Array.from({ length: model.minTicks[phase] }, (_, step) => ({
+			phase,
+			phaseIndex,
+			step,
+			last: step === model.minTicks[phase] - 1,
+		})),
+	);
+	const indexOf = (phase, step) =>
+		states.findIndex((state) => state.phase === phase && state.step === step);
+	const preds = states.map(() => []);
+
+	states.forEach((state, index) => {
+		if (!state.last) {
+			preds[index + 1].push([index, 0]);
+			return;
+		}
+		const leave = model.leave[state.phase];
+		preds[index].push([index, Math.log(1 - leave)]);
+		for (const next of NEXT[state.phase]) {
+			const branch = model.branch[state.phase]?.[next] ?? 1;
+			preds[indexOf(next, 0)].push([index, Math.log(leave * branch)]);
+		}
+	});
+
+	const topology = {
+		states,
+		preds,
+		start: indexOf("standing", model.minTicks.standing - 1),
+	};
+	topologies.set(model, topology);
+	return topology;
+}
+
+function argmax(values) {
+	let best = 0;
+	for (let index = 1; index < values.length; index++) {
+		if (values[index] > values[best]) best = index;
+	}
+	return best;
+}
+
+function logAddExp(a, b) {
+	const top = Math.max(a, b);
+	return top + Math.log(Math.exp(a - top) + Math.exp(b - top));
 }
 
 function finiteOr(value, fallback) {

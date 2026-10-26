@@ -2,6 +2,9 @@
 
 **Status:** Historical design with the authoritative phase-count correction below.
 
+> **Counting model:** the rep counter itself (phases, emissions, dropouts, decoding) is now
+> [Burpee HSMM](2026-10-26-burpee-hsmm-design.md); this document's counting details are historical.
+
 **Supersedes:** the camera-placement and emission-feature portions of `2026-08-18-zero-setup-hsmm-camera-counting-design.md`. The durable lifecycle, trace-upload, explicit-correction, and general macro-cycle decisions remain unchanged.
 
 > **Authoritative correction:** This document's former expiry and no-reset details are historical. The phase-count contract below supersedes them.

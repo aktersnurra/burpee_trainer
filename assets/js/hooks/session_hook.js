@@ -1429,7 +1429,7 @@ const SessionHook = {
     );
   },
 
-  observePoseRep({ index }) {
+  observePoseRep({ index, lagMs = 0 }) {
     // A rep that lands while the workout waits for its last one counts at its end.
     if (this.pendingWorkoutResult) {
       this.tracking = observeTrackingRep(this.tracking, {
@@ -1444,7 +1444,11 @@ const SessionHook = {
       return;
     }
 
-    const elapsedSec = this.segment.clock.elapsedSec || 0;
+    // The counter decides a rep a moment after it happens; date it when it happened.
+    const elapsedSec = Math.max(
+      0,
+      (this.segment.clock.elapsedSec || 0) - Math.max(0, lagMs) / 1_000,
+    );
     const frame = currentFrame(this.timeline, elapsedSec);
     const eligible =
       this.activeSegment === "workout" &&
