@@ -11,13 +11,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   def summary_body(assigns) do
     ~H"""
     <span :if={@loading?} role="status" class="coach-summary-loading">
-      <img
-        class="coach-summary-loader"
-        src="/images/burpee-loader-ink.gif"
-        alt=""
-        width="40"
-        height="40"
-      />
+      <.burpee_loader class="coach-summary-loader" size={40} />
       <span>Updating your summary</span>
     </span>
     <span :if={not @loading? and @summary} class="coach-summary-text">
