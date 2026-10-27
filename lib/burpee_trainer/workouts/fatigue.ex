@@ -28,7 +28,8 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
           decline: float() | nil,
           slip_at_sec: float() | nil,
           kept_up: boolean() | nil,
-          recovery_delta_sec: float() | nil
+          recovery_delta_sec: float() | nil,
+          consistency: float() | nil
         }
 
   @empty %{
@@ -37,7 +38,8 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
     decline: nil,
     slip_at_sec: nil,
     kept_up: nil,
-    recovery_delta_sec: nil
+    recovery_delta_sec: nil,
+    consistency: nil
   }
 
   @doc """
@@ -55,7 +57,7 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
       coverage = Enum.count(matched, & &1.t) / length(matched)
 
       if opening_coverage(matched) < @min_opening_coverage do
-        %{@empty | coverage: round3(coverage)}
+        %{@empty | coverage: round3(coverage), consistency: consistency(matched)}
       else
         slip_at = slip_at(matched)
 
@@ -65,7 +67,8 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
           decline: decline(matched),
           slip_at_sec: slip_at,
           kept_up: is_nil(slip_at),
-          recovery_delta_sec: recovery_delta(matched)
+          recovery_delta_sec: recovery_delta(matched),
+          consistency: consistency(matched)
         }
       end
     end
@@ -206,6 +209,20 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   end
 
   defp ratio(slots), do: slots |> work_pairs() |> Enum.map(fn {a, p} -> a / p end) |> median()
+
+  # 1 minus the coefficient of variation of each rep's interval against its set's planned
+  # one: rests and a ladder's changing pace are the plan, not unevenness.
+  defp consistency(matched) do
+    case matched |> work_pairs() |> Enum.map(fn {a, p} -> a / p end) do
+      [_, _ | _] = ratios ->
+        mean = Enum.sum(ratios) / length(ratios)
+        sd = :math.sqrt(Enum.sum(Enum.map(ratios, &((&1 - mean) ** 2))) / length(ratios))
+        round3(min(max(1 - sd / mean, 0.0), 1.0))
+
+      _too_few ->
+        nil
+    end
+  end
 
   # Lag is net of the opening segment, since everyone lands some fixed time after the beep.
   # The slip starts at the first segment from which every later segment slipped too.

@@ -22,7 +22,6 @@ defmodule BurpeeTrainer.Workouts do
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Scoring
   alias BurpeeTrainer.Workouts.Fatigue
-  alias BurpeeTrainer.Workouts.PaceConsistency
 
   alias BurpeeTrainer.Workouts.{
     CoachRecommendation,
@@ -1943,16 +1942,14 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
+  # Pace consistency is derived from the cadence and the program with the session's fatigue.
   defp apply_tracked_session_mode(changeset, {:trusted, cadence, target_pace}) do
-    consistency = if valid_cadence_values?(cadence), do: PaceConsistency.score(cadence)
-
     changeset
     |> validate_tracked_capture(cadence)
     |> Ecto.Changeset.change(
       capture_mode: :tracked,
       cadence_ms: Jason.encode!(cadence),
-      target_pace_sec: parse_optional_float(target_pace),
-      pace_consistency: consistency
+      target_pace_sec: parse_optional_float(target_pace)
     )
   end
 
@@ -2394,7 +2391,8 @@ defmodule BurpeeTrainer.Workouts do
       fatigue_coverage: fatigue.coverage,
       fatigue_decline: fatigue.decline,
       slip_at_sec: fatigue.slip_at_sec,
-      kept_up: fatigue.kept_up
+      kept_up: fatigue.kept_up,
+      pace_consistency: fatigue.consistency
     }
   end
 

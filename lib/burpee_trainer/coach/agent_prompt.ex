@@ -59,7 +59,8 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   for good; decline: how much slower than planned the last third was than the first (0.08 \
   is 8%); pace_delta_sec: median seconds slower than planned between reps (negative is \
   ahead); recovery_delta_sec: median seconds later the first rep after a rest lands on its \
-  beat than the workout's first rep did (positive is slower to restart). \
+  beat than the workout's first rep did (positive is slower to restart). pace_consistency: how \
+  even the reps inside each set were against its planned pace, 1 perfectly even. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   today's share of missed minutes across the remaining weekend days; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time. progression: the deterministic rate \

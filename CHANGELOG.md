@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — Pace consistency is measured inside each set
+
+- Pace consistency was 1 minus the coefficient of variation of every gap between reps, the gaps across rests included, so every workout with rests scored 0 (sessions 56 and 57), and a ladder's planned change of pace read as unevenness. It is now derived with the session's fatigue (`Workouts.Fatigue`), from each rep's interval inside a set against that set's planned one; `Workouts.PaceConsistency` is removed. Production: 56 is 0.896, 57 is 0.957, and 40 and 58, without rests, keep 0.974 and 0.972.
+- Like the fatigue columns, `pace_consistency` is derived from the locked `cadence_ms` and `program_snapshot`, so the completion trigger no longer locks it; a migration recomputes it for completed camera sessions. The coach's glossary, which Claude reads through the MCP, defines it.
+
 ## 2026-10-27 — Running ahead of the beat is keeping up
 
 - Fatigue (`Workouts.Fatigue`) dropped a rep done more than half an interval ahead of its beat, so its beat read as missed: finishing a set early could read as falling behind, and the planner then repeated the workout for late fatigue instead of progressing. Scheduled reps now take the detections in order, and an early one is that rep done ahead. Late is unchanged: a rep more than half an interval behind still leaves its beat missed, so one missed detection still never shifts the reps after it, and falling behind still shows.

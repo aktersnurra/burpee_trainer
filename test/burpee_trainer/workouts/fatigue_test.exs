@@ -43,6 +43,7 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
       assert fatigue.slip_at_sec == nil
       assert abs(fatigue.pace_delta_sec) < 0.01
       assert abs(fatigue.decline) < 0.01
+      assert fatigue.consistency == 1.0
       if rest > 0, do: assert(abs(fatigue.recovery_delta_sec) < 0.01)
     end
   end
@@ -122,6 +123,31 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
 
       assert_in_delta fatigue.recovery_delta_sec, restart, 0.01
     end
+  end
+
+  test "pace consistency is how even each set was against its own planned pace" do
+    # A ladder: 6, 4 and 8 s per rep, with rests between.
+    events = [
+      %{kind: :work, reps: 6, sec_per_rep: 6.0},
+      %{kind: :rest, duration_sec: 30},
+      %{kind: :work, reps: 6, sec_per_rep: 4.0},
+      %{kind: :rest, duration_sec: 45},
+      %{kind: :work, reps: 6, sec_per_rep: 8.0}
+    ]
+
+    beats = fn jitter ->
+      [{0.0, 6.0}, {66.0, 4.0}, {135.0, 8.0}]
+      |> Enum.flat_map(fn {start, spr} ->
+        for rep <- 1..6, do: round((start + rep * spr + jitter.(rep) * spr) * 1_000)
+      end)
+    end
+
+    assert Fatigue.compute(beats.(fn _rep -> 0.0 end), events).consistency == 1.0
+
+    uneven =
+      Fatigue.compute(beats.(fn rep -> if rem(rep, 2) == 0, do: 0.2, else: 0.0 end), events)
+
+    assert uneven.consistency < 0.9
   end
 
   test "finishing the last set early is not falling behind" do

@@ -48,8 +48,12 @@ defmodule BurpeeTrainer.SessionFatigueMigrationTest do
     assert plain.pace_delta_sec == 9.9 and is_nil(plain.fatigue_coverage) and
              is_nil(plain.kept_up)
 
-    # Fatigue may be recomputed; the reps it was computed from may not change.
-    Repo.query!("UPDATE workout_sessions SET kept_up = 1")
+    # Even sets against their plan, whatever the rest between them.
+    assert camera.pace_consistency == 1.0
+    assert is_nil(plain.pace_consistency)
+
+    # Fatigue and pace consistency may be recomputed; the reps they come from may not change.
+    Repo.query!("UPDATE workout_sessions SET kept_up = 1, pace_consistency = 0.5")
 
     assert_raise Exqlite.Error, ~r/exact_once_completion_check/, fn ->
       Repo.query!("UPDATE workout_sessions SET cadence_ms = '[1]'")
