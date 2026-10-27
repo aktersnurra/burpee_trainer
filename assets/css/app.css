@@ -290,6 +290,7 @@ body {
 }
 
 #session-progress {
+  position: relative;
   width: 100%;
   height: 4px;
   overflow: hidden;
@@ -297,22 +298,28 @@ body {
   background: var(--session-progress-track);
 }
 
-#session-progress-fill {
-  width: 100%;
-  height: 100%;
+#session-progress-fill,
+#session-progress-reps {
+  position: absolute;
+  inset: 0;
   border-radius: inherit;
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
 }
 
-#session-runner-client.is-working #session-progress-fill,
-#session-runner-client.is-count-in #session-progress-fill {
+/* While the camera counts reps, the clock's fill fades behind them. */
+#session-progress-reps:not([hidden]) + #session-progress-fill {
+  opacity: 0.35;
+}
+
+#session-runner-client.is-working :is(#session-progress-fill, #session-progress-reps),
+#session-runner-client.is-count-in :is(#session-progress-fill, #session-progress-reps) {
   background: var(--session-work);
 }
 
-#session-runner-client.is-rest #session-progress-fill,
-#session-runner-client.is-rest-count-in #session-progress-fill {
+#session-runner-client.is-rest :is(#session-progress-fill, #session-progress-reps),
+#session-runner-client.is-rest-count-in :is(#session-progress-fill, #session-progress-reps) {
   background: var(--session-rest);
 }
 

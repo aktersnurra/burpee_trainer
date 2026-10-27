@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+	cameraRepsBySet,
 	currentFrame,
+	eventDurationSec,
 	initialSegmentState,
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
@@ -639,4 +641,64 @@ test("ticks after the segment is done change nothing", () => {
 	const late = segmentTransition(state, { type: "TICK", elapsedSec: 21 });
 	assert.equal(late.state, state);
 	assert.deepEqual(late.commands, []);
+});
+
+function pacedSegment(timeline) {
+	let state = segmentTransition(initialSegmentState(), {
+		type: "SEGMENT_READY",
+		timeline,
+	}).state;
+	return segmentTransition(state, { type: "COUNTDOWN_DONE", now: 0 }).state;
+}
+
+const totalSec = (timeline) =>
+	timeline.reduce((sum, event) => sum + eventDurationSec(event), 0);
+
+test("a set finished early hands its time to the next rest, and the workout keeps its length", () => {
+	const timeline = [
+		{ kind: "work", reps: 3, sec_per_rep: 10 },
+		{ kind: "rest", duration_sec: 30 },
+		{ kind: "work", reps: 2, sec_per_rep: 10 },
+	];
+	let state = pacedSegment(timeline);
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 22 }).state;
+	state = segmentTransition(state, { type: "END_SET", elapsedSec: 22 }).state;
+
+	assert.equal(currentFrame(state.timeline, 22.5).event.kind, "rest");
+	assert.equal(currentFrame(state.timeline, 59.9).event.kind, "rest");
+	assert.equal(currentFrame(state.timeline, 60).index, 2);
+	assert.equal(totalSec(state.timeline), 80);
+
+	// The schedule credits the set the athlete finished.
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 23 }).state;
+	assert.equal(state.reps.burpeeCountDone, 3);
+	const done = segmentTransition(state, { type: "TICK", elapsedSec: 80 });
+	assert.equal(
+		done.commands.find((command) => command.type === "segmentDone").result.scheduledRepsDone,
+		5,
+	);
+});
+
+test("only a set followed by a rest ends early", () => {
+	const timeline = [
+		{ kind: "work", reps: 3, sec_per_rep: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 5 },
+	];
+	for (const elapsedSec of [12, 32]) {
+		let state = pacedSegment(timeline);
+		state = segmentTransition(state, { type: "TICK", elapsedSec }).state;
+		const ended = segmentTransition(state, { type: "END_SET", elapsedSec });
+		assert.equal(ended.state.timeline, state.timeline);
+	}
+});
+
+test("camera reps count for the set they land in, or the set a rest follows", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 4 },
+		{ kind: "rest", duration_sec: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 4 },
+	];
+
+	// 9 s is the start of the rest; 26 s is the workout's end.
+	assert.deepEqual(cameraRepsBySet(timeline, [3_000, 7_000, 9_000, 20_000, 26_000]), [3, 0, 2]);
 });

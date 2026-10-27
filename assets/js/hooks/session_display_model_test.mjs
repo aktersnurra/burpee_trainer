@@ -62,6 +62,7 @@ const runningKeys = [
 	"countdownDots",
 	"restTimeLeftSec",
 	"sessionProgress",
+	"repProgress",
 	"setProgress",
 	"totalDone",
 	"totalTarget",

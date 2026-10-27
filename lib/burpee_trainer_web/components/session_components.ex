@@ -128,6 +128,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
           <div id="session-top-readout" class="pointer-events-none">
             <div id="session-progress" hidden aria-hidden="true">
+              <div id="session-progress-reps" hidden></div>
               <div id="session-progress-fill"></div>
             </div>
             <div id="session-status-line" class="qs-tabular flex items-start">

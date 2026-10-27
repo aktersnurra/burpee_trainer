@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import SessionHook from "./session_hook.js";
 import { initialFlowState } from "./session_flow_fsm.mjs";
 import { openSessionStore } from "./session_store.mjs";
-import { initialSegmentState } from "./session_segment_fsm.mjs";
+import { currentFrame, initialSegmentState } from "./session_segment_fsm.mjs";
 import {
 	initialTrackingObserver,
 	updateTrackingStatus,
@@ -445,6 +445,8 @@ function buildHarness({
 		wakeLock,
 		flow: initialFlowState(),
 		segment: initialSegmentState(),
+		tracking: initialTrackingObserver(),
+		cameraSetReps: [],
 		activeSegment: null,
 		timeline: [],
 		startTime: null,
@@ -628,6 +630,51 @@ test("a rep the counter decides late is dated, and judged, when it happened", ()
 	ctx.observePoseRep({ index: 2, lagMs: 700 });
 
 	assert.deepEqual(ctx.tracking.cadenceMs, [5_000, 9_800]);
+});
+
+test("with the camera, a set ends when its reps are done and its time goes to the rest", () => {
+	const ctx = trackedContext([
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+		{ kind: "rest", duration_sec: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+	]);
+	const at = (elapsedSec) => {
+		ctx.segment = { ...ctx.segment, clock: { ...ctx.segment.clock, elapsedSec } };
+	};
+
+	at(3);
+	ctx.observePoseRep({ index: 1 });
+	assert.equal(currentFrame(ctx.timeline, 5).event.kind, "work");
+	at(5);
+	ctx.observePoseRep({ index: 2 });
+
+	assert.equal(currentFrame(ctx.timeline, 5.1).event.kind, "rest");
+	// The next set starts when it always did.
+	assert.equal(currentFrame(ctx.timeline, 17.9).event.kind, "rest");
+	assert.equal(currentFrame(ctx.timeline, 18).index, 2);
+});
+
+test("with the camera, the screen counts the camera's reps; without it, the schedule's", () => {
+	const timeline = [
+		{ kind: "work", reps: 3, sec_per_rep: 4, sec_per_burpee: 3 },
+		{ kind: "rest", duration_sec: 10 },
+	];
+	const ctx = trackedContext(timeline);
+	ctx.observePoseRep({ index: 1 });
+	ctx.renderRunningFrame(2.6, currentFrame(ctx.timeline, 2.6));
+
+	let model = ctx.renderedModels.at(-1);
+	assert.equal(model.primaryCount, 2);
+	assert.equal(model.totalDone, 1);
+	assert.equal(model.repProgress, 1 / 3);
+	assert.deepEqual(ctx.downCueValues.at(-1), 2);
+
+	ctx.updatePoseStatus({ state: "lost" });
+	ctx.renderRunningFrame(2.7, currentFrame(ctx.timeline, 2.7));
+	model = ctx.renderedModels.at(-1);
+	assert.equal(model.primaryCount, 3);
+	assert.equal(model.totalDone, 0);
+	assert.equal(model.repProgress, null);
 });
 
 test("with the camera, the workout waits briefly for its last rep before the count is final", () => {

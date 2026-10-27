@@ -31,6 +31,7 @@ export function runningDisplayModel({
 	frame,
 	timeLeftSec,
 	sessionProgress = null,
+	repProgress = null,
 	totalDone,
 	totalTarget,
 	doneInEvent = 0,
@@ -63,6 +64,7 @@ export function runningDisplayModel({
 				? setProgressForFrame(timeline, frame)
 				: null,
 		sessionProgress,
+		repProgress,
 		totalDone,
 		totalTarget,
 		timeLeftSec,

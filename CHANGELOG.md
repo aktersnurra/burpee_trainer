@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — Camera workouts follow your pace
+
+- While the camera counts, the screen shows its reps instead of the schedule's: the reps left in the set and the total. The top bar keeps the clock as a faded fill, with a solid fill of the reps done over it, so being ahead of or behind the clock shows at a glance. If tracking drops, the screen goes back to the schedule.
+- A set ends when the camera has counted its reps: the rest starts at once (the beeps stop), and the set's remaining time goes to that rest, so the next set starts when it would have and the workout keeps its length (a 20-minute session still counts for levels and goals). Only a set followed by a rest ends early; the last set, or a set straight into another, runs on the clock. Behind the clock, a set ends on the clock as before.
+
 ## 2026-10-26 — A proper HSMM counts camera reps
 
 - The camera's rep counter is an explicit-duration HSMM (`pose_burpee_hsmm.mjs`): standing, lowering, pushup, rising, and an "other" phase for bending or squatting during rests, on a 100 ms clock where an unusable frame is a missing observation. It is decoded by Viterbi with a 600 ms lag, so a rep is decided about 0.7 s after you stand up; the session dates it when it happened (`lagMs` on `pose-tracker:rep`). Its parameters (`pose_burpee_hsmm_model.mjs`) are fitted, not hand-tuned. Before, one bad frame while lowering lost the rep. On the recorded sessions (140 and 135 reps) it still counts exactly, and with dropouts it holds where the old counter did not: 1% bursts of 830 ms leave 138–140 of 140 (was 108–120).

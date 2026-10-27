@@ -529,14 +529,18 @@ export class SessionRenderer {
 		);
 	}
 
-	updateSessionProgress(progress) {
+	// The fill is the clock; while the camera counts, a solid fill of the reps done runs
+	// over it, so being ahead or behind the clock shows at a glance.
+	updateSessionProgress(progress, repProgress = null) {
 		const track = this.node("#session-progress");
 		const fill = this.node("#session-progress-fill");
+		const reps = this.node("#session-progress-reps");
 		const numericProgress = Number(progress);
 		const visible = progress != null && Number.isFinite(numericProgress);
 		const clampedProgress = visible
 			? Math.min(Math.max(numericProgress, 0), 1)
 			: 0;
+		const paced = visible && repProgress != null && Number.isFinite(repProgress);
 
 		this.setHidden(track, !visible, "sessionProgressHidden");
 		this.setStyle(
@@ -544,6 +548,13 @@ export class SessionRenderer {
 			"transform",
 			`scaleX(${clampedProgress})`,
 			"sessionProgressTransform",
+		);
+		this.setHidden(reps, !paced, "sessionRepProgressHidden");
+		this.setStyle(
+			reps,
+			"transform",
+			`scaleX(${paced ? Math.min(Math.max(repProgress, 0), 1) : 0})`,
+			"sessionRepProgressTransform",
 		);
 	}
 
@@ -707,7 +718,7 @@ export class SessionRenderer {
 			setProgress: model.setProgress,
 		});
 		this.setVisualState(visual.state);
-		this.updateSessionProgress(model.sessionProgress);
+		this.updateSessionProgress(model.sessionProgress, model.repProgress);
 
 		if (visual.state === "count_in") {
 			this.lastPulseValue = null;

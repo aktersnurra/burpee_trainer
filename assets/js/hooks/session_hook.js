@@ -1,5 +1,6 @@
 import { SessionAudio } from "./session_audio.mjs";
 import {
+  cameraRepsBySet,
   currentFrame,
   initialSegmentState,
   segmentTransition,
@@ -108,6 +109,7 @@ const SessionHook = {
     this.lastDownCueKey = null;
     this.hiddenAt = null;
     this.tracking = initialTrackingObserver();
+    this.cameraSetReps = [];
     this.trackerReadiness = "not_ready";
     this.trackingCompletion = null;
     this.armedPoseStep = null;
@@ -1234,8 +1236,12 @@ const SessionHook = {
 
   renderRunningFrame(elapsed, frame) {
     this.syncRepStateFromSegment();
+    // While the camera is counting, the screen shows its reps; otherwise the schedule's.
+    const paced = this.cameraPaced();
+    const doneInEvent = paced ? (this.cameraSetReps[frame?.index] ?? 0) : this.doneReps;
+    const totalDone = paced ? this.tracking.cadenceMs.length : this.segment.reps.burpeeCountDone;
     const remainingReps = Math.max(
-      (frame?.event?.reps || 0) - this.doneReps,
+      (frame?.event?.reps || 0) - doneInEvent,
       0,
     );
 
@@ -1249,9 +1255,10 @@ const SessionHook = {
       frame,
       timeLeftSec: Math.max(totalDurationSec - elapsed, 0),
       sessionProgress,
-      totalDone: this.segment.reps.burpeeCountDone,
+      repProgress: paced ? totalDone / programBurpeeCount(this.timeline) : null,
+      totalDone,
       totalTarget: this.segment.reps.burpeeCountTarget,
-      doneInEvent: this.doneReps,
+      doneInEvent,
     });
     this.renderer.renderDisplayModel(model);
     this.triggerDownCueForFrame(frame, remainingReps);
@@ -1389,6 +1396,11 @@ const SessionHook = {
   startPoseObservation() {
     this.resetPoseTracker();
     this.tracking = startTrackingObserver(this.tracking, this.trackerReadiness);
+    this.cameraSetReps = [];
+  },
+
+  cameraPaced() {
+    return this.activeSegment === "workout" && this.tracking.mode === "observing";
   },
 
   resetPoseTracker() {
@@ -1462,6 +1474,18 @@ const SessionHook = {
       elapsedMs: Math.max(0, Math.round(elapsedSec * 1_000)),
       eligible,
     });
+    if (!this.cameraPaced()) return;
+
+    // Once the camera has counted the set's reps, its rest starts.
+    this.cameraSetReps = cameraRepsBySet(this.timeline, this.tracking.cadenceMs);
+    const now = this.segment.clock.elapsedSec || 0;
+    const current = currentFrame(this.timeline, now);
+    if (
+      current?.event?.kind === "work" &&
+      this.cameraSetReps[current.index] >= (current.event.reps || 0)
+    ) {
+      this.dispatchSegment({ type: "END_SET", elapsedSec: now });
+    }
   },
 
   updatePoseStatus({ state, reason }) {

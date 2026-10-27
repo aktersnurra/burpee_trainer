@@ -101,6 +101,7 @@ function completedRepsForElapsed(event, phaseElapsedSec) {
 		Math.max(Number(phaseElapsedSec) || 0, 0),
 		eventDurationSec(event),
 	);
+	if (event.ended_early && eventElapsedSec >= eventDurationSec(event)) return target;
 
 	const activeBoundaryToleranceSec =
 		Number.EPSILON * 4 * Math.max(1, eventElapsedSec, activeSec, cadenceSec);
@@ -135,6 +136,38 @@ function scheduledRepsAtElapsed(timeline, elapsedSec) {
 		cursor += eventDurationSec(event);
 		return nextCompleted;
 	}, 0);
+}
+
+// The set at elapsedSec ends now, and its remaining time goes to the rest after it, so
+// the workout keeps its length; any other moment leaves the timeline as it is.
+function endSetEarly(timeline, elapsedSec) {
+	const frame = currentFrame(timeline, elapsedSec);
+	if (!isBurpeeEvent(frame?.event) || timeline[frame.index + 1]?.kind !== "rest") {
+		return timeline;
+	}
+	return timeline.map((event, index) => {
+		if (index === frame.index) {
+			return { ...event, duration_sec: frame.phase_elapsed, ended_early: true };
+		}
+		if (index === frame.index + 1) {
+			return { ...event, duration_sec: event.duration_sec + frame.phase_remaining };
+		}
+		return event;
+	});
+}
+
+// Camera reps per timeline event: a rep counts for the set it lands in, or for the set a
+// rest follows (the camera sees a set's last rep a moment after it ends); one after the
+// timeline counts for the last set.
+export function cameraRepsBySet(timeline, cadenceMs) {
+	const counts = timeline.map(() => 0);
+	const lastSet = timeline.findLastIndex(isBurpeeEvent);
+	for (const repMs of cadenceMs) {
+		const frame = currentFrame(timeline, repMs / 1_000);
+		const index = !frame ? lastSet : isBurpeeEvent(frame.event) ? frame.index : frame.index - 1;
+		if (isBurpeeEvent(timeline[index])) counts[index] += 1;
+	}
+	return counts;
 }
 
 export function accountReps(previousFrame, nextFrame, reps) {
@@ -587,6 +620,14 @@ export function segmentTransition(state, event) {
 			return {
 				state: { ...state, beeps: result.beeps },
 				commands: result.commands,
+			};
+		}
+
+		case "END_SET": {
+			if (state.mode !== "running") return { state, commands: [] };
+			return {
+				state: { ...state, timeline: endSetEarly(state.timeline, event.elapsedSec) },
+				commands: [],
 			};
 		}
 
