@@ -246,17 +246,19 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
 
   defp lags(segment), do: for(%{t: t, at: at} <- segment, is_number(t), do: t - at)
 
+  # How late the first rep after a rest lands on its beat, net of how late the workout's
+  # first rep landed after the same count-in; not the gap from the set before, which
+  # finishing that set early lengthens.
   defp recovery_delta(matched) do
-    matched
-    |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.flat_map(fn
-      [%{t: a}, %{t: b, first?: true, rest_before: r, interval: i}]
-      when is_number(a) and is_number(b) and r > 0 ->
-        [b - a - (r + i)]
+    reaction =
+      case Enum.find(matched, &is_number(&1.t)) do
+        %{t: t, at: at, set: 0} -> t - at
+        _other -> 0.0
+      end
 
-      _other ->
-        []
-    end)
+    for %{t: t, at: at, first?: true, rest_before: r} <- matched, is_number(t) and r > 0 do
+      t - at - reaction
+    end
     |> median()
   end
 

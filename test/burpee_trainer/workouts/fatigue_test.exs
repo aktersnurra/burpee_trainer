@@ -103,6 +103,27 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
     end
   end
 
+  property "recovery is how late a set's first rep lands, not when the set before ended" do
+    check all(
+            {sets, reps, spr, rest} <- shape(),
+            rest > 0,
+            pace <- float(min: 0.5, max: 1.0),
+            # Under half the shortest interval, past which the first rep reads as missed.
+            restart <- float(min: 0.0, max: 1.9)
+          ) do
+      # Each set run ahead and finished early; every set after the first restarts late.
+      lag = fn
+        0, rep -> -(rep - 1) * spr * (1 - pace)
+        _set, rep -> restart - (rep - 1) * spr * (1 - pace)
+      end
+
+      fatigue =
+        Fatigue.compute(on_beat(sets, reps, spr, rest, lag), program(sets, reps, spr, rest))
+
+      assert_in_delta fatigue.recovery_delta_sec, restart, 0.01
+    end
+  end
+
   test "finishing the last set early is not falling behind" do
     # Ten sets of fifteen every 6 s with 30 s rests, the last done 12 s ahead of its end.
     ahead = fn set, rep -> if set == 9, do: -rep * 0.8, else: 0.0 end
