@@ -709,7 +709,7 @@ button.home-summary:hover .home-workout-name {
 .home-history-sheet-tags span { padding:5px 8px; border:1px solid var(--home-line); border-radius:3px; color:var(--home-muted); font-size: var(--text-small); }
 #home-history-sheet-note { margin-top: 12px; font-size: var(--text-body); line-height: 1.5; }
 @media (max-width: 600px) { .adaptive-home { padding-inline: 30px; } }
-@media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } .home-loading-animation { display: none; } }
 /* Measured local-day detail keeps the same 80-minute visual ceiling as weekly cells. */
 .home-history-week-cell { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform var(--motion-quick) ease; }
 .home-history-week-cell:hover { transform: translateY(-2px); }

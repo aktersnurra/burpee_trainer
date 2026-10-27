@@ -397,7 +397,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           if(@state.authoring_stage == :review, do: "Saving variation", else: "Preparing variation")
         }
       >
-        <.burpee_loader />
+        <img
+          class="home-loading-animation"
+          src="/images/burpee-loader-ink.gif"
+          alt=""
+          width="142"
+          height="142"
+        />
         <span id="home-edit-progress" class="home-local-message">
           {if(@state.authoring_stage == :review,
             do: "Saving variation…",
@@ -598,7 +604,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             </span>
           </div>
           <div id="home-update-loading" role="status" aria-label="Updating workout">
-            <.burpee_loader />
+            <img
+              class="home-loading-animation"
+              src="/images/burpee-loader-ink.gif"
+              alt=""
+              width="142"
+              height="142"
+            />
             <span class="sr-only">Updating workout</span>
           </div>
         <% else %>
