@@ -24,3 +24,29 @@ On iPhone, open the app in Safari and choose Share → Add to Home Screen. If an
 existing installation still shows the old icon, remove and re-add its home-screen
 shortcut. Run the normal `mix assets.deploy` step when deploying to regenerate
 digested assets.
+
+## Approved loading animation
+
+The loader uses illustrated poses based on the logo's sculpted ivory silhouette
+and black contour channels. It performs a six-count military burpee, including
+the push-up, with no upward jump or clap.
+
+The approved version has a deliberate pose-by-pose rhythm: 19 source frames over
+2.8 seconds. The first and last standing poses match. Identical holds may be
+coalesced by the encoders. This version does not use optical-flow interpolation.
+
+Exports under `priv/static/images/`:
+
+- `burpee-loader.webp`: preferred lossless animation.
+- `burpee-loader.gif`: optimized browser fallback.
+- `burpee-loader-still.png`: standing pose for reduced motion.
+- `burpee-loader-transparent.webp`: ivory artwork with smooth alpha.
+- `burpee-loader-transparent.gif`: ivory artwork with binary alpha.
+
+All exports are 192px square. Transparent ivory versions need a dark background.
+The shared `burpee_loader/1` component selects the still image when
+`prefers-reduced-motion: reduce` is enabled. Existing status labels provide
+accessible loading announcements.
+
+The approved source poses are preserved in `loader-poses.zip`. Reproduce all
+exports with `python3 scripts/render_burpee_loader.py` (Pillow and NumPy required).

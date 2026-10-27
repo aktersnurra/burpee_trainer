@@ -310,6 +310,30 @@ defmodule BurpeeTrainerWeb.CoreComponents do
     """
   end
 
+  @doc "A six-count burpee silhouette, with a still frame for reduced-motion preferences."
+  attr :class, :string, default: "home-loading-animation"
+  attr :size, :integer, default: 142
+
+  def burpee_loader(assigns) do
+    ~H"""
+    <picture>
+      <source
+        media="(prefers-reduced-motion: reduce)"
+        srcset="/images/burpee-loader-still.png"
+        type="image/png"
+      />
+      <source srcset="/images/burpee-loader.webp" type="image/webp" />
+      <img
+        class={@class}
+        src="/images/burpee-loader.gif"
+        alt=""
+        width={@size}
+        height={@size}
+      />
+    </picture>
+    """
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do
