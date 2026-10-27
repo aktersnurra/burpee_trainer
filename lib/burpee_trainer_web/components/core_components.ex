@@ -310,7 +310,7 @@ defmodule BurpeeTrainerWeb.CoreComponents do
     """
   end
 
-  @doc "The burpee contour loop, with a still frame for reduced-motion preferences."
+  @doc "A six-count burpee silhouette, with a still frame for reduced-motion preferences."
   attr :class, :string, default: "home-loading-animation"
   attr :size, :integer, default: 142
 

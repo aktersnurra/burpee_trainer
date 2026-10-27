@@ -27,10 +27,16 @@ digested assets.
 
 ## Loading animation
 
-The loader is a subtle, periodic deformation of the original raster contours.
-It keeps the standing figure fixed while a travelling phase moves through the
-crouch, plank, and low push-up contours. It does not animate separate cutouts
-or attempt a literal articulated exercise demonstration.
+The loader is one articulated side-profile silhouette in the icon's ivory-and-black
+palette, performing an actual six-count military burpee: stand → crouch with
+hands down → kick back to plank → lower into a push-up → press to plank →
+tuck the feet in → stand. There is no jump or clap. The logo's static
+multi-pose composition remains the app icon; the loading animation isolates the
+athlete so the rep reads clearly at small sizes.
+
+Hands stay planted throughout the kick-back, push-up, and tuck. Toes stay
+planted through the push-up. Joint positions interpolate smoothly, with a brief
+foot lift for the kick-back and tuck; the camera and canvas remain fixed.
 
 | Export under `priv/static/images/` | Use |
 |---|---|
@@ -38,10 +44,11 @@ or attempt a literal articulated exercise demonstration.
 | `burpee-loader.gif` | Optimized GIF fallback on black |
 | `burpee-loader-transparent.webp` | Ivory contours with smooth alpha |
 | `burpee-loader-transparent.gif` | Transparent GIF with binary alpha edges |
-| `burpee-loader-still.png` | Original composition for reduced motion |
+| `burpee-loader-still.png` | Standing silhouette for reduced motion |
 
-Each animation is 192 × 192px, 85 frames over 2.8 seconds (about 30 FPS), and
-loops forever. The closing frame is identical to the opening frame. GIF uses
+Each animation is 192 × 192px, rendered at about 30 FPS over 2.8 seconds, and
+loops forever. The closing frame is identical to the opening frame. Identical
+standing frames may be coalesced by the encoder. GIF uses
 30/40ms frame delays to fit its centisecond timing format. A shared palette and
 limited antialias coverage reduce export size and avoid palette flicker.
 Transparent ivory artwork needs a dark surface for contrast.
