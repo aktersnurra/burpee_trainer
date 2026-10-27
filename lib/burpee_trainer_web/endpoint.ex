@@ -29,6 +29,9 @@ defmodule BurpeeTrainerWeb.Endpoint do
     from: :burpee_trainer,
     gzip: not code_reloading?,
     only: BurpeeTrainerWeb.static_paths(),
+    # A digested top-level file is renamed, favicon.ico to favicon-<digest>.ico, so it no
+    # longer matches `only`.
+    only_matching: ~w(favicon manifest),
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the

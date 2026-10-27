@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-27 — The favicon and web app manifest load in production
+
+- In production the layout links the fingerprinted favicon and manifest (`/favicon-<digest>.ico`, `/manifest-<digest>.webmanifest`), and both answered 404: the static plug serves only paths whose first segment is listed, and a digested top-level file no longer matches its name. A browser without a cached icon (a private window, a first visit) showed none, and the phone never got the manifest or its icons. The endpoint now also serves top-level files starting with `favicon` or `manifest`.
+
 ## 2026-10-27 — Poses upload from the finish screen
 
 - A camera workout's poses start uploading as soon as its finish screen shows, while you fill it in, instead of after Save. The server takes poses for a workout not saved yet and completes the trace when it is saved; poses written after that still land on it.
