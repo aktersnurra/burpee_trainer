@@ -17,10 +17,11 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     intruder = user_fixture()
     {_plan, session} = completed_session(owner)
 
+    # The session exists, so the device keeps its trace: it may be another sign-in's.
     for {user, session_id, client_id} <- [
           {intruder, session.id, session.client_session_id},
           {owner, session.id, Ecto.UUID.generate()},
-          {owner, 2_147_483_647, session.client_session_id}
+          {intruder, session.client_session_id, session.client_session_id}
         ] do
       response =
         conn
@@ -34,20 +35,90 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.all(PoseCaptureRun) == []
   end
 
-  test "started sessions reject deferred evidence without persisting it", %{conn: conn} do
+  test "a session that no longer exists is gone, so the device can drop its trace", %{
+    conn: conn
+  } do
+    user = user_fixture()
+    {_plan, session} = completed_session(user)
+    {:ok, _deleted} = Workouts.delete_session(Scope.for_user(user), session.id)
+
+    for session_id <- [session.id, session.client_session_id] do
+      response =
+        conn
+        |> recycle()
+        |> authenticated_json(user)
+        |> post(
+          ~p"/api/session-pose-traces",
+          upload_payload(session_id, session.client_session_id, [chunk(0)], true)
+        )
+
+      assert json_response(response, 410) == %{"error" => "gone"}
+    end
+
+    assert Repo.all(PoseCaptureRun) == []
+  end
+
+  test "an unsaved session takes poses, and saving it completes them", %{conn: conn} do
     user = user_fixture()
     plan = plan_fixture(user)
     {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
 
-    response =
+    post_final = fn chunks ->
       conn
+      |> recycle()
       |> authenticated_json(user)
       |> post(
         ~p"/api/session-pose-traces",
-        upload_payload(started.id, started.client_session_id, [chunk(0)], true)
+        upload_payload(started.id, started.client_session_id, chunks, true)
+      )
+    end
+
+    early = post_final.([chunk(0), chunk(1)])
+
+    assert json_response(early, 200) == %{
+             "accepted_indexes" => [0, 1],
+             "complete" => false,
+             "awaiting_completion" => true
+           }
+
+    assert [%PoseCaptureRun{status: :active}] = Repo.all(PoseCaptureRun)
+
+    {:ok, _completed} =
+      Workouts.complete_session(
+        Scope.for_user(user),
+        started.id,
+        %{"burpee_count_actual" => 30, "duration_sec_actual" => 120},
+        :timed
       )
 
-    assert json_response(response, 404) == %{"error" => "not_found"}
+    assert [%PoseCaptureRun{status: :completed, workout_session_id: session_id}] =
+             Repo.all(PoseCaptureRun)
+
+    assert session_id == started.id
+    assert Repo.aggregate(PoseTraceChunk, :count) == 2
+
+    # A chunk the device writes after Save still lands on the completed trace.
+    assert json_response(post_final.([chunk(2)]), 200) == %{
+             "accepted_indexes" => [2],
+             "complete" => true
+           }
+  end
+
+  test "discarding an unsaved session removes the poses it took", %{conn: conn} do
+    user = user_fixture()
+    plan = plan_fixture(user)
+    {:ok, started} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
+    conn
+    |> authenticated_json(user)
+    |> post(
+      ~p"/api/session-pose-traces",
+      upload_payload(started.id, started.client_session_id, [chunk(0)])
+    )
+    |> json_response(200)
+
+    {:ok, _discarded} = Workouts.discard_started_session(Scope.for_user(user), started.id)
+
     assert Repo.all(PoseCaptureRun) == []
     assert Repo.all(PoseTraceChunk) == []
   end

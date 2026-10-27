@@ -54,6 +54,11 @@ function uploadStore(
 			chunks = chunks.filter((item) => !indexes.includes(item.chunk_index));
 			marker = false;
 		},
+		async deleteTrace(sessionId) {
+			assert.equal(sessionId, 99);
+			chunks = [];
+			marker = false;
+		},
 		remainingIndexes() {
 			return chunks.map((item) => item.chunk_index);
 		},
@@ -80,15 +85,58 @@ function parseJson(body) {
 	}
 }
 
-test("deferred uploads stay idle while a workout session owns the page", () => {
-	const activeSessionDocument = {
-		querySelector: (selector) =>
-			selector === "#burpee-session" ? { id: "burpee-session" } : null,
+test("deferred uploads stay idle while a workout runs, and start on its finish screen", () => {
+	const sessionDocument = (finishScreenHidden) => {
+		const finishScreen = { hidden: finishScreenHidden };
+		const session = {
+			querySelector: (selector) => (selector === "#session-completion-review" ? finishScreen : null),
+		};
+		return { querySelector: (selector) => (selector === "#burpee-session" ? session : null) };
 	};
 	const nonSessionDocument = { querySelector: () => null };
 
-	assert.equal(canDrainPoseTraces(activeSessionDocument), false);
+	assert.equal(canDrainPoseTraces(sessionDocument(true)), false);
+	assert.equal(canDrainPoseTraces(sessionDocument(false)), true);
 	assert.equal(canDrainPoseTraces(nonSessionDocument), true);
+});
+
+test("a workout not saved yet uploads its whole trace, and its poses leave the device", async () => {
+	const store = uploadStore([chunk(0), chunk(1), chunk(2)]);
+	const requests = [];
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async (_url, request) => {
+			const body = parseJson(request.body);
+			requests.push([body.chunks.map((item) => item.chunk_index), body.complete]);
+			const accepted_indexes = body.chunks.map((item) => item.chunk_index);
+			return jsonResponse({ accepted_indexes, complete: false, awaiting_completion: true });
+		},
+		csrfToken: "token",
+		batchSize: 2,
+	});
+
+	const result = await uploader.drain();
+
+	assert.deepEqual(result.uploads, [{ sessionId: 99, status: "uploaded" }]);
+	assert.deepEqual(requests, [[[0, 1], false], [[2], true]]);
+	assert.deepEqual(store.remainingIndexes(), []);
+	assert.equal(store.uploadMarkerExists(), false);
+});
+
+test("a trace whose workout is gone from the server is removed from the device", async () => {
+	const store = uploadStore([chunk(0), chunk(1)]);
+	const uploader = createPoseTraceUploader({
+		store,
+		fetch: async () => ({ ok: false, status: 410 }),
+		csrfToken: "token",
+	});
+
+	const result = await uploader.drain();
+
+	assert.equal(result.status, "complete");
+	assert.deepEqual(result.uploads, [{ sessionId: 99, status: "gone" }]);
+	assert.deepEqual(store.remainingIndexes(), []);
+	assert.equal(store.uploadMarkerExists(), false);
 });
 
 test("uploader acknowledges only accepted chunks", async () => {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — Poses upload from the finish screen
+
+- A camera workout's poses start uploading as soon as its finish screen shows, while you fill it in, instead of after Save. The server takes poses for a workout not saved yet and completes the trace when it is saved; poses written after that still land on it.
+- Removing a workout removes its trace everywhere. Deleting or discarding it already deleted the server's copy; now, when a device uploads poses for a workout no one has any more, the server answers 410 Gone and the device deletes its copy, instead of showing a rejection notice for good. A workout that exists but is someone else's still answers 404, so a shared device keeps the other sign-in's poses.
+
 ## 2026-10-27 — Camera workouts follow your pace
 
 - While the camera counts, the screen shows its reps instead of the schedule's: the reps left in the set and the total. The top bar keeps the clock as a faded fill, with a solid fill of the reps done over it, so being ahead of or behind the clock shows at a glance. If tracking drops, the screen goes back to the schedule.

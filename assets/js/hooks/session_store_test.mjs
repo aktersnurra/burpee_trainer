@@ -722,6 +722,21 @@ test("discard removes the exact session range without loading pose payloads", as
   assert.equal(fake.metrics.cursorValues, 0);
 });
 
+test("a trace the server no longer has is removed with its upload, and nothing else", async () => {
+  const fake = statefulIndexedDbHarness();
+  for (const sessionId of [41, 42]) {
+    fake.seed("completion_drafts", { session_id: sessionId, content_hash: "hash" });
+    fake.seed("pose_trace_chunks", { session_id: sessionId, chunk_index: 0, payload: {} });
+    fake.seed("trace_uploads", { session_id: sessionId });
+  }
+  const store = await openSessionStore(fake.indexedDB, keyRanges);
+  await store.deleteTrace(41);
+  for (const name of ["pose_trace_chunks", "trace_uploads"]) {
+    assert.deepEqual(fake.values(name).map((value) => value.session_id), [42]);
+  }
+  assert.deepEqual(fake.values("completion_drafts").map((value) => value.session_id), [41, 42]);
+});
+
 test("a discarded session leaves no draft, trace, or upload behind, and touches no other", async () => {
   const store = createSessionStore(memoryEngine());
   for (const id of [11, 12]) {

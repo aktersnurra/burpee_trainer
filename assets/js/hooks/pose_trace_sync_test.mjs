@@ -49,7 +49,7 @@ function harness({ fetch, failOpenOnce = false, emptySessionIds = [], frameSessi
 		"#pose-upload-progress-bar": progressBar,
 	};
 	documentRoot.querySelector = (selector) => selector === "#burpee-session"
-		? (activeWorkout ? {} : null)
+		? (activeWorkout ? { querySelector: () => ({ hidden: true }) } : null)
 		: (nodes[selector] || null);
 	const store = {
 		listReadyTraceUploads: async () => [...queues.keys()].sort((a, b) => a - b)

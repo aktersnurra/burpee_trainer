@@ -6,8 +6,10 @@ const DEFAULT_ENDPOINT = "/api/session-pose-traces";
 // Decoded JSON per request; the server's PoseUploadBodyReader accepts the same.
 export const MAX_TRACE_REQUEST_BYTES = 4 * 1024 * 1024;
 
+// Not while a workout runs on the page; from its finish screen on, its poses can go up.
 export function canDrainPoseTraces(documentRoot) {
-	return !documentRoot.querySelector("#burpee-session");
+	const session = documentRoot.querySelector("#burpee-session");
+	return !session || session.querySelector("#session-completion-review")?.hidden === false;
 }
 
 export function createPoseTraceUploader({
@@ -78,6 +80,11 @@ export function createPoseTraceUploader({
 
 			const finalBatch = !hasMore;
 			const posted = await postBatch(traceRequest(upload, batch, finalBatch));
+			// The workout was deleted or discarded, and its trace with it.
+			if (posted.httpStatus === 410) {
+				await store.deleteTrace(upload.session_id);
+				return { sessionId: upload.session_id, status: "gone" };
+			}
 			if (posted.reason) return pendingUpload(upload, posted.reason, posted.httpStatus);
 
 			const result = posted.body;
@@ -88,7 +95,13 @@ export function createPoseTraceUploader({
 			if (acceptedIndexes.length === 0) return pendingUpload(upload, "invalid_acknowledgement");
 			onProgress(acceptedIndexes.length);
 
-			if (finalBatch && acceptedIndexes.length === batch.length && result.complete !== true) {
+			if (
+				finalBatch &&
+				acceptedIndexes.length === batch.length &&
+				result.complete !== true &&
+				// A workout not saved yet: saving it completes what the server has.
+				result.awaiting_completion !== true
+			) {
 				return pendingUpload(upload, "incomplete_acknowledgement");
 			}
 			if (acceptedIndexes.length !== batch.length) {

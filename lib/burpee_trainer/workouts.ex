@@ -1095,7 +1095,7 @@ defmodule BurpeeTrainer.Workouts do
           boolean()
         ) ::
           {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
-          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
+          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found | :gone}
   @spec ingest_pose_trace_batch(
           Scope.t(),
           pos_integer() | nil,
@@ -1105,7 +1105,7 @@ defmodule BurpeeTrainer.Workouts do
           non_neg_integer() | nil
         ) ::
           {:ok, %{accepted_indexes: [non_neg_integer()], complete: boolean()}}
-          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found}
+          | {:error, Ecto.Changeset.t() | :invalid_batch | :not_found | :gone}
   def ingest_pose_trace_batch(
         scope,
         session_id,
@@ -1127,15 +1127,23 @@ defmodule BurpeeTrainer.Workouts do
              is_binary(client_session_id) and is_list(chunks) and is_boolean(complete?) do
     # Devices whose storage predates server session IDs know only the client ID, which
     # is unique per user.
-    session_clauses =
-      [user_id: user_id, client_session_id: client_session_id, state: :completed] ++
-        if(session_id, do: [id: session_id], else: [])
+    identity = if(session_id, do: [id: session_id], else: [client_session_id: client_session_id])
 
+    # A workout uploads as soon as it ends, before it is saved; only a saved one completes.
     Multi.new()
     |> Multi.run(:session, fn repo, _changes ->
-      case repo.get_by(WorkoutSession, session_clauses) do
-        %WorkoutSession{state: :completed} = session -> {:ok, session}
-        nil -> {:error, :not_found}
+      case repo.get_by(
+             WorkoutSession,
+             [user_id: user_id, client_session_id: client_session_id] ++ identity
+           ) do
+        %WorkoutSession{} = session ->
+          {:ok, session}
+
+        # No one's session: deleted or discarded, so the device's trace has no home.
+        nil ->
+          if repo.exists?(where(WorkoutSession, ^identity)),
+            do: {:error, :not_found},
+            else: {:error, :gone}
       end
     end)
     |> Multi.run(:run, fn repo, %{session: session} ->
@@ -1145,12 +1153,22 @@ defmodule BurpeeTrainer.Workouts do
       insert_deferred_pose_chunks(repo, run, chunks)
     end)
     |> Multi.run(:completion, fn repo, %{run: run, session: session} ->
+      complete? = complete? and session.state == :completed
+
       with :ok <- verify_pose_chunk_coverage(repo, run, complete?) do
         complete_deferred_pose_run(repo, run, session, complete?)
       end
     end)
     |> Repo.transaction()
     |> case do
+      {:ok, %{chunks: accepted_indexes, completion: run, session: %{state: :started}}} ->
+        {:ok,
+         %{
+           accepted_indexes: accepted_indexes,
+           complete: run.status == :completed,
+           awaiting_completion: true
+         }}
+
       {:ok, %{chunks: accepted_indexes, completion: run}} ->
         {:ok, %{accepted_indexes: accepted_indexes, complete: run.status == :completed}}
 
@@ -1518,6 +1536,7 @@ defmodule BurpeeTrainer.Workouts do
             |> with_derived_session_fields(user_id, user.timezone)
 
           completed = persist_completed_session(user, changeset, &Repo.update/1)
+          complete_uploaded_pose_run(completed)
 
           admit_completion_jobs(scope, completed)
           completed
@@ -1540,6 +1559,17 @@ defmodule BurpeeTrainer.Workouts do
 
   def complete_session(%Scope{}, session_id, _attrs, _capture),
     do: {:error, Error.new(:session_not_owned, %{session_id: session_id})}
+
+  # Poses upload from the finish screen, before Save; saving completes what arrived.
+  defp complete_uploaded_pose_run(%WorkoutSession{id: session_id}) do
+    with %PoseCaptureRun{status: :active} = run <-
+           Repo.get_by(PoseCaptureRun, workout_session_id: session_id),
+         true <- Repo.exists?(where(PoseTraceChunk, pose_capture_run_id: ^run.id)) do
+      run
+      |> PoseCaptureRun.complete_changeset(%{"completed_at" => DateTime.utc_now(:second)})
+      |> Repo.update!()
+    end
+  end
 
   @doc """
   Logs a session done away from the phone (`source_kind: :manual`). Like a completion it

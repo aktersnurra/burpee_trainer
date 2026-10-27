@@ -90,6 +90,11 @@ export function createSessionStore(engine) {
     discardSession(sessionId, contentHash) {
       return engine.discardSession(sessionId, contentHash);
     },
+
+    // The server no longer has the session; its trace has nowhere to go.
+    deleteTrace(sessionId) {
+      return engine.deleteTrace(sessionId);
+    },
   };
 }
 
@@ -304,6 +309,12 @@ function indexedDbEngine(database, keyRanges) {
     deleteTraceChunks(sessionId, indexes) {
       return transact(CHUNKS, "readwrite", (transaction) => {
         deleteChunkKeys(transaction.objectStore(CHUNKS), sessionId, indexes);
+      });
+    },
+    deleteTrace(sessionId) {
+      return transact([CHUNKS, UPLOADS], "readwrite", (transaction) => {
+        transaction.objectStore(CHUNKS).delete(traceRange(sessionId));
+        transaction.objectStore(UPLOADS).delete(sessionId);
       });
     },
     discardSession(sessionId, contentHash) {

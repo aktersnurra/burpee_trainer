@@ -977,6 +977,10 @@ const SessionHook = {
         this.queueCompletionDraft();
         this.renderer.renderCompletion(this.flow.completion);
         this.renderer.renderFlowState(this.flow);
+        // The poses go up while you fill in the finish screen; Save completes them.
+        void Promise.resolve(this.traceWrite).then(() =>
+          window.dispatchEvent(new CustomEvent("burpee:trace-upload-ready")),
+        );
         break;
     }
   },

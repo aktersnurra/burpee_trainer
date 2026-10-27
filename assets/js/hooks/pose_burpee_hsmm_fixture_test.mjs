@@ -362,6 +362,7 @@ async function runControlledSessionFixture(frames) {
 			this.bubbles = Boolean(init.bubbles);
 		}
 	};
+	globalThis.window ??= { dispatchEvent() {} };
 	globalThis.document = {
 		visibilityState: "visible",
 		documentElement: {},

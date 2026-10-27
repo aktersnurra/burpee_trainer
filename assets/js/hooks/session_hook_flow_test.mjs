@@ -176,6 +176,8 @@ globalThis.CustomEvent = class {
 	}
 };
 
+globalThis.window ??= { dispatchEvent() {} };
+
 const documentListeners = new Map();
 globalThis.document = {
 	root: null,
@@ -3116,6 +3118,28 @@ test("acknowledged completion facts stay frozen and Retry finalization is local-
 	}
 });
 
+test("the finish screen starts the pose upload once the workout's poses are stored", async () => {
+	const originalWindow = globalThis.window;
+	const readyEvents = [];
+	globalThis.window = { dispatchEvent: (event) => readyEvents.push(event.type) };
+	const ctx = buildHarness();
+	let storeTrace;
+	ctx.traceWrite = new Promise((resolve) => { storeTrace = resolve; });
+	ctx.queueCompletionDraft = () => {};
+
+	try {
+		ctx.runFlowCommand({ type: "showCompletion" });
+		await flushHookPromises();
+		assert.deepEqual(readyEvents, []);
+
+		storeTrace(true);
+		await flushHookPromises();
+		assert.deepEqual(readyEvents, ["burpee:trace-upload-ready"]);
+	} finally {
+		globalThis.window = originalWindow;
+	}
+});
+
 test("successful Save commits local finalization before success state, upload dispatch, and navigation", async () => {
 	const order = [];
 	const store = {
@@ -3757,7 +3781,7 @@ test("paused, Abort asks in place of Finish early before it deletes anything", a
 test("a confirmed abort deletes the session, clears the device copy, and goes Home", async () => {
 	const originalWindow = globalThis.window;
 	const navigations = [];
-	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	globalThis.window = { location: { assign: (path) => navigations.push(path) }, dispatchEvent() {} };
 	const discarded = [];
 	const ctx = await pausedWithAbortReply({ status: "discarded" }, discarded);
 	try {
@@ -3777,7 +3801,7 @@ test("a confirmed abort deletes the session, clears the device copy, and goes Ho
 test("a refused abort stays paused, puts the choices back and says so", async () => {
 	const originalWindow = globalThis.window;
 	const navigations = [];
-	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	globalThis.window = { location: { assign: (path) => navigations.push(path) }, dispatchEvent() {} };
 	const ctx = await pausedWithAbortReply({ status: "error" });
 	try {
 		click(ctx, "session-abort-btn");
@@ -3868,7 +3892,7 @@ test("discard asks on the page before it deletes anything", async () => {
 test("a confirmed discard deletes the session, clears the device copy, and goes Home", async () => {
 	const originalWindow = globalThis.window;
 	const navigations = [];
-	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	globalThis.window = { location: { assign: (path) => navigations.push(path) }, dispatchEvent() {} };
 	const discarded = [];
 	const ctx = await finishedWithDiscardReply({ status: "discarded" }, discarded);
 	try {
@@ -3888,7 +3912,7 @@ test("a confirmed discard deletes the session, clears the device copy, and goes 
 test("a refused discard keeps everything and says so", async () => {
 	const originalWindow = globalThis.window;
 	const navigations = [];
-	globalThis.window = { location: { assign: (path) => navigations.push(path) } };
+	globalThis.window = { location: { assign: (path) => navigations.push(path) }, dispatchEvent() {} };
 	const discarded = [];
 	const ctx = await finishedWithDiscardReply({ status: "error" }, discarded);
 	try {
