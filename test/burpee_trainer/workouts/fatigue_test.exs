@@ -88,6 +88,30 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
     end
   end
 
+  property "running ahead of the beat reads as keeping up, however far ahead" do
+    check all({sets, reps, spr, rest} <- shape(), pace <- float(min: 0.5, max: 1.0)) do
+      # Each set's reps at `pace` of the planned interval: the set ends early.
+      ahead = fn _set, rep -> -rep * spr * (1 - pace) end
+
+      fatigue =
+        Fatigue.compute(on_beat(sets, reps, spr, rest, ahead), program(sets, reps, spr, rest))
+
+      assert fatigue.coverage == 1.0
+      assert fatigue.kept_up
+      assert fatigue.slip_at_sec == nil
+      assert fatigue.pace_delta_sec <= 0
+    end
+  end
+
+  test "finishing the last set early is not falling behind" do
+    # Ten sets of fifteen every 6 s with 30 s rests, the last done 12 s ahead of its end.
+    ahead = fn set, rep -> if set == 9, do: -rep * 0.8, else: 0.0 end
+    fatigue = Fatigue.compute(on_beat(10, 15, 6.0, 30, ahead), program(10, 15, 6.0, 30))
+
+    assert fatigue.kept_up
+    assert fatigue.slip_at_sec == nil
+  end
+
   test "falling behind from the last third on marks where it began" do
     # Six sets of ten every 8 s with 30 s rests; from the fifth set each rep lands 2.5 s late.
     lag = fn set, _rep -> if set >= 4, do: 2.5, else: 0.0 end

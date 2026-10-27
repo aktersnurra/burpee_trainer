@@ -54,10 +54,11 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   sessions first, with reps and reps_planned, duration_sec and duration_sec_planned, pace_sec \
   (seconds per rep) and their feedback (mood: -1 rough, 0 OK, 1 good). \
   fatigue is null without the camera; camera_coverage is the share of planned reps it caught, \
-  and when it missed the start that is all there is. kept_up: they stayed on the beat to the \
-  end; slip_at_sec: when they fell behind for good; decline: how much slower than planned \
-  the last third was than the first (0.08 is 8%); pace_delta_sec and recovery_delta_sec: \
-  median seconds slower than planned between reps and across rests. \
+  and when it missed the start that is all there is. kept_up: they stayed on or ahead of the \
+  beat to the end (finishing a set early is keeping up); slip_at_sec: when they fell behind \
+  for good; decline: how much slower than planned the last third was than the first (0.08 \
+  is 8%); pace_delta_sec and recovery_delta_sec: median seconds slower than planned between \
+  reps and across rests (negative is ahead). \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   today's share of missed minutes across the remaining weekend days; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time. progression: the deterministic rate \

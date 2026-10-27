@@ -2,10 +2,11 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   @moduledoc """
   How a paced session went inside it, from detected rep times against the program.
 
-  Each detection is matched to the scheduled rep it lands nearest, within half that rep's
-  interval, so one missed or extra detection never shifts the reps after it. A rep the
-  athlete fell a whole interval behind on reads as missed, so slipping shows up as late
-  lag, missed reps, or both.
+  Scheduled reps take the detections in order. A detection more than half an interval
+  after a scheduled rep leaves that rep missed, so one missed detection never shifts the
+  reps after it, and a rep the athlete fell a whole interval behind on reads as missed:
+  slipping shows up as late lag, missed reps, or both. A detection early, however early,
+  is that rep done ahead of the beat: running ahead is keeping up, not missing reps.
 
   The camera must have caught most of the opening third, when the athlete is fresh;
   otherwise only `coverage` is returned and late misses could not be told from a camera
@@ -161,21 +162,17 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
     |> elem(0)
   end
 
-  # Both lists are in time order; a detection outside every remaining window is dropped.
+  # Both lists are in time order; detections left after the last scheduled rep are dropped.
   defp match(times, slots), do: match(times, slots, [])
 
   defp match(_times, [], acc), do: Enum.reverse(acc)
 
   defp match([], [slot | rest], acc), do: match([], rest, [Map.put(slot, :t, nil) | acc])
 
-  defp match([t | times] = all, [slot | rest] = slots, acc) do
-    window = slot.interval / 2
-
-    cond do
-      t < slot.at - window -> match(times, slots, acc)
-      t > slot.at + window -> match(all, rest, [Map.put(slot, :t, nil) | acc])
-      true -> match(times, rest, [Map.put(slot, :t, t) | acc])
-    end
+  defp match([t | times] = all, [slot | rest], acc) do
+    if t > slot.at + slot.interval / 2,
+      do: match(all, rest, [Map.put(slot, :t, nil) | acc]),
+      else: match(times, rest, [Map.put(slot, :t, t) | acc])
   end
 
   defp opening_coverage(matched) do

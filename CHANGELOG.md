@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-27 — Running ahead of the beat is keeping up
+
+- Fatigue (`Workouts.Fatigue`) dropped a rep done more than half an interval ahead of its beat, so its beat read as missed: finishing a set early could read as falling behind, and the planner then repeated the workout for late fatigue instead of progressing. Scheduled reps now take the detections in order, and an early one is that rep done ahead. Late is unchanged: a rep more than half an interval behind still leaves its beat missed, so one missed detection still never shifts the reps after it, and falling behind still shows.
+- A migration recomputes completed camera sessions' fatigue. On production data only session 56 changes its verdict: it finished sets 2, 5, 9 and 10 by 10–21 s early and read as slipping at 19:18; it now reads as kept up, with 149 of 150 reps caught.
+- The coach's glossary, which Claude reads through the MCP too, says finishing a set early is keeping up and that a negative pace or recovery delta is ahead.
+
 ## 2026-10-27 — The favicon and web app manifest load in production
 
 - In production the layout links the fingerprinted favicon and manifest (`/favicon-<digest>.ico`, `/manifest-<digest>.webmanifest`), and both answered 404: the static plug serves only paths whose first segment is listed, and a digested top-level file no longer matches its name. A browser without a cached icon (a private window, a first visit) showed none, and the phone never got the manifest or its icons. The endpoint now also serves top-level files starting with `favicon` or `manifest`.
