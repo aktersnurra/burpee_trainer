@@ -146,6 +146,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
   @spec message(t(), String.t()) :: String.t()
   def message(params, note \\ ""), do: summary(params) <> "\n" <> @prefix <> note
 
+  @doc "The message as sent: the choices, and the request after them only when there is one."
+  @spec sent(t(), String.t()) :: String.t()
+  def sent(params, ""), do: summary(params)
+  def sent(params, note), do: message(params, note)
+
   @doc "What the athlete wrote after the prefix; with the prefix gone, all of the message."
   @spec note(String.t()) :: String.t()
   def note(text) when is_binary(text) do

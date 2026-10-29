@@ -21,7 +21,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     %{conn: conn, view: view, user: user, selected: selected}
   end
 
-  test "New asks one question at a time; back is one question back, close leaves", %{view: view} do
+  test "New asks one question at a time; back is one step back and leaves from the first",
+       %{view: view} do
     open_new(view)
 
     # The studio takes Home's place and shows only the question being asked.
@@ -29,9 +30,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#studio-step", "Which burpee?")
     assert has_element?(view, ".studio-subtitle", "Question 1 of 5")
     refute has_element?(view, "#home-workout-hero, #home-chat-dock, #studio-thread")
-    # Back from the first question leaves.
+    # Back from the first question leaves; there is no separate close.
     assert has_element?(view, "#home-request-abort[aria-label='Cancel new workout']")
-    refute has_element?(view, "#studio-back")
+    refute has_element?(view, "#studio-back, .studio-close")
 
     # A tap on a choice answers it; no Next, and the answered question is gone.
     view |> element("#home-pill-burpee_type-navy_seal") |> render_click()
@@ -43,7 +44,6 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     view |> element("#studio-back") |> render_click()
     assert has_element?(view, "#studio-step", "Which burpee?")
 
-    view |> element("#home-pill-burpee_type-navy_seal") |> render_click()
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-studio")
     assert hero_focus_target(view) == "#home-summary"
@@ -97,8 +97,17 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     view |> element("#studio-next") |> render_click()
 
-    # The chat opens on a message made of the answers, with the cursor on the line for more.
-    assert has_element?(view, "#studio-thread", "Here is what you chose")
+    # The last screen is what was chosen: send it as it is, or add a request.
+    assert has_element?(view, "#studio-step", "Ready?")
+    assert has_element?(view, "#studio-row-duration .studio-summary-value", "20 min")
+    assert has_element?(view, "#studio-row-pace .studio-summary-value", "5.0 s per rep")
+    assert has_element?(view, "#studio-create", "Create workout")
+    refute has_element?(view, "#home-chat-dock")
+
+    # Adding a request opens the chat on a message made of the answers, the cursor on the
+    # line for more.
+    view |> element("#studio-add-request") |> render_click()
+    assert has_element?(view, ".studio-subtitle", "Add a request")
     assert has_element?(view, "#home-edit-instruction[data-caret=end]")
 
     textarea =
@@ -111,15 +120,18 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert String.trim_leading(textarea) =~
              "Six-count · Even · 20 min · 55 reps · 5.0 s per rep\nAdditional request: "
 
-    # Send is ready: the message may go as it is.
     assert has_element?(view, "#home-chat-dock #home-edit-send.composer-send-ready")
+
+    # Back is one step back: to what was chosen.
+    view |> element("#studio-back") |> render_click()
+    assert has_element?(view, "#studio-create")
   end
 
   test "an earlier answer can be changed, and what followed it is suggested again", %{view: view} do
     walk(view)
     assert has_element?(view, "#studio-request", "20 min")
 
-    view |> element("#studio-part-duration") |> render_click()
+    view |> element("#studio-row-duration") |> render_click()
     assert has_element?(view, "#studio-step", "How long?")
     refute has_element?(view, "#home-chat-dock")
 
@@ -136,7 +148,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     count = Repo.aggregate(WorkoutPlan, :count)
 
     walk(view, style: "unbroken", reps: 100, minutes: 20, pace_ups: 1)
-    view |> form("#home-edit-form", home_adjustment: %{instruction: ""}) |> render_submit()
+    create(view)
     render_async(view, 2_000)
 
     assert has_element?(view, "#home-edit-review #studio-proposal", "Independent new workout")
@@ -223,11 +235,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     walk(view, style: "unbroken", reps: 140, minutes: 20, pace_ups: 1)
 
-    view
-    |> form("#home-edit-form",
-      home_adjustment: %{instruction: "A minute's break at 11:00 and 40 seconds at 18:00"}
-    )
-    |> render_submit()
+    request(view, "A minute's break at 11:00 and 40 seconds at 18:00")
 
     render_async(view, 2_000)
     assert Agent.get(counter, & &1.calls) == ["workout_request", "workout_layout"]
@@ -268,6 +276,45 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert unchanged.plan.id == selected.plan.id
   end
 
+  test "an unbroken workout can limit the reps in a set, and the coach is told", %{view: view} do
+    quarters = List.duplicate({25, 5.0, 5.0}, 4)
+    counter = fake_authoring_provider(%{"workout_layout" => layout([quarters], "Quarter sets")})
+
+    walk(view, style: "unbroken", reps: 100, minutes: 20, max_set: 25, pace_ups: 1)
+    assert has_element?(view, "#studio-row-sets .studio-summary-value", "Up to 25")
+    create(view)
+    render_async(view, 2_000)
+
+    assert has_element?(view, "#studio-proposal", "Quarter sets")
+    assert [body] = Agent.get(counter, & &1.bodies)
+    assert body =~ "No set may have more than 25 reps"
+  end
+
+  test "a layout that goes past the limit is refused after its one correction", %{view: view} do
+    halves = List.duplicate({50, 5.0, 5.0}, 2)
+    counter = fake_authoring_provider(%{"workout_layout" => layout([halves], "Half sets")})
+
+    walk(view, style: "unbroken", reps: 100, minutes: 20, max_set: 25, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+
+    assert Agent.get(counter, & &1.calls) == ["workout_layout", "workout_layout"]
+    refute has_element?(view, "#home-request-confirm")
+    assert has_element?(view, "#home-adjustment-error")
+    # The choices are still there to change.
+    assert has_element?(view, "#studio-row-sets .studio-summary-value", "Up to 25")
+  end
+
+  test "an even beat has no set size to ask", %{view: view} do
+    open_new(view)
+    view |> element("#home-pill-burpee_type-six_count") |> render_click()
+    view |> element("#home-pill-pacing_style-even") |> render_click()
+    view |> element("#studio-next") |> render_click()
+    view |> element("#studio-next") |> render_click()
+    assert has_element?(view, "#studio-step", "How fast is each rep?")
+    assert has_element?(view, ".studio-subtitle", "Question 5 of 5")
+  end
+
   defp layout(phases, name) do
     %{
       "name" => name,
@@ -302,6 +349,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
       })
 
     walk(view, style: "unbroken", reps: 10, minutes: 5)
+    view |> element("#studio-add-request") |> render_click()
 
     assert has_element?(
              view,

@@ -16,7 +16,11 @@ defmodule BurpeeTrainerWeb.StudioHelpers do
   def walk(view, opts \\ []) do
     open_new(view)
     style = Keyword.get(opts, :style, "unbroken")
-    view |> element("#home-pill-burpee_type-#{Keyword.get(opts, :type, "six_count")}") |> render_click()
+
+    view
+    |> element("#home-pill-burpee_type-#{Keyword.get(opts, :type, "six_count")}")
+    |> render_click()
+
     view |> element("#home-pill-pacing_style-#{style}") |> render_click()
 
     step_to(view, "duration", Keyword.get(opts, :minutes, 20))
@@ -41,7 +45,10 @@ defmodule BurpeeTrainerWeb.StudioHelpers do
   @doc "Opens the chat on what was chosen and sends it with `text` as the request."
   def request(view, text) do
     view |> element("#studio-add-request") |> render_click()
-    view |> Phoenix.LiveViewTest.form("#home-edit-form", home_adjustment: %{instruction: text}) |> render_submit()
+
+    view
+    |> Phoenix.LiveViewTest.form("#home-edit-form", home_adjustment: %{instruction: text})
+    |> render_submit()
   end
 
   defp step_set_size_to(view, max) do

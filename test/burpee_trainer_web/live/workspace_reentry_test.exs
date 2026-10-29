@@ -51,6 +51,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     plan_fixture(user, %{target_reps: 10})
     {:ok, view, _} = live(conn, ~p"/")
     walk(view, reps: 60, pace_ups: 1)
+    view |> element("#studio-add-request") |> render_click()
 
     view
     |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
@@ -61,7 +62,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
     for via <- [:history, :coach] do
       roundtrip(view, via)
-      assert has_element?(view, "#home-studio #studio-request", "60 reps")
+      assert has_element?(view, "#home-studio #home-edit-instruction", "20 sets of 6")
       assert workspace(view) == before
 
       assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
@@ -161,6 +162,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     plan_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
     walk(view, reps: 60, pace_ups: 1)
+    view |> element("#studio-add-request") |> render_click()
 
     view
     |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})

@@ -237,8 +237,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
           # New's first ask is the message its questions made.
           instruction:
             if(is_nil(m.editing_source) and m.design_turns == [],
-              do:
-                HomeWorkoutRequest.message(m.workout_parameters, m.workout_parameters.note || ""),
+              do: HomeWorkoutRequest.sent(m.workout_parameters, m.workout_parameters.note || ""),
               else: m.instruction
             ),
           name: definition["name"],

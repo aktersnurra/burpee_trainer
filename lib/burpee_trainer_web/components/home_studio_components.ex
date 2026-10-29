@@ -191,8 +191,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp ask(state) do
     if edit?(state) or state.design_turns != [],
       do: state.instruction,
-      else:
-        HomeWorkoutRequest.message(state.workout_parameters, state.workout_parameters.note || "")
+      else: HomeWorkoutRequest.sent(state.workout_parameters, state.workout_parameters.note || "")
   end
 
   attr(:state, :map, required: true)

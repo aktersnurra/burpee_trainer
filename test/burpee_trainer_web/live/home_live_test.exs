@@ -100,6 +100,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
 
     walk(view, reps: 60, pace_ups: 1)
+    view |> element("#studio-add-request") |> render_click()
 
     view
     |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
@@ -116,7 +117,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     render_patch(view, "/")
     assert view.pid == pid
     refute has_element?(view, "#home-history")
-    assert has_element?(view, "#home-studio #studio-request", "60 reps")
+    assert has_element?(view, "#home-studio #home-edit-instruction", "20 sets of 6")
 
     assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
              "20 sets of 6"

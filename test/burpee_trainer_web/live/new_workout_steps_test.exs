@@ -19,11 +19,29 @@ defmodule BurpeeTrainerWeb.NewWorkoutStepsTest do
         )
       )
 
-  test "the questions run in order and end at the message" do
-    assert NewWorkoutSteps.steps() == [:type, :style, :duration, :reps, :pace, :ready]
-    assert NewWorkoutSteps.next(:duration) == :reps
-    assert NewWorkoutSteps.next(:pace) == :ready
-    assert NewWorkoutSteps.next(:ready) == :ready
+  test "unbroken sets ask how large a set may be; an even beat does not" do
+    unbroken = params(%{pacing_style: "unbroken"})
+    assert NewWorkoutSteps.questions(unbroken) == [:type, :style, :duration, :reps, :sets, :pace]
+    assert NewWorkoutSteps.questions(params()) == [:type, :style, :duration, :reps, :pace]
+
+    assert NewWorkoutSteps.next(:reps, unbroken) == :sets
+    assert NewWorkoutSteps.next(:reps, params()) == :pace
+    assert NewWorkoutSteps.next(:pace, unbroken) == :ready
+    assert NewWorkoutSteps.next(:ready, unbroken) == :request
+    assert NewWorkoutSteps.previous(:pace, unbroken) == :sets
+    assert NewWorkoutSteps.previous(:pace, params()) == :reps
+    assert NewWorkoutSteps.previous(:type, params()) == :type
+  end
+
+  test "a set's size starts unlimited, tightens by five, and loosens back to unlimited" do
+    p = params(%{pacing_style: "unbroken", reps: 60})
+
+    assert NewWorkoutSteps.enter(%{p | max_set_reps: 20}, :sets, scope_fixture(), nil).max_set_reps ==
+             nil
+
+    assert NewWorkoutSteps.step(p, "sets", :down, nil).max_set_reps == 55
+    assert NewWorkoutSteps.step(%{p | max_set_reps: 55}, "sets", :up, nil).max_set_reps == nil
+    assert NewWorkoutSteps.step(%{p | max_set_reps: 5}, "sets", :down, nil).max_set_reps == 5
   end
 
   test "only an answerable step can be gone back to" do

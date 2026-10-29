@@ -61,6 +61,7 @@ defmodule BurpeeTrainer.Mcp.WorkoutFormat do
       than timed rests.
     - `requested_pace_sec`: movement seconds per rep the athlete asked for, or null.
     - `set_reps`: reps of each set when the athlete states them; empty otherwise.
+    - `max_set_reps`: the most reps the athlete allows in one set, or null.
 
     ## The layout
 
