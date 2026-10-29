@@ -140,7 +140,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     render_async(view, 2_000)
 
     assert has_element?(view, "#home-edit-review #studio-proposal", "Independent new workout")
-    assert has_element?(view, "#home-chat-actions #home-request-confirm", "Accept")
+    assert has_element?(view, "#home-edit-review #home-chat-actions #home-request-confirm", "Run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 

@@ -95,7 +95,7 @@ are parts you can tap to change; what followed a changed answer is suggested aga
 - `--chat-dock-height` sizes a spacer under the conversation so its last line clears the dock.
 - When the conversation moves on (`data-version`), the newest message scrolls to the top of the
   screen with its answer below it; reduced motion scrolls without animation.
-- The dock holds Accept and Save (the proposal's actions) and the quick changes, so none scrolls
+- The dock holds Save and Run (the proposal's actions, now under its card) and the quick changes, so none scrolls
   away. The coach's message box uses the same dock.
 
 ## The coach reads like a coach

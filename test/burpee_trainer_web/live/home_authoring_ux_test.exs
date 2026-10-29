@@ -220,7 +220,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     walk(view, reps: 10, minutes: 5, pace_ups: 1)
     view |> form("#home-edit-form", home_adjustment: %{instruction: ""}) |> render_submit()
     render_async(view, 2_000)
-    assert has_element?(view, "#home-chat-dock #home-request-confirm")
+    assert has_element?(view, "#home-edit-review #home-request-confirm")
     assert has_element?(view, "#studio-proposal .home-prescription-reps")
 
     view

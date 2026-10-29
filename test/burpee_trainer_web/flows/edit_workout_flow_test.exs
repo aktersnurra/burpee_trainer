@@ -271,16 +271,17 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
 
-    # Edit refines by talking, so there is no way back to a form; Accept and Save ride the dock.
+    # Edit refines by talking, so there is no way back to a form; Run and Save sit under the card.
     refute has_element?(view, "#home-request-edit")
 
     assert has_element?(
              view,
-             "#home-chat-dock #home-request-confirm.studio-pill-primary",
-             "Accept"
+             "#home-edit-review #home-request-confirm.studio-pill-primary",
+             "Run"
            )
 
-    assert has_element?(view, "#home-chat-dock #home-request-save", "Save")
+    assert has_element?(view, "#home-edit-review #home-request-save", "Save")
+    refute has_element?(view, "#home-chat-dock #home-request-confirm")
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
     assert has_element?(view, "#home-edit-review .home-prescription-every", "5s")

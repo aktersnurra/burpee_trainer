@@ -225,6 +225,27 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       >
         {pauses_label(@state.pending_request.request.timed_rests)}
       </p>
+      <%!-- What to do with it sits right under the card it is about. --%>
+      <div id="home-chat-actions" class="studio-actions">
+        <button
+          id="home-request-save"
+          type="button"
+          class="studio-pill"
+          phx-click="save_review_to_library"
+          disabled={@state.busy?}
+        >
+          <.icon name="hero-bookmark" class="size-4" /> Save
+        </button>
+        <button
+          id="home-request-confirm"
+          type="button"
+          class="studio-pill studio-pill-primary"
+          phx-click="confirm_workout_request"
+          disabled={@state.busy?}
+        >
+          <.icon name="hero-play-solid" class="size-4" /> Run
+        </button>
+      </div>
     </div>
     """
   end
@@ -385,16 +406,10 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     ~H"""
     <div class="studio-options" role="group" aria-label="Burpee type">
       <.option
-        :for={
-          {text, value, detail} <- [
-            {"Six-count", "six_count", "The classic: down, back, push-up, up. About 4 to 5 s a rep."},
-            {"Navy SEAL", "navy_seal", "Slower and heavier. About 7 to 9 s a rep."}
-          ]
-        }
+        :for={{text, value} <- [{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]}
         field="burpee_type"
         text={text}
         value={value}
-        detail={detail}
       />
     </div>
     """
@@ -404,16 +419,10 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     ~H"""
     <div class="studio-options" role="group" aria-label="Set style">
       <.option
-        :for={
-          {text, value, detail} <- [
-            {"Even", "even", "A steady beat, with a pause between reps."},
-            {"Unbroken", "unbroken", "Reps back to back, with rest between sets."}
-          ]
-        }
+        :for={{text, value} <- [{"Even", "even"}, {"Unbroken", "unbroken"}]}
         field="pacing_style"
         text={text}
         value={value}
-        detail={detail}
       />
     </div>
     """
@@ -494,7 +503,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:field, :string, required: true)
   attr(:text, :string, required: true)
   attr(:value, :string, required: true)
-  attr(:detail, :string, required: true)
 
   # A choice is a card to tap, which answers the question.
   defp option(assigns) do
@@ -508,7 +516,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       value={@value}
     >
       <span class="studio-option-title">{@text}</span>
-      <span class="studio-option-detail">{@detail}</span>
     </button>
     """
   end
@@ -611,26 +618,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       data-scroll-to={scroll_target(@state)}
     >
       <div class="chat-dock-inner">
-        <div :if={@proposed?} id="home-chat-actions" class="studio-pills studio-pills-dock">
-          <button
-            id="home-request-save"
-            type="button"
-            class="studio-pill"
-            phx-click="save_review_to_library"
-            disabled={@state.busy?}
-          >
-            <.icon name="hero-bookmark" class="size-4" /> Save
-          </button>
-          <button
-            id="home-request-confirm"
-            type="button"
-            class="studio-pill studio-pill-primary"
-            phx-click="confirm_workout_request"
-            disabled={@state.busy?}
-          >
-            <.icon name="hero-check" class="size-4" /> Accept
-          </button>
-        </div>
         <div
           :if={edit?(@state) and not @state.busy?}
           class="composer-suggestions chat-dock-chips"

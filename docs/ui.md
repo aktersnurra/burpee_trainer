@@ -155,7 +155,7 @@ right and the workout list takes the space; `#home-page` moves with `left`, neve
 up opens the Edit / New sheet. Edit and New are the studio, a full-screen chat: a 44px round back
 button and a two-line header, the coach's messages plain on the left (a workout is a card:
 `--color-base-200`, a `--color-base-border` edge, 18px radius), yours in soft bubbles on the right,
-pills for choices (`.studio-pill`; the filled ink pill is the one action, Accept), and a value to
+pills for choices (`.studio-pill`; the filled ink pill is the one action, Run), and a value to
 swipe is a card with a round button either side (`.studio-stepper`). Everything rises in with
 `home-enter`; reduced motion removes every animation here.
 - Meta never joins unlike things with middle dots; each goal is its own line.
