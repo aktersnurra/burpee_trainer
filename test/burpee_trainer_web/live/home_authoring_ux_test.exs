@@ -216,6 +216,32 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     refute_received {:provider_request, _}
   end
 
+  test "a New workout is refined by talking once it is proposed", %{view: view} do
+    open_new(view)
+    view |> element("#home-pill-pacing_style-even") |> render_click()
+    view |> form("#home-new-form", home_workout: %{reps: 10, duration: "2:00"}) |> render_submit()
+    render_async(view)
+    assert has_element?(view, "#home-chat-dock #home-request-confirm")
+    assert has_element?(view, "#home-new-review-inspection .home-prescription-reps")
+    refute has_element?(view, "#home-new-form #home-request-confirm")
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
+    |> render_submit()
+
+    render_async(view)
+
+    # The proposal it replaced stays, as "New workout"; the fields follow the new proposal.
+    assert has_element?(view, "#home-design-thread .design-turn-you", "New workout")
+    assert has_element?(view, "#home-design-thread .design-turn-coach", "10 reps")
+    assert has_element?(view, "#home-new-review-inspection #home-design-ask", "Increase to 150")
+    assert has_element?(view, "#home-new-reps[value='150']")
+
+    view |> element("#home-request-save") |> render_click()
+    render_async(view)
+    assert has_element?(view, "#home-new-saved")
+  end
+
   test "provider failure retains input and current pin without offering approval", %{
     view: view,
     user: user,

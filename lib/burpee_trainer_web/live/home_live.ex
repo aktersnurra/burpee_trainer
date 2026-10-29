@@ -326,6 +326,15 @@ defmodule BurpeeTrainerWeb.HomeLive do
     handle_event(event, params, HomeAuthoring.discard_preparation(socket))
   end
 
+  # Cancel works while the coach is on a follow-up, and takes the proposal with it.
+  def handle_event(
+        "abort_new_workout" = event,
+        params,
+        %{assigns: %{busy?: true, authoring_stage: :review, pending_turn: turn}} = socket
+      )
+      when is_binary(turn),
+      do: handle_event(event, params, HomeAuthoring.discard_preparation(socket))
+
   def handle_event(_event, _params, %{assigns: %{busy?: true}} = socket), do: {:noreply, socket}
 
   def handle_event(
@@ -363,6 +372,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "edit_current_workout",
              "edit_workout_request",
              "new_workout",
+             "refine_workout",
              "review_current_edit",
              "review_new_workout",
              "save_workout_request",

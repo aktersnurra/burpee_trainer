@@ -39,11 +39,17 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   """
 
   @coach_page_task """
-  Answer what the athlete asked in at most three sentences. What they tell you about \
-  themselves is noted for you after the conversation. Use propose_goal only when they ask for a goal; \
-  they confirm it themselves. In suggestions, give up to three short things the athlete is \
-  likely to say next, in their own words and specific to this reply (under 60 characters \
-  each); they tap one to send it.
+  Answer the way a coach would across the gym floor, in at most three sentences, starting \
+  from what the athlete just said. When they tell you how a session felt, that something \
+  hurt, or that their week has changed, take it in and say what it means for their next \
+  sessions; what they tell you about themselves is noted for you after the conversation, so \
+  you may say you will keep it in mind. Bring in their notes and recent sessions only when \
+  they bear on what was said, as someone who remembers them would; leave trends, totals and \
+  levels out unless they ask. Ask at most one short question, and only when the answer would \
+  change their training. Use propose_goal only when they ask for a goal; they confirm it \
+  themselves. In suggestions, give up to three short things the athlete is likely to say \
+  next, in their own words and specific to this reply (under 60 characters each); they tap \
+  one to send it.
   """
 
   @context_glossary """

@@ -141,6 +141,12 @@ proposed, the review's own actions take over). Its border darkens while focused,
 Suggested words (Edit's common changes, the coach's predicted replies) are quiet chips
 under the card, and one tap sends them. Classes: `.composer`, `.composer-bar`,
 `.composer-icon`, `.composer-send`, `.composer-suggestions`, `.composer-suggestion`.
+
+A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds the
+card, its chips and, for a proposal, its actions, fixed at the bottom of the screen above the
+home indicator, and the `ChatDock` hook lifts it above the iPhone keyboard. A spacer
+(`.chat-dock-spacer`) keeps the last line clear of it. Your messages are soft bubbles on the
+right (`.design-turn-you`, `.coach-exchange-you`); new lines rise in rather than jump.
 - Meta never joins unlike things with middle dots; each goal is its own line.
 
 ## 4a2. Actions

@@ -1059,3 +1059,38 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .coach-exchange { display: grid; gap: 8px; font-size: var(--text-body); line-height: 1.5; }
 .coach-exchange-you { justify-self: end; max-width: 85%; margin: 0; padding: 8px 14px; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; }
 .coach-exchange-coach { margin: 0; color: #262722; }
+
+/* The chat dock: the box you write in rides above the keyboard, as in the Claude app.
+   ChatDock sets --keyboard-inset (how far the keyboard lifts it) and --chat-dock-height. */
+.chat-dock { position: fixed; inset-inline: 0; bottom: var(--keyboard-inset, 0px); z-index: 30; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); background: var(--color-base-100); transition: bottom var(--motion-quick) var(--ease-out); }
+/* The home indicator is behind the keyboard, so its padding would only float the box. */
+.chat-dock[data-keyboard="open"] { padding-bottom: 8px; }
+.chat-dock-inner { display: grid; gap: 8px; max-width: 410px; margin-inline: auto; }
+.chat-dock .home-authoring-form { margin-top: 0; }
+.chat-dock-actions { justify-content: flex-end; margin-left: 0; }
+.chat-dock .composer textarea { min-height: 1.5em; max-height: 9rem; overflow-y: auto; }
+.chat-dock .chat-dock-chips { flex-wrap: nowrap; margin: 0; overflow-x: auto; scrollbar-width: none; }
+.chat-dock .chat-dock-chips::-webkit-scrollbar { display: none; }
+.chat-dock .chat-dock-chips .composer-suggestion { flex: none; white-space: nowrap; }
+.chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
+
+/* The design as a conversation: what you asked, what it became, newest last. */
+.design-thread { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.design-turn { display: grid; gap: 4px; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.design-turn-you { justify-self: end; width: fit-content; max-width: 85%; margin: 16px 0 8px auto; padding: 8px 14px; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; font-size: var(--text-body); line-height: 1.5; overflow-wrap: anywhere; scroll-margin-top: 16px; }
+.design-turn .design-turn-you { margin-top: 16px; }
+.design-turn-new { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.design-turn-coach { margin: 0 0 4px; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.design-proposal { animation: home-enter var(--motion-settle) var(--ease-out) var(--motion-stagger) backwards; transition: opacity var(--motion-quick) ease; }
+.design-proposal-stale { opacity: .45; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-dock, .design-proposal { transition: none; }
+  .design-turn, .design-turn-new, .design-proposal { animation: none; }
+}
+
+/* The coach thread grows downward: the reply arrives, it does not jump in. */
+.coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.coach-pending-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--home-muted); font-size: var(--text-small); }
+/* Inside the dock the form is the composer card itself; the panel's own spacing gives way. */
+.chat-dock .coach-message-form { margin-top: 0; }
+@media (prefers-reduced-motion: reduce) { .coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: none; } }

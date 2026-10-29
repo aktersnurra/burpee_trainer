@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-29 — Design by conversation, a box above the keyboard, a coach that sounds like one
+
+- Opening the app on iPhone showed the old stick-figure plank on the launch screen. The launch images (`priv/static/images/startup/`) now show the app icon on the warm-stone background (`scripts/render_startup_screens.py`). iOS caches launch images per home-screen shortcut: remove and re-add the shortcut to see the new one.
+- The loading animation is the approved silhouette inverted: dark ink on a transparent background, so it sits on any surface instead of in a black square. The ivory-on-black exports are gone (`scripts/render_burpee_loader.py`).
+- Each follow-up to a workout design was read against the workout the design started from, so every improvement set it back. After the first proposal the box stays and each message refines the **latest proposal** (`Coach.prepare_refinement/4`); what each follow-up replaced stays above it as a conversation (`design_turns`). A follow-up that fails leaves the proposal and the typed words in place, and Cancel works while the coach is on it. New refines by talking too once it has a proposal.
+- The box you write in is docked above the iPhone keyboard (`ChatDock`, from `visualViewport`) for a design's follow-ups and for the coach, and brings the newest message into view as the conversation grows. The actions on a proposal (Save, Use) ride the dock, so they stay reachable.
+- The coach reads like a person, not a dashboard: its voice starts from what was just said and drops trends and "insights"; the coach page answers in a few sentences with at most one question; the note on Home is written from what you have told the coach (its notes about you and this week's last messages), and the look back names something specific or is left empty. When the coach changes its memory after a reply, the note is written again.
+
 ## 2026-10-27 — Pace consistency is measured inside each set
 
 - Pace consistency was 1 minus the coefficient of variation of every gap between reps, the gaps across rests included, so every workout with rests scored 0 (sessions 56 and 57), and a ladder's planned change of pace read as unevenness. It is now derived with the session's fatigue (`Workouts.Fatigue`), from each rep's interval inside a set against that set's planned one; `Workouts.PaceConsistency` is removed. Production: 56 is 0.896, 57 is 0.957, and 40 and 58, without rests, keep 0.974 and 0.972.

@@ -11,7 +11,7 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Client, Exchange, Memory}
+  alias BurpeeTrainer.Coach.{Client, Exchange, Memory, SummaryJob}
   alias BurpeeTrainer.Coach.Tools.History
   alias BurpeeTrainer.Workouts.WorkoutSession
 
@@ -89,6 +89,24 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
 
   def perform(%Oban.Job{}), do: {:cancel, :invalid_args}
 
+  # What the coach just learned changes what it would tell the athlete next, so the note
+  # on Home is written again from it. A note that cannot be queued is not this job's failure.
+  defp refresh_note({:ok, [_ | _]} = kept, scope) do
+    case SummaryJob.enqueue(scope) do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.info(
+          "coach_summary_not_admitted trigger=memory user_id=#{scope.user.id} reason=#{inspect(reason)}"
+        )
+    end
+
+    kept
+  end
+
+  defp refresh_note(kept, _scope), do: kept
+
   @doc "Reads one event into the memory; `{:ok, changes}`, or the reason nothing changed."
   @spec keep(Scope.t(), map(), keyword()) :: {:ok, [Memory.change()]} | {:error, term()}
   def keep(%Scope{} = scope, event, opts) do
@@ -116,7 +134,7 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
 
     case Client.chat(messages, chat_opts) do
       {:ok, %{content: %{"ops" => ops}, tool_calls: []}} when is_list(ops) ->
-        Memory.apply_ops(scope, ops)
+        scope |> Memory.apply_ops(ops) |> refresh_note(scope)
 
       {:ok, _other} ->
         {:error, :invalid_shape}

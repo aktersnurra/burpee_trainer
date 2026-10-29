@@ -57,6 +57,62 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     {:noreply, socket |> step({:instruction_changed, text}) |> adjustment_form(text)}
   end
 
+  # While a proposal is on screen the box holds the next message: typing changes nothing else.
+  def handle_event(
+        "change_current_edit",
+        %{"home_adjustment" => %{"instruction" => text}},
+        %{assigns: %{authoring_stage: :review}} = socket
+      )
+      when is_binary(text),
+      do: {:noreply, adjustment_form(socket, text)}
+
+  # A follow-up reads against the proposal on screen, so the design keeps its place.
+  def handle_event(
+        "refine_workout",
+        %{"home_adjustment" => %{"instruction" => text}},
+        %{assigns: %{authoring_stage: :review, pending_request: %{} = base, busy?: false}} =
+          socket
+      )
+      when is_binary(text) do
+    a = socket.assigns
+
+    cond do
+      not valid_instruction?(text) ->
+        {:noreply,
+         assign(socket,
+           local_error: "Enter a change of at most 500 characters.",
+           adjustment_form: adjustment_changeset(text)
+         )}
+
+      verify_edit_selection(socket) != :ok ->
+        {:noreply,
+         assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
+
+      true ->
+        id = make_ref()
+        scope = a.current_scope
+        key = a.creation_key
+        source = a.editing_source
+        selection = a.home_selection
+        text = String.trim(text)
+
+        {:noreply,
+         socket
+         |> step({:refine_started, id, text})
+         |> adjustment_form(text)
+         |> start_async({:new_request, id}, fn ->
+           with {:ok, interpreted} <- Coach.prepare_refinement(scope, base.definition, text),
+                :ok <- verified(scope, source, selection) do
+             Coach.prepare_plan(scope, text, interpreted.request,
+               workspace_key: key,
+               edit_source: source,
+               base_definition: base.definition
+             )
+           end
+         end)}
+    end
+  end
+
   def handle_event(
         "review_current_edit",
         %{"home_adjustment" => %{"instruction" => text}},
@@ -300,11 +356,27 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       params =
         HomeWorkoutRequest.from_request(prepared.request, socket.assigns.workout_parameters)
 
+      # What was asked now sits above the proposal; the box is empty for the next message.
       socket
       |> step({:review_prepared, id, prepared, params, prepared_inspection(prepared)})
       |> workout_form(params, %{})
+      |> adjustment_form("")
     end
   end
+
+  # A refinement that fails speaks of the proposal, which stays as it was.
+  defp settle(
+         :new_request,
+         id,
+         {:ok, {:error, error}},
+         %{assigns: %{pending_turn: turn}} = socket
+       )
+       when is_binary(turn),
+       do: step(socket, {:review_failed, id, refinement_failure(error)})
+
+  defp settle(:new_request, id, result, %{assigns: %{pending_turn: turn}} = socket)
+       when is_binary(turn),
+       do: step(socket, {:review_failed, id, refinement_failure(result)})
 
   defp settle(:new_request, id, {:ok, {:error, error}}, socket) do
     {message, field, field_message} = review_failure(error)
@@ -446,6 +518,16 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     )
   end
 
+  defp refinement_failure(%{code: code})
+       when code in [:provider_unavailable, :provider_timeout, :invalid_provider_response],
+       do: "Coach unavailable. Try again later; your proposal is unchanged."
+
+  defp refinement_failure(%{code: :design_workspace_changed}),
+    do: "That workout changed. Abort and open Edit again."
+
+  defp refinement_failure(_),
+    do: "That change didn't fit. Try saying it another way; your proposal is unchanged."
+
   defp review_failure(%{code: code})
        when code in [:provider_unavailable, :provider_timeout, :invalid_provider_response],
        do: {"Coach unavailable. Try again later; your current workout is unchanged.", nil, nil}
@@ -553,6 +635,16 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   defp valid_instruction?(prompt),
     do: String.trim(prompt) != "" and String.length(prompt) <= 500 and byte_size(prompt) <= 4_000
+
+  # A design that began as New has no workout to re-check.
+  defp verified(_scope, nil, _selection), do: :ok
+
+  defp verified(scope, _source, selection) do
+    with {:ok, _} <- Workouts.verify_home_selection(scope, selection), do: :ok
+  end
+
+  defp adjustment_changeset(text),
+    do: to_form(HomeAdjustment.changeset(%HomeAdjustment{}, %{"instruction" => text}))
 
   def adjustment_form(socket, text),
     do:

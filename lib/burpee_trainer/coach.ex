@@ -81,6 +81,30 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
+  @doc """
+  Reads a follow-up instruction against the proposal being refined, not the workout the
+  design started from, so each turn builds on the last.
+  """
+  @spec prepare_refinement(Accounts.Scope.t(), map(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def prepare_refinement(
+        %Accounts.Scope{} = scope,
+        %{} = base_definition,
+        instruction,
+        opts \\ []
+      ) do
+    with :ok <- outside_authoring_transaction(),
+         {:ok, text} <- validate_authoring_input(instruction) do
+      prepare_request(
+        scope,
+        %{definition_json: base_definition},
+        text,
+        %{kind: :refinement},
+        opts
+      )
+    end
+  end
+
   @spec confirm_home_revision(Accounts.Scope.t(), map()) ::
           {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
   @spec confirm_home_revision(Accounts.Scope.t(), map(), keyword()) ::
@@ -179,8 +203,11 @@ defmodule BurpeeTrainer.Coach do
          {:ok, text} <- validate_authoring_input(instruction),
          {:ok, request} <- WorkoutRequest.new(WorkoutRequest.to_map(request)),
          :ok <- validate_review_budget(request),
-         {:ok, review_source, reference_messages} <-
+         {:ok, review_source, source_messages} <-
            review_source(scope, Keyword.get(opts, :edit_source)) do
+      reference_messages =
+        refinement_messages(Keyword.get(opts, :base_definition), source_messages)
+
       opts =
         opts
         |> Keyword.put(:confirmed_request, request)
@@ -260,6 +287,25 @@ defmodule BurpeeTrainer.Coach do
         {:error, error} -> BurpeeTrainer.Repo.rollback(error)
       end
     end)
+  end
+
+  # A refinement builds on the proposal the athlete is looking at; the workout the design
+  # started from stays the provenance (`review_source`) but is no longer the reference.
+  defp refinement_messages(nil, source_messages), do: source_messages
+
+  defp refinement_messages(%{} = base, _source_messages) do
+    [
+      %{
+        role: "system",
+        content:
+          Jason.encode!(%{
+            scope: "current_proposal",
+            definition: base,
+            rule:
+              "The athlete is refining this proposal. Keep everything they did not ask to change; the confirmed fields are authoritative. Redistribute ordinary recovery within the new movement budget; preserve exact supplied ordered sets and timed pauses. Update the name if the workout's character changed. Never modify the original."
+          })
+      }
+    ]
   end
 
   defp review_source(_user, nil), do: {:ok, nil, []}

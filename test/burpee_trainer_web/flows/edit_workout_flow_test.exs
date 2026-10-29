@@ -47,20 +47,13 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
       end
 
       extracting? = is_nil(constraints)
+      provider_down? = extracting? and requested_reps(body["messages"]) == 999
 
       constraints =
         constraints ||
           %{
             "burpee_type" => "six_count",
-            "target_reps" =>
-              if(
-                Enum.any?(
-                  body["messages"],
-                  &String.contains?(&1["content"], "Increase to 150")
-                ),
-                do: 150,
-                else: 120
-              ),
+            "target_reps" => requested_reps(body["messages"]),
             "target_duration_sec" => 1200,
             "pacing_style" => "unbroken",
             "recovery" => "required",
@@ -100,7 +93,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
       {request,
        %Req.Response{
-         status: 200,
+         status: if(provider_down?, do: 503, else: 200),
          body:
            Jason.encode!(%{
              "choices" => [
@@ -244,7 +237,10 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert_receive {:edit_planning_waiting, planner}, 1_000
     assert has_element?(view, "#home-update-loading[role=status] .home-loading-animation")
     assert has_element?(view, "#home-request-abort:not([disabled])")
-    refute has_element?(view, "#home-edit-form, #home-edit-review")
+    # The message stays on screen with the loader, and the box waits for the answer.
+    assert has_element?(view, "#home-design-ask", instruction)
+    assert has_element?(view, "#home-edit-instruction[disabled]")
+    refute has_element?(view, "#home-edit-review")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     send(planner, :release_plan)
     render_async(view)
@@ -272,16 +268,14 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
     refute has_element?(view, "#home-authoring-source, #home-edit-review h2")
-    assert has_element?(view, "#home-edit-review #home-request-abort[aria-label] .hero-x-mark")
+    assert has_element?(view, "#home-chat-dock #home-request-abort[aria-label] .hero-x-mark")
+
+    # Edit refines by talking, so there is no way back to a form; the actions ride the dock.
+    refute has_element?(view, "#home-request-edit")
 
     assert has_element?(
              view,
-             "#home-edit-review #home-request-edit[aria-label] .hero-pencil-square"
-           )
-
-    assert has_element?(
-             view,
-             "#home-edit-review #home-request-confirm.home-primary-action[aria-label] .hero-check"
+             "#home-chat-dock #home-request-confirm.home-primary-action[aria-label] .hero-check"
            )
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
@@ -328,6 +322,136 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
     assert saved_id == saved.id
+  end
+
+  @tag hold_edit_plan: true
+  test "each follow-up refines the proposal on screen, not the workout the design started from",
+       %{view: view, selected: selected} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-edit-workout") |> render_click()
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
+    |> render_submit()
+
+    assert_receive {:edit_planning_waiting, planner}, 1_000
+    send(planner, :release_plan)
+    render_async(view)
+    assert has_element?(view, "#home-edit-review #home-design-ask", "Increase to 150 reps")
+    assert has_element?(view, "#home-workout-hero #home-edit-review-reps", "150")
+    # The box stays, empty, for the next message.
+    assert has_element?(view, "#home-chat-dock #home-edit-form #home-edit-instruction")
+    flush_provider_requests()
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 160 reps"})
+    |> render_submit()
+
+    # The proposal stays in view while the coach works on the next one.
+    assert_receive {:edit_planning_waiting, planner}, 1_000
+    assert has_element?(view, "#home-edit-review #home-design-pending", "Increase to 160 reps")
+    assert has_element?(view, "#home-edit-review #home-inspection table")
+    assert has_element?(view, "#home-edit-instruction[disabled]")
+    send(planner, :release_plan)
+    render_async(view)
+
+    requests = provider_requests()
+
+    interpretation =
+      Enum.find_value(requests, fn body ->
+        Enum.find_value(body["messages"], fn message ->
+          case Jason.decode(message["content"]) do
+            {:ok, %{"scope" => "workout_design"} = design} -> design
+            _ -> nil
+          end
+        end)
+      end)
+
+    # Read against the 150-rep proposal, not the workout the design started from.
+    assert interpretation["current_definition"]["target_reps"] == 150
+    assert interpretation["current_definition"]["target_reps"] != selected.plan.target_reps
+
+    scopes =
+      for body <- requests, message <- body["messages"], reduce: [] do
+        scopes ->
+          case Jason.decode(message["content"]) do
+            {:ok, %{"scope" => scope} = decoded} -> [{scope, decoded} | scopes]
+            _ -> scopes
+          end
+      end
+
+    assert {_, %{"definition" => %{"target_reps" => 150}}} =
+             List.keyfind(scopes, "current_proposal", 0)
+
+    assert List.keyfind(scopes, "edit_workout_source", 0) == nil
+
+    # The first ask and what it became are kept; the newest ask heads the proposal.
+    assert has_element?(view, "#home-design-thread .design-turn-you", "Increase to 150 reps")
+    assert has_element?(view, "#home-design-thread .design-turn-coach", "150 reps")
+    assert has_element?(view, "#home-edit-review #home-design-ask", "Increase to 160 reps")
+    refute has_element?(view, "#home-design-pending")
+    assert has_element?(view, "#home-workout-hero #home-edit-review-reps", "160")
+    refute has_element?(view, "#home-edit-instruction", "Increase")
+
+    view |> element("#home-request-confirm") |> render_click()
+    render_async(view)
+
+    assert [saved] =
+             Enum.filter(
+               Workouts.list_library(Scope.for_user(Repo.one!(Accounts.User))),
+               &(&1.target_reps == 160)
+             )
+
+    assert saved.id != selected.plan.id
+  end
+
+  test "a follow-up the coach cannot make leaves the proposal on screen to try again",
+       %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    view |> element("#home-edit-workout") |> render_click()
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
+    |> render_submit()
+
+    render_async(view)
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 999 reps"})
+    |> render_submit()
+
+    render_async(view)
+
+    assert has_element?(view, "#home-adjustment-error", "your proposal is unchanged")
+    assert has_element?(view, "#home-workout-hero #home-edit-review-reps", "150")
+    assert has_element?(view, "#home-edit-review #home-inspection table")
+    refute has_element?(view, "#home-design-pending")
+    # What was typed is still there to send again.
+    assert has_element?(view, "#home-edit-instruction:not([disabled])", "Increase to 999 reps")
+    assert has_element?(view, "#home-request-confirm:not([disabled])")
+  end
+
+  defp provider_requests(acc \\ []) do
+    receive do
+      {:provider_request, body} -> provider_requests([body | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  defp flush_provider_requests, do: provider_requests()
+
+  # The reps the active instruction asks for ("Increase to 160 reps"); 120 otherwise.
+  defp requested_reps(messages) do
+    Enum.find_value(messages, 120, fn message ->
+      with {:ok, %{"scope" => "workout_design", "active_attempt" => %{"instruction" => text}}} <-
+             Jason.decode(message["content"]),
+           [_, reps] <- Regex.run(~r/Increase to (\d+)/, text) do
+        String.to_integer(reps)
+      else
+        _ -> nil
+      end
+    end)
   end
 
   defp selected_slot(user) do

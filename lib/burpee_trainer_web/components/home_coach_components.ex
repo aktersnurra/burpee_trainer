@@ -119,61 +119,74 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           <p class="coach-exchange-you">{@state.coach_pending_message}</p>
         </li>
       </ol>
+      <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-pending-status">
+        <.burpee_loader class="coach-summary-loader" size={32} />
+        <span>Sending to the coach</span>
+      </p>
       <%!-- Talking to the app's coach needs it; without it the coach is Claude, and this
            section shows only what Claude left. --%>
       <%= if coach?(@state) do %>
-        <.form
-          for={@state.coach_message_form}
-          id="home-coach-message-form"
-          phx-submit="coach_message"
-          phx-change="coach_message_change"
-          class="coach-message-form home-authoring-form composer"
+        <%!-- The box rides above the keyboard, as in the design chat (see the ChatDock hook).
+             Collapsed, the panel's visibility hides it with the rest. --%>
+        <div
+          id="home-coach-dock"
+          class="chat-dock"
+          phx-hook="ChatDock"
+          data-version={coach_version(@state)}
+          data-scroll-to="#home-coach-thread > :last-child"
+          data-scroll-on-mount="false"
         >
-          <.input
-            field={@state.coach_message_form[:text]}
-            id="home-coach-message-text"
-            type="textarea"
-            label="Message the coach"
-            rows="2"
-            maxlength="1000"
-            placeholder="Message the coach"
-            class="composer-input"
-            disabled={@state.coach_busy?}
-          />
-          <div class="composer-bar">
-            <button
-              id="home-coach-message-send"
-              type="submit"
-              class="composer-send"
-              disabled={@state.coach_busy?}
-              aria-label="Send"
-              title="Send"
+          <div class="chat-dock-inner">
+            <div
+              class="coach-quick-replies composer-suggestions chat-dock-chips"
+              role="group"
+              aria-label="Quick replies"
             >
-              <span><.icon name="hero-arrow-up" class="size-5" /></span>
-            </button>
+              <button
+                :for={{id, text} <- quick_replies(@state)}
+                id={"home-coach-quick-#{id}"}
+                type="button"
+                class="composer-suggestion"
+                phx-click="coach_quick_reply"
+                phx-value-text={text}
+                disabled={@state.coach_busy?}
+              >
+                {text}
+              </button>
+            </div>
+            <.form
+              for={@state.coach_message_form}
+              id="home-coach-message-form"
+              phx-submit="coach_message"
+              phx-change="coach_message_change"
+              class="coach-message-form home-authoring-form composer"
+            >
+              <.input
+                field={@state.coach_message_form[:text]}
+                id="home-coach-message-text"
+                type="textarea"
+                label="Message the coach"
+                rows="1"
+                maxlength="1000"
+                placeholder="Message the coach"
+                class="composer-input"
+                disabled={@state.coach_busy?}
+              />
+              <div class="composer-bar">
+                <button
+                  id="home-coach-message-send"
+                  type="submit"
+                  class="composer-send"
+                  disabled={@state.coach_busy?}
+                  aria-label="Send"
+                  title="Send"
+                >
+                  <span><.icon name="hero-arrow-up" class="size-5" /></span>
+                </button>
+              </div>
+            </.form>
           </div>
-        </.form>
-        <div class="coach-quick-replies composer-suggestions" role="group" aria-label="Quick replies">
-          <button
-            :for={{id, text} <- quick_replies(@state)}
-            id={"home-coach-quick-#{id}"}
-            type="button"
-            class="composer-suggestion"
-            phx-click="coach_quick_reply"
-            phx-value-text={text}
-            disabled={@state.coach_busy?}
-          >
-            {text}
-          </button>
         </div>
-        <p
-          :if={@state.coach_busy?}
-          id="home-coach-loading"
-          role="status"
-          class="coach-guidance-status"
-        >
-          Sending to the coach
-        </p>
         <p id="home-coach-reply" role="status" class="coach-guidance-status">
           {@state.coach_reply}
         </p>
@@ -215,9 +228,14 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </div>
       </div>
+      <div :if={coach?(@state)} class="chat-dock-spacer" aria-hidden="true"></div>
     </section>
     """
   end
+
+  # Changes whenever the conversation moves, so the dock brings the newest line into view.
+  defp coach_version(state),
+    do: "#{length(Map.get(state, :coach_thread, []))}:#{state.coach_busy?}"
 
   @doc """
   Whether Home has a coach section: always with the app's coach; without it, only once

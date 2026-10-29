@@ -26,6 +26,19 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
     end)
   end
 
+  test "what the coach learns writes its note again; an unchanged memory does not" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+
+    reply(%{"ops" => []})
+    assert {:ok, []} = MemoryJob.keep(scope, %{kind: "conversation"}, opts())
+    refute_enqueued(worker: BurpeeTrainer.Coach.SummaryJob)
+
+    reply(%{"ops" => [%{"op" => "add", "text" => "Left knee gets sore after jumps"}]})
+    assert {:ok, [_]} = MemoryJob.keep(scope, %{kind: "conversation"}, opts())
+    assert_enqueued(worker: BurpeeTrainer.Coach.SummaryJob, args: %{"user_id" => scope.user.id})
+  end
+
   test "the model reads the notes and the event, and its ops change the memory" do
     scope = scope_fixture()
     {:ok, _} = Memory.apply_ops(scope, [%{"op" => "add", "text" => "Trains at 7:00"}])

@@ -6,6 +6,10 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   commands the LiveView adapter runs. Nothing here reads the database, calls the coach or
   touches the socket; the adapter does that and reports what happened as an event.
 
+  A design is a conversation: each follow-up is read against the proposal on screen, and
+  the proposals it replaces stay as `design_turns`, oldest first. Nothing in a refinement
+  falls back to the workout the design started from.
+
   Work in flight is identified by `update_id`. A result is applied only while it is the
   one in flight, so a late answer to a discarded or superseded request changes nothing.
   """
@@ -28,6 +32,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     pending_request: nil,
     review_inspection_rows: [],
     instruction: "",
+    design_turns: [],
+    pending_turn: nil,
     busy?: false,
     update_id: nil,
     local_error: nil
@@ -96,6 +102,13 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     {%{discarded | busy?: true, update_id: id, instruction: text}, commands}
   end
 
+  # A refinement keeps the proposal in view; only a newer one replaces it.
+  def update(
+        %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
+        {:refine_started, id, text}
+      ),
+      do: {%{m | busy?: true, update_id: id, pending_turn: text, local_error: nil}, []}
+
   def update(%__MODULE__{} = m, {:adjustment_started, id, text}),
     do: {%{m | busy?: true, update_id: id, instruction: text, local_error: nil}, []}
 
@@ -111,13 +124,21 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
          | authoring_stage: :review,
            review_inspection_rows: rows,
            pending_request: prepared,
-           workout_parameters: params
+           workout_parameters: params,
+           design_turns: superseded(m),
+           instruction: m.pending_turn || m.instruction,
+           pending_turn: nil
        }, []}
     end)
   end
 
-  def update(%__MODULE__{} = m, {:review_failed, id, message}),
-    do: settle(m, id, &{%{&1 | pending_request: nil, local_error: message}, []})
+  # A refinement that fails leaves the proposal it was refining on screen.
+  def update(%__MODULE__{} = m, {:review_failed, id, message}) do
+    settle(m, id, fn
+      %{pending_turn: nil} = m -> {%{m | pending_request: nil, local_error: message}, []}
+      m -> {%{m | pending_turn: nil, local_error: message}, []}
+    end)
+  end
 
   def update(%__MODULE__{} = m, {:plan_saved, id, plan}) do
     settle(m, id, fn m ->
@@ -171,6 +192,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         creation_key: key,
         created_plan: nil,
         pending_request: nil,
+        design_turns: [],
+        pending_turn: nil,
         local_error: nil
     }
   end
@@ -182,7 +205,31 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   defp discard(m), do: {%{clear(m) | busy?: false, update_id: nil}, []}
 
-  defp clear(m), do: %{m | pending_request: nil, local_error: nil}
+  defp clear(m),
+    do: %{m | pending_request: nil, local_error: nil, design_turns: [], pending_turn: nil}
+
+  # The proposal a refinement replaces, kept with the words that asked for it.
+  defp superseded(%{pending_turn: nil} = m), do: m.design_turns
+  defp superseded(%{pending_request: nil} = m), do: m.design_turns
+
+  defp superseded(%{pending_request: prepared} = m) do
+    definition = prepared.definition
+
+    m.design_turns ++
+      [
+        %{
+          # New's first ask is its fields, not words worth repeating.
+          instruction:
+            if(is_nil(m.editing_source) and m.design_turns == [],
+              do: "New workout",
+              else: m.instruction
+            ),
+          name: definition["name"],
+          reps: definition["target_reps"],
+          duration_sec: round(definition["target_duration_sec"])
+        }
+      ]
+  end
 
   defp settle(m, id, apply_result) do
     if current?(m, id) do

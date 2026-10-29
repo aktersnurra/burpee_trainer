@@ -35,18 +35,25 @@ The approved version has a deliberate pose-by-pose rhythm: 19 source frames over
 2.8 seconds. The first and last standing poses match. Identical holds may be
 coalesced by the encoders. This version does not use optical-flow interpolation.
 
+The poses are ivory on black; the exports invert them for the light-only app: a dark
+ink silhouette (`#20201D`) on a transparent background, so the loader sits on any surface.
+
 Exports under `priv/static/images/`:
 
-- `burpee-loader.webp`: preferred lossless animation.
-- `burpee-loader.gif`: optimized browser fallback.
+- `burpee-loader.webp`: preferred lossless animation with smooth alpha.
+- `burpee-loader.gif`: fallback with binary alpha, soft edges matted against the stone.
 - `burpee-loader-still.png`: standing pose for reduced motion.
-- `burpee-loader-transparent.webp`: ivory artwork with smooth alpha.
-- `burpee-loader-transparent.gif`: ivory artwork with binary alpha.
 
-All exports are 192px square. Transparent ivory versions need a dark background.
-The shared `burpee_loader/1` component selects the still image when
-`prefers-reduced-motion: reduce` is enabled. Existing status labels provide
+All exports are 192px square. The shared `burpee_loader/1` component selects the still
+image when `prefers-reduced-motion: reduce` is enabled. Existing status labels provide
 accessible loading announcements.
+
+## Launch screens
+
+`apple-touch-startup-image` files in `priv/static/images/startup/` show the app icon on
+the warm-stone background while a home-screen launch loads. Regenerate them with
+`python3 scripts/render_startup_screens.py` (Pillow required). iOS caches launch images
+per home-screen shortcut: remove and re-add the shortcut to see a new one.
 
 The approved source poses are preserved in `loader-poses.zip`. Reproduce all
 exports with `python3 scripts/render_burpee_loader.py` (Pillow and NumPy required).

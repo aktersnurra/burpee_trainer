@@ -12,9 +12,9 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
 
   require Logger
 
-  alias BurpeeTrainer.{Accounts, Goals, Repo, UserTime, Workouts}
+  alias BurpeeTrainer.{Accounts, Goals, Repo, UserTime, WeekWindow, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Client, Summary, Voice}
+  alias BurpeeTrainer.Coach.{Client, Exchange, Memory, Summary, Voice}
   alias BurpeeTrainer.Insights.{Metrics, Validator}
 
   @schema %{
@@ -148,8 +148,9 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         content:
           Voice.text() <>
             "\n" <>
-            "Write at most two sentences explaining what the rest of this week should aim for, given what is left of the weekly training window (week.minutes of week.target_minutes) and their active goal, or the next level when they have none. It sits under a list of this week's sessions done and left, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences looking back over the last weeks for each burpee type: what is rising, what is flat, what was missed. It leads their Progress page, above each goal's best and target, so do not restate those either. In replies, give up to three short changes the athlete might ask for, in their own words (under 60 characters each). Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
-            Jason.encode!(metrics)
+            "Write the note a coach would leave for this athlete, at most two sentences, plain and personal, about what the rest of this week should aim for, given what is left of the weekly training window (week.minutes of week.target_minutes) and their active goal, or the next level when they have none. When what they have told you (below) matters now, such as a sore knee, a busy week or how a session felt, start from that in your own words, and do not repeat a number from it. It sits under a list of this week's sessions done and left, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences on how the last weeks have actually gone, as you would say it to them across the gym floor: name something specific, never list what is rising, flat and missed in turn, and leave it empty when nothing stands out. It leads their Progress page, above each goal's best and target, so do not restate those either. In replies, give up to three short changes the athlete might ask for, in their own words (under 60 characters each). Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
+            Jason.encode!(metrics) <>
+            " What they have told you: " <> Jason.encode!(told(scope))
       }
     ]
 
@@ -171,6 +172,18 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
           summary -> store(scope, summary, :fallback)
         end
     end
+  end
+
+  # What the athlete has said to the coach, for the note to start from: its notes about them
+  # and the last words of this week's conversation.
+  defp told(scope) do
+    %{
+      notes: scope |> Memory.list() |> Enum.map(& &1.text),
+      recent_messages:
+        scope
+        |> Exchange.since(WeekWindow.week_start_utc(scope), 5)
+        |> Enum.map(& &1.message)
+    }
   end
 
   # The look back is checked like the note; one that fails is left out, not the note.

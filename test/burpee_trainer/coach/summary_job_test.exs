@@ -89,6 +89,34 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert prompt =~ "do not restate"
   end
 
+  test "the note starts from what the athlete has told the coach" do
+    scope = scope_fixture()
+    free_form_session_fixture(scope.user)
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Memory.apply_ops(scope, [
+        %{"op" => "add", "text" => "Left knee gets sore after jumps"}
+      ])
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Exchange.record(scope, "Travelling Thursday", "Then keep it short.")
+
+    test_pid = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:messages, Jason.decode!(body)["messages"]})
+      Req.Test.json(conn, %{"choices" => [%{"message" => %{"content" => "{}"}}]})
+    end)
+
+    SummaryJob.summarize(scope, opts())
+    assert_receive {:messages, [%{"role" => "system", "content" => prompt}]}
+    assert prompt =~ "Left knee gets sore after jumps"
+    assert prompt =~ "Travelling Thursday"
+    # Only what the athlete said, not what the coach answered.
+    refute prompt =~ "Then keep it short."
+  end
+
   test "a fabricated number stores a fallback that is itself validated" do
     scope = scope_fixture()
     free_form_session_fixture(scope.user)
