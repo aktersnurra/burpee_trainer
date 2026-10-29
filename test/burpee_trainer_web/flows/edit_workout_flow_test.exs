@@ -276,22 +276,22 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     assert has_element?(
              view,
-             "#home-edit-review #home-request-confirm.studio-pill-primary",
+             "#home-edit-review #home-request-run.studio-pill-primary",
              "Run"
            )
 
     assert has_element?(view, "#home-edit-review #home-request-save", "Save")
-    refute has_element?(view, "#home-chat-dock #home-request-confirm")
+    refute has_element?(view, "#home-chat-dock #home-request-run")
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
     assert has_element?(view, "#home-edit-review .home-prescription-every", "5s")
     assert has_element?(view, "#home-edit-review .home-prescription-rest", "450s")
     refute has_element?(view, "#home-update-loading")
     assert Repo.aggregate(WorkoutPlan, :count) == count
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-run") |> render_click()
     render_async(view)
-    refute has_element?(view, "#home-new-saved")
-    assert has_element?(view, "#home-action")
+    # Run starts it: the session is its own, on the new workout.
+    {"/session/" <> started, _flash} = assert_redirect(view)
 
     assert Repo.aggregate(
              from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),
@@ -327,6 +327,9 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
     assert saved_id == saved.id
+
+    assert Repo.get!(BurpeeTrainer.Workouts.WorkoutSession, String.to_integer(started)).plan_id ==
+             saved.id
   end
 
   @tag hold_edit_plan: true
@@ -398,7 +401,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#studio-proposal .studio-card-totals", "160 reps")
     refute has_element?(view, "#home-edit-instruction", "Increase")
 
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-save") |> render_click()
     render_async(view)
 
     assert [saved] =
@@ -433,7 +436,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     refute has_element?(view, "#home-design-pending")
     # What was typed is still there to send again.
     assert has_element?(view, "#home-edit-instruction:not([disabled])", "Increase to 999 reps")
-    assert has_element?(view, "#home-request-confirm:not([disabled])")
+    assert has_element?(view, "#home-request-run:not([disabled])")
   end
 
   defp provider_requests(acc \\ []) do

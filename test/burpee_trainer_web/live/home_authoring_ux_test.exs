@@ -165,11 +165,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view)
     assert_receive {:provider_request, _}
     assert_receive {:provider_request, _}
-    assert has_element?(view, "#home-request-confirm")
+    assert has_element?(view, "#home-request-run")
     other = plan_fixture(user, %{"state" => "published"})
     {:ok, changed} = Workouts.select_home_workout(Scope.for_user(user), selected, other.id)
     count = Repo.aggregate(WorkoutPlan, :count)
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-run") |> render_click()
     render_async(view)
     refute has_element?(view, "#home-new-saved")
     assert has_element?(view, "#home-adjustment-error", "changed")
@@ -220,7 +220,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     walk(view, reps: 10, minutes: 5, pace_ups: 1)
     create(view)
     render_async(view, 2_000)
-    assert has_element?(view, "#home-edit-review #home-request-confirm")
+    assert has_element?(view, "#home-edit-review #home-request-run")
     assert has_element?(view, "#studio-proposal .home-prescription-reps")
 
     view
@@ -230,7 +230,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
 
     # What the questions made stays above, as one message; the new proposal follows the ask.
-    assert has_element?(view, "#studio-thread .studio-bubble", "10 reps")
+    assert has_element?(view, "#studio-proposal .studio-chip", "10 reps")
     assert has_element?(view, "#studio-proposal .studio-chip", "150 reps")
     assert has_element?(view, ".studio-turn", "10 reps")
     assert has_element?(view, "#home-design-ask", "Increase to 150")
@@ -252,7 +252,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     create(view)
     render_async(view, 2_000)
     assert has_element?(view, "#studio-request", "140")
-    refute has_element?(view, "#home-request-confirm")
+    refute has_element?(view, "#home-request-run")
     assert has_element?(view, "#home-adjustment-error", "Coach unavailable")
     assert Repo.aggregate(WorkoutPlan, :count) == count
 
@@ -270,11 +270,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     walk(view, reps: 10, minutes: 5, pace_ups: 1)
     create(view)
     render_async(view, 2_000)
-    assert has_element?(view, "#home-request-confirm")
+    assert has_element?(view, "#home-request-run")
 
     # Back is one step back: to what was chosen, without the proposal made from it.
     view |> element("#studio-back") |> render_click()
-    refute has_element?(view, "#home-request-confirm, #studio-proposal")
+    refute has_element?(view, "#home-request-run, #studio-proposal")
     assert has_element?(view, "#studio-create")
 
     view |> element("#studio-row-reps") |> render_click()
@@ -300,7 +300,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
     assert_receive {:provider_request, %{"messages" => _}}
     assert has_element?(view, "#home-adjustment-error", "doesn't add up")
-    refute has_element?(view, "#home-request-confirm")
+    refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
   end
 
@@ -315,7 +315,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     for _call <- 1..3, do: assert_receive({:provider_request, _})
     assert has_element?(view, "#home-adjustment-error", "ordered set pattern")
     assert has_element?(view, "#home-adjustment-error", "Returned 2 sets; expected 20")
-    refute has_element?(view, "#home-request-confirm")
+    refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     refute_received {:provider_request, _}
   end
@@ -343,7 +343,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     send(task, :release)
     render_async(view, 2_000)
     assert has_element?(view, "#studio-pace-value", "5.0")
-    refute has_element?(view, "#home-request-confirm")
+    refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     # Back, one step at a time, out of the questions: sets, reps, duration, style, type.
     for _ <- 1..5, do: view |> element("#studio-back") |> render_click()

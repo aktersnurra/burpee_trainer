@@ -28,7 +28,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     # The studio takes Home's place and shows only the question being asked.
     assert has_element?(view, "#home-studio h1#home-authoring-heading", "New workout")
     assert has_element?(view, "#studio-step", "Which burpee?")
-    assert has_element?(view, ".studio-subtitle", "Question 1 of 5")
+    assert has_element?(view, "ol[aria-label='Question 1 of 5']")
     refute has_element?(view, "#home-workout-hero, #home-chat-dock, #studio-thread")
     # Back from the first question leaves; there is no separate close.
     assert has_element?(view, "#home-request-abort[aria-label='Cancel new workout']")
@@ -39,7 +39,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#studio-step", "How should the sets go?")
     refute has_element?(view, "#home-pill-burpee_type-six_count")
     refute has_element?(view, "#studio-next")
-    assert has_element?(view, ".studio-subtitle", "Question 2 of 5")
+    assert has_element?(view, "ol[aria-label='Question 2 of 5']")
 
     view |> element("#studio-back") |> render_click()
     assert has_element?(view, "#studio-step", "Which burpee?")
@@ -86,14 +86,18 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#studio-step", "How many reps?")
     # With no history, the next level's landmark scaled to the duration.
     assert has_element?(view, "#studio-reps-value", "50")
+    # What it comes to: 50 reps at 4.5 s is 3:45 moving, the rest of the 20 minutes recovery.
+    assert has_element?(view, ".studio-step-hint", "3:45 moving · 16:15 recovering")
     view |> element("#studio-reps-up") |> render_click()
     assert has_element?(view, "#studio-reps-value", "55")
+    assert has_element?(view, ".studio-step-hint", "4:08 moving · 15:52 recovering")
 
     view |> element("#studio-next") |> render_click()
     assert has_element?(view, "#studio-step", "How fast is each rep?")
     assert has_element?(view, "#studio-pace-value", "4.5")
     view |> element("#studio-pace-up") |> render_click()
     assert has_element?(view, "#studio-pace-value", "5.0")
+    assert has_element?(view, ".studio-step-hint", "4:35 moving · 15:25 recovering")
 
     view |> element("#studio-next") |> render_click()
 
@@ -104,22 +108,19 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#studio-create", "Create workout")
     refute has_element?(view, "#home-chat-dock")
 
-    # Adding a request opens the chat on a message made of the answers, the cursor on the
-    # line for more.
+    # Adding a request opens the chat, empty: it is for a request only, not the answers again.
     view |> element("#studio-add-request") |> render_click()
-    assert has_element?(view, ".studio-subtitle", "Add a request")
-    assert has_element?(view, "#home-edit-instruction[data-caret=end]")
+    assert has_element?(view, "#studio-thread", "Anything else")
+    assert has_element?(view, "#home-edit-instruction[placeholder='Additional request']")
 
-    textarea =
-      view
-      |> element("#home-edit-instruction")
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.text()
+    assert view
+           |> element("#home-edit-instruction")
+           |> render()
+           |> LazyHTML.from_fragment()
+           |> LazyHTML.text()
+           |> String.trim() == ""
 
-    assert String.trim_leading(textarea) =~
-             "Six-count · Even · 20 min · 55 reps · 5.0 s per rep\nAdditional request: "
-
+    # It may be sent without a word, so Send is ready.
     assert has_element?(view, "#home-chat-dock #home-edit-send.composer-send-ready")
 
     # Back is one step back: to what was chosen.
@@ -140,7 +141,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "#studio-reps-value", "40")
   end
 
-  test "New is sent as it is, a proposal comes back, and Accept saves and selects it",
+  test "New is sent as it is, a proposal comes back, and Run saves, selects and starts it",
        %{view: view, user: user, selected: selected, conn: conn} do
     layout = layout([[{50, 5.0, 5.0}, {50, 5.0, 5.0}]], "Independent new workout")
 
@@ -152,15 +153,17 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     render_async(view, 2_000)
 
     assert has_element?(view, "#home-edit-review #studio-proposal", "Independent new workout")
-    assert has_element?(view, "#home-edit-review #home-chat-actions #home-request-confirm", "Run")
+    assert has_element?(view, "#home-edit-review #home-chat-actions #home-request-run", "Run")
+    # Run starts it, so the device's start toggles sit beside it.
+    assert has_element?(view, "#home-chat-actions #home-start-camera")
+    assert has_element?(view, "#home-chat-actions #home-start-warmup")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-run") |> render_click()
     render_async(view, 2_000)
-    refute has_element?(view, "#home-studio")
-    assert has_element?(view, "#home-action")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
+    {path, _flash} = assert_redirect(view)
+    assert "/session/" <> id = path
 
     [saved] =
       Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == layout["name"]))
@@ -168,22 +171,13 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert saved.state == :published
     assert Repo.aggregate(WorkoutPlan, :count) == count + 1
 
-    assert {:ok, unchanged} =
+    # It is today's workout, and the session started is its own.
+    assert {:ok, chosen} =
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
-    assert unchanged.plan.id == saved.id
-    refute unchanged.plan.id == selected.plan.id
+    assert chosen.plan.id == saved.id
+    refute chosen.plan.id == selected.plan.id
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-
-    [token] =
-      view
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-action")
-      |> LazyHTML.attribute("phx-value-client_session_id")
-
-    {:error, {:live_redirect, %{to: "/session/" <> id}}} =
-      view |> element("#home-action") |> render_click(%{"client_session_id" => token})
 
     session = Repo.get!(WorkoutSession, String.to_integer(id))
     assert session.plan_id == saved.id
@@ -299,7 +293,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     render_async(view, 2_000)
 
     assert Agent.get(counter, & &1.calls) == ["workout_layout", "workout_layout"]
-    refute has_element?(view, "#home-request-confirm")
+    refute has_element?(view, "#home-request-run")
     assert has_element?(view, "#home-adjustment-error")
     # The choices are still there to change.
     assert has_element?(view, "#studio-row-sets .studio-summary-value", "Up to 25")
@@ -312,7 +306,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     view |> element("#studio-next") |> render_click()
     view |> element("#studio-next") |> render_click()
     assert has_element?(view, "#studio-step", "How fast is each rep?")
-    assert has_element?(view, ".studio-subtitle", "Question 5 of 5")
+    assert has_element?(view, "ol[aria-label='Question 5 of 5']")
   end
 
   defp layout(phases, name) do
@@ -353,20 +347,11 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     assert has_element?(
              view,
-             "#home-edit-form textarea[name='home_adjustment[instruction]'][maxlength='400']"
+             "#home-edit-form textarea[name='home_adjustment[instruction]'][maxlength='300']"
            )
 
-    message =
-      view
-      |> element("#home-edit-instruction")
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.text()
-
     view
-    |> form("#home-edit-form",
-      home_adjustment: %{instruction: String.trim_leading(message) <> "slow and steady"}
-    )
+    |> form("#home-edit-form", home_adjustment: %{instruction: "slow and steady"})
     |> render_submit()
 
     render_async(view, 2_000)
