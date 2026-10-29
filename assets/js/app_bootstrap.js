@@ -4,7 +4,6 @@ import { LiveSocket } from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
 import ChatDock from "./hooks/chat_dock.mjs";
-import ComposerCaret from "./hooks/composer_caret.mjs";
 import HomeAdjustment from "./hooks/home_adjustment.mjs";
 import HomeGestures from "./hooks/home_gestures.mjs";
 import SwipeValue from "./hooks/swipe_value.mjs";
@@ -29,7 +28,6 @@ export function startApp(PoseTracker) {
 		hooks: {
 			ChartHook,
 			ChatDock,
-			ComposerCaret,
 			HomeAdjustment,
 			HomeGestures,
 			SwipeValue,

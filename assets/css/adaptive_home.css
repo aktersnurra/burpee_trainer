@@ -1103,7 +1103,6 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-close { margin-left: auto; border-color: transparent; background: transparent; color: var(--home-muted, #736f68); }
 .studio-heading { min-width: 0; }
 .studio-title { margin: 0; font: 600 17px/1.25 var(--font-sans); }
-.studio-subtitle { margin: 0; overflow: hidden; color: var(--home-muted, #736f68); font-size: var(--text-small); text-overflow: ellipsis; white-space: nowrap; }
 .studio-thread { display: grid; gap: 16px; margin: 12px 0 0; padding: 0; list-style: none; }
 .studio-msg { min-width: 0; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
 .studio-you { display: flex; justify-content: flex-end; }
@@ -1143,8 +1142,10 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-pill-primary:hover:not(:disabled) { background: #262722; opacity: .85; }
 .studio-pill-wide { width: 100%; min-height: 52px; font-size: 16px; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
-.studio-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.studio-actions .studio-pill { min-height: 48px; }
+.studio-actions { display: flex; align-items: center; gap: 8px; }
+.studio-actions .studio-pill { flex: 1; min-height: 48px; }
+.studio-start-choices { display: flex; flex: none; gap: 2px; }
+.studio-start-choices .home-start-choice { min-width: 44px; min-height: 44px; padding: 0; }
 
 /* One question at a time: centred, with the answer under it and the progress above. */
 .studio-step { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); text-align: center; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }

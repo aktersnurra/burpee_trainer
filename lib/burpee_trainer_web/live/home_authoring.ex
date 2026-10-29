@@ -311,7 +311,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         %{assigns: %{authoring_stage: :new, new_step: :request, busy?: false}} = socket
       )
       when is_binary(text) do
-    begin_plan_review(socket, %{"note" => HomeWorkoutRequest.note(text)})
+    begin_plan_review(socket, %{"note" => String.trim(text)})
   end
 
   def handle_event("select_created_workout", _, %{assigns: %{authoring_stage: :saved}} = socket) do
@@ -379,20 +379,20 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   end
 
   def handle_event(event, _, %{assigns: %{authoring_stage: :review}} = socket)
-      when event in ["confirm_workout_request", "save_review_to_library"] do
+      when event in ["run_workout_request", "save_review_to_library"] do
     a = socket.assigns
     id = make_ref()
     scope = a.current_scope
     prepared = a.pending_request
     expected = a.home_selection
-    kind = if event == "confirm_workout_request", do: :use_plan, else: :new_plan
+    kind = if event == "run_workout_request", do: :run_plan, else: :new_plan
 
     if prepared && verify_edit_selection(socket) == :ok do
       {:noreply,
        socket
        |> step({:confirm_started, id})
        |> start_async({kind, id}, fn ->
-         if kind == :use_plan,
+         if kind == :run_plan,
            do: Coach.approve_and_select_plan(scope, prepared, expected),
            else: Coach.approve_plan(scope, prepared)
        end)}
@@ -486,18 +486,30 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
          "Coach unavailable. Try again later; your current workout is unchanged."}
       )
 
-  defp settle(:use_plan, id, {:ok, {:ok, selected}}, socket) do
+  # Run saves the proposal, makes it today's workout and starts it, the way Home's play does.
+  defp settle(:run_plan, id, {:ok, {:ok, selected}}, socket) do
+    socket =
+      socket
+      |> step({:plan_selected, id})
+      |> HomeWorkspace.show_selection(selected, true)
+
+    a = socket.assigns
+
+    {:noreply, socket} =
+      HomeLive.start_result(
+        socket,
+        Workouts.start_home_workout(a.current_scope, a.home_selection, a.start_client_session_id)
+      )
+
     socket
-    |> step({:plan_selected, id})
-    |> HomeWorkspace.show_selection(selected, true)
   end
 
-  defp settle(:use_plan, id, _result, socket),
+  defp settle(:run_plan, id, _result, socket),
     do:
       step(
         socket,
         {:plan_failed, id,
-         "Couldn’t use this workout. Your selection may have changed; cancel and reopen the review."}
+         "Couldn’t run this workout. Your selection may have changed; go back and try again."}
       )
 
   defp settle(:new_plan, id, {:ok, {:ok, plan}}, socket),
@@ -588,25 +600,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     socket
     |> assign(workout_parameters: params)
     |> step({:new_step, step})
-    |> write_message(params, step)
   end
 
-  # The last question leaves the chat open on a message made of the answers, with the
-  # cursor on a line for anything more. What was already written there is kept.
-  defp write_message(socket, params, :request) do
-    written = socket.assigns.adjustment_form[:instruction].value || ""
-
-    note =
-      if String.contains?(String.downcase(written), "additional request:"),
-        do: HomeWorkoutRequest.note(written),
-        else: ""
-
-    adjustment_form(socket, HomeWorkoutRequest.message(params, note))
-  end
-
-  defp write_message(socket, _params, _step), do: socket
-
-  # What the week has left, which is all New may spend.
   defp remaining_sec(%{assigns: %{slot: %{remaining_sec: seconds}}}), do: seconds
   defp remaining_sec(_socket), do: nil
 

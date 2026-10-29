@@ -381,6 +381,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "open_options",
              "refine_workout",
              "review_current_edit",
+             "run_workout_request",
              "save_review_to_library",
              "select_created_workout",
              "send_new_workout",
@@ -554,7 +555,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when kind in [
              :new_request,
              :new_plan,
-             :use_plan,
+             :run_plan,
              :home_revision_request,
              :home_revision
            ] do

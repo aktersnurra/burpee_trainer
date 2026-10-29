@@ -107,6 +107,17 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   def step_pace(pace, :up), do: round_to(pace + @pace_step, @pace_step)
   def step_pace(pace, :down), do: max(round_to(pace - @pace_step, @pace_step), @pace_step)
 
+  @doc """
+  What `reps` at `pace` come to in `duration_sec`: whole seconds spent moving and left to
+  recover, or `nil` when the movement alone would not fit.
+  """
+  @spec budget(pos_integer(), number(), pos_integer()) ::
+          {non_neg_integer(), non_neg_integer()} | nil
+  def budget(reps, pace, duration_sec) do
+    moving = round(reps * pace)
+    if moving <= duration_sec, do: {moving, duration_sec - moving}, else: nil
+  end
+
   @doc "The most reps `duration_sec` holds at `pace`, since movement alone must fit."
   @spec max_reps(number(), pos_integer()) :: pos_integer()
   def max_reps(pace, duration_sec), do: max(trunc(duration_sec / pace), 1)

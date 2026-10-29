@@ -9,12 +9,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   alias BurpeeTrainer.Coach.NewDefaults
 
-  alias BurpeeTrainerWeb.{
-    CreationParameters,
-    HomeWorkoutComponents,
-    HomeWorkoutRequest,
-    NewWorkoutSteps
-  }
+  alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents, NewWorkoutSteps}
 
   @doc "Whether Home gives way to the studio."
   def studio?(state), do: state.authoring_stage in [:new, :editing, :review, :saved]
@@ -26,17 +21,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   # One screen at a time until the chat: while a request is being sent it is the thread.
   defp wizard?(state),
     do: state.authoring_stage == :new and state.new_step != :request and not state.busy?
-
-  defp subtitle(%{editing_source: source} = state) when not is_nil(source),
-    do: state.home_selection.plan.name
-
-  defp subtitle(%{authoring_stage: :new, new_step: :ready}), do: "Ready to send"
-  defp subtitle(%{authoring_stage: :new, new_step: :request}), do: "Add a request"
-
-  defp subtitle(%{authoring_stage: :new, new_step: step, workout_parameters: params}),
-    do: "Question #{step_number(step, params)} of #{length(NewWorkoutSteps.questions(params))}"
-
-  defp subtitle(%{workout_parameters: params}), do: HomeWorkoutRequest.summary(params)
 
   defp step_number(step, params),
     do: Enum.find_index(NewWorkoutSteps.questions(params), &(&1 == step)) + 1
@@ -104,7 +88,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       </button>
       <div class="studio-heading">
         <h1 id="home-authoring-heading" class="studio-title">{heading(@state)}</h1>
-        <p class="studio-subtitle">{subtitle(@state)}</p>
       </div>
     </header>
     """
@@ -187,11 +170,11 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   end
 
   # What was asked for the proposal on screen: your words in Edit and in a follow-up; New's
-  # first ask is the message its questions made.
+  # first ask is only what was written with its answers, which the screen before showed.
   defp ask(state) do
     if edit?(state) or state.design_turns != [],
       do: state.instruction,
-      else: HomeWorkoutRequest.sent(state.workout_parameters, state.workout_parameters.note || "")
+      else: state.workout_parameters.note || ""
   end
 
   attr(:state, :map, required: true)
@@ -221,8 +204,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       >
         {pauses_label(@state.pending_request.request.timed_rests)}
       </p>
-      <%!-- What to do with it sits right under the card it is about. --%>
+      <%!-- What to do with it sits right under the card it is about. Run starts it, so the
+           start toggles are here too: the device remembers them. --%>
       <div id="home-chat-actions" class="studio-actions">
+        <div class="studio-start-choices">
+          <HomeWorkoutComponents.start_choice choice="camera" />
+          <HomeWorkoutComponents.start_choice choice="warmup" />
+        </div>
         <button
           id="home-request-save"
           type="button"
@@ -233,10 +221,10 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           <.icon name="hero-bookmark" class="size-4" /> Save
         </button>
         <button
-          id="home-request-confirm"
+          id="home-request-run"
           type="button"
           class="studio-pill studio-pill-primary"
-          phx-click="confirm_workout_request"
+          phx-click="run_workout_request"
           disabled={@state.busy?}
         >
           <.icon name="hero-play-solid" class="size-4" /> Run
@@ -295,9 +283,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp new_thread(%{state: %{authoring_stage: :new}} = assigns) do
     ~H"""
     <li :if={not @state.busy?} class="studio-msg studio-coach">
-      <p class="studio-text">
-        Write what else you want after the prefix, or send the choices as they are.
-      </p>
+      <p class="studio-text">Anything else I should know?</p>
     </li>
     <.proposal_thread :if={@state.busy?} state={@state} />
     """
@@ -500,7 +486,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           label: "Reps",
           at_min?: params.reps <= 5,
           at_max?: params.reps + 5 > NewDefaults.max_reps(pace, seconds),
-          hint: "Suggested from your recent sessions"
+          hint: split(params, params.pace || pace)
         }
       )
 
@@ -545,7 +531,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           label: "Seconds of movement per rep",
           at_min?: params.pace <= 0.5,
           at_max?: params.reps * (params.pace + 0.5) > seconds,
-          hint: "The rest of the time is recovery"
+          hint: split(params, params.pace)
         }
       )
 
@@ -580,7 +566,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:label, :string, required: true)
   attr(:at_min?, :boolean, required: true)
   attr(:at_max?, :boolean, required: true)
-  attr(:hint, :string, required: true)
+  attr(:hint, :string, default: nil)
 
   # A value to swipe: right for more, left for less. The buttons and arrow keys do the same.
   defp stepper(assigns) do
@@ -631,7 +617,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           <.icon name="hero-plus" class="size-6" />
         </button>
       </div>
-      <p class="studio-step-hint">{@hint}</p>
+      <p :if={@hint} class="studio-step-hint">{@hint}</p>
     </div>
     <div class="studio-step-actions">
       <button
@@ -714,11 +700,10 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
               label={if(edit?(@state), do: "What do you want to change?", else: "Anything else?")}
               placeholder={@placeholder}
               rows="1"
-              maxlength={if(edit?(@state), do: "500", else: "400")}
+              maxlength={if(edit?(@state), do: "500", else: "300")}
               class="composer-input"
               disabled={@state.busy?}
-              phx-hook="ComposerCaret"
-              data-caret={if(@state.authoring_stage == :new, do: "end")}
+              phx-mounted={@state.authoring_stage == :new && JS.focus()}
             />
             <div class="composer-bar">
               <button
@@ -748,7 +733,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp event(_state), do: "review_current_edit"
 
   defp placeholder(%{authoring_stage: :review}), do: "Change anything else?"
-  defp placeholder(%{editing_source: nil}), do: "Anything else? Or just send"
+  defp placeholder(%{editing_source: nil}), do: "Additional request"
   defp placeholder(_state), do: "What should change?"
 
   defp suggestions do
@@ -778,6 +763,19 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp duration_minutes(params), do: div(duration_seconds(params), 60)
   defp type(params), do: String.to_existing_atom(params.burpee_type)
+
+  # What reps at a pace come to: the time spent moving, and what is left to recover.
+  defp split(params, pace) do
+    seconds = duration_seconds(params)
+
+    case NewDefaults.budget(params.reps, pace, seconds) do
+      {moving, recovering} ->
+        "#{CreationParameters.duration_label(moving)} moving · #{CreationParameters.duration_label(recovering)} recovering"
+
+      nil ->
+        nil
+    end
+  end
 
   defp set_size_value(nil), do: "No limit"
   defp set_size_value(size), do: size
