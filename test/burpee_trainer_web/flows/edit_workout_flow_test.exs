@@ -130,7 +130,6 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     # The studio takes Home's place: the coach's first message is today's workout.
     assert has_element?(view, "#home-studio h1#home-authoring-heading", "Edit workout")
-    assert has_element?(view, "#home-studio .studio-subtitle", selected.plan.name)
     assert has_element?(view, "#studio-thread #studio-source", selected.plan.name)
     assert has_element?(view, "#studio-source #home-inspection table")
     assert has_element?(view, "#studio-thread", "What would you like to change?")
@@ -289,9 +288,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     refute has_element?(view, "#home-update-loading")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     view |> element("#home-request-run") |> render_click()
-    render_async(view)
     # Run starts it: the session is its own, on the new workout.
-    {"/session/" <> started, _flash} = assert_redirect(view)
+    {"/session/" <> started, _flash} = assert_redirect(view, 2_000)
 
     assert Repo.aggregate(
              from(plan in WorkoutPlan, where: plan.user_id == ^user.id and plan.state == :draft),

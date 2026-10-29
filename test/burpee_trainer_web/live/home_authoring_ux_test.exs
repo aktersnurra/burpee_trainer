@@ -230,7 +230,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
 
     # What the questions made stays above, as one message; the new proposal follows the ask.
-    assert has_element?(view, "#studio-proposal .studio-chip", "10 reps")
     assert has_element?(view, "#studio-proposal .studio-chip", "150 reps")
     assert has_element?(view, ".studio-turn", "10 reps")
     assert has_element?(view, "#home-design-ask", "Increase to 150")

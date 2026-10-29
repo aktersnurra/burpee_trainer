@@ -858,14 +858,13 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     create(view)
 
     render_async(view, 2_000)
-    assert has_element?(view, "#home-design-ask", "10 reps")
+    assert has_element?(view, "#studio-proposal .studio-chip", "10 reps")
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
     assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
 
     view |> element("#home-request-run") |> render_click()
-    render_async(view, 2_000)
     # Run starts it: the session is on the new workout, which is now today's.
-    assert_redirect(view)
+    assert_redirect(view, 2_000)
     assert {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert selected.plan.name == "Confirmed adjustment"
     refute selected.plan.id == original.plan.id

@@ -77,19 +77,24 @@ nothing says you are done. Back is one step back, out of the first; there is no 
 - **Pace** starts mid-reference for the type (4.5 s six-count, 8 s Navy SEAL), or faster when the
   reps leave little room to recover. It moves by half a second.
 
+Under reps and pace the screen says what the choices come to ("11:15 moving · 3:45 recovering"),
+the one number that tells whether a combination is sensible (`NewDefaults.budget/3`).
+
 The last screen is what was chosen, each row a way back to that question, with two ways on:
 
 - **Create workout** sends the choices as they are.
-- **Add a request** opens the chat on a message made of the choices, in the box:
+- **Add a request** opens the chat with an empty box, for a request only (Send works without a word).
+  The answers are not said again: the screen before showed them, and the proposal's card shows what
+  came of them.
 
-```
-Six-count · Unbroken · 20 min · 75 reps · sets of up to 25 · 4.5 s per rep
-Additional request: ▌
-```
+Back from the chat, or from a proposal, is to the summary. The header carries only its title; the
+rest of the screen says what it is about.
 
-The cursor sits after the prefix (`ComposerCaret`). Only what follows the prefix reaches the coach
-as the athlete's request (`HomeWorkoutRequest.note/1`); the choices come from the answers, so
-editing the first line changes nothing. Back from the chat, or from a proposal, is to the summary.
+## Run
+
+A proposal's card has Save and Run under it. **Run** saves the proposal, makes it today's workout
+and starts it, as Home's play does, so the camera and warmup toggles sit beside it (the device
+remembers them). Leaving the session screen discards the session if it was started by mistake.
 
 ## The dock
 
@@ -101,8 +106,7 @@ editing the first line changes nothing. Back from the chat, or from a proposal, 
 - `--chat-dock-height` sizes a spacer under the conversation so its last line clears the dock.
 - When the conversation moves on (`data-version`), the newest message scrolls to the top of the
   screen with its answer below it; reduced motion scrolls without animation.
-- The dock holds Save and Run (the proposal's actions, now under its card) and the quick changes, so none scrolls
-  away. The coach's message box uses the same dock.
+- The dock holds the quick changes and the box. The coach's message box uses the same dock.
 
 ## The coach reads like a coach
 

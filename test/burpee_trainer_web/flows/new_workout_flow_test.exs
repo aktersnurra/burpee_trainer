@@ -161,8 +161,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 
     view |> element("#home-request-run") |> render_click()
-    render_async(view, 2_000)
-    {path, _flash} = assert_redirect(view)
+    {path, _flash} = assert_redirect(view, 2_000)
     assert "/session/" <> id = path
 
     [saved] =
