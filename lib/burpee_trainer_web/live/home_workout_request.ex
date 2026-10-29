@@ -14,6 +14,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
     field :note, :string, default: ""
     field :recovery, :string, default: "optional"
     field :pace, :float
+    field :max_set_reps, :integer
   end
 
   @type t :: %__MODULE__{}
@@ -49,7 +50,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
       :duration,
       :note,
       :recovery,
-      :pace
+      :pace,
+      :max_set_reps
     ])
     |> validate_required([:burpee_type, :pacing_style, :reps, :duration, :recovery])
     |> validate_inclusion(:burpee_type, ~w(six_count navy_seal))
@@ -57,6 +59,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
     |> validate_inclusion(:recovery, ~w(optional required forbidden))
     |> validate_number(:reps, greater_than: 0, less_than_or_equal_to: 100_000)
     |> validate_number(:pace, greater_than: 0, less_than_or_equal_to: 86_400)
+    |> validate_number(:max_set_reps, greater_than: 0)
     |> validate_length(:note, max: 300)
     |> preflight()
   end
@@ -94,7 +97,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
         "target_duration_sec" => seconds,
         "recovery" => params.recovery,
         "timed_rests" => [],
-        "requested_pace_sec" => params.pace
+        "requested_pace_sec" => params.pace,
+        "max_set_reps" => params.max_set_reps
       })
     end
   end
@@ -108,7 +112,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
         reps: request.target_reps,
         duration: CreationParameters.duration_label(request.target_duration_sec),
         recovery: request.recovery,
-        pace: request.requested_pace_sec
+        pace: request.requested_pace_sec,
+        max_set_reps: request.max_set_reps
     }
   end
 
@@ -124,11 +129,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
       params.pacing_style |> String.capitalize(),
       "#{div(seconds, 60)} min",
       "#{params.reps} reps",
+      if(params.max_set_reps, do: "sets of up to #{params.max_set_reps}"),
       if(params.pace,
         do: "#{:erlang.float_to_binary(params.pace * 1.0, decimals: 1)} s per rep",
         else: "coach picks the pace"
       )
     ]
+    |> Enum.reject(&is_nil/1)
     |> Enum.join(" · ")
   end
 
@@ -150,7 +157,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
 
   @spec instruction(t()) :: String.t()
   def instruction(params) do
-    "New workout. Type: #{params.burpee_type}; style: #{params.pacing_style}; reps: #{params.reps}; duration: #{params.duration}; active pace: #{if(params.pace, do: "#{params.pace}s per rep", else: "coach chooses")}. " <>
+    "New workout. Type: #{params.burpee_type}; style: #{params.pacing_style}; reps: #{params.reps}; duration: #{params.duration}; active pace: #{if(params.pace, do: "#{params.pace}s per rep", else: "coach chooses")}#{if(params.max_set_reps, do: "; no set longer than #{params.max_set_reps} reps")}. " <>
       String.trim(params.note || "")
   end
 end

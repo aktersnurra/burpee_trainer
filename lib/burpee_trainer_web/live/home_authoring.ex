@@ -103,7 +103,10 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
          |> step({:refine_started, id, text})
          |> adjustment_form(text)
          |> start_async({:new_request, id}, fn ->
-           with {:ok, interpreted} <- Coach.prepare_refinement(scope, base.definition, text),
+           with {:ok, interpreted} <-
+                  Coach.prepare_refinement(scope, base.definition, text,
+                    max_set_reps: base.request.max_set_reps
+                  ),
                 :ok <- verified(scope, source, selection) do
              Coach.prepare_plan(scope, text, interpreted.request,
                workspace_key: key,
@@ -206,7 +209,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     {params, next} =
       if field == "burpee_type",
         do: {%{params | burpee_type: value}, :style},
-        else: {%{params | pacing_style: value}, :duration}
+        else:
+          {%{
+             params
+             | pacing_style: value,
+               max_set_reps: if(value == "even", do: nil, else: params.max_set_reps)
+           }, :duration}
 
     {:noreply, enter_step(socket, params, next)}
   end
@@ -236,13 +244,24 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         _,
         %{assigns: %{authoring_stage: :new, new_step: step, busy?: false}} = socket
       )
-      when step in [:duration, :reps, :pace] do
-    {:noreply, enter_step(socket, socket.assigns.workout_parameters, NewWorkoutSteps.next(step))}
+      when step in [:duration, :reps, :sets, :pace] do
+    params = socket.assigns.workout_parameters
+    {:noreply, enter_step(socket, params, NewWorkoutSteps.next(step, params))}
   end
 
-  # Back is one question back; from the first it leaves (the close button always does).
+  # A message to add to the choices opens the chat on them; otherwise they go as they are.
+  def handle_event(
+        "add_new_request",
+        _,
+        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
+      ),
+      do: {:noreply, enter_step(socket, socket.assigns.workout_parameters, :request)}
+
+  # Back is one step back: from the chat to what was chosen, from a proposal to it too, and
+  # from the first question out.
   def handle_event("back_new_step", _, %{assigns: %{editing_source: nil}} = socket) do
     a = socket.assigns
+    params = a.workout_parameters
 
     cond do
       a.authoring_stage not in [:new, :review] ->
@@ -252,13 +271,10 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         handle_event("abort_new_workout", %{}, socket)
 
       a.authoring_stage == :review ->
-        {:noreply,
-         socket
-         |> step({:new_step_reopened, :ready})
-         |> write_message(a.workout_parameters, :ready)}
+        {:noreply, socket |> step({:new_step_reopened, :ready}) |> adjustment_form("")}
 
       true ->
-        {:noreply, step(socket, {:new_step, NewWorkoutSteps.previous(a.new_step)})}
+        {:noreply, step(socket, {:new_step, NewWorkoutSteps.previous(a.new_step, params)})}
     end
   end
 
@@ -279,11 +295,20 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
-  # New's message, which may be empty, makes its first proposal.
+  # What was chosen, sent as it is, makes the first proposal.
+  def handle_event(
+        "send_new_workout",
+        params,
+        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
+      )
+      when params == %{} or not is_map_key(params, "home_adjustment"),
+      do: begin_plan_review(socket, %{"note" => ""})
+
+  # With a request written after the prefix, it goes with them.
   def handle_event(
         "send_new_workout",
         %{"home_adjustment" => %{"instruction" => text}},
-        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
+        %{assigns: %{authoring_stage: :new, new_step: :request, busy?: false}} = socket
       )
       when is_binary(text) do
     begin_plan_review(socket, %{"note" => HomeWorkoutRequest.note(text)})
@@ -568,7 +593,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   # The last question leaves the chat open on a message made of the answers, with the
   # cursor on a line for anything more. What was already written there is kept.
-  defp write_message(socket, params, :ready) do
+  defp write_message(socket, params, :request) do
     written = socket.assigns.adjustment_form[:instruction].value || ""
 
     note =

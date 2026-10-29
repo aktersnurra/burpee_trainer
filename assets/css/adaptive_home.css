@@ -1165,9 +1165,17 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-step-button:disabled { opacity: .3; cursor: default; }
 .studio-step-value { min-width: 0; text-align: center; }
 .studio-step-number { display: block; font: 600 76px/1 var(--font-sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.studio-step-text { font-size: 40px; line-height: 1.2; padding-block: 18px; }
 .studio-step-unit { display: block; margin-top: 8px; color: var(--home-muted, #736f68); font-size: var(--text-body); }
 .studio-step-hint { margin: 14px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); }
-.studio-step-actions { width: 100%; margin-top: 8px; }
+.studio-step-actions { display: grid; gap: 10px; width: 100%; margin-top: 8px; }
+.studio-summary { width: 100%; margin: 0; padding: 4px 0; list-style: none; border: 1px solid var(--color-base-border); border-radius: 22px; background: var(--color-base-200); text-align: left; }
+.studio-summary li + li .studio-summary-row { border-top: 1px solid var(--color-base-border); }
+.studio-summary-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 0 18px; border: 0; background: transparent; color: #262722; font: 400 var(--text-body)/1.3 var(--font-sans); text-align: left; cursor: pointer; }
+.studio-summary-row:hover { background: var(--color-base-100); }
+.studio-summary-label { flex: 1; color: var(--home-muted, #736f68); }
+.studio-summary-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+.studio-summary-chevron { color: var(--home-muted, #736f68); }
 /* The docked box is one line that grows: the text, and the send key inside its right edge. */
 .chat-dock .composer { display: flex; align-items: flex-end; gap: 6px; padding: 4px 6px 4px 18px; border-radius: 18px; }
 .chat-dock .composer > .fieldset { flex: 1; min-width: 0; }

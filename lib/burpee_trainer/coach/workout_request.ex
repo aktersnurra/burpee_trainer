@@ -19,7 +19,7 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
     :timed_rests,
     :requested_pace_sec
   ]
-  defstruct @enforce_keys ++ [set_reps: []]
+  defstruct @enforce_keys ++ [set_reps: [], max_set_reps: nil]
 
   @type t :: %__MODULE__{
           burpee_type: String.t(),
@@ -29,12 +29,15 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
           recovery: String.t(),
           timed_rests: [map()],
           requested_pace_sec: number() | nil,
-          set_reps: [pos_integer()]
+          set_reps: [pos_integer()],
+          max_set_reps: pos_integer() | nil
         }
 
   @spec new(map()) :: {:ok, t()} | {:error, Error.t()}
   def new(%{} = attrs) do
-    with true <- MapSet.new(Map.keys(Map.delete(attrs, "set_reps"))) == MapSet.new(@fields),
+    with true <-
+           MapSet.new(Map.keys(Map.drop(attrs, ["set_reps", "max_set_reps"]))) ==
+             MapSet.new(@fields),
          %{
            "burpee_type" => burpee_type,
            "target_reps" => reps,
@@ -55,6 +58,8 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
            is_list(sets) and length(sets) <= 5_000 and
              Enum.all?(sets, &(is_integer(&1) and &1 > 0)) and
              (sets == [] or Enum.sum(sets) == reps),
+         max_set <- Map.get(attrs, "max_set_reps"),
+         true <- is_nil(max_set) or (is_integer(max_set) and max_set >= 1 and max_set <= reps),
          {:ok, rests} <- validate_rests(rests, duration, recovery) do
       {:ok,
        %__MODULE__{
@@ -65,7 +70,8 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
          recovery: recovery,
          timed_rests: rests,
          requested_pace_sec: pace,
-         set_reps: sets
+         set_reps: sets,
+         max_set_reps: max_set
        }}
     else
       _ -> {:error, Error.new(:invalid_workout_definition)}
@@ -94,6 +100,11 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
     |> then(fn attrs ->
       if request.set_reps == [], do: attrs, else: Map.put(attrs, "set_reps", request.set_reps)
     end)
+    |> then(fn attrs ->
+      if is_nil(request.max_set_reps),
+        do: attrs,
+        else: Map.put(attrs, "max_set_reps", request.max_set_reps)
+    end)
   end
 
   @spec json_schema() :: map()
@@ -101,8 +112,13 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
     %{
       type: "object",
       additionalProperties: false,
-      required: @fields ++ ["set_reps"],
+      required: @fields ++ ["set_reps", "max_set_reps"],
       properties: %{
+        max_set_reps: %{
+          anyOf: [%{type: "integer", minimum: 1}, %{type: "null"}],
+          description:
+            "The most reps the user allows in one set, when they say so; null otherwise."
+        },
         set_reps: %{
           type: "array",
           maxItems: 5_000,
@@ -159,6 +175,10 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
           actual_count: Enum.count(definition.events, &(&1.kind == :work)),
           expected_count: length(request.set_reps)
         })
+
+      request.max_set_reps != nil and
+          Enum.any?(definition.events, &(&1.kind == :work and &1.reps > request.max_set_reps)) ->
+        invalid_definition("field=max_set_reps no_set_may_exceed=#{request.max_set_reps}")
 
       request.pacing_style == "unbroken" and
           Enum.any?(definition.events, fn event ->

@@ -94,16 +94,26 @@ defmodule BurpeeTrainer.Coach do
         opts \\ []
       ) do
     with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(instruction) do
-      prepare_request(
-        scope,
-        %{definition_json: base_definition},
-        text,
-        %{kind: :refinement},
-        opts
-      )
+         {:ok, text} <- validate_authoring_input(instruction),
+         {:ok, prepared} <-
+           prepare_request(
+             scope,
+             %{definition_json: base_definition},
+             text,
+             %{kind: :refinement},
+             opts
+           ) do
+      {:ok, carry_max_set(prepared, Keyword.get(opts, :max_set_reps))}
     end
   end
+
+  # What the athlete limited a set to stays limited unless they say otherwise, and while it
+  # still fits the reps.
+  defp carry_max_set(%{request: %WorkoutRequest{max_set_reps: nil} = request} = prepared, max)
+       when is_integer(max) and max >= 1 and max <= request.target_reps,
+       do: %{prepared | request: %{request | max_set_reps: max}}
+
+  defp carry_max_set(prepared, _max), do: prepared
 
   @spec confirm_home_revision(Accounts.Scope.t(), map()) ::
           {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
@@ -545,11 +555,17 @@ defmodule BurpeeTrainer.Coach do
             scope: "confirmed_workout_request",
             request: WorkoutRequest.to_map(request),
             rule:
-              "These constraints are authoritative. Return a layout with exactly #{length(request.timed_rests) + 1} phases; fixed pauses sit between phases and are not part of the layout. Rest durations are computed from your weights."
+              "These constraints are authoritative. Return a layout with exactly #{length(request.timed_rests) + 1} phases; fixed pauses sit between phases and are not part of the layout. Rest durations are computed from your weights." <>
+                max_set_rule(request)
           })
       }
     ] ++ Keyword.get(opts, :source_reference_messages, [])
   end
+
+  defp max_set_rule(%WorkoutRequest{max_set_reps: nil}), do: ""
+
+  defp max_set_rule(%WorkoutRequest{max_set_reps: max}),
+    do: " No set may have more than #{max} reps; use more, smaller sets instead."
 
   defp validate_default_movement_pace(definition, %WorkoutRequest{} = request) do
     {fastest, slowest} = WorkoutGuidance.default_active_seconds_range(definition.burpee_type)

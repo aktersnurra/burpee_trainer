@@ -366,6 +366,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "abort_new_workout",
+             "add_new_request",
              "back_new_step",
              "back_to_workout_request",
              "change_adjustment",

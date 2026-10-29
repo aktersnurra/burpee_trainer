@@ -70,6 +70,28 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   def step_reps(reps, :down), do: max(reps - @rep_step, @rep_step)
 
   @doc """
+  What a set may be limited to, for `reps` in all: steps of five below the total, then no limit
+  (`nil`), which is where it starts.
+  """
+  @spec set_sizes(pos_integer()) :: [pos_integer() | nil]
+  def set_sizes(reps) when reps > @rep_step,
+    do: Enum.to_list(@rep_step..(reps - 1)//@rep_step) ++ [nil]
+
+  def set_sizes(_reps), do: [nil]
+
+  @doc "The limit one step up (looser) or down (tighter) the list, staying at its ends."
+  @spec step_set_size(pos_integer() | nil, :up | :down, pos_integer()) :: pos_integer() | nil
+  def step_set_size(current, direction, reps) do
+    options = set_sizes(reps)
+    index = Enum.find_index(options, &(&1 == current)) || length(options) - 1
+
+    Enum.at(
+      options,
+      max(min(index + if(direction == :up, do: 1, else: -1), length(options) - 1), 0)
+    )
+  end
+
+  @doc """
   The movement pace, in seconds per rep, to start from: the middle of the reference range
   for the type, or less when the reps would leave under a sixth of the time for recovery.
   """

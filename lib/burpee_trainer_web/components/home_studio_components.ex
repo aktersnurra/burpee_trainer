@@ -8,9 +8,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   use BurpeeTrainerWeb, :html
 
   alias BurpeeTrainer.Coach.NewDefaults
-  alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents, HomeWorkoutRequest}
 
-  @new_steps [:type, :style, :duration, :reps, :pace, :ready]
+  alias BurpeeTrainerWeb.{
+    CreationParameters,
+    HomeWorkoutComponents,
+    HomeWorkoutRequest,
+    NewWorkoutSteps
+  }
 
   @doc "Whether Home gives way to the studio."
   def studio?(state), do: state.authoring_stage in [:new, :editing, :review, :saved]
@@ -19,19 +23,23 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp heading(state), do: if(edit?(state), do: "Edit workout", else: "New workout")
 
-  defp wizard?(state), do: state.authoring_stage == :new and state.new_step != :ready
+  # One screen at a time until the chat: while a request is being sent it is the thread.
+  defp wizard?(state),
+    do: state.authoring_stage == :new and state.new_step != :request and not state.busy?
 
   defp subtitle(%{editing_source: source} = state) when not is_nil(source),
     do: state.home_selection.plan.name
 
   defp subtitle(%{authoring_stage: :new, new_step: :ready}), do: "Ready to send"
+  defp subtitle(%{authoring_stage: :new, new_step: :request}), do: "Add a request"
 
-  defp subtitle(%{authoring_stage: :new, new_step: step}),
-    do: "Question #{step_number(step)} of #{length(@new_steps) - 1}"
+  defp subtitle(%{authoring_stage: :new, new_step: step, workout_parameters: params}),
+    do: "Question #{step_number(step, params)} of #{length(NewWorkoutSteps.questions(params))}"
 
   defp subtitle(%{workout_parameters: params}), do: HomeWorkoutRequest.summary(params)
 
-  defp step_number(step), do: Enum.find_index(@new_steps, &(&1 == step)) + 1
+  defp step_number(step, params),
+    do: Enum.find_index(NewWorkoutSteps.questions(params), &(&1 == step)) + 1
 
   attr(:state, :map, required: true)
 
@@ -98,17 +106,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         <h1 id="home-authoring-heading" class="studio-title">{heading(@state)}</h1>
         <p class="studio-subtitle">{subtitle(@state)}</p>
       </div>
-      <button
-        :if={not @leaves?}
-        id="home-request-abort"
-        type="button"
-        class="studio-close"
-        aria-label="Cancel new workout"
-        title="Close"
-        phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-      >
-        <.icon name="hero-x-mark" class="size-5" />
-      </button>
     </header>
     """
   end
@@ -295,13 +292,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
-  # Once the questions are answered the chat opens on a message made of them (in the box
-  # below), with what was chosen above as parts you can change.
+  # The chat, opened from what was chosen: the message is in the box, ready to add to.
   defp new_thread(%{state: %{authoring_stage: :new}} = assigns) do
     ~H"""
     <li :if={not @state.busy?} class="studio-msg studio-coach">
-      <p class="studio-text">Here is what you chose. Send it as it is, or add a request.</p>
-      <.parts state={@state} />
+      <p class="studio-text">
+        Write what else you want after the prefix, or send the choices as they are.
+      </p>
     </li>
     <.proposal_thread :if={@state.busy?} state={@state} />
     """
@@ -338,46 +335,80 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
-  defp parts(assigns) do
+  # One question at a time. A tap on a choice answers and moves on; a value you swipe has a
+  # Next, since nothing says you are done. The last screen is what was chosen.
+  defp question(%{state: %{new_step: :ready}} = assigns) do
     params = assigns.state.workout_parameters
 
     assigns =
       assign(assigns,
-        parts: [
-          {:type, CreationParameters.type_label(params.burpee_type)},
-          {:style, style_label(params.pacing_style)},
-          {:duration, "#{duration_minutes(params)} min"},
-          {:reps, "#{params.reps} reps"},
-          {:pace, pace_label(params.pace)}
-        ]
+        rows:
+          [
+            {:type, "Burpee", CreationParameters.type_label(params.burpee_type)},
+            {:style, "Sets", style_label(params.pacing_style)},
+            {:duration, "Duration", "#{duration_minutes(params)} min"},
+            {:reps, "Reps", "#{params.reps}"},
+            params.pacing_style == "unbroken" &&
+              {:sets, "Set size", set_size_label(params.max_set_reps)},
+            {:pace, "Pace", pace_label(params.pace)}
+          ]
+          |> Enum.filter(& &1)
       )
 
     ~H"""
-    <p id="studio-request" class="studio-parts">
-      <button
-        :for={{step, text} <- @parts}
-        id={"studio-part-#{step}"}
-        type="button"
-        class="studio-part"
-        phx-click="goto_new_step"
-        phx-value-step={step}
-        aria-label={"Change #{text}"}
-      >
-        {text}
-      </button>
-    </p>
+    <section id="studio-step" class="studio-step" data-step="ready" aria-labelledby="studio-question">
+      <h2 id="studio-question" class="studio-question">Ready?</h2>
+      <ul id="studio-request" class="studio-summary">
+        <li :for={{step, label, value} <- @rows}>
+          <button
+            id={"studio-row-#{step}"}
+            type="button"
+            class="studio-summary-row"
+            phx-click="goto_new_step"
+            phx-value-step={step}
+            aria-label={"Change #{String.downcase(label)}: #{value}"}
+          >
+            <span class="studio-summary-label">{label}</span>
+            <span class="studio-summary-value">{value}</span>
+            <.icon name="hero-chevron-right" class="size-4 studio-summary-chevron" />
+          </button>
+        </li>
+      </ul>
+      <p :if={@state.local_error} id="home-adjustment-error" role="status" class="studio-error">
+        {@state.local_error}
+      </p>
+      <div class="studio-step-actions studio-ready-actions">
+        <button
+          id="studio-create"
+          type="button"
+          class="studio-pill studio-pill-primary studio-pill-wide"
+          phx-click="send_new_workout"
+        >
+          Create workout
+        </button>
+        <button
+          id="studio-add-request"
+          type="button"
+          class="studio-pill studio-pill-wide"
+          phx-click="add_new_request"
+        >
+          Add a request
+        </button>
+      </div>
+    </section>
     """
   end
 
-  attr(:state, :map, required: true)
-
-  # One question at a time. A tap on a choice answers and moves on; a value you swipe has a
-  # Next, since nothing says you are done.
   defp question(assigns) do
     step = assigns.state.new_step
+    params = assigns.state.workout_parameters
 
     assigns =
-      assign(assigns, step: step, number: step_number(step), total: length(@new_steps) - 1)
+      assign(assigns,
+        step: step,
+        number: step_number(step, params),
+        total: length(NewWorkoutSteps.questions(params))
+      )
 
     ~H"""
     <section id="studio-step" class="studio-step" data-step={@step} aria-labelledby="studio-question">
@@ -397,6 +428,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp question_text(:style), do: "How should the sets go?"
   defp question_text(:duration), do: "How long?"
   defp question_text(:reps), do: "How many reps?"
+  defp question_text(:sets), do: "Most reps in one set?"
   defp question_text(:pace), do: "How fast is each rep?"
 
   attr(:step, :atom, required: true)
@@ -470,6 +502,29 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           at_min?: params.reps <= 5,
           at_max?: params.reps + 5 > NewDefaults.max_reps(pace, seconds),
           hint: "Suggested from your recent sessions"
+        }
+      )
+
+    ~H"""
+    <.stepper {@stepper} />
+    """
+  end
+
+  defp controls(%{step: :sets} = assigns) do
+    params = assigns.state.workout_parameters
+    options = NewDefaults.set_sizes(params.reps)
+    current = params.max_set_reps
+
+    assigns =
+      assign(assigns,
+        stepper: %{
+          field: "sets",
+          value: set_size_value(current),
+          unit: if(current, do: "reps a set", else: "a set"),
+          label: "Most reps in one set",
+          at_min?: current == hd(options),
+          at_max?: is_nil(current),
+          hint: "The longest run of reps before a rest"
         }
       )
 
@@ -556,7 +611,12 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           <.icon name="hero-minus" class="size-6" />
         </button>
         <div class="studio-step-value" aria-hidden="true">
-          <span id={"studio-#{@field}-value"} class="studio-step-number">{@value}</span>
+          <span
+            id={"studio-#{@field}-value"}
+            class={["studio-step-number", String.length(to_string(@value)) > 5 && "studio-step-text"]}
+          >
+            {@value}
+          </span>
           <span class="studio-step-unit">{@unit}</span>
         </div>
         <button
@@ -591,13 +651,16 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
+  # A request on its way from the screen of choices has no box to write in.
+  defp new_sending?(state),
+    do: state.authoring_stage == :new and state.busy? and state.new_step != :request
+
   # What you can do now: Accept or Save a proposal, tap a quick change, write. It is docked
   # above the keyboard (see the ChatDock hook), so it stays within reach as the thread grows.
   defp dock(assigns) do
     state = assigns.state
     proposed? = state.authoring_stage == :review
-    questions? = state.authoring_stage == :new and state.new_step != :ready
-    visible? = not questions? and state.authoring_stage != :saved
+    visible? = not wizard?(state) and not new_sending?(state) and state.authoring_stage != :saved
 
     assigns =
       assign(assigns,
@@ -716,6 +779,12 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp duration_minutes(params), do: div(duration_seconds(params), 60)
   defp type(params), do: String.to_existing_atom(params.burpee_type)
+
+  defp set_size_value(nil), do: "No limit"
+  defp set_size_value(size), do: size
+
+  defp set_size_label(nil), do: "No limit"
+  defp set_size_label(size), do: "Up to #{size}"
 
   defp style_label("even"), do: "Even"
   defp style_label("unbroken"), do: "Unbroken"

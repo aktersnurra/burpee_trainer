@@ -9,13 +9,19 @@ defmodule BurpeeTrainerWeb.NewWorkoutSteps do
   alias BurpeeTrainer.Coach.NewDefaults
   alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutRequest}
 
-  @steps [:type, :style, :duration, :reps, :pace, :ready]
-  @answerable @steps -- [:ready]
+  @answerable [:type, :style, :duration, :reps, :sets, :pace]
 
-  @type step :: :type | :style | :duration | :reps | :pace | :ready
+  @type step :: :type | :style | :duration | :reps | :sets | :pace | :ready | :request
 
-  @spec steps() :: [step()]
-  def steps, do: @steps
+  @doc """
+  The questions to ask, in order: unbroken sets ask how large a set may be, which an even beat
+  has no use for. Then `:ready` (what was chosen, to send or add to) and `:request` (the chat).
+  """
+  @spec questions(HomeWorkoutRequest.t()) :: [step()]
+  def questions(params) do
+    [:type, :style, :duration, :reps] ++
+      if(params.pacing_style == "unbroken", do: [:sets], else: []) ++ [:pace]
+  end
 
   @doc "The step a name from the client stands for, or `:error`."
   @spec parse(String.t()) :: {:ok, step()} | :error
@@ -28,18 +34,20 @@ defmodule BurpeeTrainerWeb.NewWorkoutSteps do
 
   def parse(_name), do: :error
 
-  @doc "The step after `step`; `:ready` is the last."
-  @spec next(step()) :: step()
-  def next(step) do
-    index = Enum.find_index(@steps, &(&1 == step))
-    Enum.at(@steps, index + 1, :ready)
+  @doc "The step after `step`; `:ready` follows the last question."
+  @spec next(step(), HomeWorkoutRequest.t()) :: step()
+  def next(step, params) do
+    order = questions(params) ++ [:ready, :request]
+    index = Enum.find_index(order, &(&1 == step)) || length(order) - 1
+    Enum.at(order, index + 1, :request)
   end
 
   @doc "The step before `step`; `:type` is the first."
-  @spec previous(step()) :: step()
-  def previous(step) do
-    index = Enum.find_index(@steps, &(&1 == step))
-    Enum.at(@steps, max(index - 1, 0))
+  @spec previous(step(), HomeWorkoutRequest.t()) :: step()
+  def previous(step, params) do
+    order = questions(params) ++ [:ready, :request]
+    index = Enum.find_index(order, &(&1 == step)) || 0
+    Enum.at(order, max(index - 1, 0))
   end
 
   @doc "The parameters on entering `step`: what it is suggested to start from."
@@ -55,8 +63,17 @@ defmodule BurpeeTrainerWeb.NewWorkoutSteps do
     seconds = seconds(params)
     reps = NewDefaults.suggested_reps(scope, type, seconds)
     pace = NewDefaults.default_pace(type, reps, seconds)
-    %{params | reps: min(reps, NewDefaults.max_reps(pace, seconds)), pace: pace}
+
+    %{
+      params
+      | reps: min(reps, NewDefaults.max_reps(pace, seconds)),
+        pace: pace,
+        max_set_reps: nil
+    }
   end
+
+  # Sets start unlimited; the athlete tightens them.
+  def enter(params, :sets, _scope, _remaining_sec), do: %{params | max_set_reps: nil}
 
   def enter(params, :pace, _scope, _remaining_sec) do
     %{params | pace: NewDefaults.default_pace(burpee_type(params), params.reps, seconds(params))}
@@ -82,6 +99,12 @@ defmodule BurpeeTrainerWeb.NewWorkoutSteps do
 
     if reps * pace <= seconds, do: %{params | reps: reps}, else: params
   end
+
+  def step(params, "sets", direction, _remaining_sec),
+    do: %{
+      params
+      | max_set_reps: NewDefaults.step_set_size(params.max_set_reps, direction, params.reps)
+    }
 
   def step(params, "pace", direction, _remaining_sec) do
     pace = NewDefaults.step_pace(params.pace, direction)

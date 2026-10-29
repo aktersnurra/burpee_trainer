@@ -9,29 +9,52 @@ defmodule BurpeeTrainerWeb.StudioHelpers do
   end
 
   @doc """
-  Answers every question and stops at the message. Reps and minutes are reached by steps;
-  `pace_ups` raises the pace from its default by half a second each.
+  Answers every question and stops at what was chosen. Reps and minutes are reached by steps;
+  `pace_ups` raises the pace from its default by half a second each; `max_set` limits a set
+  (unbroken only).
   """
   def walk(view, opts \\ []) do
     open_new(view)
-
-    view
-    |> element("#home-pill-burpee_type-#{Keyword.get(opts, :type, "six_count")}")
-    |> render_click()
-
-    view
-    |> element("#home-pill-pacing_style-#{Keyword.get(opts, :style, "unbroken")}")
-    |> render_click()
+    style = Keyword.get(opts, :style, "unbroken")
+    view |> element("#home-pill-burpee_type-#{Keyword.get(opts, :type, "six_count")}") |> render_click()
+    view |> element("#home-pill-pacing_style-#{style}") |> render_click()
 
     step_to(view, "duration", Keyword.get(opts, :minutes, 20))
     view |> element("#studio-next") |> render_click()
     step_to(view, "reps", Keyword.get(opts, :reps, 50))
     view |> element("#studio-next") |> render_click()
 
+    if style == "unbroken" do
+      if max = Keyword.get(opts, :max_set), do: step_set_size_to(view, max)
+      view |> element("#studio-next") |> render_click()
+    end
+
     for _ <- List.duplicate(0, Keyword.get(opts, :pace_ups, 0)),
         do: view |> element("#studio-pace-up") |> render_click()
 
     view |> element("#studio-next") |> render_click()
+  end
+
+  @doc "Sends what was chosen as it is."
+  def create(view), do: view |> element("#studio-create") |> render_click()
+
+  @doc "Opens the chat on what was chosen and sends it with `text` as the request."
+  def request(view, text) do
+    view |> element("#studio-add-request") |> render_click()
+    view |> Phoenix.LiveViewTest.form("#home-edit-form", home_adjustment: %{instruction: text}) |> render_submit()
+  end
+
+  defp step_set_size_to(view, max) do
+    shown = view |> element("#studio-sets-value") |> render() |> text()
+
+    cond do
+      shown == to_string(max) ->
+        :ok
+
+      has_element?(view, "#studio-sets-down:not([disabled])") ->
+        view |> element("#studio-sets-down") |> render_click()
+        step_set_size_to(view, max)
+    end
   end
 
   @doc "Steps `field` (duration, reps) to `target`."
