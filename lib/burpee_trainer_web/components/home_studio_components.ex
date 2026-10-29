@@ -672,7 +672,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
               data-caret={if(@state.authoring_stage == :new, do: "end")}
             />
             <div class="composer-bar">
-              <span></span>
               <button
                 id="home-edit-send"
                 type="submit"
@@ -681,7 +680,8 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
                 title="Send"
                 disabled={@state.busy?}
               >
-                <span><.icon name="hero-arrow-up" class="size-5" /></span>
+                <span :if={@state.busy?} class="composer-stop" aria-hidden="true"></span>
+                <.icon :if={not @state.busy?} name="hero-arrow-turn-down-left" class="size-5" />
               </button>
             </div>
           </div>

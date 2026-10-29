@@ -181,7 +181,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
                   aria-label="Send"
                   title="Send"
                 >
-                  <span><.icon name="hero-arrow-up" class="size-5" /></span>
+                  <span :if={@state.coach_busy?} class="composer-stop" aria-hidden="true"></span>
+                  <.icon :if={not @state.coach_busy?} name="hero-arrow-turn-down-left" class="size-5" />
                 </button>
               </div>
             </.form>

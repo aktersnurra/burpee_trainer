@@ -1168,8 +1168,16 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-step-unit { display: block; margin-top: 8px; color: var(--home-muted, #736f68); font-size: var(--text-body); }
 .studio-step-hint { margin: 14px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); }
 .studio-step-actions { width: 100%; margin-top: 8px; }
-.chat-dock .composer-send-ready > span { background: var(--color-base-content); color: var(--color-base-200); }
-.chat-dock .composer textarea { white-space: pre-wrap; }
+/* The docked box is one line that grows: the text, and the send key inside its right edge. */
+.chat-dock .composer { display: flex; align-items: flex-end; gap: 6px; padding: 4px 6px 4px 18px; border-radius: 18px; }
+.chat-dock .composer > .fieldset { flex: 1; min-width: 0; }
+.chat-dock .composer textarea { min-height: 1.5em; padding: 9px 0; white-space: pre-wrap; }
+.chat-dock .composer-bar { flex: none; margin: 0; }
+.chat-dock .composer-send { min-width: 40px; min-height: 40px; width: 40px; height: 40px; border-radius: 12px; color: #9A9489; transition: color var(--motion-quick) ease, background var(--motion-quick) ease; }
+.chat-dock .composer:has(textarea:not(:placeholder-shown)) .composer-send, .chat-dock .composer-send-ready { color: var(--color-base-content); }
+.chat-dock .composer-send:hover:not(:disabled) { background: var(--color-base-300); }
+.chat-dock .composer-send:disabled { opacity: 1; color: var(--color-base-content); }
+.chat-dock .composer-send > .composer-stop { display: block; width: 14px; height: 14px; border-radius: 3px; background: currentColor; }
 @media (prefers-reduced-motion: reduce) {
   .studio, .studio-msg, .studio-step, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
   #home-page { transition: none; }
