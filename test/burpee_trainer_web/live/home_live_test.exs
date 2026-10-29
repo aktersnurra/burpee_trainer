@@ -855,7 +855,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
 
     walk(view, reps: 10, minutes: 5)
-    view |> form("#home-edit-form", home_adjustment: %{instruction: ""}) |> render_submit()
+    create(view)
 
     render_async(view, 2_000)
     assert has_element?(view, "#home-design-ask", "10 reps")

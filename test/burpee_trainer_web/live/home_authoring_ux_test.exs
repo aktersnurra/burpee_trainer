@@ -251,7 +251,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     walk(view, reps: 140, pace_ups: 1)
     create(view)
     render_async(view, 2_000)
-    assert has_element?(view, "#studio-request", "140 reps")
+    assert has_element?(view, "#studio-request", "140")
     refute has_element?(view, "#home-request-confirm")
     assert has_element?(view, "#home-adjustment-error", "Coach unavailable")
     assert Repo.aggregate(WorkoutPlan, :count) == count
@@ -345,6 +345,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert has_element?(view, "#studio-pace-value", "5.0")
     refute has_element?(view, "#home-request-confirm")
     assert Repo.aggregate(WorkoutPlan, :count) == count
+    # Back, one step at a time, out of the questions: sets, reps, duration, style, type.
+    for _ <- 1..5, do: view |> element("#studio-back") |> render_click()
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
   end

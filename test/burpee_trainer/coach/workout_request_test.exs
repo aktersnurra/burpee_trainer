@@ -253,6 +253,29 @@ defmodule BurpeeTrainer.Coach.WorkoutRequestTest do
     assert detail =~ "set_configuration"
   end
 
+  test "a limit on set size is kept, must fit the reps, and no set may pass it" do
+    assert {:ok, request} = WorkoutRequest.new(Map.put(@request, "max_set_reps", 88))
+    assert request.max_set_reps == 88
+    assert WorkoutRequest.to_map(request)["max_set_reps"] == 88
+
+    # Without one it is absent from the map, and null is the same as absent.
+    assert {:ok, %{max_set_reps: nil} = unlimited} =
+             WorkoutRequest.new(Map.put(@request, "max_set_reps", nil))
+
+    refute Map.has_key?(WorkoutRequest.to_map(unlimited), "max_set_reps")
+
+    for bad <- [0, -5, 141, 2.5, "88"],
+        do: assert({:error, _} = WorkoutRequest.new(Map.put(@request, "max_set_reps", bad)))
+
+    # The anchored fixture's longest set is 88 reps.
+    {:ok, definition} = WorkoutDefinition.new(anchored_definition())
+    assert :ok = WorkoutRequest.validate_definition(request, definition)
+
+    {:ok, tight} = WorkoutRequest.new(Map.put(@request, "max_set_reps", 50))
+    assert {:error, _, detail} = WorkoutRequest.validate_definition(tight, definition)
+    assert detail =~ "max_set_reps"
+  end
+
   defp anchored_definition do
     work = fn reps ->
       %{"kind" => "work", "reps" => reps, "sec_per_rep" => 5, "sec_per_burpee" => 5}

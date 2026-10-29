@@ -78,4 +78,20 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
       assert NewDefaults.max_reps(4.5, 1_200) == 266
     end
   end
+
+  describe "set size" do
+    test "steps of five below the total, then no limit, which is the start" do
+      assert NewDefaults.set_sizes(30) == [5, 10, 15, 20, 25, nil]
+      assert NewDefaults.set_sizes(31) == [5, 10, 15, 20, 25, 30, nil]
+      assert NewDefaults.set_sizes(5) == [nil]
+    end
+
+    test "a step tightens or loosens along the list and stops at its ends" do
+      assert NewDefaults.step_set_size(nil, :down, 30) == 25
+      assert NewDefaults.step_set_size(25, :up, 30) == nil
+      assert NewDefaults.step_set_size(nil, :up, 30) == nil
+      assert NewDefaults.step_set_size(5, :down, 30) == 5
+      assert NewDefaults.step_set_size(nil, :down, 5) == nil
+    end
+  end
 end

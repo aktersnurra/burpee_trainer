@@ -225,7 +225,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         %{"field" => field, "dir" => dir},
         %{assigns: %{authoring_stage: :new, busy?: false}} = socket
       )
-      when field in ["duration", "reps", "pace"] and dir in ["up", "down"] do
+      when field in ["duration", "reps", "sets", "pace"] and dir in ["up", "down"] do
     direction = String.to_existing_atom(dir)
 
     params =

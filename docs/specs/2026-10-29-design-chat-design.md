@@ -60,9 +60,10 @@ Two even sets with a breather.      ← the proposal arrives as a card
 ## New: one question at a time
 
 New asks one question per screen, centred, with its progress above: burpee type and set style
-(a card to tap, which answers and moves on), then duration, reps and pace, each a value you swipe
-left and right (the buttons and arrow keys do the same; `SwipeValue`) with a Next, since nothing
-says you are done. Back is one question back (out of the first); a close button always leaves.
+(a card to tap, which answers and moves on), then duration and reps, then, for unbroken sets, the
+most reps in one set (no limit to start), then pace. Duration, reps, set size and pace are values
+you swipe left and right (the buttons and arrow keys do the same; `SwipeValue`) with a Next, since
+nothing says you are done. Back is one step back, out of the first; there is no close button.
 `NewWorkoutSteps` (pure) holds the steps; `Coach.NewDefaults` holds what each starts from.
 
 - **Duration** starts at 20 minutes, or at what the week has left if that is less, and moves in
@@ -70,20 +71,25 @@ says you are done. Back is one question back (out of the first); a close button 
 - **Reps** start from the athlete's progression for the type (a recent comparable session, within
   the planner's ceiling), else their recent best, else the next level's landmark, scaled to the
   duration. They move by five and stop where movement alone would not fit the duration.
+- **Set size** (unbroken only) moves in fives below the reps, then no limit. It is a constraint:
+  `WorkoutRequest.max_set_reps` tells the coach and rejects a layout with a longer set (after the
+  one correction), and a follow-up keeps it unless it is changed.
 - **Pace** starts mid-reference for the type (4.5 s six-count, 8 s Navy SEAL), or faster when the
   reps leave little room to recover. It moves by half a second.
 
-Then the chat opens on a message made of the answers, in the box and ready to send:
+The last screen is what was chosen, each row a way back to that question, with two ways on:
+
+- **Create workout** sends the choices as they are.
+- **Add a request** opens the chat on a message made of the choices, in the box:
 
 ```
-Six-count · Unbroken · 20 min · 75 reps · 4.5 s per rep
+Six-count · Unbroken · 20 min · 75 reps · sets of up to 25 · 4.5 s per rep
 Additional request: ▌
 ```
 
-The cursor sits after the prefix (`ComposerCaret`). Send works as it is, without text. Only what
-follows the prefix reaches the coach as the athlete's request (`HomeWorkoutRequest.note/1`); the
-choices come from the answers, so editing the first line changes nothing. Above the box the choices
-are parts you can tap to change; what followed a changed answer is suggested again.
+The cursor sits after the prefix (`ComposerCaret`). Only what follows the prefix reaches the coach
+as the athlete's request (`HomeWorkoutRequest.note/1`); the choices come from the answers, so
+editing the first line changes nothing. Back from the chat, or from a proposal, is to the summary.
 
 ## The dock
 

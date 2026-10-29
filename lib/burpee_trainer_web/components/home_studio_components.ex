@@ -344,7 +344,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         rows:
           [
             {:type, "Burpee", CreationParameters.type_label(params.burpee_type)},
-            {:style, "Sets", style_label(params.pacing_style)},
+            {:style, "Style", style_label(params.pacing_style)},
             {:duration, "Duration", "#{duration_minutes(params)} min"},
             {:reps, "Reps", "#{params.reps}"},
             params.pacing_style == "unbroken" &&
