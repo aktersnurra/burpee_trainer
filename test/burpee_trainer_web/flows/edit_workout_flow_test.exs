@@ -318,7 +318,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
              used.program_snapshot
 
     {:ok, reopened, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
-    assert has_element?(reopened, "#home-ready-recommendation .home-workout-name", saved.name)
+    # The workout is under way, so Home offers to resume it.
+    assert has_element?(reopened, "#resume-recommended-workout")
     assert Enum.any?(Workouts.list_library(Scope.for_user(user)), &(&1.id == original.id))
 
     assert {:ok, %{plan: %{id: saved_id}}} =
