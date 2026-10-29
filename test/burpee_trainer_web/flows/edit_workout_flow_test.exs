@@ -115,22 +115,30 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     %{view: view, user: user, selected: selected}
   end
 
-  test "Edit keeps the workout and its table in view and opens one field under the table",
+  test "swiping up offers Edit and New; Edit opens a chat that begins with today's workout",
        %{view: view, selected: selected} do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    # The swipe is the hook's event, the same one the buttons lead to.
+    render_hook(view, "open_options", %{})
+    assert has_element?(view, "#home-options-sheet #home-options-edit", "Edit this workout")
+    assert has_element?(view, "#home-options-sheet #home-options-new", "New workout")
 
-    # Nothing is replaced: the workout, its totals and its table stay; only the actions give way.
-    refute has_element?(view, "#home-authoring-heading")
-    assert has_element?(view, "#home-workout-hero .home-workout-name", selected.plan.name)
-    assert has_element?(view, "#home-inspection table")
-    refute has_element?(view, ".home-workout-actions")
-    html = render(view)
-    {table, _} = :binary.match(html, ~s(id="home-inspection"))
-    {field, _} = :binary.match(html, ~s(id="home-edit-form"))
-    assert table < field
+    render_hook(view, "close_options", %{})
+    refute has_element?(view, "#home-options-sheet")
+    render_hook(view, "open_options", %{})
+    view |> element("#home-options-edit") |> render_click()
+    refute has_element?(view, "#home-options-sheet")
 
-    # The instruction is named by its placeholder; the label is for screen readers.
+    # The studio takes Home's place: the coach's first message is today's workout.
+    assert has_element?(view, "#home-studio h1#home-authoring-heading", "Edit workout")
+    assert has_element?(view, "#home-studio .studio-subtitle", selected.plan.name)
+    assert has_element?(view, "#studio-thread #studio-source", selected.plan.name)
+    assert has_element?(view, "#studio-source #home-inspection table")
+    assert has_element?(view, "#studio-thread", "What would you like to change?")
+    refute has_element?(view, "#home-workout-hero, .home-workout-actions")
+
+    # The box is docked, named by its placeholder; the label is for screen readers.
+    assert has_element?(view, "#home-chat-dock #home-edit-form")
+
     assert has_element?(
              view,
              "label[for=home-edit-instruction] .label",
@@ -138,11 +146,13 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
            )
 
     assert has_element?(view, "#home-edit-instruction[placeholder='What should change?']")
-    assert has_element?(view, "#home-edit-form #home-request-abort[aria-label]")
     assert has_element?(view, "#home-edit-form #home-edit-send[aria-label=Send]")
+    refute has_element?(view, "#home-chat-actions")
 
+    # Back leaves without a change.
+    assert has_element?(view, "#home-request-abort[aria-label='Cancel edit'] .hero-chevron-left")
     view |> element("#home-request-abort") |> render_click()
-    refute has_element?(view, "#home-edit-form")
+    refute has_element?(view, "#home-studio")
     assert has_element?(view, ".home-workout-actions #home-edit-workout")
   end
 
@@ -203,7 +213,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
     view |> element("#home-edit-workout") |> render_click()
-    refute has_element?(view, "#home-new-form, #home-new-reps, #home-workout-budget")
+    refute has_element?(view, "#studio-reps-value, #studio-duration-value")
 
     view
     |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 160 reps"})
@@ -226,16 +236,14 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     |> form("#home-edit-form", home_adjustment: %{instruction: instruction})
     |> render_change()
 
-    view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/progress")
-    view |> element("#home-history-close") |> render_click()
-    assert_patch(view, "/")
+    render_patch(view, "/progress")
+    render_patch(view, "/")
     assert has_element?(view, "#home-edit-instruction", instruction)
     refute_received {:provider_request, _}
     count = Repo.aggregate(WorkoutPlan, :count)
     view |> form("#home-edit-form") |> render_submit()
     assert_receive {:edit_planning_waiting, planner}, 1_000
-    assert has_element?(view, "#home-update-loading[role=status] .home-loading-animation")
+    assert has_element?(view, "#home-update-loading[role=status] .studio-spinner")
     assert has_element?(view, "#home-request-abort:not([disabled])")
     # The message stays on screen with the loader, and the box waits for the answer.
     assert has_element?(view, "#home-design-ask", instruction)
@@ -256,27 +264,23 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
       end)
 
     assert source["definition"]["target_reps"] == 140
-    refute has_element?(view, "#home-new-form")
-    # Review redraws the workout in place: the proposed totals in the hero, changes marked.
-    assert has_element?(
-             view,
-             "#home-workout-hero #home-edit-review-reps mark.home-changed",
-             "150"
-           )
-
-    refute has_element?(view, "#home-edit-review-sets, .home-edit-structure")
+    # The proposal arrives as a card below the ask, with what changed marked in its table.
+    assert has_element?(view, "#studio-thread #home-design-ask", instruction)
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "150 reps")
+    assert has_element?(view, "#studio-source:not(:has(table))")
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
-    refute has_element?(view, "#home-authoring-source, #home-edit-review h2")
-    assert has_element?(view, "#home-chat-dock #home-request-abort[aria-label] .hero-x-mark")
 
-    # Edit refines by talking, so there is no way back to a form; the actions ride the dock.
+    # Edit refines by talking, so there is no way back to a form; Accept and Save ride the dock.
     refute has_element?(view, "#home-request-edit")
 
     assert has_element?(
              view,
-             "#home-chat-dock #home-request-confirm.home-primary-action[aria-label] .hero-check"
+             "#home-chat-dock #home-request-confirm.studio-pill-primary",
+             "Accept"
            )
+
+    assert has_element?(view, "#home-chat-dock #home-request-save", "Save")
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
     assert has_element?(view, "#home-edit-review .home-prescription-every", "5s")
@@ -337,8 +341,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert_receive {:edit_planning_waiting, planner}, 1_000
     send(planner, :release_plan)
     render_async(view)
-    assert has_element?(view, "#home-edit-review #home-design-ask", "Increase to 150 reps")
-    assert has_element?(view, "#home-workout-hero #home-edit-review-reps", "150")
+    assert has_element?(view, "#studio-thread #home-design-ask", "Increase to 150 reps")
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "150 reps")
     # The box stays, empty, for the next message.
     assert has_element?(view, "#home-chat-dock #home-edit-form #home-edit-instruction")
     flush_provider_requests()
@@ -349,8 +353,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     # The proposal stays in view while the coach works on the next one.
     assert_receive {:edit_planning_waiting, planner}, 1_000
-    assert has_element?(view, "#home-edit-review #home-design-pending", "Increase to 160 reps")
-    assert has_element?(view, "#home-edit-review #home-inspection table")
+    assert has_element?(view, "#studio-thread #home-design-pending", "Increase to 160 reps")
+    assert has_element?(view, "#studio-proposal #home-inspection table")
     assert has_element?(view, "#home-edit-instruction[disabled]")
     send(planner, :release_plan)
     render_async(view)
@@ -386,11 +390,11 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert List.keyfind(scopes, "edit_workout_source", 0) == nil
 
     # The first ask and what it became are kept; the newest ask heads the proposal.
-    assert has_element?(view, "#home-design-thread .design-turn-you", "Increase to 150 reps")
-    assert has_element?(view, "#home-design-thread .design-turn-coach", "150 reps")
-    assert has_element?(view, "#home-edit-review #home-design-ask", "Increase to 160 reps")
+    assert has_element?(view, "#studio-thread .studio-bubble", "Increase to 150 reps")
+    assert has_element?(view, "#studio-thread .studio-turn", "150 reps")
+    assert has_element?(view, "#studio-thread #home-design-ask", "Increase to 160 reps")
     refute has_element?(view, "#home-design-pending")
-    assert has_element?(view, "#home-workout-hero #home-edit-review-reps", "160")
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "160 reps")
     refute has_element?(view, "#home-edit-instruction", "Increase")
 
     view |> element("#home-request-confirm") |> render_click()
@@ -423,7 +427,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     render_async(view)
 
     assert has_element?(view, "#home-adjustment-error", "your proposal is unchanged")
-    assert has_element?(view, "#home-workout-hero #home-edit-review-reps", "150")
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "150 reps")
     assert has_element?(view, "#home-edit-review #home-inspection table")
     refute has_element?(view, "#home-design-pending")
     # What was typed is still there to send again.

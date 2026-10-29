@@ -421,11 +421,15 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   defp settle(:new_request, id, {:ok, {:error, error}}, socket) do
     {message, _field, field_message} = review_failure(error)
 
-    step(
-      socket,
-      {:review_failed, id,
-       if(socket.assigns.editing_source && field_message, do: field_message, else: message)}
-    )
+    # Edit says the detail; New has no field to carry it, so it follows the message.
+    text =
+      cond do
+        is_nil(field_message) -> message
+        socket.assigns.editing_source -> field_message
+        true -> message <> " " <> field_message
+      end
+
+    step(socket, {:review_failed, id, text})
   end
 
   defp settle(:new_request, id, _, socket),
@@ -560,31 +564,31 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   defp review_failure(%{code: :note_does_not_fit}),
     do:
-      {"Your note doesn't add up with the reps and duration above. Change one, then Review again; your current workout is unchanged.",
+      {"Your note doesn't add up with the reps and duration. Change one, then send again; your current workout is unchanged.",
        :note, "This doesn't add up with the reps and duration above."}
 
   defp review_failure(%{
          context: %{field: :set_reps, actual_count: actual, expected_count: expected}
        }) do
-    {"The returned plan changed your ordered set pattern. Edit or Review again; your current workout is unchanged.",
+    {"The returned plan changed your ordered set pattern. Change something and send again; your current workout is unchanged.",
      :note, "Returned #{actual} sets; expected #{expected}. The ordered rep sequence must match."}
   end
 
   defp review_failure(%{
          context: %{field: :timed_rests, start_sec: start, duration_sec: duration}
        }) do
-    {"The returned plan missed #{duration}s at #{CreationParameters.duration_label(start)}. Try a different time or shorter pause, then Review again; your current workout is unchanged.",
+    {"The returned plan missed #{duration}s at #{CreationParameters.duration_label(start)}. Try a different time or shorter pause, then send again; your current workout is unchanged.",
      :note, "Returned plan did not meet this total pause."}
   end
 
   defp review_failure(%{context: %{field: :requested_pace_sec}}),
     do:
-      {"Returned movement time exceeds the requested duration. Edit or Review again; your current workout is unchanged.",
+      {"Returned movement time exceeds the requested duration. Change something and send again; your current workout is unchanged.",
        :pace, "Returned movement time exceeds the requested duration."}
 
   defp review_failure(_),
     do:
-      {"The returned plan did not meet your constraints. Check the sets and pauses you asked for, then Review again; your current workout is unchanged.",
+      {"The returned plan did not meet your constraints. Check the sets and pauses you asked for, then send again; your current workout is unchanged.",
        nil, nil}
 
   def discard_preparation(socket), do: step(socket, :preparation_discarded)

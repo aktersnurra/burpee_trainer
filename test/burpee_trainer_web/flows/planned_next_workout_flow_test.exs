@@ -125,7 +125,7 @@ defmodule BurpeeTrainerWeb.Flows.PlannedNextWorkoutFlowTest do
     assert has_element?(home, "#home-alternative-plan-#{plan.id}-select[aria-current=true]")
 
     assert has_element?(editor, "#home-edit-instruction", "Add five reps")
-    assert has_element?(editor, "#home-summary", before.plan.name)
+    assert has_element?(editor, "#studio-source", before.plan.name)
     editor |> element("#home-request-abort") |> render_click()
     assert has_element?(editor, "#home-summary", plan.name)
   end

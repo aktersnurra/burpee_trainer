@@ -236,13 +236,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   def workspace(assigns) do
     ~H"""
     <section id="home-ready-recommendation" data-expanded={to_string(@state.expanded?)}>
-      <div
-        id="home-workout-area"
-        phx-hook="HomeGestures"
-        data-chooser-open={to_string(@state.chooser_open?)}
-        data-options-open={to_string(@state.options_open?)}
-        aria-busy={to_string(@state.busy?)}
-      >
+      <div id="home-workout-area" aria-busy={to_string(@state.busy?)}>
         <%= if @state.busy? and @state.authoring_stage == :idle do %>
           <p class="home-eyebrow">Today’s workout</p>
           <div class="home-hero">
@@ -879,12 +873,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  defp edit_review?(state),
-    do: not is_nil(state.editing_source) and state.authoring_stage == :review
-
   defp hero_name(state) do
     cond do
-      edit_review?(state) -> state.pending_request.definition["name"]
       swap_review?(state) -> state.swap_preview.source.name
       true -> state.home_selection.plan.name
     end
@@ -892,14 +882,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp hero_totals(state) do
     cond do
-      edit_review?(state) -> state.pending_request.request
       swap_review?(state) and state.swap_preview.kind == "plan" -> state.swap_preview.source
       true -> state.home_selection.plan
     end
   end
 
-  # What the hero is marked against: only an edit shows what it changed. A swap is another
-  # workout, so it reads plain.
+  # What the hero is marked against. A swap is another workout, so it reads plain.
   defp hero_was(state),
     do: if(swap_review?(state), do: hero_totals(state), else: state.home_selection.plan)
 

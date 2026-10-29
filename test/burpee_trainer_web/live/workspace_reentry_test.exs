@@ -3,6 +3,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
+  import BurpeeTrainerWeb.StudioHelpers
 
   alias BurpeeTrainer.{Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Accounts.Scope
@@ -15,15 +16,13 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     %{conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "plan rows replay after History and Coach without resetting filters or working forms", %{
+  test "plan rows replay after History and Coach without resetting filters", %{
     conn: conn,
     user: user
   } do
     plan = plan_fixture(user, %{target_reps: 10})
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
     render_click(view, "filter", %{"kind" => "type", "filter" => "navy_seal"})
     render_click(view, "open_chooser")
     assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
@@ -35,7 +34,6 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
       roundtrip(view, via)
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
       assert workspace(view) == before
-      assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
       assert has_element?(view, "#home-expansion[data-open=true]")
       assert Repo.all(WorkoutPlan) == rows
       assert Workouts.list_sessions(Scope.for_user(user)) == sessions
@@ -44,9 +42,33 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
     refute :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
-    # A working authoring form cannot be displaced by a late chooser click.
-    assert has_element?(view, "#home-new-form")
-    refute has_element?(view, "#home-title-action")
+  end
+
+  test "a New draft, its answers and its message, survives History and Coach", %{
+    conn: conn,
+    user: user
+  } do
+    plan_fixture(user, %{target_reps: 10})
+    {:ok, view, _} = live(conn, ~p"/")
+    walk(view, reps: 60, pace_ups: 1)
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
+    |> render_change()
+
+    before = workspace(view)
+    rows = Repo.all(WorkoutPlan)
+
+    for via <- [:history, :coach] do
+      roundtrip(view, via)
+      assert has_element?(view, "#home-studio #studio-request", "60 reps")
+      assert workspace(view) == before
+
+      assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
+               "20 sets of 6"
+
+      assert Repo.all(WorkoutPlan) == rows
+    end
   end
 
   test "the real Switch control reopens plan choices without needing a tab or filter refresh", %{
@@ -138,17 +160,23 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   } do
     plan_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
+    walk(view, reps: 60, pace_ups: 1)
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
+    |> render_change()
+
     before = workspace(view)
     plans = Repo.all(WorkoutPlan)
     saved = complete(user)
     delete_completion(view, saved)
     close_history(view)
     assert workspace(view) == before
-    assert has_element?(view, "#home-new-form")
-    assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
+    assert has_element?(view, "#home-studio")
+
+    assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
+             "20 sets of 6"
+
     assert Repo.all(WorkoutPlan) == plans
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
@@ -240,8 +268,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
   defp roundtrip(view, via) do
     pid = view.pid
-    view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/progress")
+    render_patch(view, "/progress")
 
     if via == :coach do
       # An old Coach link lands on Home.
@@ -255,14 +282,12 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   end
 
   defp close_history(view) do
-    view |> element("#home-history-close") |> render_click()
-    assert_patch(view, "/")
+    render_patch(view, "/")
   end
 
   defp delete_completion(view, saved) do
     pid = view.pid
-    view |> element("#home-history-toggle") |> render_click()
-    assert_patch(view, "/progress")
+    render_patch(view, "/progress")
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
     # The first tap on the trash arms it; the second deletes.
     view |> element("#home-history-delete-#{saved.id}") |> render_click()

@@ -16,9 +16,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequestTest do
     refute Map.has_key?(params, :sets)
     refute Map.has_key?(params, :rests)
 
-    assert {:ok, %{work_us: 700_000_000, recovery_us: 500_000_000}} =
-             HomeWorkoutRequest.budget(params)
-
     assert {:ok, request} = HomeWorkoutRequest.request(params)
     assert request.target_reps == 140
     assert request.set_reps == []

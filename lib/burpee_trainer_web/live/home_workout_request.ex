@@ -99,12 +99,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
     end
   end
 
-  @spec budget(t()) :: {:ok, map() | :unknown_pace} | {:error, atom()}
-  def budget(params) do
-    with {:ok, seconds} <- CreationParameters.duration_seconds(params.duration),
-         do: WorkoutConfiguration.budget(params.reps, params.pace, seconds)
-  end
-
   @spec from_request(WorkoutRequest.t(), t()) :: t()
   def from_request(request, previous) do
     %{

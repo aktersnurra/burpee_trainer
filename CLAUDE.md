@@ -40,6 +40,7 @@
 | `BurpeeTrainerWeb.{HomeScreen, HistoryScreen, CoachScreen}` | Screen modules rendered by `HomeLive` |
 | `BurpeeTrainerWeb.HomeAuthoring.Flow` | Pure authoring transitions: `update(model, event) -> {model, commands}`; work in flight is applied only while its `update_id` is current; each follow-up refines the latest proposal and the ones it replaced stay as `design_turns` (`docs/specs/2026-10-29-design-chat-design.md`) |
 | `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |
+| `BurpeeTrainerWeb.{HomeStudioComponents, NewWorkoutSteps}` / `BurpeeTrainer.Coach.NewDefaults` | The studio (Edit and New as a chat), New's questions one at a time (pure), and what each starts from: the week's time left, the athlete's rate, a pace that fits |
 | `BurpeeTrainerWeb.SessionLive` / `BurpeeTrainerWeb.VideoLive.Show` | Plan and video session runners |
 | `BurpeeTrainerWeb.HomeDayBoundary` | Local-day boundary scheduling |
 | `BurpeeTrainerWeb.Components.*` | Shared layout, Home, History, Coach, workout, and session components |

@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
+  import BurpeeTrainerWeb.StudioHelpers
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
@@ -98,23 +99,27 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
 
-    view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
+    walk(view, reps: 60, pace_ups: 1)
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
+    |> render_change()
 
     {:ok, before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     pid = view.pid
-    view = history_route(conn, view)
+    render_patch(view, "/progress")
     assert has_element?(view, "#home-history")
     assert has_element?(view, "#home-history-empty")
-    refute has_element?(view, "#home-state-content")
+    refute has_element?(view, "#home-state-content, #home-studio")
     assert has_element?(view, "#history-progress #home-history-close[aria-label='Back to Home']")
 
-    view = home_route(conn, view)
+    render_patch(view, "/")
     assert view.pid == pid
     refute has_element?(view, "#home-history")
-    assert has_element?(view, "#home-expansion[data-open=true]")
-    assert has_element?(view, "#home-new-form")
-    assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
+    assert has_element?(view, "#home-studio #studio-request", "60 reps")
+
+    assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
+             "20 sets of 6"
 
     assert {:ok, ^before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -839,7 +844,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       "requested_pace_sec" => nil
     }
 
-    layout = single_set_layout("Confirmed adjustment", "A shorter session.")
+    layout = two_set_layout("Confirmed adjustment", "A shorter session.")
 
     counter =
       fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
@@ -848,16 +853,11 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     original = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user)) |> elem(1)
     view |> element("#home-summary") |> render_click()
 
-    view |> element("#home-new-workout") |> render_click()
+    walk(view, reps: 10, minutes: 5)
+    view |> form("#home-edit-form", home_adjustment: %{instruction: ""}) |> render_submit()
 
-    view |> element("#home-pill-pacing_style-even") |> render_click()
-
-    view
-    |> form("#home-new-form", home_workout: %{reps: 10, duration: "2:00"})
-    |> render_submit()
-
-    render_async(view)
-    assert has_element?(view, "#home-new-reps[disabled][value='10']")
+    render_async(view, 2_000)
+    assert has_element?(view, "#studio-request", "10 reps")
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
     assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
 
@@ -875,9 +875,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
 
     view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    assert has_element?(view, "#home-adjustment-error")
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
   end
@@ -1811,14 +1809,18 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     end
   end
 
-  defp single_set_layout(name, rationale) do
+  # Two sets of five at the wizard's default pace; the rest between them is computed.
+  defp two_set_layout(name, rationale) do
     %{
       "name" => name,
       "rationale" => rationale,
       "phases" => [
         %{
-          "sets" => [%{"reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}],
-          "rests" => []
+          "sets" => [
+            %{"reps" => 5, "sec_per_rep" => 4.5, "sec_per_burpee" => 4.5},
+            %{"reps" => 5, "sec_per_rep" => 4.5, "sec_per_burpee" => 4.5}
+          ],
+          "rests" => [%{"share" => 1}]
         }
       ]
     }

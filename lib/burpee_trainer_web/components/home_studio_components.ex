@@ -281,7 +281,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           class="studio-part"
           phx-click="goto_new_step"
           phx-value-step={step}
-          disabled={@state.busy?}
           aria-label={"Change #{text}"}
         >
           {text}
@@ -295,10 +294,11 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp questions(assigns) do
     step = assigns.state.new_step
-    shown = Enum.take_while(@new_steps, &(&1 != step)) ++ [step]
-    assigns = assign(assigns, step: step, answered: Enum.drop(shown, -1))
+    answered = if step == :ready, do: [], else: Enum.take_while(@new_steps, &(&1 != step))
+    assigns = assign(assigns, step: step, answered: answered)
 
     ~H"""
+    <.request_message :if={@step == :ready} state={@state} />
     <%= for past <- @answered do %>
       <li class="studio-msg studio-coach">
         <p class="studio-text">{question(past)}</p>
@@ -322,9 +322,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     </li>
     <li :if={@step == :ready and not @state.busy?} class="studio-msg studio-coach">
       <p class="studio-text">{question(:ready)}</p>
-    </li>
-    <li :if={@step == :ready and @state.busy?} class="studio-msg studio-you">
-      <p id="home-design-ask" class="studio-bubble">{request_summary(@state.workout_parameters)}</p>
     </li>
     """
   end
@@ -355,7 +352,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         class="studio-pill"
         phx-click="choose_workout_value"
         phx-value-field="burpee_type"
-        phx-value-value={value}
+        value={value}
       >
         {text}
       </button>
@@ -373,7 +370,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         class="studio-pill"
         phx-click="choose_workout_value"
         phx-value-field="pacing_style"
-        phx-value-value={value}
+        value={value}
       >
         {text}
       </button>

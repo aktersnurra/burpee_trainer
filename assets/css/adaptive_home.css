@@ -853,33 +853,17 @@ button.home-summary:hover .home-workout-name {
 .home-authoring-form .fieldset label:has(.input-unit):not(:has(input:placeholder-shown)) { grid-template-columns: 1fr 1.4fr auto; }
 .home-authoring-form .input-unit { color: var(--home-muted); font-size: var(--text-small); }
 .home-authoring-form label:has(input:placeholder-shown) .input-unit { display: none; }
-.home-authoring-input { display: block; width: 100%; min-width: 0; min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: #1d1d1b; font: 400 var(--text-body)/1.5 var(--font-sans); text-align: right; box-shadow: none; }
 /* Pauses and Note stack: label above, a full-width field that grows with its text. */
-textarea.home-authoring-input { text-align: left; resize: none; field-sizing: content; min-height: 1.5em; }
 .home-authoring-form .fieldset label:has(textarea) { grid-template-columns: 1fr; gap: 4px; }
-.home-authoring-input::placeholder { color: var(--home-muted); opacity: 1; }
 /* The focused field underlines its row instead of drawing a box past the column edge. */
-.home-authoring-form .home-authoring-input:focus-visible { outline: none; }
 .home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
 .home-authoring-form input[type="hidden"] { display: none; }
-#home-new-form .home-authoring-input:disabled { opacity: 1; color: #1d1d1b; -webkit-text-fill-color: #1d1d1b; }
-.home-pill-row { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; min-height: 60px; padding: 8px 0; border-bottom: 1px solid var(--home-line); }
-.home-pill-row:first-of-type { border-top: 1px solid var(--home-line); }
-.home-pill-label { color: var(--home-muted); font-size: var(--text-body); }
-.home-pill-options { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; }
-#home-new-form .home-selection-pill, #home-filters [role="group"] button { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
-#home-new-form .home-selection-pill[aria-pressed="true"], #home-filters [role="group"] button[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
-#home-new-form .home-selection-pill:disabled { opacity: 1; }
+#home-filters [role="group"] button { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
+#home-filters [role="group"] button[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
 /* Work and recovery is computed, not typed: a caption under Duration, not a row. */
 /* Duration and its Movement/Recovery caption read as one row; with no caption, Duration keeps its own line. */
-.home-authoring-form .fieldset:has(#home_workout_duration):has(+ #home-workout-budget:has(*)) { border-bottom: 0; }
-.home-budget { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 0 12px; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: var(--text-body); line-height: 1.5; font-variant-numeric: tabular-nums; }
-.home-budget strong { margin-left: 6px; color: #262722; font-weight: 400; }
-.home-budget-detail { color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
-.home-budget > .home-budget-detail { flex-basis: 100%; }
 .home-rest-alternative { margin-top: 14px; font-size: var(--text-small); line-height: 1.7; }
-#home-new-form .home-alternative-choice { min-height: 44px; margin-top: 8px; padding: 8px 0; background: transparent; border: 0; border-bottom: 1px solid var(--home-line); color: #262722; font-size: var(--text-small); }
-@media (prefers-reduced-motion: reduce) { #home-new-form .home-selection-pill, #home-filters [role="group"] button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #home-filters [role="group"] button { transition: none; } }
 .adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"], .home-workout-actions .home-expanded-action, .home-workout-actions[data-expanded="true"] .home-expanded-action { transition: none; }
@@ -900,7 +884,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 
 /* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
 .home-chooser-header .home-text-action { margin-left: -12px; }
-#home-workout-budget:empty, #home-workout-budget:not(:has(*)) { display: none; }
 /* The density readout sits under its heading like the streak and level pair. */
 .home-history-trend-readout { margin-top: 12px; }
 /* Points are dots: six-count filled ink, navy seal an open ring. */
@@ -921,7 +904,6 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
 /* New's title takes the workout title's place: centred, at the title size. */
-.home-authoring-title { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-align: center; text-wrap: balance; }
 /* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
 .adaptive-home mark.home-changed { background: transparent; color: inherit; }
 .adaptive-home .home-changed { font-weight: 600; color: #262722; text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
@@ -1075,17 +1057,8 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
 
 /* The design as a conversation: what you asked, what it became, newest last. */
-.design-thread { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.design-turn { display: grid; gap: 4px; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
-.design-turn-you { justify-self: end; width: fit-content; max-width: 85%; margin: 16px 0 8px auto; padding: 8px 14px; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; font-size: var(--text-body); line-height: 1.5; overflow-wrap: anywhere; scroll-margin-top: 16px; }
-.design-turn .design-turn-you { margin-top: 16px; }
-.design-turn-new { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
-.design-turn-coach { margin: 0 0 4px; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.design-proposal { animation: home-enter var(--motion-settle) var(--ease-out) var(--motion-stagger) backwards; transition: opacity var(--motion-quick) ease; }
-.design-proposal-stale { opacity: .45; }
 @media (prefers-reduced-motion: reduce) {
-  .chat-dock, .design-proposal { transition: none; }
-  .design-turn, .design-turn-new, .design-proposal { animation: none; }
+  .chat-dock { transition: none; }
 }
 
 /* The coach thread grows downward: the reply arrives, it does not jump in. */
@@ -1095,13 +1068,14 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 .chat-dock .coach-message-form { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) { .coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: none; } }
 
-/* ---- Swap drawer: the page slides right and the list of workouts is under it, as in the
-   Claude app. The page moves with `left`, not a transform, so the fixed drawer stays put. ---- */
+/* ---- Swap drawer: the page slides right and the list of workouts takes the space it leaves,
+   as in the Claude app. The page moves with `left`, not a transform, so the fixed drawer
+   stays put; the two never overlap, so the drawer needs no layer below the page. ---- */
 :root { --drawer-w: min(84vw, 340px); }
 #home-page { position: relative; left: 0; background: var(--color-base-100); transition: left 320ms var(--ease-out), border-radius 320ms var(--ease-out); }
 body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 #home-page:has(#home-alternatives-panel:not([hidden])) { left: var(--drawer-w); border-radius: 22px 0 0 22px; box-shadow: -1px 0 0 var(--color-base-border); }
-#home-alternatives-panel:not([hidden]) { position: fixed; z-index: -1; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-100); transform: none; animation: drawer-in 320ms var(--ease-out) backwards; overscroll-behavior: contain; }
+#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-100); transform: none; animation: drawer-in 320ms var(--ease-out) backwards; overscroll-behavior: contain; }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
 /* The page is the way back: a tap on it closes the drawer. */
 #home-chooser-backdrop { display: block; position: fixed; z-index: 40; inset: 0 0 0 var(--drawer-w); background: transparent; }
@@ -1149,7 +1123,9 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-proposal { display: grid; gap: 8px; transition: opacity var(--motion-quick) ease; }
 .studio-proposal-stale { opacity: .45; }
 .studio-working { display: flex; align-items: center; gap: 10px; }
-.studio-spinner { flex: none; width: 44px; height: 44px; object-fit: contain; }
+.studio-working picture { display: flex; }
+.studio-spinner { display: block; }
+.studio-spinner { flex: none; width: 44px; height: 44px; margin-top: -6px; object-fit: contain; }
 .studio-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .studio-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px; border: 1px solid var(--color-base-border); border-radius: 999px; background: var(--color-base-200); color: #262722; font: 500 15px/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease; }
 .studio-pill:hover:not(:disabled) { background: var(--color-base-300); }
@@ -1171,3 +1147,5 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
   .studio, .studio-msg, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
   #home-page { transition: none; }
 }
+/* In the studio the working indicator is a line in the conversation, not a screen of its own. */
+.studio #home-update-loading { display: flex; min-height: 0; place-items: unset; }
