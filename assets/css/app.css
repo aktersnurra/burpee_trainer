@@ -85,6 +85,12 @@
 
 /* One light theme and one page background on every screen: base-100. */
 :root {
+  /* One edge for every screen, one radius for every surface, and the sizes above the three
+     body sizes (see docs/ui.md). */
+  --gutter: 30px;
+  --radius-surface: 20px;
+  --text-heading: 20px;
+  --text-hero: 64px;
   color-scheme: light;
   background: var(--color-base-100);
 }
@@ -622,33 +628,28 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   #burpee-session :is(button, a) { transition: none; }
 }
 
-/* The composer: every box you write words in is one soft card holding the text and its
-   actions. Send is a small square that darkens once there is something to send. */
-.composer { padding: 14px 16px; border: 1px solid var(--color-base-border); border-radius: 18px; background: var(--color-base-200); box-shadow: 0 1px 2px rgb(32 32 29 / .04), 0 4px 16px rgb(32 32 29 / .04); text-align: left; transition: border-color var(--motion-quick) ease; }
+/* The composer: every box you write words in is one rounded line that grows with its text,
+   the send key inside its right edge. Send is grey until there is something to send. */
+.composer { display: flex; align-items: flex-end; gap: 6px; padding: 4px 6px 4px 18px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); box-shadow: 0 1px 2px rgb(32 32 29 / .04), 0 4px 16px rgb(32 32 29 / .04); text-align: left; transition: border-color var(--motion-quick) ease; }
 .composer:focus-within { border-color: #918d83; }
-/* The card's border shows focus, so the text inside draws no ring of its own. */
+/* The box's border shows focus, so the text inside draws no ring of its own. */
 :is(.adaptive-home, #burpee-session, .composer) .composer textarea:focus-visible { outline: none; }
+.composer > .fieldset { flex: 1; min-width: 0; }
 .composer :is(.fieldset, .fieldset > label) { display: block; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; }
 .composer .fieldset:focus-within { box-shadow: none; }
 .composer .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.composer textarea { display: block; width: 100%; min-height: 3em; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); text-align: left; resize: none; field-sizing: content; box-shadow: none; outline: none; }
+.composer textarea { display: block; width: 100%; min-height: 1.5em; max-height: 9rem; padding: 9px 0; border: 0; border-radius: 0; background: transparent; color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); text-align: left; resize: none; field-sizing: content; overflow-y: auto; box-shadow: none; outline: none; }
 .composer textarea::placeholder { color: #74716A; opacity: 1; }
 .composer textarea:disabled { opacity: 1; color: var(--color-base-content); -webkit-text-fill-color: var(--color-base-content); }
-.composer-bar { display: flex; align-items: center; justify-content: space-between; margin: 0 -10px -10px -12px; }
-.composer-bar > :last-child { margin-left: auto; }
-.composer-icon, .composer-send { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: #74716A; cursor: pointer; }
-.composer-icon:hover { color: var(--color-base-content); }
-.composer-send > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--color-base-300); color: #9A9489; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
-.composer:has(textarea:not(:placeholder-shown)) .composer-send > span { background: var(--color-base-content); color: var(--color-base-200); }
-/* Review needs no words (the note is optional), so its send is always ready. */
-.composer-send-ready > span { background: var(--color-base-content); color: var(--color-base-200); }
-.composer-send:disabled { cursor: default; }
-:is(.composer-icon, .composer-send):disabled { opacity: .45; }
-:is(.composer-icon, .composer-send):focus-visible { outline: 2px solid #5e615b; outline-offset: -4px; border-radius: 12px; }
+.composer-bar { flex: none; }
+.composer-send { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: #9A9489; cursor: pointer; transition: color var(--motion-quick) ease, background var(--motion-quick) ease; }
+.composer:has(textarea:not(:placeholder-shown)) .composer-send, .composer-send-ready { color: var(--color-base-content); }
+.composer-send:hover:not(:disabled) { background: var(--color-base-300); }
+.composer-send:disabled { cursor: default; color: var(--color-base-content); }
+.composer-send:focus-visible { outline: 2px solid #5e615b; outline-offset: -4px; }
+.composer-stop { display: block; width: 14px; height: 14px; border-radius: 3px; background: currentColor; }
 .composer-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.home-new-note { margin-top: 20px; }
-#home-edit-form { margin-top: 20px; }
 .composer-suggestion { min-height: 36px; padding: 0 14px; border: 1px solid var(--color-base-border); border-radius: 999px; background: transparent; color: #74716A; font: 400 14px/1.2 var(--font-sans); cursor: pointer; transition: color var(--motion-quick) ease, border-color var(--motion-quick) ease, background var(--motion-quick) ease; }
 .composer-suggestion:hover:not(:disabled) { border-color: var(--color-base-border-hover-token); background: var(--color-base-200); color: var(--color-base-content); }
 .composer-suggestion:disabled { opacity: .45; cursor: default; }
-@media (prefers-reduced-motion: reduce) { .composer, .composer-send > span, .composer-suggestion { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .composer, .composer-send, .composer-suggestion { transition: none; } }

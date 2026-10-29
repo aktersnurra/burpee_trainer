@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-29 — One set of conventions across the pages
+
+- One edge: Home, Progress, the studio and the docked box all start at `--gutter` (30px); the studio and the dock had their own (36px and 16px).
+- One radius for every card, box, sheet and the composer (`--radius-surface`, 20px), instead of 18, 20, 22 and 26.
+- One composer: the single growing line with the send key inside, for the coach and the studio alike (the older two-row card is gone).
+- The type is the Home tokens plus two for screens built around one thing (`--text-heading`, `--text-hero`); the studio's own sizes, its uppercase card label and its small-caps table header are gone.
+- Motion uses the two durations (`--motion-settle`, `--motion-quick`) everywhere, including the drawer and the studio.
+- `docs/ui.md` says where the studio differs on purpose (words on its pills, a round back button) and where it must not (gutter, radius, type, motion).
+
 ## 2026-10-29 — Edit and New are a chat; swipes on Home
 
 - Swipe right on Home and the page slides over to reveal the list of workouts to swap to, as in the Claude app; swipe left or tap the page to close it. Swipe up for Edit this workout and New workout. The buttons stay.

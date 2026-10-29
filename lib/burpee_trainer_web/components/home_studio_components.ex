@@ -108,7 +108,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     <li class="studio-msg studio-coach">
       <.card
         id="studio-source"
-        label="Today’s workout"
         name={@state.home_selection.plan.name}
         seconds={@state.home_selection.plan.target_duration_sec}
         reps={@state.home_selection.plan.target_reps}
@@ -188,7 +187,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     <div id="home-edit-review" class={["studio-proposal", @stale? && "studio-proposal-stale"]}>
       <.card
         id="studio-proposal"
-        label="Proposal"
         name={@definition["name"]}
         seconds={@definition["target_duration_sec"]}
         reps={@definition["target_reps"]}
@@ -246,7 +244,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   end
 
   attr(:id, :string, required: true)
-  attr(:label, :string, required: true)
   attr(:name, :string, required: true)
   attr(:seconds, :any, required: true)
   attr(:reps, :any, required: true)
@@ -256,12 +253,11 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:expanded, :any, default: MapSet.new())
   attr(:table?, :boolean, default: true)
 
-  # A workout, as the coach shows it: a label, its name, its totals as two chips, a line on
+  # A workout, as the coach shows it: its name, its totals as two chips, a line on
   # why, and the table when it is the one being discussed.
   defp card(assigns) do
     ~H"""
     <article id={@id} class="studio-card">
-      <p class="studio-card-label">{@label}</p>
       <h2 class="studio-card-name">{@name}</h2>
       <p class="studio-card-totals">
         <span class="studio-chip">{minutes(@seconds)} min</span>
