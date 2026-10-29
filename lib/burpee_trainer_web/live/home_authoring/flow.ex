@@ -15,6 +15,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   """
 
   @type stage :: :idle | :new | :editing | :review | :saved | :choosing
+  @type new_step :: :type | :style | :duration | :reps | :pace | :ready
 
   @type command ::
           {:cancel_async, {:new_request, reference()}}
@@ -34,6 +35,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     instruction: "",
     design_turns: [],
     pending_turn: nil,
+    new_step: :type,
     busy?: false,
     update_id: nil,
     local_error: nil
@@ -63,6 +65,17 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   def update(%__MODULE__{authoring_stage: :idle} = m, {:edit_opened, source, params, key}) do
     {%{open(m, :editing, params, key) | editing_source: source, instruction: ""}, []}
+  end
+
+  # New asks one question at a time. Going back to an earlier one drops the proposal made
+  # from the answers, and the work still in flight for it.
+  def update(%__MODULE__{authoring_stage: :new} = m, {:new_step, step}),
+    do: {%{m | new_step: step}, []}
+
+  def update(%__MODULE__{authoring_stage: stage} = m, {:new_step_reopened, step})
+      when stage in [:new, :review] and is_nil(m.editing_source) do
+    {discarded, commands} = discard(m)
+    {%{discarded | authoring_stage: :new, new_step: step}, commands}
   end
 
   def update(%__MODULE__{} = m, :aborted) do
@@ -194,6 +207,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         pending_request: nil,
         design_turns: [],
         pending_turn: nil,
+        new_step: :type,
         local_error: nil
     }
   end

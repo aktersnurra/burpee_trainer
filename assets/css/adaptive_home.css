@@ -1094,3 +1094,80 @@ textarea.home-authoring-input { text-align: left; resize: none; field-sizing: co
 /* Inside the dock the form is the composer card itself; the panel's own spacing gives way. */
 .chat-dock .coach-message-form { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) { .coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: none; } }
+
+/* ---- Swap drawer: the page slides right and the list of workouts is under it, as in the
+   Claude app. The page moves with `left`, not a transform, so the fixed drawer stays put. ---- */
+:root { --drawer-w: min(84vw, 340px); }
+#home-page { position: relative; left: 0; background: var(--color-base-100); transition: left 320ms var(--ease-out), border-radius 320ms var(--ease-out); }
+body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
+#home-page:has(#home-alternatives-panel:not([hidden])) { left: var(--drawer-w); border-radius: 22px 0 0 22px; box-shadow: -1px 0 0 var(--color-base-border); }
+#home-alternatives-panel:not([hidden]) { position: fixed; z-index: -1; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-100); transform: none; animation: drawer-in 320ms var(--ease-out) backwards; overscroll-behavior: contain; }
+@keyframes drawer-in { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
+/* The page is the way back: a tap on it closes the drawer. */
+#home-chooser-backdrop { display: block; position: fixed; z-index: 40; inset: 0 0 0 var(--drawer-w); background: transparent; }
+.adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: grid; }
+@media (min-width: 601px) { #home-alternatives-panel:not([hidden]) { top: 0; left: 0; right: auto; bottom: 0; width: var(--drawer-w); padding: 28px 24px; border-radius: 0; transform: none; } }
+
+/* ---- Options sheet: swiped up from the workout. ---- */
+#home-options-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .28); animation: sheet-fade var(--motion-quick) ease backwards; }
+#home-options-sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; display: grid; gap: 8px; width: min(430px, 100%); padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; background: var(--color-base-200); transform: translateX(-50%); animation: sheet-up 360ms var(--ease-out) backwards; }
+@keyframes sheet-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
+@keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+.home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--color-base-border); }
+.home-option { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 12px 14px; border: 1px solid var(--color-base-border); border-radius: 16px; background: transparent; color: #262722; text-align: left; transition: background var(--motion-quick) ease; }
+.home-option:hover, .home-option:focus-visible { background: var(--color-base-100); }
+.home-option-text { display: grid; gap: 2px; min-width: 0; }
+.home-option-title { font: 600 var(--text-body)/1.3 var(--font-sans); }
+.home-option-detail { color: var(--home-muted); font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- The studio: Edit and New as a chat. ---- */
+:is(#home-page):has(.studio) { max-width: none; padding: 0; }
+.studio { max-width: 430px; min-height: 100svh; margin: 0 auto; padding: 0 20px; color: #262722; font-family: var(--font-sans); animation: studio-in 420ms var(--ease-out) backwards; }
+@keyframes studio-in { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
+.studio-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; margin-inline: -20px; padding: calc(10px + env(safe-area-inset-top)) 20px 10px; background: var(--color-base-100); }
+.studio-back { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-200); color: #262722; cursor: pointer; }
+.studio-heading { min-width: 0; }
+.studio-title { margin: 0; font: 600 17px/1.25 var(--font-sans); }
+.studio-subtitle { margin: 0; overflow: hidden; color: var(--home-muted, #736f68); font-size: var(--text-small); text-overflow: ellipsis; white-space: nowrap; }
+.studio-thread { display: grid; gap: 14px; margin: 12px 0 0; padding: 0; list-style: none; }
+.studio-msg { min-width: 0; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.studio-you { display: flex; justify-content: flex-end; }
+.studio-bubble { width: fit-content; max-width: 88%; margin: 0; padding: 8px 14px; border: 0; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; font: 400 var(--text-body)/1.5 var(--font-sans); overflow-wrap: anywhere; text-align: left; scroll-margin-top: 72px; }
+.studio-answer { cursor: pointer; }
+.studio-bubble-parts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; padding: 0; background: transparent; }
+.studio-part { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: #e9e5dc; color: #262722; font: 400 14px/1 var(--font-sans); cursor: pointer; }
+.studio-part:disabled { opacity: .5; cursor: default; }
+.studio-text { margin: 0; font-size: var(--text-body); line-height: 1.5; }
+.studio-turn { margin: 0; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.studio-error { margin: 0; color: #8a3b2b; font-size: var(--text-small); }
+.studio-error:empty { display: none; }
+.studio-card { margin-top: 8px; padding: 16px 16px 8px; border: 1px solid var(--color-base-border); border-radius: 18px; background: var(--color-base-200); }
+.studio-card-label { margin: 0; color: var(--home-muted, #736f68); font-size: var(--text-small); }
+.studio-card-name { margin: 4px 0 0; font: 600 22px/1.2 var(--font-sans); letter-spacing: -.01em; }
+.studio-card-totals { margin: 4px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); }
+.studio-card #home-inspection { padding-top: 10px; }
+.studio-proposal { display: grid; gap: 8px; transition: opacity var(--motion-quick) ease; }
+.studio-proposal-stale { opacity: .45; }
+.studio-working { display: flex; align-items: center; gap: 10px; }
+.studio-spinner { flex: none; width: 44px; height: 44px; object-fit: contain; }
+.studio-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.studio-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px; border: 1px solid var(--color-base-border); border-radius: 999px; background: var(--color-base-200); color: #262722; font: 500 15px/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease; }
+.studio-pill:hover:not(:disabled) { background: var(--color-base-300); }
+.studio-pill-primary { border-color: #262722; background: #262722; color: var(--color-base-100); }
+.studio-pill-primary:hover:not(:disabled) { background: #262722; opacity: .85; }
+.studio-pill:disabled { opacity: .4; cursor: default; }
+.studio-pills-dock { justify-content: flex-end; margin-top: 0; }
+.studio-stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 14px 12px; border: 1px solid var(--color-base-border); border-radius: 18px; background: var(--color-base-200); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.studio-stepper:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
+.studio-step-button { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border: 1px solid var(--color-base-border); border-radius: 50%; background: transparent; color: #262722; cursor: pointer; }
+.studio-step-button:disabled { opacity: .35; cursor: default; }
+.studio-step-value { text-align: center; }
+.studio-step-number { display: block; font: 600 44px/1 var(--font-sans); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.studio-step-unit { display: block; margin-top: 4px; color: var(--home-muted, #736f68); font-size: var(--text-small); }
+.studio-step-hint { margin: 8px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); text-align: center; }
+#studio-next { margin-top: 12px; }
+.chat-dock .composer-send-ready > span { background: var(--color-base-content); color: var(--color-base-200); }
+@media (prefers-reduced-motion: reduce) {
+  .studio, .studio-msg, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
+  #home-page { transition: none; }
+}

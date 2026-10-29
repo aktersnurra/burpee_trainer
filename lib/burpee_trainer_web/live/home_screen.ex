@@ -2,7 +2,7 @@ defmodule BurpeeTrainerWeb.HomeScreen do
   @moduledoc "Home.State-driven card presentation and result field projection."
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainerWeb.{Fmt, HomeWorkoutComponents}
+  alias BurpeeTrainerWeb.{Fmt, HomeStudioComponents, HomeWorkoutComponents}
 
   def assign_results(socket, results) do
     case results do
@@ -98,7 +98,8 @@ defmodule BurpeeTrainerWeb.HomeScreen do
       <p :if={@home_planning_error} id="home-planning-error" role="status" class="home-local-message">
         {@home_planning_error}
       </p>
-      <div class="adaptive-home">
+      <HomeStudioComponents.studio :if={HomeStudioComponents.studio?(assigns)} state={assigns} />
+      <div :if={not HomeStudioComponents.studio?(assigns)} class="adaptive-home">
         <div id="home-progress-history" class="relative min-h-11">
           <%= if @slot do %>
             <HomeWorkoutComponents.week_progress slot={@slot} />

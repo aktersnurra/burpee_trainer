@@ -318,7 +318,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, %{assigns: %{busy?: true, authoring_stage: stage}} = socket)
       when event in [
              "abort_new_workout",
-             "change_new_workout",
+             "goto_new_step",
              "choose_workout_value",
              "change_current_edit"
            ] and
@@ -326,13 +326,14 @@ defmodule BurpeeTrainerWeb.HomeLive do
     handle_event(event, params, HomeAuthoring.discard_preparation(socket))
   end
 
-  # Cancel works while the coach is on a follow-up, and takes the proposal with it.
+  # Back, or a different answer, works while the coach is on a follow-up, and takes the
+  # proposal with it.
   def handle_event(
-        "abort_new_workout" = event,
+        event,
         params,
         %{assigns: %{busy?: true, authoring_stage: :review, pending_turn: turn}} = socket
       )
-      when is_binary(turn),
+      when event in ["abort_new_workout", "goto_new_step"] and is_binary(turn),
       do: handle_event(event, params, HomeAuthoring.discard_preparation(socket))
 
   def handle_event(_event, _params, %{assigns: %{busy?: true}} = socket), do: {:noreply, socket}
@@ -366,18 +367,20 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "back_to_workout_request",
              "change_adjustment",
              "change_current_edit",
-             "change_new_workout",
              "choose_workout_value",
+             "close_options",
              "confirm_workout_request",
              "edit_current_workout",
-             "edit_workout_request",
+             "goto_new_step",
              "new_workout",
+             "next_new_step",
+             "open_options",
              "refine_workout",
              "review_current_edit",
-             "review_new_workout",
-             "save_workout_request",
              "save_review_to_library",
              "select_created_workout",
+             "send_new_workout",
+             "step_workout_value",
              "submit_home_action"
            ] do
     HomeAuthoring.handle_event(event, params, socket)

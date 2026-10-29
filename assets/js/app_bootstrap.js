@@ -5,6 +5,8 @@ import topbar from "../vendor/topbar";
 import ChartHook from "./hooks/chart_hook";
 import ChatDock from "./hooks/chat_dock.mjs";
 import HomeAdjustment from "./hooks/home_adjustment.mjs";
+import HomeGestures from "./hooks/home_gestures.mjs";
+import SwipeValue from "./hooks/swipe_value.mjs";
 import { registerHomeChooserFeedback } from "./hooks/home_chooser_feedback.mjs";
 import HomePendingSession from "./hooks/home_pending_session.mjs";
 import HomeStartChoice from "./hooks/home_start_choice.mjs";
@@ -27,6 +29,8 @@ export function startApp(PoseTracker) {
 			ChartHook,
 			ChatDock,
 			HomeAdjustment,
+			HomeGestures,
+			SwipeValue,
 			HomePendingSession,
 			HomeStartChoice,
 			SessionHook,
