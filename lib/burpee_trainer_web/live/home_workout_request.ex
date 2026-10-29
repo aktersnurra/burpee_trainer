@@ -112,6 +112,42 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequest do
     }
   end
 
+  @prefix "Additional request: "
+
+  @doc "What New's questions chose, in one line: `Six-count · Unbroken · 20 min · 75 reps · 4.5 s per rep`."
+  @spec summary(t()) :: String.t()
+  def summary(params) do
+    {:ok, seconds} = CreationParameters.duration_seconds(params.duration)
+
+    [
+      CreationParameters.type_label(params.burpee_type),
+      params.pacing_style |> String.capitalize(),
+      "#{div(seconds, 60)} min",
+      "#{params.reps} reps",
+      if(params.pace,
+        do: "#{:erlang.float_to_binary(params.pace * 1.0, decimals: 1)} s per rep",
+        else: "coach picks the pace"
+      )
+    ]
+    |> Enum.join(" · ")
+  end
+
+  @doc """
+  The message New opens its chat with: the choices, then a line for anything else, ready to
+  be written after.
+  """
+  @spec message(t(), String.t()) :: String.t()
+  def message(params, note \\ ""), do: summary(params) <> "\n" <> @prefix <> note
+
+  @doc "What the athlete wrote after the prefix; with the prefix gone, all of the message."
+  @spec note(String.t()) :: String.t()
+  def note(text) when is_binary(text) do
+    case Regex.run(~r/additional request:[ \t]*(.*)\z/is, text) do
+      [_, note] -> String.trim(note)
+      nil -> String.trim(text)
+    end
+  end
+
   @spec instruction(t()) :: String.t()
   def instruction(params) do
     "New workout. Type: #{params.burpee_type}; style: #{params.pacing_style}; reps: #{params.reps}; duration: #{params.duration}; active pace: #{if(params.pace, do: "#{params.pace}s per rep", else: "coach chooses")}. " <>

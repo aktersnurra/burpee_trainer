@@ -35,6 +35,13 @@ defmodule BurpeeTrainerWeb.NewWorkoutSteps do
     Enum.at(@steps, index + 1, :ready)
   end
 
+  @doc "The step before `step`; `:type` is the first."
+  @spec previous(step()) :: step()
+  def previous(step) do
+    index = Enum.find_index(@steps, &(&1 == step))
+    Enum.at(@steps, max(index - 1, 0))
+  end
+
   @doc "The parameters on entering `step`: what it is suggested to start from."
   @spec enter(HomeWorkoutRequest.t(), step(), Scope.t(), non_neg_integer() | nil) ::
           HomeWorkoutRequest.t()

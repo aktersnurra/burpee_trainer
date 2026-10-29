@@ -59,10 +59,11 @@ Two even sets with a breather.      ← the proposal arrives as a card
 
 ## New: one question at a time
 
-New asks in the chat: burpee type, then set style (a tap each), then duration, reps and pace, each
-a value you swipe left and right (the buttons and arrow keys do the same; `SwipeValue`), with Next.
-Then the message, which may be empty: send it as it is. `NewWorkoutSteps` (pure) holds the steps;
-`Coach.NewDefaults` holds what each starts from.
+New asks one question per screen, centred, with its progress above: burpee type and set style
+(a card to tap, which answers and moves on), then duration, reps and pace, each a value you swipe
+left and right (the buttons and arrow keys do the same; `SwipeValue`) with a Next, since nothing
+says you are done. Back is one question back (out of the first); a close button always leaves.
+`NewWorkoutSteps` (pure) holds the steps; `Coach.NewDefaults` holds what each starts from.
 
 - **Duration** starts at 20 minutes, or at what the week has left if that is less, and moves in
   steps of five up to what is left, which is always one of them. Never past the week's 80 minutes.
@@ -71,8 +72,18 @@ Then the message, which may be empty: send it as it is. `NewWorkoutSteps` (pure)
   duration. They move by five and stop where movement alone would not fit the duration.
 - **Pace** starts mid-reference for the type (4.5 s six-count, 8 s Navy SEAL), or faster when the
   reps leave little room to recover. It moves by half a second.
-- Once past its questions, what was chosen reads as one message of tappable parts: tapping one goes
-  back to that question, and what followed it is suggested again.
+
+Then the chat opens on a message made of the answers, in the box and ready to send:
+
+```
+Six-count · Unbroken · 20 min · 75 reps · 4.5 s per rep
+Additional request: ▌
+```
+
+The cursor sits after the prefix (`ComposerCaret`). Send works as it is, without text. Only what
+follows the prefix reaches the coach as the athlete's request (`HomeWorkoutRequest.note/1`); the
+choices come from the answers, so editing the first line changes nothing. Above the box the choices
+are parts you can tap to change; what followed a changed answer is suggested again.
 
 ## The dock
 

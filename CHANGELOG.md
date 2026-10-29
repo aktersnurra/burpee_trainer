@@ -4,7 +4,8 @@
 
 - Swipe right on Home and the page slides over to reveal the list of workouts to swap to, as in the Claude app; swipe left or tap the page to close it. Swipe up for Edit this workout and New workout. The buttons stay.
 - Edit and New take Home's place as a chat with a back button. Edit opens with today's workout as the coach's first message; each message refines the latest proposal, a spinner shows while the coach works, and the proposal arrives as a new card with an Accept pill (and Save). Back leaves with no change.
-- New asks one question at a time: burpee type and set style by tap, then duration, reps and pace by swiping the value (or its buttons). Duration starts at 20 minutes or what the week has left and never passes it; reps start from your progression; pace from a typical reference that leaves room to recover. Then send as it is, or add a line.
+- New asks one question per screen: burpee type and set style by tap (which answers and moves on), then duration, reps and pace by swiping the value (or its buttons) with a Next. Duration starts at 20 minutes or what the week has left and never passes it; reps start from your progression; pace from a typical reference that leaves room to recover. Then the chat opens on a message made of your answers with the cursor on an "Additional request:" line; send it as it is, or write after the prefix.
+- Workout cards are redone: a label, the name, minutes and reps as chips, why, then a small table.
 - Removed the inline Edit and New forms and their review (`HomeWorkoutRequest`'s form fields, budgets and pills).
 
 ## 2026-10-29 — Design by conversation, a box above the keyboard, a coach that sounds like one

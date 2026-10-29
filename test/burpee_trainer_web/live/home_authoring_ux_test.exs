@@ -230,7 +230,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
 
     # What the questions made stays above, as one message; the new proposal follows the ask.
-    assert has_element?(view, "#studio-request", "150 reps")
+    assert has_element?(view, "#studio-thread .studio-bubble", "10 reps")
+    assert has_element?(view, "#studio-proposal .studio-chip", "150 reps")
     assert has_element?(view, ".studio-turn", "10 reps")
     assert has_element?(view, "#home-design-ask", "Increase to 150")
     assert has_element?(view, "#studio-proposal", "150 reps")
@@ -271,9 +272,14 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
     assert has_element?(view, "#home-request-confirm")
 
-    view |> element("#studio-part-reps") |> render_click()
+    # Back is one step back: to the message, without the proposal made from it.
+    view |> element("#studio-back") |> render_click()
     refute has_element?(view, "#home-request-confirm, #studio-proposal")
-    assert has_element?(view, "#studio-thread", "How many reps?")
+    assert has_element?(view, "#studio-request")
+    assert has_element?(view, "#home-edit-instruction", "Additional request:")
+
+    view |> element("#studio-part-reps") |> render_click()
+    assert has_element?(view, "#studio-step", "How many reps?")
     assert has_element?(view, "#studio-reps-value", "10")
 
     view |> element("#home-request-abort") |> render_click()
@@ -334,11 +340,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     view |> form("#home-edit-form", home_adjustment: %{instruction: ""}) |> render_submit()
     assert_receive {:planning_started, task}
     monitor = Process.monitor(task)
-    view |> element("#studio-part-reps") |> render_click()
+    view |> element("#studio-back") |> render_click()
     assert_receive {:DOWN, ^monitor, :process, ^task, _}
     send(task, :release)
     render_async(view, 2_000)
-    assert has_element?(view, "#studio-reps-value", "140")
+    assert has_element?(view, "#studio-pace-value", "5.0")
     refute has_element?(view, "#home-request-confirm")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     view |> element("#home-request-abort") |> render_click()

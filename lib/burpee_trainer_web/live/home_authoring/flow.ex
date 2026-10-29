@@ -14,6 +14,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   one in flight, so a late answer to a discarded or superseded request changes nothing.
   """
 
+  alias BurpeeTrainerWeb.HomeWorkoutRequest
+
   @type stage :: :idle | :new | :editing | :review | :saved | :choosing
   @type new_step :: :type | :style | :duration | :reps | :pace | :ready
 
@@ -232,10 +234,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     m.design_turns ++
       [
         %{
-          # New's first ask is its fields, not words worth repeating.
+          # New's first ask is the message its questions made.
           instruction:
             if(is_nil(m.editing_source) and m.design_turns == [],
-              do: "New workout",
+              do:
+                HomeWorkoutRequest.message(m.workout_parameters, m.workout_parameters.note || ""),
               else: m.instruction
             ),
           name: definition["name"],

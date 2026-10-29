@@ -240,6 +240,28 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     {:noreply, enter_step(socket, socket.assigns.workout_parameters, NewWorkoutSteps.next(step))}
   end
 
+  # Back is one question back; from the first it leaves (the close button always does).
+  def handle_event("back_new_step", _, %{assigns: %{editing_source: nil}} = socket) do
+    a = socket.assigns
+
+    cond do
+      a.authoring_stage not in [:new, :review] ->
+        {:noreply, socket}
+
+      a.authoring_stage == :new and a.new_step == :type ->
+        handle_event("abort_new_workout", %{}, socket)
+
+      a.authoring_stage == :review ->
+        {:noreply,
+         socket
+         |> step({:new_step_reopened, :ready})
+         |> write_message(a.workout_parameters, :ready)}
+
+      true ->
+        {:noreply, step(socket, {:new_step, NewWorkoutSteps.previous(a.new_step)})}
+    end
+  end
+
   # Any answer can be changed; what was suggested after it is suggested again.
   def handle_event(
         "goto_new_step",
@@ -250,8 +272,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       {:ok, step} when socket.assigns.authoring_stage in [:new, :review] ->
         {:noreply,
          socket
-         |> step({:new_step_reopened, step})
-         |> adjustment_form("")}
+         |> step({:new_step_reopened, step})}
 
       _ ->
         {:noreply, socket}
@@ -265,7 +286,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
       )
       when is_binary(text) do
-    begin_plan_review(socket, %{"note" => String.trim(text)})
+    begin_plan_review(socket, %{"note" => HomeWorkoutRequest.note(text)})
   end
 
   def handle_event("select_created_workout", _, %{assigns: %{authoring_stage: :saved}} = socket) do
@@ -542,7 +563,23 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     socket
     |> assign(workout_parameters: params)
     |> step({:new_step, step})
+    |> write_message(params, step)
   end
+
+  # The last question leaves the chat open on a message made of the answers, with the
+  # cursor on a line for anything more. What was already written there is kept.
+  defp write_message(socket, params, :ready) do
+    written = socket.assigns.adjustment_form[:instruction].value || ""
+
+    note =
+      if String.contains?(String.downcase(written), "additional request:"),
+        do: HomeWorkoutRequest.note(written),
+        else: ""
+
+    adjustment_form(socket, HomeWorkoutRequest.message(params, note))
+  end
+
+  defp write_message(socket, _params, _step), do: socket
 
   # What the week has left, which is all New may spend.
   defp remaining_sec(%{assigns: %{slot: %{remaining_sec: seconds}}}), do: seconds

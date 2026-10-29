@@ -30,4 +30,35 @@ defmodule BurpeeTrainerWeb.HomeWorkoutRequestTest do
 
     refute changeset.valid?
   end
+
+  test "New's message is its choices, then a line for anything more, which is all that is sent" do
+    params = %HomeWorkoutRequest{
+      burpee_type: "six_count",
+      pacing_style: "unbroken",
+      reps: 75,
+      duration: "20:00",
+      pace: 4.5
+    }
+
+    assert HomeWorkoutRequest.summary(params) ==
+             "Six-count · Unbroken · 20 min · 75 reps · 4.5 s per rep"
+
+    message = HomeWorkoutRequest.message(params)
+
+    assert message ==
+             "Six-count · Unbroken · 20 min · 75 reps · 4.5 s per rep\nAdditional request: "
+
+    assert HomeWorkoutRequest.note(message) == ""
+
+    assert HomeWorkoutRequest.note(message <> "  a minute's break at 10:00 ") ==
+             "a minute's break at 10:00"
+
+    assert HomeWorkoutRequest.note("some\nadditional request: slow and steady") ==
+             "slow and steady"
+
+    # With the prefix deleted, what is left is still what the athlete wrote.
+    assert HomeWorkoutRequest.note("  just make it gentle ") == "just make it gentle"
+
+    assert HomeWorkoutRequest.summary(%{params | pace: nil}) =~ "coach picks the pace"
+  end
 end

@@ -8,7 +8,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   use BurpeeTrainerWeb, :html
 
   alias BurpeeTrainer.Coach.NewDefaults
-  alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents}
+  alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents, HomeWorkoutRequest}
 
   @new_steps [:type, :style, :duration, :reps, :pace, :ready]
 
@@ -19,38 +19,33 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp heading(state), do: if(edit?(state), do: "Edit workout", else: "New workout")
 
+  defp wizard?(state), do: state.authoring_stage == :new and state.new_step != :ready
+
   defp subtitle(%{editing_source: source} = state) when not is_nil(source),
     do: state.home_selection.plan.name
 
-  defp subtitle(%{authoring_stage: :new, new_step: :type}), do: "A few questions"
+  defp subtitle(%{authoring_stage: :new, new_step: :ready}), do: "Ready to send"
 
-  defp subtitle(%{authoring_stage: :new, new_step: step, workout_parameters: params}),
-    do: request_summary(params, step)
+  defp subtitle(%{authoring_stage: :new, new_step: step}),
+    do: "Question #{step_number(step)} of #{length(@new_steps) - 1}"
 
-  defp subtitle(%{workout_parameters: params}), do: request_summary(params)
+  defp subtitle(%{workout_parameters: params}), do: HomeWorkoutRequest.summary(params)
+
+  defp step_number(step), do: Enum.find_index(@new_steps, &(&1 == step)) + 1
 
   attr(:state, :map, required: true)
 
   def studio(assigns) do
     ~H"""
     <section id="home-studio" class="studio" data-stage={@state.authoring_stage}>
-      <header class="studio-header">
-        <button
-          id="home-request-abort"
-          type="button"
-          class="studio-back"
-          aria-label={if(edit?(@state), do: "Cancel edit", else: "Cancel new workout")}
-          title="Back"
-          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-        >
-          <.icon name="hero-chevron-left" class="size-5" />
-        </button>
-        <div class="studio-heading">
-          <h1 id="home-authoring-heading" class="studio-title">{heading(@state)}</h1>
-          <p class="studio-subtitle">{subtitle(@state)}</p>
-        </div>
-      </header>
-      <ol id="studio-thread" class="studio-thread" aria-label="Conversation with the coach">
+      <.header state={@state} />
+      <.question :if={wizard?(@state)} state={@state} />
+      <ol
+        :if={not wizard?(@state)}
+        id="studio-thread"
+        class="studio-thread"
+        aria-label="Conversation with the coach"
+      >
         <.edit_thread :if={edit?(@state)} state={@state} />
         <.new_thread :if={not edit?(@state)} state={@state} />
         <li :if={@state.local_error} id="home-adjustment-error" role="status" class="studio-error">
@@ -59,6 +54,62 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       </ol>
       <.dock state={@state} />
     </section>
+    """
+  end
+
+  attr(:state, :map, required: true)
+
+  # Back: out of Edit; for New one question back (out of the first). New also has a close.
+  defp header(assigns) do
+    state = assigns.state
+    first? = state.authoring_stage == :new and state.new_step == :type
+    leaves? = edit?(state) or first?
+
+    assigns =
+      assign(assigns,
+        leaves?: leaves?,
+        back_id: if(leaves?, do: "home-request-abort", else: "studio-back"),
+        back_label:
+          cond do
+            edit?(state) -> "Cancel edit"
+            first? -> "Cancel new workout"
+            true -> "Previous question"
+          end
+      )
+
+    ~H"""
+    <header class="studio-header">
+      <button
+        id={@back_id}
+        type="button"
+        class="studio-back"
+        aria-label={@back_label}
+        title="Back"
+        phx-click={
+          if(@leaves?,
+            do: JS.push("abort_new_workout") |> JS.focus(to: "#home-summary"),
+            else: JS.push("back_new_step")
+          )
+        }
+      >
+        <.icon name="hero-chevron-left" class="size-5" />
+      </button>
+      <div class="studio-heading">
+        <h1 id="home-authoring-heading" class="studio-title">{heading(@state)}</h1>
+        <p class="studio-subtitle">{subtitle(@state)}</p>
+      </div>
+      <button
+        :if={not @leaves?}
+        id="home-request-abort"
+        type="button"
+        class="studio-close"
+        aria-label="Cancel new workout"
+        title="Close"
+        phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
+      >
+        <.icon name="hero-x-mark" class="size-5" />
+      </button>
+    </header>
     """
   end
 
@@ -113,8 +164,8 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         </p>
       </li>
     <% end %>
-    <li :if={@state.instruction != "" and edit_or_asked?(@state)} class="studio-msg studio-you">
-      <p id="home-design-ask" class="studio-bubble">{@state.instruction}</p>
+    <li :if={ask(@state) != ""} class="studio-msg studio-you">
+      <p id="home-design-ask" class="studio-bubble">{ask(@state)}</p>
     </li>
     <li :if={@first_busy?} class="studio-msg studio-coach">
       <.working />
@@ -138,9 +189,14 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     """
   end
 
-  # New's first proposal answers its questions, not words of the athlete's own; once they
-  # write, what they wrote reads as a message.
-  defp edit_or_asked?(state), do: edit?(state) or state.design_turns != []
+  # What was asked for the proposal on screen: your words in Edit and in a follow-up; New's
+  # first ask is the message its questions made.
+  defp ask(state) do
+    if edit?(state) or state.design_turns != [],
+      do: state.instruction,
+      else:
+        HomeWorkoutRequest.message(state.workout_parameters, state.workout_parameters.note || "")
+  end
 
   attr(:state, :map, required: true)
   attr(:stale?, :boolean, default: false)
@@ -151,13 +207,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
     ~H"""
     <div id="home-edit-review" class={["studio-proposal", @stale? && "studio-proposal-stale"]}>
-      <p :if={@definition["rationale"]} class="studio-text">{@definition["rationale"]}</p>
       <.card
         id="studio-proposal"
         label="Proposal"
         name={@definition["name"]}
         seconds={@definition["target_duration_sec"]}
         reps={@definition["target_reps"]}
+        note={@definition["rationale"]}
         rows={@state.review_inspection_rows}
         compare={if edit?(@state), do: @state.inspection_rows}
         expanded={@state.expanded_groups}
@@ -189,25 +245,27 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:name, :string, required: true)
   attr(:seconds, :any, required: true)
   attr(:reps, :any, required: true)
+  attr(:note, :string, default: nil)
   attr(:rows, :list, default: [])
   attr(:compare, :any, default: nil)
   attr(:expanded, :any, default: MapSet.new())
   attr(:table?, :boolean, default: true)
 
-  # A workout, as the coach shows it: its name and totals, and the table when it is the one
-  # being discussed.
+  # A workout, as the coach shows it: a label, its name, its totals as two chips, a line on
+  # why, and the table when it is the one being discussed.
   defp card(assigns) do
     ~H"""
     <article id={@id} class="studio-card">
       <p class="studio-card-label">{@label}</p>
       <h2 class="studio-card-name">{@name}</h2>
-      <p class="studio-card-totals">{minutes(@seconds)} min · {@reps} reps</p>
-      <HomeWorkoutComponents.inspection
-        :if={@table?}
-        rows={@rows}
-        compare={@compare}
-        expanded={@expanded}
-      />
+      <p class="studio-card-totals">
+        <span class="studio-chip">{minutes(@seconds)} min</span>
+        <span class="studio-chip">{@reps} reps</span>
+      </p>
+      <p :if={@note && @table?} class="studio-card-note">{@note}</p>
+      <div :if={@table?} class="studio-card-table">
+        <HomeWorkoutComponents.inspection rows={@rows} compare={@compare} expanded={@expanded} />
+      </div>
     </article>
     """
   end
@@ -216,16 +274,20 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
+  # Once the questions are answered the chat opens on a message made of them (in the box
+  # below), with what was chosen above as parts you can change.
   defp new_thread(%{state: %{authoring_stage: :new}} = assigns) do
     ~H"""
-    <.questions state={@state} />
+    <li :if={not @state.busy?} class="studio-msg studio-coach">
+      <p class="studio-text">Here is what you chose. Send it as it is, or add a request.</p>
+      <.parts state={@state} />
+    </li>
     <.proposal_thread :if={@state.busy?} state={@state} />
     """
   end
 
   defp new_thread(%{state: %{authoring_stage: :saved}} = assigns) do
     ~H"""
-    <.request_message state={@state} />
     <li id="home-new-saved" class="studio-msg studio-coach">
       <p class="studio-text">
         Saved {@state.created_plan.name}. Your current workout is unchanged.
@@ -249,15 +311,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp new_thread(assigns) do
     ~H"""
-    <.request_message state={@state} />
     <.proposal_thread state={@state} />
     """
   end
 
-  # Past its questions, what was chosen reads as one message, each part a way back.
   attr(:state, :map, required: true)
 
-  defp request_message(assigns) do
+  defp parts(assigns) do
     params = assigns.state.workout_parameters
 
     assigns =
@@ -272,108 +332,89 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       )
 
     ~H"""
-    <li class="studio-msg studio-you">
-      <p id="studio-request" class="studio-bubble studio-bubble-parts">
-        <button
-          :for={{step, text} <- @parts}
-          id={"studio-part-#{step}"}
-          type="button"
-          class="studio-part"
-          phx-click="goto_new_step"
-          phx-value-step={step}
-          aria-label={"Change #{text}"}
-        >
-          {text}
-        </button>
-      </p>
-    </li>
+    <p id="studio-request" class="studio-parts">
+      <button
+        :for={{step, text} <- @parts}
+        id={"studio-part-#{step}"}
+        type="button"
+        class="studio-part"
+        phx-click="goto_new_step"
+        phx-value-step={step}
+        aria-label={"Change #{text}"}
+      >
+        {text}
+      </button>
+    </p>
     """
   end
 
   attr(:state, :map, required: true)
 
-  defp questions(assigns) do
+  # One question at a time. A tap on a choice answers and moves on; a value you swipe has a
+  # Next, since nothing says you are done.
+  defp question(assigns) do
     step = assigns.state.new_step
-    answered = if step == :ready, do: [], else: Enum.take_while(@new_steps, &(&1 != step))
-    assigns = assign(assigns, step: step, answered: answered)
+
+    assigns =
+      assign(assigns, step: step, number: step_number(step), total: length(@new_steps) - 1)
 
     ~H"""
-    <.request_message :if={@step == :ready} state={@state} />
-    <%= for past <- @answered do %>
-      <li class="studio-msg studio-coach">
-        <p class="studio-text">{question(past)}</p>
-      </li>
-      <li class="studio-msg studio-you">
-        <button
-          id={"studio-answer-#{past}"}
-          type="button"
-          class="studio-bubble studio-answer"
-          phx-click="goto_new_step"
-          phx-value-step={past}
-          aria-label={"Change #{answer(past, @state.workout_parameters)}"}
-        >
-          {answer(past, @state.workout_parameters)}
-        </button>
-      </li>
-    <% end %>
-    <li :if={@step != :ready} class="studio-msg studio-coach">
-      <p class="studio-text">{question(@step)}</p>
+    <section id="studio-step" class="studio-step" data-step={@step} aria-labelledby="studio-question">
+      <ol class="studio-dots" aria-label={"Question #{@number} of #{@total}"}>
+        <li :for={n <- 1..@total} class={["studio-dot", n <= @number && "studio-dot-on"]}></li>
+      </ol>
+      <h2 id="studio-question" class="studio-question">{question_text(@step)}</h2>
       <.controls step={@step} state={@state} />
-    </li>
-    <li :if={@step == :ready and not @state.busy?} class="studio-msg studio-coach">
-      <p class="studio-text">{question(:ready)}</p>
-    </li>
+      <p :if={@state.local_error} id="home-adjustment-error" role="status" class="studio-error">
+        {@state.local_error}
+      </p>
+    </section>
     """
   end
 
-  defp question(:type), do: "Which burpee?"
-  defp question(:style), do: "How should the sets go?"
-  defp question(:duration), do: "How long?"
-  defp question(:reps), do: "How many reps?"
-  defp question(:pace), do: "How fast is each rep?"
-  defp question(:ready), do: "Anything else I should know? Send it as it is, or add a line."
-
-  defp answer(:type, params), do: CreationParameters.type_label(params.burpee_type)
-  defp answer(:style, params), do: style_label(params.pacing_style)
-  defp answer(:duration, params), do: "#{duration_minutes(params)} min"
-  defp answer(:reps, params), do: "#{params.reps} reps"
-  defp answer(:pace, params), do: pace_label(params.pace)
+  defp question_text(:type), do: "Which burpee?"
+  defp question_text(:style), do: "How should the sets go?"
+  defp question_text(:duration), do: "How long?"
+  defp question_text(:reps), do: "How many reps?"
+  defp question_text(:pace), do: "How fast is each rep?"
 
   attr(:step, :atom, required: true)
   attr(:state, :map, required: true)
 
   defp controls(%{step: :type} = assigns) do
     ~H"""
-    <div class="studio-pills" role="group" aria-label="Burpee type">
-      <button
-        :for={{text, value} <- [{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]}
-        id={"home-pill-burpee_type-#{value}"}
-        type="button"
-        class="studio-pill"
-        phx-click="choose_workout_value"
-        phx-value-field="burpee_type"
+    <div class="studio-options" role="group" aria-label="Burpee type">
+      <.option
+        :for={
+          {text, value, detail} <- [
+            {"Six-count", "six_count", "The classic: down, back, push-up, up. About 4 to 5 s a rep."},
+            {"Navy SEAL", "navy_seal", "Slower and heavier. About 7 to 9 s a rep."}
+          ]
+        }
+        field="burpee_type"
+        text={text}
         value={value}
-      >
-        {text}
-      </button>
+        detail={detail}
+      />
     </div>
     """
   end
 
   defp controls(%{step: :style} = assigns) do
     ~H"""
-    <div class="studio-pills" role="group" aria-label="Set style">
-      <button
-        :for={{text, value} <- [{"Even", "even"}, {"Unbroken", "unbroken"}]}
-        id={"home-pill-pacing_style-#{value}"}
-        type="button"
-        class="studio-pill"
-        phx-click="choose_workout_value"
-        phx-value-field="pacing_style"
+    <div class="studio-options" role="group" aria-label="Set style">
+      <.option
+        :for={
+          {text, value, detail} <- [
+            {"Even", "even", "A steady beat, with a pause between reps."},
+            {"Unbroken", "unbroken", "Reps back to back, with rest between sets."}
+          ]
+        }
+        field="pacing_style"
+        text={text}
         value={value}
-      >
-        {text}
-      </button>
+        detail={detail}
+      />
     </div>
     """
   end
@@ -451,6 +492,28 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   end
 
   attr(:field, :string, required: true)
+  attr(:text, :string, required: true)
+  attr(:value, :string, required: true)
+  attr(:detail, :string, required: true)
+
+  # A choice is a card to tap, which answers the question.
+  defp option(assigns) do
+    ~H"""
+    <button
+      id={"home-pill-#{@field}-#{@value}"}
+      type="button"
+      class="studio-option"
+      phx-click="choose_workout_value"
+      phx-value-field={@field}
+      value={@value}
+    >
+      <span class="studio-option-title">{@text}</span>
+      <span class="studio-option-detail">{@detail}</span>
+    </button>
+    """
+  end
+
+  attr(:field, :string, required: true)
   attr(:value, :any, required: true)
   attr(:unit, :string, required: true)
   attr(:label, :string, required: true)
@@ -461,55 +524,59 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   # A value to swipe: right for more, left for less. The buttons and arrow keys do the same.
   defp stepper(assigns) do
     ~H"""
-    <div
-      id={"studio-step-#{@field}"}
-      class="studio-stepper"
-      phx-hook="SwipeValue"
-      data-field={@field}
-      role="spinbutton"
-      tabindex="0"
-      aria-label={@label}
-      aria-valuenow={@value}
-      aria-valuetext={"#{@value} #{@unit}"}
-    >
-      <button
-        id={"studio-#{@field}-down"}
-        type="button"
-        class="studio-step-button"
-        phx-click="step_workout_value"
-        phx-value-field={@field}
-        phx-value-dir="down"
-        aria-label={"Less #{@field}"}
-        disabled={@at_min?}
+    <div class="studio-stepper-wrap">
+      <div
+        id={"studio-step-#{@field}"}
+        class="studio-stepper"
+        phx-hook="SwipeValue"
+        data-field={@field}
+        role="spinbutton"
+        tabindex="0"
+        aria-label={@label}
+        aria-valuenow={@value}
+        aria-valuetext={"#{@value} #{@unit}"}
       >
-        <.icon name="hero-minus" class="size-5" />
-      </button>
-      <div class="studio-step-value" aria-hidden="true">
-        <span id={"studio-#{@field}-value"} class="studio-step-number">{@value}</span>
-        <span class="studio-step-unit">{@unit}</span>
+        <button
+          id={"studio-#{@field}-down"}
+          type="button"
+          class="studio-step-button"
+          phx-click="step_workout_value"
+          phx-value-field={@field}
+          phx-value-dir="down"
+          aria-label={"Less #{@field}"}
+          disabled={@at_min?}
+        >
+          <.icon name="hero-minus" class="size-6" />
+        </button>
+        <div class="studio-step-value" aria-hidden="true">
+          <span id={"studio-#{@field}-value"} class="studio-step-number">{@value}</span>
+          <span class="studio-step-unit">{@unit}</span>
+        </div>
+        <button
+          id={"studio-#{@field}-up"}
+          type="button"
+          class="studio-step-button"
+          phx-click="step_workout_value"
+          phx-value-field={@field}
+          phx-value-dir="up"
+          aria-label={"More #{@field}"}
+          disabled={@at_max?}
+        >
+          <.icon name="hero-plus" class="size-6" />
+        </button>
       </div>
+      <p class="studio-step-hint">{@hint}</p>
+    </div>
+    <div class="studio-step-actions">
       <button
-        id={"studio-#{@field}-up"}
+        id="studio-next"
         type="button"
-        class="studio-step-button"
-        phx-click="step_workout_value"
-        phx-value-field={@field}
-        phx-value-dir="up"
-        aria-label={"More #{@field}"}
-        disabled={@at_max?}
+        class="studio-pill studio-pill-primary studio-pill-wide"
+        phx-click="next_new_step"
       >
-        <.icon name="hero-plus" class="size-5" />
+        Next
       </button>
     </div>
-    <p class="studio-step-hint">{@hint}</p>
-    <button
-      id="studio-next"
-      type="button"
-      class="studio-pill studio-pill-primary"
-      phx-click="next_new_step"
-    >
-      Next
-    </button>
     """
   end
 
@@ -598,9 +665,11 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
               label={if(edit?(@state), do: "What do you want to change?", else: "Anything else?")}
               placeholder={@placeholder}
               rows="1"
-              maxlength={if(edit?(@state), do: "500", else: "300")}
+              maxlength={if(edit?(@state), do: "500", else: "400")}
               class="composer-input"
               disabled={@state.busy?}
+              phx-hook="ComposerCaret"
+              data-caret={if(@state.authoring_stage == :new, do: "end")}
             />
             <div class="composer-bar">
               <span></span>
@@ -669,13 +738,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp format_pace(nil), do: "–"
   defp format_pace(pace), do: :erlang.float_to_binary(pace * 1.0, decimals: 1)
-
-  # What has been chosen by `step`, as one line.
-  defp request_summary(params, upto \\ :pace) do
-    chosen = Enum.take_while(@new_steps, &(&1 != upto)) |> Enum.filter(&(&1 != :ready))
-    chosen = if upto == :pace, do: chosen ++ [:pace], else: chosen
-    Enum.map_join(chosen, " · ", &answer(&1, params))
-  end
 
   defp pauses_label([_one] = rests), do: "Pause: " <> pause_times(rests)
   defp pauses_label(rests), do: "Pauses: " <> pause_times(rests)

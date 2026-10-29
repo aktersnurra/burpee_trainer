@@ -857,7 +857,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> form("#home-edit-form", home_adjustment: %{instruction: ""}) |> render_submit()
 
     render_async(view, 2_000)
-    assert has_element?(view, "#studio-request", "10 reps")
+    assert has_element?(view, "#home-design-ask", "10 reps")
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
     assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
 
