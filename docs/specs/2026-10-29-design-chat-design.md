@@ -41,7 +41,7 @@ What would you like to change?
 Two even sets with a breather.      ← the proposal arrives as a card
 ╭ Proposal ───────────────╮
 ╰─────────────────────────╯
-              (Save) (✓ Accept)     ← docked
+              (Save) (▶ Run)         ← under the card
 ╭─────────────────────────╮
 │ Change anything else? ↑ │
 ╰─────────────────────────╯
