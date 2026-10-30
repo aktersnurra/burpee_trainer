@@ -66,8 +66,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#progress-gauge-navy_seal .progress-gauge-number", "30")
     assert has_element?(view, "#progress-gauge-navy_seal", "of 60 by")
     # One chart: six-count on the left axis, Navy SEAL on the right, each topped by its goal.
-    assert has_element?(view, "#home-history-trend-axis-left.progress-key-six-count", "150")
-    assert has_element?(view, "#home-history-trend-axis-right.progress-key-navy-seal", "60")
+    assert has_element?(view, "#home-history-trend-axis-six-count.progress-key-six-count", "150")
+    assert has_element?(view, "#home-history-trend-axis-navy-seal.progress-key-navy-seal", "60")
     assert has_element?(view, "#home-history-trend .home-history-goal-line")
   end
 
@@ -109,18 +109,22 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              BurpeeTrainer.Goals.list(Scope.for_user(user))
   end
 
-  test "after the first workout, its result is the starting point", %{conn: conn, user: user} do
+  test "after the first workout, its result is the best, with the next level it is short of",
+       %{conn: conn, user: user} do
     free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 110})
     {:ok, view, _} = live(conn, ~p"/progress")
 
     assert has_element?(
              view,
-             "#progress-gauge-six_count[data-kind=first] .progress-gauge-number",
+             "#progress-gauge-six_count[data-kind=best] .progress-gauge-number",
              "110"
            )
 
-    assert has_element?(view, "#progress-gauge-six_count", "First session")
-    refute has_element?(view, "#progress-set-goal-six_count")
+    assert has_element?(
+             view,
+             "#progress-gauge-six_count .progress-gauge-detail",
+             "1D at 150 · 40 to go"
+           )
   end
 
   test "the streak counts weeks in a row at the target, this one once it is met", %{

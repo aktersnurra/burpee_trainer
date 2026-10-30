@@ -61,11 +61,18 @@ defmodule BurpeeTrainer.ProgressGaugesTest do
     assert [%{kind: :goal, goal: ^near}, _] = gauges([far, near], [session(130)])
   end
 
-  test "one or two measured sessions: the first is the starting point" do
-    first = session(110, completed_at: ~U[2026-10-08 10:00:00Z])
+  test "one measured 20-minute session is the best; the next level is what it is short of" do
+    assert [%{kind: :best, best: 115, next_level: {:level_1d, 150}}, %{kind: :none}] =
+             gauges([], [session(115), session(110)])
+  end
 
-    assert [%{kind: :first, reps: 110}, %{kind: :none}] =
-             gauges([], [session(115), first])
+  test "evenness is the latest camera-tracked session's, as a percentage" do
+    old = session(100, completed_at: ~U[2026-10-01 10:00:00Z]) |> Map.put(:pace_consistency, 0.5)
+
+    new =
+      session(100, completed_at: ~U[2026-10-08 10:00:00Z]) |> Map.put(:pace_consistency, 0.937)
+
+    assert [%{evenness: 94}, _] = gauges([], [old, new, session(100)])
   end
 
   test "three measured sessions and no goal: the best, and the next goal" do

@@ -6,43 +6,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   alias BurpeeTrainerWeb.Fmt
   alias Phoenix.LiveView.JS
 
-  attr(:decisions, :map, required: true)
-
-  def recent_performance(assigns) do
-    ~H"""
-    <section :if={@decisions != %{}} aria-label="Recent comparable training" class="my-5">
-      <p class="mb-2 text-sm opacity-60">Recent reps per 20 minutes</p>
-      <dl class="grid grid-cols-2 gap-4">
-        <div
-          :for={type <- [:six_count, :navy_seal]}
-          id={"progress-pace-#{type}"}
-          data-reps-per-20={@decisions[type].baseline_reps_per_20}
-          class="rounded-xl border border-current/10 p-3"
-        >
-          <dt class="text-sm opacity-70">{Fmt.burpee_type(type)}</dt>
-          <dd :if={is_nil(@decisions[type].baseline_reps_per_20)} class="mt-1 text-sm opacity-60">
-            No comparable sessions yet
-          </dd>
-          <dd :if={not is_nil(@decisions[type].baseline_reps_per_20)} class="mt-1">
-            <span class="text-2xl font-semibold tabular-nums">{@decisions[type].baseline_reps_per_20}</span>
-            <span :if={@decisions[type].previous_reps_per_20} class="mt-1 block text-xs opacity-60">
-              {pace_change(@decisions[type])} vs previous
-            </span>
-          </dd>
-        </div>
-      </dl>
-      <p class="sr-only">
-        Same movement, completed sessions from the last eight weeks. Rates use at least twenty minutes and retain planned time for early finishes.
-      </p>
-    </section>
-    """
-  end
-
-  defp pace_change(decision) do
-    delta = decision.baseline_reps_per_20 - decision.previous_reps_per_20
-    if delta > 0, do: "+#{delta}", else: to_string(delta)
-  end
-
   # Where the chart's top (each type's goal) and bottom lines sit, in percent of its height.
   @plot_top 12
   @plot_bottom 88
@@ -80,7 +43,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             <span aria-hidden="true">{@state.history_streak}</span>
           </span>
         </div>
-        <.recent_performance decisions={@state.history_performance} />
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>
@@ -397,6 +359,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         {gauge_number(@gauge)}
       </p>
       <p class="progress-gauge-label">{gauge_label(@gauge)}</p>
+      <p :if={gauge_detail(@gauge)} class="progress-gauge-detail">{gauge_detail(@gauge)}</p>
       <%!-- When an honest course exists, when the target comes at this pace. --%>
       <p
         :if={@gauge.kind == :goal and @gauge.course}
@@ -437,6 +400,32 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp gauge_label(%{kind: :first}), do: "First session"
   defp gauge_label(%{kind: :none}), do: "No sessions yet"
 
+  # The next level and how far off it is, and how even the latest tracked session was.
+  defp gauge_detail(gauge) do
+    level =
+      case Map.get(gauge, :next_level) do
+        {level, reps} ->
+          to_go = reps - (Map.get(gauge, :best) || Map.get(gauge, :reps) || 0)
+          "#{level_label(level)} at #{reps} · #{to_go} to go"
+
+        nil ->
+          nil
+      end
+
+    even =
+      case Map.get(gauge, :evenness) do
+        nil -> nil
+        percent -> "#{percent}% even"
+      end
+
+    case Enum.reject([level, even], &is_nil/1) do
+      [] -> nil
+      parts -> Enum.join(parts, " · ")
+    end
+  end
+
+  defp level_label(level), do: level |> Fmt.level() |> String.replace_prefix("Level ", "")
+
   defp type_sentence(:six_count), do: "Six-count"
   defp type_sentence(:navy_seal), do: "Navy SEAL"
 
@@ -454,9 +443,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:show_sessions?, :boolean, default: false)
   attr(:gauges, :list, default: [])
 
-  # Both types on one chart, each in its colour and on its own axis: six-count on the
-  # left, Navy SEAL on the right. Each axis tops out at that type's goal, so both goals
-  # sit on the one dashed line and a line's height reads as closeness to its goal.
+  # Each type in its own lane on a shared time axis, in its colour and on its own scale,
+  # which tops out at its goal when it has one (the dashed line), so a line's height reads
+  # as closeness to its goal.
   def trend_chart(assigns) do
     series = [
       %{
@@ -477,9 +466,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
     assigns =
       assigns
-      |> assign(:series, plot_series(series, scales, assigns.period_start, assigns.now))
-      |> assign(:axes, axes(series, scales))
-      |> assign(:goal?, Enum.any?(assigns.gauges, &(&1.kind == :goal)))
+      |> assign(
+        :series,
+        plot_series(series, scales, assigns.gauges, assigns.period_start, assigns.now)
+      )
       |> assign(plot_top: @plot_top, plot_bottom: @plot_bottom)
 
     ~H"""
@@ -517,58 +507,62 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           class="home-history-plot"
           phx-remove={removed_target_focus("home-history-trend-plot")}
         >
+          <button
+            id="home-history-trend-open-sessions"
+            type="button"
+            aria-label="Show saved sessions"
+            phx-click="history_density_mode"
+            phx-value-mode="sessions"
+            class="home-history-trend-open-sessions"
+          ></button>
+          <%!-- One lane per type, on a shared time axis, each read on its own scale. --%>
           <div
-            :for={axis <- @axes}
-            id={"home-history-trend-axis-#{axis.side}"}
-            class={[
-              "home-history-trend-axis",
-              "home-history-trend-axis-#{axis.side}",
-              "progress-key-#{series_class(axis.type)}"
-            ]}
-            aria-hidden="true"
+            :for={series <- @series}
+            :if={series.points != []}
+            id={"home-history-lane-#{series_class(series.type)}"}
+            class="home-history-lane"
           >
-            <span style={"top: #{@plot_top}%"}>{axis.hi}</span>
-            <span style="top: 50%">{div(axis.hi + axis.lo, 2)}</span>
-            <span style={"top: #{@plot_bottom}%"}>{axis.lo}</span>
-          </div>
-          <div class={["home-history-plot-area", length(@axes) == 2 && "home-history-plot-dual"]}>
-            <button
-              id="home-history-trend-open-sessions"
-              type="button"
-              aria-label="Show saved sessions"
-              phx-click="history_density_mode"
-              phx-value-mode="sessions"
-              class="home-history-trend-open-sessions"
-            ></button>
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
+            <div
+              id={"home-history-trend-axis-#{series_class(series.type)}"}
+              class={["home-history-trend-axis", "progress-key-#{series_class(series.type)}"]}
               aria-hidden="true"
-              class="home-history-svg"
             >
-              <line
-                x1="0"
-                x2="100"
-                y1={@plot_top}
-                y2={@plot_top}
-                class={["home-history-grid", @goal? && "home-history-goal-line"]}
-              />
-              <line x1="0" x2="100" y1="50" y2="50" class="home-history-grid" />
-              <line x1="0" x2="100" y1={@plot_bottom} y2={@plot_bottom} class="home-history-grid" />
-              <polyline
-                :for={series <- @series}
-                :if={series.points != []}
-                class={"home-history-line-#{series_class(series.type)}"}
-                stroke-dasharray={series.type == :navy_seal && "5 4"}
-                points={series.line}
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                vector-effect="non-scaling-stroke"
-              />
-            </svg>
-            <%= for series <- @series, point <- series.points do %>
+              <span style={"top: #{@plot_top}%"}>{series.hi}</span>
+              <span style={"top: #{@plot_bottom}%"}>{series.lo}</span>
+            </div>
+            <div class="home-history-plot-area">
+              <svg
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+                class="home-history-svg"
+              >
+                <line
+                  x1="0"
+                  x2="100"
+                  y1={@plot_top}
+                  y2={@plot_top}
+                  class={["home-history-grid", series.goal? && "home-history-goal-line"]}
+                />
+                <line
+                  x1="0"
+                  x2="100"
+                  y1={@plot_bottom}
+                  y2={@plot_bottom}
+                  class="home-history-grid"
+                />
+                <polyline
+                  class={"home-history-line-#{series_class(series.type)}"}
+                  stroke-dasharray={series.type == :navy_seal && "5 4"}
+                  points={series.line}
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
               <button
+                :for={point <- series.points}
                 id={"home-history-point-#{point.id}"}
                 phx-remove={removed_target_focus("home-history-point-#{point.id}")}
                 type="button"
@@ -584,7 +578,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               >
                 <span aria-hidden="true"></span>
               </button>
-            <% end %>
+            </div>
           </div>
         </div>
       <% end %>
@@ -672,7 +666,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp tags(_session), do: []
 
-  defp plot_series(series, scales, period_start, now) do
+  defp plot_series(series, scales, gauges, period_start, now) do
     all =
       series
       |> Enum.flat_map(& &1.points)
@@ -720,7 +714,13 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           })
         end)
 
-      Map.merge(series, %{points: plotted, line: Enum.map_join(plotted, " ", &"#{&1.x},#{&1.y}")})
+      Map.merge(series, %{
+        points: plotted,
+        line: Enum.map_join(plotted, " ", &"#{&1.x},#{&1.y}"),
+        lo: lo,
+        hi: hi,
+        goal?: Enum.any?(gauges, &(&1.burpee_type == series.type and &1.kind == :goal))
+      })
     end)
   end
 
@@ -739,18 +739,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       lo = (Enum.min(densities) * 0.8 / 10) |> floor() |> Kernel.*(10) |> max(0) |> min(hi - 10)
       {type, {lo, hi}}
     end
-  end
-
-  # Six-count reads on the left; Navy SEAL on the right, or the left when it is alone.
-  defp axes(series, scales) do
-    shown = for %{type: type} <- series, Map.has_key?(scales, type), do: type
-
-    shown
-    |> Enum.zip([:left, :right])
-    |> Enum.map(fn {type, side} ->
-      {lo, hi} = scales[type]
-      %{type: type, side: side, lo: lo, hi: hi}
-    end)
   end
 
   defp series_class(type), do: type |> Atom.to_string() |> String.replace("_", "-")

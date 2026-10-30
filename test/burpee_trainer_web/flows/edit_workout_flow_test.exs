@@ -461,7 +461,10 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     flush_provider_requests()
 
     # A tap on the first set's row selects it; its reps step down by one.
-    view |> element("#studio-proposal tr.home-editable-row[phx-value-index='0']") |> render_click()
+    view
+    |> element("#studio-proposal tr.home-editable-row[phx-value-index='0']")
+    |> render_click()
+
     assert has_element?(view, "#studio-hand-edit", "Set 1")
     assert has_element?(view, "#studio-hand-reps", "75")
     view |> element("#studio-hand-reps-down") |> render_click()
