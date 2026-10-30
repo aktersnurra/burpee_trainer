@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-30 — The handle shows everything Home can do; hidden until asked
+
+- Edit, Swap and New stay hidden until asked for, as designed: Home starts with the one thing to do. The ways to ask are a tap on the workout, a swipe, or the handle at the bottom, and the handle's sheet now offers Swap workout beside Edit and New, so nothing needs the workout opened first. `docs/ui.md` states the principle.
+
 ## 2026-10-30 — The swipes are findable; the studio has a browser check
 
 - Home has a handle at its bottom edge that opens the Edit / New sheet, and a line above it saying what the two swipes do, for the first three visits or until the first swipe (`HomeHint`).

@@ -448,7 +448,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       id="home-options-sheet"
       role="dialog"
       aria-modal="true"
-      aria-label="Edit this workout or make a new one"
+      aria-label="Edit, swap or make a new workout"
       phx-window-keydown="close_options"
       phx-key="Escape"
       phx-mounted={JS.focus()}
@@ -466,6 +466,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <span class="home-option-text">
           <span class="home-option-title">Edit this workout</span>
           <span class="home-option-detail">Talk it through with the coach</span>
+        </span>
+      </button>
+      <button id="home-options-swap" type="button" class="home-option" phx-click="open_chooser">
+        <.icon name="hero-arrows-right-left" class="size-6" />
+        <span class="home-option-text">
+          <span class="home-option-title">Swap workout</span>
+          <span class="home-option-detail">Pick another from your library</span>
         </span>
       </button>
       <button id="home-options-new" type="button" class="home-option" phx-click="new_workout">

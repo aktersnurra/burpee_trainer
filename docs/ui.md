@@ -9,6 +9,10 @@
 ## 1. Design Principles
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
+- **Show what is needed, reveal the rest when asked.** A screen starts with the one thing to do;
+  what it can also do (a workout's table, Edit, Swap, New) waits until the athlete asks, by a tap on
+  the workout, a swipe, or the handle at the bottom. Hiding a control is only right when asking is
+  cheap and findable, so every hidden thing has a visible way to ask and a gesture as a shortcut.
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.

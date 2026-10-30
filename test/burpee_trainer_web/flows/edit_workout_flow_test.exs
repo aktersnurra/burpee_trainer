@@ -128,6 +128,14 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     render_hook(view, "open_options", %{})
     assert has_element?(view, "#home-options-sheet #home-options-edit", "Edit this workout")
     assert has_element?(view, "#home-options-sheet #home-options-new", "New workout")
+    assert has_element?(view, "#home-options-sheet #home-options-swap", "Swap workout")
+
+    # Swap opens the list and takes the sheet away; nothing needed the workout opened first.
+    view |> element("#home-options-swap") |> render_click()
+    refute has_element?(view, "#home-options-sheet")
+    assert has_element?(view, "#home-alternatives-panel:not([hidden])")
+    render_click(view, "close_chooser", %{})
+    render_hook(view, "open_options", %{})
 
     render_hook(view, "close_options", %{})
     refute has_element?(view, "#home-options-sheet")
