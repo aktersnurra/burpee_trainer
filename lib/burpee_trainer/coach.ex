@@ -8,6 +8,7 @@ defmodule BurpeeTrainer.Coach do
     AuthoringPrompt,
     WorkoutLayout,
     RestFitter,
+    ProposalEdit,
     WorkoutGuidance,
     WorkoutRequest
   }
@@ -285,6 +286,38 @@ defmodule BurpeeTrainer.Coach do
   end
 
   def approve_plan(%Accounts.Scope{}, _, _), do: {:error, Error.new(:design_workspace_changed)}
+
+  @doc """
+  A number on a reviewed proposal changed by hand: `field` (`:reps` or `:every`) of the sets
+  at `indices` stepped by `dir`, the rests fitted again (`ProposalEdit`). No call is made;
+  the result is checked as a proposal from the coach is. `:error` when it does not fit.
+  """
+  @spec adjust_proposal(map(), [non_neg_integer()], :reps | :every, -1 | 1) ::
+          {:ok, map()} | :error
+  def adjust_proposal(
+        %{definition: %{} = canonical, original_request: %WorkoutRequest{} = base} = prepared,
+        indices,
+        field,
+        dir
+      ) do
+    with {:ok, attrs, base} <- ProposalEdit.apply(canonical, base, indices, field, dir),
+         {:ok, definition} <- WorkoutDefinition.new(attrs),
+         {:ok, _program} <- BurpeeTrainer.PlanCompiler.compile(definition),
+         :ok <- WorkoutRequest.validate_definition(base, definition),
+         {:ok, chosen} <- complete_review_request(base, definition) do
+      {:ok,
+       %{
+         prepared
+         | definition: WorkoutDefinition.canonical_map(definition),
+           request: chosen,
+           original_request: base
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  def adjust_proposal(_prepared, _indices, _field, _dir), do: :error
 
   @doc "Publish a reviewed workout and select it atomically; never starts a session."
   def approve_and_select_plan(scope, prepared, expected) do

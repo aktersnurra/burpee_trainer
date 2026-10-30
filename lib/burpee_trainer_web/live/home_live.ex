@@ -366,6 +366,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "abort_new_workout",
              "add_new_request",
+             "adjust_proposal",
              "back_new_step",
              "back_to_workout_request",
              "change_adjustment",
@@ -383,6 +384,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "run_workout_request",
              "save_review_to_library",
              "select_created_workout",
+             "select_proposal_row",
              "send_new_workout",
              "step_workout_value",
              "submit_home_action"

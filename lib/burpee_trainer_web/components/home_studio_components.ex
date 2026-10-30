@@ -192,9 +192,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         reps={@definition["target_reps"]}
         note={@definition["rationale"]}
         rows={@state.review_inspection_rows}
-        compare={if edit?(@state), do: @state.inspection_rows}
+        compare={compare(@state)}
+        was={was(@state)}
         expanded={@state.expanded_groups}
+        editable={not @stale?}
+        selected={Map.get(@state, :edit_row)}
       />
+      <.hand_edit :if={not @stale? and Map.get(@state, :edit_row)} state={@state} />
       <p
         :if={@state.pending_request.request.timed_rests != []}
         id="home-edit-review-pauses"
@@ -228,6 +232,122 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     """
   end
 
+  # What a proposal is read against: the one it replaced, else the workout Edit began from.
+  defp compare(state) do
+    case Map.get(state, :previous) do
+      %{rows: rows} -> rows
+      nil -> if edit?(state), do: state.inspection_rows
+    end
+  end
+
+  defp was(state) do
+    case Map.get(state, :previous) do
+      %{reps: reps, seconds: seconds} ->
+        %{reps: reps, seconds: seconds}
+
+      nil ->
+        if edit?(state) do
+          plan = state.home_selection.plan
+          %{reps: plan.target_reps, seconds: plan.target_duration_sec}
+        end
+    end
+  end
+
+  attr(:state, :map, required: true)
+
+  # The selected sets' numbers, stepped by hand; the rests are fitted again to keep the length.
+  defp hand_edit(assigns) do
+    rows = assigns.state.review_inspection_rows
+    row = HomeWorkoutComponents.row_at(rows, assigns.state.edit_row)
+    steps = assigns.state.edit_steps || %{}
+
+    assigns =
+      assign(assigns,
+        row: row,
+        label: row && HomeWorkoutComponents.set_range(rows, row),
+        work: row && first_work(row),
+        steps: steps
+      )
+
+    ~H"""
+    <div
+      :if={@row && @work}
+      id="studio-hand-edit"
+      class="studio-hand-edit"
+      role="group"
+      aria-label={"Set #{@label}"}
+    >
+      <span class="studio-hand-edit-label">{if String.contains?(@label, "–"), do: "Sets", else: "Set"} {@label}</span>
+      <.hand_step
+        field="reps"
+        value={@work["reps"]}
+        unit="reps"
+        down?={@steps[{:reps, -1}]}
+        up?={@steps[{:reps, 1}]}
+      />
+      <.hand_step
+        field="every"
+        value={format_beat(@work["sec_per_rep_us"])}
+        unit="s"
+        down?={@steps[{:every, -1}]}
+        up?={@steps[{:every, 1}]}
+      />
+    </div>
+    """
+  end
+
+  attr(:field, :string, required: true)
+  attr(:value, :any, required: true)
+  attr(:unit, :string, required: true)
+  attr(:down?, :boolean, default: false)
+  attr(:up?, :boolean, default: false)
+
+  defp hand_step(assigns) do
+    ~H"""
+    <span class="studio-hand-step">
+      <button
+        id={"studio-hand-#{@field}-down"}
+        type="button"
+        class="studio-hand-button"
+        phx-click="adjust_proposal"
+        phx-value-field={@field}
+        phx-value-dir="-1"
+        aria-label={"Less #{@field}"}
+        disabled={!@down?}
+      >
+        <.icon name="hero-minus" class="size-4" />
+      </button>
+      <span id={"studio-hand-#{@field}"} class="studio-hand-value">{@value}<small>{@unit}</small></span>
+      <button
+        id={"studio-hand-#{@field}-up"}
+        type="button"
+        class="studio-hand-button"
+        phx-click="adjust_proposal"
+        phx-value-field={@field}
+        phx-value-dir="1"
+        aria-label={"More #{@field}"}
+        disabled={!@up?}
+      >
+        <.icon name="hero-plus" class="size-4" />
+      </button>
+    </span>
+    """
+  end
+
+  defp first_work(row),
+    do:
+      row.units
+      |> Enum.flat_map(& &1.paired)
+      |> Enum.find_value(&if(&1.program["kind"] == "work", do: &1.program))
+
+  defp format_beat(us),
+    do:
+      us
+      |> Decimal.new()
+      |> Decimal.div(1_000_000)
+      |> Decimal.normalize()
+      |> Decimal.to_string(:normal)
+
   attr(:label, :string, default: "Working on it…")
 
   defp working(assigns) do
@@ -246,8 +366,11 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:note, :string, default: nil)
   attr(:rows, :list, default: [])
   attr(:compare, :any, default: nil)
+  attr(:was, :map, default: nil)
   attr(:expanded, :any, default: MapSet.new())
   attr(:table?, :boolean, default: true)
+  attr(:editable, :boolean, default: false)
+  attr(:selected, :integer, default: nil)
 
   # A workout, as the coach shows it: its name, its totals as two chips, a line on
   # why, and the table when it is the one being discussed.
@@ -256,16 +379,32 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     <article id={@id} class="studio-card">
       <h2 class="studio-card-name">{@name}</h2>
       <p class="studio-card-totals">
-        <span class="studio-chip">{minutes(@seconds)} min</span>
-        <span class="studio-chip">{@reps} reps</span>
+        <span class={[
+          "studio-chip",
+          changed?(@was, :seconds, round(@seconds)) && "studio-chip-changed"
+        ]}>
+          {minutes(@seconds)} min
+        </span>
+        <span class={["studio-chip", changed?(@was, :reps, @reps) && "studio-chip-changed"]}>
+          {@reps} reps
+        </span>
       </p>
       <p :if={@note && @table?} class="studio-card-note">{@note}</p>
       <div :if={@table?} class="studio-card-table">
-        <HomeWorkoutComponents.inspection rows={@rows} compare={@compare} expanded={@expanded} />
+        <HomeWorkoutComponents.inspection
+          rows={@rows}
+          compare={@compare}
+          expanded={@expanded}
+          editable={@editable}
+          selected={@selected}
+        />
       </div>
     </article>
     """
   end
+
+  defp changed?(nil, _key, _value), do: false
+  defp changed?(was, key, value), do: Map.get(was, key) != value
 
   ## New
 

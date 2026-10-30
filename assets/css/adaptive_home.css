@@ -908,10 +908,10 @@ button.home-summary:hover .home-workout-name {
 @media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
 /* New's title takes the workout title's place: centred, at the title size. */
 /* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
-.adaptive-home mark.home-changed { background: transparent; color: inherit; }
-.adaptive-home .home-changed { font-weight: 600; color: #262722; text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
-.adaptive-home td.home-changed, .adaptive-home th.home-changed { text-decoration: none; }
-.adaptive-home td.home-changed span, .adaptive-home th.home-changed > span { text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+:is(.adaptive-home, .studio) mark.home-changed { background: transparent; color: inherit; }
+:is(.adaptive-home, .studio) .home-changed { font-weight: 600; color: #262722; text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+:is(.adaptive-home, .studio) td.home-changed, :is(.adaptive-home, .studio) th.home-changed { text-decoration: none; }
+:is(.adaptive-home, .studio) td.home-changed span, :is(.adaptive-home, .studio) th.home-changed > span { text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
 /* New's title lands exactly where the open workout's title was. */
 #home-ready-recommendation[data-expanded="true"]:has(#home-authoring-heading) { margin-top: 56px; }
 /* The status row opens the page under its heading; the period tabs then open the record. */
@@ -1186,3 +1186,16 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 
 #home-options-sheet:focus { outline: none; }
 .coach-summary-loader { margin-top: -8px; }
+
+/* What a proposal changed from the one before: the clay underline, on a chip as its border. */
+.studio-chip-changed { box-shadow: inset 0 0 0 1.5px #a77b5d; font-weight: 600; }
+/* A proposal's set rows take a tap to change their numbers by hand. */
+.studio .home-editable-row { cursor: pointer; }
+.studio .home-selected-row > * { background: var(--color-base-100); }
+.studio-hand-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 10px; padding: 10px 14px; border-radius: var(--radius-surface); background: var(--color-base-200); font-variant-numeric: tabular-nums; animation: studio-in var(--motion-quick) var(--ease-out) backwards; }
+.studio-hand-edit-label { flex: 1 0 100%; color: var(--home-muted); font-size: var(--text-small); }
+.studio-hand-step { display: inline-flex; align-items: center; gap: 4px; }
+.studio-hand-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; }
+.studio-hand-button:disabled { opacity: .35; }
+.studio-hand-value { min-width: 56px; font: 600 var(--text-body)/1 var(--font-sans); text-align: center; }
+.studio-hand-value small { margin-left: 2px; color: var(--home-muted); font-weight: 400; font-size: var(--text-small); }

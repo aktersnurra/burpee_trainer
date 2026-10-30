@@ -8,7 +8,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   A design is a conversation: each follow-up is read against the proposal on screen, and
   the proposals it replaces stay as `design_turns`, oldest first. Nothing in a refinement
-  falls back to the workout the design started from.
+  falls back to the workout the design started from. `previous` is the proposal the one on
+  screen replaced, so what changed reads marked; a number changed by hand (`edit_row`, the
+  selected row's first event, and `edit_steps`, which steps it allows) replaces it in place.
 
   Work in flight is identified by `update_id`. A result is applied only while it is the
   one in flight, so a late answer to a discarded or superseded request changes nothing.
@@ -35,6 +37,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     instruction: "",
     design_turns: [],
     pending_turn: nil,
+    previous: nil,
+    edit_row: nil,
+    edit_steps: nil,
     new_step: :type,
     busy?: false,
     update_id: nil,
@@ -138,11 +143,38 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
            review_inspection_rows: rows,
            pending_request: prepared,
            workout_parameters: params,
+           previous: snapshot(m),
+           edit_row: nil,
+           edit_steps: nil,
            design_turns: superseded(m),
            instruction: m.pending_turn || m.instruction,
            pending_turn: nil
        }, []}
     end)
+  end
+
+  # A row of the proposal selected for a hand edit; selecting it again lets it go.
+  def update(
+        %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
+        {:row_selected, index, steps}
+      ) do
+    if m.edit_row == index,
+      do: {%{m | edit_row: nil, edit_steps: nil}, []},
+      else: {%{m | edit_row: index, edit_steps: steps, local_error: nil}, []}
+  end
+
+  def update(
+        %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
+        {:proposal_adjusted, prepared, rows, steps}
+      ) do
+    {%{
+       m
+       | pending_request: prepared,
+         review_inspection_rows: rows,
+         previous: snapshot(m),
+         edit_steps: steps,
+         local_error: nil
+     }, []}
   end
 
   # A refinement that fails leaves the proposal it was refining on screen.
@@ -220,7 +252,26 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   defp discard(m), do: {%{clear(m) | busy?: false, update_id: nil}, []}
 
   defp clear(m),
-    do: %{m | pending_request: nil, local_error: nil, design_turns: [], pending_turn: nil}
+    do: %{
+      m
+      | pending_request: nil,
+        local_error: nil,
+        design_turns: [],
+        pending_turn: nil,
+        previous: nil,
+        edit_row: nil,
+        edit_steps: nil
+    }
+
+  # The proposal on screen, as what the next one is read against.
+  defp snapshot(%{pending_request: %{definition: definition}, review_inspection_rows: rows}),
+    do: %{
+      rows: rows,
+      reps: definition["target_reps"],
+      seconds: round(definition["target_duration_sec"])
+    }
+
+  defp snapshot(_m), do: nil
 
   # The proposal a refinement replaces, kept with the words that asked for it.
   defp superseded(%{pending_turn: nil} = m), do: m.design_turns

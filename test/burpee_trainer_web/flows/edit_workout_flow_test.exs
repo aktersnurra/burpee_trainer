@@ -293,7 +293,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
     assert has_element?(view, "#home-edit-review .home-prescription-every", "5s")
-    assert has_element?(view, "#home-edit-review .home-prescription-rest", "450s")
+    assert has_element?(view, "#home-edit-review .home-prescription-rest", "7:30")
     refute has_element?(view, "#home-update-loading")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     view |> element("#home-request-run") |> render_click()
@@ -445,6 +445,45 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     # What was typed is still there to send again.
     assert has_element?(view, "#home-edit-instruction:not([disabled])", "Increase to 999 reps")
     assert has_element?(view, "#home-request-run:not([disabled])")
+  end
+
+  test "a set's numbers change by hand with no call; the rests keep the length, Run takes it",
+       %{view: view} do
+    view |> element("#home-summary") |> render_click()
+    open_edit(view)
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
+    |> render_submit()
+
+    render_async(view)
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "150 reps")
+    flush_provider_requests()
+
+    # A tap on the first set's row selects it; its reps step down by one.
+    view |> element("#studio-proposal tr.home-editable-row[phx-value-index='0']") |> render_click()
+    assert has_element?(view, "#studio-hand-edit", "Set 1")
+    assert has_element?(view, "#studio-hand-reps", "75")
+    view |> element("#studio-hand-reps-down") |> render_click()
+
+    assert has_element?(view, "#studio-hand-reps", "74")
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "149 reps")
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "20 min")
+    # What changed from the proposal before reads marked.
+    assert has_element?(view, "#studio-proposal .studio-chip-changed", "149 reps")
+    assert has_element?(view, "#studio-proposal td.home-changed", "74")
+    refute_received {:provider_request, _}
+
+    view |> element("#home-request-save") |> render_click()
+    render_async(view)
+
+    assert [saved] =
+             Enum.filter(
+               Workouts.list_library(Scope.for_user(Repo.one!(Accounts.User))),
+               &(&1.target_reps == 149)
+             )
+
+    assert saved.target_duration_sec == 1_200
   end
 
   defp provider_requests(acc \\ []) do

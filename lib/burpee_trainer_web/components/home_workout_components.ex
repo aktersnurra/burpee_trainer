@@ -698,6 +698,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     doc: "rows of the current workout; changed cells are marked"
   )
 
+  attr(:editable, :boolean,
+    default: false,
+    doc: "a tap on a set's row selects it for a hand edit (`select_proposal_row`)"
+  )
+
+  attr(:selected, :integer, default: nil, doc: "the first event index of the selected row")
+
   def inspection(assigns) do
     show_move? = show_move?(assigns.rows)
 
@@ -736,7 +743,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         </caption>
         <thead>
           <tr>
-            <th scope="col">Sets</th>
+            <th scope="col">Set</th>
             <th scope="col">Reps</th>
             <th scope="col">Every</th>
             <th :if={@show_move?} scope="col">Move</th>
@@ -750,9 +757,23 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <%!-- A tap anywhere on a group row toggles it; the button keeps keyboard and screen-reader operation. --%>
             <tr
               id={"#{row.id}-event-#{hd(hd(row.units).paired).index}"}
-              class={row.count > 1 && "home-group-row"}
-              phx-click={row.count > 1 && "toggle_group"}
-              phx-value-id={row.count > 1 && row.id}
+              class={[
+                row.count > 1 && "home-group-row",
+                (@editable and row.kind != :recovery) && "home-editable-row",
+                @selected == first_index(row) && "home-selected-row"
+              ]}
+              phx-click={
+                cond do
+                  @editable and row.kind != :recovery -> "select_proposal_row"
+                  row.count > 1 -> "toggle_group"
+                  true -> nil
+                end
+              }
+              phx-value-index={(@editable and row.kind != :recovery) && first_index(row)}
+              phx-value-id={(not @editable and row.count > 1) && row.id}
+              aria-selected={
+                (@editable and row.kind != :recovery) && to_string(@selected == first_index(row))
+              }
             >
               <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
                 <button
@@ -767,16 +788,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   aria-describedby={"#{row.id}-prescription"}
                 >
                   <%= if expanded? do %>
-                    Set {set_number(@rows, hd(row.units))}
+                    {set_number(@rows, hd(row.units))}
                   <% else %>
-                    {row.count} {if length(row.units) == row.count, do: "sets", else: "repeats"}
+                    {set_range(@rows, row)}
                   <% end %>
                   <.icon name="hero-chevron-down" class="home-chevron" />
                 </button>
                 <span :if={row.count > 1} id={"#{row.id}-prescription"} class="sr-only">
                   {Enum.map_join(visible_units, "; ", &prescription_label/1)}
                 </span>
-                <span :if={row.count == 1}>{row_label(row)}</span>
+                <span :if={row.count == 1}>{row_label(@rows, row)}</span>
               </th>
               <.prescription
                 units={visible_units}
@@ -792,7 +813,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             hidden={!expanded?}
           >
             <tr :for={unit <- Enum.drop(row.units, 1)} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
-              <th scope="row">Set {set_number(@rows, unit)}</th>
+              <th scope="row">{set_number(@rows, unit)}</th>
               <.prescription units={[unit]} show_move?={@show_move?} />
             </tr>
           </tbody>
@@ -831,7 +852,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     units = shared_units(row)
 
     %{
-      label: if(row.count > 1, do: "#{row.count}", else: row_label(row)),
+      label: if(row.count > 1, do: "#{row.count}", else: "#{row.kind}"),
       reps: Enum.map(units, &work_value(&1, "reps")),
       every: Enum.map(units, &cadence/1),
       move: if(show_move?, do: Enum.map(units, &pace/1), else: []),
@@ -922,7 +943,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
     total_us = tail_us + explicit_ms * 1_000
     # Whole seconds: timing is planned to ±10s, so decimals here are noise.
-    if total_us == 0, do: "—", else: "#{round(total_us / 1_000_000)}s"
+    if total_us == 0,
+      do: "—",
+      else: BurpeeTrainer.Workouts.Shape.clock(round(total_us / 1_000_000))
   end
 
   defp pace(unit),
@@ -937,9 +960,33 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     end)
   end
 
-  defp row_label(%{trailing?: true}), do: "Final recovery"
-  defp row_label(%{kind: :recovery}), do: "Recovery"
-  defp row_label(_), do: "1 set"
+  defp row_label(_rows, %{trailing?: true}), do: "Final recovery"
+  defp row_label(_rows, %{kind: :recovery}), do: "Recovery"
+  defp row_label(rows, row), do: set_range(rows, row)
+
+  defp first_index(row), do: hd(hd(row.units).paired).index
+
+  @doc "A row's sets by number, as the table labels them: `5`, or `1–4` for a group."
+  def set_range(rows, row) do
+    numbers = row.units |> Enum.filter(&work/1) |> Enum.map(&set_number(rows, &1))
+
+    case numbers do
+      [] -> ""
+      [one] -> "#{one}"
+      _ -> "#{Enum.min(numbers)}–#{Enum.max(numbers)}"
+    end
+  end
+
+  @doc "The definition indices of a row's sets, for a hand edit."
+  def work_indices(row),
+    do:
+      row.units
+      |> Enum.flat_map(& &1.paired)
+      |> Enum.filter(&(&1.program["kind"] == "work"))
+      |> Enum.map(& &1.index)
+
+  @doc "The row whose first event is at `index`, if any."
+  def row_at(rows, index), do: Enum.find(rows, &(first_index(&1) == index))
 
   defp set_number(rows, unit) do
     rows

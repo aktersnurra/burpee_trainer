@@ -232,7 +232,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     render_async(view, 2_000)
     assert Agent.get(counter, & &1.calls) == ["workout_request", "workout_layout"]
     assert has_element?(view, "#studio-proposal #home-inspection")
-    assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "1:00")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "40s")
     assert has_element?(view, "#home-edit-review-pauses", "Pauses: 60s at 11:00")
     assert has_element?(view, "#home-edit-review-pauses", "40s at 18:00")
@@ -246,7 +246,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     [group_id | _] = LazyHTML.attribute(first_group, "id")
     view |> element("##{group_id}") |> render_click()
     assert has_element?(view, "##{group_id}[aria-expanded=true]")
-    assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "1:00")
 
     view |> element("#home-request-save") |> render_click()
     render_async(view, 2_000)

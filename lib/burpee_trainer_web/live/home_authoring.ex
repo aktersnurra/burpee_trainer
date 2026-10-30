@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     HomeWorkspace,
     HomeChooser,
     HomeLive,
+    HomeWorkoutComponents,
     NewWorkoutSteps
   }
 
@@ -401,6 +402,52 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
+  # A row of the proposal, to change its numbers by hand; no call to the coach.
+  def handle_event(
+        "select_proposal_row",
+        %{"index" => raw},
+        %{assigns: %{authoring_stage: :review, busy?: false, pending_request: %{} = prepared}} =
+          socket
+      ) do
+    with {index, ""} <- Integer.parse(to_string(raw)),
+         %{} = row <- HomeWorkoutComponents.row_at(socket.assigns.review_inspection_rows, index) do
+      {:noreply, step(socket, {:row_selected, index, edit_steps(prepared, row)})}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event(
+        "adjust_proposal",
+        %{"field" => field, "dir" => dir},
+        %{
+          assigns: %{
+            authoring_stage: :review,
+            busy?: false,
+            pending_request: %{} = prepared,
+            edit_row: index
+          }
+        } = socket
+      )
+      when field in ["reps", "every"] and dir in ["-1", "1"] and is_integer(index) do
+    with %{} = row <- HomeWorkoutComponents.row_at(socket.assigns.review_inspection_rows, index),
+         {:ok, adjusted} <-
+           Coach.adjust_proposal(
+             prepared,
+             HomeWorkoutComponents.work_indices(row),
+             String.to_existing_atom(field),
+             String.to_integer(dir)
+           ) do
+      rows = prepared_inspection(adjusted)
+      row = HomeWorkoutComponents.row_at(rows, index)
+
+      {:noreply,
+       step(socket, {:proposal_adjusted, adjusted, rows, row && edit_steps(adjusted, row)})}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   def handle_event(
         "confirm_workout_request",
         _params,
@@ -715,6 +762,15 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       %{pace: [message | _]} -> message <> "."
       %{note: [message | _]} -> message <> "."
       _ -> "Check the reps, duration and pace."
+    end
+  end
+
+  # Which steps a row's numbers allow now: each is tried, as a tap would.
+  defp edit_steps(prepared, row) do
+    indices = HomeWorkoutComponents.work_indices(row)
+
+    for field <- [:reps, :every], dir <- [-1, 1], into: %{} do
+      {{field, dir}, match?({:ok, _}, Coach.adjust_proposal(prepared, indices, field, dir))}
     end
   end
 
