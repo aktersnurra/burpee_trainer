@@ -39,6 +39,9 @@ Goals waiting      ✕ (✓)
 
 ## The coach's memory
 
+Superseded by `2026-10-30-coach-memory-design.md` (two bounded parts and a memory tool, as
+in the Hermes agent). What follows is the earlier design.
+
 There is no notebook to read or edit. The coach keeps its own memory:
 
 - **One note per fact** (`coach_notes`): a sentence of up to 160 characters. A forgotten

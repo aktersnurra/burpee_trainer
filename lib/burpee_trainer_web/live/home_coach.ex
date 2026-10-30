@@ -33,9 +33,25 @@ defmodule BurpeeTrainerWeb.HomeCoach do
     |> assign(
       coach_thread: this_week(scope),
       coach_memory_changes: Memory.changes_since(scope, week_start_utc(scope)),
+      coach_memory: Memory.stores(scope),
       coach_week: week_window(scope, socket.assigns[:slot])
     )
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
+  end
+
+  # What the coach remembers, opened on asking; an entry the owner removes is forgotten.
+  def handle_event("coach_memory_toggle", _, socket),
+    do:
+      {:noreply,
+       assign(socket, coach_memory_open?: not Map.get(socket.assigns, :coach_memory_open?, false))}
+
+  def handle_event("coach_memory_forget", %{"id" => raw}, socket) do
+    with {id, ""} <- Integer.parse(to_string(raw)),
+         :ok <- Memory.forget(socket.assigns.current_scope, id) do
+      {:noreply, refresh(socket)}
+    else
+      _ -> {:noreply, socket}
+    end
   end
 
   # Done opens like the workout day: the result stays, the coach unfolds under it.
@@ -106,15 +122,17 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
   defp week_start_utc(scope), do: WeekWindow.week_start_utc(scope)
 
-  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket) do
+  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply} = result}}, socket) do
     # The exchange is kept so it is still there after a reload; failing to keep it loses
     # nothing the owner sees now.
     scope = socket.assigns.current_scope
 
     with {:ok, exchange} <-
            Exchange.record(scope, socket.assigns.coach_pending_message, reply) do
-      # The coach keeps its memory after the exchange; what it notes reads in the thread.
-      MemoryJob.admit_exchange(scope, exchange)
+      # The coach keeps its memory as it talks; when it wrote nothing, a review reads the
+      # exchange afterwards. What it notes reads in the thread.
+      if not Map.get(result, :memory_written?, false),
+        do: MemoryJob.admit_exchange(scope, exchange)
     end
 
     {:noreply,

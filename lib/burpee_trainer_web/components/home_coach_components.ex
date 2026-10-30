@@ -60,6 +60,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </span>
           <span class="coach-week-when">
             {week_when(item, @state.current_scope.user.timezone)}
+            <.icon :if={item.status == :done} name="hero-check" class="size-4 coach-week-done-mark" />
+            <span :if={item.status == :done} class="sr-only">done</span>
           </span>
         </li>
       </ol>
@@ -83,13 +85,11 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           <li :if={match?({:memory, _}, item)} class="coach-memory" data-kind={elem(item, 1).kind}>
             <.icon
               name={
-                if(elem(item, 1).kind == :noted, do: "hero-bookmark", else: "hero-bookmark-slash")
+                if(elem(item, 1).kind == :forgot, do: "hero-bookmark-slash", else: "hero-bookmark")
               }
               class="size-4"
             />
-            <span>
-              {if(elem(item, 1).kind == :noted, do: "Noted: ", else: "Forgot: ")}{elem(item, 1).text}
-            </span>
+            <span>{memory_verb(elem(item, 1).kind)}{elem(item, 1).text}</span>
           </li>
         <% end %>
         <li
@@ -193,6 +193,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </div>
       </div>
+      <.memory :if={Map.get(@state, :coach_memory, []) != []} state={@state} />
       <div :if={coach?(@state)} class="chat-dock-spacer" aria-hidden="true"></div>
     </section>
     """
@@ -237,5 +238,66 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     "#{day} · #{div(sec, 60)} min"
   end
 
-  defp week_when(%{status: :left, duration_sec: sec}, _timezone), do: "#{div(sec, 60)} min"
+  defp week_when(%{status: :left, duration_sec: sec}, _timezone), do: "#{div(sec, 60)} min to go"
+
+  defp memory_verb(:noted), do: "Noted: "
+  defp memory_verb(:updated), do: "Updated: "
+  defp memory_verb(:forgot), do: "Forgot: "
+
+  attr(:state, :map, required: true)
+
+  # What the coach remembers, on asking: who the athlete is, then its notes on coaching
+  # them, each part with how full it is. An entry can be removed.
+  defp memory(assigns) do
+    open? = Map.get(assigns.state, :coach_memory_open?, false)
+    parts = assigns.state.coach_memory
+    count = parts |> Enum.map(&length(&1.entries)) |> Enum.sum()
+    assigns = assign(assigns, open?: open?, parts: parts, count: count)
+
+    ~H"""
+    <section id="home-coach-memory" class="coach-memory-view" aria-label="What the coach remembers">
+      <button
+        id="home-coach-memory-toggle"
+        type="button"
+        class="coach-memory-toggle"
+        phx-click="coach_memory_toggle"
+        aria-expanded={to_string(@open?)}
+        aria-controls="home-coach-memory-parts"
+      >
+        <span>Memory</span>
+        <span class="coach-memory-count">{@count}</span>
+        <.icon name="hero-chevron-down" class="size-4 coach-memory-chevron" />
+      </button>
+      <div :if={@open?} id="home-coach-memory-parts" class="coach-memory-parts">
+        <section
+          :for={part <- @parts}
+          id={"home-coach-memory-#{part.store}"}
+          class="coach-memory-part"
+        >
+          <h3 class="coach-memory-heading">
+            <span>{if(part.store == "user", do: "Profile", else: "Notes")}</span>
+            <span class="coach-memory-usage">{part.percent}%</span>
+          </h3>
+          <p :if={part.entries == []} class="coach-memory-empty">Nothing yet.</p>
+          <ul :if={part.entries != []} class="coach-memory-entries">
+            <li :for={entry <- part.entries} id={"home-coach-memory-entry-#{entry.id}"}>
+              <span>{entry.text}</span>
+              <button
+                id={"home-coach-memory-forget-#{entry.id}"}
+                type="button"
+                class="coach-memory-forget"
+                phx-click="coach_memory_forget"
+                phx-value-id={entry.id}
+                aria-label={"Forget: #{entry.text}"}
+                title="Forget"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </section>
+    """
+  end
 end

@@ -59,7 +59,7 @@ Deletes are their own tools and never side effects of something else.
 | `query_history` | sessions matching filters (below), newest first, paged |
 | `history_stats` | per-week or per-month totals for the same filters (below) |
 | `get_progress` | the gauges and per-type trend Progress shows |
-| `list_memory` / `update_memory` | the coach's notes; add/forget through `Memory.apply_ops` (same guard: ≤5 ops, 160 chars, ≤20 notes) |
+| `list_memory` / `update_memory` | the coach's memory, two bounded parts; batches of add/patch/remove through `Memory.write/3`, the in-app coach's own tool (`2026-10-30-coach-memory-design.md`) |
 | `list_goals` / `set_goal` / `confirm_goal` / `dismiss_goal` | goals per burpee type |
 | `list_workouts` | the library: name, type, reps, minutes, pacing style, pace |
 | `get_workout` | one workout in full (see "How a workout is described") |
@@ -144,9 +144,9 @@ The in-app coach runs on queued jobs. Without these rules they would undo Claude
 3. **The coach's note follows every change.** Logging, editing and deleting a session
    through MCP queue `SummaryJob`, as completing one in the app does. Logging also queues
    `PlanNextWorkoutJob` (subject to rule 1); editing and deleting do not re-plan.
-4. **Memory changes from both coaches go through `Memory.apply_ops`**, one transaction
-   each, under the same guard. An op on a note the other coach already forgot is skipped,
-   not an error.
+4. **Memory changes from both coaches go through `Memory.write/3`**, one transaction
+   per batch, all or nothing. A batch whose text no longer matches an entry (the other
+   coach changed it) is rejected with the current entries, to retry against.
 
 Each tool is a `BurpeeTrainer.Coach.Tool` module (name, description, JSON schema, `call/3`),
 so arguments are validated before anything runs. The existing coach tools that only read

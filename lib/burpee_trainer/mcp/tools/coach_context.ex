@@ -1,12 +1,13 @@
 defmodule BurpeeTrainer.Mcp.Tools.CoachContext do
   @behaviour BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Coach.{AgentPrompt, Policy, Tool}
+  alias BurpeeTrainer.Coach.{AgentPrompt, Memory, Policy, Tool}
 
   def name, do: "get_coach_context"
 
   def description,
     do:
-      "What the in-app coach reads before it answers: memory notes, goals, current level, " <>
+      "What the in-app coach reads before it answers: its memory of the athlete (two " <>
+        "bounded parts, rendered as the coach sees them), goals, current level, " <>
         "the reps each level needs in 20 minutes, recent sessions with feedback, and the " <>
         "next session this week. Read it first."
 
@@ -19,7 +20,8 @@ defmodule BurpeeTrainer.Mcp.Tools.CoachContext do
         _ -> nil
       end
 
-    {:ok, scope |> AgentPrompt.context(slot) |> Jason.encode!() |> Jason.decode!()}
+    context = scope |> AgentPrompt.context(slot) |> Jason.encode!() |> Jason.decode!()
+    {:ok, Map.put(context, "memory", Memory.snapshot(scope))}
   end
 
   def call(_, _, _), do: {:error, "get_coach_context takes no arguments"}

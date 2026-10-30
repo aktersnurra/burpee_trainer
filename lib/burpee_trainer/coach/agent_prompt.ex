@@ -42,18 +42,15 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   Answer the way a coach would across the gym floor, in at most three sentences, starting \
   from what the athlete just said. When they tell you how a session felt, that something \
   hurt, or that their week has changed, take it in and say what it means for their next \
-  sessions; what they tell you about themselves is noted for you after the conversation, so \
-  you may say you will keep it in mind. Bring in their notes and recent sessions only when \
-  they bear on what was said, as someone who remembers them would; leave trends, totals and \
+  sessions. Bring in what you remember and their recent sessions only when they bear on \
+  what was said, as someone who knows them would; leave trends, totals and \
   levels out unless they ask. Ask at most one short question, and only when the answer would \
   change their training. Use propose_goal only when they ask for a goal; they confirm it \
   themselves.
   """
 
   @context_glossary """
-  The context that follows is JSON. memory: short notes on what you know about the athlete \
-  from earlier, oldest first. goals: \
-  their active and proposed goals. current_level: the level they hold now. landmarks: the \
+  The context that follows is JSON. goals: their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps and reps_planned, duration_sec and duration_sec_planned, pace_sec \
   (seconds per rep) and their feedback (mood: -1 rough, 0 OK, 1 good). \
@@ -86,7 +83,6 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
     sessions = Workouts.list_recent_training_sessions(scope)
 
     %{
-      memory: scope |> Memory.list() |> Enum.map(& &1.text),
       goals: goals["goals"] |> Enum.take(20),
       current_level: Levels.current_level(Workouts.list_sessions(scope)),
       slot: slot,
@@ -123,11 +119,15 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
           Voice.text() <> "\n" <> @planner_create_task <> "\n" <> @context_glossary
 
         :coach_page ->
-          Voice.text() <> "\n" <> @coach_page_task <> "\n" <> @context_glossary
+          Voice.text() <>
+            "\n" <> @coach_page_task <> "\n" <> Memory.guidance() <> "\n" <> @context_glossary
       end
 
+    # What the coach remembers, frozen for this turn; a write lands at once and reads here
+    # from the next turn.
     messages = [
       %{role: "system", content: rule},
+      %{role: "system", content: Memory.snapshot(scope)},
       %{
         role: "system",
         content: Jason.encode!(context(scope, slot))

@@ -26,51 +26,80 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
     end)
   end
 
+  defp op(target, action, content, old \\ nil),
+    do: %{"target" => target, "action" => action, "content" => content, "old_text" => old}
+
   test "what the coach learns writes its note again; an unchanged memory does not" do
     scope = scope_fixture()
     free_form_session_fixture(scope.user)
 
-    reply(%{"ops" => []})
+    reply(%{"operations" => []})
     assert {:ok, []} = MemoryJob.keep(scope, %{kind: "conversation"}, opts())
     refute_enqueued(worker: BurpeeTrainer.Coach.SummaryJob)
 
-    reply(%{"ops" => [%{"op" => "add", "text" => "Left knee gets sore after jumps"}]})
+    reply(%{"operations" => [op("user", "add", "Left knee gets sore after jumps")]})
     assert {:ok, [_]} = MemoryJob.keep(scope, %{kind: "conversation"}, opts())
     assert_enqueued(worker: BurpeeTrainer.Coach.SummaryJob, args: %{"user_id" => scope.user.id})
   end
 
-  test "the model reads the notes and the event, and its ops change the memory" do
+  test "the review reads the memory as the coach does and patches it by text" do
     scope = scope_fixture()
-    {:ok, _} = Memory.apply_ops(scope, [%{"op" => "add", "text" => "Trains at 7:00"}])
-    [old] = Memory.list(scope)
+    {:ok, _} = Memory.write(scope, "user", [%{"action" => "add", "content" => "Trains at 7:00"}])
 
     reply(%{
-      "ops" => [
-        %{"op" => "replace", "id" => old.id, "text" => "Trains at 18:00"},
-        %{"op" => "add", "text" => "Left knee gets sore after jumps"}
+      "operations" => [
+        op("user", "patch", "18:00", "7:00"),
+        op("memory", "add", "Keeps Thursdays light while the knee settles")
       ]
     })
 
     event = %{kind: "conversation", athlete: "Evenings now, and my knee hurts", coach: "Noted."}
-    assert {:ok, changes} = MemoryJob.keep(scope, event, opts())
+    assert {:ok, [_, _]} = MemoryJob.keep(scope, event, opts())
 
     assert_received {:request, request}
     assert request["response_format"]["json_schema"]["name"] == "coach_memory"
-    [_task, %{"content" => input}] = request["messages"]
+    [_task, %{"content" => snapshot}, %{"content" => input}] = request["messages"]
+    assert snapshot =~ "USER PROFILE"
+    assert snapshot =~ "Trains at 7:00"
+    assert %{"event" => _} = Jason.decode!(input)
 
-    assert %{"notes" => [%{"id" => _, "text" => "Trains at 7:00"}], "event" => _} =
-             Jason.decode!(input)
+    assert Enum.map(Memory.list(scope, "user"), & &1.text) == ["Trains at 18:00"]
 
-    assert Enum.map(changes, &{&1.kind, &1.text}) == [
-             forgot: "Trains at 7:00",
-             noted: "Trains at 18:00",
-             noted: "Left knee gets sore after jumps"
+    assert Enum.map(Memory.list(scope, "memory"), & &1.text) == [
+             "Keeps Thursdays light while the knee settles"
            ]
 
-    assert Enum.map(Memory.list(scope), & &1.text) == [
-             "Trains at 18:00",
-             "Left knee gets sore after jumps"
-           ]
+    since = DateTime.add(DateTime.utc_now(), -60)
+    kinds = scope |> Memory.changes_since(since) |> Enum.map(& &1.kind) |> Enum.sort()
+    assert kinds == [:noted, :noted, :updated]
+  end
+
+  test "a rejected batch goes back once with the reason" do
+    scope = scope_fixture()
+    test_pid = self()
+
+    answers = [
+      [op("user", "remove", nil, "nothing like this")],
+      [op("user", "add", "Trains evenings")]
+    ]
+
+    {:ok, pid} = Elixir.Agent.start_link(fn -> answers end)
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:request, Jason.decode!(body)})
+      ops = Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end)
+
+      Req.Test.json(conn, %{
+        "choices" => [%{"message" => %{"content" => Jason.encode!(%{"operations" => ops})}}]
+      })
+    end)
+
+    assert {:ok, [_]} = MemoryJob.keep(scope, %{kind: "conversation"}, opts())
+    assert_received {:request, _first}
+    assert_received {:request, second}
+    assert List.last(second["messages"])["content"] =~ "no entry matches"
+    assert Enum.map(Memory.list(scope), & &1.text) == ["Trains evenings"]
   end
 
   test "an unusable answer, or no provider, changes nothing" do

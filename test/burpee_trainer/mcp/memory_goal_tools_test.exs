@@ -27,63 +27,70 @@ defmodule BurpeeTrainer.Mcp.MemoryGoalToolsTest do
   end
 
   describe "memory" do
-    test "notes are added, replaced and forgotten through the app's guard", %{scope: scope} do
+    test "entries are added, patched and removed by text, as the app's coach does",
+         %{scope: scope} do
       Memory.subscribe(scope)
 
       {:ok, result} =
         call(scope, "update_memory", %{
-          "ops" => [
-            %{"op" => "add", "text" => "Trains before work, around 6:30."},
-            %{"op" => "add", "text" => "Left knee was sore in October."}
+          "target" => "user",
+          "operations" => [
+            %{"action" => "add", "content" => "Trains before work, around 6:30."},
+            %{"action" => "add", "content" => "Left knee was sore in October."}
           ]
         })
 
-      assert Enum.map(result["changes"], & &1["kind"]) == ["noted", "noted"]
+      assert result["success"] and result["changed"]
+      assert result["usage"] =~ "/1,375"
       assert_receive :coach_memory
 
-      {:ok, %{"notes" => [early, knee]}} = call(scope, "list_memory")
+      {:ok, %{"user" => %{"entries" => [early, _knee]}, "memory" => %{"entries" => []}}} =
+        call(scope, "list_memory")
+
       assert early["text"] == "Trains before work, around 6:30."
 
       {:ok, result} =
         call(scope, "update_memory", %{
-          "ops" => [
-            %{
-              "op" => "replace",
-              "id" => early["id"],
-              "text" => "Trains before work, around 7:00."
-            },
-            %{"op" => "forget", "id" => knee["id"]}
+          "target" => "user",
+          "operations" => [
+            %{"action" => "patch", "old_text" => "6:30", "content" => "7:00"},
+            %{"action" => "remove", "old_text" => "knee"}
           ]
         })
 
-      assert Enum.sort(Enum.map(result["changes"], & &1["kind"])) == ["forgot", "forgot", "noted"]
-      assert Enum.map(Memory.list(scope), & &1.text) == ["Trains before work, around 7:00."]
+      assert result["entries"] == ["Trains before work, around 7:00."]
     end
 
-    test "what the guard refuses is reported, not silently dropped", %{scope: scope} do
-      {:ok, result} =
-        call(scope, "update_memory", %{
-          "ops" => [
-            %{"op" => "add", "text" => String.duplicate("long ", 40)},
-            %{"op" => "add", "text" => "Prefers six_count."},
-            %{"op" => "forget", "id" => 999_999}
-          ]
-        })
+    test "a refused batch is reported with the entries and changes nothing", %{scope: scope} do
+      assert {:error, message} =
+               call(scope, "update_memory", %{
+                 "target" => "user",
+                 "operations" => [
+                   %{"action" => "add", "content" => "Trains mornings."},
+                   %{"action" => "add", "content" => "Prefers six_count."}
+                 ]
+               })
 
-      assert result["changes"] == []
-      assert result["ignored"] == 3
+      assert %{"success" => false, "error" => error, "current_entries" => []} =
+               Jason.decode!(message)
+
+      assert error =~ "internal id"
       assert Memory.list(scope) == []
     end
 
-    test "another user's notes cannot be read or forgotten", %{scope: scope} do
+    test "another user's entries cannot be read or removed", %{scope: scope} do
       other = Scope.for_user(user_fixture())
-      {:ok, _} = Memory.apply_ops(other, [%{"op" => "add", "text" => "Someone else."}])
-      [note] = Memory.list(other)
 
-      {:ok, %{"notes" => []}} = call(scope, "list_memory")
+      {:ok, _} =
+        Memory.write(other, "user", [%{"action" => "add", "content" => "Someone else."}])
 
-      {:ok, %{"changes" => []}} =
-        call(scope, "update_memory", %{"ops" => [%{"op" => "forget", "id" => note.id}]})
+      {:ok, %{"user" => %{"entries" => []}}} = call(scope, "list_memory")
+
+      assert {:error, _} =
+               call(scope, "update_memory", %{
+                 "target" => "user",
+                 "operations" => [%{"action" => "remove", "old_text" => "Someone else."}]
+               })
 
       assert [_] = Memory.list(other)
     end

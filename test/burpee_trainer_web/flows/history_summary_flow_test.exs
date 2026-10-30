@@ -242,29 +242,55 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert busy =~ "Sending to the coach"
   end
 
-  test "what the coach noted or forgot reads in the thread, after the exchange that caused it",
+  test "what the coach noted or updated reads in the thread, after the exchange that caused it",
        %{conn: conn, user: user} do
     scope = Scope.for_user(user)
     free_form_session_fixture(user, %{duration_sec_actual: 1_200})
 
     {:ok, _} =
-      BurpeeTrainer.Coach.Memory.apply_ops(scope, [%{"op" => "add", "text" => "Trains at 7:00"}])
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "add", "content" => "Trains at 7:00"}
+      ])
 
     {:ok, _} = BurpeeTrainer.Coach.Exchange.record(scope, "I train evenings now", "18:00 then.")
-    [old] = BurpeeTrainer.Coach.Memory.list(scope)
 
     {:ok, _} =
-      BurpeeTrainer.Coach.Memory.apply_ops(scope, [
-        %{"op" => "replace", "id" => old.id, "text" => "Trains at 18:00"}
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "patch", "old_text" => "7:00", "content" => "18:00"}
       ])
 
     {:ok, view, _} = live(conn, ~p"/")
     html = render(view)
     {said, _} = :binary.match(html, "I train evenings now")
-    {noted, _} = :binary.match(html, "Noted: Trains at 18:00")
-    {forgot, _} = :binary.match(html, "Forgot: Trains at 7:00")
-    assert said < noted and said < forgot
+    {updated, _} = :binary.match(html, "Updated: Trains at 18:00")
+    assert said < updated
+    # A patch reads once, as updated, not as a forget and a note.
+    refute html =~ "Forgot: Trains at 7:00"
     assert has_element?(view, "#home-coach-thread .coach-memory[data-kind=noted] .hero-bookmark")
+  end
+
+  test "what the coach remembers opens on asking, by part, and an entry can be removed",
+       %{conn: conn, user: user} do
+    scope = Scope.for_user(user)
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "add", "content" => "Trains at 7:00"}
+      ])
+
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+    {:ok, view, _} = live(conn, ~p"/")
+    refute has_element?(view, "#home-coach-memory-parts")
+
+    view |> element("#home-coach-memory-toggle") |> render_click()
+    assert has_element?(view, "#home-coach-memory-toggle[aria-expanded=true]")
+    assert has_element?(view, "#home-coach-memory-user", "Trains at 7:00")
+    assert has_element?(view, "#home-coach-memory-memory", "Nothing yet.")
+
+    [entry] = BurpeeTrainer.Coach.Memory.list(scope)
+    view |> element("#home-coach-memory-forget-#{entry.id}") |> render_click()
+    assert BurpeeTrainer.Coach.Memory.list(scope) == []
+    refute has_element?(view, "#home-coach-memory-entry-#{entry.id}")
   end
 
   defp text(view, selector),

@@ -45,7 +45,10 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     assert Repo.get!(WorkoutPlan, foreign.id).state == :published
 
     owner_scope = Scope.for_user(owner)
-    {:ok, _} = Memory.apply_ops(owner_scope, [%{"op" => "add", "text" => "Trains mornings"}])
+
+    {:ok, _} =
+      Memory.write(owner_scope, "user", [%{"action" => "add", "content" => "Trains mornings"}])
+
     [owner_note] = Memory.list(owner_scope)
     {:ok, owner_exchange} = Exchange.record(owner_scope, "Mornings?", "Yes.")
     coach_plans_before = Repo.all(WorkoutPlan)

@@ -1035,7 +1035,8 @@ button.home-summary:hover .home-workout-name {
 .coach-week-type::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
 .coach-week-type.progress-key-six-count::before { border-color: var(--series-six-count); }
 .coach-week-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
-.coach-week-when { color: var(--home-muted); font-variant-numeric: tabular-nums; }
+.coach-week-when { display: inline-flex; align-items: center; gap: 6px; color: var(--home-muted); font-variant-numeric: tabular-nums; }
+.coach-week-done-mark { color: #262722; }
 .adaptive-home .coach-week-left .coach-week-type { color: var(--home-muted); }
 .coach-week-left .coach-week-type::before { opacity: .5; }
 .coach-thread { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
@@ -1197,3 +1198,20 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-hand-button:disabled { opacity: .35; }
 .studio-hand-value { min-width: 56px; font: 600 var(--text-body)/1 var(--font-sans); text-align: center; }
 .studio-hand-value small { margin-left: 2px; color: var(--home-muted); font-weight: 400; font-size: var(--text-small); }
+
+/* What the coach remembers: a quiet line that opens to its two parts. */
+.coach-memory-view { margin-top: 24px; border-top: 1px solid var(--home-line); }
+.coach-memory-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 0; border: 0; background: transparent; color: var(--home-muted); font: 500 var(--text-body)/1 var(--font-sans); cursor: pointer; }
+.coach-memory-count { font-variant-numeric: tabular-nums; }
+.coach-memory-chevron { margin-left: auto; transition: transform var(--motion-quick) ease; }
+.coach-memory-toggle[aria-expanded="true"] .coach-memory-chevron { transform: rotate(180deg); }
+.coach-memory-parts { display: grid; gap: 18px; padding-bottom: 12px; }
+.coach-memory-heading { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--home-muted); font: 500 var(--text-small)/1.2 var(--font-sans); }
+.coach-memory-usage { font-variant-numeric: tabular-nums; }
+.coach-memory-empty { margin: 0; color: var(--home-muted); font-size: var(--text-small); }
+.coach-memory-entries { margin: 0; padding: 0; list-style: none; }
+.coach-memory-entries li { display: flex; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--home-line); color: #262722; font-size: var(--text-small); line-height: 1.4; }
+.coach-memory-entries li > span { flex: 1; padding: 8px 0; }
+.coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 0; background: transparent; color: var(--home-muted); }
+.coach-memory-forget:hover { color: #262722; }
+

@@ -10,8 +10,10 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     slot = %{burpee_type: :navy_seal, duration_sec: 2400}
 
     for surface <- [:planner, :planner_create] do
-      [_rule, %{role: "system", content: content}] =
+      [_rule, %{role: "system", content: memory}, %{role: "system", content: content}] =
         AgentPrompt.messages(scope, surface, nil, slot)
+
+      assert memory =~ "USER PROFILE"
 
       context = Jason.decode!(content)
       assert context["slot"] == %{"burpee_type" => "navy_seal", "duration_sec" => 2400}
@@ -23,7 +25,7 @@ defmodule BurpeeTrainer.Coach.AgentPromptTest do
     scope = scope_fixture()
     history = [{"Can Thursday be mornings?", "Yes, 7:00."}, {"And Friday?", "Rest."}]
 
-    [_rule, _context | turns] =
+    [_rule, _memory, _context | turns] =
       AgentPrompt.messages(scope, :coach_page, "Thanks", nil, history)
 
     assert Enum.map(turns, & &1.role) == ~w[user assistant user assistant user]

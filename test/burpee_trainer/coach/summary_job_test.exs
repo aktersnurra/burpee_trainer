@@ -92,8 +92,8 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     free_form_session_fixture(scope.user)
 
     {:ok, _} =
-      BurpeeTrainer.Coach.Memory.apply_ops(scope, [
-        %{"op" => "add", "text" => "Left knee gets sore after jumps"}
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "add", "content" => "Left knee gets sore after jumps"}
       ])
 
     {:ok, _} =
