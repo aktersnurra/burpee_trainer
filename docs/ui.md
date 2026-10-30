@@ -137,7 +137,7 @@ Home's content does (`--gutter`), and a docked box is as wide as the column, not
 Every box you write words in (Edit's follow-ups, a request for New, a message to the coach) is the
 composer: one rounded line (`--color-base-200`, a `--color-base-border` edge, `--radius-surface`,
 a faint shadow) that grows with its text up to nine lines, the send key inside its right edge.
-Its placeholder names it; the label stays for screen readers. Send is a return arrow, grey until
+Its send key is a 44px target. Its placeholder names it; the label stays for screen readers. Send is a return arrow, grey until
 there is something to send, then ink (always ink where an empty send is fine, as New's request);
 while the coach works it is a small square. Its border darkens while focused, so the text draws
 no ring of its own. Suggested words (Edit's common changes, the coach's predicted replies) are
@@ -154,7 +154,9 @@ lines rise in rather than jump.
 
 Home answers two swipes with what its buttons do: right opens the swap drawer (the page slides
 right and the workout list takes the space; `#home-page` moves with `left`, never a transform),
-up opens the Edit / New sheet. Edit and New are the studio, a full-screen chat on the same page
+up opens the Edit / New sheet. The swipes are invisible, so Home has a handle at its bottom edge
+(`#home-grab`, the same sheet) and, for the first three visits or until the first swipe, a line
+saying what they do (`HomeHint`). Edit and New are the studio, a full-screen chat on the same page
 and gutter as Home:
 
 - **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is

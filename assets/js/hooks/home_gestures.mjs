@@ -1,6 +1,7 @@
 // Home's gestures: swipe right to swap the workout, swipe up for Edit and New.
 // Both open what the buttons open; the buttons stay for anyone who cannot swipe.
 import { createSwipeTracker } from "./swipe.mjs";
+import { noteSwipe } from "./home_hint.mjs";
 
 // What a swipe does, given what is open. `null` leaves the stroke alone.
 export function gestureEvent(direction, { chooserOpen, optionsOpen }) {
@@ -25,7 +26,10 @@ export default {
 					chooserOpen: this.el.dataset.chooserOpen === "true",
 					optionsOpen: this.el.dataset.optionsOpen === "true",
 				});
-				if (event) this.pushEvent(event, {});
+				if (event) {
+					noteSwipe();
+					this.pushEvent(event, {});
+				}
 			},
 		});
 		this.tracker.mount();

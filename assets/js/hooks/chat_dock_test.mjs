@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { createChatDock, keyboardInset, KEYBOARD_MIN_PX } from "./chat_dock.mjs";
 
 function fixture({ innerHeight = 800, viewport, scrollTo = "#ask", reduced = false } = {}) {
-	const listeners = { viewport: new Map(), win: new Map() };
+	const listeners = { viewport: new Map(), win: new Map(), doc: new Map() };
+	const timers = [];
 	const props = new Map();
 	const scrolls = [];
 	const el = { dataset: { version: "a", scrollTo }, offsetHeight: 120 };
@@ -18,8 +19,11 @@ function fixture({ innerHeight = 800, viewport, scrollTo = "#ask", reduced = fal
 		matchMedia: () => ({ matches: reduced }),
 		addEventListener: (name, fn) => listeners.win.set(name, fn),
 		removeEventListener: (name) => listeners.win.delete(name),
+		setTimeout: (fn, ms) => timers.push({ fn, ms }),
 	};
 	const doc = {
+		addEventListener: (name, fn) => listeners.doc.set(name, fn),
+		removeEventListener: (name) => listeners.doc.delete(name),
 		documentElement: {
 			style: {
 				setProperty: (k, v) => props.set(k, v),
@@ -29,7 +33,7 @@ function fixture({ innerHeight = 800, viewport, scrollTo = "#ask", reduced = fal
 		querySelector: (selector) =>
 			selector === "#ask" ? { scrollIntoView: (o) => scrolls.push(o) } : null,
 	};
-	return { el, win, doc, vp, listeners, props, scrolls, dock: createChatDock({ el, win, doc }) };
+	return { el, win, doc, vp, listeners, props, scrolls, timers, dock: createChatDock({ el, win, doc }) };
 }
 
 test("the inset is the gap the keyboard leaves under the visual viewport", () => {
@@ -99,4 +103,21 @@ test("works without visualViewport and cleans up after itself", () => {
 	f.dock.destroy();
 	assert.equal(f.props.size, 0);
 	assert.equal(f.listeners.win.size, 0);
+});
+
+test("a focus change measures again once the keyboard has settled", () => {
+	const f = fixture({ viewport: { height: 800, offsetTop: 0 } });
+	f.dock.mount();
+	f.vp.height = 480;
+	f.listeners.doc.get("focusin")();
+	assert.equal(f.props.get("--keyboard-inset"), "320px");
+
+	// The keyboard moves on after the first measure; the second, later, catches where it stopped.
+	f.vp.height = 460;
+	assert.deepEqual(f.timers.map((t) => t.ms), [350]);
+	f.timers[0].fn();
+	assert.equal(f.props.get("--keyboard-inset"), "340px");
+
+	f.dock.destroy();
+	assert.equal(f.listeners.doc.size, 0);
 });

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — The swipes are findable; the studio has a browser check
+
+- Home has a handle at its bottom edge that opens the Edit / New sheet, and a line above it saying what the two swipes do, for the first three visits or until the first swipe (`HomeHint`).
+- `scripts/e2e/studio_journey.mjs` drives the swipes, Edit and New in a phone-sized browser against a stubbed server (`scripts/e2e/studio_preview.exs`) and fails on a layout, gesture or tap-target regression: the shared left edge, sideways scroll, spinner, Save and Run, the swiped value, the set size, the summary and Run (`docs/guides/studio-e2e.md`). `docs/guides/ios-device-check.md` lists what only a phone can check.
+- The send key is a 44px target (it was 40), the docked box measures again once the keyboard has settled, and the sheet no longer draws a focus ring on its first choice.
+- Small composition fixes: the quick-change chips run to the screen edge when they scroll, the start toggles line up with the card above them, and the coach's loader sits level with its line.
+
 ## 2026-10-29 — One set of conventions across the pages
 
 - One edge: Home, Progress, the studio and the docked box all start at `--gutter` (30px); the studio and the dock had their own (36px and 16px).

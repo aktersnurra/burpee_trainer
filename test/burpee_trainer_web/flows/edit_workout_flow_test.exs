@@ -117,6 +117,13 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
   test "swiping up offers Edit and New; Edit opens a chat that begins with today's workout",
        %{view: view, selected: selected} do
+    # The swipe is invisible, so there is a handle for it; both lead to the same sheet.
+    assert has_element?(view, "#home-grab[aria-label='Edit or new workout']")
+    assert has_element?(view, "#home-hint", "Swipe right to swap")
+    view |> element("#home-grab") |> render_click()
+    assert has_element?(view, "#home-options-sheet")
+    refute has_element?(view, "#home-grab")
+    render_hook(view, "close_options", %{})
     # The swipe is the hook's event, the same one the buttons lead to.
     render_hook(view, "open_options", %{})
     assert has_element?(view, "#home-options-sheet #home-options-edit", "Edit this workout")
@@ -133,7 +140,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#studio-thread #studio-source", selected.plan.name)
     assert has_element?(view, "#studio-source #home-inspection table")
     assert has_element?(view, "#studio-thread", "What would you like to change?")
-    refute has_element?(view, "#home-workout-hero, .home-workout-actions")
+    refute has_element?(view, "#home-workout-hero, .home-workout-actions, #home-grab")
 
     # The box is docked, named by its placeholder; the label is for screen readers.
     assert has_element?(view, "#home-chat-dock #home-edit-form")

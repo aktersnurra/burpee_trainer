@@ -1140,7 +1140,7 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
 .studio-actions { display: flex; align-items: center; gap: 8px; }
 .studio-actions .studio-pill { flex: 1; min-height: 48px; }
-.studio-start-choices { display: flex; flex: none; gap: 2px; }
+.studio-start-choices { display: flex; flex: none; gap: 2px; margin-left: -12px; }
 .studio-start-choices .home-start-choice { min-width: 44px; min-height: 44px; padding: 0; }
 
 /* One question at a time: centred, with the answer under it and the progress above. */
@@ -1180,3 +1180,20 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
 .studio #home-update-loading { display: flex; min-height: 0; place-items: unset; }
+
+/* The way up: a handle at the bottom edge for what a swipe up does, and a line that says so for a
+   few visits. Both leave when the sheet, the drawer or the studio is open. */
+.home-grab-area { position: fixed; inset-inline: 0; bottom: 0; z-index: 10; display: grid; justify-items: center; padding-bottom: calc(4px + env(safe-area-inset-bottom)); pointer-events: none; }
+.home-grab { display: grid; place-items: center; width: 120px; height: 36px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
+.home-grab-bar { width: 40px; height: 4px; border-radius: 2px; background: var(--color-base-border); transition: background var(--motion-quick) ease, width var(--motion-quick) ease; }
+.home-grab:hover .home-grab-bar, .home-grab:focus-visible .home-grab-bar { width: 56px; background: #9A9489; }
+.home-hint { margin: 0; color: var(--home-muted, #736f68); font-size: var(--text-small); animation: home-hint var(--motion-settle) var(--ease-out) backwards, home-hint-out var(--motion-settle) ease 7s forwards; }
+@keyframes home-hint { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes home-hint-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .home-hint { animation: none; } }
+
+/* The chips scroll sideways: they run to the edge of the screen, not the column, so the one cut off
+   reads as more to scroll, not as clipped. */
+.chat-dock .chat-dock-chips { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); }
+#home-options-sheet:focus { outline: none; }
+.coach-summary-loader { margin-top: -8px; }

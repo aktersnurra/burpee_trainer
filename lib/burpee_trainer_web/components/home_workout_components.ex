@@ -407,6 +407,29 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </div>
             </section>
           </div>
+          <%!-- The swipes are invisible, so the way up has a handle, and a line says so for the
+               first few visits (see the HomeHint hook). --%>
+          <div
+            :if={
+              @state.authoring_stage == :idle and not @state.options_open? and
+                not @state.chooser_open?
+            }
+            class="home-grab-area"
+          >
+            <p id="home-hint" class="home-hint" phx-hook="HomeHint" phx-update="ignore" hidden>
+              Swipe right to swap · up for more
+            </p>
+            <button
+              id="home-grab"
+              type="button"
+              class="home-grab"
+              phx-click="open_options"
+              aria-label="Edit or new workout"
+              title="Edit or new workout"
+            >
+              <span class="home-grab-bar"></span>
+            </button>
+          </div>
           <.options_sheet :if={@state.options_open?} state={@state} />
           <.chooser state={@state} />
         <% end %>
@@ -428,6 +451,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       aria-label="Edit this workout or make a new one"
       phx-window-keydown="close_options"
       phx-key="Escape"
+      phx-mounted={JS.focus()}
+      tabindex="-1"
       data-no-swipe
     >
       <span class="home-sheet-grip" aria-hidden="true"></span>
@@ -436,12 +461,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         type="button"
         class="home-option"
         phx-click="edit_current_workout"
-        phx-mounted={JS.focus()}
       >
         <.icon name="hero-pencil-square" class="size-6" />
         <span class="home-option-text">
           <span class="home-option-title">Edit this workout</span>
-          <span class="home-option-detail">{@state.home_selection.plan.name}, changed by talking it through</span>
+          <span class="home-option-detail">Talk it through with the coach</span>
         </span>
       </button>
       <button id="home-options-new" type="button" class="home-option" phx-click="new_workout">

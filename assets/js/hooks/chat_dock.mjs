@@ -30,6 +30,13 @@ export function createChatDock({ el, win, doc }) {
 		el.dataset.keyboard = inset > KEYBOARD_MIN_PX ? "open" : "closed";
 	};
 
+	// iOS reports the keyboard late and in pieces while it slides, so a focus change measures again
+	// once it has settled, not only when the first resize arrives.
+	const settleLater = () => {
+		sync();
+		win.setTimeout?.(sync, 350);
+	};
+
 	// The newest thing said comes to the top of the screen, with its answer below it.
 	const bringIntoView = () => {
 		const target = el.dataset.scrollTo && doc.querySelector(el.dataset.scrollTo);
@@ -44,6 +51,8 @@ export function createChatDock({ el, win, doc }) {
 			viewport?.addEventListener("resize", sync);
 			viewport?.addEventListener("scroll", sync);
 			win.addEventListener("resize", sync);
+			doc.addEventListener?.("focusin", settleLater);
+			doc.addEventListener?.("focusout", settleLater);
 			if (win.ResizeObserver) {
 				observer = new win.ResizeObserver(sync);
 				observer.observe(el);
@@ -62,6 +71,8 @@ export function createChatDock({ el, win, doc }) {
 			viewport?.removeEventListener("resize", sync);
 			viewport?.removeEventListener("scroll", sync);
 			win.removeEventListener("resize", sync);
+			doc.removeEventListener?.("focusin", settleLater);
+			doc.removeEventListener?.("focusout", settleLater);
 			observer?.disconnect();
 			root.style.removeProperty("--keyboard-inset");
 			root.style.removeProperty("--chat-dock-height");

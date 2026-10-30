@@ -630,7 +630,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
 /* The composer: every box you write words in is one rounded line that grows with its text,
    the send key inside its right edge. Send is grey until there is something to send. */
-.composer { display: flex; align-items: flex-end; gap: 6px; padding: 4px 6px 4px 18px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); box-shadow: 0 1px 2px rgb(32 32 29 / .04), 0 4px 16px rgb(32 32 29 / .04); text-align: left; transition: border-color var(--motion-quick) ease; }
+.composer { display: flex; align-items: flex-end; gap: 6px; padding: 2px 4px 2px 18px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); box-shadow: 0 1px 2px rgb(32 32 29 / .04), 0 4px 16px rgb(32 32 29 / .04); text-align: left; transition: border-color var(--motion-quick) ease; }
 .composer:focus-within { border-color: #918d83; }
 /* The box's border shows focus, so the text inside draws no ring of its own. */
 :is(.adaptive-home, #burpee-session, .composer) .composer textarea:focus-visible { outline: none; }
@@ -642,7 +642,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .composer textarea::placeholder { color: #74716A; opacity: 1; }
 .composer textarea:disabled { opacity: 1; color: var(--color-base-content); -webkit-text-fill-color: var(--color-base-content); }
 .composer-bar { flex: none; }
-.composer-send { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: #9A9489; cursor: pointer; transition: color var(--motion-quick) ease, background var(--motion-quick) ease; }
+.composer-send { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: #9A9489; cursor: pointer; transition: color var(--motion-quick) ease, background var(--motion-quick) ease; }
 .composer:has(textarea:not(:placeholder-shown)) .composer-send, .composer-send-ready { color: var(--color-base-content); }
 .composer-send:hover:not(:disabled) { background: var(--color-base-300); }
 .composer-send:disabled { cursor: default; color: var(--color-base-content); }
