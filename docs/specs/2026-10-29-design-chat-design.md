@@ -96,8 +96,13 @@ rest of the screen says what it is about.
 ## Run
 
 A proposal's card has Save and Run under it. **Run** saves the proposal, makes it today's workout
-and starts it, as Home's play does, so the camera and warmup toggles sit beside it (the device
-remembers them). Leaving the session screen discards the session if it was started by mistake.
+and starts it, as Home's play does, with the camera and warmup choices the device remembers from
+Home; the chat shows no toggles.
+
+A tap on a set's row selects it for a hand edit: its reps and its beat step by one rep and half a
+second, with no model call (`Coach.adjust_proposal/4`, `ProposalEdit`); the rests are fitted again
+by `RestFitter`, each keeping its share, so the length holds. Every proposal is marked against the
+one it replaced (`previous` in `Flow`). Leaving the session screen discards the session if it was started by mistake.
 
 ## The dock
 

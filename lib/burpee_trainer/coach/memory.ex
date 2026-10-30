@@ -78,7 +78,6 @@ defmodule BurpeeTrainer.Coach.Memory do
 
     scope
     |> stores()
-    |> Enum.sort_by(&(&1.store != "user"))
     |> Enum.map_join("\n\n", fn %{store: store, entries: entries, usage: usage, percent: percent} ->
       body =
         case entries do

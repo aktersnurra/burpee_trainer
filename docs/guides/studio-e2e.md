@@ -7,17 +7,16 @@ the composer or the CSS around them.
 
 ## What it checks
 
-- A closed Home has no handle and says "Swipe right to swap" on the first visit.
+- A closed Home has no handle and no Edit, Swap or New of its own.
 - A swipe right opens the swap drawer and a swipe left closes it; a swipe up does nothing until the
-  workout is opened, then opens Edit / New, and a swipe down closes it; the first swipe is
-  remembered so the hint stops.
+  workout is opened, then opens Edit / New, and a swipe down closes it.
 - Edit: the studio starts at Home's left edge, the docked box starts at the same edge, nothing
   scrolls sideways, a spinner shows while the coach works, and Save and Run sit under the proposal.
 - New: one question at a time, a swipe raises a value by a step, reps say what they come to,
   unbroken asks for a set size, the last screen offers Create workout or Add a request, and Run
   starts the workout.
-- Every button is big enough to hit (at least 40px on both sides and 44px on one; the suggestion
-  chips, parts and the handle are exempt) and the browser logs no errors.
+- Every button is big enough to hit (at least 40px on both sides and 44px on one; parts and the
+  handle are exempt) and the browser logs no errors.
 
 ## Run it
 

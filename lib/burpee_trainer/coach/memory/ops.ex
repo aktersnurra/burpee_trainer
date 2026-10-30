@@ -18,7 +18,7 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
 
   alias BurpeeTrainer.Coach.Voice
 
-  @stores ~w[memory user]
+  @stores ~w[user memory]
   @limits %{"memory" => 2_200, "user" => 1_375}
   @separator "\n§\n"
   @max_operations 10

@@ -12,7 +12,7 @@ not in Safari, as the keyboard behaves differently in each. Do it once in each.
 
 ## The keyboard dock (Edit, a request in New, the coach)
 
-- [ ] Tapping the box lifts it above the keyboard; it is never covered, and its chips come with it.
+- [ ] Tapping the box lifts it above the keyboard; it is never covered.
 - [ ] Typing several lines grows the box and stays above the keyboard; the last line you wrote stays visible.
 - [ ] Dismissing the keyboard (swipe down on the page, or Done) puts the box back at the bottom,
       above the home indicator, with no gap and no jump.
@@ -28,14 +28,13 @@ not in Safari, as the keyboard behaves differently in each. Do it once in each.
 - [ ] Swipe up on a long Home (the table expanded) scrolls the page instead of opening the sheet
       until the page is at its bottom.
 - [ ] Open the workout: a handle appears at the bottom and a swipe up (or the handle) opens the sheet
-  with Edit, New and Swap. On a closed workout a swipe up does nothing, and the hint line ("Swipe
-  right to swap") shows on the first visits only.
+  with Edit, New and Swap. On a closed workout a swipe up does nothing.
 - [ ] A swipe on a value (duration, reps, set size, pace) changes it by one step and does not scroll
       the page.
 
 ## Taps
 
-- [ ] Every button can be hit with a thumb without a miss (Save, Run, the round buttons, the start toggles).
-- [ ] The camera toggle beside Run is off and disabled when the camera is unavailable.
+- [ ] Every button can be hit with a thumb without a miss (Save, Run, the round buttons, the hand-edit steppers).
+- [ ] The camera toggle beside Home's play is off and disabled when the camera is unavailable.
 
 Report what failed with the iOS version and whether it was the Home Screen app or Safari.

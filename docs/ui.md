@@ -12,8 +12,12 @@
 - **Show what is needed, reveal the rest when asked.** A screen starts with the one thing to do;
   what it can also do waits until the athlete asks. Swap is a swipe right (the drawer); Edit and
   New wait behind the opened workout, a swipe up or its handle. Hiding a control is only right
-  when asking is cheap and findable, so every hidden thing has a visible way to ask (the hint on
-  a closed workout, the handle on an opened one) and a gesture as a shortcut.
+  when asking is cheap and findable: the handle on an opened workout is the visible way to ask,
+  the swipes the shortcut.
+- **For someone who knows it.** The athlete knows the app: no hint lines, no suggested replies,
+  no subtitles that explain a choice, and no number said twice on one screen. Density beats
+  explanation: a workout's shape reads in one line (`5 × 3 · every 8s · 4:30 rest`), with their
+  best beside it.
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
@@ -145,12 +149,11 @@ a faint shadow) that grows with its text up to nine lines, the send key inside i
 Its send key is a 44px target. Its placeholder names it; the label stays for screen readers. Send is a return arrow, grey until
 there is something to send, then ink (always ink where an empty send is fine, as New's request);
 while the coach works it is a small square. Its border darkens while focused, so the text draws
-no ring of its own. Suggested words (Edit's common changes, the coach's predicted replies) are
-quiet chips above it that scroll sideways, and one tap sends them. Classes: `.composer`,
-`.composer-bar`, `.composer-send`, `.composer-stop`, `.composer-suggestions`, `.composer-suggestion`.
+no ring of its own. There are no suggested words above it. Classes: `.composer`,
+`.composer-bar`, `.composer-send`, `.composer-stop`.
 
-A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds it and
-its chips, fixed at the bottom of the screen above the home indicator, and the `ChatDock` hook
+A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds it,
+fixed at the bottom of the screen above the home indicator, and the `ChatDock` hook
 lifts it above the iPhone keyboard. A spacer (`.chat-dock-spacer`) keeps the last line clear of
 it. Your messages are soft bubbles on the right (`.studio-bubble`, `.coach-exchange-you`); new
 lines rise in rather than jump.
@@ -160,10 +163,8 @@ lines rise in rather than jump.
 Home has no Edit, Swap or New buttons. A swipe right opens the swap drawer (the page slides
 right and the workout list takes the space; `#home-page` moves with `left`, never a transform).
 Edit and New are for an athlete who has opened the workout and is not happy with it: a swipe up
-inside the opened workout opens their sheet. The swipes are invisible, so a closed workout says
-"Swipe right to swap" for the first three visits or until the first swipe (`HomeHint`), and an
-opened one has a handle at its bottom edge (`#home-grab`, the same sheet) with "Swipe up for
-edit or new" above it. The sheet also lists Swap. Edit and New are the studio, a full-screen chat on the same page
+inside the opened workout opens their sheet, titles only. An opened workout has a handle at its
+bottom edge (`#home-grab`, the same sheet); there are no hint lines. The sheet also lists Swap. Edit and New are the studio, a full-screen chat on the same page
 and gutter as Home:
 
 - **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is
@@ -172,13 +173,19 @@ and gutter as Home:
   week strip), that stays.
 - **Messages**: the coach's plain on the left, yours in soft bubbles on the right. A workout is a
   card: its name (`--text-heading`), minutes and reps as chips, why, then the table in body size.
-  The card needs no label; what it is, the sentence before it says.
+  The card needs no label; what it is, the sentence before it says. A proposal is marked against
+  the one it replaced (Edit's first, against the workout): a changed chip has a clay ring, a
+  changed cell the clay underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
+- **Numbers by hand**: a tap on a set's row of the proposal selects it (a soft row) and opens
+  `.studio-hand-edit` under the card: the reps and the beat, each with 44px round steppers. A step
+  that cannot fit is disabled; the rests are fitted again, so the length holds.
 - **One question at a time** (New): centred, progress dots above, the question at
   `--text-display`, a choice as a card to tap (it answers and moves on), a value as a card you
   swipe with a round button either side (`.studio-stepper`, its number `--text-hero`) and a Next.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
   filled ink pill per view is the way on: Run, Create workout, Next), where the rest of the app
-  uses icons (4a2). Run keeps its play mark; the start toggles (camera, warmup) sit beside it.
+  uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio
+  has no toggles of its own.
 
 Everything rises in with `home-enter` or `studio-in`, both `--motion-settle`; reduced motion removes
 every animation here.

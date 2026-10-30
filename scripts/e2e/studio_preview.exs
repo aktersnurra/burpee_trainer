@@ -69,7 +69,7 @@ end)
 user = user_fixture()
 {:ok, user} = Accounts.update_timezone(user, "Etc/UTC")
 
-# History: a few completed sessions so suggestions have something to go on, and a week partly done.
+# History: a few completed sessions so the coach has something to go on, and a week partly done.
 for {type, reps, days} <- [{"six_count", 90, 3}, {"navy_seal", 40, 5}, {"six_count", 100, 1}] do
   free_form_session_fixture(user, %{"burpee_type" => type, "burpee_count_actual" => reps, "duration_sec_actual" => 1200,
     "completed_at" => DateTime.add(DateTime.utc_now(:second), -days * 86_400, :second)})
@@ -91,8 +91,9 @@ for {type, reps, days} <- [{"six_count", 95, 6}, {"six_count", 100, 3}, {"navy_s
     "completed_at" => DateTime.add(DateTime.utc_now(:second), -days * 86_400, :second)})
 end
 free_form_session_fixture(done_user, %{"burpee_type" => "six_count", "burpee_count_actual" => 104, "duration_sec_actual" => 1200})
-{:ok, _} = BurpeeTrainer.Coach.Exchange.record(Scope.for_user(done_user), "My knee felt rough today", "Then keep Thursday light and we'll see how it settles.", ["Make Thursday easier", "Add a rest day"])
-{:ok, _} = BurpeeTrainer.Coach.Memory.apply_ops(Scope.for_user(done_user), [%{"op" => "add", "text" => "Left knee gets sore after jumps"}])
+{:ok, _} = BurpeeTrainer.Coach.Exchange.record(Scope.for_user(done_user), "My knee felt rough today", "Then keep Thursday light and we'll see how it settles.")
+{:ok, _} = BurpeeTrainer.Coach.Memory.write(Scope.for_user(done_user), "user", [%{"action" => "add", "content" => "Left knee gets sore after jumps"}, %{"action" => "add", "content" => "Trains before work, around 6:30"}])
+{:ok, _} = BurpeeTrainer.Coach.Memory.write(Scope.for_user(done_user), "memory", [%{"action" => "add", "content" => "Keeps Thursdays light while the knee settles"}])
 
 # Today's cookie, signed the way the endpoint signs it.
 opts = [store: :cookie, key: "_burpee_trainer_key", signing_salt: "LSPz1/8A", same_site: "Lax", http_only: true, secure: true]
