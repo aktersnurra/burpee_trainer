@@ -804,6 +804,9 @@ button.home-summary:hover .home-workout-name {
 #home-ready-recommendation .home-hero { padding: 0; border: 0; text-align: center; }
 #home-ready-recommendation .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 #home-ready-recommendation .home-workout-totals { font-size: var(--text-body); }
+/* The shape and the athlete's best: one quiet line, numbers aligned for a glance. */
+.home-shape { margin: 6px 0 0; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: center; }
+.home-best { white-space: nowrap; }
 #home-ready-recommendation .home-hero-main { display: block; }
 #home-ready-recommendation .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
 #home-ready-recommendation .home-eyebrow { display: none; }
@@ -816,7 +819,7 @@ button.home-summary:hover .home-workout-name {
 .home-workout-actions #home-start-camera { grid-column: 1; grid-row: 1; }
 .home-workout-actions #home-start-warmup { grid-column: 3; grid-row: 1; }
 .home-start-choice { position: relative; min-width: 44px; padding-inline: 14px; }
-.home-start-choice[aria-pressed="true"] { color: #262722; }
+.home-start-choice[aria-pressed="true"] { color: #262722; background: var(--color-base-200); }
 .home-start-choice[aria-pressed="false"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
 .home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
 .home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }

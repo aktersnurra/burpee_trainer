@@ -296,6 +296,17 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </span>
             </div>
             <p
+              :if={@state.authoring_stage == :idle and shape(@state.home_selection.plan)}
+              id="home-shape"
+              class="home-shape"
+            >
+              {shape(@state.home_selection.plan)}<span
+                :if={best(@state)}
+                id="home-best"
+                class="home-best"
+              > · best {best(@state)} in 20 min</span>
+            </p>
+            <p
               :if={@state.home_selection.rationale && @state.authoring_stage == :idle}
               id="home-planner-rationale"
               class="home-coach-summary-text"
@@ -845,6 +856,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     <mark :if={@value != @was} class="home-changed">{@value}</mark><span :if={@value == @was}>{@value}</span>
     """
   end
+
+  defp shape(plan), do: BurpeeTrainer.Workouts.Shape.describe(plan.definition_json)
+
+  # The athlete's best for this burpee type, per 20 minutes, to read today's reps against.
+  defp best(state),
+    do: state |> Map.get(:home_bests, %{}) |> Map.get(state.home_selection.plan.burpee_type)
 
   defp hero_name(state) do
     cond do

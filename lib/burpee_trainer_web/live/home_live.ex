@@ -507,6 +507,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         socket
         |> assign(
           home_facts: facts,
+          home_bests: BurpeeTrainer.Coach.RepCeiling.recent_bests(socket.assigns.current_scope),
           home_insight: day_insight(socket.assigns.current_scope, now),
           home_state: state,
           home_primary_action: BurpeeTrainer.Home.State.primary_action(state),
