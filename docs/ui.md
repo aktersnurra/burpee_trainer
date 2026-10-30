@@ -221,7 +221,7 @@ arrives in place instead of beside the old. Reduced motion turns it all off.
 There is no navigation bar. The app opens on the one thing the owner needs now, and each
 screen leads to the next in context:
 
-- **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
+- **Home** (`/`) shows today's state: the ready workout with Start, and Edit, Swap and New beside it (never behind a tap on the workout) (a starter workout on
   first use, never an empty prompt), or once trained, the day's result. The result's title
   opens it like the workout's onto the coach, a section of the page (never a card): the
   coach's word on the rest of the week, this week's sessions done and left in Progress's

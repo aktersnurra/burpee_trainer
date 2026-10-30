@@ -137,7 +137,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-action")
     refute has_element?(view, "#home-adjustment-form")
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
-    assert has_element?(view, "#home-new-workout[inert]")
+    # Edit, swap and new are there without opening the workout first.
+    assert has_element?(view, "#home-new-workout:not([inert])")
+    assert has_element?(view, "#home-edit-workout:not([inert])")
     refute has_element?(view, "#resume-recommended-workout")
     refute has_element?(view, "#tell-coach-button")
     refute has_element?(view, "#manual-workout-form")
@@ -337,7 +339,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
 
-    assert has_element?(view, "#home-title-action[inert]")
+    assert has_element?(view, "#home-title-action:not([inert])")
     refute has_element?(view, "#home-title-action", "Change")
     assert has_element?(view, "#home-expansion-content[inert]")
     refute has_element?(view, "#home-other-workouts")
