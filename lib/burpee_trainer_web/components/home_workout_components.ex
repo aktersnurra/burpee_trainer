@@ -302,12 +302,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             >
               {@state.home_selection.rationale}
             </p>
-            <%!-- Edit, swap and new are always there: changing today's workout should not need a
-                 tap on it first. Only its table waits to be opened. --%>
             <div
               :if={@state.authoring_stage == :idle}
               class="home-workout-actions"
-              data-expanded="true"
+              data-expanded={to_string(@state.expanded?)}
             >
               <.start_choice choice="camera" />
               <.start_choice choice="warmup" />
@@ -318,6 +316,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 aria-label="Edit current workout"
                 title="Edit workout"
                 class="home-text-action home-expanded-action"
+                inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
                 <.icon name="hero-pencil-square" class="size-5" />
@@ -332,6 +331,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 aria-expanded={to_string(@state.chooser_open?)}
                 aria-controls="home-alternatives-panel"
                 class="home-text-action home-expanded-action"
+                inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
                 <.icon name="hero-arrows-right-left" class="size-5" />
@@ -356,6 +356,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 aria-label="New workout"
                 title="New workout"
                 class="home-text-action home-expanded-action"
+                inert={!@state.expanded?}
                 disabled={@state.authoring_stage != :idle}
               >
                 <.icon name="hero-plus" class="size-5" />

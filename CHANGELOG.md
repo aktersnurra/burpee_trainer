@@ -1,9 +1,5 @@
 # Changelog
 
-## 2026-10-30 — Edit, swap and new without opening the workout first
-
-- Home shows Edit, Swap and New under the play button from the start. They were hidden until you tapped the workout's title, which was a tap with no purpose: they change nothing until chosen. Only the workout's table still waits to be opened.
-
 ## 2026-10-30 — The swipes are findable; the studio has a browser check
 
 - Home has a handle at its bottom edge that opens the Edit / New sheet, and a line above it saying what the two swipes do, for the first three visits or until the first swipe (`HomeHint`).
