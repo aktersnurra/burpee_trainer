@@ -656,7 +656,7 @@ export class SessionRenderer {
 			if (totalPlan) totalPlan.hidden = true;
 			surface?.classList.remove("is-paused");
 			if (countEl) this.writeCount({});
-			this.updateSetProgress(this.currentSetProgress);
+			this.updateSetProgress(this.currentSetProgress, this.currentNextReps);
 		}
 
 		this.updateAccessibleState({
@@ -712,6 +712,7 @@ export class SessionRenderer {
 			this.announce(`Workout starts in ${model.primaryCount}`);
 		}
 		this.currentSetProgress = model.setProgress;
+		this.currentNextReps = model.nextReps ?? null;
 		this.updateAccessibleState({
 			state: visual.state,
 			primaryCount: model.primaryCount,
@@ -734,7 +735,7 @@ export class SessionRenderer {
 			this.renderRestState(model);
 		}
 
-		this.updateSetProgress(model.setProgress);
+		this.updateSetProgress(model.setProgress, model.nextReps);
 		if (model.timeLeftSec !== undefined) this.renderTimer(model.timeLeftSec);
 		if (model.totalDone !== undefined) {
 			this.updateTotalCounter(model.totalDone);
@@ -797,12 +798,16 @@ export class SessionRenderer {
 		this.lastPulseValue = null;
 	}
 
-	updateSetProgress(value) {
+	updateSetProgress(value, nextReps = null) {
 		const setProgress = this.node("#set-progress");
-		this.setText(setProgress, value, "setProgressText");
+		const parts = [value, nextReps == null ? null : `next ${nextReps}`].filter(
+			(part) => part != null,
+		);
+		const text = parts.length ? parts.join(" · ") : null;
+		this.setText(setProgress, text, "setProgressText");
 		this.setHidden(
 			setProgress,
-			this.paused || value == null,
+			this.paused || text == null,
 			"setProgressHidden",
 		);
 	}

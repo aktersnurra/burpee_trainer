@@ -63,6 +63,8 @@ export function runningDisplayModel({
 			["rest", "work_recovery"].includes(visual.state)
 				? setProgressForFrame(timeline, frame)
 				: null,
+		// What comes after a rest, so it is never a surprise: the next set's reps.
+		nextReps: visual.state === "rest" ? nextSetReps(timeline, frame) : null,
 		sessionProgress,
 		repProgress,
 		totalDone,
@@ -156,6 +158,13 @@ function setProgressForFrame(timeline, frame) {
 		eventKind(frame?.event) === "work" ? completed + 1 : completed;
 
 	return total > 1 ? `${position}/${total}` : null;
+}
+
+function nextSetReps(timeline, frame) {
+	const next = timeline
+		.slice((frame?.index ?? 0) + 1)
+		.find((event) => eventKind(event) === "work");
+	return next?.reps ?? null;
 }
 
 function eventKind(event) {
