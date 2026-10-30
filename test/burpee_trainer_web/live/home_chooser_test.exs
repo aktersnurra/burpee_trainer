@@ -19,7 +19,7 @@ defmodule BurpeeTrainerWeb.HomeChooserTest do
           {"level", "not_a_real_level"}
         ] do
       render_click(view, "filter", %{"kind" => kind, "filter" => value})
-      assert has_element?(view, "#home-title-action")
+      assert has_element?(view, "#home-summary")
     end
   end
 
@@ -28,7 +28,7 @@ defmodule BurpeeTrainerWeb.HomeChooserTest do
 
     for event <- ["select_alternative", "delete_workout"] do
       render_click(view, event, %{"id" => "not_a_number", "kind" => "plan"})
-      assert has_element?(view, "#home-title-action")
+      assert has_element?(view, "#home-summary")
     end
   end
 
@@ -39,7 +39,7 @@ defmodule BurpeeTrainerWeb.HomeChooserTest do
 
     for event <- ["select_alternative", "delete_workout"] do
       render_click(view, event, %{"id" => to_string(foreign.id), "kind" => "plan"})
-      assert has_element?(view, "#home-title-action")
+      assert has_element?(view, "#home-summary")
       persisted = BurpeeTrainer.Repo.get!(BurpeeTrainer.Workouts.WorkoutPlan, foreign.id)
       assert persisted.state == :published
       assert persisted.content_hash == foreign.content_hash

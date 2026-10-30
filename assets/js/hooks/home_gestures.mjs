@@ -3,12 +3,13 @@
 import { createSwipeTracker } from "./swipe.mjs";
 import { noteSwipe } from "./home_hint.mjs";
 
-// What a swipe does, given what is open. `null` leaves the stroke alone.
-export function gestureEvent(direction, { chooserOpen, optionsOpen }) {
+// What a swipe does, given what is open. `null` leaves the stroke alone. Swap is the swipe right
+// anywhere; Edit and New wait for the swipe up on a workout that has been opened.
+export function gestureEvent(direction, { chooserOpen, optionsOpen, expanded }) {
 	if (chooserOpen) return direction === "left" ? "close_chooser" : null;
 	if (optionsOpen) return direction === "down" ? "close_options" : null;
 	if (direction === "right") return "open_chooser";
-	if (direction === "up") return "open_options";
+	if (direction === "up" && expanded) return "open_options";
 	return null;
 }
 
@@ -25,6 +26,7 @@ export default {
 				const event = gestureEvent(direction, {
 					chooserOpen: this.el.dataset.chooserOpen === "true",
 					optionsOpen: this.el.dataset.optionsOpen === "true",
+					expanded: this.el.dataset.expanded === "true",
 				});
 				if (event) {
 					noteSwipe();

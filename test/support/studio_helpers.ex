@@ -2,11 +2,32 @@ defmodule BurpeeTrainerWeb.StudioHelpers do
   @moduledoc "Drives New's questions in a LiveView test, as a person would: by taps and steps."
   import Phoenix.LiveViewTest
 
+  @doc "Opens the workout, as a tap on its title does, when it is not open."
+  def expand(view) do
+    if has_element?(view, "#home-expansion[data-open='false']"),
+      do: view |> element("#home-summary") |> render_click()
+  end
+
+  @doc "Swipes up on the opened workout: the sheet of what else to do, through its handle."
+  def open_sheet(view) do
+    expand(view)
+    view |> element("#home-grab") |> render_click()
+  end
+
+  @doc "Edit, as the sheet offers it."
+  def open_edit(view) do
+    open_sheet(view)
+    view |> element("#home-options-edit") |> render_click()
+  end
+
   @doc "Opens New from Home."
   def open_new(view) do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
+    open_sheet(view)
+    view |> element("#home-options-new") |> render_click()
   end
+
+  @doc "Swipes right: the swap drawer, which opens from anywhere on Home."
+  def open_swap(view), do: render_click(view, "open_chooser", %{})
 
   @doc """
   Answers every question and stops at what was chosen. Reps and minutes are reached by steps;

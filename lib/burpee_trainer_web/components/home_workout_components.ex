@@ -16,7 +16,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     |> JS.remove_attribute("inert",
       to: "#home-summary, .home-workout-actions, #home-expansion-content"
     )
-    |> JS.focus(to: "#home-title-action")
+    |> JS.focus(to: "#home-summary")
     |> JS.push("close_chooser")
   end
 
@@ -305,37 +305,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <div
               :if={@state.authoring_stage == :idle}
               class="home-workout-actions"
-              data-expanded={to_string(@state.expanded?)}
+              data-expanded="true"
             >
               <.start_choice choice="camera" />
               <.start_choice choice="warmup" />
-              <button
-                id="home-edit-workout"
-                type="button"
-                phx-click="edit_current_workout"
-                aria-label="Edit current workout"
-                title="Edit workout"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-pencil-square" class="size-5" />
-              </button>
-              <button
-                id="home-title-action"
-                type="button"
-                phx-click={open_chooser()}
-                aria-label="Switch workout"
-                title="Switch workout"
-                aria-haspopup="dialog"
-                aria-expanded={to_string(@state.chooser_open?)}
-                aria-controls="home-alternatives-panel"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-arrows-right-left" class="size-5" />
-              </button>
               <button
                 id="home-action"
                 data-primary-action="start"
@@ -348,18 +321,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 disabled={@state.authoring_stage != :idle}
               >
                 <.icon name="hero-play-solid" class="size-6" />
-              </button>
-              <button
-                id="home-new-workout"
-                type="button"
-                phx-click="new_workout"
-                aria-label="New workout"
-                title="New workout"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-plus" class="size-5" />
               </button>
             </div>
           </div>
@@ -407,8 +368,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </div>
             </section>
           </div>
-          <%!-- The swipes are invisible, so the way up has a handle, and a line says so for the
-               first few visits (see the HomeHint hook). --%>
+          <%!-- Edit and New wait until the workout is opened and the athlete swipes up (or uses the
+               handle); Swap is the swipe right, which is the left drawer. The line says so for the
+               first visits (see the HomeHint hook). --%>
           <div
             :if={
               @state.authoring_stage == :idle and not @state.options_open? and
@@ -416,16 +378,34 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             }
             class="home-grab-area"
           >
-            <p id="home-hint" class="home-hint" phx-hook="HomeHint" phx-update="ignore" hidden>
-              Swipe right to swap · up for more
+            <p
+              :if={not @state.expanded?}
+              id="home-hint"
+              class="home-hint"
+              phx-hook="HomeHint"
+              phx-update="ignore"
+              hidden
+            >
+              Swipe right to swap
+            </p>
+            <p
+              :if={@state.expanded?}
+              id="home-hint-more"
+              class="home-hint"
+              phx-hook="HomeHint"
+              phx-update="ignore"
+              hidden
+            >
+              Swipe up to edit or start fresh
             </p>
             <button
+              :if={@state.expanded?}
               id="home-grab"
               type="button"
               class="home-grab"
               phx-click="open_options"
-              aria-label="Edit or new workout"
-              title="Edit or new workout"
+              aria-label="Edit, swap or new workout"
+              title="Edit, swap or new workout"
             >
               <span class="home-grab-bar"></span>
             </button>

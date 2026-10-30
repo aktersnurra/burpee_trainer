@@ -160,7 +160,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     a = socket.assigns
 
     if a.authoring_stage == :idle and not is_nil(a.home_selection) and not a.busy? and
-         not a.chooser_open?,
+         a.expanded? and not a.chooser_open?,
        do: {:noreply, assign(socket, options_open?: true)},
        else: {:noreply, socket}
   end

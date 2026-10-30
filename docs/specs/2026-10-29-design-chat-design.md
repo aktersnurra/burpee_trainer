@@ -12,13 +12,16 @@ with a way back that discarded the proposal.
 ## Home: two swipes
 
 `HomeGestures` (`assets/js/hooks/home_gestures.mjs`, on the whole Home screen) turns a swipe into
-the event a button already sends. The buttons stay for anyone who cannot swipe.
+an event. Home itself carries no Edit, Swap or New buttons (show what is needed, reveal the rest);
+the handle on an opened workout is the way in for anyone who cannot swipe.
 
 - **Right** opens the swap list as a drawer, as in the Claude app: the page slides right
   (`#home-page` moves with `left`, not a transform, so the fixed drawer stays put) and the list of
   workouts takes the space it leaves. A swipe left, or a tap on the page, closes it. Choosing a
   workout previews it and confirms as before.
-- **Up** opens a sheet with two choices, Edit this workout and New workout. Down closes it.
+- **Up**, only on an opened workout, opens a sheet with Edit this workout, New workout and Swap
+  workout. Down closes it. On a closed workout it does nothing; the server also refuses
+  `open_options` unless the workout is open.
 - `swipe.mjs` recognises a stroke: 56px, at least 1.6 times more in its direction than across, under
   800ms. An upward stroke counts only when the page cannot scroll further, so it never fights a
   scroll. Strokes that start in a field, or an element marked `data-no-swipe`, are left alone.

@@ -7,9 +7,10 @@ the composer or the CSS around them.
 
 ## What it checks
 
-- Home has the handle for the swipe up and says what the swipes do on the first visit.
-- A swipe right opens the swap drawer and a swipe left closes it; a swipe up opens Edit / New and a
-  swipe down closes it; the first swipe is remembered so the hint stops.
+- A closed Home has no handle and says "Swipe right to swap" on the first visit.
+- A swipe right opens the swap drawer and a swipe left closes it; a swipe up does nothing until the
+  workout is opened, then opens Edit / New, and a swipe down closes it; the first swipe is
+  remembered so the hint stops.
 - Edit: the studio starts at Home's left edge, the docked box starts at the same edge, nothing
   scrolls sideways, a spinner shows while the coach works, and Save and Run sit under the proposal.
 - New: one question at a time, a swipe raises a value by a step, reps say what they come to,

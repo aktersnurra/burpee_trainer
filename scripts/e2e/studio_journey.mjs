@@ -84,8 +84,8 @@ await settle(800);
 const home = await geometry();
 check(!home.overflow, "Home does not scroll sideways");
 check(home.small.length === 0, "Home's buttons are big enough to hit", home.small.join(", "));
-check(await page.isVisible("#home-grab"), "Home has the handle for the swipe up");
-check(await page.isVisible("#home-hint"), "the first visit says what the swipes do");
+check(!(await page.$("#home-grab")), "closed, Home offers no Edit, Swap or New of its own");
+check((await page.textContent("#home-hint")).includes("Swipe right to swap"), "the first visit says how to swap");
 await shot("01-home");
 
 // Swipe right: the swap drawer; left: back.
@@ -97,10 +97,18 @@ await swipe(client, [300, 400], [60, 405]);
 await settle(600);
 check(await page.evaluate(() => document.querySelector("#home-alternatives-panel").hidden), "swipe left closes it");
 
-// Swipe up: the sheet; down: back.
+// Swipe up does nothing until the workout is opened; opened, it offers Edit / New; down: back.
+await swipe(client, [200, 640], [205, 340]);
+await settle(500);
+check(!(await page.$("#home-options-sheet")), "swipe up on the closed workout does nothing");
+await page.tap("#home-summary");
+await page.waitForSelector("#home-grab");
+await settle(500);
+// The hint line stops after the first swipe (the swap above), so only its presence is checked.
+check(!!(await page.$("#home-hint-more")), "the opened workout says to swipe up for more");
 await swipe(client, [200, 640], [205, 340]);
 await settle(600);
-check(await page.isVisible("#home-options-sheet"), "swipe up opens Edit / New");
+check(await page.isVisible("#home-options-sheet"), "swipe up on the opened workout opens Edit / New");
 await shot("03-options");
 await swipe(client, [200, 500], [205, 800]);
 await settle(500);
@@ -135,6 +143,8 @@ await page.tap("#home-request-abort");
 await page.waitForSelector("#home-summary");
 
 // New.
+if (!(await page.$("#home-grab"))) await page.tap("#home-summary");
+await page.waitForSelector("#home-grab");
 await page.tap("#home-grab");
 await page.tap("#home-options-new");
 await page.waitForSelector("#studio-step");

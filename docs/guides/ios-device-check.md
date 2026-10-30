@@ -27,7 +27,9 @@ not in Safari, as the keyboard behaves differently in each. Do it once in each.
       list needs a start point away from the edge.
 - [ ] Swipe up on a long Home (the table expanded) scrolls the page instead of opening the sheet
       until the page is at its bottom.
-- [ ] The handle at the bottom opens the same sheet, and the hint line shows on the first visits only.
+- [ ] Open the workout: a handle appears at the bottom and a swipe up (or the handle) opens the sheet
+  with Edit, New and Swap. On a closed workout a swipe up does nothing, and the hint line ("Swipe
+  right to swap") shows on the first visits only.
 - [ ] A swipe on a value (duration, reps, set size, pace) changes it by one step and does not scroll
       the page.
 

@@ -108,6 +108,7 @@ defmodule BurpeeTrainerWeb.HomeScreen do
         phx-hook="HomeGestures"
         data-chooser-open={to_string(@chooser_open?)}
         data-options-open={to_string(@options_open?)}
+        data-expanded={to_string(@expanded?)}
       >
         <div id="home-progress-history" class="relative min-h-11">
           <%= if @slot do %>

@@ -152,7 +152,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     selected: selected
   } do
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
 
     view
     |> form("#home-edit-form",

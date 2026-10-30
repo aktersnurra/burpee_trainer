@@ -92,18 +92,22 @@ test("a cancelled touch forgets its start, and destroy detaches", () => {
 	assert.equal(f.listeners.size, 0);
 });
 
-test("a swipe on Home opens what the buttons open, and closes it the way it came", () => {
-	const closed = { chooserOpen: false, optionsOpen: false };
+test("a swipe on Home: right swaps anywhere; up edits or starts fresh only on an opened workout", () => {
+	const closed = { chooserOpen: false, optionsOpen: false, expanded: false };
 	assert.equal(gestureEvent("right", closed), "open_chooser");
-	assert.equal(gestureEvent("up", closed), "open_options");
+	assert.equal(gestureEvent("up", closed), null);
 	assert.equal(gestureEvent("left", closed), null);
 	assert.equal(gestureEvent("down", closed), null);
 
-	const drawer = { chooserOpen: true, optionsOpen: false };
+	const opened = { ...closed, expanded: true };
+	assert.equal(gestureEvent("up", opened), "open_options");
+	assert.equal(gestureEvent("right", opened), "open_chooser");
+
+	const drawer = { ...opened, chooserOpen: true };
 	assert.equal(gestureEvent("left", drawer), "close_chooser");
 	assert.equal(gestureEvent("up", drawer), null);
 
-	const sheet = { chooserOpen: false, optionsOpen: true };
+	const sheet = { ...opened, optionsOpen: true };
 	assert.equal(gestureEvent("down", sheet), "close_options");
 	assert.equal(gestureEvent("right", sheet), null);
 });

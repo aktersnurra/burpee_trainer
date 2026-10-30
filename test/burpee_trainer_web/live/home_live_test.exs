@@ -137,7 +137,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-action")
     refute has_element?(view, "#home-adjustment-form")
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
-    assert has_element?(view, "#home-new-workout[inert]")
+    refute has_element?(view, "#home-edit-workout, #home-title-action, #home-new-workout")
+    refute has_element?(view, "#home-grab")
     refute has_element?(view, "#resume-recommended-workout")
     refute has_element?(view, "#tell-coach-button")
     refute has_element?(view, "#manual-workout-form")
@@ -169,7 +170,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-start-camera")
     assert has_element?(view, "#home-start-warmup")
 
-    view |> element("#home-new-workout") |> render_click()
+    open_new(view)
     refute has_element?(view, "#home-start-camera")
     refute has_element?(view, "#home-start-warmup")
   end
@@ -213,7 +214,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
     assert has_element?(view, "#home-alternatives-panel[hidden] #home-alternatives-toolbar")
     refute has_element?(view, "#home-other-workouts")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
 
     assert has_element?(
              view,
@@ -247,7 +248,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-type-six_count[aria-pressed=false]")
     view |> element("#home-filter-reset") |> render_click()
     assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     assert has_element?(view, "#home-alternatives-panel:not([hidden]) #home-filter-toggle")
   end
 
@@ -255,7 +256,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     recommendation_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     assert has_element?(view, "#home-current-level", "Level 1A is your current level.")
@@ -292,7 +293,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     unknown = video_fixture()
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     for level <- BurpeeTrainer.Levels.all_levels() do
@@ -311,7 +312,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-summary", plan.name)
     assert has_element?(view, "#home-alternatives-panel[hidden]")
     assert Repo.aggregate(WorkoutSession, :count) == 0
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-tab-videos") |> render_click()
 
     assert has_element?(
@@ -337,34 +338,18 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
 
-    assert has_element?(view, "#home-title-action[inert]")
-    refute has_element?(view, "#home-title-action", "Change")
+    refute has_element?(view, "#home-title-action")
     assert has_element?(view, "#home-expansion-content[inert]")
     refute has_element?(view, "#home-other-workouts")
 
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-title-action")
-      |> LazyHTML.attribute("phx-click")
-
-    assert [
-             ["set_attr", %{"attr" => ["inert", ""]}],
-             ["remove_attr", %{"attr" => "hidden", "to" => "#home-alternatives-panel"}],
-             ["focus", %{"to" => "#home-chooser-close"}],
-             ["push", %{"event" => "open_chooser"}]
-           ] = Jason.decode!(commands)
-
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     assert has_element?(view, "#home-alternatives-panel[role=dialog]:not([hidden])")
     refute has_element?(view, "#home-expansion-content[inert] #home-alternatives-panel")
     view |> element("#home-chooser-close") |> render_click()
     view |> element("#home-summary") |> render_click()
 
-    assert has_element?(
-             view,
-             "#home-title-action[aria-label='Switch workout'] .hero-arrows-right-left"
-           )
+    # Opened, the workout has the handle for edit and new, and the sheet it opens offers all three.
+    assert has_element?(view, "#home-grab[aria-label='Edit, swap or new workout']")
 
     assert has_element?(
              view,
@@ -380,7 +365,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   } do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     doc = render(view) |> LazyHTML.from_fragment()
 
     [close] = doc |> LazyHTML.query("#home-chooser-close") |> LazyHTML.attribute("phx-click")
@@ -388,7 +373,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert [
              ["set_attr", %{"attr" => ["hidden", ""], "to" => "#home-alternatives-panel"}],
              ["remove_attr", %{"attr" => "inert"}],
-             ["focus", %{"to" => "#home-title-action"}],
+             ["focus", %{"to" => "#home-summary"}],
              ["push", %{"event" => "close_chooser"}]
            ] = Jason.decode!(close)
 
@@ -876,7 +861,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
 
-    view |> element("#home-new-workout") |> render_click()
+    open_new(view)
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
@@ -920,7 +905,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              )
     end
 
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
 
     assert has_element?(
              view,

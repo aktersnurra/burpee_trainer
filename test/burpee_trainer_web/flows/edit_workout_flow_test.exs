@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   use BurpeeTrainerWeb.ConnCase, async: false
   import Ecto.Query
   import Phoenix.LiveViewTest
+  import BurpeeTrainerWeb.StudioHelpers
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Accounts, ReqStub, Workouts, Repo}
   alias BurpeeTrainer.Accounts.Scope
@@ -117,9 +118,13 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
 
   test "swiping up offers Edit and New; Edit opens a chat that begins with today's workout",
        %{view: view, selected: selected} do
-    # The swipe is invisible, so there is a handle for it; both lead to the same sheet.
-    assert has_element?(view, "#home-grab[aria-label='Edit or new workout']")
+    # Closed, the workout offers only the swap swipe; edit and new wait until it is opened.
     assert has_element?(view, "#home-hint", "Swipe right to swap")
+    refute has_element?(view, "#home-grab")
+    view |> element("#home-summary") |> render_click()
+
+    # The swipe up is invisible, so the opened workout has a handle for it; both lead to the same sheet.
+    assert has_element?(view, "#home-grab[aria-label='Edit, swap or new workout']")
     view |> element("#home-grab") |> render_click()
     assert has_element?(view, "#home-options-sheet")
     refute has_element?(view, "#home-grab")
@@ -167,12 +172,12 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-request-abort[aria-label='Cancel edit'] .hero-chevron-left")
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-studio")
-    assert has_element?(view, ".home-workout-actions #home-edit-workout")
+    assert has_element?(view, ".home-workout-actions #home-action")
   end
 
   test "a suggested change is sent to the coach with one tap", %{view: view} do
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
     view |> element("#home-edit-suggest-shorter", "Make it shorter") |> render_click()
     render_async(view)
 
@@ -226,7 +231,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     {:ok, pin} = Workouts.select_home_workout(Scope.for_user(user), selected, original.id)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
     refute has_element?(view, "#studio-reps-value, #studio-duration-value")
 
     view
@@ -242,7 +247,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
            ) == 0
 
     refute_received {:provider_request, _}
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
     assert has_element?(view, "#home-edit-instruction")
     instruction = "Increase to 150 reps, keep 20 minutes, 5 seconds active pace and two sets."
 
@@ -350,7 +355,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   test "each follow-up refines the proposal on screen, not the workout the design started from",
        %{view: view, selected: selected} do
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
 
     view
     |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
@@ -430,7 +435,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   test "a follow-up the coach cannot make leaves the proposal on screen to try again",
        %{view: view} do
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
 
     view
     |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})

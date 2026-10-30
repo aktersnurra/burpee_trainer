@@ -10,9 +10,10 @@
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
 - **Show what is needed, reveal the rest when asked.** A screen starts with the one thing to do;
-  what it can also do (a workout's table, Edit, Swap, New) waits until the athlete asks, by a tap on
-  the workout, a swipe, or the handle at the bottom. Hiding a control is only right when asking is
-  cheap and findable, so every hidden thing has a visible way to ask and a gesture as a shortcut.
+  what it can also do waits until the athlete asks. Swap is a swipe right (the drawer); Edit and
+  New wait behind the opened workout, a swipe up or its handle. Hiding a control is only right
+  when asking is cheap and findable, so every hidden thing has a visible way to ask (the hint on
+  a closed workout, the handle on an opened one) and a gesture as a shortcut.
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
@@ -156,11 +157,13 @@ lines rise in rather than jump.
 
 ## 4a1a. Swipes, the drawer and the studio
 
-Home answers two swipes with what its buttons do: right opens the swap drawer (the page slides
-right and the workout list takes the space; `#home-page` moves with `left`, never a transform),
-up opens the Edit / New sheet. The swipes are invisible, so Home has a handle at its bottom edge
-(`#home-grab`, the same sheet) and, for the first three visits or until the first swipe, a line
-saying what they do (`HomeHint`). Edit and New are the studio, a full-screen chat on the same page
+Home has no Edit, Swap or New buttons. A swipe right opens the swap drawer (the page slides
+right and the workout list takes the space; `#home-page` moves with `left`, never a transform).
+Edit and New are for an athlete who has opened the workout and is not happy with it: a swipe up
+inside the opened workout opens their sheet. The swipes are invisible, so a closed workout says
+"Swipe right to swap" for the first three visits or until the first swipe (`HomeHint`), and an
+opened one has a handle at its bottom edge (`#home-grab`, the same sheet) with "Swipe up for
+edit or new" above it. The sheet also lists Swap. Edit and New are the studio, a full-screen chat on the same page
 and gutter as Home:
 
 - **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is

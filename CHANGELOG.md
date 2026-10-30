@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-30 — Swap is the drawer; Edit and New wait behind the opened workout
+
+- Home no longer has Edit, Swap or New buttons. Swap is a swipe right (the drawer); Edit and New appear when you open the workout and swipe up, or use the handle at the bottom of the opened workout. A closed workout only says "Swipe right to swap". The server refuses `open_options` on a closed workout.
+
 ## 2026-10-30 — The handle shows everything Home can do; hidden until asked
 
 - Edit, Swap and New stay hidden until asked for, as designed: Home starts with the one thing to do. The ways to ask are a tap on the workout, a swipe, or the handle at the bottom, and the handle's sheet now offers Swap workout beside Edit and New, so nothing needs the workout opened first. `docs/ui.md` states the principle.
