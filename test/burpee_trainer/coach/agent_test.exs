@@ -49,27 +49,12 @@ defmodule BurpeeTrainer.Coach.AgentTest do
     assert BurpeeTrainer.Coach.Memory.list(scope) == []
   end
 
-  test "the coach's reply carries what the athlete might say next, cleaned" do
-    scope = scope_fixture()
-
-    reply = %{
-      "reply" => "Thursday stays unbroken.",
-      "suggestions" => ["Make it shorter", "", "Can I do it at 7?"]
-    }
-
+  test "a reply with anything besides the reply is rejected" do
+    reply = %{"reply" => "Thursday stays unbroken.", "suggestions" => ["Make it shorter"]}
     opts = responses([%{"choices" => [%{"message" => %{"content" => Jason.encode!(reply)}}]}])
 
-    assert {:ok,
-            %{
-              reply: "Thursday stays unbroken.",
-              suggestions: ["Make it shorter", "Can I do it at 7?"]
-            }} =
-             Agent.run(scope, :coach_page, "Thursday?", opts)
-  end
-
-  test "a reply without suggestions has none" do
-    opts = responses([final("Noted.")])
-    assert {:ok, %{suggestions: []}} = Agent.run(scope_fixture(), :coach_page, "Hi", opts)
+    assert {:error, :invalid_provider_response} =
+             Agent.run(scope_fixture(), :coach_page, "Thursday?", opts)
   end
 
   test "stops at six calls" do

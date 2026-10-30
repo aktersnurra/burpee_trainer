@@ -10,7 +10,6 @@ defmodule BurpeeTrainer.Coach.Exchange do
     field :user_id, :integer
     field :message, :string
     field :reply, :string
-    field :suggestions, {:array, :string}, default: []
     timestamps(type: :utc_datetime_usec)
   end
 
@@ -26,15 +25,11 @@ defmodule BurpeeTrainer.Coach.Exchange do
     |> Enum.reverse()
   end
 
-  @spec record(Scope.t(), String.t(), String.t(), [String.t()]) ::
+  @spec record(Scope.t(), String.t(), String.t()) ::
           {:ok, t()} | {:error, Ecto.Changeset.t()}
-  def record(%Scope{user: %{id: id}}, message, reply, suggestions \\ []) do
+  def record(%Scope{user: %{id: id}}, message, reply) do
     %__MODULE__{user_id: id}
-    |> cast(%{message: message, reply: reply, suggestions: suggestions}, [
-      :message,
-      :reply,
-      :suggestions
-    ])
+    |> cast(%{message: message, reply: reply}, [:message, :reply])
     |> validate_required([:message, :reply])
     |> Repo.insert()
   end

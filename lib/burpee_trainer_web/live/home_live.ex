@@ -303,7 +303,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_toggle",
              "coach_message_change",
              "coach_message",
-             "coach_quick_reply",
              "coach_goal_confirm",
              "coach_goal_dismiss"
            ] do

@@ -202,13 +202,9 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       >
         {pauses_label(@state.pending_request.request.timed_rests)}
       </p>
-      <%!-- What to do with it sits right under the card it is about. Run starts it, so the
-           start toggles are here too: the device remembers them. --%>
+      <%!-- What to do with it sits right under the card it is about. Run starts it with the
+           camera and warmup choices this device remembers from Home. --%>
       <div id="home-chat-actions" class="studio-actions">
-        <div class="studio-start-choices">
-          <HomeWorkoutComponents.start_choice choice="camera" />
-          <HomeWorkoutComponents.start_choice choice="warmup" />
-        </div>
         <button
           id="home-request-save"
           type="button"
@@ -636,7 +632,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp new_sending?(state),
     do: state.authoring_stage == :new and state.busy? and state.new_step != :request
 
-  # What you can do now: Accept or Save a proposal, tap a quick change, write. It is docked
+  # Where you write. It is docked
   # above the keyboard (see the ChatDock hook), so it stays within reach as the thread grows.
   defp dock(assigns) do
     state = assigns.state
@@ -662,24 +658,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       data-scroll-to={scroll_target(@state)}
     >
       <div class="chat-dock-inner">
-        <div
-          :if={edit?(@state) and not @state.busy?}
-          class="composer-suggestions chat-dock-chips"
-          role="group"
-          aria-label="Suggested changes"
-        >
-          <button
-            :for={{id, label, instruction} <- suggestions()}
-            id={"home-edit-suggest-#{id}"}
-            type="button"
-            class="composer-suggestion"
-            phx-click={
-              JS.push(@event, value: %{"home_adjustment" => %{"instruction" => instruction}})
-            }
-          >
-            {label}
-          </button>
-        </div>
         <.form
           for={@state.adjustment_form}
           id="home-edit-form"
@@ -731,14 +709,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp placeholder(%{authoring_stage: :review}), do: "Change anything else?"
   defp placeholder(%{editing_source: nil}), do: "Additional request"
   defp placeholder(_state), do: "What should change?"
-
-  defp suggestions do
-    [
-      {"split", "Split into sets", "Split it into sets with a short rest between them"},
-      {"rests", "Longer rests", "Make the rests longer"},
-      {"shorter", "Make it shorter", "Make it shorter"}
-    ]
-  end
 
   # The newest thing said: your pending message while the coach works, else your last one.
   defp scroll_target(%{pending_turn: turn}) when is_binary(turn), do: "#home-design-pending"

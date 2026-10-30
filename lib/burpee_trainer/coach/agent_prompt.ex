@@ -47,9 +47,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   they bear on what was said, as someone who remembers them would; leave trends, totals and \
   levels out unless they ask. Ask at most one short question, and only when the answer would \
   change their training. Use propose_goal only when they ask for a goal; they confirm it \
-  themselves. In suggestions, give up to three short things the athlete is likely to say \
-  next, in their own words and specific to this reply (under 60 characters each); they tap \
-  one to send it.
+  themselves.
   """
 
   @context_glossary """

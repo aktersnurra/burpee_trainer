@@ -1050,9 +1050,6 @@ button.home-summary:hover .home-workout-name {
 .chat-dock-inner { display: grid; gap: 8px; max-width: calc(410px - 2 * var(--gutter)); margin-inline: auto; }
 .chat-dock-actions { justify-content: flex-end; margin-left: 0; }
 .chat-dock .composer textarea { min-height: 1.5em; max-height: 9rem; overflow-y: auto; }
-.chat-dock .chat-dock-chips { flex-wrap: nowrap; margin: 0; overflow-x: auto; scrollbar-width: none; }
-.chat-dock .chat-dock-chips::-webkit-scrollbar { display: none; }
-.chat-dock .chat-dock-chips .composer-suggestion { flex: none; white-space: nowrap; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
 
 /* The design as a conversation: what you asked, what it became, newest last. */
@@ -1088,9 +1085,7 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--color-base-border); }
 .home-option { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 12px 14px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: transparent; color: #262722; text-align: left; transition: background var(--motion-quick) ease; }
 .home-option:hover, .home-option:focus-visible { background: var(--color-base-100); }
-.home-option-text { display: grid; gap: 2px; min-width: 0; }
 .home-option-title { font: 600 var(--text-body)/1.3 var(--font-sans); }
-.home-option-detail { color: var(--home-muted); font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- The studio: Edit and New as a chat. ---- */
 .studio { display: flex; flex-direction: column; max-width: 410px; min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: #262722; font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
@@ -1140,8 +1135,6 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
 .studio-actions { display: flex; align-items: center; gap: 8px; }
 .studio-actions .studio-pill { flex: 1; min-height: 48px; }
-.studio-start-choices { display: flex; flex: none; gap: 2px; margin-left: -12px; }
-.studio-start-choices .home-start-choice { min-width: 44px; min-height: 44px; padding: 0; }
 
 /* One question at a time: centred, with the answer under it and the progress above. */
 .studio-step { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); text-align: center; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
@@ -1181,19 +1174,12 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
 .studio #home-update-loading { display: flex; min-height: 0; place-items: unset; }
 
-/* The way up: a handle at the bottom edge for what a swipe up does, and a line that says so for a
-   few visits. Both leave when the sheet, the drawer or the studio is open. */
+/* The way up on an opened workout: a handle at the bottom edge for what a swipe up does. It leaves
+   when the sheet, the drawer or the studio is open. */
 .home-grab-area { position: fixed; inset-inline: 0; bottom: 0; z-index: 10; display: grid; justify-items: center; padding-bottom: calc(4px + env(safe-area-inset-bottom)); pointer-events: none; }
 .home-grab { display: grid; place-items: center; width: 120px; height: 36px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
 .home-grab-bar { width: 40px; height: 4px; border-radius: 2px; background: var(--color-base-border); transition: background var(--motion-quick) ease, width var(--motion-quick) ease; }
 .home-grab:hover .home-grab-bar, .home-grab:focus-visible .home-grab-bar { width: 56px; background: #9A9489; }
-.home-hint { margin: 0; color: var(--home-muted, #736f68); font-size: var(--text-small); animation: home-hint var(--motion-settle) var(--ease-out) backwards, home-hint-out var(--motion-settle) ease 7s forwards; }
-@keyframes home-hint { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes home-hint-out { to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .home-hint { animation: none; } }
 
-/* The chips scroll sideways: they run to the edge of the screen, not the column, so the one cut off
-   reads as more to scroll, not as clipped. */
-.chat-dock .chat-dock-chips { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); }
 #home-options-sheet:focus { outline: none; }
 .coach-summary-loader { margin-top: -8px; }

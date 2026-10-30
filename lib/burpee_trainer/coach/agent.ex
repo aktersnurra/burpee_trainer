@@ -1,7 +1,6 @@
 defmodule BurpeeTrainer.Coach.Agent do
   @moduledoc "Bounded scoped coach loop; tool errors are visible to the model, not exceptions."
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.Suggestions
   alias BurpeeTrainer.Coach.{Client, Tool, Tools, AgentPrompt}
 
   @tools %{
@@ -19,7 +18,7 @@ defmodule BurpeeTrainer.Coach.Agent do
   @selection_reminder "Nothing was chosen. Call select_workout or propose_workout for this slot, then reply."
   @create_reminder "Nothing was designed. Call propose_workout for this slot, then reply."
   @spec run(Scope.t(), :planner | :coach_page, String.t() | nil, keyword()) ::
-          {:ok, %{reply: String.t(), suggestions: [String.t()]}} | {:error, term()}
+          {:ok, %{reply: String.t()}} | {:error, term()}
   def run(%Scope{} = scope, surface, input, opts \\ []) when surface in [:planner, :coach_page] do
     create_only? = surface == :planner and Keyword.get(opts, :create_only, false)
     tools = if create_only?, do: @create_tools, else: Map.fetch!(@tools, surface)
@@ -70,10 +69,7 @@ defmodule BurpeeTrainer.Coach.Agent do
           response_format:
             {"coach_reply",
              Tool.object(
-               %{
-                 "reply" => %{"type" => "string", "maxLength" => 600},
-                 "suggestions" => Suggestions.schema()
-               },
+               %{"reply" => %{"type" => "string", "maxLength" => 600}},
                ["reply"]
              )},
           ledger: %{
@@ -85,11 +81,8 @@ defmodule BurpeeTrainer.Coach.Agent do
 
       case Client.chat(messages, opts) do
         {:ok, %{tool_calls: [], content: %{"reply" => reply} = content}}
-        when is_binary(reply) and map_size(content) <= 2 ->
+        when is_binary(reply) and map_size(content) == 1 ->
           cond do
-            Map.keys(content) -- ["reply", "suggestions"] != [] ->
-              {:error, :invalid_provider_response}
-
             String.length(reply) > 600 ->
               {:error, :invalid_provider_response}
 
@@ -109,10 +102,7 @@ defmodule BurpeeTrainer.Coach.Agent do
               loop(scope, messages, tools, %{run | reminded?: true}, calls + 1, opts)
 
             true ->
-              with {:ok, result} <- finalize(scope, run, reply),
-                   do:
-                     {:ok,
-                      Map.put(result, :suggestions, Suggestions.clean(content["suggestions"]))}
+              finalize(scope, run, reply)
           end
 
         {:ok, %{tool_calls: [_ | _] = calls_returned}} ->

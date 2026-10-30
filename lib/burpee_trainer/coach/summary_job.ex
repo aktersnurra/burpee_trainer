@@ -23,10 +23,9 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
     properties: %{
       text: %{type: "string", minLength: 1, maxLength: 280},
       review: %{type: "string", maxLength: 280},
-      metric_ids: %{type: "array", items: %{type: "string"}},
-      replies: BurpeeTrainer.Coach.Suggestions.schema()
+      metric_ids: %{type: "array", items: %{type: "string"}}
     },
-    required: ["text", "review", "metric_ids", "replies"]
+    required: ["text", "review", "metric_ids"]
   }
 
   @spec enqueue(Scope.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -148,7 +147,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         content:
           Voice.text() <>
             "\n" <>
-            "Write the note a coach would leave for this athlete, at most two sentences, plain and personal, about what the rest of this week should aim for, given what is left of the weekly training window (week.minutes of week.target_minutes) and their active goal, or the next level when they have none. When what they have told you (below) matters now, such as a sore knee, a busy week or how a session felt, start from that in your own words, and do not repeat a number from it. It sits under a list of this week's sessions done and left, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences on how the last weeks have actually gone, as you would say it to them across the gym floor: name something specific, never list what is rising, flat and missed in turn, and leave it empty when nothing stands out. It leads their Progress page, above each goal's best and target, so do not restate those either. In replies, give up to three short changes the athlete might ask for, in their own words (under 60 characters each). Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
+            "Write the note a coach would leave for this athlete, at most two sentences, plain and personal, about what the rest of this week should aim for, given what is left of the weekly training window (week.minutes of week.target_minutes) and their active goal, or the next level when they have none. When what they have told you (below) matters now, such as a sore knee, a busy week or how a session felt, start from that in your own words, and do not repeat a number from it. It sits under a list of this week's sessions done and left, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences on how the last weeks have actually gone, as you would say it to them across the gym floor: name something specific, never list what is rising, flat and missed in turn, and leave it empty when nothing stands out. It leads their Progress page, above each goal's best and target, so do not restate those either. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
             Jason.encode!(metrics) <>
             " What they have told you: " <> Jason.encode!(told(scope))
       }
@@ -203,8 +202,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         text: summary["text"],
         metric_ids: summary["metric_ids"],
         source: source,
-        review: summary["review"],
-        suggestions: BurpeeTrainer.Coach.Suggestions.clean(summary["replies"])
+        review: summary["review"]
       })
 
   @doc """

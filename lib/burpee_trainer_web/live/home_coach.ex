@@ -81,10 +81,6 @@ defmodule BurpeeTrainerWeb.HomeCoach do
     end
   end
 
-  # A one-tap reply sends its words as a message.
-  def handle_event("coach_quick_reply", %{"text" => text}, socket) when is_binary(text),
-    do: handle_event("coach_message", %{"coach_message" => %{"text" => text}}, socket)
-
   def handle_event(event, %{"id" => raw}, socket)
       when event in ["coach_goal_confirm", "coach_goal_dismiss"] and is_binary(raw) do
     with {id, ""} <- Integer.parse(raw),
@@ -110,18 +106,13 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
   defp week_start_utc(scope), do: WeekWindow.week_start_utc(scope)
 
-  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply} = result}}, socket) do
+  def handle_async(:coach_reply, {:ok, {:ok, %{reply: reply}}}, socket) do
     # The exchange is kept so it is still there after a reload; failing to keep it loses
     # nothing the owner sees now.
     scope = socket.assigns.current_scope
 
     with {:ok, exchange} <-
-           Exchange.record(
-             scope,
-             socket.assigns.coach_pending_message,
-             reply,
-             Map.get(result, :suggestions, [])
-           ) do
+           Exchange.record(scope, socket.assigns.coach_pending_message, reply) do
       # The coach keeps its memory after the exchange; what it notes reads in the thread.
       MemoryJob.admit_exchange(scope, exchange)
     end

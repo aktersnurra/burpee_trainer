@@ -368,38 +368,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </div>
             </section>
           </div>
-          <%!-- Edit and New wait until the workout is opened and the athlete swipes up (or uses the
-               handle); Swap is the swipe right, which is the left drawer. The line says so for the
-               first visits (see the HomeHint hook). --%>
+          <%!-- Edit and New wait until the workout is opened: a swipe up, or this handle. Swap is
+               the swipe right, the left drawer. --%>
           <div
             :if={
-              @state.authoring_stage == :idle and not @state.options_open? and
+              @state.authoring_stage == :idle and @state.expanded? and not @state.options_open? and
                 not @state.chooser_open?
             }
             class="home-grab-area"
           >
-            <p
-              :if={not @state.expanded?}
-              id="home-hint"
-              class="home-hint"
-              phx-hook="HomeHint"
-              phx-update="ignore"
-              hidden
-            >
-              Swipe right to swap
-            </p>
-            <p
-              :if={@state.expanded?}
-              id="home-hint-more"
-              class="home-hint"
-              phx-hook="HomeHint"
-              phx-update="ignore"
-              hidden
-            >
-              Swipe up to edit or start fresh
-            </p>
             <button
-              :if={@state.expanded?}
               id="home-grab"
               type="button"
               class="home-grab"
@@ -443,24 +421,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         phx-click="edit_current_workout"
       >
         <.icon name="hero-pencil-square" class="size-6" />
-        <span class="home-option-text">
-          <span class="home-option-title">Edit this workout</span>
-          <span class="home-option-detail">Talk it through with the coach</span>
-        </span>
+        <span class="home-option-title">Edit this workout</span>
       </button>
       <button id="home-options-swap" type="button" class="home-option" phx-click="open_chooser">
         <.icon name="hero-arrows-right-left" class="size-6" />
-        <span class="home-option-text">
-          <span class="home-option-title">Swap workout</span>
-          <span class="home-option-detail">Pick another from your library</span>
-        </span>
+        <span class="home-option-title">Swap workout</span>
       </button>
       <button id="home-options-new" type="button" class="home-option" phx-click="new_workout">
         <.icon name="hero-plus" class="size-6" />
-        <span class="home-option-text">
-          <span class="home-option-title">New workout</span>
-          <span class="home-option-detail">A few questions, then the coach designs it</span>
-        </span>
+        <span class="home-option-title">New workout</span>
       </button>
     </div>
     """
@@ -706,13 +675,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       >
         <span id="home-week-fill" style={"width: #{progress_percent(@slot)}%"}></span>
       </div>
-      <p id="home-week-remaining" class="mt-2 text-sm opacity-60">
-        <%= if @slot.remaining_sec > 0 do %>
-          {div(@slot.remaining_sec + 59, 60)} min left this week
-        <% else %>
-          Weekly time goal complete
-        <% end %>
-      </p>
     </div>
     """
   end

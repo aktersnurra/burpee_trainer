@@ -50,8 +50,7 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     reply(%{
       "text" => "Keep Thursday.",
       "review" => "Six-count is steady at 25 reps.",
-      "metric_ids" => ["session.reps"],
-      "replies" => []
+      "metric_ids" => ["session.reps"]
     })
 
     assert {:ok, %Summary{review: "Six-count is steady at 25 reps."}} =
@@ -60,8 +59,7 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     reply(%{
       "text" => "Keep Thursday.",
       "review" => "Six-count rose by 999 reps.",
-      "metric_ids" => ["session.reps"],
-      "replies" => []
+      "metric_ids" => ["session.reps"]
     })
 
     assert {:ok, %Summary{text: "Keep Thursday.", review: nil}} =

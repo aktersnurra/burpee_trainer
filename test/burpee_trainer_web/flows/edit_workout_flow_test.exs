@@ -119,7 +119,6 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
   test "swiping up offers Edit and New; Edit opens a chat that begins with today's workout",
        %{view: view, selected: selected} do
     # Closed, the workout offers only the swap swipe; edit and new wait until it is opened.
-    assert has_element?(view, "#home-hint", "Swipe right to swap")
     refute has_element?(view, "#home-grab")
     view |> element("#home-summary") |> render_click()
 
@@ -173,16 +172,6 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-studio")
     assert has_element?(view, ".home-workout-actions #home-action")
-  end
-
-  test "a suggested change is sent to the coach with one tap", %{view: view} do
-    view |> element("#home-summary") |> render_click()
-    open_edit(view)
-    view |> element("#home-edit-suggest-shorter", "Make it shorter") |> render_click()
-    render_async(view)
-
-    assert_receive {:provider_request, body}, 1_000
-    assert Enum.any?(body["messages"], &String.contains?(&1["content"], "Make it shorter"))
   end
 
   @tag hold_edit_plan: true

@@ -64,7 +64,7 @@ async function geometry() {
 		};
 		const small = [...document.querySelectorAll("button, a[href], [role=spinbutton]")]
 			.filter(visible)
-			.filter((e) => !e.matches(".composer-suggestion, .studio-part, .home-grab, .studio-dot"))
+			.filter((e) => !e.matches(".studio-part, .home-grab, .studio-dot"))
 			.map((e) => ({ e, r: e.getBoundingClientRect() }))
 			.filter(({ r }) => r.width > 0 && r.height > 0 && (Math.min(r.width, r.height) < 40 || Math.max(r.width, r.height) < 44))
 			.map(({ e, r }) => `${e.id || e.getAttribute("aria-label") || e.textContent.trim().slice(0, 20)} ${Math.round(r.width)}x${Math.round(r.height)}`);
@@ -85,7 +85,6 @@ const home = await geometry();
 check(!home.overflow, "Home does not scroll sideways");
 check(home.small.length === 0, "Home's buttons are big enough to hit", home.small.join(", "));
 check(!(await page.$("#home-grab")), "closed, Home offers no Edit, Swap or New of its own");
-check((await page.textContent("#home-hint")).includes("Swipe right to swap"), "the first visit says how to swap");
 await shot("01-home");
 
 // Swipe right: the swap drawer; left: back.
@@ -104,8 +103,6 @@ check(!(await page.$("#home-options-sheet")), "swipe up on the closed workout do
 await page.tap("#home-summary");
 await page.waitForSelector("#home-grab");
 await settle(500);
-// The hint line stops after the first swipe (the swap above), so only its presence is checked.
-check(!!(await page.$("#home-hint-more")), "the opened workout says to swipe up for more");
 await swipe(client, [200, 640], [205, 340]);
 await settle(600);
 check(await page.isVisible("#home-options-sheet"), "swipe up on the opened workout opens Edit / New");
@@ -113,10 +110,6 @@ await shot("03-options");
 await swipe(client, [200, 500], [205, 800]);
 await settle(500);
 check(!(await page.$("#home-options-sheet")), "swipe down closes it");
-check(
-	await page.evaluate(() => JSON.parse(localStorage.getItem("burpee.hint.swipes") ?? "{}").swiped === true),
-	"the first swipe is remembered, so the hint stops",
-);
 
 // Edit.
 await page.tap("#home-grab");

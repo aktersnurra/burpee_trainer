@@ -154,9 +154,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     assert has_element?(view, "#home-edit-review #studio-proposal", "Independent new workout")
     assert has_element?(view, "#home-edit-review #home-chat-actions #home-request-run", "Run")
-    # Run starts it, so the device's start toggles sit beside it.
-    assert has_element?(view, "#home-chat-actions #home-start-camera")
-    assert has_element?(view, "#home-chat-actions #home-start-warmup")
+    # The camera and warmup choices are Home's; the chat has none of its own.
+    refute has_element?(view, "#home-studio #home-start-camera, #home-studio #home-start-warmup")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 

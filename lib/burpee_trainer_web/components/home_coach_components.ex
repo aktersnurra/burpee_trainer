@@ -20,25 +20,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     """
   end
 
-  # What you might say next: the last reply's suggestions, else the note's, else two
-  # plain asks that always make sense.
-  defp quick_replies(state) do
-    exchange = state |> Map.get(:coach_thread, []) |> List.last()
-    summary = Map.get(state, :progress_summary)
-
-    predicted =
-      cond do
-        exchange && exchange.suggestions != [] -> exchange.suggestions
-        is_nil(exchange) && summary && summary.suggestions != [] -> summary.suggestions
-        true -> []
-      end
-
-    case predicted do
-      [] -> [{"harder", "Make the next one harder"}, {"easier", "Make the next one easier"}]
-      texts -> Enum.with_index(texts, &{"predicted-#{&2}", &1})
-    end
-  end
-
   attr(:state, :map, required: true)
 
   # The coach is a section of Home, not a card: its word on the rest of the week, this
@@ -137,23 +118,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           data-scroll-on-mount="false"
         >
           <div class="chat-dock-inner">
-            <div
-              class="coach-quick-replies composer-suggestions chat-dock-chips"
-              role="group"
-              aria-label="Quick replies"
-            >
-              <button
-                :for={{id, text} <- quick_replies(@state)}
-                id={"home-coach-quick-#{id}"}
-                type="button"
-                class="composer-suggestion"
-                phx-click="coach_quick_reply"
-                phx-value-text={text}
-                disabled={@state.coach_busy?}
-              >
-                {text}
-              </button>
-            </div>
             <.form
               for={@state.coach_message_form}
               id="home-coach-message-form"
