@@ -102,7 +102,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         {:noreply,
          socket
          |> step({:refine_started, id, text})
-         |> adjustment_form(text)
+         |> adjustment_form("")
          |> start_async({:new_request, id}, fn ->
            with {:ok, interpreted} <-
                   Coach.prepare_refinement(scope, base.definition, text,
@@ -144,7 +144,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         {:noreply,
          socket
          |> step({:review_started, id, text})
-         |> adjustment_form(text)
+         |> adjustment_form("")
          |> start_async({:new_request, id}, fn ->
            with {:ok, interpreted} <- Coach.prepare_home_revision(scope, expected, text),
                 {:ok, _} <- Workouts.verify_home_selection(scope, expected) do
@@ -505,11 +505,13 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
          %{assigns: %{pending_turn: turn}} = socket
        )
        when is_binary(turn),
-       do: step(socket, {:review_failed, id, refinement_failure(error)})
+       do:
+         socket |> step({:review_failed, id, refinement_failure(error)}) |> adjustment_form(turn)
 
   defp settle(:new_request, id, result, %{assigns: %{pending_turn: turn}} = socket)
        when is_binary(turn),
-       do: step(socket, {:review_failed, id, refinement_failure(result)})
+       do:
+         socket |> step({:review_failed, id, refinement_failure(result)}) |> adjustment_form(turn)
 
   defp settle(:new_request, id, {:ok, {:error, error}}, socket) do
     {message, _field, field_message} = review_failure(error)
@@ -522,16 +524,19 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         true -> message <> " " <> field_message
       end
 
-    step(socket, {:review_failed, id, text})
+    socket
+    |> step({:review_failed, id, text})
+    |> restore_edit_ask()
   end
 
   defp settle(:new_request, id, _, socket),
     do:
-      step(
-        socket,
+      socket
+      |> step(
         {:review_failed, id,
          "Coach unavailable. Try again later; your current workout is unchanged."}
       )
+      |> restore_edit_ask()
 
   # Run saves the proposal, makes it today's workout and starts it, the way Home's play does.
   defp settle(:run_plan, id, {:ok, {:ok, selected}}, socket) do
@@ -638,6 +643,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     |> step({:revision_failed, id, message})
     |> adjustment_form(socket.assigns.instruction)
   end
+
+  # The box empties on send; an Edit ask that fails comes back to it to send again. New's first
+  # ask is made from its answers, which stay as they were.
+  defp restore_edit_ask(%{assigns: %{editing_source: nil}} = socket), do: socket
+  defp restore_edit_ask(socket), do: adjustment_form(socket, socket.assigns.instruction)
 
   # A step starts from what is suggested for it, given the answers so far.
   defp enter_step(socket, params, step) do
