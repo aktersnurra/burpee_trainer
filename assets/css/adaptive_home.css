@@ -686,8 +686,9 @@ button.home-summary:hover .home-workout-name {
 .home-history-week-oldest { margin-top: 9px; }
 .home-history-trend { margin-top: 36px; padding: 0; border: 0; background: transparent; }
 .home-history-trend-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
-.home-history-plot { position: relative; display: grid; gap: 18px; margin-top: 20px; padding: 0; }
-.home-history-lane { display: grid; grid-template-columns: 29px minmax(0, 1fr); gap: 10px; }
+.home-history-plot { position: relative; display: grid; gap: 32px; margin-top: 20px; padding: 0; }
+.home-history-lane { display: grid; grid-template-columns: 29px minmax(0, 1fr); gap: 8px 10px; }
+.home-history-lane-key { grid-column: 1 / -1; margin: 0; }
 .home-history-trend-axis { position: relative; height: 96px; font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
 .home-history-trend-axis span { position: absolute; inset-inline: 0; transform: translateY(-50%); line-height: 1; }
 .home-history-plot-area { height: 96px; border: 0; background: none; }

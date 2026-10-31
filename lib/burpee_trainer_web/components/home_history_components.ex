@@ -522,6 +522,17 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             id={"home-history-lane-#{series_class(series.type)}"}
             class="home-history-lane"
           >
+            <%!-- Each lane is its own small chart: named by its type, as the gauges above are. --%>
+            <p
+              class={[
+                "progress-gauge-type",
+                "home-history-lane-key",
+                "progress-key-#{series_class(series.type)}"
+              ]}
+              aria-hidden="true"
+            >
+              {series.label}
+            </p>
             <div
               id={"home-history-trend-axis-#{series_class(series.type)}"}
               class={["home-history-trend-axis", "progress-key-#{series_class(series.type)}"]}
