@@ -59,7 +59,9 @@ defmodule BurpeeTrainer.Coach.WorkoutRequest do
              Enum.all?(sets, &(is_integer(&1) and &1 > 0)) and
              (sets == [] or Enum.sum(sets) == reps),
          max_set <- Map.get(attrs, "max_set_reps"),
-         true <- is_nil(max_set) or (is_integer(max_set) and max_set >= 1 and max_set <= reps),
+         true <- is_nil(max_set) or (is_integer(max_set) and max_set >= 1),
+         # A limit at or above the whole workout limits nothing.
+         max_set <- if(is_integer(max_set) and max_set >= reps, do: nil, else: max_set),
          {:ok, rests} <- validate_rests(rests, duration, recovery) do
       {:ok,
        %__MODULE__{

@@ -47,6 +47,10 @@ defmodule BurpeeTrainer.ProgressGauges do
 
   defp detail(%{kind: :none} = gauge, _typed), do: gauge
 
+  # A first session that was not 20 minutes says nothing about a level's reps per 20 minutes.
+  defp detail(%{kind: :first} = gauge, typed),
+    do: Map.merge(gauge, %{next_level: nil, evenness: evenness(typed)})
+
   defp detail(gauge, typed) do
     best = Map.get(gauge, :best) || Map.get(gauge, :reps) || 0
 

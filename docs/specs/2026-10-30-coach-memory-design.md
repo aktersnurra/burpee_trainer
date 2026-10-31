@@ -34,7 +34,10 @@ entries.
   (`supersedes_id`), so the conversation shows one "Updated:" line, not a forget and a note.
 - `remove` forgets the one entry that holds `old_text`.
 - A batch (1–10 operations) is all or nothing (`Memory.Ops.plan/3`, pure). The limit is
-  checked on the batch's result, so freeing space and adding go in one batch.
+  checked on the batch's result, so freeing space and adding go in one batch. A part already
+  over its limit (notes kept before the limit existed) takes any batch that does not make it
+  larger, so it can always be brought down.
+- A patch that leaves an entry as it was changes nothing.
 - A rejection is an answer, not an exception: `success: false`, the `error`, the
   `current_entries` and the `usage` (`1,474/2,200`), plus `closest_entries` when nothing
   matched or `matching_entries` when several did.
@@ -59,8 +62,9 @@ entries.
 - **The coach, as it talks**, with the memory tool on the Coach page.
 - **A background review** (`MemoryJob`), as Hermes runs one after turns: after a session
   with feedback, and after an exchange in which the coach wrote nothing. The model returns
-  operations with a target each; each part's batch is applied as the tool would, and a
-  rejection goes back once with its reason.
+  operations with a target each; each part's batch is applied as the tool would, in the order
+  the parts first appear. A rejection goes back once with its reason, a fresh snapshot (so a
+  part already written reads as written) and an ask for the rejected part only.
 - **Claude**, through `update_memory`.
 - **The owner** removes an entry from the memory sheet on Coach.
 

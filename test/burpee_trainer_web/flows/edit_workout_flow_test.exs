@@ -475,6 +475,13 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     # What changed from the proposal before reads marked.
     assert has_element?(view, "#studio-proposal .studio-chip-changed", "149 reps")
     assert has_element?(view, "#studio-proposal td.home-changed", "74")
+    # The selection stays the set that was picked, step after step.
+    view |> element("#studio-hand-reps-down") |> render_click()
+    assert has_element?(view, "#studio-hand-edit", "Set 1")
+    assert has_element?(view, "#studio-hand-reps", "73")
+    assert has_element?(view, "#studio-proposal .studio-card-totals", "148 reps")
+    view |> element("#studio-hand-reps-up") |> render_click()
+    assert has_element?(view, "#studio-hand-reps", "74")
     refute_received {:provider_request, _}
 
     view |> element("#home-request-save") |> render_click()

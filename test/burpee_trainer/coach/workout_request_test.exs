@@ -253,7 +253,7 @@ defmodule BurpeeTrainer.Coach.WorkoutRequestTest do
     assert detail =~ "set_configuration"
   end
 
-  test "a limit on set size is kept, must fit the reps, and no set may pass it" do
+  test "a limit on set size is kept, one past the reps is dropped, and no set may pass it" do
     assert {:ok, request} = WorkoutRequest.new(Map.put(@request, "max_set_reps", 88))
     assert request.max_set_reps == 88
     assert WorkoutRequest.to_map(request)["max_set_reps"] == 88
@@ -264,8 +264,12 @@ defmodule BurpeeTrainer.Coach.WorkoutRequestTest do
 
     refute Map.has_key?(WorkoutRequest.to_map(unlimited), "max_set_reps")
 
-    for bad <- [0, -5, 141, 2.5, "88"],
+    for bad <- [0, -5, 2.5, "88"],
         do: assert({:error, _} = WorkoutRequest.new(Map.put(@request, "max_set_reps", bad)))
+
+    # A limit at or above the whole workout limits nothing, so it is dropped, not refused.
+    assert {:ok, %{max_set_reps: nil}} =
+             WorkoutRequest.new(Map.put(@request, "max_set_reps", 141))
 
     # The anchored fixture's longest set is 88 reps.
     {:ok, definition} = WorkoutDefinition.new(anchored_definition())

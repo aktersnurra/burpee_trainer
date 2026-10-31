@@ -409,9 +409,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         %{assigns: %{authoring_stage: :review, busy?: false, pending_request: %{} = prepared}} =
           socket
       ) do
+    rows = socket.assigns.review_inspection_rows
+
     with {index, ""} <- Integer.parse(to_string(raw)),
-         %{} = row <- HomeWorkoutComponents.row_at(socket.assigns.review_inspection_rows, index) do
-      {:noreply, step(socket, {:row_selected, index, edit_steps(prepared, row)})}
+         %{} = row <- HomeWorkoutComponents.row_at(rows, index),
+         [_ | _] = sets <- HomeWorkoutComponents.set_numbers(rows, row) do
+      {:noreply, step(socket, {:row_selected, sets, edit_steps(prepared, sets)})}
     else
       _ -> {:noreply, socket}
     end
@@ -425,24 +428,21 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
             authoring_stage: :review,
             busy?: false,
             pending_request: %{} = prepared,
-            edit_row: index
+            edit_sets: [_ | _] = sets
           }
         } = socket
       )
-      when field in ["reps", "every"] and dir in ["-1", "1"] and is_integer(index) do
-    with %{} = row <- HomeWorkoutComponents.row_at(socket.assigns.review_inspection_rows, index),
-         {:ok, adjusted} <-
+      when field in ["reps", "every"] and dir in ["-1", "1"] do
+    # The sets selected stay the ones changed, however the rows regroup after a step.
+    with {:ok, adjusted} <-
            Coach.adjust_proposal(
              prepared,
-             HomeWorkoutComponents.work_indices(row),
+             set_indices(prepared.definition, sets),
              String.to_existing_atom(field),
              String.to_integer(dir)
            ) do
       rows = prepared_inspection(adjusted)
-      row = HomeWorkoutComponents.row_at(rows, index)
-
-      {:noreply,
-       step(socket, {:proposal_adjusted, adjusted, rows, row && edit_steps(adjusted, row)})}
+      {:noreply, step(socket, {:proposal_adjusted, adjusted, rows, edit_steps(adjusted, sets)})}
     else
       _ -> {:noreply, socket}
     end
@@ -765,9 +765,18 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
-  # Which steps a row's numbers allow now: each is tried, as a tap would.
-  defp edit_steps(prepared, row) do
-    indices = HomeWorkoutComponents.work_indices(row)
+  # The definition's event indices of the sets numbered `sets` (1 for the first set).
+  defp set_indices(definition, sets) do
+    definition["events"]
+    |> Enum.with_index()
+    |> Enum.filter(fn {event, _index} -> event["kind"] == "work" end)
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {{_event, index}, number} -> if number in sets, do: [index], else: [] end)
+  end
+
+  # Which steps the selected sets allow now: each is tried, as a tap would.
+  defp edit_steps(prepared, sets) do
+    indices = set_indices(prepared.definition, sets)
 
     for field <- [:reps, :every], dir <- [-1, 1], into: %{} do
       {{field, dir}, match?({:ok, _}, Coach.adjust_proposal(prepared, indices, field, dir))}

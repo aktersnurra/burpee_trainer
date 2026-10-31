@@ -703,7 +703,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     doc: "a tap on a set's row selects it for a hand edit (`select_proposal_row`)"
   )
 
-  attr(:selected, :integer, default: nil, doc: "the first event index of the selected row")
+  attr(:selected, :list, default: [], doc: "the set numbers selected for a hand edit")
 
   def inspection(assigns) do
     show_move? = show_move?(assigns.rows)
@@ -760,7 +760,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               class={[
                 row.count > 1 && "home-group-row",
                 (@editable and row.kind != :recovery) && "home-editable-row",
-                @selected == first_index(row) && "home-selected-row"
+                selected?(@rows, row, @selected) && "home-selected-row"
               ]}
               phx-click={
                 cond do
@@ -772,7 +772,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               phx-value-index={(@editable and row.kind != :recovery) && first_index(row)}
               phx-value-id={(not @editable and row.count > 1) && row.id}
               aria-selected={
-                (@editable and row.kind != :recovery) && to_string(@selected == first_index(row))
+                (@editable and row.kind != :recovery) && to_string(selected?(@rows, row, @selected))
               }
             >
               <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
@@ -968,22 +968,19 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   @doc "A row's sets by number, as the table labels them: `5`, or `1–4` for a group."
   def set_range(rows, row) do
-    numbers = row.units |> Enum.filter(&work/1) |> Enum.map(&set_number(rows, &1))
-
-    case numbers do
+    case set_numbers(rows, row) do
       [] -> ""
       [one] -> "#{one}"
-      _ -> "#{Enum.min(numbers)}–#{Enum.max(numbers)}"
+      numbers -> "#{Enum.min(numbers)}–#{Enum.max(numbers)}"
     end
   end
 
-  @doc "The definition indices of a row's sets, for a hand edit."
-  def work_indices(row),
-    do:
-      row.units
-      |> Enum.flat_map(& &1.paired)
-      |> Enum.filter(&(&1.program["kind"] == "work"))
-      |> Enum.map(& &1.index)
+  @doc "The numbers of a row's sets, 1 for the workout's first."
+  def set_numbers(rows, row),
+    do: row.units |> Enum.filter(&work/1) |> Enum.map(&set_number(rows, &1))
+
+  defp selected?(_rows, _row, selected) when selected in [nil, []], do: false
+  defp selected?(rows, row, selected), do: Enum.any?(set_numbers(rows, row), &(&1 in selected))
 
   @doc "The row whose first event is at `index`, if any."
   def row_at(rows, index), do: Enum.find(rows, &(first_index(&1) == index))

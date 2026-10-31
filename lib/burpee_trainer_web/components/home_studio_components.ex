@@ -196,9 +196,9 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         was={was(@state)}
         expanded={@state.expanded_groups}
         editable={not @stale?}
-        selected={Map.get(@state, :edit_row)}
+        selected={Map.get(@state, :edit_sets) || []}
       />
-      <.hand_edit :if={not @stale? and Map.get(@state, :edit_row)} state={@state} />
+      <.hand_edit :if={not @stale? and Map.get(@state, :edit_sets)} state={@state} />
       <p
         :if={@state.pending_request.request.timed_rests != []}
         id="home-edit-review-pauses"
@@ -257,27 +257,25 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   # The selected sets' numbers, stepped by hand; the rests are fitted again to keep the length.
   defp hand_edit(assigns) do
-    rows = assigns.state.review_inspection_rows
-    row = HomeWorkoutComponents.row_at(rows, assigns.state.edit_row)
-    steps = assigns.state.edit_steps || %{}
+    sets = assigns.state.edit_sets
+    work = first_work(assigns.state.pending_request.definition, hd(sets))
 
     assigns =
       assign(assigns,
-        row: row,
-        label: row && HomeWorkoutComponents.set_range(rows, row),
-        work: row && first_work(row),
-        steps: steps
+        label: sets_label(sets),
+        work: work,
+        steps: assigns.state.edit_steps || %{}
       )
 
     ~H"""
     <div
-      :if={@row && @work}
+      :if={@work}
       id="studio-hand-edit"
       class="studio-hand-edit"
       role="group"
-      aria-label={"Set #{@label}"}
+      aria-label={@label}
     >
-      <span class="studio-hand-edit-label">{if String.contains?(@label, "–"), do: "Sets", else: "Set"} {@label}</span>
+      <span class="studio-hand-edit-label">{@label}</span>
       <.hand_step
         field="reps"
         value={@work["reps"]}
@@ -287,7 +285,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       />
       <.hand_step
         field="every"
-        value={format_beat(@work["sec_per_rep_us"])}
+        value={format_beat(@work["sec_per_rep"])}
         unit="s"
         down?={@steps[{:every, -1}]}
         up?={@steps[{:every, 1}]}
@@ -334,19 +332,20 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     """
   end
 
-  defp first_work(row),
-    do:
-      row.units
-      |> Enum.flat_map(& &1.paired)
-      |> Enum.find_value(&if(&1.program["kind"] == "work", do: &1.program))
+  # The definition's set numbered `number` (1 for the first).
+  defp first_work(definition, number),
+    do: definition["events"] |> Enum.filter(&(&1["kind"] == "work")) |> Enum.at(number - 1)
 
-  defp format_beat(us),
-    do:
-      us
-      |> Decimal.new()
-      |> Decimal.div(1_000_000)
-      |> Decimal.normalize()
-      |> Decimal.to_string(:normal)
+  defp sets_label([one]), do: "Set #{one}"
+
+  defp sets_label(sets) do
+    if Enum.max(sets) - Enum.min(sets) + 1 == length(sets),
+      do: "Sets #{Enum.min(sets)}–#{Enum.max(sets)}",
+      else: "Sets " <> Enum.join(sets, ", ")
+  end
+
+  defp format_beat(seconds) when is_integer(seconds), do: Integer.to_string(seconds)
+  defp format_beat(seconds), do: :erlang.float_to_binary(seconds * 1.0, [:short])
 
   attr(:label, :string, default: "Working on it…")
 
@@ -370,7 +369,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:expanded, :any, default: MapSet.new())
   attr(:table?, :boolean, default: true)
   attr(:editable, :boolean, default: false)
-  attr(:selected, :integer, default: nil)
+  attr(:selected, :list, default: [])
 
   # A workout, as the coach shows it: its name, its totals as two chips, a line on
   # why, and the table when it is the one being discussed.

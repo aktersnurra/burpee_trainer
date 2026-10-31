@@ -9,8 +9,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   A design is a conversation: each follow-up is read against the proposal on screen, and
   the proposals it replaces stay as `design_turns`, oldest first. Nothing in a refinement
   falls back to the workout the design started from. `previous` is the proposal the one on
-  screen replaced, so what changed reads marked; a number changed by hand (`edit_row`, the
-  selected row's first event, and `edit_steps`, which steps it allows) replaces it in place.
+  screen replaced, so what changed reads marked; a number changed by hand (`edit_sets`, the
+  set numbers selected, and `edit_steps`, which steps they allow) replaces it in place.
 
   Work in flight is identified by `update_id`. A result is applied only while it is the
   one in flight, so a late answer to a discarded or superseded request changes nothing.
@@ -38,7 +38,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     design_turns: [],
     pending_turn: nil,
     previous: nil,
-    edit_row: nil,
+    edit_sets: nil,
     edit_steps: nil,
     new_step: :type,
     busy?: false,
@@ -144,7 +144,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
            pending_request: prepared,
            workout_parameters: params,
            previous: snapshot(m),
-           edit_row: nil,
+           edit_sets: nil,
            edit_steps: nil,
            design_turns: superseded(m),
            instruction: m.pending_turn || m.instruction,
@@ -156,11 +156,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   # A row of the proposal selected for a hand edit; selecting it again lets it go.
   def update(
         %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
-        {:row_selected, index, steps}
+        {:row_selected, sets, steps}
       ) do
-    if m.edit_row == index,
-      do: {%{m | edit_row: nil, edit_steps: nil}, []},
-      else: {%{m | edit_row: index, edit_steps: steps, local_error: nil}, []}
+    if m.edit_sets == sets,
+      do: {%{m | edit_sets: nil, edit_steps: nil}, []},
+      else: {%{m | edit_sets: sets, edit_steps: steps, local_error: nil}, []}
   end
 
   def update(
@@ -259,7 +259,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         design_turns: [],
         pending_turn: nil,
         previous: nil,
-        edit_row: nil,
+        edit_sets: nil,
         edit_steps: nil
     }
 

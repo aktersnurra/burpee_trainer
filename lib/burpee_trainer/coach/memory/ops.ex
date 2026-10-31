@@ -57,7 +57,7 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
 
     with :ok <- check_operations(operations),
          {:ok, working, notes} <- run(operations, working, []),
-         :ok <- check_limit(store, working) do
+         :ok <- check_limit(store, entries, working) do
       kept = MapSet.new(for %{id: id} <- working, is_integer(id), do: id)
 
       {:ok,
@@ -101,7 +101,7 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
     with {:ok, text} <- content(content) do
       if Enum.any?(working, &(&1.text == text)),
         do: {:ok, working, "already noted, no duplicate added: #{text}"},
-        else: {:ok, working ++ [%{id: {:new, length(working)}, text: text, supersedes: nil}]}
+        else: {:ok, working ++ [%{id: new_id(working), text: text, supersedes: nil}]}
     end
   end
 
@@ -112,12 +112,18 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
     with {:ok, entry} <- find(old, working),
          :ok <- once(entry.text, old),
          {:ok, text} <- content(String.replace(entry.text, old, content, global: false)) do
-      patched =
-        if is_integer(entry.id),
-          do: %{id: {:patched, entry.id}, text: text, supersedes: entry.id},
-          else: %{entry | text: text}
+      cond do
+        # A patch that changes nothing is not a change.
+        text == entry.text ->
+          {:ok, working, "unchanged: #{text}"}
 
-      {:ok, Enum.map(working, &if(&1.id == entry.id, do: patched, else: &1))}
+        is_integer(entry.id) ->
+          patched = %{id: {:patched, entry.id}, text: text, supersedes: entry.id}
+          {:ok, Enum.map(working, &if(&1.id == entry.id, do: patched, else: &1))}
+
+        true ->
+          {:ok, Enum.map(working, &if(&1.id == entry.id, do: %{&1 | text: text}, else: &1))}
+      end
     end
   end
 
@@ -135,6 +141,13 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
     do: {:error, "#{action} takes " <> fields(action)}
 
   defp step(_operation, _working), do: {:error, "action must be add, patch or remove"}
+
+  # A new entry's id is unique among the entries now in the batch, so a later operation
+  # names it alone, whatever was removed before it.
+  defp new_id(working) do
+    taken = for %{id: {:new, n}} <- working, do: n
+    {:new, Enum.max(taken, fn -> -1 end) + 1}
+  end
 
   defp fields("add"), do: "content"
   defp fields("patch"), do: "old_text and content"
@@ -202,7 +215,7 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
   # What has no place in a memory read back into a prompt: instructions to the model,
   # secrets, and characters no one can see.
   @unsafe [
-    ~r/\b(ignore|disregard|forget|override)\b.{0,40}\b(instructions?|rules|prompt|above|previous)\b/iu,
+    ~r/\b(ignore|disregard|override)\b.{0,40}\b(instructions?|system prompt|your prompt)\b/iu,
     ~r/\b(system prompt|you are now|act as|new instructions)\b/iu,
     ~r/<\/?\s*(system|assistant|tool)\b/iu,
     ~r/\b(api[ _-]?key|password|passwd|secret|bearer|token)\b\s*[:=]/iu,
@@ -212,16 +225,19 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
 
   defp unsafe?(text), do: Enum.any?(@unsafe, &Regex.match?(&1, text))
 
-  defp check_limit(store, working) do
-    texts = Enum.map(working, & &1.text)
-    used = size(texts)
+  # The limit is checked on the batch's result. A store already over it (notes kept before
+  # the limit existed) still takes any batch that does not make it larger, so it can always
+  # be brought down.
+  defp check_limit(store, entries, working) do
+    used = working |> Enum.map(& &1.text) |> size()
+    allowed = max(limit(store), entries |> Enum.map(& &1.text) |> size())
 
-    if used <= limit(store),
+    if used <= allowed,
       do: :ok,
       else:
         {:error,
          "#{store} would hold #{thousands(used)}/#{thousands(limit(store))} chars. " <>
-           "Retry with one batch that frees #{thousands(used - limit(store))} chars " <>
+           "Retry with one batch that frees #{thousands(used - allowed)} chars " <>
            "(patch entries shorter, merge or remove some) and adds the new entry."}
   end
 

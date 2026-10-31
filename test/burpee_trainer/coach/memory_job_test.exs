@@ -99,7 +99,48 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
     assert_received {:request, _first}
     assert_received {:request, second}
     assert List.last(second["messages"])["content"] =~ "no entry matches"
+    assert Enum.at(second["messages"], 1)["role"] == "system"
     assert Enum.map(Memory.list(scope), & &1.text) == ["Trains evenings"]
+  end
+
+  test "a part written before a rejection stays written; the retry reads it and resends only the rest" do
+    scope = scope_fixture()
+    test_pid = self()
+
+    answers = [
+      [
+        op("memory", "add", "Keeps Thursdays light"),
+        op("user", "remove", nil, "nothing like this")
+      ],
+      [op("user", "add", "Trains evenings")]
+    ]
+
+    {:ok, pid} = Elixir.Agent.start_link(fn -> answers end)
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:request, Jason.decode!(body)})
+      ops = Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end)
+
+      Req.Test.json(conn, %{
+        "choices" => [%{"message" => %{"content" => Jason.encode!(%{"operations" => ops})}}]
+      })
+    end)
+
+    assert {:ok, [%{"target" => "memory"}, %{"target" => "user"}]} =
+             MemoryJob.keep(scope, %{kind: "conversation"}, opts())
+
+    assert_received {:request, _first}
+    assert_received {:request, second}
+    # The retry's snapshot already holds what the first answer wrote.
+    assert Enum.at(second["messages"], 1)["content"] =~ "Keeps Thursdays light"
+
+    assert %{"already_written" => ["memory"]} =
+             Jason.decode!(List.last(second["messages"])["content"])
+
+    assert Enum.map(Memory.list(scope, "memory"), & &1.text) == ["Keeps Thursdays light"]
+    assert Enum.map(Memory.list(scope, "user"), & &1.text) == ["Trains evenings"]
+    assert_enqueued(worker: BurpeeTrainer.Coach.SummaryJob, args: %{"user_id" => scope.user.id})
   end
 
   test "an unusable answer, or no provider, changes nothing" do

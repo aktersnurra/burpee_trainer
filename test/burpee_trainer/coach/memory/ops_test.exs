@@ -87,6 +87,37 @@ defmodule BurpeeTrainer.Coach.Memory.OpsTest do
              Ops.plan("user", current, [remove(long), add(String.duplicate("b", 100))])
   end
 
+  test "a removal between two adds does not merge the entries they made" do
+    current = entries(["Trains mornings", "Left knee sore"])
+
+    assert {:ok, plan} =
+             Ops.plan("user", current, [
+               add("Likes navy seals"),
+               remove("Trains mornings"),
+               add("Trains evenings now"),
+               remove("Likes navy seals")
+             ])
+
+    assert plan.add == [%{text: "Trains evenings now", supersedes: nil}]
+    assert plan.forget == [1]
+  end
+
+  test "a store over its limit (from before the limit) takes any batch that does not grow it" do
+    current = entries(for n <- 1..15, do: String.pad_trailing("Note #{n}.", 100, "x"))
+    assert Ops.size(Enum.map(current, & &1.text)) > Ops.limit("user")
+
+    assert {:ok, %{forget: [1]}} = Ops.plan("user", current, [remove("Note 1.")])
+    assert {:error, _} = Ops.plan("user", current, [add("Prefers mornings")])
+  end
+
+  test "a patch that changes nothing is not a change; a coaching fact about forgetting is kept" do
+    assert {:ok, %{add: [], forget: []}} =
+             Ops.plan("user", entries(["Trains at 7:00"]), [patch("7:00", "7:00")])
+
+    assert {:ok, %{add: [_]}} =
+             Ops.plan("user", [], [add("Tends to forget the previous week's soreness")])
+  end
+
   property "whatever is asked, an accepted batch keeps the store within its limit and unique" do
     check all(
             texts <-

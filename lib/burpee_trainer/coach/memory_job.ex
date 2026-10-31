@@ -113,16 +113,19 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   @doc "Reads one event into the memory; `{:ok, results}` per part written, or why not."
   @spec keep(Scope.t(), map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def keep(%Scope{} = scope, event, opts) do
-    messages = [
+    review(scope, messages(scope, event, []), opts, %{event: event, written: [], retries: 1})
+  end
+
+  # The snapshot is taken afresh for each call, so a retry reads the parts already written.
+  defp messages(scope, event, retry) do
+    [
       %{role: "system", content: @task <> "\n" <> Memory.guidance()},
       %{role: "system", content: Memory.snapshot(scope)},
       %{role: "user", content: Jason.encode!(%{event: event})}
-    ]
-
-    review(scope, messages, opts, 1)
+    ] ++ retry
   end
 
-  defp review(scope, messages, opts, retries) do
+  defp review(scope, messages, opts, state) do
     chat_opts =
       opts
       |> Keyword.take([:config, :req, :budget])
@@ -136,17 +139,33 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
       when is_list(operations) ->
         case write(scope, operations) do
           {:ok, results} ->
-            results |> then(&{:ok, &1}) |> refresh_note(scope)
+            {:ok, state.written ++ results} |> refresh_note(scope)
 
-          {:error, rejection} when retries > 0 ->
+          {:error, rejection, written} when state.retries > 0 ->
+            # Parts written before the rejection stay written and read in the new snapshot;
+            # only the rejected part is asked for again.
             retry = [
               %{role: "assistant", content: Jason.encode!(content)},
-              %{role: "user", content: Jason.encode!(rejection)}
+              %{
+                role: "user",
+                content:
+                  Jason.encode!(%{
+                    rejected: rejection,
+                    already_written: Enum.map(written, & &1["target"]),
+                    ask:
+                      "The parts already written are saved and shown above. Send operations for #{rejection["target"]} only."
+                  })
+              }
             ]
 
-            review(scope, messages ++ retry, opts, retries - 1)
+            review(scope, messages(scope, state.event, retry), opts, %{
+              state
+              | written: state.written ++ written,
+                retries: state.retries - 1
+            })
 
-          {:error, rejection} ->
+          {:error, rejection, written} ->
+            refresh_note({:ok, state.written ++ written}, scope)
             {:error, {:rejected, rejection}}
         end
 
@@ -159,20 +178,24 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
     end
   end
 
-  # One batch per part, in the order the parts first appear; a rejected part stops there.
+  # One batch per part, in the order the parts first appear; a rejected part stops there,
+  # and says which parts were written before it.
   defp write(scope, operations) do
-    operations
-    |> Enum.filter(&is_map/1)
-    |> Enum.group_by(& &1["target"])
-    |> Enum.reduce_while({:ok, []}, fn {target, ops}, {:ok, results} ->
+    operations = Enum.filter(operations, &is_map/1)
+    targets = operations |> Enum.map(& &1["target"]) |> Enum.uniq()
+
+    Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
       ops =
-        Enum.map(ops, fn op ->
+        for %{"target" => ^target} = op <- operations do
           op |> Map.drop(["target"]) |> Map.reject(fn {_key, value} -> is_nil(value) end)
-        end)
+        end
 
       case Memory.write(scope, target, ops) do
-        {:ok, result} -> {:cont, {:ok, [result | results]}}
-        {:error, rejection} -> {:halt, {:error, Map.put(rejection, "target", target)}}
+        {:ok, result} ->
+          {:cont, {:ok, results ++ [result]}}
+
+        {:error, rejection} ->
+          {:halt, {:error, Map.put(rejection, "target", target), results}}
       end
     end)
   end
