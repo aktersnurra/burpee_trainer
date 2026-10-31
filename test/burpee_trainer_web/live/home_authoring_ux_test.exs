@@ -250,7 +250,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     walk(view, reps: 140, pace_ups: 1)
     create(view)
     render_async(view, 2_000)
-    assert has_element?(view, "#studio-request", "140")
+    assert shown(view, "reps") == "140"
     refute has_element?(view, "#home-request-run")
     assert has_element?(view, "#home-adjustment-error", "Coach unavailable")
     assert Repo.aggregate(WorkoutPlan, :count) == count
@@ -261,7 +261,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert unchanged.plan.id == selected.plan.id
   end
 
-  test "going back to an answer drops the proposal made from it", %{
+  test "going back to the form drops the proposal made from it", %{
     view: view,
     user: user,
     selected: selected
@@ -271,18 +271,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
     assert has_element?(view, "#home-request-run")
 
-    # Back is one step back: to what was chosen, without the proposal made from it.
+    # Back is to the form it was made from, without the proposal, and back again leaves.
     view |> element("#studio-back") |> render_click()
     refute has_element?(view, "#home-request-run, #studio-proposal")
     assert has_element?(view, "#studio-create")
+    assert shown(view, "reps") == "10"
 
-    view |> element("#studio-row-reps") |> render_click()
-    assert has_element?(view, "#studio-step", "How many reps?")
-    assert has_element?(view, "#studio-reps-value", "10")
-
-    # Back out of the questions, one step at a time.
-    for _ <- 1..3, do: view |> element("#studio-back") |> render_click()
-    assert has_element?(view, "#studio-step", "Which burpee?")
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
     assert {:ok, unchanged} = Workouts.verify_home_selection(Scope.for_user(user), selected)
@@ -341,11 +335,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert_receive {:DOWN, ^monitor, :process, ^task, _}
     send(task, :release)
     render_async(view, 2_000)
-    assert has_element?(view, "#studio-pace-value", "5.0")
+    assert shown(view, "pace") == "5.0"
     refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
-    # Back, one step at a time, out of the questions: sets, reps, duration, style, type.
-    for _ <- 1..5, do: view |> element("#studio-back") |> render_click()
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
   end

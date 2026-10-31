@@ -1155,40 +1155,40 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-actions { display: flex; align-items: center; gap: 8px; }
 .studio-actions .studio-pill { flex: 1; min-height: 48px; }
 
-/* One question at a time: centred, with the answer under it and the progress above. */
-.studio-step { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); text-align: center; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
-.studio-dots { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.studio-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-base-border); transition: background var(--motion-quick) ease, transform var(--motion-quick) ease; }
-.studio-dot-on { background: #262722; }
-.studio-question { margin: 0; font: 600 var(--text-display)/1.15 var(--font-sans); letter-spacing: -.02em; text-wrap: balance; }
-.studio-options { display: grid; gap: 12px; width: 100%; }
-.studio-option { display: grid; width: 100%; padding: 18px 20px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); color: #262722; text-align: left; cursor: pointer; transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
-.studio-option:hover, .studio-option:focus-visible { border-color: #918d83; background: var(--color-base-100); }
-.studio-option:active { background: var(--color-base-300); }
-.studio-option-title { font: 600 var(--text-heading)/1.3 var(--font-sans); }
-.studio-stepper-wrap { width: 100%; }
-.studio-stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 26px 16px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.studio-stepper:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
-.studio-step-button { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; cursor: pointer; transition: background var(--motion-quick) ease; }
-.studio-step-button:active:not(:disabled) { background: var(--color-base-300); }
-.studio-step-button:disabled { opacity: .3; cursor: default; }
-.studio-step-value { min-width: 0; text-align: center; }
-.studio-step-number { display: block; font: 600 var(--text-hero)/1 var(--font-sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.studio-step-text { font-size: var(--text-title); line-height: 1.2; padding-block: 14px; }
-.studio-step-unit { display: block; margin-top: 8px; color: var(--home-muted, #736f68); font-size: var(--text-body); }
-.studio-step-hint { margin: 14px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); }
-.studio-step-actions { display: grid; gap: 10px; width: 100%; margin-top: 8px; }
-.studio-summary { width: 100%; margin: 0; padding: 4px 0; list-style: none; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); text-align: left; }
-.studio-summary li + li .studio-summary-row { border-top: 1px solid var(--color-base-border); }
-.studio-summary-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 0 18px; border: 0; background: transparent; color: #262722; font: 400 var(--text-body)/1.3 var(--font-sans); text-align: left; cursor: pointer; }
-.studio-summary-row:hover { background: var(--color-base-100); }
-.studio-summary-label { flex: 1; color: var(--home-muted, #736f68); }
-.studio-summary-value { font-weight: 500; font-variant-numeric: tabular-nums; }
-.studio-summary-chevron { color: var(--home-muted, #736f68); }
+/* New's form: a card of rows, each a label and its control, then the note and Create. It takes
+   the column the chat that follows it takes, from the top. */
+.studio-form { display: grid; gap: 16px; width: 100%; padding: 12px 0 calc(32px + env(safe-area-inset-bottom)); animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.studio-fields { border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); }
+.studio-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-width: 0; margin: 0; padding: 10px 12px 10px 18px; border: 0; }
+.studio-row + .studio-row { border-top: 1px solid var(--color-base-border); }
+.studio-row-label { float: left; padding: 0; color: #262722; font: 500 var(--text-body)/1.3 var(--font-sans); }
+.studio-row-hint { grid-column: 1 / -1; margin: 6px 0 2px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: right; }
+.studio-segment { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: 999px; background: var(--color-base-300); }
+.studio-segment-option { position: relative; display: grid; place-items: center; min-width: 92px; min-height: 44px; padding: 0 12px; border-radius: 999px; color: var(--home-muted, #736f68); font: 500 var(--text-small)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
+.studio-segment-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.studio-segment-option:has(input:checked) { background: var(--color-base-100); color: #262722; box-shadow: 0 1px 2px rgb(32 32 29 / .12); }
+.studio-segment-option:has(input:focus-visible) { outline: 2px solid #5e615b; outline-offset: 1px; }
+.studio-number { display: grid; grid-template-columns: 44px 104px 44px; align-items: center; gap: 4px; }
+.studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; cursor: pointer; transition: background var(--motion-quick) ease; }
+.studio-number-button:hover:not(:disabled) { background: var(--color-base-300); }
+.studio-number-button:disabled { opacity: .3; cursor: default; }
+/* The value and its unit read as one: "20 min". */
+.studio-number-field { display: flex; align-items: baseline; justify-content: center; gap: 4px; height: 44px; padding: 0 10px; border: 1px solid var(--color-base-border); border-radius: 12px; background: var(--color-base-100); cursor: text; }
+.studio-number-field:focus-within { outline: 2px solid #5e615b; outline-offset: 1px; }
+.studio-number-input { flex: 1 1 0; min-width: 0; height: 42px; padding: 0; border: 0; background: transparent; color: #262722; font: 600 var(--text-heading)/42px var(--font-sans); font-variant-numeric: tabular-nums; text-align: right; outline: none; }
+.studio-number-input::placeholder { color: var(--home-muted, #736f68); font-size: var(--text-small); font-weight: 500; text-align: center; }
+.studio-number-unit { flex: 1 1 0; color: var(--home-muted, #736f68); font-size: var(--text-small); white-space: nowrap; }
+.studio-number-input:placeholder-shown { text-align: center; }
+.studio-number-input:placeholder-shown + .studio-number-unit { display: none; }
+.studio-note { display: grid; gap: 8px; }
+.studio-note-label { color: var(--home-muted, #736f68); font-size: var(--text-small); }
+.studio-note textarea { width: 100%; min-height: 3.5em; max-height: 12rem; padding: 12px 16px; border: 1px solid var(--color-base-border); border-radius: 16px; background: var(--color-base-200); color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; }
+.studio-note textarea::placeholder { color: #74716A; opacity: 1; }
+.studio-note textarea:focus-visible { outline: none; border-color: #918d83; }
 @media (prefers-reduced-motion: reduce) {
-  .studio, .studio-msg, .studio-step, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
+  .studio, .studio-msg, .studio-form, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
   #home-page, .home-corner-action { transition: none; }
-  .studio-dot { transition: none; }
+  .studio-segment-option { transition: none; }
 }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
 .studio #home-update-loading { display: flex; align-items: center; min-height: 36px; }

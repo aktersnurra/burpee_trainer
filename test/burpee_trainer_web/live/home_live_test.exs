@@ -100,11 +100,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
 
     walk(view, reps: 60, pace_ups: 1)
-    view |> element("#studio-add-request") |> render_click()
-
-    view
-    |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
-    |> render_change()
+    fill(view, "note", "20 sets of 6")
 
     {:ok, before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     pid = view.pid
@@ -117,9 +113,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     render_patch(view, "/")
     assert view.pid == pid
     refute has_element?(view, "#home-history")
-    assert has_element?(view, "#home-studio #home-edit-instruction", "20 sets of 6")
+    assert has_element?(view, "#home-studio #studio-note", "20 sets of 6")
 
-    assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
+    assert :sys.get_state(view.pid).socket.assigns.workout_parameters.note ==
              "20 sets of 6"
 
     assert {:ok, ^before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))

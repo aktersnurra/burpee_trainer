@@ -62,9 +62,9 @@ async function geometry() {
 			const e = document.querySelector(sel);
 			return e && visible(e) ? Math.round(e.getBoundingClientRect().left) : null;
 		};
-		const small = [...document.querySelectorAll("button, a[href], [role=spinbutton]")]
+		const small = [...document.querySelectorAll("button, a[href], [role=spinbutton], .studio-segment-option, .studio-number-field")]
 			.filter(visible)
-			.filter((e) => !e.matches(".studio-part, .home-grab, .studio-dot"))
+			.filter((e) => !e.matches(".studio-part, .home-grab"))
 			.map((e) => ({ e, r: e.getBoundingClientRect() }))
 			.filter(({ r }) => r.width > 0 && r.height > 0 && (Math.min(r.width, r.height) < 40 || Math.max(r.width, r.height) < 44))
 			.map(({ e, r }) => `${e.id || e.getAttribute("aria-label") || e.textContent.trim().slice(0, 20)} ${Math.round(r.width)}x${Math.round(r.height)}`);
@@ -140,33 +140,26 @@ if (!(await page.$("#home-grab"))) await page.tap("#home-summary");
 await page.waitForSelector("#home-grab");
 await page.tap("#home-grab");
 await page.tap("#home-options-new");
-await page.waitForSelector("#studio-step");
-check((await page.textContent("#studio-question")).includes("Which burpee"), "New begins with its first question");
-await page.tap("#home-pill-burpee_type-six_count");
-await page.tap("#home-pill-pacing_style-unbroken");
-await page.waitForSelector("#studio-step-duration");
-const box = await (await page.$("#studio-step-duration")).boundingBox();
-const y = box.y + box.height / 2;
-const before = (await page.textContent("#studio-duration-value")).trim();
-await swipe(client, [box.x + 80, y], [box.x + 260, y + 4]);
+await page.waitForSelector("#studio-new-form");
+check(await page.isVisible("#studio-create"), "New opens on one form with Create");
+await page.tap("label:has(#studio-burpee_type-six_count)");
+await page.tap("label:has(#studio-pacing_style-unbroken)");
+await page.waitForSelector("#studio-sets");
+check(await page.isVisible("#studio-sets"), "unbroken asks for a set size");
+const before = Number(await page.inputValue("#studio-duration"));
+await page.tap(before > 5 ? "#studio-duration-down" : "#studio-duration-up");
 await settle(400);
-const after = (await page.textContent("#studio-duration-value")).trim();
-check(Number(after) === Number(before) + 5, "swiping a value right raises it by a step", `${before} -> ${after}`);
-await page.tap("#studio-next");
-await page.waitForSelector("#studio-reps-value");
-check((await page.textContent(".studio-step-hint")).includes("moving"), "reps says what they come to");
-await page.tap("#studio-next");
-await page.waitForSelector("#studio-sets-value");
-await page.tap("#studio-sets-down");
-await settle(400);
-check(/\d/.test(await page.textContent("#studio-sets-value")), "unbroken asks for a set size");
-await page.tap("#studio-next");
-await page.tap("#studio-next");
-await page.waitForSelector("#studio-create");
-check(await page.isVisible("#studio-add-request"), "the last screen offers Create workout or Add a request");
+const after = Number(await page.inputValue("#studio-duration"));
+check(Math.abs(after - before) === 5, "a value's buttons move it by a step", `${before} -> ${after}`);
+await page.fill("#studio-reps", "30");
+await page.tap("#studio-note");
+await settle(800);
+check((await page.inputValue("#studio-reps")) === "30", "a value can be typed");
+check((await page.textContent("#studio-pace-hint")).includes("moving"), "the form says what the values come to");
 g = await geometry();
-check(g.small.length === 0, "the summary's buttons are big enough to hit", g.small.join(", "));
-await shot("06-summary");
+check(!g.overflow, "the form does not scroll sideways");
+check(g.small.length === 0, "the form's controls are big enough to hit", g.small.join(", "));
+await shot("06-form");
 await page.tap("#studio-create");
 await page.waitForSelector("#home-request-run", { timeout: 20000 });
 await shot("07-new-proposal");

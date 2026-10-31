@@ -60,38 +60,38 @@ Two even sets with a breather.      ← the proposal arrives as a card
 - A follow-up that fails leaves the proposal on screen and the words in the box, and says so.
   Back works while the coach is on a follow-up and takes the proposal with it.
 
-## New: one question at a time
+## New: one form
 
-New asks one question per screen, centred, with its progress above: burpee type and set style
-(a card to tap, which answers and moves on), then duration and reps, then, for unbroken sets, the
-most reps in one set (no limit to start), then pace. Duration, reps, set size and pace are values
-you swipe left and right (the buttons and arrow keys do the same; `SwipeValue`) with a Next, since
-nothing says you are done. Back is one step back, out of the first; there is no close button.
-`NewWorkoutSteps` (pure) holds the steps; `Coach.NewDefaults` holds what each starts from.
+New opens on one form, in the column the chat that follows it takes: burpee type and style as a
+choice of two side by side, then duration, reps, for unbroken sets the most reps in one set (no
+limit to start), and pace, each a number to type with a round button either side that moves it by
+a step; then an optional note and **Create workout**. Back from the form leaves; there is no close
+button. `NewWorkoutForm` (pure but for the suggested reps) holds the rules; `Coach.NewDefaults`
+holds what each value starts from.
 
-- **Duration** starts at 20 minutes, or at what the week has left if that is less, and moves in
-  steps of five up to what is left, which is always one of them. Never past the week's 80 minutes.
+- **Duration** starts at 20 minutes, or at what the week has left if that is less, and steps by
+  five up to what is left, which is always one of them. Never past the week's 80 minutes; a value
+  typed is kept within that.
 - **Reps** start from the athlete's progression for the type (a recent comparable session, within
   the planner's ceiling), else their recent best, else the next level's landmark, scaled to the
-  duration. They move by five and stop where movement alone would not fit the duration.
-- **Set size** (unbroken only) moves in fives below the reps, then no limit. It is a constraint:
-  `WorkoutRequest.max_set_reps` tells the coach and rejects a layout with a longer set (after the
-  one correction), and a follow-up keeps it unless it is changed.
+  duration. They step by five.
+- **Set size** (unbroken only) steps in fives below the reps, then no limit; a limit at or above
+  the reps is no limit. It is a constraint: `WorkoutRequest.max_set_reps` tells the coach and
+  rejects a layout with a longer set (after the one correction), and a follow-up keeps it unless it
+  is changed.
 - **Pace** starts mid-reference for the type (4.5 s six-count, 8 s Navy SEAL), or faster when the
-  reps leave little room to recover. It moves by half a second.
+  reps leave little room to recover. It steps by half a second.
 
-Under reps and pace the screen says what the choices come to ("11:15 moving · 3:45 recovering"),
-the one number that tells whether a combination is sensible (`NewDefaults.budget/3`).
+Reps and pace follow the duration and type until the athlete sets them; after that they stay as
+set. Movement alone must fit the duration: the value being changed is capped at what the others
+leave room for, and a change of duration or type lowers the reps when they no longer fit. Under the
+pace the form says what the values come to ("11:15 moving · 3:45 recovering",
+`NewDefaults.budget/3`).
 
-The last screen is what was chosen, each row a way back to that question, with two ways on:
-
-- **Create workout** sends the choices as they are.
-- **Add a request** opens the chat with an empty box, for a request only (Send works without a word).
-  The answers are not said again: the screen before showed them, and the proposal's card shows what
-  came of them.
-
-Back from the chat, or from a proposal, is to the summary. The header carries only its title; the
-rest of the screen says what it is about.
+A value typed is sent when the typing pauses or the field is left; Create applies whatever the form
+holds, so a value typed and sent with Enter counts. The note goes to the coach with the values,
+which are not said again in the chat: the proposal's card shows what came of them. Back from a
+proposal, or from the request in flight, is to the form as it was.
 
 ## Run
 

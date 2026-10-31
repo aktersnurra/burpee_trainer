@@ -179,11 +179,12 @@ and gutter as Home:
 - **Numbers by hand**: a tap on a set's row of the proposal selects it (a soft row) and opens
   `.studio-hand-edit` under the card: the reps and the beat, each with 44px round steppers. A step
   that cannot fit is disabled; the rests are fitted again, so the length holds.
-- **One question at a time** (New): centred, progress dots above, the question at
-  `--text-display`, a choice as a card to tap (it answers and moves on), a value as a card you
-  swipe with a round button either side (`.studio-stepper`, its number `--text-hero`) and a Next.
+- **New's form**: one card of rows (`.studio-fields`), each a label and its control: a choice of
+  two as a segmented pill (`.studio-segment`), a number as a field with its unit inside
+  (`.studio-number-field`, "20 min") and a 44px round button either side; a hint under a row in
+  small muted type. Then the note and the one filled Create workout.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
-  filled ink pill per view is the way on: Run, Create workout, Next), where the rest of the app
+  filled ink pill per view is the way on: Run, Create workout), where the rest of the app
   uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio
   has no toggles of its own.
 

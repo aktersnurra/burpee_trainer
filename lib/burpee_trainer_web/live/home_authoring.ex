@@ -14,7 +14,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     HomeChooser,
     HomeLive,
     HomeWorkoutComponents,
-    NewWorkoutSteps
+    NewWorkoutForm
   }
 
   # Selected-workspace events cannot act without a persisted selection.
@@ -169,18 +169,20 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   def handle_event("close_options", _, socket),
     do: {:noreply, assign(socket, options_open?: false)}
 
-  # New starts from its first question, with the week's time left deciding what it offers.
+  # New opens its form on what is suggested, with the week's time left deciding what it offers.
   def handle_event("new_workout", _, socket) do
     a = socket.assigns
 
     if a.authoring_stage == :idle and not is_nil(a.home_selection) and not a.busy? do
       current = HomeWorkoutRequest.from_definition(a.home_selection.plan.definition_json)
       params = %{current | pace: nil, note: "", recovery: "optional"}
+      form = NewWorkoutForm.open(params, a.current_scope, remaining_sec(socket))
 
       {:noreply,
        socket
-       |> step({:new_opened, params, "creator:#{Ecto.UUID.generate()}"})
-       |> assign(options_open?: false, workout_parameters: params)
+       |> step({:new_opened, form.params, "creator:#{Ecto.UUID.generate()}"})
+       |> assign(options_open?: false)
+       |> put_new_form(form)
        |> adjustment_form("")}
     else
       {:noreply, socket}
@@ -197,122 +199,70 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
      |> HomeWorkspace.refresh_projection()}
   end
 
-  # The first two questions are answered by one tap each, and the next follows.
+  # A value typed or chosen in the form; the field it came from is the one that changed.
   def handle_event(
-        "choose_workout_value",
-        %{"field" => field, "value" => value},
-        %{assigns: %{authoring_stage: :new}} = socket
+        "change_new_workout",
+        %{"_target" => ["new", field], "new" => %{} = submitted},
+        %{assigns: %{authoring_stage: :new, busy?: false}} = socket
       )
-      when (field == "burpee_type" and value in ["six_count", "navy_seal"]) or
-             (field == "pacing_style" and value in ["even", "unbroken"]) do
-    params = socket.assigns.workout_parameters
+      when is_map_key(submitted, field) do
+    form =
+      NewWorkoutForm.change(
+        new_form(socket),
+        field,
+        submitted[field],
+        socket.assigns.current_scope,
+        remaining_sec(socket)
+      )
 
-    {params, next} =
-      if field == "burpee_type",
-        do: {%{params | burpee_type: value}, :style},
-        else:
-          {%{
-             params
-             | pacing_style: value,
-               max_set_reps: if(value == "even", do: nil, else: params.max_set_reps)
-           }, :duration}
-
-    {:noreply, enter_step(socket, params, next)}
+    {:noreply, put_new_form(socket, form)}
   end
 
-  # Duration, reps and pace move one step at a time, by swipe or by button.
+  # Duration, reps, set size and pace move one step at a time by their buttons.
   def handle_event(
         "step_workout_value",
         %{"field" => field, "dir" => dir},
         %{assigns: %{authoring_stage: :new, busy?: false}} = socket
       )
       when field in ["duration", "reps", "sets", "pace"] and dir in ["up", "down"] do
-    direction = String.to_existing_atom(dir)
-
-    params =
-      NewWorkoutSteps.step(
-        socket.assigns.workout_parameters,
+    form =
+      NewWorkoutForm.step(
+        new_form(socket),
         field,
-        direction,
+        String.to_existing_atom(dir),
+        socket.assigns.current_scope,
         remaining_sec(socket)
       )
 
-    {:noreply, assign(socket, workout_parameters: params)}
+    {:noreply, put_new_form(socket, form)}
   end
 
-  def handle_event(
-        "next_new_step",
-        _,
-        %{assigns: %{authoring_stage: :new, new_step: step, busy?: false}} = socket
-      )
-      when step in [:duration, :reps, :sets, :pace] do
-    params = socket.assigns.workout_parameters
-    {:noreply, enter_step(socket, params, NewWorkoutSteps.next(step, params))}
-  end
-
-  # A message to add to the choices opens the chat on them; otherwise they go as they are.
-  def handle_event(
-        "add_new_request",
-        _,
-        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
-      ),
-      do: {:noreply, enter_step(socket, socket.assigns.workout_parameters, :request)}
-
-  # Back is one step back: from the chat to what was chosen, from a proposal to it too, and
-  # from the first question out.
+  # Back from a proposal is back to the form it was made from, without it. On the form itself
+  # (reached here once a request in flight is dropped) there is nothing further back to go.
   def handle_event("back_new_step", _, %{assigns: %{editing_source: nil}} = socket) do
-    a = socket.assigns
-    params = a.workout_parameters
-
-    cond do
-      a.authoring_stage not in [:new, :review] ->
-        {:noreply, socket}
-
-      a.authoring_stage == :new and a.new_step == :type ->
-        handle_event("abort_new_workout", %{}, socket)
-
-      a.authoring_stage == :review ->
-        {:noreply, socket |> step({:new_step_reopened, :ready}) |> adjustment_form("")}
-
-      true ->
-        {:noreply, step(socket, {:new_step, NewWorkoutSteps.previous(a.new_step, params)})}
+    case socket.assigns.authoring_stage do
+      :review -> {:noreply, socket |> step(:new_reopened) |> adjustment_form("")}
+      _ -> {:noreply, socket}
     end
   end
 
-  # Any answer can be changed; what was suggested after it is suggested again.
+  # The form as submitted, with what was typed but not yet sent, makes the first proposal.
   def handle_event(
-        "goto_new_step",
-        %{"step" => name},
-        %{assigns: %{editing_source: nil}} = socket
+        "send_new_workout",
+        %{"new" => %{} = submitted},
+        %{assigns: %{authoring_stage: :new, busy?: false}} = socket
       ) do
-    case NewWorkoutSteps.parse(name) do
-      {:ok, step} when socket.assigns.authoring_stage in [:new, :review] ->
-        {:noreply,
-         socket
-         |> step({:new_step_reopened, step})}
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
-  # What was chosen, sent as it is, makes the first proposal.
-  def handle_event(
-        "send_new_workout",
-        params,
-        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
+    form =
+      NewWorkoutForm.submit(
+        new_form(socket),
+        submitted,
+        socket.assigns.current_scope,
+        remaining_sec(socket)
       )
-      when params == %{} or not is_map_key(params, "home_adjustment"),
-      do: begin_plan_review(socket, %{"note" => ""})
 
-  # With a request written after the prefix, it goes with them.
-  def handle_event(
-        "send_new_workout",
-        %{"home_adjustment" => %{"instruction" => text}},
-        %{assigns: %{authoring_stage: :new, new_step: :request, busy?: false}} = socket
-      )
-      when is_binary(text) do
-    begin_plan_review(socket, %{"note" => String.trim(text)})
+    socket
+    |> put_new_form(form)
+    |> begin_plan_review(%{"note" => String.trim(form.params.note || "")})
   end
 
   def handle_event("select_created_workout", _, %{assigns: %{authoring_stage: :saved}} = socket) do
@@ -650,15 +600,14 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   defp restore_edit_ask(%{assigns: %{editing_source: nil}} = socket), do: socket
   defp restore_edit_ask(socket), do: adjustment_form(socket, socket.assigns.instruction)
 
-  # A step starts from what is suggested for it, given the answers so far.
-  defp enter_step(socket, params, step) do
-    params =
-      NewWorkoutSteps.enter(params, step, socket.assigns.current_scope, remaining_sec(socket))
+  defp new_form(socket),
+    do: %NewWorkoutForm{
+      params: socket.assigns.workout_parameters,
+      touched: socket.assigns.new_touched
+    }
 
-    socket
-    |> assign(workout_parameters: params)
-    |> step({:new_step, step})
-  end
+  defp put_new_form(socket, form),
+    do: assign(socket, workout_parameters: form.params, new_touched: form.touched)
 
   defp remaining_sec(%{assigns: %{slot: %{remaining_sec: seconds}}}), do: seconds
   defp remaining_sec(_socket), do: nil

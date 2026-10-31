@@ -647,7 +647,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 /* A 44px target around a 34px circle. */
 .composer-send { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
 .composer-send-dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--color-base-300); color: #9A9489; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, opacity var(--motion-quick) ease; }
-.composer:has(textarea:not(:placeholder-shown)) .composer-send:not(:disabled) .composer-send-dot, .composer-send-ready:not(:disabled) .composer-send-dot { background: #262722; color: var(--color-base-100); }
+.composer:has(textarea:not(:placeholder-shown)) .composer-send:not(:disabled) .composer-send-dot { background: #262722; color: var(--color-base-100); }
 .composer-send:hover:not(:disabled) .composer-send-dot { opacity: .85; }
 .composer-send:disabled { cursor: default; }
 .composer-send:focus-visible { outline: none; }

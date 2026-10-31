@@ -321,8 +321,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "abort_new_workout",
              "back_new_step",
-             "goto_new_step",
-             "choose_workout_value",
              "change_current_edit"
            ] and
              stage in [:new, :editing] do
@@ -336,7 +334,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         params,
         %{assigns: %{busy?: true, authoring_stage: :review, pending_turn: turn}} = socket
       )
-      when event in ["abort_new_workout", "back_new_step", "goto_new_step"] and
+      when event in ["abort_new_workout", "back_new_step"] and
              is_binary(turn),
       do: handle_event(event, params, HomeAuthoring.discard_preparation(socket))
 
@@ -368,19 +366,16 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "abort_new_workout",
-             "add_new_request",
              "adjust_proposal",
              "back_new_step",
              "back_to_workout_request",
              "change_adjustment",
              "change_current_edit",
-             "choose_workout_value",
+             "change_new_workout",
              "close_options",
              "confirm_workout_request",
              "edit_current_workout",
-             "goto_new_step",
              "new_workout",
-             "next_new_step",
              "open_options",
              "refine_workout",
              "review_current_edit",

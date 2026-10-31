@@ -12,11 +12,11 @@ the composer or the CSS around them.
   workout is opened, then opens Edit / New, and a swipe down closes it.
 - Edit: the studio starts at Home's left edge, the docked box starts at the same edge, nothing
   scrolls sideways, a spinner shows while the coach works, and Save and Run sit under the proposal.
-- New: one question at a time, a swipe raises a value by a step, reps say what they come to,
-  unbroken asks for a set size, the last screen offers Create workout or Add a request, and Run
+- New: one form with Create, unbroken asks for a set size, a value's buttons move it by a step and
+  a value can be typed, the form says what the values come to, nothing scrolls sideways, and Run
   starts the workout.
-- Every button is big enough to hit (at least 40px on both sides and 44px on one; parts and the
-  handle are exempt) and the browser logs no errors.
+- Every button and form control is big enough to hit (at least 40px on both sides and 44px on one;
+  parts and the handle are exempt) and the browser logs no errors.
 
 ## Run it
 

@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { atPageBottom, classifySwipe, createSwipeTracker } from "./swipe.mjs";
 import { gestureEvent } from "./home_gestures.mjs";
-import { stepDirection } from "./swipe_value.mjs";
 
 test("a clear, quick stroke is a swipe in its main direction", () => {
 	assert.equal(classifySwipe({ dx: 120, dy: 10, ms: 200 }), "right");
@@ -110,10 +109,4 @@ test("a swipe on Home: right swaps anywhere; up edits or starts fresh only on an
 	const sheet = { ...opened, optionsOpen: true };
 	assert.equal(gestureEvent("down", sheet), "close_options");
 	assert.equal(gestureEvent("right", sheet), null);
-});
-
-test("swiping a value right raises it and left lowers it", () => {
-	assert.equal(stepDirection("right"), "up");
-	assert.equal(stepDirection("left"), "down");
-	assert.equal(stepDirection("up"), null);
 });
