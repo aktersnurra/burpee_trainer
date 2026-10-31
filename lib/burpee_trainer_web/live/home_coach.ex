@@ -45,10 +45,16 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       {:noreply,
        assign(socket, coach_memory_open?: not Map.get(socket.assigns, :coach_memory_open?, false))}
 
+  def handle_event("coach_memory_close", _, socket),
+    do: {:noreply, assign(socket, coach_memory_open?: false)}
+
   def handle_event("coach_memory_forget", %{"id" => raw}, socket) do
     with {id, ""} <- Integer.parse(to_string(raw)),
          :ok <- Memory.forget(socket.assigns.current_scope, id) do
-      {:noreply, refresh(socket)}
+      socket = refresh(socket)
+      # The last entry gone, there is nothing to show: the sheet closes with its icon.
+      empty? = Enum.all?(socket.assigns.coach_memory, &(&1.entries == []))
+      {:noreply, if(empty?, do: assign(socket, coach_memory_open?: false), else: socket)}
     else
       _ -> {:noreply, socket}
     end

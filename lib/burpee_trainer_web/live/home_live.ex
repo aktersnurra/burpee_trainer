@@ -306,6 +306,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_goal_confirm",
              "coach_goal_dismiss",
              "coach_memory_toggle",
+             "coach_memory_close",
              "coach_memory_forget"
            ] do
     if socket.assigns.workspace_screen == :home,

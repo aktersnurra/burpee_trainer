@@ -269,7 +269,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#home-coach-thread .coach-memory[data-kind=noted] .hero-bookmark")
   end
 
-  test "what the coach remembers opens on asking, by part, and an entry can be removed",
+  test "what the coach remembers is an icon that opens a sheet by part, and an entry can be removed",
        %{conn: conn, user: user} do
     scope = Scope.for_user(user)
 
@@ -280,10 +280,14 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     free_form_session_fixture(user, %{duration_sec_actual: 1_200})
     {:ok, view, _} = live(conn, ~p"/")
-    refute has_element?(view, "#home-coach-memory-parts")
+    refute has_element?(view, "#home-coach-memory")
 
-    view |> element("#home-coach-memory-toggle") |> render_click()
+    view
+    |> element("#home-coach-memory-toggle[aria-label='What the coach remembers']")
+    |> render_click()
+
     assert has_element?(view, "#home-coach-memory-toggle[aria-expanded=true]")
+    assert has_element?(view, "#home-coach-memory[role=dialog]")
     assert has_element?(view, "#home-coach-memory-user", "Trains at 7:00")
     assert has_element?(view, "#home-coach-memory-memory", "Nothing yet.")
 
@@ -291,6 +295,10 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     view |> element("#home-coach-memory-forget-#{entry.id}") |> render_click()
     assert BurpeeTrainer.Coach.Memory.list(scope) == []
     refute has_element?(view, "#home-coach-memory-entry-#{entry.id}")
+
+    # Nothing left to remember: the sheet and the icon go with it.
+    refute has_element?(view, "#home-coach-memory-toggle")
+    refute has_element?(view, "#home-coach-memory")
   end
 
   defp text(view, selector),

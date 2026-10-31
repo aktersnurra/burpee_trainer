@@ -6,7 +6,7 @@
 - **Home** reads the workout's shape in one line (`5 × 3 · every 8s · 4:30 rest`) and your best for its type per 20 minutes. An enabled start toggle sits on a soft pill.
 - **Studio**: tap a set's row to change its reps or beat by hand, with no model call; the rests are refitted so the length holds. Each proposal is marked against the one it replaced. Sets read by number (1–4, 5), rests as clocks (4:30).
 - **Progress**: the recent-reps cards that repeated the gauges are gone. Each type shows its best from its first 20-minute session, the next level and reps to go, and how even the latest tracked session was. The chart is one lane per type instead of two axes on one plot.
-- **Coach**: the week list marks done (✓) and to go; a closed Memory line opens to what the coach remembers, with a remove button per entry.
+- **Coach**: the week list marks done (✓) and to go; a bookmark icon beside the coach's note opens a sheet with what the coach remembers, with a remove button per entry.
 - **Memory, the Hermes way**: two bounded parts, user (1,375 chars) and memory (2,200), kept by a memory tool the coach calls as it talks (add, patch, remove by text, all or nothing, limit checked on the result, rejections with the entries and closest matches), read each turn as a frozen snapshot. Injection-like content is blocked. The background review runs after session feedback or a turn that wrote nothing. Claude's `update_memory` takes the same batches. See `docs/specs/2026-10-30-coach-memory-design.md`.
 - **Runner**: a rest reads the set and the next set's reps ("2/5 · next 3").
 

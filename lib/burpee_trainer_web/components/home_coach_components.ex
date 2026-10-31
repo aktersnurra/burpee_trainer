@@ -29,19 +29,24 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   def panel(assigns) do
     ~H"""
     <section id="home-coach-panel" class="home-coach-panel" aria-label="Coach">
-      <%!-- The coach's word on the rest of the week leads. --%>
-      <p id="home-coach-note" class="coach-note">
-        <.summary_body
-          :if={@state.progress_summary || @state.progress_summary_loading?}
-          summary={@state.progress_summary}
-          loading?={@state.progress_summary_loading?}
-        />
-        <span :if={
-          coach?(@state) and is_nil(@state.progress_summary) and not @state.progress_summary_loading?
-        }>
-          Tell me what you're training for, or how the last session felt.
-        </span>
-      </p>
+      <%!-- The coach's word on the rest of the week leads; what it remembers is an icon
+           beside it, opened on asking. --%>
+      <div class="coach-head">
+        <p id="home-coach-note" class="coach-note">
+          <.summary_body
+            :if={@state.progress_summary || @state.progress_summary_loading?}
+            summary={@state.progress_summary}
+            loading?={@state.progress_summary_loading?}
+          />
+          <span :if={
+            coach?(@state) and is_nil(@state.progress_summary) and
+              not @state.progress_summary_loading?
+          }>
+            Tell me what you're training for, or how the last session felt.
+          </span>
+        </p>
+        <.memory_button :if={memory_count(@state) > 0} state={@state} />
+      </div>
       <%!-- This week's window as Progress's rows: what is done, then what is left, muted. --%>
       <ol
         :if={@state.coach_week != []}
@@ -193,7 +198,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </div>
       </div>
-      <.memory :if={Map.get(@state, :coach_memory, []) != []} state={@state} />
+      <.memory_sheet :if={Map.get(@state, :coach_memory_open?, false)} state={@state} />
       <div :if={coach?(@state)} class="chat-dock-spacer" aria-hidden="true"></div>
     </section>
     """
@@ -244,60 +249,77 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   defp memory_verb(:updated), do: "Updated: "
   defp memory_verb(:forgot), do: "Forgot: "
 
+  defp memory_count(state),
+    do: state |> Map.get(:coach_memory, []) |> Enum.map(&length(&1.entries)) |> Enum.sum()
+
   attr(:state, :map, required: true)
 
-  # What the coach remembers, on asking: who the athlete is, then its notes on coaching
-  # them, each part with how full it is. An entry can be removed.
-  defp memory(assigns) do
-    open? = Map.get(assigns.state, :coach_memory_open?, false)
-    parts = assigns.state.coach_memory
-    count = parts |> Enum.map(&length(&1.entries)) |> Enum.sum()
-    assigns = assign(assigns, open?: open?, parts: parts, count: count)
-
+  defp memory_button(assigns) do
     ~H"""
-    <section id="home-coach-memory" class="coach-memory-view" aria-label="What the coach remembers">
-      <button
-        id="home-coach-memory-toggle"
-        type="button"
-        class="coach-memory-toggle"
-        phx-click="coach_memory_toggle"
-        aria-expanded={to_string(@open?)}
-        aria-controls="home-coach-memory-parts"
+    <button
+      id="home-coach-memory-toggle"
+      type="button"
+      class="coach-memory-toggle"
+      phx-click="coach_memory_toggle"
+      aria-haspopup="dialog"
+      aria-expanded={to_string(Map.get(@state, :coach_memory_open?, false))}
+      aria-label="What the coach remembers"
+      title="What the coach remembers"
+    >
+      <.icon name="hero-bookmark" class="size-5" />
+    </button>
+    """
+  end
+
+  attr(:state, :map, required: true)
+
+  # What the coach remembers, as a sheet over the coach: who the athlete is, then its
+  # notes on coaching them, each part with how full it is. An entry can be removed.
+  defp memory_sheet(assigns) do
+    ~H"""
+    <div id="home-coach-memory-backdrop" class="home-sheet-backdrop" phx-click="coach_memory_close">
+    </div>
+    <div
+      id="home-coach-memory"
+      class="home-sheet coach-memory-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="What the coach remembers"
+      phx-window-keydown="coach_memory_close"
+      phx-key="Escape"
+      phx-mounted={JS.focus()}
+      tabindex="-1"
+      data-no-swipe
+    >
+      <span class="home-sheet-grip" aria-hidden="true"></span>
+      <section
+        :for={part <- @state.coach_memory}
+        id={"home-coach-memory-#{part.store}"}
+        class="coach-memory-part"
       >
-        <span>Memory</span>
-        <span class="coach-memory-count">{@count}</span>
-        <.icon name="hero-chevron-down" class="size-4 coach-memory-chevron" />
-      </button>
-      <div :if={@open?} id="home-coach-memory-parts" class="coach-memory-parts">
-        <section
-          :for={part <- @parts}
-          id={"home-coach-memory-#{part.store}"}
-          class="coach-memory-part"
-        >
-          <h3 class="coach-memory-heading">
-            <span>{if(part.store == "user", do: "Profile", else: "Notes")}</span>
-            <span class="coach-memory-usage">{part.percent}%</span>
-          </h3>
-          <p :if={part.entries == []} class="coach-memory-empty">Nothing yet.</p>
-          <ul :if={part.entries != []} class="coach-memory-entries">
-            <li :for={entry <- part.entries} id={"home-coach-memory-entry-#{entry.id}"}>
-              <span>{entry.text}</span>
-              <button
-                id={"home-coach-memory-forget-#{entry.id}"}
-                type="button"
-                class="coach-memory-forget"
-                phx-click="coach_memory_forget"
-                phx-value-id={entry.id}
-                aria-label={"Forget: #{entry.text}"}
-                title="Forget"
-              >
-                <.icon name="hero-x-mark" class="size-4" />
-              </button>
-            </li>
-          </ul>
-        </section>
-      </div>
-    </section>
+        <h3 class="coach-memory-heading">
+          <span>{if(part.store == "user", do: "Profile", else: "Notes")}</span>
+          <span class="coach-memory-usage">{part.percent}%</span>
+        </h3>
+        <p :if={part.entries == []} class="coach-memory-empty">Nothing yet.</p>
+        <ul :if={part.entries != []} class="coach-memory-entries">
+          <li :for={entry <- part.entries} id={"home-coach-memory-entry-#{entry.id}"}>
+            <span>{entry.text}</span>
+            <button
+              id={"home-coach-memory-forget-#{entry.id}"}
+              type="button"
+              class="coach-memory-forget"
+              phx-click="coach_memory_forget"
+              phx-value-id={entry.id}
+              aria-label={"Forget: #{entry.text}"}
+              title="Forget"
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </li>
+        </ul>
+      </section>
+    </div>
     """
   end
 end

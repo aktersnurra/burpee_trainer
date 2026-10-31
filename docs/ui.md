@@ -187,6 +187,10 @@ and gutter as Home:
   uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio
   has no toggles of its own.
 
+A screen's seldom-used extra is an icon beside what it belongs to, opening a sheet (`.home-sheet`,
+`.home-sheet-backdrop`, a grip, closed by the backdrop or Escape): the coach's memory is a bookmark
+beside its note, never a section of the page.
+
 Everything rises in with `home-enter` or `studio-in`, both `--motion-settle`; reduced motion removes
 every animation here.
 

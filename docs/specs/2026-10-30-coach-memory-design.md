@@ -62,10 +62,11 @@ entries.
   operations with a target each; each part's batch is applied as the tool would, and a
   rejection goes back once with its reason.
 - **Claude**, through `update_memory`.
-- **The owner** removes an entry on Coach ("Memory", closed until asked).
+- **The owner** removes an entry from the memory sheet on Coach.
 
 ## What the athlete sees
 
 - In the conversation, a quiet line per change: "Noted:", "Updated:", "Forgot:".
-- On Coach, a "Memory" line with the number of entries opens to both parts (Profile, Notes)
-  with how full each is, and a remove button per entry.
+- On Coach, a bookmark icon beside the coach's note (only while there is something to
+  remember) opens a sheet with both parts, Profile then Notes, how full each is, and a remove
+  button per entry. Removing the last entry closes the sheet and takes the icon with it.
