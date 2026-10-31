@@ -826,8 +826,9 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
                 title="Send"
                 disabled={@state.busy?}
               >
-                <span :if={@state.busy?} class="composer-stop" aria-hidden="true"></span>
-                <.icon :if={not @state.busy?} name="hero-arrow-turn-down-left" class="size-5" />
+                <span class="composer-send-dot" aria-hidden="true">
+                  <.icon name="hero-arrow-up-mini" class="size-5" />
+                </span>
               </button>
             </div>
           </div>
