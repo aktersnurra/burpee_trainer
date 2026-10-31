@@ -443,9 +443,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:show_sessions?, :boolean, default: false)
   attr(:gauges, :list, default: [])
 
-  # Each type in its own lane on a shared time axis, in its colour and on its own scale,
-  # which tops out at its goal when it has one (the dashed line), so a line's height reads
-  # as closeness to its goal.
+  # Both types on one chart, each in its colour and on its own axis: six-count on the
+  # left, Navy SEAL on the right. Each axis tops out at that type's goal, so both goals
+  # sit on the one dashed line and a line's height reads as closeness to its goal.
   def trend_chart(assigns) do
     series = [
       %{
@@ -466,10 +466,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
     assigns =
       assigns
-      |> assign(
-        :series,
-        plot_series(series, scales, assigns.gauges, assigns.period_start, assigns.now)
-      )
+      |> assign(:series, plot_series(series, scales, assigns.period_start, assigns.now))
+      |> assign(:axes, axes(series, scales))
+      |> assign(:goal?, Enum.any?(assigns.gauges, &(&1.kind == :goal)))
       |> assign(plot_top: @plot_top, plot_bottom: @plot_bottom)
 
     ~H"""
@@ -507,73 +506,58 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           class="home-history-plot"
           phx-remove={removed_target_focus("home-history-trend-plot")}
         >
-          <button
-            id="home-history-trend-open-sessions"
-            type="button"
-            aria-label="Show saved sessions"
-            phx-click="history_density_mode"
-            phx-value-mode="sessions"
-            class="home-history-trend-open-sessions"
-          ></button>
-          <%!-- One lane per type, on a shared time axis, each read on its own scale. --%>
           <div
-            :for={series <- @series}
-            :if={series.points != []}
-            id={"home-history-lane-#{series_class(series.type)}"}
-            class="home-history-lane"
+            :for={axis <- @axes}
+            id={"home-history-trend-axis-#{axis.side}"}
+            class={[
+              "home-history-trend-axis",
+              "home-history-trend-axis-#{axis.side}",
+              "progress-key-#{series_class(axis.type)}"
+            ]}
+            aria-hidden="true"
           >
-            <%!-- Each lane is its own small chart: named by its type, as the gauges above are. --%>
-            <p
-              class={[
-                "progress-gauge-type",
-                "home-history-lane-key",
-                "progress-key-#{series_class(series.type)}"
-              ]}
+            <span style={"top: #{@plot_top}%"}>{axis.hi}</span>
+            <span style="top: 50%">{div(axis.hi + axis.lo, 2)}</span>
+            <span style={"top: #{@plot_bottom}%"}>{axis.lo}</span>
+          </div>
+          <div class={["home-history-plot-area", length(@axes) == 2 && "home-history-plot-dual"]}>
+            <button
+              id="home-history-trend-open-sessions"
+              type="button"
+              aria-label="Show saved sessions"
+              phx-click="history_density_mode"
+              phx-value-mode="sessions"
+              class="home-history-trend-open-sessions"
+            ></button>
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
               aria-hidden="true"
+              class="home-history-svg"
             >
-              {series.label}
-            </p>
-            <div
-              id={"home-history-trend-axis-#{series_class(series.type)}"}
-              class={["home-history-trend-axis", "progress-key-#{series_class(series.type)}"]}
-              aria-hidden="true"
-            >
-              <span style={"top: #{@plot_top}%"}>{series.hi}</span>
-              <span style={"top: #{@plot_bottom}%"}>{series.lo}</span>
-            </div>
-            <div class="home-history-plot-area">
-              <svg
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-                class="home-history-svg"
-              >
-                <line
-                  x1="0"
-                  x2="100"
-                  y1={@plot_top}
-                  y2={@plot_top}
-                  class={["home-history-grid", series.goal? && "home-history-goal-line"]}
-                />
-                <line
-                  x1="0"
-                  x2="100"
-                  y1={@plot_bottom}
-                  y2={@plot_bottom}
-                  class="home-history-grid"
-                />
-                <polyline
-                  class={"home-history-line-#{series_class(series.type)}"}
-                  stroke-dasharray={series.type == :navy_seal && "5 4"}
-                  points={series.line}
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  vector-effect="non-scaling-stroke"
-                />
-              </svg>
+              <line
+                x1="0"
+                x2="100"
+                y1={@plot_top}
+                y2={@plot_top}
+                class={["home-history-grid", @goal? && "home-history-goal-line"]}
+              />
+              <line x1="0" x2="100" y1="50" y2="50" class="home-history-grid" />
+              <line x1="0" x2="100" y1={@plot_bottom} y2={@plot_bottom} class="home-history-grid" />
+              <polyline
+                :for={series <- @series}
+                :if={series.points != []}
+                class={"home-history-line-#{series_class(series.type)}"}
+                stroke-dasharray={series.type == :navy_seal && "5 4"}
+                points={series.line}
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"
+              />
+            </svg>
+            <%= for series <- @series, point <- series.points do %>
               <button
-                :for={point <- series.points}
                 id={"home-history-point-#{point.id}"}
                 phx-remove={removed_target_focus("home-history-point-#{point.id}")}
                 type="button"
@@ -589,7 +573,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               >
                 <span aria-hidden="true"></span>
               </button>
-            </div>
+            <% end %>
           </div>
         </div>
       <% end %>
@@ -677,7 +661,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp tags(_session), do: []
 
-  defp plot_series(series, scales, gauges, period_start, now) do
+  defp plot_series(series, scales, period_start, now) do
     all =
       series
       |> Enum.flat_map(& &1.points)
@@ -725,13 +709,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           })
         end)
 
-      Map.merge(series, %{
-        points: plotted,
-        line: Enum.map_join(plotted, " ", &"#{&1.x},#{&1.y}"),
-        lo: lo,
-        hi: hi,
-        goal?: Enum.any?(gauges, &(&1.burpee_type == series.type and &1.kind == :goal))
-      })
+      Map.merge(series, %{points: plotted, line: Enum.map_join(plotted, " ", &"#{&1.x},#{&1.y}")})
     end)
   end
 
@@ -750,6 +728,18 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       lo = (Enum.min(densities) * 0.8 / 10) |> floor() |> Kernel.*(10) |> max(0) |> min(hi - 10)
       {type, {lo, hi}}
     end
+  end
+
+  # Six-count reads on the left; Navy SEAL on the right, or the left when it is alone.
+  defp axes(series, scales) do
+    shown = for %{type: type} <- series, Map.has_key?(scales, type), do: type
+
+    shown
+    |> Enum.zip([:left, :right])
+    |> Enum.map(fn {type, side} ->
+      {lo, hi} = scales[type]
+      %{type: type, side: side, lo: lo, hi: hi}
+    end)
   end
 
   defp series_class(type), do: type |> Atom.to_string() |> String.replace("_", "-")
