@@ -42,34 +42,61 @@ defmodule BurpeeTrainer.Coach.AgentTest do
     assert {:ok, %{reply: "Keep going."}} = Agent.run(scope, :coach_page, "How am I doing?", opts)
   end
 
-  test "the coach cannot write its memory mid-reply; that is kept afterwards" do
+  test "the coach keeps its memory as it talks, reading the snapshot it began with" do
     scope = scope_fixture()
-    opts = responses([call("update_notebook", %{"text" => "Mornings"}), final("Noted.")])
-    assert {:ok, %{reply: "Noted."}} = Agent.run(scope, :coach_page, "I train mornings", opts)
-    assert BurpeeTrainer.Coach.Memory.list(scope) == []
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "add", "content" => "Trains at 7:00"}
+      ])
+
+    test_pid = self()
+
+    answers = [
+      call("memory", %{
+        "target" => "user",
+        "operations" => [%{"action" => "patch", "old_text" => "7:00", "content" => "18:00"}]
+      }),
+      final("Evenings it is.")
+    ]
+
+    {:ok, pid} = Elixir.Agent.start_link(fn -> answers end)
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:request, Jason.decode!(body)})
+      Req.Test.json(conn, Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end))
+    end)
+
+    opts = [config: @config, req: Req.new(plug: {Req.Test, __MODULE__})]
+
+    assert {:ok, %{reply: "Evenings it is.", memory_written?: true}} =
+             Agent.run(scope, :coach_page, "I train evenings now", opts)
+
+    assert Enum.map(BurpeeTrainer.Coach.Memory.list(scope), & &1.text) == ["Trains at 18:00"]
+
+    assert_received {:request, first}
+    assert_received {:request, second}
+    # The prompt's snapshot stays as the turn began; the tool's answer is live.
+    snapshot = fn request -> Enum.at(request["messages"], 1)["content"] end
+    assert snapshot.(first) =~ "Trains at 7:00"
+    assert snapshot.(second) =~ "Trains at 7:00"
+    assert List.last(second["messages"])["content"] =~ "Trains at 18:00"
   end
 
-  test "the coach's reply carries what the athlete might say next, cleaned" do
-    scope = scope_fixture()
+  test "a reply that wrote nothing says so" do
+    opts = responses([final("Noted.")])
 
-    reply = %{
-      "reply" => "Thursday stays unbroken.",
-      "suggestions" => ["Make it shorter", "", "Can I do it at 7?"]
-    }
+    assert {:ok, %{memory_written?: false}} =
+             Agent.run(scope_fixture(), :coach_page, "Hi", opts)
+  end
 
+  test "a reply with anything besides the reply is rejected" do
+    reply = %{"reply" => "Thursday stays unbroken.", "suggestions" => ["Make it shorter"]}
     opts = responses([%{"choices" => [%{"message" => %{"content" => Jason.encode!(reply)}}]}])
 
-    assert {:ok,
-            %{
-              reply: "Thursday stays unbroken.",
-              suggestions: ["Make it shorter", "Can I do it at 7?"]
-            }} =
-             Agent.run(scope, :coach_page, "Thursday?", opts)
-  end
-
-  test "a reply without suggestions has none" do
-    opts = responses([final("Noted.")])
-    assert {:ok, %{suggestions: []}} = Agent.run(scope_fixture(), :coach_page, "Hi", opts)
+    assert {:error, :invalid_provider_response} =
+             Agent.run(scope_fixture(), :coach_page, "Thursday?", opts)
   end
 
   test "stops at six calls" do

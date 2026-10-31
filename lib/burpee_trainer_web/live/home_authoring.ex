@@ -12,7 +12,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     HomeWorkoutRequest,
     HomeWorkspace,
     HomeChooser,
-    HomeLive
+    HomeLive,
+    HomeWorkoutComponents,
+    NewWorkoutSteps
   }
 
   # Selected-workspace events cannot act without a persisted selection.
@@ -24,8 +26,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     do: {:noreply, socket}
 
   def handle_event("edit_current_workout", _, socket) do
-    if not is_nil(socket.assigns.home_selection) and socket.assigns.expanded? and
-         socket.assigns.authoring_stage == :idle do
+    if not is_nil(socket.assigns.home_selection) and socket.assigns.authoring_stage == :idle and
+         not socket.assigns.busy? do
       case Workouts.verify_home_selection(
              socket.assigns.current_scope,
              socket.assigns.home_selection
@@ -36,8 +38,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
           {:noreply,
            socket
            |> step({:edit_opened, source, params, "variation:#{Ecto.UUID.generate()}"})
-           |> adjustment_form("")
-           |> workout_form(params, %{})}
+           |> assign(options_open?: false, workout_parameters: params)
+           |> adjustment_form("")}
 
         _ ->
           {:noreply,
@@ -55,6 +57,66 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       )
       when not is_nil(source) and is_binary(text) do
     {:noreply, socket |> step({:instruction_changed, text}) |> adjustment_form(text)}
+  end
+
+  # While a proposal is on screen, or New's message is being written, the box holds the next
+  # message: typing changes nothing else.
+  def handle_event(
+        "change_current_edit",
+        %{"home_adjustment" => %{"instruction" => text}},
+        %{assigns: %{authoring_stage: stage}} = socket
+      )
+      when is_binary(text) and stage in [:review, :new],
+      do: {:noreply, adjustment_form(socket, text)}
+
+  # A follow-up reads against the proposal on screen, so the design keeps its place.
+  def handle_event(
+        "refine_workout",
+        %{"home_adjustment" => %{"instruction" => text}},
+        %{assigns: %{authoring_stage: :review, pending_request: %{} = base, busy?: false}} =
+          socket
+      )
+      when is_binary(text) do
+    a = socket.assigns
+
+    cond do
+      not valid_instruction?(text) ->
+        {:noreply,
+         assign(socket,
+           local_error: "Enter a change of at most 500 characters.",
+           adjustment_form: adjustment_changeset(text)
+         )}
+
+      verify_edit_selection(socket) != :ok ->
+        {:noreply,
+         assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
+
+      true ->
+        id = make_ref()
+        scope = a.current_scope
+        key = a.creation_key
+        source = a.editing_source
+        selection = a.home_selection
+        text = String.trim(text)
+
+        {:noreply,
+         socket
+         |> step({:refine_started, id, text})
+         |> adjustment_form(text)
+         |> start_async({:new_request, id}, fn ->
+           with {:ok, interpreted} <-
+                  Coach.prepare_refinement(scope, base.definition, text,
+                    max_set_reps: base.request.max_set_reps
+                  ),
+                :ok <- verified(scope, source, selection) do
+             Coach.prepare_plan(scope, text, interpreted.request,
+               workspace_key: key,
+               edit_source: source,
+               base_definition: base.definition
+             )
+           end
+         end)}
+    end
   end
 
   def handle_event(
@@ -95,18 +157,31 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
-  def handle_event("new_workout", _, socket) do
-    if socket.assigns.expanded? and socket.assigns.authoring_stage == :idle and
-         socket.assigns.home_selection do
-      current =
-        HomeWorkoutRequest.from_definition(socket.assigns.home_selection.plan.definition_json)
+  def handle_event("open_options", _, socket) do
+    a = socket.assigns
 
-      params = %{current | pace: nil}
+    if a.authoring_stage == :idle and not is_nil(a.home_selection) and not a.busy? and
+         a.expanded? and not a.chooser_open?,
+       do: {:noreply, assign(socket, options_open?: true)},
+       else: {:noreply, socket}
+  end
+
+  def handle_event("close_options", _, socket),
+    do: {:noreply, assign(socket, options_open?: false)}
+
+  # New starts from its first question, with the week's time left deciding what it offers.
+  def handle_event("new_workout", _, socket) do
+    a = socket.assigns
+
+    if a.authoring_stage == :idle and not is_nil(a.home_selection) and not a.busy? do
+      current = HomeWorkoutRequest.from_definition(a.home_selection.plan.definition_json)
+      params = %{current | pace: nil, note: "", recovery: "optional"}
 
       {:noreply,
        socket
        |> step({:new_opened, params, "creator:#{Ecto.UUID.generate()}"})
-       |> workout_form(params, %{})}
+       |> assign(options_open?: false, workout_parameters: params)
+       |> adjustment_form("")}
     else
       {:noreply, socket}
     end
@@ -117,58 +192,127 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
      socket
      |> step(:aborted)
      |> assign(swap_preview: nil)
+     |> adjustment_form("")
      |> HomeLive.assign_home()
      |> HomeWorkspace.refresh_projection()}
   end
 
-  def handle_event("change_new_workout", %{"home_workout" => attrs}, socket) do
-    if socket.assigns.authoring_stage in [:new, :editing],
-      do:
-        {:noreply,
-         socket
-         |> step(:preparation_discarded)
-         |> workout_form(socket.assigns.workout_parameters, attrs)},
-      else: {:noreply, socket}
+  # The first two questions are answered by one tap each, and the next follows.
+  def handle_event(
+        "choose_workout_value",
+        %{"field" => field, "value" => value},
+        %{assigns: %{authoring_stage: :new}} = socket
+      )
+      when (field == "burpee_type" and value in ["six_count", "navy_seal"]) or
+             (field == "pacing_style" and value in ["even", "unbroken"]) do
+    params = socket.assigns.workout_parameters
+
+    {params, next} =
+      if field == "burpee_type",
+        do: {%{params | burpee_type: value}, :style},
+        else:
+          {%{
+             params
+             | pacing_style: value,
+               max_set_reps: if(value == "even", do: nil, else: params.max_set_reps)
+           }, :duration}
+
+    {:noreply, enter_step(socket, params, next)}
   end
 
-  def handle_event("choose_workout_value", %{"field" => field, "value" => value}, socket)
-      when field in ["burpee_type", "pacing_style"] do
-    if socket.assigns.authoring_stage in [:new, :editing] do
-      attrs = Map.put(socket.assigns.workout_form.params, field, value)
+  # Duration, reps and pace move one step at a time, by swipe or by button.
+  def handle_event(
+        "step_workout_value",
+        %{"field" => field, "dir" => dir},
+        %{assigns: %{authoring_stage: :new, busy?: false}} = socket
+      )
+      when field in ["duration", "reps", "sets", "pace"] and dir in ["up", "down"] do
+    direction = String.to_existing_atom(dir)
 
-      {:noreply,
-       socket
-       |> step(:preparation_discarded)
-       |> workout_form(socket.assigns.workout_parameters, attrs)}
-    else
-      {:noreply, socket}
+    params =
+      NewWorkoutSteps.step(
+        socket.assigns.workout_parameters,
+        field,
+        direction,
+        remaining_sec(socket)
+      )
+
+    {:noreply, assign(socket, workout_parameters: params)}
+  end
+
+  def handle_event(
+        "next_new_step",
+        _,
+        %{assigns: %{authoring_stage: :new, new_step: step, busy?: false}} = socket
+      )
+      when step in [:duration, :reps, :sets, :pace] do
+    params = socket.assigns.workout_parameters
+    {:noreply, enter_step(socket, params, NewWorkoutSteps.next(step, params))}
+  end
+
+  # A message to add to the choices opens the chat on them; otherwise they go as they are.
+  def handle_event(
+        "add_new_request",
+        _,
+        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
+      ),
+      do: {:noreply, enter_step(socket, socket.assigns.workout_parameters, :request)}
+
+  # Back is one step back: from the chat to what was chosen, from a proposal to it too, and
+  # from the first question out.
+  def handle_event("back_new_step", _, %{assigns: %{editing_source: nil}} = socket) do
+    a = socket.assigns
+    params = a.workout_parameters
+
+    cond do
+      a.authoring_stage not in [:new, :review] ->
+        {:noreply, socket}
+
+      a.authoring_stage == :new and a.new_step == :type ->
+        handle_event("abort_new_workout", %{}, socket)
+
+      a.authoring_stage == :review ->
+        {:noreply, socket |> step({:new_step_reopened, :ready}) |> adjustment_form("")}
+
+      true ->
+        {:noreply, step(socket, {:new_step, NewWorkoutSteps.previous(a.new_step, params)})}
     end
   end
 
+  # Any answer can be changed; what was suggested after it is suggested again.
   def handle_event(
-        "review_new_workout",
-        %{"home_workout" => attrs},
-        %{assigns: %{authoring_stage: stage}} = socket
-      )
-      when stage in [:new, :editing] do
-    begin_plan_review(socket, attrs)
-  end
-
-  def handle_event("edit_workout_request", _, %{assigns: %{authoring_stage: :review}} = socket) do
-    params = socket.assigns.workout_parameters
-
-    {:noreply,
-     socket
-     |> step(:editing_resumed)
-     |> workout_form(params, %{})}
-  end
-
-  def handle_event(
-        "save_workout_request",
-        %{"home_workout" => attrs},
-        %{assigns: %{authoring_stage: :editing}} = socket
+        "goto_new_step",
+        %{"step" => name},
+        %{assigns: %{editing_source: nil}} = socket
       ) do
-    begin_plan_review(socket, attrs)
+    case NewWorkoutSteps.parse(name) do
+      {:ok, step} when socket.assigns.authoring_stage in [:new, :review] ->
+        {:noreply,
+         socket
+         |> step({:new_step_reopened, step})}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  # What was chosen, sent as it is, makes the first proposal.
+  def handle_event(
+        "send_new_workout",
+        params,
+        %{assigns: %{authoring_stage: :new, new_step: :ready, busy?: false}} = socket
+      )
+      when params == %{} or not is_map_key(params, "home_adjustment"),
+      do: begin_plan_review(socket, %{"note" => ""})
+
+  # With a request written after the prefix, it goes with them.
+  def handle_event(
+        "send_new_workout",
+        %{"home_adjustment" => %{"instruction" => text}},
+        %{assigns: %{authoring_stage: :new, new_step: :request, busy?: false}} = socket
+      )
+      when is_binary(text) do
+    begin_plan_review(socket, %{"note" => String.trim(text)})
   end
 
   def handle_event("select_created_workout", _, %{assigns: %{authoring_stage: :saved}} = socket) do
@@ -236,25 +380,71 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   end
 
   def handle_event(event, _, %{assigns: %{authoring_stage: :review}} = socket)
-      when event in ["confirm_workout_request", "save_review_to_library"] do
+      when event in ["run_workout_request", "save_review_to_library"] do
     a = socket.assigns
     id = make_ref()
     scope = a.current_scope
     prepared = a.pending_request
     expected = a.home_selection
-    kind = if event == "confirm_workout_request", do: :use_plan, else: :new_plan
+    kind = if event == "run_workout_request", do: :run_plan, else: :new_plan
 
     if prepared && verify_edit_selection(socket) == :ok do
       {:noreply,
        socket
        |> step({:confirm_started, id})
        |> start_async({kind, id}, fn ->
-         if kind == :use_plan,
+         if kind == :run_plan,
            do: Coach.approve_and_select_plan(scope, prepared, expected),
            else: Coach.approve_plan(scope, prepared)
        end)}
     else
       {:noreply, assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
+    end
+  end
+
+  # A row of the proposal, to change its numbers by hand; no call to the coach.
+  def handle_event(
+        "select_proposal_row",
+        %{"index" => raw},
+        %{assigns: %{authoring_stage: :review, busy?: false, pending_request: %{} = prepared}} =
+          socket
+      ) do
+    rows = socket.assigns.review_inspection_rows
+
+    with {index, ""} <- Integer.parse(to_string(raw)),
+         %{} = row <- HomeWorkoutComponents.row_at(rows, index),
+         [_ | _] = sets <- HomeWorkoutComponents.set_numbers(rows, row) do
+      {:noreply, step(socket, {:row_selected, sets, edit_steps(prepared, sets)})}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event(
+        "adjust_proposal",
+        %{"field" => field, "dir" => dir},
+        %{
+          assigns: %{
+            authoring_stage: :review,
+            busy?: false,
+            pending_request: %{} = prepared,
+            edit_sets: [_ | _] = sets
+          }
+        } = socket
+      )
+      when field in ["reps", "every"] and dir in ["-1", "1"] do
+    # The sets selected stay the ones changed, however the rows regroup after a step.
+    with {:ok, adjusted} <-
+           Coach.adjust_proposal(
+             prepared,
+             set_indices(prepared.definition, sets),
+             String.to_existing_atom(field),
+             String.to_integer(dir)
+           ) do
+      rows = prepared_inspection(adjusted)
+      {:noreply, step(socket, {:proposal_adjusted, adjusted, rows, edit_steps(adjusted, sets)})}
+    else
+      _ -> {:noreply, socket}
     end
   end
 
@@ -300,39 +490,39 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       params =
         HomeWorkoutRequest.from_request(prepared.request, socket.assigns.workout_parameters)
 
+      # What was asked now sits above the proposal; the box is empty for the next message.
       socket
       |> step({:review_prepared, id, prepared, params, prepared_inspection(prepared)})
-      |> workout_form(params, %{})
+      |> adjustment_form("")
     end
   end
 
+  # A refinement that fails speaks of the proposal, which stays as it was.
+  defp settle(
+         :new_request,
+         id,
+         {:ok, {:error, error}},
+         %{assigns: %{pending_turn: turn}} = socket
+       )
+       when is_binary(turn),
+       do: step(socket, {:review_failed, id, refinement_failure(error)})
+
+  defp settle(:new_request, id, result, %{assigns: %{pending_turn: turn}} = socket)
+       when is_binary(turn),
+       do: step(socket, {:review_failed, id, refinement_failure(result)})
+
   defp settle(:new_request, id, {:ok, {:error, error}}, socket) do
-    {message, field, field_message} = review_failure(error)
+    {message, _field, field_message} = review_failure(error)
 
-    socket =
-      step(
-        socket,
-        {:review_failed, id,
-         if(socket.assigns.editing_source && field_message, do: field_message, else: message)}
-      )
+    # Edit says the detail; New has no field to carry it, so it follows the message.
+    text =
+      cond do
+        is_nil(field_message) -> message
+        socket.assigns.editing_source -> field_message
+        true -> message <> " " <> field_message
+      end
 
-    if field do
-      changeset =
-        Ecto.Changeset.add_error(socket.assigns.workout_form.source, field, field_message)
-
-      params =
-        Map.put(
-          changeset.params || %{},
-          Atom.to_string(field),
-          socket.assigns.workout_form[field].value
-        )
-
-      assign(socket,
-        workout_form: to_form(%{changeset | action: :validate, params: params}, as: :home_workout)
-      )
-    else
-      socket
-    end
+    step(socket, {:review_failed, id, text})
   end
 
   defp settle(:new_request, id, _, socket),
@@ -343,18 +533,30 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
          "Coach unavailable. Try again later; your current workout is unchanged."}
       )
 
-  defp settle(:use_plan, id, {:ok, {:ok, selected}}, socket) do
+  # Run saves the proposal, makes it today's workout and starts it, the way Home's play does.
+  defp settle(:run_plan, id, {:ok, {:ok, selected}}, socket) do
+    socket =
+      socket
+      |> step({:plan_selected, id})
+      |> HomeWorkspace.show_selection(selected, true)
+
+    a = socket.assigns
+
+    {:noreply, socket} =
+      HomeLive.start_result(
+        socket,
+        Workouts.start_home_workout(a.current_scope, a.home_selection, a.start_client_session_id)
+      )
+
     socket
-    |> step({:plan_selected, id})
-    |> HomeWorkspace.show_selection(selected, true)
   end
 
-  defp settle(:use_plan, id, _result, socket),
+  defp settle(:run_plan, id, _result, socket),
     do:
       step(
         socket,
         {:plan_failed, id,
-         "Couldn’t use this workout. Your selection may have changed; cancel and reopen the review."}
+         "Couldn’t run this workout. Your selection may have changed; go back and try again."}
       )
 
   defp settle(:new_plan, id, {:ok, {:ok, plan}}, socket),
@@ -437,14 +639,28 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     |> adjustment_form(socket.assigns.instruction)
   end
 
-  defp workout_form(socket, params, attrs) do
-    changeset = HomeWorkoutRequest.changeset(params, attrs)
+  # A step starts from what is suggested for it, given the answers so far.
+  defp enter_step(socket, params, step) do
+    params =
+      NewWorkoutSteps.enter(params, step, socket.assigns.current_scope, remaining_sec(socket))
 
-    assign(socket,
-      workout_parameters: Ecto.Changeset.apply_changes(changeset),
-      workout_form: to_form(changeset, as: :home_workout)
-    )
+    socket
+    |> assign(workout_parameters: params)
+    |> step({:new_step, step})
   end
+
+  defp remaining_sec(%{assigns: %{slot: %{remaining_sec: seconds}}}), do: seconds
+  defp remaining_sec(_socket), do: nil
+
+  defp refinement_failure(%{code: code})
+       when code in [:provider_unavailable, :provider_timeout, :invalid_provider_response],
+       do: "Coach unavailable. Try again later; your proposal is unchanged."
+
+  defp refinement_failure(%{code: :design_workspace_changed}),
+    do: "That workout changed. Abort and open Edit again."
+
+  defp refinement_failure(_),
+    do: "That change didn't fit. Try saying it another way; your proposal is unchanged."
 
   defp review_failure(%{code: code})
        when code in [:provider_unavailable, :provider_timeout, :invalid_provider_response],
@@ -452,31 +668,31 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   defp review_failure(%{code: :note_does_not_fit}),
     do:
-      {"Your note doesn't add up with the reps and duration above. Change one, then Review again; your current workout is unchanged.",
+      {"Your note doesn't add up with the reps and duration. Change one, then send again; your current workout is unchanged.",
        :note, "This doesn't add up with the reps and duration above."}
 
   defp review_failure(%{
          context: %{field: :set_reps, actual_count: actual, expected_count: expected}
        }) do
-    {"The returned plan changed your ordered set pattern. Edit or Review again; your current workout is unchanged.",
+    {"The returned plan changed your ordered set pattern. Change something and send again; your current workout is unchanged.",
      :note, "Returned #{actual} sets; expected #{expected}. The ordered rep sequence must match."}
   end
 
   defp review_failure(%{
          context: %{field: :timed_rests, start_sec: start, duration_sec: duration}
        }) do
-    {"The returned plan missed #{duration}s at #{CreationParameters.duration_label(start)}. Try a different time or shorter pause, then Review again; your current workout is unchanged.",
+    {"The returned plan missed #{duration}s at #{CreationParameters.duration_label(start)}. Try a different time or shorter pause, then send again; your current workout is unchanged.",
      :note, "Returned plan did not meet this total pause."}
   end
 
   defp review_failure(%{context: %{field: :requested_pace_sec}}),
     do:
-      {"Returned movement time exceeds the requested duration. Edit or Review again; your current workout is unchanged.",
+      {"Returned movement time exceeds the requested duration. Change something and send again; your current workout is unchanged.",
        :pace, "Returned movement time exceeds the requested duration."}
 
   defp review_failure(_),
     do:
-      {"The returned plan did not meet your constraints. Check the sets and pauses you asked for, then Review again; your current workout is unchanged.",
+      {"The returned plan did not meet your constraints. Check the sets and pauses you asked for, then send again; your current workout is unchanged.",
        nil, nil}
 
   def discard_preparation(socket), do: step(socket, :preparation_discarded)
@@ -521,7 +737,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       {:noreply,
        socket
        |> step({:review_started, id, text})
-       |> workout_form(params, %{})
+       |> assign(workout_parameters: params)
+       |> adjustment_form("")
        |> start_async({:new_request, id}, fn ->
          with {:ok, request} <- Coach.prepare_new_request(scope, request, params.note || "") do
            Coach.prepare_plan(scope, text, request, workspace_key: key, edit_source: source)
@@ -529,7 +746,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        end)}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, workout_form: to_form(changeset, as: :home_workout))}
+        {:noreply, assign(socket, local_error: changeset_message(changeset))}
 
       {:error, :selection_changed} ->
         {:noreply,
@@ -537,6 +754,32 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
       _ ->
         {:noreply, assign(socket, local_error: "Check the reps, duration and pace.")}
+    end
+  end
+
+  defp changeset_message(changeset) do
+    case Ecto.Changeset.traverse_errors(changeset, fn {message, _} -> message end) do
+      %{pace: [message | _]} -> message <> "."
+      %{note: [message | _]} -> message <> "."
+      _ -> "Check the reps, duration and pace."
+    end
+  end
+
+  # The definition's event indices of the sets numbered `sets` (1 for the first set).
+  defp set_indices(definition, sets) do
+    definition["events"]
+    |> Enum.with_index()
+    |> Enum.filter(fn {event, _index} -> event["kind"] == "work" end)
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {{_event, index}, number} -> if number in sets, do: [index], else: [] end)
+  end
+
+  # Which steps the selected sets allow now: each is tried, as a tap would.
+  defp edit_steps(prepared, sets) do
+    indices = set_indices(prepared.definition, sets)
+
+    for field <- [:reps, :every], dir <- [-1, 1], into: %{} do
+      {{field, dir}, match?({:ok, _}, Coach.adjust_proposal(prepared, indices, field, dir))}
     end
   end
 
@@ -553,6 +796,16 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
 
   defp valid_instruction?(prompt),
     do: String.trim(prompt) != "" and String.length(prompt) <= 500 and byte_size(prompt) <= 4_000
+
+  # A design that began as New has no workout to re-check.
+  defp verified(_scope, nil, _selection), do: :ok
+
+  defp verified(scope, _source, selection) do
+    with {:ok, _} <- Workouts.verify_home_selection(scope, selection), do: :ok
+  end
+
+  defp adjustment_changeset(text),
+    do: to_form(HomeAdjustment.changeset(%HomeAdjustment{}, %{"instruction" => text}))
 
   def adjustment_form(socket, text),
     do:

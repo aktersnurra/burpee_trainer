@@ -3,6 +3,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
+  import BurpeeTrainerWeb.StudioHelpers
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
@@ -20,163 +21,147 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     %{conn: conn, view: view, user: user, selected: selected}
   end
 
-  test "New takes the workout's place under one heading, and abort brings the workout back",
+  test "New asks one question at a time; back is one step back and leaves from the first",
        %{view: view} do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
+    open_new(view)
 
-    assert has_element?(view, "h1#home-authoring-heading", "New workout")
-    refute has_element?(view, "#home-workout-hero")
-    refute has_element?(view, "#home-new-form h2")
+    # The studio takes Home's place and shows only the question being asked.
+    assert has_element?(view, "#home-studio h1#home-authoring-heading", "New workout")
+    assert has_element?(view, "#studio-step", "Which burpee?")
+    assert has_element?(view, "ol[aria-label='Question 1 of 5']")
+    refute has_element?(view, "#home-workout-hero, #home-chat-dock, #studio-thread")
+    # Back from the first question leaves; there is no separate close.
+    assert has_element?(view, "#home-request-abort[aria-label='Cancel new workout']")
+    refute has_element?(view, "#studio-back, .studio-close")
 
-    # Cancel and review sit in the action row, not inside the note's text box.
-    assert has_element?(
-             view,
-             "#home-new-form .home-review-actions #home-request-abort[aria-label]"
-           )
+    # A tap on a choice answers it; no Next, and the answered question is gone.
+    view |> element("#home-pill-burpee_type-navy_seal") |> render_click()
+    assert has_element?(view, "#studio-step", "How should the sets go?")
+    refute has_element?(view, "#home-pill-burpee_type-six_count")
+    refute has_element?(view, "#studio-next")
+    assert has_element?(view, "ol[aria-label='Question 2 of 5']")
 
-    assert has_element?(
-             view,
-             "#home-new-form .home-review-actions #home-new-review[aria-label='Review workout']"
-           )
-
-    refute has_element?(view, ".home-new-note #home-request-abort")
+    view |> element("#studio-back") |> render_click()
+    assert has_element?(view, "#studio-step", "Which burpee?")
 
     view |> element("#home-request-abort") |> render_click()
-    refute has_element?(view, "#home-authoring-heading")
-    # The workout mounts again and takes focus once the patch has landed.
+    refute has_element?(view, "#home-studio")
     assert hero_focus_target(view) == "#home-summary"
   end
 
-  test "New starts with the current workout's targets without pinning its movement pace", %{
-    conn: conn,
-    user: user,
-    selected: selected
-  } do
-    plan =
-      plan_fixture(user, %{burpee_type: "navy_seal", target_reps: 60, target_duration_sec: 1200})
+  test "each pill carries its value, since the client sends a button's own value", %{view: view} do
+    open_new(view)
 
-    {:ok, chosen} = Workouts.select_home_workout(Scope.for_user(user), selected, plan.id)
-    {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-
-    assert has_element?(view, "#home-pill-burpee_type-navy_seal[aria-pressed=true]")
-    assert has_element?(view, "#home-new-reps[value='60']")
-    assert has_element?(view, "#home_workout_duration[value='20:00']")
-    refute has_element?(view, "#home_workout_pace[value]:not([value=''])")
-
-    assert {:ok, ^chosen} =
-             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
-  end
-
-  test "New fields name their units beside the value", %{view: view} do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-
-    for {id, unit} <- [
-          {"home-new-reps", "reps"},
-          {"home_workout_duration", "min"},
-          {"home_workout_pace", "s per rep"}
-        ] do
-      assert has_element?(view, "label[for=#{id}] .input-unit", unit)
-    end
-
-    for {id, label} <- [{"home_workout_pace", "Pace"}, {"home_workout_note", "Anything else"}] do
-      assert view |> element("label[for=#{id}] .label") |> render() =~ ">#{label}<"
-    end
-
-    # Sets and pauses are said in plain words in the note; there is no syntax to learn.
-    refute has_element?(view, "#home_workout_sets, #home_workout_rests")
-    assert has_element?(view, "#home_workout_note[placeholder^='Anything else?']")
-  end
-
-  test "the computed work and recovery is a caption under Duration, with the timing rule", %{
-    view: view
-  } do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-
-    ids =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(
-        "#home-new-form input:not([type=hidden]), #home-new-form textarea, #home-workout-budget"
-      )
-      |> LazyHTML.attribute("id")
-
-    assert Enum.take(ids, 3) == ["home-new-reps", "home_workout_duration", "home-workout-budget"]
-    refute has_element?(view, "#home-workout-budget", "Timing")
-    refute has_element?(view, "#home-request-timing")
-  end
-
-  test "today's workout fades out before New comes in, and back in on Cancel", %{view: view} do
-    view |> element("#home-summary") |> render_click()
-    hero = view |> element("#home-workout-hero") |> render()
-    # The fade runs on the click, so the form waits for it instead of landing beside it.
-    refute hero =~ ~s(phx-remove=)
-    assert view |> element("#home-new-workout") |> render() =~ "home-leaving"
-    # Edit keeps the workout in view, so it does not fade it.
-    refute view |> element("#home-edit-workout") |> render() =~ "home-leaving"
-
-    view |> element("#home-new-workout") |> render_click()
-    assert has_element?(view, "#home-authoring-heading.home-enter")
-    assert has_element?(view, "#home-new-form.home-enter")
-
-    view |> element("#home-request-abort") |> render_click()
-    assert view |> element("#home-workout-hero") |> render() =~ "home-enter"
-  end
-
-  test "the selected pill follows every switch", %{view: view} do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-
-    # LiveView's client sends a clicked button's own value as "value", over phx-value-value,
-    # so each pill must carry its value or the browser sends "".
-    for field <- ~w[burpee_type pacing_style],
-        value <- ~w[six_count navy_seal even unbroken],
-        has_element?(view, "#home-pill-#{field}-#{value}") do
+    for {field, value} <- [{"burpee_type", "six_count"}, {"burpee_type", "navy_seal"}] do
       assert has_element?(view, "#home-pill-#{field}-#{value}[value=#{value}]")
     end
 
-    for type <- ~w[navy_seal six_count navy_seal six_count] do
-      view |> element("#home-pill-burpee_type-#{type}") |> render_click()
-      assert has_element?(view, "#home-pill-burpee_type-#{type}[aria-pressed=true]")
+    view |> element("#home-pill-burpee_type-six_count") |> render_click()
 
-      assert has_element?(
-               view,
-               "#home-new-form input[type=hidden][name='home_workout[burpee_type]'][value=#{type}]"
-             )
+    for value <- ~w[even unbroken] do
+      assert has_element?(view, "#home-pill-pacing_style-#{value}[value=#{value}]")
     end
   end
 
-  test "New reviews without a plan, Use saves and selects, then Start completes into History",
-       %{
-         view: view,
-         user: user,
-         selected: selected,
-         conn: conn
-       } do
-    layout = layout([[{10, 12.0, 12.0}]], "Independent new workout")
+  test "duration starts at a standard session and moves by five, reps by five, pace by half a second",
+       %{view: view} do
+    open_new(view)
+    view |> element("#home-pill-burpee_type-six_count") |> render_click()
+    view |> element("#home-pill-pacing_style-even") |> render_click()
+
+    assert has_element?(view, "#studio-step", "How long?")
+    assert has_element?(view, "#studio-duration-value", "20")
+    assert has_element?(view, ".studio-step-hint", "left this week")
+
+    view |> element("#studio-duration-up") |> render_click()
+    assert has_element?(view, "#studio-duration-value", "25")
+    view |> element("#studio-duration-down") |> render_click()
+    view |> element("#studio-duration-down") |> render_click()
+    assert has_element?(view, "#studio-duration-value", "15")
+    # The same step the swipe takes.
+    render_hook(view, "step_workout_value", %{"field" => "duration", "dir" => "up"})
+    assert has_element?(view, "#studio-duration-value", "20")
+
+    view |> element("#studio-next") |> render_click()
+    assert has_element?(view, "#studio-step", "How many reps?")
+    # With no history, the next level's landmark scaled to the duration.
+    assert has_element?(view, "#studio-reps-value", "50")
+    # What it comes to: 50 reps at 4.5 s is 3:45 moving, the rest of the 20 minutes recovery.
+    assert has_element?(view, ".studio-step-hint", "3:45 moving · 16:15 recovering")
+    view |> element("#studio-reps-up") |> render_click()
+    assert has_element?(view, "#studio-reps-value", "55")
+    assert has_element?(view, ".studio-step-hint", "4:08 moving · 15:52 recovering")
+
+    view |> element("#studio-next") |> render_click()
+    assert has_element?(view, "#studio-step", "How fast is each rep?")
+    assert has_element?(view, "#studio-pace-value", "4.5")
+    view |> element("#studio-pace-up") |> render_click()
+    assert has_element?(view, "#studio-pace-value", "5.0")
+    assert has_element?(view, ".studio-step-hint", "4:35 moving · 15:25 recovering")
+
+    view |> element("#studio-next") |> render_click()
+
+    # The last screen is what was chosen: send it as it is, or add a request.
+    assert has_element?(view, "#studio-step", "Ready?")
+    assert has_element?(view, "#studio-row-duration .studio-summary-value", "20 min")
+    assert has_element?(view, "#studio-row-pace .studio-summary-value", "5.0 s per rep")
+    assert has_element?(view, "#studio-create", "Create workout")
+    refute has_element?(view, "#home-chat-dock")
+
+    # Adding a request opens the chat, empty: it is for a request only, not the answers again.
+    view |> element("#studio-add-request") |> render_click()
+    assert has_element?(view, "#studio-thread", "Anything else")
+    assert has_element?(view, "#home-edit-instruction[placeholder='Additional request']")
+
+    assert view
+           |> element("#home-edit-instruction")
+           |> render()
+           |> LazyHTML.from_fragment()
+           |> LazyHTML.text()
+           |> String.trim() == ""
+
+    # It may be sent without a word, so Send is ready.
+    assert has_element?(view, "#home-chat-dock #home-edit-send.composer-send-ready")
+
+    # Back is one step back: to what was chosen.
+    view |> element("#studio-back") |> render_click()
+    assert has_element?(view, "#studio-create")
+  end
+
+  test "an earlier answer can be changed, and what followed it is suggested again", %{view: view} do
+    walk(view)
+    assert has_element?(view, "#studio-request", "20 min")
+
+    view |> element("#studio-row-duration") |> render_click()
+    assert has_element?(view, "#studio-step", "How long?")
+    refute has_element?(view, "#home-chat-dock")
+
+    view |> element("#studio-duration-down") |> render_click()
+    view |> element("#studio-next") |> render_click()
+    assert has_element?(view, "#studio-reps-value", "40")
+  end
+
+  test "New is sent as it is, a proposal comes back, and Run saves, selects and starts it",
+       %{view: view, user: user, selected: selected, conn: conn} do
+    layout = layout([[{50, 5.0, 5.0}, {50, 5.0, 5.0}]], "Independent new workout")
 
     counter = fake_authoring_provider(%{"workout_layout" => layout})
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
     count = Repo.aggregate(WorkoutPlan, :count)
-    view |> element("#home-pill-pacing_style-even") |> render_click()
-    view |> form("#home-new-form", home_workout: %{reps: 10, duration: "2:00"}) |> render_submit()
-    render_async(view)
 
-    assert has_element?(view, "#home-new-form[data-stage=review]")
-    assert has_element?(view, "#home-new-reps[disabled][value='10']")
+    walk(view, style: "unbroken", reps: 100, minutes: 20, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+
+    assert has_element?(view, "#home-edit-review #studio-proposal", "Independent new workout")
+    assert has_element?(view, "#home-edit-review #home-chat-actions #home-request-run", "Run")
+    # The camera and warmup choices are Home's; the chat has none of its own.
+    refute has_element?(view, "#home-studio #home-start-camera, #home-studio #home-start-warmup")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
 
-    view |> element("#home-request-confirm") |> render_click()
-    render_async(view)
-    refute has_element?(view, "#home-new-saved")
-    assert has_element?(view, "#home-action")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
+    view |> element("#home-request-run") |> render_click()
+    {path, _flash} = assert_redirect(view, 2_000)
+    assert "/session/" <> id = path
 
     [saved] =
       Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == layout["name"]))
@@ -184,22 +169,13 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert saved.state == :published
     assert Repo.aggregate(WorkoutPlan, :count) == count + 1
 
-    assert {:ok, unchanged} =
+    # It is today's workout, and the session started is its own.
+    assert {:ok, chosen} =
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
-    assert unchanged.plan.id == saved.id
-    refute unchanged.plan.id == selected.plan.id
+    assert chosen.plan.id == saved.id
+    refute chosen.plan.id == selected.plan.id
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-
-    [token] =
-      view
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-action")
-      |> LazyHTML.attribute("phx-value-client_session_id")
-
-    {:error, {:live_redirect, %{to: "/session/" <> id}}} =
-      view |> element("#home-action") |> render_click(%{"client_session_id" => token})
 
     session = Repo.get!(WorkoutSession, String.to_integer(id))
     assert session.plan_id == saved.id
@@ -207,8 +183,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     render_hook(runner, "save_session", %{
       "workout_session" => %{
-        "burpee_count_actual" => 10,
-        "duration_sec_actual" => 120,
+        "burpee_count_actual" => 100,
+        "duration_sec_actual" => 1200,
         "client_session_id" => session.client_session_id
       },
       "tracking" => %{"enabled" => false, "trust" => "disabled", "cadence_ms" => []}
@@ -249,44 +225,32 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
           )
       })
 
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-    view |> element("#home-pill-pacing_style-unbroken") |> render_click()
+    walk(view, style: "unbroken", reps: 140, minutes: 20, pace_ups: 1)
 
-    view
-    |> form("#home-new-form",
-      home_workout: %{
-        reps: 140,
-        duration: "20:00",
-        pace: "5.0",
-        note: "A minute's break at 11:00 and 40 seconds at 18:00"
-      }
-    )
-    |> render_submit()
+    request(view, "A minute's break at 11:00 and 40 seconds at 18:00")
 
-    render_async(view)
+    render_async(view, 2_000)
     assert Agent.get(counter, & &1.calls) == ["workout_request", "workout_layout"]
-    assert has_element?(view, "#home-new-form[data-stage=review]")
-    assert has_element?(view, "#home-new-review-inspection #home-inspection")
-    assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
+    assert has_element?(view, "#studio-proposal #home-inspection")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "1:00")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "40s")
-    assert has_element?(view, "#home-new-review-pauses", "Pauses: 60s at 11:00")
-    assert has_element?(view, "#home-new-review-pauses", "40s at 18:00")
-    assert has_element?(view, "#home_workout_note[disabled]", "40 seconds at 18:00")
+    assert has_element?(view, "#home-edit-review-pauses", "Pauses: 60s at 11:00")
+    assert has_element?(view, "#home-edit-review-pauses", "40s at 18:00")
 
     first_group =
       view
       |> render()
       |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-new-review-inspection .home-group-toggle")
+      |> LazyHTML.query("#studio-proposal .home-group-toggle")
 
     [group_id | _] = LazyHTML.attribute(first_group, "id")
     view |> element("##{group_id}") |> render_click()
     assert has_element?(view, "##{group_id}[aria-expanded=true]")
-    assert has_element?(view, "#home-inspection .home-prescription-rest", "60s")
+    assert has_element?(view, "#home-inspection .home-prescription-rest", "1:00")
 
     view |> element("#home-request-save") |> render_click()
-    render_async(view)
+    render_async(view, 2_000)
+    assert has_element?(view, "#home-new-saved", "Minute blocks")
 
     [saved] =
       Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == "Minute blocks"))
@@ -302,6 +266,45 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
     assert unchanged.plan.id == selected.plan.id
+  end
+
+  test "an unbroken workout can limit the reps in a set, and the coach is told", %{view: view} do
+    quarters = List.duplicate({25, 5.0, 5.0}, 4)
+    counter = fake_authoring_provider(%{"workout_layout" => layout([quarters], "Quarter sets")})
+
+    walk(view, style: "unbroken", reps: 100, minutes: 20, max_set: 25, pace_ups: 1)
+    assert has_element?(view, "#studio-row-sets .studio-summary-value", "Up to 25")
+    create(view)
+    render_async(view, 2_000)
+
+    assert has_element?(view, "#studio-proposal", "Quarter sets")
+    assert [body] = Agent.get(counter, & &1.bodies)
+    assert body =~ "No set may have more than 25 reps"
+  end
+
+  test "a layout that goes past the limit is refused after its one correction", %{view: view} do
+    halves = List.duplicate({50, 5.0, 5.0}, 2)
+    counter = fake_authoring_provider(%{"workout_layout" => layout([halves], "Half sets")})
+
+    walk(view, style: "unbroken", reps: 100, minutes: 20, max_set: 25, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+
+    assert Agent.get(counter, & &1.calls) == ["workout_layout", "workout_layout"]
+    refute has_element?(view, "#home-request-run")
+    assert has_element?(view, "#home-adjustment-error")
+    # The choices are still there to change.
+    assert has_element?(view, "#studio-row-sets .studio-summary-value", "Up to 25")
+  end
+
+  test "an even beat has no set size to ask", %{view: view} do
+    open_new(view)
+    view |> element("#home-pill-burpee_type-six_count") |> render_click()
+    view |> element("#home-pill-pacing_style-even") |> render_click()
+    view |> element("#studio-next") |> render_click()
+    view |> element("#studio-next") |> render_click()
+    assert has_element?(view, "#studio-step", "How fast is each rep?")
+    assert has_element?(view, "ol[aria-label='Question 5 of 5']")
   end
 
   defp layout(phases, name) do
@@ -321,40 +324,36 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     }
   end
 
-  test "the New form's note reaches the coach alongside the structured fields", %{view: view} do
+  test "the message reaches the coach alongside the chosen values", %{view: view} do
     counter =
       fake_authoring_provider(%{
         "workout_request" => %{
           "burpee_type" => "six_count",
           "target_reps" => 10,
-          "target_duration_sec" => 120,
-          "pacing_style" => "even",
-          "recovery" => "optional",
+          "target_duration_sec" => 300,
+          "pacing_style" => "unbroken",
+          "recovery" => "required",
           "timed_rests" => [],
-          "requested_pace_sec" => nil,
+          "requested_pace_sec" => 4.5,
           "set_reps" => []
         },
-        "workout_layout" => layout([[{10, 12.0, 12.0}]], "Noted new workout")
+        "workout_layout" => layout([[{5, 4.5, 4.5}, {5, 4.5, 4.5}]], "Noted new workout")
       })
 
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
+    walk(view, style: "unbroken", reps: 10, minutes: 5)
+    view |> element("#studio-add-request") |> render_click()
 
     assert has_element?(
              view,
-             "#home-new-form textarea[name='home_workout[note]'][maxlength='300']"
+             "#home-edit-form textarea[name='home_adjustment[instruction]'][maxlength='300']"
            )
 
-    view |> element("#home-pill-pacing_style-even") |> render_click()
-
     view
-    |> form("#home-new-form",
-      home_workout: %{reps: 10, duration: "2:00", note: "slow and steady"}
-    )
+    |> form("#home-edit-form", home_adjustment: %{instruction: "slow and steady"})
     |> render_submit()
 
-    render_async(view)
-    assert has_element?(view, "#home-new-form[data-stage=review]")
+    render_async(view, 2_000)
+    assert has_element?(view, "#home-edit-review #studio-proposal")
     # The coach reads the note for sets and pauses, then plans with it.
     assert [extraction, layout] = Agent.get(counter, & &1.bodies)
 
@@ -364,6 +363,22 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
              |> Map.fetch!("messages")
              |> Enum.any?(&(&1["content"] =~ "slow and steady"))
     end
+  end
+
+  test "reps stop where the movement alone would no longer fit the duration", %{view: view} do
+    counter = fake_authoring_provider(%{})
+    open_new(view)
+    view |> element("#home-pill-burpee_type-six_count") |> render_click()
+    view |> element("#home-pill-pacing_style-unbroken") |> render_click()
+    step_to(view, "duration", 5)
+    view |> element("#studio-next") |> render_click()
+    # 300 s at 4.5 s a rep holds 66 reps; in steps of five from 15, 65 is the last.
+    press_while_possible(view, "#studio-reps-up")
+    assert has_element?(view, "#studio-reps-value", "65")
+    assert has_element?(view, "#studio-reps-up[disabled]")
+
+    view |> element("#studio-next") |> render_click()
+    assert Agent.get(counter, & &1.calls) == []
   end
 
   defp fake_authoring_provider(responses) do

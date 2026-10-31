@@ -303,9 +303,11 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_toggle",
              "coach_message_change",
              "coach_message",
-             "coach_quick_reply",
              "coach_goal_confirm",
-             "coach_goal_dismiss"
+             "coach_goal_dismiss",
+             "coach_memory_toggle",
+             "coach_memory_close",
+             "coach_memory_forget"
            ] do
     if socket.assigns.workspace_screen == :home,
       do: HomeCoach.handle_event(event, params, socket),
@@ -318,13 +320,25 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, %{assigns: %{busy?: true, authoring_stage: stage}} = socket)
       when event in [
              "abort_new_workout",
-             "change_new_workout",
+             "back_new_step",
+             "goto_new_step",
              "choose_workout_value",
              "change_current_edit"
            ] and
              stage in [:new, :editing] do
     handle_event(event, params, HomeAuthoring.discard_preparation(socket))
   end
+
+  # Back, or a different answer, works while the coach is on a follow-up, and takes the
+  # proposal with it.
+  def handle_event(
+        event,
+        params,
+        %{assigns: %{busy?: true, authoring_stage: :review, pending_turn: turn}} = socket
+      )
+      when event in ["abort_new_workout", "back_new_step", "goto_new_step"] and
+             is_binary(turn),
+      do: handle_event(event, params, HomeAuthoring.discard_preparation(socket))
 
   def handle_event(_event, _params, %{assigns: %{busy?: true}} = socket), do: {:noreply, socket}
 
@@ -354,20 +368,28 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "abort_new_workout",
+             "add_new_request",
+             "adjust_proposal",
+             "back_new_step",
              "back_to_workout_request",
              "change_adjustment",
              "change_current_edit",
-             "change_new_workout",
              "choose_workout_value",
+             "close_options",
              "confirm_workout_request",
              "edit_current_workout",
-             "edit_workout_request",
+             "goto_new_step",
              "new_workout",
+             "next_new_step",
+             "open_options",
+             "refine_workout",
              "review_current_edit",
-             "review_new_workout",
-             "save_workout_request",
+             "run_workout_request",
              "save_review_to_library",
              "select_created_workout",
+             "select_proposal_row",
+             "send_new_workout",
+             "step_workout_value",
              "submit_home_action"
            ] do
     HomeAuthoring.handle_event(event, params, socket)
@@ -490,6 +512,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         socket
         |> assign(
           home_facts: facts,
+          home_bests: BurpeeTrainer.Coach.RepCeiling.recent_bests(socket.assigns.current_scope),
           home_insight: day_insight(socket.assigns.current_scope, now),
           home_state: state,
           home_primary_action: BurpeeTrainer.Home.State.primary_action(state),
@@ -537,7 +560,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when kind in [
              :new_request,
              :new_plan,
-             :use_plan,
+             :run_plan,
              :home_revision_request,
              :home_revision
            ] do

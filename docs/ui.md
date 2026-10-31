@@ -9,6 +9,15 @@
 ## 1. Design Principles
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
+- **Show what is needed, reveal the rest when asked.** A screen starts with the one thing to do;
+  what it can also do waits until the athlete asks. Swap is a swipe right (the drawer); Edit and
+  New wait behind the opened workout, a swipe up or its handle. Hiding a control is only right
+  when asking is cheap and findable: the handle on an opened workout is the visible way to ask,
+  the swipes the shortcut.
+- **For someone who knows it.** The athlete knows the app: no hint lines, no suggested replies,
+  no subtitles that explain a choice, and no number said twice on one screen. Density beats
+  explanation: a workout's shape reads in one line (`5 × 3 · every 8s · 4:30 rest`), with their
+  best beside it.
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
@@ -100,6 +109,9 @@ Home and Progress use three sizes, as tokens in `assets/css/adaptive_home.css`:
 | `--text-small`   | 13px | labels, captions, goals, dates, chart scales (muted)          |
 
 `--text-title` (34px, 600) is reserved for Home's one title: today's workout or the result.
+Two more sizes exist, only where a screen is built around one thing: `--text-heading` (20px,
+600) names a card or a choice, and `--text-hero` (64px, 600) is the one value you are setting.
+Nothing else needs a size of its own; the tokens live in `assets/css/app.css`.
 Numbers that summarise something (streak, level, latest and best density, a session's reps
 and time) are a display-size number with a body word beside it on one baseline.
 
@@ -110,18 +122,18 @@ Letter-spacing: `-0.02em` on headings/large numbers. `0.06em` on badge text (upp
 ## 4. Spacing & Radius
 
 ```
-Page horizontal padding:  16px mobile, 24px tablet+
-Section gap:              24px (space-y-6)
-Card internal padding:    20px
-Component gap inside card: 16px
+--gutter:          30px   the one edge: Home, Progress, the studio and its dock share it
+Section gap:       24px (space-y-6)
+Card padding:      20px
+Gap inside a card: 16px
 
---radius-card:   10px
---radius-badge:  999px (pill)
---radius-button: 8px
---radius-input:  6px
+--radius-surface:  20px   every card, box, sheet, drawer corner and the composer
+--radius-badge:    999px  pills, chips and round buttons
+--radius-input:    6px
 ```
 
----
+A screen never shifts its left edge: the studio, the drawer's list and the docked box start where
+Home's content does (`--gutter`), and a docked box is as wide as the column, not the screen.
 
 ## 4a. Lines and edges
 
@@ -131,16 +143,57 @@ Component gap inside card: 16px
 
 ## 4a1. The composer
 
-Every box you write words in (Edit's instruction, a message to the coach, New's "Anything
-else", a session's note) is the composer: one soft card (`--color-base-200`, a
-`--color-base-border` edge, 18px radius, a faint shadow) holding the text and its actions.
-Its placeholder names it; the label stays for screen readers. Cancel (x-mark) sits at its
-bottom left, Send at its bottom right: a small square with an arrow up, grey until there is
-text, then ink (New's Review is always ink, since its note is optional; once the workout is
-proposed, the review's own actions take over). Its border darkens while focused, so the text draws no ring of its own.
-Suggested words (Edit's common changes, the coach's predicted replies) are quiet chips
-under the card, and one tap sends them. Classes: `.composer`, `.composer-bar`,
-`.composer-icon`, `.composer-send`, `.composer-suggestions`, `.composer-suggestion`.
+Every box you write words in (Edit's follow-ups, a request for New, a message to the coach) is the
+composer: one rounded line (`--color-base-200`, a `--color-base-border` edge, `--radius-surface`,
+a faint shadow) that grows with its text up to nine lines, the send key inside its right edge.
+Its send key is a 44px target. Its placeholder names it; the label stays for screen readers. Send is a return arrow, grey until
+there is something to send, then ink (always ink where an empty send is fine, as New's request);
+while the coach works it is a small square. Its border darkens while focused, so the text draws
+no ring of its own. There are no suggested words above it. Classes: `.composer`,
+`.composer-bar`, `.composer-send`, `.composer-stop`.
+
+A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds it,
+fixed at the bottom of the screen above the home indicator, and the `ChatDock` hook
+lifts it above the iPhone keyboard. A spacer (`.chat-dock-spacer`) keeps the last line clear of
+it. Your messages are soft bubbles on the right (`.studio-bubble`, `.coach-exchange-you`); new
+lines rise in rather than jump.
+
+## 4a1a. Swipes, the drawer and the studio
+
+Home has no Edit, Swap or New buttons. A swipe right opens the swap drawer (the page slides
+right and the workout list takes the space; `#home-page` moves with `left`, never a transform).
+Edit and New are for an athlete who has opened the workout and is not happy with it: a swipe up
+inside the opened workout opens their sheet, titles only. An opened workout has a handle at its
+bottom edge (`#home-grab`, the same sheet); there are no hint lines. The sheet also lists Swap. Edit and New are the studio, a full-screen chat on the same page
+and gutter as Home:
+
+- **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is
+  one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
+  covers part of Home rather than replacing it. Where a screen's own head leads back (Progress's
+  week strip), that stays.
+- **Messages**: the coach's plain on the left, yours in soft bubbles on the right. A workout is a
+  card: its name (`--text-heading`), minutes and reps as chips, why, then the table in body size.
+  The card needs no label; what it is, the sentence before it says. A proposal is marked against
+  the one it replaced (Edit's first, against the workout): a changed chip has a clay ring, a
+  changed cell the clay underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
+- **Numbers by hand**: a tap on a set's row of the proposal selects it (a soft row) and opens
+  `.studio-hand-edit` under the card: the reps and the beat, each with 44px round steppers. A step
+  that cannot fit is disabled; the rests are fitted again, so the length holds.
+- **One question at a time** (New): centred, progress dots above, the question at
+  `--text-display`, a choice as a card to tap (it answers and moves on), a value as a card you
+  swipe with a round button either side (`.studio-stepper`, its number `--text-hero`) and a Next.
+- **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
+  filled ink pill per view is the way on: Run, Create workout, Next), where the rest of the app
+  uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio
+  has no toggles of its own.
+
+A screen's seldom-used extra is an icon beside what it belongs to, opening a sheet (`.home-sheet`,
+`.home-sheet-backdrop`, a grip, closed by the backdrop or Escape): the coach's memory is a bookmark
+beside its note, never a section of the page.
+
+Everything rises in with `home-enter` or `studio-in`, both `--motion-settle`; reduced motion removes
+every animation here.
+
 - Meta never joins unlike things with middle dots; each goal is its own line.
 
 ## 4a2. Actions
@@ -155,7 +208,8 @@ under the card, and one tap sends them. Classes: `.composer`, `.composer-bar`,
   adjustments-horizontal filters, chevron-down loads more.
 - Words stay only where they are the content or an icon would be ambiguous: picks (types,
   levels, styles), tabs (period, Workouts and Videos), the coach's predicted replies, and
-  "Sign in with Pocket ID".
+  "Sign in with Pocket ID". The studio (4a1a) is the one place actions are words, since it is a
+  conversation; Home's play is still a play mark, and means the same as the studio's Run.
 - A view switch is one icon at the end of its heading showing the view it leads to, and
   it turns into the other when tapped: list-bullet shows the sessions, chart-bar the
   chart; calendar-days shows a week's days, squares-2x2 the weeks.

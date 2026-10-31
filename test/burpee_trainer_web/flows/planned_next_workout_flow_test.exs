@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.Flows.PlannedNextWorkoutFlowTest do
   use BurpeeTrainerWeb.ConnCase, async: false
   use Oban.Testing, repo: BurpeeTrainer.Repo, engine: Oban.Engines.Lite
   import Phoenix.LiveViewTest
+  import BurpeeTrainerWeb.StudioHelpers
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Workouts, Repo}
   alias BurpeeTrainer.Accounts.Scope
@@ -100,10 +101,10 @@ defmodule BurpeeTrainerWeb.Flows.PlannedNextWorkoutFlowTest do
     {:ok, home, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     assert has_element?(home, "#home-summary", before.plan.name)
     home |> element("#home-summary") |> render_click()
-    home |> element("#home-title-action") |> render_click()
+    open_swap(home)
     {:ok, editor, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     editor |> element("#home-summary") |> render_click()
-    editor |> element("#home-edit-workout") |> render_click()
+    open_edit(editor)
 
     editor
     |> form("#home-edit-form", home_adjustment: %{instruction: "Add five reps"})
@@ -125,7 +126,7 @@ defmodule BurpeeTrainerWeb.Flows.PlannedNextWorkoutFlowTest do
     assert has_element?(home, "#home-alternative-plan-#{plan.id}-select[aria-current=true]")
 
     assert has_element?(editor, "#home-edit-instruction", "Add five reps")
-    assert has_element?(editor, "#home-summary", before.plan.name)
+    assert has_element?(editor, "#studio-source", before.plan.name)
     editor |> element("#home-request-abort") |> render_click()
     assert has_element?(editor, "#home-summary", plan.name)
   end

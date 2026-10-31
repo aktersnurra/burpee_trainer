@@ -6,9 +6,13 @@ defmodule BurpeeTrainer.ProgressGauges do
     1. its active goal with the nearest date (`:goal`), with its course when one is honest
        to show (`GoalCourse.project/4`);
     2. a goal reached in the last week (`:reached`), with the next goal;
-    3. three or more measured sessions: the best (`:best`), with the next goal;
-    4. one or two measured sessions: the first as a starting point (`:first`);
+    3. a measured 20-minute session: the best (`:best`), with the next goal;
+    4. measured sessions, none of 20 minutes: the first as a starting point (`:first`);
     5. nothing measured (`:none`).
+
+  Each gauge with a number also carries the next level above its best (`next_level`: the
+  level and the reps it needs) and how even the reps were in the latest camera-tracked
+  session of its type (`evenness`, 0–100), when there is one.
 
   A new goal set after one is reached leads at once. Best reps toward a goal are
   `Insights.Metrics.goal_best/2`, the figure the coach's summary uses.
@@ -19,7 +23,6 @@ defmodule BurpeeTrainer.ProgressGauges do
 
   @types [:six_count, :navy_seal]
   @reached_days 7
-  @best_after 3
 
   @type gauge :: %{
           required(:kind) => atom(),
@@ -35,9 +38,35 @@ defmodule BurpeeTrainer.ProgressGauges do
       typed_goals = Enum.filter(goals, &(&1.burpee_type == type))
       typed = Enum.filter(measured, &(&1.burpee_type == type))
 
-      active(typed_goals, sessions, typed, today) ||
-        reached(typed_goals, sessions, today, timezone) ||
-        without_goal(type, typed, sessions, today)
+      (active(typed_goals, sessions, typed, today) ||
+         reached(typed_goals, sessions, today, timezone) ||
+         without_goal(type, typed, sessions, today))
+      |> detail(typed)
+    end
+  end
+
+  defp detail(%{kind: :none} = gauge, _typed), do: gauge
+
+  # A first session that was not 20 minutes says nothing about a level's reps per 20 minutes.
+  defp detail(%{kind: :first} = gauge, typed),
+    do: Map.merge(gauge, %{next_level: nil, evenness: evenness(typed)})
+
+  defp detail(gauge, typed) do
+    best = Map.get(gauge, :best) || Map.get(gauge, :reps) || 0
+
+    Map.merge(gauge, %{
+      next_level: BurpeeTrainer.Levels.next_landmark(gauge.burpee_type, best),
+      evenness: evenness(typed)
+    })
+  end
+
+  defp evenness(typed) do
+    typed
+    |> Enum.filter(&is_float(Map.get(&1, :pace_consistency)))
+    |> Enum.max_by(& &1.completed_at, DateTime, fn -> nil end)
+    |> case do
+      nil -> nil
+      session -> round(session.pace_consistency * 100)
     end
   end
 
@@ -86,14 +115,15 @@ defmodule BurpeeTrainer.ProgressGauges do
 
   defp without_goal(type, [], _sessions, _today), do: %{kind: :none, burpee_type: type}
 
-  defp without_goal(type, typed, _sessions, _today) when length(typed) < @best_after do
-    first = Enum.min_by(typed, & &1.completed_at, DateTime)
-    %{kind: :first, burpee_type: type, reps: first.burpee_count_actual}
-  end
+  defp without_goal(type, typed, sessions, today) do
+    case Metrics.goal_best(sessions, type) do
+      0 ->
+        first = Enum.min_by(typed, & &1.completed_at, DateTime)
+        %{kind: :first, burpee_type: type, reps: first.burpee_count_actual}
 
-  defp without_goal(type, _typed, sessions, today) do
-    best = Metrics.goal_best(sessions, type)
-    %{kind: :best, burpee_type: type, best: best, next: NextGoal.for_best(type, best, today)}
+      best ->
+        %{kind: :best, burpee_type: type, best: best, next: NextGoal.for_best(type, best, today)}
+    end
   end
 
   defp course(goal, typed, today) do

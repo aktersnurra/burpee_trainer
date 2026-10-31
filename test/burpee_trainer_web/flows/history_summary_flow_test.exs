@@ -109,18 +109,22 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              BurpeeTrainer.Goals.list(Scope.for_user(user))
   end
 
-  test "after the first workout, its result is the starting point", %{conn: conn, user: user} do
+  test "after the first workout, its result is the best, with the next level it is short of",
+       %{conn: conn, user: user} do
     free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 110})
     {:ok, view, _} = live(conn, ~p"/progress")
 
     assert has_element?(
              view,
-             "#progress-gauge-six_count[data-kind=first] .progress-gauge-number",
+             "#progress-gauge-six_count[data-kind=best] .progress-gauge-number",
              "110"
            )
 
-    assert has_element?(view, "#progress-gauge-six_count", "First session")
-    refute has_element?(view, "#progress-set-goal-six_count")
+    assert has_element?(
+             view,
+             "#progress-gauge-six_count .progress-gauge-detail",
+             "1D at 150 · 40 to go"
+           )
   end
 
   test "the streak counts weeks in a row at the target, this one once it is met", %{
@@ -238,29 +242,63 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert busy =~ "Sending to the coach"
   end
 
-  test "what the coach noted or forgot reads in the thread, after the exchange that caused it",
+  test "what the coach noted or updated reads in the thread, after the exchange that caused it",
        %{conn: conn, user: user} do
     scope = Scope.for_user(user)
     free_form_session_fixture(user, %{duration_sec_actual: 1_200})
 
     {:ok, _} =
-      BurpeeTrainer.Coach.Memory.apply_ops(scope, [%{"op" => "add", "text" => "Trains at 7:00"}])
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "add", "content" => "Trains at 7:00"}
+      ])
 
     {:ok, _} = BurpeeTrainer.Coach.Exchange.record(scope, "I train evenings now", "18:00 then.")
-    [old] = BurpeeTrainer.Coach.Memory.list(scope)
 
     {:ok, _} =
-      BurpeeTrainer.Coach.Memory.apply_ops(scope, [
-        %{"op" => "replace", "id" => old.id, "text" => "Trains at 18:00"}
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "patch", "old_text" => "7:00", "content" => "18:00"}
       ])
 
     {:ok, view, _} = live(conn, ~p"/")
     html = render(view)
     {said, _} = :binary.match(html, "I train evenings now")
-    {noted, _} = :binary.match(html, "Noted: Trains at 18:00")
-    {forgot, _} = :binary.match(html, "Forgot: Trains at 7:00")
-    assert said < noted and said < forgot
+    {updated, _} = :binary.match(html, "Updated: Trains at 18:00")
+    assert said < updated
+    # A patch reads once, as updated, not as a forget and a note.
+    refute html =~ "Forgot: Trains at 7:00"
     assert has_element?(view, "#home-coach-thread .coach-memory[data-kind=noted] .hero-bookmark")
+  end
+
+  test "what the coach remembers is an icon that opens a sheet by part, and an entry can be removed",
+       %{conn: conn, user: user} do
+    scope = Scope.for_user(user)
+
+    {:ok, _} =
+      BurpeeTrainer.Coach.Memory.write(scope, "user", [
+        %{"action" => "add", "content" => "Trains at 7:00"}
+      ])
+
+    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
+    {:ok, view, _} = live(conn, ~p"/")
+    refute has_element?(view, "#home-coach-memory")
+
+    view
+    |> element("#home-coach-memory-toggle[aria-label='What the coach remembers']")
+    |> render_click()
+
+    assert has_element?(view, "#home-coach-memory-toggle[aria-expanded=true]")
+    assert has_element?(view, "#home-coach-memory[role=dialog]")
+    assert has_element?(view, "#home-coach-memory-user", "Trains at 7:00")
+    assert has_element?(view, "#home-coach-memory-memory", "Nothing yet.")
+
+    [entry] = BurpeeTrainer.Coach.Memory.list(scope)
+    view |> element("#home-coach-memory-forget-#{entry.id}") |> render_click()
+    assert BurpeeTrainer.Coach.Memory.list(scope) == []
+    refute has_element?(view, "#home-coach-memory-entry-#{entry.id}")
+
+    # Nothing left to remember: the sheet and the icon go with it.
+    refute has_element?(view, "#home-coach-memory-toggle")
+    refute has_element?(view, "#home-coach-memory")
   end
 
   defp text(view, selector),

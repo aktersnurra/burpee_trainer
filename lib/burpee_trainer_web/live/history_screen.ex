@@ -4,7 +4,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
 
-  alias BurpeeTrainer.Coach.Progression
   alias BurpeeTrainer.{Goals, History, Workouts}
   alias BurpeeTrainerWeb.{HomeHistoryComponents, HomeWorkoutComponents}
 
@@ -30,7 +29,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_expanded: MapSet.new(),
       history_points: %{six_count: [], navy_seal: []},
       history_summary: History.summary([]),
-      history_performance: %{},
       history_loaded_ids: [],
       history_loaded_count: 0,
       history_available?: false,
@@ -314,8 +312,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       |> assign(
         history_available?: history_available?,
         history_gauges: gauges(a.current_scope, all_sessions, now),
-        history_performance:
-          Map.new([:six_count, :navy_seal], &{&1, Progression.decide(all_sessions, &1, now)}),
         history_weeks: weeks,
         history_week_start: selected_week,
         history_week_days: days,
@@ -346,8 +342,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
           history_week_days: [],
           history_streak: 0,
           history_points: %{six_count: [], navy_seal: []},
-          history_summary: History.summary([]),
-          history_performance: %{}
+          history_summary: History.summary([])
         )
         |> stream(:history_sessions, [], reset: true)
     end

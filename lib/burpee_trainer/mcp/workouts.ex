@@ -12,7 +12,7 @@ defmodule BurpeeTrainer.Mcp.Workouts do
   alias BurpeeTrainer.PlanCompiler
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
 
-  @request_keys ~w[burpee_type target_reps target_duration_sec pacing_style recovery timed_rests requested_pace_sec set_reps]
+  @request_keys ~w[burpee_type target_reps target_duration_sec pacing_style recovery timed_rests requested_pace_sec set_reps max_set_reps]
   @layout_keys ~w[name rationale phases]
 
   def keys, do: @request_keys ++ @layout_keys

@@ -20,7 +20,7 @@
 | `BurpeeTrainer.Coach.RepCeiling` | The most reps the planner may plan, designed or picked: 10% above the recent best, or the next level without a recent session |
 | `BurpeeTrainer.Coach.{Selector, SelectionRationale}` | Plans a slot with a decision model first (pick a fitting workout or `create_new`, then the coach designs one), and the template rationale for a picked workout |
 | `BurpeeTrainer.Coach.{Voice, Rationale}` | The one athlete-facing voice every prompt starts with, and the check the planner tools apply to a rationale before it reaches Home |
-| `BurpeeTrainer.Coach.{Memory, Memory.Ops, MemoryJob, PlanNextWorkoutJob}` | The coach's notes about the owner (one fact per row, guarded by `Memory.Ops`, shared with Claude), the job that keeps them after an exchange or session, and the job that plans the next workout (never replacing a slot the owner or Claude planned: `planned_by`) |
+| `BurpeeTrainer.Coach.{Memory, Memory.Ops, MemoryJob, PlanNextWorkoutJob}` | The coach's memory of the owner, kept as the Hermes agent keeps its own: two bounded parts (`user`, `memory`), written by the memory tool (`Coach.Tools.Memory`, shared with Claude) in all-or-nothing batches checked by `Memory.Ops`, read as a frozen snapshot each turn (`docs/specs/2026-10-30-coach-memory-design.md`); the background review after a session or a turn that wrote nothing, and the job that plans the next workout (never replacing a slot the owner or Claude planned: `planned_by`) |
 | `BurpeeTrainer.Coach.{Summary, SummaryJob}` | The owner's two-sentence progress summary (validated against metrics, deterministic fallback) and the job that refreshes it after a completion or a confirmed goal, and when the app opens with a summary from an earlier week |
 | `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`, and `decide/3` for the Decisions API) and the per-call ledger with daily budgets for automated and owner-started calls |
 | `BurpeeTrainer.Coach.enabled?/1` | Whether the app's own coach runs for a user (a Pocket ID claim, `users.coach_enabled`); `Client.chat/2` refuses without it |
@@ -38,8 +38,9 @@
 | `BurpeeTrainer.UserTime` | User-local date and time calculations |
 | `BurpeeTrainerWeb.HomeLive` | One LiveView for `/`, `/history`, and `/coach` (live actions `:home`, `:history`, `:coach`) |
 | `BurpeeTrainerWeb.{HomeScreen, HistoryScreen, CoachScreen}` | Screen modules rendered by `HomeLive` |
-| `BurpeeTrainerWeb.HomeAuthoring.Flow` | Pure authoring transitions: `update(model, event) -> {model, commands}`; work in flight is applied only while its `update_id` is current |
+| `BurpeeTrainerWeb.HomeAuthoring.Flow` | Pure authoring transitions: `update(model, event) -> {model, commands}`; work in flight is applied only while its `update_id` is current; each follow-up refines the latest proposal and the ones it replaced stay as `design_turns` (`docs/specs/2026-10-29-design-chat-design.md`) |
 | `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |
+| `BurpeeTrainerWeb.{HomeStudioComponents, NewWorkoutSteps}` / `BurpeeTrainer.Coach.NewDefaults` | The studio (Edit and New as a chat), New's questions one at a time (pure), and what each starts from: the week's time left, the athlete's rate, a pace that fits |
 | `BurpeeTrainerWeb.SessionLive` / `BurpeeTrainerWeb.VideoLive.Show` | Plan and video session runners |
 | `BurpeeTrainerWeb.HomeDayBoundary` | Local-day boundary scheduling |
 | `BurpeeTrainerWeb.Components.*` | Shared layout, Home, History, Coach, workout, and session components |

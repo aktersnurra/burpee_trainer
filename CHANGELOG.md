@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-10-30 — Built for someone who knows it; the coach remembers like Hermes
+
+- **Less to read.** No hint lines, no predicted replies (the coach and summary no longer generate them), no subtitles in the Edit / Swap / New sheet, and no "min left this week" under the week bar. The studio's proposal has only Save and Run; Run uses Home's camera and warmup choices.
+- **Home** reads the workout's shape in one line (`5 × 3 · every 8s · 4:30 rest`) and your best for its type per 20 minutes. An enabled start toggle sits on a soft pill.
+- **Studio**: tap a set's row to change its reps or beat by hand, with no model call; the rests are refitted so the length holds. Each proposal is marked against the one it replaced. Sets read by number (1–4, 5), rests as clocks (4:30).
+- **Progress**: the recent-reps cards that repeated the gauges are gone. Each type shows its best from its first 20-minute session, the next level and reps to go, and how even the latest tracked session was. The chart stays one graph: six-count on the left axis, Navy SEAL on the right.
+- **Coach**: the week list marks done (✓) and to go; a bookmark icon beside the coach's note opens a sheet with what the coach remembers, with a remove button per entry.
+- **Memory, the Hermes way**: two bounded parts, user (1,375 chars) and memory (2,200), kept by a memory tool the coach calls as it talks (add, patch, remove by text, all or nothing, limit checked on the result, rejections with the entries and closest matches), read each turn as a frozen snapshot. Injection-like content is blocked. The background review runs after session feedback or a turn that wrote nothing. Claude's `update_memory` takes the same batches. See `docs/specs/2026-10-30-coach-memory-design.md`.
+- **Runner**: a rest reads the set and the next set's reps ("2/5 · next 3").
+
+## 2026-10-30 — Swap is the drawer; Edit and New wait behind the opened workout
+
+- Home no longer has Edit, Swap or New buttons. Swap is a swipe right (the drawer); Edit and New appear when you open the workout and swipe up, or use the handle at the bottom of the opened workout. A closed workout only says "Swipe right to swap". The server refuses `open_options` on a closed workout.
+
+## 2026-10-30 — The handle shows everything Home can do; hidden until asked
+
+- Edit, Swap and New stay hidden until asked for, as designed: Home starts with the one thing to do. The ways to ask are a tap on the workout, a swipe, or the handle at the bottom, and the handle's sheet now offers Swap workout beside Edit and New, so nothing needs the workout opened first. `docs/ui.md` states the principle.
+
+## 2026-10-30 — The swipes are findable; the studio has a browser check
+
+- Home has a handle at its bottom edge that opens the Edit / New sheet, and a line above it saying what the two swipes do, for the first three visits or until the first swipe (`HomeHint`).
+- `scripts/e2e/studio_journey.mjs` drives the swipes, Edit and New in a phone-sized browser against a stubbed server (`scripts/e2e/studio_preview.exs`) and fails on a layout, gesture or tap-target regression: the shared left edge, sideways scroll, spinner, Save and Run, the swiped value, the set size, the summary and Run (`docs/guides/studio-e2e.md`). `docs/guides/ios-device-check.md` lists what only a phone can check.
+- The send key is a 44px target (it was 40), the docked box measures again once the keyboard has settled, and the sheet no longer draws a focus ring on its first choice.
+- Small composition fixes: the quick-change chips run to the screen edge when they scroll, the start toggles line up with the card above them, and the coach's loader sits level with its line.
+
+## 2026-10-29 — One set of conventions across the pages
+
+- One edge: Home, Progress, the studio and the docked box all start at `--gutter` (30px); the studio and the dock had their own (36px and 16px).
+- One radius for every card, box, sheet and the composer (`--radius-surface`, 20px), instead of 18, 20, 22 and 26.
+- One composer: the single growing line with the send key inside, for the coach and the studio alike (the older two-row card is gone).
+- The type is the Home tokens plus two for screens built around one thing (`--text-heading`, `--text-hero`); the studio's own sizes, its uppercase card label and its small-caps table header are gone.
+- Motion uses the two durations (`--motion-settle`, `--motion-quick`) everywhere, including the drawer and the studio.
+- `docs/ui.md` says where the studio differs on purpose (words on its pills, a round back button) and where it must not (gutter, radius, type, motion).
+
+## 2026-10-29 — Edit and New are a chat; swipes on Home
+
+- Swipe right on Home and the page slides over to reveal the list of workouts to swap to, as in the Claude app; swipe left or tap the page to close it. Swipe up for Edit this workout and New workout. The buttons stay.
+- Edit and New take Home's place as a chat with a back button. Edit opens with today's workout as the coach's first message; each message refines the latest proposal, a spinner shows while the coach works, and the proposal arrives as a new card with Save and Run pills under it (and Save). Back leaves with no change.
+- New asks one question per screen: burpee type and set style by tap (which answers and moves on), then duration, reps and pace by swiping the value (or its buttons) with a Next. Duration starts at 20 minutes or what the week has left and never passes it; reps start from your progression; pace from a typical reference that leaves room to recover. Unbroken sets also ask for the most reps in one set, which the coach must respect. The last screen is what you chose, with Create workout (sent as it is) or Add a request, which opens the chat with an empty box for a request only. Reps and pace show what they come to (moving and recovering time). The New header has no close button and no subtitle; back is one step back.
+- Run (under a proposal) now saves it, makes it today's workout and starts it; the camera and warmup toggles sit beside it.
+- Workout cards are redone: a label, the name, minutes and reps as chips, why, then a small table.
+- Removed the inline Edit and New forms and their review (`HomeWorkoutRequest`'s form fields, budgets and pills).
+
+## 2026-10-29 — Design by conversation, a box above the keyboard, a coach that sounds like one
+
+- Opening the app on iPhone showed the old stick-figure plank on the launch screen. The launch images (`priv/static/images/startup/`) now show the app icon on the warm-stone background (`scripts/render_startup_screens.py`). iOS caches launch images per home-screen shortcut: remove and re-add the shortcut to see the new one.
+- The loading animation is the approved silhouette inverted: dark ink on a transparent background, so it sits on any surface instead of in a black square. The ivory-on-black exports are gone (`scripts/render_burpee_loader.py`).
+- Each follow-up to a workout design was read against the workout the design started from, so every improvement set it back. After the first proposal the box stays and each message refines the **latest proposal** (`Coach.prepare_refinement/4`); what each follow-up replaced stays above it as a conversation (`design_turns`). A follow-up that fails leaves the proposal and the typed words in place, and Cancel works while the coach is on it. New refines by talking too once it has a proposal.
+- The box you write in is docked above the iPhone keyboard (`ChatDock`, from `visualViewport`) for a design's follow-ups and for the coach, and brings the newest message into view as the conversation grows. The actions on a proposal (Save, Use) ride the dock, so they stay reachable.
+- The coach reads like a person, not a dashboard: its voice starts from what was just said and drops trends and "insights"; the coach page answers in a few sentences with at most one question; the note on Home is written from what you have told the coach (its notes about you and this week's last messages), and the look back names something specific or is left empty. When the coach changes its memory after a reply, the note is written again.
+
 ## 2026-10-27 — Pace consistency is measured inside each set
 
 - Pace consistency was 1 minus the coefficient of variation of every gap between reps, the gaps across rests included, so every workout with rests scored 0 (sessions 56 and 57), and a ladder's planned change of pace read as unevenness. It is now derived with the session's fatigue (`Workouts.Fatigue`), from each rep's interval inside a set against that set's planned one; `Workouts.PaceConsistency` is removed. Production: 56 is 0.896, 57 is 0.957, and 40 and 58, without rests, keep 0.974 and 0.972.

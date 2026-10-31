@@ -28,7 +28,10 @@ defmodule BurpeeTrainer.Mcp.CoachTest do
       end
 
     expected = AgentPrompt.context(scope, slot) |> Jason.encode!() |> Jason.decode!()
-    assert result["structuredContent"] == expected
+
+    assert result["structuredContent"] ==
+             Map.put(expected, "memory", BurpeeTrainer.Coach.Memory.snapshot(scope))
+
     refute result["isError"]
   end
 

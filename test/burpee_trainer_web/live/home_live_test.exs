@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
+  import BurpeeTrainerWeb.StudioHelpers
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
@@ -98,23 +99,28 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
 
-    view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
+    walk(view, reps: 60, pace_ups: 1)
+    view |> element("#studio-add-request") |> render_click()
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "20 sets of 6"})
+    |> render_change()
 
     {:ok, before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     pid = view.pid
-    view = history_route(conn, view)
+    render_patch(view, "/progress")
     assert has_element?(view, "#home-history")
     assert has_element?(view, "#home-history-empty")
-    refute has_element?(view, "#home-state-content")
+    refute has_element?(view, "#home-state-content, #home-studio")
     assert has_element?(view, "#history-progress #home-history-close[aria-label='Back to Home']")
 
-    view = home_route(conn, view)
+    render_patch(view, "/")
     assert view.pid == pid
     refute has_element?(view, "#home-history")
-    assert has_element?(view, "#home-expansion[data-open=true]")
-    assert has_element?(view, "#home-new-form")
-    assert :sys.get_state(view.pid).socket.assigns.workout_form[:note].value == "20 sets of 6"
+    assert has_element?(view, "#home-studio #home-edit-instruction", "20 sets of 6")
+
+    assert :sys.get_state(view.pid).socket.assigns.adjustment_form[:instruction].value ==
+             "20 sets of 6"
 
     assert {:ok, ^before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
     assert Repo.aggregate(WorkoutSession, :count) == 1
@@ -131,7 +137,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-action")
     refute has_element?(view, "#home-adjustment-form")
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
-    assert has_element?(view, "#home-new-workout[inert]")
+    refute has_element?(view, "#home-edit-workout, #home-title-action, #home-new-workout")
+    refute has_element?(view, "#home-grab")
     refute has_element?(view, "#resume-recommended-workout")
     refute has_element?(view, "#tell-coach-button")
     refute has_element?(view, "#manual-workout-form")
@@ -163,7 +170,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-start-camera")
     assert has_element?(view, "#home-start-warmup")
 
-    view |> element("#home-new-workout") |> render_click()
+    open_new(view)
     refute has_element?(view, "#home-start-camera")
     refute has_element?(view, "#home-start-warmup")
   end
@@ -207,7 +214,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
     assert has_element?(view, "#home-alternatives-panel[hidden] #home-alternatives-toolbar")
     refute has_element?(view, "#home-other-workouts")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
 
     assert has_element?(
              view,
@@ -241,7 +248,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-type-six_count[aria-pressed=false]")
     view |> element("#home-filter-reset") |> render_click()
     assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     assert has_element?(view, "#home-alternatives-panel:not([hidden]) #home-filter-toggle")
   end
 
@@ -249,7 +256,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     recommendation_fixture(user)
     {:ok, view, _html} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     assert has_element?(view, "#home-current-level", "Level 1A is your current level.")
@@ -286,7 +293,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     unknown = video_fixture()
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     for level <- BurpeeTrainer.Levels.all_levels() do
@@ -305,7 +312,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-summary", plan.name)
     assert has_element?(view, "#home-alternatives-panel[hidden]")
     assert Repo.aggregate(WorkoutSession, :count) == 0
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-tab-videos") |> render_click()
 
     assert has_element?(
@@ -331,34 +338,18 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
 
-    assert has_element?(view, "#home-title-action[inert]")
-    refute has_element?(view, "#home-title-action", "Change")
+    refute has_element?(view, "#home-title-action")
     assert has_element?(view, "#home-expansion-content[inert]")
     refute has_element?(view, "#home-other-workouts")
 
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-title-action")
-      |> LazyHTML.attribute("phx-click")
-
-    assert [
-             ["set_attr", %{"attr" => ["inert", ""]}],
-             ["remove_attr", %{"attr" => "hidden", "to" => "#home-alternatives-panel"}],
-             ["focus", %{"to" => "#home-chooser-close"}],
-             ["push", %{"event" => "open_chooser"}]
-           ] = Jason.decode!(commands)
-
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     assert has_element?(view, "#home-alternatives-panel[role=dialog]:not([hidden])")
     refute has_element?(view, "#home-expansion-content[inert] #home-alternatives-panel")
     view |> element("#home-chooser-close") |> render_click()
     view |> element("#home-summary") |> render_click()
 
-    assert has_element?(
-             view,
-             "#home-title-action[aria-label='Switch workout'] .hero-arrows-right-left"
-           )
+    # Opened, the workout has the handle for edit and new, and the sheet it opens offers all three.
+    assert has_element?(view, "#home-grab[aria-label='Edit, swap or new workout']")
 
     assert has_element?(
              view,
@@ -374,7 +365,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   } do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     doc = render(view) |> LazyHTML.from_fragment()
 
     [close] = doc |> LazyHTML.query("#home-chooser-close") |> LazyHTML.attribute("phx-click")
@@ -382,7 +373,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert [
              ["set_attr", %{"attr" => ["hidden", ""], "to" => "#home-alternatives-panel"}],
              ["remove_attr", %{"attr" => "inert"}],
-             ["focus", %{"to" => "#home-title-action"}],
+             ["focus", %{"to" => "#home-summary"}],
              ["push", %{"event" => "close_chooser"}]
            ] = Jason.decode!(close)
 
@@ -839,7 +830,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       "requested_pace_sec" => nil
     }
 
-    layout = single_set_layout("Confirmed adjustment", "A shorter session.")
+    layout = two_set_layout("Confirmed adjustment", "A shorter session.")
 
     counter =
       fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
@@ -848,23 +839,19 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     original = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user)) |> elem(1)
     view |> element("#home-summary") |> render_click()
 
-    view |> element("#home-new-workout") |> render_click()
+    walk(view, reps: 10, minutes: 5)
+    create(view)
 
-    view |> element("#home-pill-pacing_style-even") |> render_click()
-
-    view
-    |> form("#home-new-form", home_workout: %{reps: 10, duration: "2:00"})
-    |> render_submit()
-
-    render_async(view)
-    assert has_element?(view, "#home-new-reps[disabled][value='10']")
+    render_async(view, 2_000)
+    assert has_element?(view, "#studio-proposal .studio-chip", "10 reps")
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
     assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
 
-    view |> element("#home-request-confirm") |> render_click()
-    render_async(view)
-    assert has_element?(view, "#home-summary", "Confirmed adjustment")
+    view |> element("#home-request-run") |> render_click()
+    # Run starts it: the session is on the new workout, which is now today's.
+    assert_redirect(view, 2_000)
     assert {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
+    assert selected.plan.name == "Confirmed adjustment"
     refute selected.plan.id == original.plan.id
     assert Agent.get(counter, & &1.calls) == ["workout_layout"]
   end
@@ -874,10 +861,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
 
-    view |> element("#home-new-workout") |> render_click()
-    view |> form("#home-new-form", home_workout: %{note: "20 sets of 6"}) |> render_change()
+    open_new(view)
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    assert has_element?(view, "#home-adjustment-error")
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
   end
@@ -920,7 +905,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              )
     end
 
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
 
     assert has_element?(
              view,
@@ -1811,14 +1796,18 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     end
   end
 
-  defp single_set_layout(name, rationale) do
+  # Two sets of five at the wizard's default pace; the rest between them is computed.
+  defp two_set_layout(name, rationale) do
     %{
       "name" => name,
       "rationale" => rationale,
       "phases" => [
         %{
-          "sets" => [%{"reps" => 10, "sec_per_rep" => 12, "sec_per_burpee" => 12}],
-          "rests" => []
+          "sets" => [
+            %{"reps" => 5, "sec_per_rep" => 4.5, "sec_per_burpee" => 4.5},
+            %{"reps" => 5, "sec_per_rep" => 4.5, "sec_per_burpee" => 4.5}
+          ],
+          "rests" => [%{"share" => 1}]
         }
       ]
     }

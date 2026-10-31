@@ -74,6 +74,16 @@ defmodule BurpeeTrainer.Levels do
     if found, do: found.level, else: :level_1a
   end
 
+  @doc "The next level above `count` reps in 20 minutes for one type, and the reps it needs."
+  @spec next_landmark(:six_count | :navy_seal, non_neg_integer()) ::
+          {atom(), pos_integer()} | nil
+  def next_landmark(burpee_type, count) when is_integer(count) do
+    @landmarks
+    |> Enum.map(&{&1.level, Map.fetch!(&1, burpee_type)})
+    |> Enum.filter(fn {_level, threshold} -> threshold > count end)
+    |> Enum.min_by(fn {_level, threshold} -> threshold end, fn -> nil end)
+  end
+
   @doc """
   Returns the level tag for a plan given its total rep count and burpee type.
   Filters to landmarks where count >= threshold, then picks the one with the

@@ -64,6 +64,7 @@ const runningKeys = [
 	"sessionProgress",
 	"repProgress",
 	"setProgress",
+	"nextReps",
 	"totalDone",
 	"totalTarget",
 	"timeLeftSec",
@@ -235,6 +236,8 @@ test("normal rest reads as a time and derives set progress from immutable work e
 	assert.equal(secondRest.visual.state, "rest");
 	assert.equal(secondRest.primaryCount, "0:04");
 	assert.equal(secondRest.setProgress, "2/3");
+	// A rest says what follows it: the next set's reps.
+	assert.equal(firstRest.nextReps, threeSetTimeline[2].reps);
 	assert.equal(Object.hasOwn(threeSetTimeline[1], "setProgress"), false);
 	assertLeanContract(firstRest, runningKeys);
 });

@@ -35,8 +35,7 @@ defmodule BurpeeTrainer.Mcp.Tools.SetCoachNote do
              text: text,
              review: review,
              source: :claude,
-             metric_ids: [],
-             suggestions: []
+             metric_ids: []
            }) do
       Summary.broadcast(scope, summary)
       {:ok, %{"text" => summary.text, "review" => summary.review}}

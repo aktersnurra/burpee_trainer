@@ -46,30 +46,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert has_element?(view, "#home-coach-reply", "Coach unavailable")
   end
 
-  test "the pills are what the coach expects you to say next", %{conn: conn, scope: scope} do
-    {:ok, _} =
-      BurpeeTrainer.Coach.Summary.store(scope, %{
-        text: "Protect Thursday.",
-        metric_ids: [],
-        source: :llm,
-        suggestions: ["Why Thursday?"]
-      })
-
-    {:ok, view, _} = live(conn, ~p"/")
-    # Before any exchange, the note's suggestions.
-    assert has_element?(view, ".coach-quick-replies button", "Why Thursday?")
-
-    {:ok, _} =
-      BurpeeTrainer.Coach.Exchange.record(scope, "Why Thursday?", "It is your longest day.", [
-        "Move it to Friday"
-      ])
-
-    {:ok, view, _} = live(conn, ~p"/")
-    # After an exchange, the reply's suggestions.
-    assert has_element?(view, ".coach-quick-replies button", "Move it to Friday")
-    refute has_element?(view, ".coach-quick-replies button", "Why Thursday?")
-  end
-
   test "the week's conversation reads in order, oldest first",
        %{conn: conn, scope: scope} do
     {:ok, first} = BurpeeTrainer.Coach.Exchange.record(scope, "Can Thursday be mornings?", "Yes.")
@@ -86,9 +62,13 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
              [{"Can Thursday be mornings?", "Yes."}, {"Make it shorter", "15 minutes."}]
   end
 
-  test "a one-tap reply sends its words to the coach", %{conn: conn} do
+  test "a message is sent to the coach", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-coach-quick-harder") |> render_click()
+
+    view
+    |> form("#home-coach-message-form", coach_message: %{text: "Make the next one harder"})
+    |> render_submit()
+
     render_async(view)
     # No provider in tests: the send happened and the coach says it is unavailable.
     assert has_element?(view, "#home-coach-reply", "Coach unavailable")

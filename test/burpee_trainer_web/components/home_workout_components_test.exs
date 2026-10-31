@@ -63,11 +63,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponentsTest do
 
   test "one column says how often a rep starts; Move appears only when it differs" do
     same = inspection(inspection_rows())
-    assert headers(same) == ["Sets", "Reps", "Every", "Rest"]
+    assert headers(same) == ["Set", "Reps", "Every", "Rest"]
     assert same |> LazyHTML.query(".home-prescription-every") |> LazyHTML.text() =~ "5s"
 
     padded = inspection(inspection_rows(6_000_000))
-    assert headers(padded) == ["Sets", "Reps", "Every", "Move", "Rest"]
+    assert headers(padded) == ["Set", "Reps", "Every", "Move", "Rest"]
     assert padded |> LazyHTML.query(".home-prescription-every") |> LazyHTML.text() =~ "6s"
     assert padded |> LazyHTML.query(".home-prescription-move") |> LazyHTML.text() =~ "5s"
   end

@@ -1,9 +1,11 @@
 defmodule BurpeeTrainer.Coach.MemoryJob do
   @moduledoc """
-  Keeps the coach's memory after an exchange or a session with feedback: the model reads
-  the notes and what just happened, and says what to note, forget or replace. Its ops go
-  through `Memory.apply_ops/2`, so a careless answer cannot wipe or bloat the memory.
-  Without a provider nothing changes.
+  The memory's background review, as the Hermes agent runs one after a turn: after a session
+  with feedback, or an exchange in which the coach wrote nothing itself, the model reads the
+  memory and what happened and returns memory operations, which `Memory.write/3` applies per
+  part, all or nothing. A rejected batch (a part full, a text that matched nothing) goes back
+  once with the reason, as the tool would answer the coach. Without a provider nothing
+  changes.
   """
   use Oban.Worker, queue: :coach, max_attempts: 1
 
@@ -11,7 +13,7 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
 
   alias BurpeeTrainer.{Accounts, Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Client, Exchange, Memory}
+  alias BurpeeTrainer.Coach.{Client, Exchange, Memory, SummaryJob}
   alias BurpeeTrainer.Coach.Tools.History
   alias BurpeeTrainer.Workouts.WorkoutSession
 
@@ -19,33 +21,30 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
     type: "object",
     additionalProperties: false,
     properties: %{
-      ops: %{
+      operations: %{
         type: "array",
-        maxItems: 5,
+        maxItems: 10,
         items: %{
           type: "object",
           additionalProperties: false,
           properties: %{
-            op: %{type: "string", enum: ["add", "forget", "replace"]},
-            id: %{type: ["integer", "null"]},
-            text: %{type: ["string", "null"], maxLength: 160}
+            target: %{type: "string", enum: ["user", "memory"]},
+            action: %{type: "string", enum: ["add", "patch", "remove"]},
+            content: %{type: ["string", "null"]},
+            old_text: %{type: ["string", "null"]}
           },
-          required: ["op", "id", "text"]
+          required: ["target", "action", "content", "old_text"]
         }
       }
     },
-    required: ["ops"]
+    required: ["operations"]
   }
 
   @task """
-  You keep short notes about an athlete for their burpee coach: lasting facts and \
-  preferences that should shape future training, such as when they train, injuries or \
-  soreness, what they like or dislike, and what they are training for. Read the notes and \
-  the event, and return ops: add a new fact; forget a note the event shows is no longer \
-  true; replace a note the event updates. Each note is one plain sentence under 160 \
-  characters, about the athlete, in the third person without a name. Do not note results \
-  (reps, times, levels), which are kept elsewhere, or anything only true today. Most \
-  events change nothing; then return no ops. The athlete reads every change.
+  Review what just happened with the athlete and keep the coach's memory of them up to \
+  date. Return operations, each with its target part: add {content}; patch {old_text, \
+  content}; remove {old_text}; leave unused fields null. Most events change nothing; then \
+  return no operations. The athlete sees every change.
   """
 
   @doc "Admits a job for an exchange the owner just had with the coach."
@@ -82,30 +81,51 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
 
         case event(scope, args) do
           nil -> {:cancel, :event_missing}
-          event -> keep(scope, event, [])
+          event -> scope |> keep(event, []) |> done()
         end
     end
   end
 
   def perform(%Oban.Job{}), do: {:cancel, :invalid_args}
 
-  @doc "Reads one event into the memory; `{:ok, changes}`, or the reason nothing changed."
-  @spec keep(Scope.t(), map(), keyword()) :: {:ok, [Memory.change()]} | {:error, term()}
+  defp done({:ok, _results}), do: :ok
+  defp done({:error, reason}), do: {:error, reason}
+
+  # What the coach just learned changes what it would tell the athlete next, so the note
+  # on Home is written again from it. A note that cannot be queued is not this job's failure.
+  defp refresh_note({:ok, results} = kept, scope) do
+    if Enum.any?(results, & &1["changed"]), do: refresh_summary(scope)
+    kept
+  end
+
+  defp refresh_summary(scope) do
+    case SummaryJob.enqueue(scope) do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.info(
+          "coach_summary_not_admitted trigger=memory user_id=#{scope.user.id} reason=#{inspect(reason)}"
+        )
+    end
+  end
+
+  @doc "Reads one event into the memory; `{:ok, results}` per part written, or why not."
+  @spec keep(Scope.t(), map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def keep(%Scope{} = scope, event, opts) do
-    notes = Memory.list(scope)
+    review(scope, messages(scope, event, []), opts, %{event: event, written: [], retries: 1})
+  end
 
-    messages = [
-      %{role: "system", content: @task},
-      %{
-        role: "user",
-        content:
-          Jason.encode!(%{
-            notes: Enum.map(notes, &%{id: &1.id, text: &1.text}),
-            event: event
-          })
-      }
-    ]
+  # The snapshot is taken afresh for each call, so a retry reads the parts already written.
+  defp messages(scope, event, retry) do
+    [
+      %{role: "system", content: @task <> "\n" <> Memory.guidance()},
+      %{role: "system", content: Memory.snapshot(scope)},
+      %{role: "user", content: Jason.encode!(%{event: event})}
+    ] ++ retry
+  end
 
+  defp review(scope, messages, opts, state) do
     chat_opts =
       opts
       |> Keyword.take([:config, :req, :budget])
@@ -115,8 +135,39 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
       )
 
     case Client.chat(messages, chat_opts) do
-      {:ok, %{content: %{"ops" => ops}, tool_calls: []}} when is_list(ops) ->
-        Memory.apply_ops(scope, ops)
+      {:ok, %{content: %{"operations" => operations} = content, tool_calls: []}}
+      when is_list(operations) ->
+        case write(scope, operations) do
+          {:ok, results} ->
+            {:ok, state.written ++ results} |> refresh_note(scope)
+
+          {:error, rejection, written} when state.retries > 0 ->
+            # Parts written before the rejection stay written and read in the new snapshot;
+            # only the rejected part is asked for again.
+            retry = [
+              %{role: "assistant", content: Jason.encode!(content)},
+              %{
+                role: "user",
+                content:
+                  Jason.encode!(%{
+                    rejected: rejection,
+                    already_written: Enum.map(written, & &1["target"]),
+                    ask:
+                      "The parts already written are saved and shown above. Send operations for #{rejection["target"]} only."
+                  })
+              }
+            ]
+
+            review(scope, messages(scope, state.event, retry), opts, %{
+              state
+              | written: state.written ++ written,
+                retries: state.retries - 1
+            })
+
+          {:error, rejection, written} ->
+            refresh_note({:ok, state.written ++ written}, scope)
+            {:error, {:rejected, rejection}}
+        end
 
       {:ok, _other} ->
         {:error, :invalid_shape}
@@ -125,6 +176,28 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
         Logger.info("coach_memory_unchanged user_id=#{scope.user.id} reason=#{inspect(reason)}")
         {:error, reason}
     end
+  end
+
+  # One batch per part, in the order the parts first appear; a rejected part stops there,
+  # and says which parts were written before it.
+  defp write(scope, operations) do
+    operations = Enum.filter(operations, &is_map/1)
+    targets = operations |> Enum.map(& &1["target"]) |> Enum.uniq()
+
+    Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
+      ops =
+        for %{"target" => ^target} = op <- operations do
+          op |> Map.drop(["target"]) |> Map.reject(fn {_key, value} -> is_nil(value) end)
+        end
+
+      case Memory.write(scope, target, ops) do
+        {:ok, result} ->
+          {:cont, {:ok, results ++ [result]}}
+
+        {:error, rejection} ->
+          {:halt, {:error, Map.put(rejection, "target", target), results}}
+      end
+    end)
   end
 
   defp event(scope, %{"exchange_id" => id}) when is_integer(id) do

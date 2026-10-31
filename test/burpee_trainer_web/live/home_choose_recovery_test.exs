@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import BurpeeTrainerWeb.StudioHelpers
   import BurpeeTrainer.Fixtures
   import Ecto.Query
 
@@ -83,7 +84,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
        %{view: view, user: user, plan: plan} do
     before = persisted()
     pid = view.pid
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
     render_click(view, "filter", %{"kind" => "type", "filter" => "navy_seal"})
     filters = :sys.get_state(view.pid).socket.assigns.filters
@@ -109,7 +110,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     plan: plan,
     user: user
   } do
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
 
     assert has_element?(
@@ -132,7 +133,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     video: video,
     user: user
   } do
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-tab-videos") |> render_click()
     before = :sys.get_state(view.pid).socket.assigns
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
@@ -207,7 +208,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
   test "nil-selection owned Delete reports actual absent-fallback rejection without effects",
        %{view: view, plan: plan, user: user} do
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     assert has_element?(
@@ -239,7 +240,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     assert_patch(view, "/")
     view |> element("#home-alternatives-panel") |> render_keydown(%{"key" => "Escape"})
     assert has_element?(view, "#home-alternatives-panel[hidden]")
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     assert all_table_rows() == before_rows
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
     selected = stable_assigns(view).home_selection
@@ -253,7 +254,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
   test "nil-selection foreign and archived Delete preserve all rows and workspace assigns",
        %{view: view, foreign: foreign, archived: archived} do
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     before_rows = all_table_rows()
     before_assigns = stable_assigns(view)
 
@@ -275,7 +276,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     view: view,
     plan: plan
   } do
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     before_rows = all_table_rows()
     before_assigns = stable_assigns(view)
 
@@ -290,7 +291,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     view |> element("#home-alternatives-panel") |> render_keydown(%{"key" => "Escape"})
     render_click(view, "delete_workout", %{"id" => to_string(plan.id)})
     refute_push_event(view, "home_chooser_rejected", %{})
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-history-toggle") |> render_click()
     render_click(view, "delete_workout", %{"id" => to_string(plan.id)})
     refute_push_event(view, "home_chooser_rejected", %{})
@@ -300,7 +301,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     view: view,
     plan: plan
   } do
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     socket = :sys.get_state(view.pid).socket
     rows = all_table_rows()
 

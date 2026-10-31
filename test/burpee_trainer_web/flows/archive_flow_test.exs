@@ -1,6 +1,7 @@
 defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
   use BurpeeTrainerWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
+  import BurpeeTrainerWeb.StudioHelpers
   import BurpeeTrainer.Fixtures
   alias BurpeeTrainer.{Accounts, ReqStub, Workouts, Repo}
   alias BurpeeTrainer.Accounts.Scope
@@ -168,7 +169,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     {:ok, _pin} = Workouts.select_home_workout(Scope.for_user(user), selected, original.id)
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     for level <- BurpeeTrainer.Levels.all_levels() do
@@ -206,7 +207,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert Repo.get!(WorkoutPlan, fallback.plan.id).state == :published
     {:ok, reloaded, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     reloaded |> element("#home-summary") |> render_click()
-    reloaded |> element("#home-title-action") |> render_click()
+    open_swap(reloaded)
     reloaded |> element("#home-filter-toggle") |> render_click()
 
     for level <- BurpeeTrainer.Levels.all_levels() do
@@ -272,7 +273,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
 
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     view |> element("#home-delete-workout-#{plan.id}") |> render_click()
     assert Repo.get!(WorkoutPlan, plan.id).state == :archived
     assert Repo.get!(WorkoutSession, completed.id).program_snapshot == completed.program_snapshot
@@ -339,12 +340,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     end
 
     assert MapSet.size(:sys.get_state(view.pid).socket.assigns.expanded_groups) == 1
-    view |> element("#home-new-workout") |> render_click()
-
-    view
-    |> form("#home-new-form", home_workout: %{reps: 140, note: "20 sets of 7"})
-    |> render_change()
-
+    open_new(view)
     view |> element("#home-request-abort") |> render_click()
 
     instruction = "Change to 120 reps in 20 minutes, in two sets at 5 seconds active pace"
@@ -370,7 +366,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert prepared.home_selection == prepared.home_facts.selection
     assert prepared.home_state == {:start, pinned}
 
-    view |> element("#home-title-action:not([disabled])") |> render_click()
+    open_swap(view)
     view |> element("#home-filter-toggle") |> render_click()
 
     for level <- BurpeeTrainer.Levels.all_levels() do

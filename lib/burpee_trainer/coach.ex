@@ -8,6 +8,7 @@ defmodule BurpeeTrainer.Coach do
     AuthoringPrompt,
     WorkoutLayout,
     RestFitter,
+    ProposalEdit,
     WorkoutGuidance,
     WorkoutRequest
   }
@@ -80,6 +81,40 @@ defmodule BurpeeTrainer.Coach do
       prepare_request(scope, source, text, %{kind: :revision, expected: expected}, opts)
     end
   end
+
+  @doc """
+  Reads a follow-up instruction against the proposal being refined, not the workout the
+  design started from, so each turn builds on the last.
+  """
+  @spec prepare_refinement(Accounts.Scope.t(), map(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def prepare_refinement(
+        %Accounts.Scope{} = scope,
+        %{} = base_definition,
+        instruction,
+        opts \\ []
+      ) do
+    with :ok <- outside_authoring_transaction(),
+         {:ok, text} <- validate_authoring_input(instruction),
+         {:ok, prepared} <-
+           prepare_request(
+             scope,
+             %{definition_json: base_definition},
+             text,
+             %{kind: :refinement},
+             opts
+           ) do
+      {:ok, carry_max_set(prepared, Keyword.get(opts, :max_set_reps))}
+    end
+  end
+
+  # What the athlete limited a set to stays limited unless they say otherwise, and while it
+  # still fits the reps.
+  defp carry_max_set(%{request: %WorkoutRequest{max_set_reps: nil} = request} = prepared, max)
+       when is_integer(max) and max >= 1 and max <= request.target_reps,
+       do: %{prepared | request: %{request | max_set_reps: max}}
+
+  defp carry_max_set(prepared, _max), do: prepared
 
   @spec confirm_home_revision(Accounts.Scope.t(), map()) ::
           {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
@@ -179,8 +214,11 @@ defmodule BurpeeTrainer.Coach do
          {:ok, text} <- validate_authoring_input(instruction),
          {:ok, request} <- WorkoutRequest.new(WorkoutRequest.to_map(request)),
          :ok <- validate_review_budget(request),
-         {:ok, review_source, reference_messages} <-
+         {:ok, review_source, source_messages} <-
            review_source(scope, Keyword.get(opts, :edit_source)) do
+      reference_messages =
+        refinement_messages(Keyword.get(opts, :base_definition), source_messages)
+
       opts =
         opts
         |> Keyword.put(:confirmed_request, request)
@@ -249,6 +287,38 @@ defmodule BurpeeTrainer.Coach do
 
   def approve_plan(%Accounts.Scope{}, _, _), do: {:error, Error.new(:design_workspace_changed)}
 
+  @doc """
+  A number on a reviewed proposal changed by hand: `field` (`:reps` or `:every`) of the sets
+  at `indices` stepped by `dir`, the rests fitted again (`ProposalEdit`). No call is made;
+  the result is checked as a proposal from the coach is. `:error` when it does not fit.
+  """
+  @spec adjust_proposal(map(), [non_neg_integer()], :reps | :every, -1 | 1) ::
+          {:ok, map()} | :error
+  def adjust_proposal(
+        %{definition: %{} = canonical, original_request: %WorkoutRequest{} = base} = prepared,
+        indices,
+        field,
+        dir
+      ) do
+    with {:ok, attrs, base} <- ProposalEdit.apply(canonical, base, indices, field, dir),
+         {:ok, definition} <- WorkoutDefinition.new(attrs),
+         {:ok, _program} <- BurpeeTrainer.PlanCompiler.compile(definition),
+         :ok <- WorkoutRequest.validate_definition(base, definition),
+         {:ok, chosen} <- complete_review_request(base, definition) do
+      {:ok,
+       %{
+         prepared
+         | definition: WorkoutDefinition.canonical_map(definition),
+           request: chosen,
+           original_request: base
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  def adjust_proposal(_prepared, _indices, _field, _dir), do: :error
+
   @doc "Publish a reviewed workout and select it atomically; never starts a session."
   def approve_and_select_plan(scope, prepared, expected) do
     BurpeeTrainer.Repo.immediate_transaction(fn ->
@@ -260,6 +330,25 @@ defmodule BurpeeTrainer.Coach do
         {:error, error} -> BurpeeTrainer.Repo.rollback(error)
       end
     end)
+  end
+
+  # A refinement builds on the proposal the athlete is looking at; the workout the design
+  # started from stays the provenance (`review_source`) but is no longer the reference.
+  defp refinement_messages(nil, source_messages), do: source_messages
+
+  defp refinement_messages(%{} = base, _source_messages) do
+    [
+      %{
+        role: "system",
+        content:
+          Jason.encode!(%{
+            scope: "current_proposal",
+            definition: base,
+            rule:
+              "The athlete is refining this proposal. Keep everything they did not ask to change; the confirmed fields are authoritative. Redistribute ordinary recovery within the new movement budget; preserve exact supplied ordered sets and timed pauses. Update the name if the workout's character changed. Never modify the original."
+          })
+      }
+    ]
   end
 
   defp review_source(_user, nil), do: {:ok, nil, []}
@@ -499,11 +588,17 @@ defmodule BurpeeTrainer.Coach do
             scope: "confirmed_workout_request",
             request: WorkoutRequest.to_map(request),
             rule:
-              "These constraints are authoritative. Return a layout with exactly #{length(request.timed_rests) + 1} phases; fixed pauses sit between phases and are not part of the layout. Rest durations are computed from your weights."
+              "These constraints are authoritative. Return a layout with exactly #{length(request.timed_rests) + 1} phases; fixed pauses sit between phases and are not part of the layout. Rest durations are computed from your weights." <>
+                max_set_rule(request)
           })
       }
     ] ++ Keyword.get(opts, :source_reference_messages, [])
   end
+
+  defp max_set_rule(%WorkoutRequest{max_set_reps: nil}), do: ""
+
+  defp max_set_rule(%WorkoutRequest{max_set_reps: max}),
+    do: " No set may have more than #{max} reps; use more, smaller sets instead."
 
   defp validate_default_movement_pace(definition, %WorkoutRequest{} = request) do
     {fastest, slowest} = WorkoutGuidance.default_active_seconds_range(definition.burpee_type)

@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
   use BurpeeTrainerWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
+  import BurpeeTrainerWeb.StudioHelpers
   alias BurpeeTrainer.{Accounts, ReqStub, Workouts, Repo}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
@@ -151,7 +152,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     selected: selected
   } do
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-edit-workout") |> render_click()
+    open_edit(view)
 
     view
     |> form("#home-edit-form",
@@ -164,11 +165,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view)
     assert_receive {:provider_request, _}
     assert_receive {:provider_request, _}
-    assert has_element?(view, "#home-request-confirm")
+    assert has_element?(view, "#home-request-run")
     other = plan_fixture(user, %{"state" => "published"})
     {:ok, changed} = Workouts.select_home_workout(Scope.for_user(user), selected, other.id)
     count = Repo.aggregate(WorkoutPlan, :count)
-    view |> element("#home-request-confirm") |> render_click()
+    view |> element("#home-request-run") |> render_click()
     render_async(view)
     refute has_element?(view, "#home-new-saved")
     assert has_element?(view, "#home-adjustment-error", "changed")
@@ -185,13 +186,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     user: user,
     selected: selected
   } do
-    open_new(view)
-    view |> element("#home-pill-pacing_style-even") |> render_click()
-    view |> form("#home-new-form", home_workout: %{reps: 10, duration: "2:00"}) |> render_submit()
-    render_async(view)
+    walk(view, reps: 10, minutes: 5, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
     assert_receive {:provider_request, _}
     view |> element("#home-request-save") |> render_click()
-    render_async(view)
+    render_async(view, 2_000)
     assert has_element?(view, "#home-new-saved")
     view |> element("#home-new-dismiss") |> render_click()
     refute has_element?(view, "#home-new-saved")
@@ -216,18 +216,42 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     refute_received {:provider_request, _}
   end
 
-  test "provider failure retains input and current pin without offering approval", %{
+  test "a New workout is refined by talking once it is proposed", %{view: view} do
+    walk(view, reps: 10, minutes: 5, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+    assert has_element?(view, "#home-edit-review #home-request-run")
+    assert has_element?(view, "#studio-proposal .home-prescription-reps")
+
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
+    |> render_submit()
+
+    render_async(view, 2_000)
+
+    # What the questions made stays above, as one message; the new proposal follows the ask.
+    assert has_element?(view, "#studio-proposal .studio-chip", "150 reps")
+    assert has_element?(view, ".studio-turn", "10 reps")
+    assert has_element?(view, "#home-design-ask", "Increase to 150")
+    assert has_element?(view, "#studio-proposal", "150 reps")
+
+    view |> element("#home-request-save") |> render_click()
+    render_async(view, 2_000)
+    assert has_element?(view, "#home-new-saved")
+  end
+
+  test "provider failure retains the answers and the current pin without offering approval", %{
     view: view,
     user: user,
     selected: selected
   } do
     Application.put_env(:burpee_trainer, :llm_provider, enabled: false)
-    open_new(view)
     count = Repo.aggregate(WorkoutPlan, :count)
-    view |> form("#home-new-form", home_workout: %{reps: 140}) |> render_submit()
-    render_async(view)
-    assert has_element?(view, "#home-new-reps[value='140']")
-    refute has_element?(view, "#home-request-confirm")
+    walk(view, reps: 140, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+    assert has_element?(view, "#studio-request", "140")
+    refute has_element?(view, "#home-request-run")
     assert has_element?(view, "#home-adjustment-error", "Coach unavailable")
     assert Repo.aggregate(WorkoutPlan, :count) == count
 
@@ -237,32 +261,28 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert unchanged.plan.id == selected.plan.id
   end
 
-  test "all three states use the same fields, pills and local budget; pencil invalidates approval",
-       %{view: view, user: user, selected: selected} do
-    open_new(view)
-    ids = field_ids(view)
+  test "going back to an answer drops the proposal made from it", %{
+    view: view,
+    user: user,
+    selected: selected
+  } do
+    walk(view, reps: 10, minutes: 5, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+    assert has_element?(view, "#home-request-run")
 
-    view
-    |> form("#home-new-form", home_workout: %{reps: 140, pace: "5", duration: "20:00"})
-    |> render_change()
+    # Back is one step back: to what was chosen, without the proposal made from it.
+    view |> element("#studio-back") |> render_click()
+    refute has_element?(view, "#home-request-run, #studio-proposal")
+    assert has_element?(view, "#studio-create")
 
-    assert has_element?(view, "#home-workout-budget", "11:40")
-    assert has_element?(view, "#home-workout-budget", "8:20")
-    refute_received {:provider_request, _}
-    view |> element("#home-pill-pacing_style-even") |> render_click()
-    assert has_element?(view, "#home-pill-pacing_style-even[aria-pressed=true]")
-    refute_received {:provider_request, _}
-    view |> form("#home-new-form") |> render_submit()
-    render_async(view)
-    assert_receive {:provider_request, _}
-    assert field_ids(view) == ids
-    assert has_element?(view, "#home-request-edit[aria-label='Edit workout']")
-    view |> element("#home-request-edit") |> render_click()
-    assert field_ids(view) == ids
-    refute has_element?(view, "#home-request-confirm")
-    view |> form("#home-new-form", home_workout: %{reps: 130}) |> render_change()
-    assert has_element?(view, "#home-workout-budget", "10:50")
-    refute_received {:provider_request, _}
+    view |> element("#studio-row-reps") |> render_click()
+    assert has_element?(view, "#studio-step", "How many reps?")
+    assert has_element?(view, "#studio-reps-value", "10")
+
+    # Back out of the questions, one step at a time.
+    for _ <- 1..3, do: view |> element("#studio-back") |> render_click()
+    assert has_element?(view, "#studio-step", "Which burpee?")
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
     assert {:ok, unchanged} = Workouts.verify_home_selection(Scope.for_user(user), selected)
@@ -271,39 +291,37 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
   end
 
   test "a note whose sets do not add up to the reps is explained before any plan", %{view: view} do
-    open_new(view)
     count = Repo.aggregate(WorkoutPlan, :count)
+    walk(view, reps: 140, pace_ups: 1)
 
-    view
-    |> form("#home-new-form", home_workout: %{reps: 140, note: "two sets of 30"})
-    |> render_submit()
+    request(view, "two sets of 30")
 
-    render_async(view)
+    render_async(view, 2_000)
     assert_receive {:provider_request, %{"messages" => _}}
-    assert has_element?(view, "#home-new-form", "doesn't add up")
-    refute has_element?(view, "#home-request-confirm")
+    assert has_element?(view, "#home-adjustment-error", "doesn't add up")
+    refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
   end
 
   test "a returned pattern mismatch is explained before any save", %{view: view} do
-    open_new(view)
     count = Repo.aggregate(WorkoutPlan, :count)
+    walk(view, reps: 140, pace_ups: 1)
 
-    view
-    |> form("#home-new-form", home_workout: %{reps: 140, pace: 5, note: "5x8, 5x7, 5x(7,6)"})
-    |> render_submit()
+    request(view, "5x8, 5x7, 5x(7,6)")
 
-    render_async(view)
+    render_async(view, 2_000)
     # Reading the note, the layout and its one correction.
     for _call <- 1..3, do: assert_receive({:provider_request, _})
     assert has_element?(view, "#home-adjustment-error", "ordered set pattern")
-    assert has_element?(view, "#home-new-form", "Returned 2 sets; expected 20")
-    refute has_element?(view, "#home-request-confirm")
+    assert has_element?(view, "#home-adjustment-error", "Returned 2 sets; expected 20")
+    refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     refute_received {:provider_request, _}
   end
 
-  test "editing during preparation cancels the task and a late result cannot save", %{view: view} do
+  test "going back during preparation cancels the task and a late result cannot save", %{
+    view: view
+  } do
     parent = self()
 
     ReqStub.default(fn request ->
@@ -314,34 +332,22 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
       end
     end)
 
-    open_new(view)
     count = Repo.aggregate(WorkoutPlan, :count)
-    view |> form("#home-new-form", home_workout: %{reps: 140}) |> render_submit()
+    walk(view, reps: 140, pace_ups: 1)
+    create(view)
     assert_receive {:planning_started, task}
     monitor = Process.monitor(task)
-    view |> form("#home-new-form", home_workout: %{reps: 130}) |> render_change()
+    view |> element("#studio-back") |> render_click()
     assert_receive {:DOWN, ^monitor, :process, ^task, _}
     send(task, :release)
-    render_async(view)
-    assert has_element?(view, "#home-new-reps[value='130']")
-    refute has_element?(view, "#home-request-confirm")
+    render_async(view, 2_000)
+    assert has_element?(view, "#studio-pace-value", "5.0")
+    refute has_element?(view, "#home-request-run")
     assert Repo.aggregate(WorkoutPlan, :count) == count
+    # Back, one step at a time, out of the questions: sets, reps, duration, style, type.
+    for _ <- 1..5, do: view |> element("#studio-back") |> render_click()
     view |> element("#home-request-abort") |> render_click()
     assert has_element?(view, "#home-inspection")
-  end
-
-  defp open_new(view) do
-    view |> element("#home-summary") |> render_click()
-    view |> element("#home-new-workout") |> render_click()
-  end
-
-  defp field_ids(view) do
-    render(view)
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query(
-      "#home-new-form input:not([type=hidden]), #home-new-form textarea, #home-workout-budget"
-    )
-    |> LazyHTML.attribute("id")
   end
 
   defp selected_slot(user) do

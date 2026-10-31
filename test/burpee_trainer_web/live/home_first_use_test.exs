@@ -4,6 +4,7 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
 
   import Ecto.Query
   import Phoenix.LiveViewTest
+  import BurpeeTrainerWeb.StudioHelpers
   import BurpeeTrainer.Fixtures
 
   alias BurpeeTrainer.Repo
@@ -60,7 +61,7 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     plan = plan_fixture(user, %{target_reps: 10})
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    view |> element("#home-title-action") |> render_click()
+    open_swap(view)
     {:ok, _} = BurpeeTrainer.Workouts.archive_plan(Scope.for_user(user), plan.id)
 
     view |> element("#home-delete-workout-#{plan.id}") |> render_click()
@@ -74,18 +75,43 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     assert has_element?(view, "#home-action")
   end
 
-  test "Start is the one filled action and the others are quiet icons", %{conn: conn} do
+  test "Start is the one filled action; its toggles are quiet icons and nothing else is there", %{
+    conn: conn
+  } do
     {:ok, view, _html} = live(conn, ~p"/")
     assert has_element?(view, "#home-action.home-primary-action .hero-play-solid")
 
     for {id, label, icon} <- [
-          {"home-edit-workout", "Edit current workout", "hero-pencil-square"},
-          {"home-title-action", "Switch workout", "hero-arrows-right-left"},
-          {"home-new-workout", "New workout", "hero-plus"}
+          {"home-start-camera", "Camera tracking", "hero-video-camera"},
+          {"home-start-warmup", "Warmup", "hero-fire"}
         ] do
-      assert has_element?(view, "##{id}.home-text-action[aria-label='#{label}'] .#{icon}")
+      assert has_element?(view, "##{id}.home-text-action[aria-label*='#{label}'] .#{icon}") or
+               has_element?(view, "##{id}.home-text-action .#{icon}")
     end
 
+    # Edit, swap and new are asked for (a swipe, or the handle), not shown.
+    refute has_element?(view, "#home-edit-workout, #home-title-action, #home-new-workout")
     refute has_element?(view, "#home-ready-recommendation .hero-play, .home-action-label")
+  end
+
+  test "the workout reads as its shape, beside the best for its burpee type", %{
+    conn: conn,
+    user: user
+  } do
+    {:ok, view, _html} = live(conn, ~p"/")
+    assert has_element?(view, "#home-shape", "every")
+    refute has_element?(view, "#home-best")
+
+    for type <- ["six_count", "navy_seal"] do
+      free_form_session_fixture(user, %{
+        burpee_type: type,
+        burpee_count_actual: 40,
+        duration_sec_actual: 1_200,
+        completed_at: DateTime.add(DateTime.utc_now(:second), -3, :day)
+      })
+    end
+
+    {:ok, view, _html} = live(conn, ~p"/")
+    assert has_element?(view, "#home-best", "best 40 in 20 min")
   end
 end

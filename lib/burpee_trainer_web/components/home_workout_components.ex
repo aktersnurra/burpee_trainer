@@ -2,12 +2,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   use BurpeeTrainerWeb, :html
   alias BurpeeTrainerWeb.CreationParameters
 
-  # LiveView holds the reply's patch until a running transition ends, so New and Edit
-  # arrive after today's workout has faded instead of beside it.
-  defp leave_hero do
-    JS.transition("home-leaving", to: "#home-workout-hero", time: 180)
-  end
-
   defp open_chooser do
     JS.set_attribute({"inert", ""},
       to: "#home-summary, .home-workout-actions, #home-expansion-content"
@@ -22,7 +16,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     |> JS.remove_attribute("inert",
       to: "#home-summary, .home-workout-actions, #home-expansion-content"
     )
-    |> JS.focus(to: "#home-title-action")
+    |> JS.focus(to: "#home-summary")
     |> JS.push("close_chooser")
   end
 
@@ -139,357 +133,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  attr(:cancel_id, :string, required: true)
-  attr(:cancel_label, :string, required: true)
-  attr(:send_id, :string, required: true)
-  attr(:send_label, :string, required: true)
-  attr(:busy, :boolean, default: false)
-
-  # The row under New's and Edit's text box, in the place Cancel and confirm hold in review.
-  defp authoring_actions(assigns) do
-    ~H"""
-    <div class="home-review-actions home-review-actions-split">
-      <button
-        id={@cancel_id}
-        type="button"
-        phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-        class="home-text-action home-icon-action"
-        aria-label={@cancel_label}
-        title="Cancel"
-      >
-        <.icon name="hero-x-mark" class="size-5" />
-      </button>
-      <div class="home-review-actions-group">
-        <button
-          id={@send_id}
-          type="submit"
-          class="home-primary-action home-icon-action"
-          aria-label={@send_label}
-          title={@send_label}
-          disabled={@busy}
-        >
-          <.icon name="hero-arrow-up" class="size-5" />
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  attr(:form, :any, required: true)
-  attr(:stage, :atom, default: :new)
-  attr(:candidate, :map, default: nil)
-  attr(:busy, :boolean, default: false)
-  attr(:review_inspection_rows, :list, default: [])
-  attr(:expanded_groups, :any, default: MapSet.new())
-
-  def authoring_form(assigns) do
-    params = Ecto.Changeset.apply_changes(assigns.form.source)
-    allocation = candidate_allocation(assigns.candidate)
-
-    budget =
-      case BurpeeTrainerWeb.HomeWorkoutRequest.budget(params) do
-        {:ok, :unknown_pace} when not is_nil(allocation) ->
-          {:ok, %{work_us: allocation.work_us, recovery_us: allocation.pool_us}}
-
-        local ->
-          local
-      end
-
-    assigns =
-      assigns
-      |> assign(:locked, assigns.stage == :review)
-      |> assign(:budget, budget)
-      |> assign(:allocation, allocation)
-
-    ~H"""
-    <.form
-      for={@form}
-      id="home-new-form"
-      data-stage={@stage}
-      phx-mounted={JS.focus(to: "#home-new-reps")}
-      phx-submit="review_new_workout"
-      phx-change="change_new_workout"
-      class="home-authoring-form home-enter"
-    >
-      <.input field={@form[:burpee_type]} type="hidden" />
-      <.input field={@form[:pacing_style]} type="hidden" />
-      <div
-        :for={
-          {field, label, choices} <- [
-            {:burpee_type, "Burpee type", [{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]},
-            {:pacing_style, "Set style", [{"Even", "even"}, {"Unbroken", "unbroken"}]}
-          ]
-        }
-        class="home-pill-row"
-        role="group"
-        aria-label={label}
-      >
-        <span class="home-pill-label">{label}</span>
-        <div class="home-pill-options">
-          <button
-            :for={{text, value} <- choices}
-            id={"home-pill-#{field}-#{value}"}
-            type="button"
-            class="home-selection-pill"
-            phx-click="choose_workout_value"
-            phx-value-field={field}
-            value={value}
-            aria-pressed={to_string(@form[field].value == value)}
-            disabled={@locked}
-          >
-            {text}
-          </button>
-        </div>
-      </div>
-      <.input
-        field={@form[:reps]}
-        id="home-new-reps"
-        type="number"
-        label="Total reps"
-        unit="reps"
-        min="1"
-        max="100000"
-        disabled={@locked}
-        class="home-authoring-input"
-      />
-      <.input
-        field={@form[:duration]}
-        type="text"
-        label="Duration"
-        unit="min"
-        placeholder="20:00"
-        disabled={@locked}
-        class="home-authoring-input"
-      />
-      <div
-        id="home-workout-budget"
-        class="home-budget"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <%= case @budget do %>
-          <% {:ok, %{work_us: work, recovery_us: recovery}} -> %>
-            <span>Movement <strong>{budget_clock(work)}</strong></span>
-            <span>Recovery <strong>{budget_clock(recovery)}</strong></span>
-          <% {:ok, :unknown_pace} -> %>
-            <%!-- Pace already reads "Coach chooses"; saying it twice is noise. --%>
-          <% _ -> %>
-            <span>Check reps, pace and duration</span>
-        <% end %>
-      </div>
-      <.input
-        field={@form[:pace]}
-        type="number"
-        step="any"
-        min="0.000001"
-        label="Pace"
-        unit="s per rep"
-        placeholder={
-          if(@candidate && is_nil(@form[:pace].value), do: "Varies by set", else: "Coach chooses")
-        }
-        disabled={@locked}
-        class="home-authoring-input"
-      />
-      <div class="composer home-new-note">
-        <.input
-          field={@form[:note]}
-          type="textarea"
-          rows="2"
-          label="Anything else"
-          placeholder="Anything else? Two sets of 25, a minute's break at 10:00…"
-          maxlength="300"
-          disabled={@locked}
-          class="composer-input"
-        />
-      </div>
-      <.authoring_actions
-        :if={!@locked}
-        cancel_id="home-request-abort"
-        cancel_label="Cancel new workout"
-        send_id="home-new-review"
-        send_label="Review workout"
-        busy={@busy}
-      />
-      <p :if={@busy} id="home-update-loading" role="status" class="home-budget-detail">
-        {if(@locked, do: "Saving…", else: "Preparing and validating…")}
-      </p>
-      <.review_actions :if={@locked} busy={@busy || is_nil(@candidate)} />
-      <section
-        :if={@locked && @candidate}
-        id="home-new-review-inspection"
-        aria-label="Proposed workout structure"
-      >
-        <.inspection
-          rows={@review_inspection_rows}
-          expanded={@expanded_groups}
-        />
-        <p
-          :if={@candidate.request.timed_rests != []}
-          id="home-new-review-pauses"
-          class="home-local-message"
-        >
-          {pauses_label(@candidate.request.timed_rests)}
-        </p>
-      </section>
-    </.form>
-    """
-  end
-
-  defp budget_clock(us) do
-    seconds = div(us, 1_000_000)
-    fraction = rem(us, 1_000_000)
-
-    elapsed_clock(seconds) <>
-      if(fraction == 0,
-        do: "",
-        else:
-          "." <>
-            (fraction
-             |> Integer.to_string()
-             |> String.pad_leading(6, "0")
-             |> String.trim_trailing("0"))
-      )
-  end
-
-  defp candidate_allocation(nil), do: nil
-
-  defp candidate_allocation(candidate) do
-    movement =
-      candidate.definition["events"]
-      |> Enum.filter(&(&1["kind"] == "work"))
-      |> Enum.reduce(0, &(&2 + &1["reps"] * round(&1["sec_per_burpee"] * 1_000_000)))
-
-    actual = candidate.definition["target_duration_sec"] * 1_000_000
-    requested = candidate.original_request.target_duration_sec * 1_000_000
-
-    %{
-      work_us: movement,
-      pool_us: requested - movement,
-      recovery_us: actual - movement,
-      unallocated_us: max(requested - actual, 0),
-      overrun_us: max(actual - requested, 0)
-    }
-  end
-
   defp elapsed_clock(seconds),
     do:
       "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
-
-  # Common edits, one tap each: the label on the chip, the instruction the coach receives.
-  defp edit_suggestions do
-    [
-      {"split", "Split into sets", "Split it into sets with a short rest between them"},
-      {"rests", "Longer rests", "Make the rests longer"},
-      {"shorter", "Make it shorter", "Make it shorter"}
-    ]
-  end
-
-  attr(:state, :map, required: true)
-
-  def current_edit(assigns) do
-    ~H"""
-    <%= if @state.busy? do %>
-      <div
-        id="home-update-loading"
-        role="status"
-        aria-label={
-          if(@state.authoring_stage == :review, do: "Saving variation", else: "Preparing variation")
-        }
-      >
-        <.burpee_loader />
-        <span id="home-edit-progress" class="home-local-message">
-          {if(@state.authoring_stage == :review,
-            do: "Saving variation…",
-            else: "Preparing variation…"
-          )}
-        </span>
-      </div>
-      <div
-        :if={@state.authoring_stage == :editing}
-        class="home-review-actions home-review-actions-split"
-      >
-        <button
-          id="home-request-abort"
-          type="button"
-          class="home-text-action home-icon-action"
-          aria-label="Cancel edit"
-          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-          title="Cancel"
-        >
-          <.icon name="hero-x-mark" class="size-5" />
-        </button>
-      </div>
-    <% else %>
-      <%= if @state.authoring_stage == :editing do %>
-        <.form
-          for={@state.adjustment_form}
-          id="home-edit-form"
-          class="home-current-edit home-authoring-form home-enter"
-          phx-submit="review_current_edit"
-          phx-change="change_current_edit"
-          aria-busy={to_string(@state.busy?)}
-          phx-mounted={JS.focus(to: "#home-edit-instruction")}
-        >
-          <div class="composer">
-            <.input
-              field={@state.adjustment_form[:instruction]}
-              id="home-edit-instruction"
-              type="textarea"
-              label="What do you want to change?"
-              placeholder="What should change?"
-              rows="2"
-              maxlength="500"
-              class="composer-input"
-            />
-          </div>
-          <div class="composer-suggestions" role="group" aria-label="Suggested changes">
-            <button
-              :for={{id, label, instruction} <- edit_suggestions()}
-              id={"home-edit-suggest-#{id}"}
-              type="button"
-              class="composer-suggestion"
-              phx-click={
-                JS.push("review_current_edit",
-                  value: %{"home_adjustment" => %{"instruction" => instruction}}
-                )
-              }
-            >
-              {label}
-            </button>
-          </div>
-          <.authoring_actions
-            cancel_id="home-request-abort"
-            cancel_label="Cancel edit"
-            send_id="home-edit-send"
-            send_label="Send"
-          />
-        </.form>
-      <% else %>
-        <section
-          id="home-edit-review"
-          class="home-review"
-          phx-mounted={JS.focus(to: "#home-request-confirm")}
-          aria-label="Proposed variation"
-        >
-          <.inspection
-            rows={@state.review_inspection_rows}
-            compare={@state.inspection_rows}
-            expanded={@state.expanded_groups}
-          />
-          <p
-            :if={@state.pending_request.request.timed_rests != []}
-            id="home-edit-review-pauses"
-            class="home-local-message"
-          >
-            {pauses_label(@state.pending_request.request.timed_rests)}
-          </p>
-          <.review_actions />
-        </section>
-      <% end %>
-    <% end %>
-    """
-  end
 
   attr(:prefix, :string, default: "home-request")
   attr(:busy, :boolean, default: false)
@@ -585,6 +231,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   attr(:state, :map, required: true)
 
+  # Today's workout. Swipe right to swap it; swipe up to edit it or make a new one (the
+  # buttons do the same). Edit and New take Home's place as a chat: `HomeStudioComponents`.
   def workspace(assigns) do
     ~H"""
     <section id="home-ready-recommendation" data-expanded={to_string(@state.expanded?)}>
@@ -602,18 +250,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <span class="sr-only">Updating workout</span>
           </div>
         <% else %>
-          <%!-- New takes the workout title's place, at the title's size, in the same column. --%>
-          <h1
-            :if={authoring_new?(@state)}
-            id="home-authoring-heading"
-            class="home-authoring-title home-enter"
-          >
-            {authoring_heading(@state.authoring_stage)}
-          </h1>
-          <%!-- Not rendered while New is open, so Cancel mounts it again and focus lands after the
-               patch. Edit keeps it in view: the field opens under the table. --%>
           <div
-            :if={not authoring_new?(@state)}
             id="home-workout-hero"
             class={@state.authoring_returned? && "home-enter"}
             phx-mounted={@state.authoring_returned? && JS.focus(to: "#home-summary")}
@@ -652,15 +289,23 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   value={duration_label(hero_totals(@state).target_duration_sec)}
                   was={duration_label(hero_was(@state).target_duration_sec)}
                 /> ·
-                <span id={edit_review?(@state) && "home-edit-review-reps"}>
-                  <.changed
-                    value={"#{hero_totals(@state).target_reps}"}
-                    was={"#{hero_was(@state).target_reps}"}
-                  />
-                </span>
-                reps
+                <.changed
+                  value={"#{hero_totals(@state).target_reps}"}
+                  was={"#{hero_was(@state).target_reps}"}
+                /> reps
               </span>
             </div>
+            <p
+              :if={@state.authoring_stage == :idle and shape(@state.home_selection.plan)}
+              id="home-shape"
+              class="home-shape"
+            >
+              {shape(@state.home_selection.plan)}<span
+                :if={best(@state)}
+                id="home-best"
+                class="home-best"
+              > · best {best(@state)} in 20 min</span>
+            </p>
             <p
               :if={@state.home_selection.rationale && @state.authoring_stage == :idle}
               id="home-planner-rationale"
@@ -671,37 +316,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <div
               :if={@state.authoring_stage == :idle}
               class="home-workout-actions"
-              data-expanded={to_string(@state.expanded?)}
+              data-expanded="true"
             >
               <.start_choice choice="camera" />
               <.start_choice choice="warmup" />
-              <button
-                id="home-edit-workout"
-                type="button"
-                phx-click="edit_current_workout"
-                aria-label="Edit current workout"
-                title="Edit workout"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-pencil-square" class="size-5" />
-              </button>
-              <button
-                id="home-title-action"
-                type="button"
-                phx-click={open_chooser()}
-                aria-label="Switch workout"
-                title="Switch workout"
-                aria-haspopup="dialog"
-                aria-expanded={to_string(@state.chooser_open?)}
-                aria-controls="home-alternatives-panel"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-arrows-right-left" class="size-5" />
-              </button>
               <button
                 id="home-action"
                 data-primary-action="start"
@@ -715,18 +333,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               >
                 <.icon name="hero-play-solid" class="size-6" />
               </button>
-              <button
-                id="home-new-workout"
-                type="button"
-                phx-click={leave_hero() |> JS.push("new_workout") |> JS.focus(to: "#home-new-reps")}
-                aria-label="New workout"
-                title="New workout"
-                class="home-text-action home-expanded-action"
-                inert={!@state.expanded?}
-                disabled={@state.authoring_stage != :idle}
-              >
-                <.icon name="hero-plus" class="size-5" />
-              </button>
             </div>
           </div>
           <div id="home-expansion" class="home-expansion" data-open={to_string(@state.expanded?)}>
@@ -737,10 +343,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               aria-hidden={to_string(!@state.expanded?)}
             >
               <.inspection
-                :if={
-                  @state.authoring_stage == :idle or
-                    (@state.editing_source && @state.authoring_stage == :editing)
-                }
+                :if={@state.authoring_stage == :idle}
                 rows={@state.inspection_rows}
                 expanded={@state.expanded_groups}
               />
@@ -770,60 +373,76 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   :if={@state.pending_request && @state.authoring_stage == :idle}
                   request={@state.pending_request.request}
                 />
-                <.authoring_form
-                  :if={authoring_new?(@state)}
-                  form={@state.workout_form}
-                  stage={@state.authoring_stage}
-                  candidate={@state.pending_request}
-                  busy={@state.busy?}
-                  review_inspection_rows={@state.review_inspection_rows}
-                  expanded_groups={@state.expanded_groups}
-                />
-                <.current_edit
-                  :if={
-                    not is_nil(@state.editing_source) and
-                      @state.authoring_stage in [:editing, :review]
-                  }
-                  state={@state}
-                />
-                <section
-                  :if={@state.authoring_stage == :saved}
-                  id="home-new-saved"
-                  class="home-review"
-                >
-                  <h2 class="home-review-heading">{@state.created_plan.name}</h2>
-                  <p class="home-local-message">Saved. Your current workout is unchanged.</p>
-                  <div class="home-review-actions home-review-actions-split">
-                    <button
-                      id="home-new-dismiss"
-                      phx-click="abort_new_workout"
-                      class="home-text-action home-icon-action"
-                      aria-label="Keep current workout"
-                      title="Keep current workout"
-                    >
-                      <.icon name="hero-x-mark" class="size-5" />
-                    </button>
-                    <button
-                      id="home-new-select"
-                      phx-click="select_created_workout"
-                      class="home-primary-action home-icon-action"
-                      aria-label="Use this workout"
-                      title="Use this workout"
-                    >
-                      <.icon name="hero-check" class="size-5" />
-                    </button>
-                  </div>
-                </section>
                 <p id="home-adjustment-error" role="status" class="home-local-message">
                   {@state.local_error}
                 </p>
               </div>
             </section>
           </div>
+          <%!-- Edit and New wait until the workout is opened: a swipe up, or this handle. Swap is
+               the swipe right, the left drawer. --%>
+          <div
+            :if={
+              @state.authoring_stage == :idle and @state.expanded? and not @state.options_open? and
+                not @state.chooser_open?
+            }
+            class="home-grab-area"
+          >
+            <button
+              id="home-grab"
+              type="button"
+              class="home-grab"
+              phx-click="open_options"
+              aria-label="Edit, swap or new workout"
+              title="Edit, swap or new workout"
+            >
+              <span class="home-grab-bar"></span>
+            </button>
+          </div>
+          <.options_sheet :if={@state.options_open?} state={@state} />
           <.chooser state={@state} />
         <% end %>
       </div>
     </section>
+    """
+  end
+
+  attr(:state, :map, required: true)
+
+  # Swiped up from the workout: what to do with it, in two choices.
+  defp options_sheet(assigns) do
+    ~H"""
+    <div id="home-options-backdrop" phx-click="close_options"></div>
+    <div
+      id="home-options-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit, swap or make a new workout"
+      phx-window-keydown="close_options"
+      phx-key="Escape"
+      phx-mounted={JS.focus()}
+      tabindex="-1"
+      data-no-swipe
+    >
+      <span class="home-sheet-grip" aria-hidden="true"></span>
+      <button
+        id="home-options-edit"
+        type="button"
+        class="home-option"
+        phx-click="edit_current_workout"
+      >
+        <.icon name="hero-pencil-square" class="size-6" />
+        <span class="home-option-title">Edit this workout</span>
+      </button>
+      <button id="home-options-swap" type="button" class="home-option" phx-click="open_chooser">
+        <.icon name="hero-arrows-right-left" class="size-6" />
+        <span class="home-option-title">Swap workout</span>
+      </button>
+      <button id="home-options-new" type="button" class="home-option" phx-click="new_workout">
+        <.icon name="hero-plus" class="size-6" />
+        <span class="home-option-title">New workout</span>
+      </button>
+    </div>
     """
   end
 
@@ -1067,13 +686,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       >
         <span id="home-week-fill" style={"width: #{progress_percent(@slot)}%"}></span>
       </div>
-      <p id="home-week-remaining" class="mt-2 text-sm opacity-60">
-        <%= if @slot.remaining_sec > 0 do %>
-          {div(@slot.remaining_sec + 59, 60)} min left this week
-        <% else %>
-          Weekly time goal complete
-        <% end %>
-      </p>
     </div>
     """
   end
@@ -1085,6 +697,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     default: nil,
     doc: "rows of the current workout; changed cells are marked"
   )
+
+  attr(:editable, :boolean,
+    default: false,
+    doc: "a tap on a set's row selects it for a hand edit (`select_proposal_row`)"
+  )
+
+  attr(:selected, :list, default: [], doc: "the set numbers selected for a hand edit")
 
   def inspection(assigns) do
     show_move? = show_move?(assigns.rows)
@@ -1124,7 +743,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         </caption>
         <thead>
           <tr>
-            <th scope="col">Sets</th>
+            <th scope="col">Set</th>
             <th scope="col">Reps</th>
             <th scope="col">Every</th>
             <th :if={@show_move?} scope="col">Move</th>
@@ -1138,9 +757,23 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <%!-- A tap anywhere on a group row toggles it; the button keeps keyboard and screen-reader operation. --%>
             <tr
               id={"#{row.id}-event-#{hd(hd(row.units).paired).index}"}
-              class={row.count > 1 && "home-group-row"}
-              phx-click={row.count > 1 && "toggle_group"}
-              phx-value-id={row.count > 1 && row.id}
+              class={[
+                row.count > 1 && "home-group-row",
+                (@editable and row.kind != :recovery) && "home-editable-row",
+                selected?(@rows, row, @selected) && "home-selected-row"
+              ]}
+              phx-click={
+                cond do
+                  @editable and row.kind != :recovery -> "select_proposal_row"
+                  row.count > 1 -> "toggle_group"
+                  true -> nil
+                end
+              }
+              phx-value-index={(@editable and row.kind != :recovery) && first_index(row)}
+              phx-value-id={(not @editable and row.count > 1) && row.id}
+              aria-selected={
+                (@editable and row.kind != :recovery) && to_string(selected?(@rows, row, @selected))
+              }
             >
               <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
                 <button
@@ -1155,16 +788,16 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                   aria-describedby={"#{row.id}-prescription"}
                 >
                   <%= if expanded? do %>
-                    Set {set_number(@rows, hd(row.units))}
+                    {set_number(@rows, hd(row.units))}
                   <% else %>
-                    {row.count} {if length(row.units) == row.count, do: "sets", else: "repeats"}
+                    {set_range(@rows, row)}
                   <% end %>
                   <.icon name="hero-chevron-down" class="home-chevron" />
                 </button>
                 <span :if={row.count > 1} id={"#{row.id}-prescription"} class="sr-only">
                   {Enum.map_join(visible_units, "; ", &prescription_label/1)}
                 </span>
-                <span :if={row.count == 1}>{row_label(row)}</span>
+                <span :if={row.count == 1}>{row_label(@rows, row)}</span>
               </th>
               <.prescription
                 units={visible_units}
@@ -1180,7 +813,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             hidden={!expanded?}
           >
             <tr :for={unit <- Enum.drop(row.units, 1)} id={"#{row.id}-event-#{hd(unit.paired).index}"}>
-              <th scope="row">Set {set_number(@rows, unit)}</th>
+              <th scope="row">{set_number(@rows, unit)}</th>
               <.prescription units={[unit]} show_move?={@show_move?} />
             </tr>
           </tbody>
@@ -1219,7 +852,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     units = shared_units(row)
 
     %{
-      label: if(row.count > 1, do: "#{row.count}", else: row_label(row)),
+      label: if(row.count > 1, do: "#{row.count}", else: "#{row.kind}"),
       reps: Enum.map(units, &work_value(&1, "reps")),
       every: Enum.map(units, &cadence/1),
       move: if(show_move?, do: Enum.map(units, &pace/1), else: []),
@@ -1245,12 +878,14 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  defp edit_review?(state),
-    do: not is_nil(state.editing_source) and state.authoring_stage == :review
+  defp shape(plan), do: BurpeeTrainer.Workouts.Shape.describe(plan.definition_json)
+
+  # The athlete's best for this burpee type, per 20 minutes, to read today's reps against.
+  defp best(state),
+    do: state |> Map.get(:home_bests, %{}) |> Map.get(state.home_selection.plan.burpee_type)
 
   defp hero_name(state) do
     cond do
-      edit_review?(state) -> state.pending_request.definition["name"]
       swap_review?(state) -> state.swap_preview.source.name
       true -> state.home_selection.plan.name
     end
@@ -1258,14 +893,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp hero_totals(state) do
     cond do
-      edit_review?(state) -> state.pending_request.request
       swap_review?(state) and state.swap_preview.kind == "plan" -> state.swap_preview.source
       true -> state.home_selection.plan
     end
   end
 
-  # What the hero is marked against: only an edit shows what it changed. A swap is another
-  # workout, so it reads plain.
+  # What the hero is marked against. A swap is another workout, so it reads plain.
   defp hero_was(state),
     do: if(swap_review?(state), do: hero_totals(state), else: state.home_selection.plan)
 
@@ -1310,7 +943,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
     total_us = tail_us + explicit_ms * 1_000
     # Whole seconds: timing is planned to ±10s, so decimals here are noise.
-    if total_us == 0, do: "—", else: "#{round(total_us / 1_000_000)}s"
+    if total_us == 0,
+      do: "—",
+      else: BurpeeTrainer.Workouts.Shape.clock(round(total_us / 1_000_000))
   end
 
   defp pace(unit),
@@ -1325,9 +960,30 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     end)
   end
 
-  defp row_label(%{trailing?: true}), do: "Final recovery"
-  defp row_label(%{kind: :recovery}), do: "Recovery"
-  defp row_label(_), do: "1 set"
+  defp row_label(_rows, %{trailing?: true}), do: "Final recovery"
+  defp row_label(_rows, %{kind: :recovery}), do: "Recovery"
+  defp row_label(rows, row), do: set_range(rows, row)
+
+  defp first_index(row), do: hd(hd(row.units).paired).index
+
+  @doc "A row's sets by number, as the table labels them: `5`, or `1–4` for a group."
+  def set_range(rows, row) do
+    case set_numbers(rows, row) do
+      [] -> ""
+      [one] -> "#{one}"
+      numbers -> "#{Enum.min(numbers)}–#{Enum.max(numbers)}"
+    end
+  end
+
+  @doc "The numbers of a row's sets, 1 for the workout's first."
+  def set_numbers(rows, row),
+    do: row.units |> Enum.filter(&work/1) |> Enum.map(&set_number(rows, &1))
+
+  defp selected?(_rows, _row, selected) when selected in [nil, []], do: false
+  defp selected?(rows, row, selected), do: Enum.any?(set_numbers(rows, row), &(&1 in selected))
+
+  @doc "The row whose first event is at `index`, if any."
+  def row_at(rows, index), do: Enum.find(rows, &(first_index(&1) == index))
 
   defp set_number(rows, unit) do
     rows
@@ -1360,21 +1016,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do: number(min(100, max(0, slot.completed_sec * 100 / slot.weekly_target_sec)))
 
   # Filter chips use the short form: "1A", "Graduated".
-  # New and Edit (and their review) replace today's workout on screen under one heading.
-  defp authoring_new?(state),
-    do: is_nil(state.editing_source) and state.authoring_stage in [:new, :review, :editing]
-
-  defp pauses_label([_one] = rests), do: "Pause: " <> pause_times(rests)
-  defp pauses_label(rests), do: "Pauses: " <> pause_times(rests)
-
-  defp pause_times(rests),
-    do:
-      Enum.map_join(rests, " · ", &"#{&1.duration_sec}s at #{elapsed_clock(round(&1.start_sec))}")
-
-  defp authoring_heading(:review), do: "Review"
-  defp authoring_heading(:editing), do: "Edit workout"
-  defp authoring_heading(:new), do: "New workout"
-
   defp level_label(level),
     do: level |> BurpeeTrainerWeb.Fmt.level() |> String.replace_prefix("Level ", "")
 end

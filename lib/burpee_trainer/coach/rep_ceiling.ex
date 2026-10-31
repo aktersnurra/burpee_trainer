@@ -49,11 +49,24 @@ defmodule BurpeeTrainer.Coach.RepCeiling do
   def pace(reps, duration_sec),
     do: div(reps * @landmark_duration_sec, max(duration_sec, @landmark_duration_sec))
 
-  defp recent_best(scope, burpee_type) do
+  @doc "The athlete's best reps per 20 minutes in the last eight weeks, per burpee type; nil for none."
+  @spec recent_bests(Scope.t()) :: %{atom() => pos_integer() | nil}
+  def recent_bests(%Scope{} = scope) do
+    sessions = Workouts.list_sessions(scope)
+
+    Map.new([:six_count, :navy_seal], fn type ->
+      best = sessions |> Enum.filter(&(&1.burpee_type == type)) |> best()
+      {type, if(best > 0, do: best)}
+    end)
+  end
+
+  defp recent_best(scope, burpee_type),
+    do: scope |> Workouts.list_sessions(burpee_type) |> best()
+
+  defp best(sessions) do
     since = DateTime.add(DateTime.utc_now(), -@recent_days, :day)
 
-    scope
-    |> Workouts.list_sessions(burpee_type)
+    sessions
     |> Enum.filter(
       &(DateTime.compare(&1.completed_at, since) != :lt and
           is_integer(&1.burpee_count_actual) and is_integer(&1.duration_sec_actual))
