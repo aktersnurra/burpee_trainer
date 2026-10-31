@@ -253,9 +253,10 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert_receive {:edit_planning_waiting, planner}, 1_000
     assert has_element?(view, "#home-update-loading[role=status] .studio-spinner")
     assert has_element?(view, "#home-request-abort:not([disabled])")
-    # The message stays on screen with the loader, and the box waits for the answer.
+    # The message moves into the thread with the loader; the box empties and waits for the answer.
     assert has_element?(view, "#home-design-ask", instruction)
     assert has_element?(view, "#home-edit-instruction[disabled]")
+    refute has_element?(view, "#home-edit-instruction", instruction)
     refute has_element?(view, "#home-edit-review")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     send(planner, :release_plan)

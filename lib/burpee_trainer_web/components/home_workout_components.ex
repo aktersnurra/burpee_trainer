@@ -399,11 +399,55 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               <span class="home-grab-bar"></span>
             </button>
           </div>
+          <.corner :if={
+            @state.authoring_stage == :idle and not @state.options_open? and
+              not @state.chooser_open?
+          } />
           <.options_sheet :if={@state.options_open?} state={@state} />
           <.chooser state={@state} />
         <% end %>
       </div>
     </section>
+    """
+  end
+
+  # A wide screen has no swipes: the drawer, Edit and New as buttons in the top-left corner.
+  defp corner(assigns) do
+    ~H"""
+    <nav class="home-corner" aria-label="Workout">
+      <button
+        id="home-corner-swap"
+        type="button"
+        class="home-corner-action"
+        phx-click={open_chooser()}
+        aria-label="Choose a workout"
+        title="Choose a workout"
+        aria-haspopup="dialog"
+        aria-controls="home-alternatives-panel"
+      >
+        <.icon name="hero-bars-3" class="size-5" />
+      </button>
+      <button
+        id="home-corner-edit"
+        type="button"
+        class="home-corner-action"
+        phx-click="edit_current_workout"
+        aria-label="Edit this workout"
+        title="Edit this workout"
+      >
+        <.icon name="hero-pencil-square" class="size-5" />
+      </button>
+      <button
+        id="home-corner-new"
+        type="button"
+        class="home-corner-action"
+        phx-click="new_workout"
+        aria-label="New workout"
+        title="New workout"
+      >
+        <.icon name="hero-plus" class="size-5" />
+      </button>
+    </nav>
     """
   end
 
@@ -434,7 +478,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <.icon name="hero-pencil-square" class="size-6" />
         <span class="home-option-title">Edit this workout</span>
       </button>
-      <button id="home-options-swap" type="button" class="home-option" phx-click="open_chooser">
+      <button id="home-options-swap" type="button" class="home-option" phx-click={open_chooser()}>
         <.icon name="hero-arrows-right-left" class="size-6" />
         <span class="home-option-title">Swap workout</span>
       </button>
@@ -450,20 +494,25 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   def chooser(assigns) do
     ~H"""
-    <div :if={@state.chooser_open?} id="home-chooser-backdrop" phx-click={close_chooser()}></div>
+    <%!-- The backdrop mounts with each opening, however it was opened (a button, the sheet, a
+         swipe), and takes focus into the drawer. Escape listens only while it is open. --%>
+    <div
+      :if={@state.chooser_open?}
+      id="home-chooser-backdrop"
+      phx-click={close_chooser()}
+      phx-mounted={JS.focus(to: "#home-chooser-close")}
+    >
+    </div>
     <div
       id="home-alternatives-panel"
       hidden={!@state.chooser_open?}
       role="dialog"
       aria-modal="true"
       aria-label="Choose a workout"
-      phx-window-keydown={close_chooser()}
-      phx-key="Escape"
+      phx-window-keydown={@state.chooser_open? && close_chooser()}
+      phx-key={@state.chooser_open? && "Escape"}
     >
-      <.focus_wrap
-        id="home-chooser-focus"
-        phx-mounted={@state.chooser_open? && JS.focus(to: "#home-chooser-close")}
-      >
+      <.focus_wrap id="home-chooser-focus">
         <header class="home-chooser-header">
           <button
             id="home-chooser-close"
