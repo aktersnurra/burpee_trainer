@@ -17,9 +17,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   @type stage :: :idle | :new | :editing | :review
 
-  @type command ::
-          {:cancel_async, {:new_request, reference()}}
-          | :refresh_alternatives
+  @type command :: {:cancel_async, {:new_request, reference()}}
 
   @type t :: %__MODULE__{}
 
@@ -96,9 +94,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   def update(%__MODULE__{} = m, :preparation_discarded), do: discard(m)
 
-  def update(%__MODULE__{} = m, :request_reopened),
-    do: {%{m | pending_request: nil, local_error: nil}, []}
-
   # Work starting: a new request supersedes what was in flight.
 
   def update(%__MODULE__{} = m, {:review_started, id, text}) do
@@ -112,9 +107,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         {:refine_started, id, text}
       ),
       do: {%{m | busy?: true, update_id: id, pending_turn: text, local_error: nil}, []}
-
-  def update(%__MODULE__{} = m, {:adjustment_started, id, text}),
-    do: {%{m | busy?: true, update_id: id, instruction: text, local_error: nil}, []}
 
   def update(%__MODULE__{} = m, {:confirm_started, id}),
     do: {%{m | busy?: true, update_id: id, local_error: nil}, []}
@@ -159,23 +151,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   def update(%__MODULE__{} = m, {:plan_failed, id, message}),
     do: settle(m, id, &{%{&1 | local_error: message}, []})
-
-  def update(%__MODULE__{} = m, {:revision_prepared, id, prepared}),
-    do: settle(m, id, &{%{&1 | pending_request: prepared, local_error: nil}, []})
-
-  def update(%__MODULE__{} = m, {:revision_prepare_failed, id, message}),
-    do: settle(m, id, &{%{&1 | pending_request: nil, local_error: message}, []})
-
-  def update(%__MODULE__{} = m, {:revision_applied, id}), do: settle(m, id, &{&1, []})
-
-  def update(%__MODULE__{} = m, {:revision_blocked, id, message}),
-    do: settle(m, id, &{%{&1 | local_error: message}, []})
-
-  def update(%__MODULE__{} = m, {:revision_failed, id, message}) do
-    settle(m, id, fn m ->
-      {%{m | pending_request: nil, local_error: message}, [:refresh_alternatives]}
-    end)
-  end
 
   def update(%__MODULE__{} = m, _event), do: {m, []}
 

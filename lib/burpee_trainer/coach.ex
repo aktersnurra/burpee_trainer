@@ -49,21 +49,6 @@ defmodule BurpeeTrainer.Coach do
   set_reps only when the user explicitly supplies or asks to preserve that sequence.
   """
 
-  defp revise_home_workout(scope, expected, instruction, opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(instruction),
-         {:ok, source} <- Workouts.verify_home_selection(scope, expected) do
-      author_attempt(scope, source, text, opts, fn definition, _suggestions ->
-        Workouts.commit_home_revision(
-          scope,
-          expected,
-          definition,
-          text
-        )
-      end)
-    end
-  end
-
   @spec prepare_home_revision(Accounts.Scope.t(), map(), String.t()) ::
           {:ok, map()} | {:error, Error.t()}
   @spec prepare_home_revision(Accounts.Scope.t(), map(), String.t(), keyword()) ::
@@ -114,31 +99,6 @@ defmodule BurpeeTrainer.Coach do
        do: %{prepared | request: %{request | max_set_reps: max}}
 
   defp carry_max_set(prepared, _max), do: prepared
-
-  @spec confirm_home_revision(Accounts.Scope.t(), map()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  @spec confirm_home_revision(Accounts.Scope.t(), map(), keyword()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  def confirm_home_revision(scope, prepared, opts \\ [])
-
-  def confirm_home_revision(
-        %Accounts.Scope{user: %Accounts.User{id: user_id}} = scope,
-        %{
-          user_id: user_id,
-          scope: %{kind: :revision, expected: expected},
-          request: %WorkoutRequest{} = request,
-          text: text
-        },
-        opts
-      )
-      when is_list(opts) do
-    with {:ok, _source} <- Workouts.verify_home_selection(scope, expected) do
-      revise_home_workout(scope, expected, text, Keyword.put(opts, :confirmed_request, request))
-    end
-  end
-
-  def confirm_home_revision(%Accounts.Scope{}, _prepared, _opts),
-    do: {:error, Error.new(:design_workspace_changed)}
 
   @doc """
   Reads the New form's note into exact sets, fixed pauses and recovery. The fields the

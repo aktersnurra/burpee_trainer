@@ -362,19 +362,15 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "abort_new_workout",
              "back_new_step",
-             "back_to_workout_request",
-             "change_adjustment",
              "change_current_edit",
              "change_new_workout",
-             "confirm_workout_request",
              "edit_current_workout",
              "new_workout",
              "refine_workout",
              "review_current_edit",
              "run_workout_request",
              "send_new_workout",
-             "step_workout_value",
-             "submit_home_action"
+             "step_workout_value"
            ] do
     HomeAuthoring.handle_event(event, params, socket)
   end
@@ -386,8 +382,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "open_chooser",
              "select_alternative",
              "tab",
-             "toggle_group",
-             "toggle_other"
+             "toggle_group"
            ] do
     HomeChooser.handle_event(event, params, socket)
   end
@@ -399,17 +394,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
     a = socket.assigns
 
     if (a.authoring_stage == :idle and a.home_selection) && token == a.start_client_session_id do
-      start_result(socket, Workouts.start_home_workout(a.current_scope, a.home_selection, token))
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_event("start_collapsed", %{"client_session_id" => token}, socket) do
-    a = socket.assigns
-
-    if not is_nil(a.home_selection) and not a.expanded? and
-         token == a.start_client_session_id do
       start_result(socket, Workouts.start_home_workout(a.current_scope, a.home_selection, token))
     else
       {:noreply, socket}
@@ -538,9 +522,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_async({kind, _id} = operation, result, socket)
       when kind in [
              :new_request,
-             :run_plan,
-             :home_revision_request,
-             :home_revision
+             :run_plan
            ] do
     HomeAuthoring.handle_async(operation, result, socket)
   end

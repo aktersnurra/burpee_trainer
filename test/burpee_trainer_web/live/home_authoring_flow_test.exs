@@ -107,49 +107,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoringFlowTest do
     end
   end
 
-  describe "adjusting the selected workout" do
-    test "a prepared adjustment is held for confirmation" do
-      id = make_ref()
-      {asked, []} = Flow.update(model(), {:adjustment_started, id, "shorter"})
-      assert asked.busy?
-      assert asked.instruction == "shorter"
-
-      {prepared, []} = Flow.update(asked, {:revision_prepared, id, :prepared})
-      assert prepared.pending_request == :prepared
-      refute prepared.busy?
-    end
-
-    test "a failed interpretation clears the pending request" do
-      id = make_ref()
-      {asked, []} = Flow.update(model(), {:adjustment_started, id, "x"})
-      {failed, []} = Flow.update(asked, {:revision_prepare_failed, id, "Couldn’t interpret."})
-      assert failed.pending_request == nil
-      assert failed.local_error == "Couldn’t interpret."
-    end
-
-    test "a blocked confirmation keeps the request; a failed one drops it" do
-      id = make_ref()
-      base = model(pending_request: :prepared)
-
-      {confirming, []} = Flow.update(base, {:confirm_started, id})
-      {blocked, []} = Flow.update(confirming, {:revision_blocked, id, "changed"})
-      assert blocked.pending_request == :prepared
-
-      {failed, [:refresh_alternatives]} =
-        Flow.update(confirming, {:revision_failed, id, "failed"})
-
-      assert failed.pending_request == nil
-    end
-
-    test "going back to the request clears it" do
-      {back, []} =
-        Flow.update(model(pending_request: :prepared, local_error: "x"), :request_reopened)
-
-      assert back.pending_request == nil
-      assert back.local_error == nil
-    end
-  end
-
   test "current?/2 is true only for the operation in flight" do
     id = make_ref()
     assert Flow.current?(model(update_id: id), id)

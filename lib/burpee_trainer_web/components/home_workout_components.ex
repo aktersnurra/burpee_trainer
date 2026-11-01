@@ -19,123 +19,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     |> JS.push("close_chooser")
   end
 
-  attr(:request, :map, required: true)
-  attr(:editable, :boolean, default: false)
-
-  def request_confirmation(assigns) do
-    ~H"""
-    <section
-      id="home-request-confirmation"
-      phx-mounted={JS.focus(to: "#home-request-confirm")}
-      aria-labelledby="home-request-heading"
-      class="home-review"
-    >
-      <h2 id="home-request-heading" class="home-review-heading">Review</h2>
-      <dl class="home-review-values">
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Reps</dt>
-          <dd id="home-request-reps" class="mt-1 font-semibold text-stone-900">
-            {@request.target_reps}
-          </dd>
-        </div>
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Duration</dt>
-          <dd id="home-request-duration" class="mt-1 font-semibold text-stone-900">
-            {duration_label(@request.target_duration_sec)}
-          </dd>
-        </div>
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Movement</dt>
-          <dd id="home-request-movement" class="mt-1 font-semibold text-stone-900">
-            {if(@request.burpee_type == "six_count", do: "Six-count", else: "Navy SEAL")}
-          </dd>
-        </div>
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Sets</dt>
-          <dd id="home-request-style" class="mt-1 font-semibold text-stone-900">
-            {if(@request.pacing_style == "unbroken", do: "Unbroken within sets", else: "Even")}
-          </dd>
-        </div>
-      </dl>
-      <p id="home-request-recovery" class="mt-4 text-sm text-stone-700">
-        <%= case @request.recovery do %>
-          <% "required" -> %>
-            Recovery between sets
-          <% "forbidden" -> %>
-            No rests
-          <% "optional" -> %>
-            Recovery as needed
-        <% end %>
-      </p>
-      <p :if={@request.requested_pace_sec} id="home-request-pace" class="mt-2 text-sm text-stone-700">
-        Requested movement pace: {@request.requested_pace_sec} seconds per rep
-      </p>
-      <div :if={@request.timed_rests != []} id="home-request-timed-rests" class="mt-4">
-        <p class="text-sm font-medium text-stone-900">Timed rests</p>
-        <ul class="mt-2 space-y-2 text-sm text-stone-700">
-          <li
-            :for={{rest, index} <- Enum.with_index(@request.timed_rests)}
-            id={"home-request-rest-#{index}"}
-          >
-            {rest.duration_sec} seconds beginning at {elapsed_clock(rest.start_sec)}
-          </li>
-        </ul>
-      </div>
-      <div class="home-review-actions home-review-actions-split">
-        <button
-          :if={@editable}
-          id="home-request-abort"
-          type="button"
-          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-          class="home-text-action home-icon-action"
-          aria-label="Cancel"
-          title="Cancel"
-        >
-          <.icon name="hero-x-mark" class="size-5" />
-        </button>
-        <div class="home-review-actions-group">
-          <button
-            :if={@editable}
-            id="home-request-edit"
-            type="button"
-            phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-review-reps")}
-            class="home-text-action home-icon-action"
-            aria-label="Edit"
-            title="Edit"
-          >
-            <.icon name="hero-pencil-square" class="size-5" />
-          </button>
-          <button
-            :if={!@editable}
-            id="home-request-back"
-            type="button"
-            phx-click="back_to_workout_request"
-            class="home-text-action home-icon-action"
-            aria-label="Edit"
-            title="Edit"
-          >
-            <.icon name="hero-pencil-square" class="size-5" />
-          </button>
-          <button
-            id="home-request-confirm"
-            type="button"
-            phx-click="confirm_workout_request"
-            class="home-primary-action home-icon-action"
-            aria-label="Approve"
-            title="Approve"
-          >
-            <.icon name="hero-check" class="size-5" />
-          </button>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  defp elapsed_clock(seconds),
-    do:
-      "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
-
   @start_choices %{
     "camera" => {"Camera tracking", "hero-video-camera"},
     "warmup" => {"Warmup", "hero-fire"}
@@ -266,10 +149,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 expanded={@state.expanded_groups}
               />
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
-                <.request_confirmation
-                  :if={@state.pending_request && @state.authoring_stage == :idle}
-                  request={@state.pending_request.request}
-                />
                 <p id="home-adjustment-error" role="status" class="home-local-message">
                   {@state.local_error}
                 </p>

@@ -48,14 +48,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   end
 
   @doc false
-  @spec replace_draft_changeset(t(), map()) :: Ecto.Changeset.t()
-  def replace_draft_changeset(%__MODULE__{state: :draft} = plan, attrs) do
-    plan
-    |> draft_content_changeset(attrs)
-    |> force_change(:updated_at, next_updated_at(plan.updated_at))
-  end
-
-  @doc false
   @spec publish_changeset(t(), DateTime.t()) :: Ecto.Changeset.t()
   def publish_changeset(%__MODULE__{state: :draft} = plan, %DateTime{} = published_at) do
     change(plan, state: :published, published_at: published_at)
@@ -65,13 +57,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutPlan do
   @spec archive_changeset(t(), DateTime.t()) :: Ecto.Changeset.t()
   def archive_changeset(%__MODULE__{state: :published} = plan, %DateTime{} = archived_at) do
     change(plan, state: :archived, archived_at: archived_at)
-  end
-
-  defp next_updated_at(%DateTime{} = previous) do
-    minimum = DateTime.add(previous, 1, :microsecond)
-    now = DateTime.utc_now()
-
-    if DateTime.compare(now, minimum) == :lt, do: minimum, else: now
   end
 
   defp draft_content_changeset(plan, attrs) do

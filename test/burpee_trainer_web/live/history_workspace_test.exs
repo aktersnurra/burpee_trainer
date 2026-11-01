@@ -159,8 +159,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     for {event, params} <- [
           {"history_period", %{}},
           {"history_period", %{"period" => "bogus"}},
-          {"history_session", %{"id" => %{}}},
-          {"submit_home_action", %{}}
+          {"history_session", %{"id" => %{}}}
         ] do
       render_click(view, event, params)
       assert has_element?(view, "#home-history-empty")

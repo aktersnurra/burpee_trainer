@@ -210,11 +210,11 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     plan_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
     token = :sys.get_state(view.pid).socket.assigns.start_client_session_id
+    open_edit(view)
 
-    render_click(view, "submit_home_action", %{
-      "client_session_id" => token,
-      "home_adjustment" => %{"instruction" => "Less rest"}
-    })
+    view
+    |> form("#home-edit-form", home_adjustment: %{instruction: "Less rest"})
+    |> render_submit()
 
     assert_receive {:provider_waiting, worker}
     before = workspace(view)
@@ -224,16 +224,16 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     delete_completion(view, saved)
     close_history(view)
     assert workspace(view) == before
-    assert has_element?(view, "#home-workout-area[aria-busy=true]")
+    assert has_element?(view, "#home-update-loading")
     assert Repo.reload!(before.home_selection.plan) == before.home_selection.plan
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
     refute_received {:provider_waiting, _}
     send(worker, :release)
     render_async(view)
-    assert :sys.get_state(view.pid).socket.assigns.instruction == "Less rest"
+    # The ask the coach could not answer comes back to the box to send again.
+    assert has_element?(view, "#home-edit-instruction", "Less rest")
     assert :sys.get_state(view.pid).socket.assigns.home_selection == before.home_selection
     assert :sys.get_state(view.pid).socket.assigns.start_client_session_id == token
-    assert has_element?(view, "#home-action[aria-label='Start workout']:not([disabled])")
   end
 
   defp workspace(view) do

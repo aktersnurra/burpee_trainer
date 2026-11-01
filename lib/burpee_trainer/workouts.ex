@@ -2565,20 +2565,6 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  @doc "Commit authored content against the exact Home selection CAS."
-  def commit_home_revision(%Scope{user: %User{} = user} = scope, expected, definition, text) do
-    immediate_lifecycle_transaction(fn ->
-      with {:ok, r} <- home_recommendation(user, expected),
-           {:ok, source} <- verify_home_selection(scope, expected),
-           {:ok, content} <-
-             canonical_draft_content(%{definition: definition, request_text: text}),
-           {:ok, draft} <- save_authored_draft(user, source, content),
-           {:ok, changed} <- write_home_pointer(r, draft.id, :owner) do
-        {:ok, HomeSelection.new(changed, draft)}
-      end
-    end)
-  end
-
   @doc "Idempotently publish canonical content under an owner-bound approval key."
   def commit_approved_workout(%Scope{user: %User{} = user}, definition, text, opts)
       when is_list(opts) do
@@ -2642,19 +2628,5 @@ defmodule BurpeeTrainer.Workouts do
           {:error, error} -> {:error, error}
         end
     end
-  end
-
-  defp save_authored_draft(_user, %{state: :draft} = source, content) do
-    source
-    |> WorkoutPlan.replace_draft_changeset(content)
-    |> Repo.update()
-    |> normalize_plan_write()
-  end
-
-  defp save_authored_draft(user, _published_or_nil, content) do
-    %WorkoutPlan{user_id: user.id, origin: :user, state: :draft}
-    |> WorkoutPlan.new_draft_changeset(content)
-    |> Repo.insert()
-    |> normalize_plan_write()
   end
 end

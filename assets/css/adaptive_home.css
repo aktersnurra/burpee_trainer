@@ -121,26 +121,6 @@ button.home-summary:hover .home-workout-name {
   margin-inline: -5px;
   padding-inline: 5px;
 }
-#home-adjustment-form {
-  margin-top: 22px;
-}
-/* Core input's fieldset carries a small DaisyUI font and padding even with a custom input class. */
-#home-adjustment-form .fieldset {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  padding: 0;
-  margin: 0;
-  gap: 0;
-}
-.home-adjustment-row {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  border-bottom: 1px solid var(--home-line);
-}
-.home-adjustment-row .home-action { flex: none; margin: 0; }
-.home-adjustment-row:focus-within { border-bottom-color: #5e615b; }
 #home-adjustment {
   display: block;
   width: 100%;
@@ -377,11 +357,6 @@ button.home-summary:hover .home-workout-name {
 .home-history {
   margin-top: 2.5rem;
 }
-.home-state-label,
-.home-result-totals dt {
-  color: var(--home-muted);
-  font-size: var(--text-small);
-}
 .home-state-heading {
   margin: 0.35rem 0 0;
   font-size: var(--text-display);
@@ -394,17 +369,6 @@ button.home-summary:hover .home-workout-name {
   padding: 0.5rem 0;
   text-decoration: underline;
   text-underline-offset: 0.25em;
-}
-.home-result-totals {
-  margin-top: 1.5rem;
-  font-variant-numeric: tabular-nums;
-}
-.home-result-totals dt:not(:first-child) {
-  margin-top: 0.75rem;
-}
-.home-result-duration {
-  font-size: var(--text-display);
-  line-height: 1.4;
 }
 .home-history {
   width: 100%;
@@ -459,23 +423,6 @@ button.home-summary:hover .home-workout-name {
 }
 .home-history-trend {
   padding: 1rem;
-}
-.home-history-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-  color: var(--home-muted);
-  font-size: var(--text-small);
-}
-.home-history-legend span::before {
-  content: "";
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: 0.3rem;
-  border-radius: 50%;
-  background: #8d3d25;
 }
 .home-history-plot {
   padding: 1rem 0.75rem;
@@ -612,11 +559,8 @@ button.home-summary:hover .home-workout-name {
 .home-expansion { margin-top: 0; }
 #home-inspection { max-width: 640px; padding-top: 26px; }
 #home-inspection table { font-variant-numeric: tabular-nums; }
-#home-adjustment-form { display: flex; flex-direction: column; max-width: 640px; margin-top: 30px; }
 #home-adjustment { min-height: 28px; font-size: var(--text-body); }
 .home-action { position: static; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; }
-.home-action-icon-update, #home-adjustment-form[data-has-instruction="true"] .home-action-icon-start { display: none; }
-#home-adjustment-form[data-has-instruction="true"] .home-action-icon-update { display: block; }
 @media (min-width: 601px) {
   .adaptive-home {
     max-width: 1040px;
@@ -670,15 +614,9 @@ button.home-summary:hover .home-workout-name {
 .home-history-svg { color: var(--series-six-count); }
 .home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--series-six-count); border-radius: 0; background: var(--home-surface); }
 .home-history-point-navy-seal span { border-color: var(--series-navy-seal); }
-.home-history-legend { margin-top: 12px; font-size: var(--text-small); }
-.home-history-legend span::before { width: 15px; height: 0; border: 0; border-top: 2px solid var(--series-six-count); border-radius: 0; background: transparent; }
-.home-history-legend #home-history-navy-seal::before { border-top: 2px dashed var(--series-navy-seal); border-radius: 0; background: transparent; }
 .home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
 .home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
-.home-history-sheet-tags { display: flex; flex-wrap: wrap; gap:7px; margin-top:18px; }
-.home-history-sheet-tags span { padding:5px 8px; border:1px solid var(--home-line); border-radius:3px; color:var(--home-muted); font-size: var(--text-small); }
-#home-history-sheet-note { margin-top: 12px; font-size: var(--text-body); line-height: 1.5; }
 /* On a phone the bottom row of actions (.home-corner) stays clear of the page's end. */
 @media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); padding-bottom: calc(76px + env(safe-area-inset-bottom)); } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
@@ -697,7 +635,6 @@ button.home-summary:hover .home-workout-name {
 .home-history-line-navy-seal { color: var(--series-navy-seal); }
 .home-history-point-six-count span { background: var(--home-surface); border-color: var(--series-six-count); }
 .home-history-point-navy-seal span { background: var(--home-surface); border-color: var(--series-navy-seal); border-radius: 0; }
-.home-history-legend #home-history-navy-seal::before { background: transparent; border-top-color: var(--series-navy-seal); border-radius: 0; }
 @media (prefers-reduced-motion: reduce) { .home-history-week-cell { transition: none; } }
 #home-history-empty { margin-top: 24px; }
 .home-history-day-bar { position: relative; }
@@ -736,25 +673,13 @@ button.home-summary:hover .home-workout-name {
 .home-authoring-form.home-enter { animation-delay: var(--motion-stagger); }
 /* The workout stays faded until the server's reply replaces it, however long that takes. */
 #home-workout-hero { transition: opacity var(--motion-quick) ease-in; }
-#home-workout-hero.home-leaving,
-#home-workout-hero:has(#home-new-workout.phx-click-loading, #home-edit-workout.phx-click-loading) { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .home-enter { animation: none; } #home-workout-hero { transition: none; } }
-.home-authoring-source { margin-top: 6px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.4; }
-.home-review-name { margin: 18px 0 4px; color: #262722; font: 600 var(--text-body)/1.3 var(--font-sans); letter-spacing: -0.01em; }
-.screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
 .home-coach-summary-text { margin-top: 18px; font-size: var(--text-body); line-height: 1.6; overflow-wrap: anywhere; }
 #home-coach-goals { margin-top: 28px; }
 /* Coach's message is a New form row: the label above an underlined field that grows with its text. */
 .home-authoring-form.coach-message-form { margin-top: 8px; }
 .coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-guidance-status:empty { display: none; }
-.history-coach-memory { margin-top: 32px; }
-.history-coach-memory summary { display: flex; align-items: center; min-height: 44px; color: var(--home-muted); font-size: var(--text-body); cursor: pointer; }
-.history-coach-memory summary:hover { color: #24231e; }
-.history-coach-memory summary { justify-content: space-between; list-style: none; }
-.history-coach-memory summary::-webkit-details-marker { display: none; }
-.history-coach-memory-chevron { transition: transform var(--motion-quick) ease; }
-.history-coach-memory[open] .history-coach-memory-chevron { transform: rotate(180deg); }
 .history-coach-entry { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-body); }
 .history-coach-entry p { flex: 1; }
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
@@ -762,9 +687,6 @@ button.home-summary:hover .home-workout-name {
 .history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
 .coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }
-.home-edit-structure summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--home-muted); font-size: var(--text-small); }
-.home-edit-structure ol { font-size: var(--text-small); line-height: 1.8; color: var(--home-muted); }
-.adaptive-home .history-coach-memory summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 
 /* Approved title-led Home: stable actions, quiet inline authoring. */
 #home-ready-recommendation:has(.home-hero) {
@@ -793,33 +715,17 @@ button.home-summary:hover .home-workout-name {
 .home-start-choice { position: relative; min-width: 44px; padding-inline: 14px; }
 .home-start-choice[aria-pressed="true"] { color: #262722; background: var(--color-base-200); }
 .home-start-choice[aria-pressed="false"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
-.home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
 .home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
-.home-workout-actions #home-new-workout { grid-column: 3; grid-row: 2; }
 .home-workout-actions #home-action { padding-inline: 36px; }
-.home-workout-actions .home-expanded-action { margin-top: 12px; padding-inline: 14px; }
-.home-workout-actions .home-expanded-action { opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity var(--motion-quick) ease, transform var(--motion-settle) var(--ease-out), visibility 0s linear var(--motion-quick); }
-.home-workout-actions[data-expanded="true"] .home-expanded-action { opacity: 1; visibility: visible; transform: translateY(0); transition: opacity var(--motion-settle) ease var(--motion-stagger), transform var(--motion-settle) var(--ease-out) var(--motion-stagger), visibility 0s; }
 #home-ready-recommendation .home-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
 #home-ready-recommendation .home-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
-.home-review, .home-authoring-form { margin-top: 14px; }
-.home-review-heading { padding: 11px 0 13px; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: var(--text-small); font-weight: 400; }
-.home-review-values > div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--home-line); padding: 14px 0; border-radius: 0; background: transparent; font-size: var(--text-body); }
-.home-review-values dt { color: var(--home-muted); }
-.home-review-values dd { margin: 0; font-weight: 400; text-align: right; }
-.home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
-/* New form actions are words: a quiet Cancel or Edit, and one filled primary action. */
-.home-review-actions:has(.home-text-action, .home-primary-action) { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
-/* Cancel sits at the left edge of every New, Edit, Swap and review step; the rest group at the right. */
-.home-review-actions-split { justify-content: space-between; }
-.home-review-actions-group { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.home-authoring-form { margin-top: 14px; }
 .home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
 .home-text-action { background: transparent; border: 0; color: var(--home-muted); }
 .home-text-action:hover { color: #262722; }
 .home-primary-action { background: #262722; border: 1px solid #262722; color: var(--color-base-100); }
 .home-primary-action:hover { opacity: .85; }
 :is(.home-text-action, .home-primary-action):disabled { opacity: .4; cursor: default; }
-#home-request-timing { color: var(--home-muted); font-size: var(--text-small); }
 /* Every row of the New form: label left, value right, one height and one value size. */
 .home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--home-line); font: inherit; display: flex; align-items: center; }
 .home-authoring-form .fieldset > label { flex: 1; }
@@ -833,12 +739,9 @@ button.home-summary:hover .home-workout-name {
 /* The focused field underlines its row instead of drawing a box past the column edge. */
 .home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
 .home-authoring-form input[type="hidden"] { display: none; }
-/* Work and recovery is computed, not typed: a caption under Duration, not a row. */
-/* Duration and its Movement/Recovery caption read as one row; with no caption, Duration keeps its own line. */
-.home-rest-alternative { margin-top: 14px; font-size: var(--text-small); line-height: 1.7; }
 .adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
-  #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"], .home-workout-actions .home-expanded-action, .home-workout-actions[data-expanded="true"] .home-expanded-action { transition: none; }
+  #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"] { transition: none; }
 }
 
 /* The streak: its number at display size and its words on the same baseline. */
@@ -861,8 +764,6 @@ button.home-summary:hover .home-workout-name {
 /* Points are dots: six-count filled ink, navy seal an open ring. */
 .adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--home-surface); background: var(--series-six-count); outline: 1px solid var(--series-six-count); }
 .adaptive-home .home-history-point-navy-seal span { background: var(--home-surface); outline: 1.5px solid var(--series-navy-seal); }
-/* A session's numbers sit like the streak pair: what was done, then "of" the plan. */
-.home-history-comparison { flex-wrap: wrap; gap: 12px 32px; margin-top: 20px; }
 /* View switches sit at the heading's right edge and look like the period tabs. */
 .home-workout-actions[inert] { opacity: .45; transition: opacity var(--motion-quick) ease; }
 #home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
@@ -901,32 +802,16 @@ button.home-summary:hover .home-workout-name {
 .progress-gauge-meter.progress-gauge-met span { background: #6f7d55; }
 .progress-course { margin: 0; }
 .progress-course svg { display: block; width: 100%; height: 32px; overflow: visible; }
-.progress-course-target { stroke: #262722; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
-.progress-course-done { fill: none; stroke: #262722; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.progress-course-ahead { fill: none; stroke: #262722; stroke-width: 2; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .progress-course-caption { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
 .progress-course-caption.progress-course-on { color: #262722; }
 .adaptive-home .progress-gauge-set { align-self: flex-start; min-height: 44px; padding: 0; color: #262722; font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .progress-gauge-meter span { transition: none; } }
 .home-result-status { color: var(--home-muted); }
-/* A destructive decision is still the one filled action, in the error colour. */
-.home-danger-action { background: #a55643; border-color: #a55643; color: var(--color-base-100); }
-/* A session opens under its own row: the coach's read, the numbers, then a quiet Delete. */
-.home-history-detail { padding: 4px 0 16px; }
-.home-history-detail #history-insight { margin-top: 4px; }
-.home-history-detail #history-insight-headline { font: 500 var(--text-body)/1.5 var(--font-sans); color: #262722; }
-.home-history-detail #history-insight-points { margin: 6px 0 0; padding: 0; list-style: none; color: var(--home-muted); font-size: var(--text-body); line-height: 1.5; }
-.home-history-detail .home-history-comparison { margin-top: 12px; }
-.home-history-detail .home-review-actions { justify-content: flex-start; margin-top: 8px; }
-.home-history-detail .home-review-actions .home-text-action:first-child { margin-left: -20px; }
 .home-history-delete-ask { margin-top: 12px; }
 .home-history-delete-ask p { color: #262722; font-size: var(--text-body); }
-.home-history-delete-ask .home-review-actions { justify-content: flex-end; }
-.home-history-delete-ask .home-review-actions .home-text-action:first-child { margin-left: 0; }
 /* Progress leads with one headline: the number at 64px, one line saying what, a thin bar. */
 .home-history-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 #history-level { color: inherit; font: inherit; white-space: nowrap; }
-#progress-choose-goal { display: inline-flex; align-items: center; text-decoration: none; }
 /* The coach's line: plain text and a chevron, no panel. */
 /* Other goals: one quiet row each under a hairline. */
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
@@ -951,7 +836,6 @@ button.home-summary:hover .home-workout-name {
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
 .adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
 .adaptive-home .home-primary-action.home-icon-action { width: 44px; }
-.adaptive-home .home-workout-actions .home-expanded-action { padding-inline: 10px; }
 .adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 /* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
 .home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--home-line); }
@@ -1019,7 +903,6 @@ button.home-summary:hover .home-workout-name {
 /* The home indicator is behind the keyboard, so its padding would only float the box. */
 .chat-dock[data-keyboard="open"] { padding-bottom: 8px; }
 .chat-dock-inner { display: grid; gap: 8px; max-width: var(--chat-w); margin-inline: auto; pointer-events: auto; }
-.chat-dock-actions { justify-content: flex-end; margin-left: 0; }
 .chat-dock .composer textarea { min-height: 1.5em; max-height: 9rem; overflow-y: auto; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
 

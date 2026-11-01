@@ -157,7 +157,7 @@ defmodule BurpeeTrainerWeb.HomeReturningMountTest do
     assert_historical_session_mount(user, now, slot, session, :video, completed_at)
   end
 
-  test "without a selection, Start, adjustment submit and adjustment change are inert", %{
+  test "without a selection, Start, Edit and New are inert", %{
     conn: _conn
   } do
     user = returning_user()
@@ -173,14 +173,9 @@ defmodule BurpeeTrainerWeb.HomeReturningMountTest do
     token = socket.assigns.start_client_session_id
 
     for {event, params} <- [
-          {"submit_home_action",
-           %{"client_session_id" => token, "home_adjustment" => %{"instruction" => ""}}},
-          {"submit_home_action",
-           %{
-             "client_session_id" => token,
-             "home_adjustment" => %{"instruction" => "Make it harder"}
-           }},
-          {"change_adjustment", %{"home_adjustment" => %{"instruction" => "Make it harder"}}}
+          {"start_workout", %{"client_session_id" => token}},
+          {"edit_current_workout", %{}},
+          {"new_workout", %{}}
         ] do
       assert {:noreply, ^socket} = HomeLive.handle_event(event, params, socket)
     end

@@ -28,7 +28,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_empty?: true,
       history_expanded: MapSet.new(),
       history_points: %{six_count: [], navy_seal: []},
-      history_summary: History.summary([]),
       history_loaded_ids: [],
       history_loaded_count: 0,
       history_available?: false,
@@ -247,7 +246,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
 
     with {:ok, rows, next, more?} <-
            History.page(a.current_scope, now, a.history_period, cursor) do
-      {points, summary} =
+      points =
         if reset? do
           history_sessions =
             Map.new([:six_count, :navy_seal], fn type ->
@@ -262,21 +261,11 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
               {type, sessions}
             end)
 
-          points =
-            Map.new(history_sessions, fn {type, sessions} ->
-              {type, History.points(sessions)}
-            end)
-
-          summary =
-            history_sessions
-            |> Map.values()
-            |> List.flatten()
-            |> Enum.uniq_by(& &1.id)
-            |> History.summary()
-
-          {points, summary}
+          Map.new(history_sessions, fn {type, sessions} ->
+            {type, History.points(sessions)}
+          end)
         else
-          {a.history_points, a.history_summary}
+          a.history_points
         end
 
       ids =
@@ -321,7 +310,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
         history_has_more?: more?,
         history_empty?: ids == [],
         history_points: points,
-        history_summary: summary,
         history_loaded_ids: ids,
         history_loaded_count: length(ids)
       )
@@ -341,8 +329,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
           history_week_start: nil,
           history_week_days: [],
           history_streak: 0,
-          history_points: %{six_count: [], navy_seal: []},
-          history_summary: History.summary([])
+          history_points: %{six_count: [], navy_seal: []}
         )
         |> stream(:history_sessions, [], reset: true)
     end

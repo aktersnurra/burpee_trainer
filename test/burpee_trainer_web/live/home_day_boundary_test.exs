@@ -20,7 +20,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     :instruction,
     :expanded?,
     :expanded_groups,
-    :alternatives_open?,
     :start_client_session_id,
     :busy?,
     :update_id
@@ -92,15 +91,10 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     socket = mount_home(user, DateTime.add(now, -86_400))
     old = socket.assigns.home_selection
 
-    {:noreply, socket} =
-      HomeLive.handle_event(
-        "change_adjustment",
-        %{"home_adjustment" => %{"instruction" => "Unsent adjustment"}},
-        socket
-      )
-
     socket =
-      assign(socket, expanded?: true, expanded_groups: MapSet.new(["group"]))
+      socket
+      |> assign(expanded?: true, expanded_groups: MapSet.new(["group"]))
+      |> BurpeeTrainerWeb.HomeAuthoring.adjustment_form("Unsent adjustment")
 
     before =
       Map.take(
@@ -414,7 +408,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
       assign(socket,
         instruction: "My unsent text",
         expanded_groups: MapSet.new(["group"]),
-        alternatives_open?: true,
         busy?: true,
         update_id: make_ref()
       )
@@ -508,7 +501,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     assert present?(socket, "#home-history-error")
 
     {:noreply, socket} =
-      HomeLive.handle_async({:home_revision, id}, {:ok, {:error, :unavailable}}, socket)
+      HomeLive.handle_async({:new_request, id}, {:ok, {:error, :unavailable}}, socket)
 
     refute socket.assigns.busy?
     assert socket.assigns.instruction == "Keep text"
@@ -549,44 +542,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     assert {:noreply, ^socket} = HomeLive.handle_info({:home_day_boundary, -1}, socket)
 
     assert {:noreply, ^socket} =
-             HomeLive.handle_async({:home_revision, make_ref()}, {:ok, {:ok, %{}}}, socket)
-  end
-
-  test "formerly successful async selection must still pass domain authorization", %{user: user} do
-    now = DateTime.utc_now(:second)
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
-    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    socket = mount_home(user, now)
-    selected = socket.assigns.home_selection
-
-    Repo.get!(CoachRecommendation, selected.recommendation_id)
-    |> Ecto.Changeset.change(slot_key: "obsolete-slot")
-    |> Repo.update!()
-
-    id = make_ref()
-
-    socket =
-      assign(socket,
-        busy?: true,
-        update_id: id,
-        instruction: "Keep this adjustment",
-        history_open?: true
-      )
-
-    {:noreply, result} =
-      HomeLive.handle_async({:home_revision, id}, {:ok, {:ok, selected}}, socket)
-
-    refute result.assigns.busy?
-    assert result.assigns.update_id == nil
-    assert result.assigns.home_selection == selected
-    assert result.assigns.instruction == "Keep this adjustment"
-    assert result.assigns.history_open?
-    assert result.assigns.start_client_session_id == socket.assigns.start_client_session_id
-
-    assert result.assigns.local_error ==
-             "The training day or workout changed. Reopen Home before starting or updating."
-
-    assert Workouts.current_started_session(Scope.for_user(user)) == nil
+             HomeLive.handle_async({:new_request, make_ref()}, {:ok, {:ok, %{}}}, socket)
   end
 
   test "connected scheduling cancels old timers and invalid timezone stops scheduling", %{

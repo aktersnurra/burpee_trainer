@@ -8,15 +8,12 @@ defmodule BurpeeTrainerWeb.HomeChooser do
   alias BurpeeTrainer.Workouts.CoachRecommendation
   alias BurpeeTrainerWeb.{HomeWorkspace, HomeLive}
 
-  def handle_event("toggle_other", _, socket),
-    do: {:noreply, assign(socket, alternatives_open?: not socket.assigns.alternatives_open?)}
-
   def handle_event("open_chooser", _, socket) do
     if socket.assigns.home_selection || socket.assigns.home_state == :choose,
       do:
         {:noreply,
          socket
-         |> assign(chooser_open?: true, alternatives_open?: true)
+         |> assign(chooser_open?: true)
          |> refresh_alternatives()},
       else: {:noreply, socket}
   end
@@ -60,7 +57,6 @@ defmodule BurpeeTrainerWeb.HomeChooser do
        |> HomeWorkspace.refresh_projection()
        |> assign(
          chooser_open?: true,
-         alternatives_open?: true,
          expanded?: a.expanded?,
          active_tab: a.active_tab
        )

@@ -11,18 +11,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     HomeAdjustment,
     HomeWorkoutRequest,
     HomeWorkspace,
-    HomeChooser,
     HomeLive,
     NewWorkoutForm
   }
-
-  # Selected-workspace events cannot act without a persisted selection.
-
-  def handle_event("change_adjustment", _params, %{assigns: %{home_selection: nil}} = socket),
-    do: {:noreply, socket}
-
-  def handle_event("submit_home_action", _params, %{assigns: %{home_selection: nil}} = socket),
-    do: {:noreply, socket}
 
   def handle_event("edit_current_workout", _, socket) do
     if not is_nil(socket.assigns.home_selection) and socket.assigns.authoring_stage == :idle and
@@ -250,51 +241,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     |> begin_plan_review(%{"note" => String.trim(form.params.note || "")})
   end
 
-  def handle_event("change_adjustment", %{"home_adjustment" => %{"instruction" => text}}, socket)
-      when is_binary(text),
-      do: {:noreply, socket |> assign(instruction: text) |> adjustment_form(text)}
-
-  def handle_event("submit_home_action", params, socket) do
-    text =
-      case params do
-        %{"home_adjustment" => %{"instruction" => text}} -> text
-        _ -> nil
-      end
-
-    a = socket.assigns
-
-    with true <- is_nil(a.pending_request),
-         true <- params["client_session_id"] == a.start_client_session_id,
-         {:ok, operation} <- HomeAdjustment.operation(text) do
-      case operation do
-        {:start, ""} ->
-          HomeLive.start_result(
-            socket,
-            Workouts.start_home_workout(
-              a.current_scope,
-              a.home_selection,
-              a.start_client_session_id
-            )
-          )
-
-        {:update, instruction} ->
-          id = make_ref()
-          scope = a.current_scope
-          expected = a.home_selection
-
-          {:noreply,
-           socket
-           |> step({:adjustment_started, id, text})
-           |> start_async({:home_revision_request, id}, fn ->
-             Coach.prepare_home_revision(scope, expected, instruction)
-           end)}
-      end
-    else
-      _ ->
-        {:noreply, assign(socket, local_error: "Enter an adjustment of at most 500 characters.")}
-    end
-  end
-
   def handle_event("run_workout_request", _, %{assigns: %{authoring_stage: :review}} = socket) do
     a = socket.assigns
     id = make_ref()
@@ -312,30 +258,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     else
       {:noreply, assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
     end
-  end
-
-  def handle_event(
-        "confirm_workout_request",
-        _params,
-        %{assigns: %{pending_request: %{scope: %{kind: :revision}} = prepared, busy?: false}} =
-          socket
-      ) do
-    id = make_ref()
-    scope = socket.assigns.current_scope
-
-    {:noreply,
-     socket
-     |> step({:confirm_started, id})
-     |> start_async({:home_revision, id}, fn ->
-       Coach.confirm_home_revision(scope, prepared)
-     end)}
-  end
-
-  def handle_event("back_to_workout_request", _params, %{assigns: %{busy?: false}} = socket) do
-    {:noreply,
-     socket
-     |> step(:request_reopened)
-     |> adjustment_form(socket.assigns.instruction)}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
@@ -430,61 +352,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
          "Couldn’t run this workout. Your selection may have changed; go back and try again."}
       )
 
-  defp settle(:home_revision_request, id, {:ok, {:ok, prepared}}, socket) do
-    case Workouts.verify_home_selection(socket.assigns.current_scope, prepared.scope.expected) do
-      {:ok, _plan} ->
-        step(socket, {:revision_prepared, id, prepared})
-
-      {:error, _} ->
-        step(
-          socket,
-          {:revision_prepare_failed, id,
-           "The training day or workout changed. Reopen Home before updating."}
-        )
-    end
-  end
-
-  defp settle(:home_revision_request, id, _result, socket) do
-    socket
-    |> step(
-      {:revision_prepare_failed, id,
-       "Couldn’t interpret that request. Your workout is unchanged."}
-    )
-    |> adjustment_form(socket.assigns.instruction)
-  end
-
-  defp settle(:home_revision, id, {:ok, {:ok, selected}}, socket) do
-    case Workouts.verify_home_selection(socket.assigns.current_scope, selected) do
-      {:ok, _plan} ->
-        socket
-        |> step({:revision_applied, id})
-        |> HomeWorkspace.show_selection(selected, true)
-
-      {:error, _} ->
-        socket
-        |> step(
-          {:revision_blocked, id,
-           "The training day or workout changed. Reopen Home before starting or updating."}
-        )
-        |> adjustment_form(socket.assigns.instruction)
-    end
-  end
-
-  defp settle(:home_revision, id, result, socket) do
-    message =
-      case result do
-        {:ok, {:error, %{code: :authoring_context_too_large}}} ->
-          "This design history is too large to send. Your previous workout is unchanged."
-
-        _ ->
-          "Couldn’t update. Your previous workout is unchanged."
-      end
-
-    socket
-    |> step({:revision_failed, id, message})
-    |> adjustment_form(socket.assigns.instruction)
-  end
-
   # The box empties on send; an Edit ask that fails comes back to it to send again. New's first
   # ask is made from its answers, which stay as they were.
   defp restore_edit_ask(%{assigns: %{editing_source: nil}} = socket), do: socket
@@ -554,7 +421,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   end
 
   defp run({:cancel_async, name}, socket), do: cancel_async(socket, name)
-  defp run(:refresh_alternatives, socket), do: HomeChooser.refresh_alternatives(socket)
 
   defp verify_edit_selection(%{assigns: %{editing_source: nil}}), do: :ok
 
