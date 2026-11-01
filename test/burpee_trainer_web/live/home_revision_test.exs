@@ -49,15 +49,6 @@ defmodule BurpeeTrainerWeb.HomeRevisionTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
 
-    render_click(view, "toggle_filters", %{})
-
-    for level <- BurpeeTrainer.Levels.all_levels() do
-      selector = "#home-level-#{level}[aria-pressed='false']"
-
-      if has_element?(view, selector),
-        do: view |> element(selector) |> render_click(%{"value" => ""})
-    end
-
     assert has_element?(view, "#home-alternatives")
 
     [token] =

@@ -24,48 +24,12 @@ defmodule BurpeeTrainerWeb.HomeChooser do
   def handle_event("close_chooser", _, socket),
     do: {:noreply, assign(socket, chooser_open?: false)}
 
-  def handle_event("toggle_filters", _, socket),
-    do:
-      {:noreply,
-       assign(socket, filters_open?: not socket.assigns.filters_open?, alternatives_open?: true)}
-
   def handle_event("tab", %{"tab" => tab}, socket) when tab in ["workouts", "videos"] do
     {:noreply,
      socket
      |> assign(active_tab: if(tab == "workouts", do: :workouts, else: :videos))
      |> refresh_alternatives()}
   end
-
-  def handle_event("filter", %{"kind" => kind, "filter" => value}, socket)
-      when kind in ["type", "level"] do
-    {key, allowed} =
-      if kind == "type",
-        do: {:types, [:six_count, :navy_seal]},
-        else: {:levels, BurpeeTrainer.Levels.all_levels()}
-
-    case Enum.find(allowed, &(Atom.to_string(&1) == value)) do
-      nil ->
-        {:noreply, socket}
-
-      atom ->
-        set = Map.fetch!(socket.assigns.filters, key)
-
-        set =
-          if MapSet.member?(set, atom), do: MapSet.delete(set, atom), else: MapSet.put(set, atom)
-
-        {:noreply,
-         socket
-         |> assign(filters: Map.put(socket.assigns.filters, key, set))
-         |> refresh_alternatives()}
-    end
-  end
-
-  def handle_event("reset_filters", _, socket),
-    do:
-      {:noreply,
-       socket
-       |> assign(filters: Catalog.default_filters(socket.assigns.current_level))
-       |> refresh_alternatives()}
 
   def handle_event("toggle_group", %{"id" => id}, socket) do
     rows =
@@ -98,8 +62,6 @@ defmodule BurpeeTrainerWeb.HomeChooser do
          chooser_open?: true,
          alternatives_open?: true,
          expanded?: a.expanded?,
-         filters: a.filters,
-         filters_open?: a.filters_open?,
          active_tab: a.active_tab
        )
        |> refresh_alternatives()}
@@ -192,13 +154,11 @@ defmodule BurpeeTrainerWeb.HomeChooser do
         :workouts ->
           Workouts.list_library(a.current_scope)
           |> Catalog.order_plans([], a.slot, a.current_level)
-          |> Catalog.filter(a.filters, &Catalog.plan_level/1)
           |> Enum.map(&alternative_item/1)
 
         :videos ->
           BurpeeTrainer.Videos.list_home_videos()
-          |> Catalog.order_videos()
-          |> Catalog.filter(a.filters, &Catalog.video_level/1)
+          |> Catalog.order_videos(a.current_level)
           |> Enum.map(&alternative_item/1)
       end
 
@@ -233,9 +193,8 @@ defmodule BurpeeTrainerWeb.HomeChooser do
               _ -> plans
             end
 
-          plans
-          |> Catalog.filter(a.filters, &Catalog.plan_level/1)
-          |> Enum.map(
+          Enum.map(
+            plans,
             &%{
               id: "plan-#{&1.id}",
               source_id: &1.id,
@@ -249,8 +208,7 @@ defmodule BurpeeTrainerWeb.HomeChooser do
 
         :videos ->
           BurpeeTrainer.Videos.list_home_videos()
-          |> Catalog.order_videos()
-          |> Catalog.filter(a.filters, &Catalog.video_level/1)
+          |> Catalog.order_videos(a.current_level)
           |> Enum.map(
             &%{
               id: "video-#{&1.id}",

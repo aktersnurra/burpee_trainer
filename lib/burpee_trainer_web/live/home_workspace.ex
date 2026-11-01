@@ -3,7 +3,6 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
 
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainer.Coach.Catalog
   alias BurpeeTrainer.Workouts.Inspection
   alias BurpeeTrainerWeb.{HomeWorkoutRequest, HomeChooser, HomeAuthoring, HomeLive}
 
@@ -15,9 +14,7 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         expanded?: false,
         alternatives_open?: false,
         chooser_open?: false,
-        filters_open?: false,
         active_tab: :workouts,
-        filters: Catalog.default_filters(socket.assigns.current_level),
         instruction: "",
         authoring_stage: :idle,
         workout_parameters: %HomeWorkoutRequest{},

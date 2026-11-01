@@ -40,7 +40,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     }
   end
 
-  test "real choose reads and filters expose actual catalog rows without writes", context do
+  test "real choose reads expose actual catalog rows without writes", context do
     %{
       view: view,
       plan: plan,
@@ -66,12 +66,6 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
 
     refute has_element?(view, "#home-alternative-plan-#{foreign.id}-select")
     refute has_element?(view, "#home-alternative-plan-#{archived.id}-select")
-    view |> element("#home-filter-toggle") |> render_click()
-    selected = has_element?(view, "#home-type-six_count[aria-pressed=true]")
-    view |> element("#home-type-six_count") |> render_click()
-    assert has_element?(view, "#home-type-six_count[aria-pressed=#{not selected}]")
-    view |> element("#home-filter-reset") |> render_click()
-    assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
     view |> element("#home-tab-videos") |> render_click()
     assert has_element?(view, "#home-alternative-video-#{video.id}-select:not([disabled])")
     refute has_element?(view, "#home-alternative-video-#{unavailable.id}-select")
@@ -80,14 +74,11 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     assert persisted() == before
   end
 
-  test "choose catalog streams replay across all three actions with filters",
+  test "choose catalog streams replay across all three actions",
        %{view: view, user: user, plan: plan} do
     before = persisted()
     pid = view.pid
     open_swap(view)
-    view |> element("#home-filter-toggle") |> render_click()
-    render_click(view, "filter", %{"kind" => "type", "filter" => "navy_seal"})
-    filters = :sys.get_state(view.pid).socket.assigns.filters
 
     for _ <- 1..2 do
       view |> element("#home-history-toggle") |> render_click()
@@ -98,7 +89,6 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
       assert view.pid == pid
       assert has_element?(view, "#home-page[data-home-state=choose]")
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
-      assert :sys.get_state(view.pid).socket.assigns.filters == filters
 
       assert Memory.list(Scope.for_user(user)) == []
       assert persisted() == before
@@ -209,7 +199,6 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
   test "nil-selection owned Delete reports actual absent-fallback rejection without effects",
        %{view: view, plan: plan, user: user} do
     open_swap(view)
-    view |> element("#home-filter-toggle") |> render_click()
 
     assert has_element?(
              view,
@@ -231,9 +220,6 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     assert Repo.get!(WorkoutPlan, plan.id).state == :published
     assert Workouts.current_home_selection(Scope.for_user(user), before_assigns.slot) == nil
 
-    view |> element("#home-type-six_count") |> render_click()
-    assert stable_assigns(view).filters != before_assigns.filters
-    view |> element("#home-filter-reset") |> render_click()
     view |> element("#home-history-toggle") |> render_click()
     assert_patch(view, "/progress")
     view |> element("#home-history-close") |> render_click()

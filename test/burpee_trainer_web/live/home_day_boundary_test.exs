@@ -20,9 +20,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     :instruction,
     :expanded?,
     :expanded_groups,
-    :filters,
     :alternatives_open?,
-    :filters_open?,
     :start_client_session_id,
     :busy?,
     :update_id
@@ -54,7 +52,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
       workspace_screen(socket, :history)
 
     {:noreply, socket} = HomeLive.handle_event("history_period", %{"period" => "all"}, socket)
-    socket = assign(socket, instruction: "Keep this text", expanded?: true, filters_open?: true)
+    socket = assign(socket, instruction: "Keep this text", expanded?: true)
     before = Map.take(socket.assigns, @workspace_keys -- [:home_selection])
     socket = refresh(socket, @wednesday)
     assert socket.assigns.slot.home_state == :week_complete
@@ -102,7 +100,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
       )
 
     socket =
-      assign(socket, expanded?: true, expanded_groups: MapSet.new(["group"]), filters_open?: true)
+      assign(socket, expanded?: true, expanded_groups: MapSet.new(["group"]))
 
     before =
       Map.take(
@@ -416,7 +414,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
       assign(socket,
         instruction: "My unsent text",
         expanded_groups: MapSet.new(["group"]),
-        filters_open?: true,
         alternatives_open?: true,
         busy?: true,
         update_id: make_ref()

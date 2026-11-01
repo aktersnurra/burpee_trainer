@@ -170,12 +170,6 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     view |> element("#home-summary") |> render_click()
     open_swap(view)
-    view |> element("#home-filter-toggle") |> render_click()
-
-    for level <- BurpeeTrainer.Levels.all_levels() do
-      selector = "#home-level-#{level}[aria-pressed=false]"
-      if has_element?(view, selector), do: view |> element(selector) |> render_click()
-    end
 
     assert has_element?(view, "#home-delete-workout-#{original.id}[data-confirm]")
     view |> element("#home-delete-workout-#{original.id}") |> render_click()
@@ -208,12 +202,6 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     {:ok, reloaded, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     reloaded |> element("#home-summary") |> render_click()
     open_swap(reloaded)
-    reloaded |> element("#home-filter-toggle") |> render_click()
-
-    for level <- BurpeeTrainer.Levels.all_levels() do
-      selector = "#home-level-#{level}[aria-pressed=false]"
-      if has_element?(reloaded, selector), do: reloaded |> element(selector) |> render_click()
-    end
 
     refute has_element?(reloaded, "#home-alternative-plan-#{original.id}")
     assert Repo.get!(BurpeeTrainer.Workouts.WorkoutSession, used.id) == used
@@ -367,12 +355,6 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert prepared.home_state == {:start, pinned}
 
     open_swap(view)
-    view |> element("#home-filter-toggle") |> render_click()
-
-    for level <- BurpeeTrainer.Levels.all_levels() do
-      selector = "#home-level-#{level}[aria-pressed=false]"
-      if has_element?(view, selector), do: view |> element(selector) |> render_click()
-    end
 
     assert has_element?(view, "#home-delete-workout-#{original.id}[data-confirm]")
     before = :sys.get_state(view.pid).socket.assigns

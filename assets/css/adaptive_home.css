@@ -274,22 +274,6 @@ button.home-summary:hover .home-workout-name {
 [aria-expanded="true"] > .home-chevron {
   transform: rotate(180deg);
 }
-#home-filter-toggle {
-  min-height: 44px;
-  min-width: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px;
-  color: #817b70;
-}
-#home-filter-toggle[aria-expanded="true"] { color: #262722; }
-/* Filters are the same rounded choices as New's: one shape for every pick in the app. */
-#home-filters { display: grid; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--home-line); }
-#home-filters [role="group"] { display: flex; flex-wrap: wrap; gap: 6px; }
-.home-filter-level-heading { display: flex; align-items: center; justify-content: space-between; color: var(--home-muted); font-size: var(--text-body); }
-#home-filter-reset { min-height: 44px; padding: 0 0 0 12px; color: var(--home-muted); font-size: var(--text-body); }
-#home-filter-reset:hover { color: #262722; }
 #home-alternatives-toolbar {
   display: flex;
   align-items: center;
@@ -849,12 +833,9 @@ button.home-summary:hover .home-workout-name {
 /* The focused field underlines its row instead of drawing a box past the column edge. */
 .home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
 .home-authoring-form input[type="hidden"] { display: none; }
-#home-filters [role="group"] button { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
-#home-filters [role="group"] button[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
 /* Work and recovery is computed, not typed: a caption under Duration, not a row. */
 /* Duration and its Movement/Recovery caption read as one row; with no caption, Duration keeps its own line. */
 .home-rest-alternative { margin-top: 14px; font-size: var(--text-small); line-height: 1.7; }
-@media (prefers-reduced-motion: reduce) { #home-filters [role="group"] button { transition: none; } }
 .adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"], .home-workout-actions .home-expanded-action, .home-workout-actions[data-expanded="true"] .home-expanded-action { transition: none; }

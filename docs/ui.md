@@ -208,8 +208,8 @@ every animation here.
 - Every other action is a quiet icon from one set (heroicons), each with an `aria-label`
   and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
   switches or chooses a workout, plus adds or sets, trash deletes, x-mark cancels, closes,
-  keeps or dismisses, check confirms, arrow-path resets, retries or reloads,
-  adjustments-horizontal filters, chevron-down loads more.
+  keeps or dismisses, check confirms, arrow-path resets, retries or reloads, chevron-down loads
+  more.
 - Words stay only where they are the content or an icon would be ambiguous: picks (types,
   levels, styles), tabs (period, Workouts and Videos), the coach's predicted replies, and
   "Sign in with Pocket ID". The studio (4a1a) is the one place actions are words, since it is a
@@ -220,7 +220,7 @@ every animation here.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
-- Every pick (burpee type, set style, filters, levels) is the same rounded choice; the
+- Every pick (burpee type, set style) is the same rounded choice; the
   chosen one is filled light. A destructive decision is the filled pill in the error colour.
 - The burpee types are always "Six-count" and "Navy SEAL" (lowercase "six-count" mid-sentence).
 

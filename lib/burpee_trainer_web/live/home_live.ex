@@ -348,10 +348,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "open_chooser",
              "close_chooser",
-             "toggle_filters",
              "tab",
-             "filter",
-             "reset_filters",
              "select_alternative",
              "delete_workout"
            ] do
@@ -389,12 +386,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "close_chooser",
              "delete_workout",
-             "filter",
              "open_chooser",
-             "reset_filters",
              "select_alternative",
              "tab",
-             "toggle_filters",
              "toggle_group",
              "toggle_other"
            ] do

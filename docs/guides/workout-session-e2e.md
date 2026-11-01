@@ -180,7 +180,7 @@ follow the failure policy, which also requires removing this file and proving it
 | `HOME-STALE` | fresh `pending-candidate` | Second tab cannot overwrite a newer selection or partially publish |
 | `HOME-UPDATE-FAILURE` | `published-plan` | Inline revision restores exact source and instruction; one local status; no orphan draft |
 | `HOME-UPDATE-SUCCESS` | conditional real provider | One request; type-changing revision leaves published source immutable and private context scoped |
-| `HOME-VIDEO` | `available-known-count-video` | Known-count filter match starts exact video flow directly without another Start |
+| `HOME-VIDEO` | `available-known-count-video` | A tap on a known-count video starts its exact video flow directly |
 | `HOME-FALLBACK` | `provider-failure` | disabled provider makes zero HTTP requests and published fallback remains usable |
 | `SESSION-PLAN` | `started-plan-session` | exact session ID/client UUID/hash; reload/resume; one completion update |
 | `SESSION-VIDEO` | `available-video` | Start creates exact video session snapshot, including nil-count semantics when applicable |
@@ -289,9 +289,9 @@ Blocked: HOME-UPDATE-SUCCESS — external provider credentials and separately gu
   An immediate post-click text read can precede the LiveView update and is not expansion evidence.
   Trailing recovery is projection-only
   synthetic coverage: the authoritative compiler disallows terminal rest; do not weaken it for E2E.
-- Alternatives: record current/next-level defaults; independent type filters, shared Workouts/Videos
-  tabs, reset, stable ranking subsequence and local empty state. Filtering must not select or call a
-  provider. Invalid pins converge to fallback; same-day reloads and competing tabs retain freshness.
+- Alternatives: every level is listed, nearest the athlete's first, under shared Workouts/Videos
+  tabs, with a stable ranking subsequence and a local empty state. A tap on a workout selects it
+  without starting it; a tap on a video starts it. Neither calls a provider. Invalid pins converge to fallback; same-day reloads and competing tabs retain freshness.
 - Memory: only committed finalization emits identity; verify scoped persisted facts/reasons.
   Missing/failing subscriber must not delay or fail Start (supporting domain gate).
 - Responsive: `640x360` and enlarged text scroll naturally without horizontal overflow. Reduced

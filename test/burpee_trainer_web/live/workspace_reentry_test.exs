@@ -16,14 +16,13 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     %{conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "plan rows replay after History and Coach without resetting filters", %{
+  test "plan rows replay after History and Coach", %{
     conn: conn,
     user: user
   } do
     plan = plan_fixture(user, %{target_reps: 10})
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    render_click(view, "filter", %{"kind" => "type", "filter" => "navy_seal"})
     render_click(view, "open_chooser")
     assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
     before = workspace(view)
@@ -241,8 +240,6 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     :sys.get_state(view.pid).socket.assigns
     |> Map.take([
       :home_selection,
-      :filters,
-      :filters_open?,
       :active_tab,
       :expanded?,
       :chooser_open?,

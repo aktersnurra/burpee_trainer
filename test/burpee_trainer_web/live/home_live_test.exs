@@ -200,7 +200,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.reload!(corrupt) == corrupt
   end
 
-  test "Other workouts toolbar keeps Filter adjacent to tabs and controls above results", %{
+  test "the drawer's tabs sit above its list, which says when a tab is empty", %{
     conn: conn,
     user: user
   } do
@@ -216,19 +216,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              "#home-alternatives-panel:not([hidden]) #home-alternatives-toolbar > [role=tablist]"
            )
 
-    assert has_element?(view, "#home-alternatives-toolbar > [role=tablist] + #home-filter-toggle")
-    refute has_element?(view, "[role=tablist] #home-filter-toggle")
+    assert has_element?(view, "#home-alternatives-toolbar ~ #home-alternatives")
     assert has_element?(view, "#home-tab-workouts[role=tab][aria-selected=true]")
-    view |> element("#home-filter-toggle") |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-filter-toggle[aria-expanded=true][aria-controls=home-filters]"
-           )
-
-    assert has_element?(view, "#home-alternatives-toolbar + #home-filters")
-    assert has_element?(view, "#home-filters ~ #home-alternatives")
-    view |> element("#home-type-six_count") |> render_click()
+    assert has_element?(view, "#home-week-track[role=progressbar][aria-valuemax='4800']")
     view |> element("#home-tab-videos") |> render_click()
 
     empty_text =
@@ -239,46 +229,11 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       |> LazyHTML.text()
       |> String.trim()
 
-    assert empty_text == "No matching videos. Try changing the filters."
-    assert has_element?(view, "#home-type-six_count[aria-pressed=false]")
-    view |> element("#home-filter-reset") |> render_click()
-    assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
-    open_swap(view)
-    assert has_element?(view, "#home-alternatives-panel:not([hidden]) #home-filter-toggle")
+    assert empty_text == "No videos yet."
+    assert has_element?(view, "#home-tab-videos[role=tab][aria-selected=true]")
   end
 
-  test "Home filters survive the browser button's empty value metadata", %{conn: conn, user: user} do
-    recommendation_fixture(user)
-    {:ok, view, _html} = live(conn, ~p"/")
-    view |> element("#home-summary") |> render_click()
-    open_swap(view)
-    view |> element("#home-filter-toggle") |> render_click()
-
-    assert has_element?(view, "#home-current-level", "Level 1A is your current level.")
-
-    assert has_element?(
-             view,
-             "[aria-label='Catalog level'][aria-describedby='home-current-level']"
-           )
-
-    assert has_element?(view, ".home-filter-level-heading #home-filter-reset")
-    assert has_element?(view, "#home-week-track[role=progressbar][aria-valuemax='4800']")
-
-    # LiveView's browser client adds button.value after phx-value-* metadata.
-    view |> element("#home-type-six_count") |> render_click(%{"value" => ""})
-    assert has_element?(view, "#home-type-six_count[aria-pressed=false]")
-    assert has_element?(view, "#home-type-navy_seal[aria-pressed=true]")
-
-    view |> element("#home-level-level_1a") |> render_click(%{"value" => ""})
-    assert has_element?(view, "#home-level-level_1a[aria-pressed=false]")
-    assert has_element?(view, "#home-level-level_1b[aria-pressed=true]")
-    view |> element("#home-filter-reset") |> render_click()
-    assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
-    assert has_element?(view, "#home-level-level_1a[aria-pressed=true]")
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-  end
-
-  test "alternative rows carry real metadata and review before use or video start", %{
+  test "alternative rows carry real metadata; a tap uses a workout or starts a video", %{
     conn: conn,
     user: user
   } do
@@ -289,12 +244,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
     open_swap(view)
-    view |> element("#home-filter-toggle") |> render_click()
-
-    for level <- BurpeeTrainer.Levels.all_levels() do
-      selector = "#home-level-#{level}[aria-pressed=false]"
-      if has_element?(view, selector), do: view |> element(selector) |> render_click()
-    end
 
     assert has_element?(
              view,
@@ -315,7 +264,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              "20 min · 60 reps"
            )
 
-    # Unknown-count videos still have no catalog level; metadata must not alter filter eligibility.
+    # A video without a known count has no level, so it is not listed.
     refute has_element?(view, "#home-alternative-video-#{unknown.id}")
     assert has_element?(view, "#home-summary", plan.name)
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
@@ -895,20 +844,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              )
     end
 
-    open_swap(view)
-
-    assert has_element?(
-             view,
-             "#home-filter-toggle[aria-expanded=false][aria-label=Filter] .hero-adjustments-horizontal"
-           )
-
-    view |> element("#home-filter-toggle") |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-filter-toggle[aria-expanded=true][aria-controls=home-filters]"
-           )
-
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 
@@ -987,7 +922,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
         update_id: id,
         expanded?: true,
         alternatives_open?: true,
-        filters_open?: true,
         expanded_groups: MapSet.new(["kept-group"]),
         history_expanded: MapSet.new([123])
       )
@@ -1668,8 +1602,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       :adjustment_form,
       :expanded?,
       :expanded_groups,
-      :filters,
-      :filters_open?,
       :alternatives_open?,
       :active_tab,
       :busy?,
