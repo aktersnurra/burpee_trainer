@@ -18,7 +18,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
 
     assert has_element?(
              view,
-             "#home-done-today[data-expanded=false] ~ #home-done-expansion #home-coach-panel"
+             "#home-done-today ~ #home-coach-panel"
            )
 
     view

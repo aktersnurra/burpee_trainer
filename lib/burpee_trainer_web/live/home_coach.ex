@@ -1,6 +1,6 @@
 defmodule BurpeeTrainerWeb.HomeCoach do
   @moduledoc """
-  The coach on Home: once today's training is done, the coach card opens under the result:
+  The coach on Home: once today's training is done, the coach card sits open under the result:
   this week's window, the coach's note, and the conversation, with what the coach noted
   or forgot about you between the exchanges.
   """
@@ -12,7 +12,6 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def initialize(socket) do
     socket
     |> assign(
-      coach_expanded?: false,
       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
       coach_busy?: false,
       coach_reply: nil,
@@ -59,10 +58,6 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       _ -> {:noreply, socket}
     end
   end
-
-  # Done opens like the workout day: the result stays, the coach unfolds under it.
-  def handle_event("coach_toggle", _, socket),
-    do: {:noreply, assign(socket, coach_expanded?: not socket.assigns.coach_expanded?)}
 
   def handle_event("coach_message_change", %{"coach_message" => %{"text" => text}}, socket)
       when is_binary(text),

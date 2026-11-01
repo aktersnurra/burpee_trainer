@@ -944,13 +944,9 @@ button.home-summary:hover .home-workout-name {
 .progress-gauge-type.progress-key-six-count::before { border-color: var(--series-six-count); }
 .progress-gauge-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
 .progress-gauge .progress-course-caption { margin-top: 12px; }
-/* Done opens like the workout day: the title moves up and the coach unfolds under it. */
-#home-done-today, #home-week-complete { transition: margin-top var(--motion-settle) var(--ease-out); }
+/* With the coach open under it, the result sits higher. */
 #home-done-today[data-expanded="true"], #home-week-complete[data-expanded="true"] { margin-top: 56px; }
 #home-done-today .home-summary, #home-week-complete .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
-#home-done-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
-#home-done-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
-@media (prefers-reduced-motion: reduce) { #home-done-today, #home-week-complete, #home-done-expansion, #home-done-expansion[data-open="true"] { transition: none; } }
 #home-done-today .home-workout-name, #home-week-complete .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
 .adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
