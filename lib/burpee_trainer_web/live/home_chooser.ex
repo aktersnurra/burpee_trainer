@@ -183,12 +183,6 @@ defmodule BurpeeTrainerWeb.HomeChooser do
               a.current_level
             )
 
-          plans =
-            case Workouts.get_draft(a.current_scope, r.pending_draft_id) do
-              {:ok, pending} -> [pending | plans]
-              _ -> plans
-            end
-
           Enum.map(
             plans,
             &%{

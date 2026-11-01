@@ -74,12 +74,11 @@ database, or production.
 macOS may resolve literal `/tmp` to `/private/tmp`; runtime validation allows only that platform
 resolution. Invalid paths are refused before Repo startup.
 
-The fixture marker forces the provider off and points the Repo only at the marked database. The seven
+The fixture marker forces the provider off and points the Repo only at the marked database. The six
 supported setup modes are:
 
 ```text
 published-plan
-pending-candidate
 available-video
 available-known-count-video
 started-plan-session
@@ -175,9 +174,8 @@ follow the failure policy, which also requires removing this file and proving it
 | --- | --- | --- |
 | `LIB-PUBLISHED` | `published-plan` | Published and Draft sections; exact published row; Start available |
 | `LIB-AUTHOR` | conditional real provider | one Create request, durable draft after reload, one Refine request, atomic Publish and Start |
-| `HOME-CANDIDATE-START` | `pending-candidate` | Stored Home draft pin; Start publishes/selects/snapshots atomically and clears pending draft |
-| `HOME-SELECTION` | fresh `pending-candidate` | Explicit alternative selection persists without publication; reload retains pin |
-| `HOME-STALE` | fresh `pending-candidate` | Second tab cannot overwrite a newer selection or partially publish |
+| `HOME-SELECTION` | fresh `published-plan` | A tap on another workout in the drawer persists the selection; reload retains pin |
+| `HOME-STALE` | fresh `published-plan` | Second tab cannot overwrite a newer selection or partially publish |
 | `HOME-UPDATE-FAILURE` | `published-plan` | Inline revision restores exact source and instruction; one local status; no orphan draft |
 | `HOME-UPDATE-SUCCESS` | conditional real provider | One request; type-changing revision leaves published source immutable and private context scoped |
 | `HOME-VIDEO` | `available-known-count-video` | A tap on a known-count video starts its exact video flow directly |
@@ -238,18 +236,6 @@ one-request behavior from the disabled-provider test.
 
 ### Stored Home selection, inline revision, and atomic Start
 
-`pending-candidate` uses the current authoritative slot, not a synthetic future slot key.
-On catch-up weekends it creates one fixture-owned prior-week 20-minute plan completion, recomputes
-the actual policy and uses its permitted rep ceiling. The report includes the history identity/time,
-slot strategy/current-week completed seconds and candidate verification. This history is not credited
-to the current week and is removed by normal fixture-user cleanup. No production clock is overridden.
-For `HOME-CANDIDATE-START`, authenticate and open `/`. Record the persisted recommendation's
-`home_workout_plan_id`, `home_revision`, pending draft ID/state/hash and canonical program.
-Require `#home-summary` to match that draft. Click the summary to expand in place, then submit
-`#home-adjustment-form` with blank/whitespace input using `#home-action`. Require the pending draft
-to become published, selected, and cleared from pending in the same commit as the exact session
-snapshot. Capture the hidden client UUID before submission and run the verifier for that UUID.
-
 For `HOME-SELECTION`, use a fresh fixture/profile, expand `#home-summary`, open
 `#home-other-workouts`, and click `#home-alternative-plan-PLAN_ID`. Require inline selection,
 incremented stored revision and unchanged publication/session counts. Reload and require the same
@@ -257,8 +243,7 @@ pin. A late candidate must remain an alternative rather than replacing it.
 
 For `HOME-STALE`, open two tabs before selecting an alternative in one. Submit the older tab and
 require a local stale error, unchanged current pin, and no partial publication/session insertion.
-Also retain domain tests for corrupt candidates, stale revisions/tokens, and accept/reject APIs;
-Home no longer exposes separate Use/Keep actions.
+Also retain domain tests for corrupt selections and stale revisions/tokens.
 
 For `HOME-UPDATE-FAILURE`, select a published source and enter an instruction directly in
 `#home-adjustment`. Require focus, keyboard editing, height growth, whitespace Start versus nonblank
@@ -427,7 +412,7 @@ Write a report under `.e2e-artifacts/reports/` containing:
 - redacted setup facts and fixture mode, plus proof the mode-600 secret file was deleted after auth;
 - Published/Draft selectors and persisted draft/publish evidence;
 - real-provider Create/Refine request counts or the precise external blocker;
-- fallback zero-request evidence, stored selection, atomic candidate Start and stale-tab evidence;
+- fallback zero-request evidence, stored selection, atomic Start and stale-tab evidence;
 - exact session ID/client UUID/hash/snapshot before and after reload/completion;
 - exact video snapshot and any media-serving blocker;
 - archived-plan History facts matching the persisted setup/verifier fields;

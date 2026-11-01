@@ -115,36 +115,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-start-warmup")
   end
 
-  test "Home replaces malformed pinned events before rendering inspection", %{
-    conn: conn,
-    user: user
-  } do
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
-    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    plan = workout_plan_draft_fixture(user)
-
-    Repo.get!(BurpeeTrainer.Workouts.CoachRecommendation, shown.recommendation_id)
-    |> Ecto.Changeset.change(pending_draft_id: plan.id)
-    |> Repo.update!()
-
-    {:ok, pinned} = Workouts.select_home_workout(Scope.for_user(user), shown, plan.id)
-
-    corrupt =
-      plan
-      |> Ecto.Changeset.change(
-        definition_json: Map.put(plan.definition_json, "events", ["malformed"])
-      )
-      |> Repo.update!()
-
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-ready-recommendation")
-    assert has_element?(view, "#home-action")
-    assert {:ok, fallback} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    assert fallback.plan.origin == :built_in
-    assert fallback.home_revision == pinned.home_revision + 1
-    assert Repo.reload!(corrupt) == corrupt
-  end
-
   test "the drawer's tabs sit above its list, which says when a tab is empty", %{
     conn: conn,
     user: user

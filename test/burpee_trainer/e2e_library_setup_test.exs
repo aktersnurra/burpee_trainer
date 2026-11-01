@@ -2,8 +2,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   use ExUnit.Case, async: false
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.{PlanCompiler, PlanCompiler.ProgramHash}
-  alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
+  alias BurpeeTrainer.PlanCompiler.ProgramHash
   alias BurpeeTrainer.TestSupport.IsolatedMigrationRepo
 
   alias BurpeeTrainer.Workouts.{
@@ -18,7 +17,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   @script "scripts/e2e/library_setup.exs"
   @modes ~w[
     published-plan
-    pending-candidate
     available-video
     available-known-count-video
     started-plan-session
@@ -133,10 +131,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
 
     assert reports["available-video"]["video_snapshot"]["count"] == nil
     assert reports["available-known-count-video"]["video_snapshot"]["count"] == 10
-    pending = reports["pending-candidate"]
-    assert pending["slot_date"] == Date.to_iso8601(Date.utc_today())
-    assert String.starts_with?(pending["slot_key"], pending["slot_date"] <> ":")
-
     available = reports["available-video"]
     video_client_session_id = Ecto.UUID.generate()
 
@@ -227,44 +221,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     refute IsolatedMigrationRepo.get(User, started["user_id"])
     assert IsolatedMigrationRepo.get_by!(WorkoutVideo, filename: unrelated_filename)
     stop_supervised(IsolatedMigrationRepo)
-  end
-
-  @tag timeout: :infinity
-  test "weekend candidates use owned prior-week PB without crediting the current week", %{
-    database: database
-  } do
-    env = fixture_env(database) ++ [{"E2E_LIBRARY_SETUP_ONLY", "1"}]
-    assert_mix_ok!(["ecto.create", "--quiet"], env)
-    assert_mix_ok!(["ecto.migrate", "--quiet"], env)
-
-    for {day, now} <- [{"saturday", "2026-09-05 12:00:00Z"}, {"sunday", "2026-09-06 12:00:00Z"}] do
-      script = """
-      Code.require_file(#{inspect(@script)})
-      {:ok, report} = BurpeeTrainer.E2E.LibrarySetup.run("pending-candidate", run_id: "weekend-#{day}", now: ~U[#{now}])
-      {:ok, ^report} = BurpeeTrainer.E2E.LibrarySetup.run("pending-candidate", run_id: "weekend-#{day}", now: ~U[#{now}])
-      IO.puts("WEEKEND=" <> Jason.encode!(report))
-      """
-
-      {output, status} =
-        System.cmd("mix", ["run", "-e", script], env: env, stderr_to_stdout: true)
-
-      assert status == 0, output
-      report = output |> report_line!("WEEKEND=") |> Jason.decode!()
-      assert report["slot_strategy"] == "catch_up"
-      assert report["slot_completed_sec"] == 0
-      assert report["history_user_id"] == report["user_id"]
-      assert report["history_session_id"] > 0
-      assert String.starts_with?(report["history_completed_at"], "2026-08-30")
-
-      assert report["pending_draft_definition_json"]["target_reps"] ==
-               report["candidate_ceiling_reps"]
-
-      assert run_cleanup!(report["user_id"], env)["deleted"]["sessions"] == 1
-      assert run_cleanup!(report["user_id"], env)["status"] == "already_absent"
-      start_isolated_repo!(database)
-      refute IsolatedMigrationRepo.get(WorkoutSession, report["history_session_id"])
-      stop_supervised(IsolatedMigrationRepo)
-    end
   end
 
   test "fixture entrypoint refuses an ordinary test database before creating a user" do
@@ -843,33 +799,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert plan.definition_json == report["definition_json"]
     assert plan.program_json == report["program_json"]
     assert plan.content_hash == report["content_hash"]
-  end
-
-  defp assert_persisted_report!("pending-candidate", report) do
-    recommendation =
-      IsolatedMigrationRepo.get!(CoachRecommendation, report["recommendation_id"])
-
-    assert recommendation.user_id == report["user_id"]
-    assert recommendation.selected_workout_plan_id == report["selected_workout_plan_id"]
-    assert recommendation.pending_draft_id == report["pending_draft_id"]
-    assert recommendation.slot_key == report["slot_key"]
-    assert Date.to_iso8601(recommendation.slot_date) == report["slot_date"]
-
-    draft = IsolatedMigrationRepo.get!(WorkoutPlan, report["pending_draft_id"])
-    assert draft.user_id == report["user_id"]
-    assert draft.user_id == report["pending_draft_user_id"]
-    assert Atom.to_string(draft.state) == report["pending_draft_state"]
-    assert draft.definition_json == report["pending_draft_definition_json"]
-    assert draft.program_json == report["pending_draft_program_json"]
-    assert draft.content_hash == report["pending_draft_content_hash"]
-
-    {:ok, definition} = WorkoutDefinition.new(draft.definition_json)
-    {:ok, program} = PlanCompiler.compile(definition)
-    assert draft.burpee_type == definition.burpee_type
-    assert draft.target_reps == definition.target_reps
-    assert draft.target_duration_sec == definition.target_duration_sec
-    assert draft.program_json == ProgramHash.canonical_map(program)
-    assert draft.content_hash == ProgramHash.hash(program)
   end
 
   defp assert_persisted_report!(mode, report)

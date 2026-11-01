@@ -118,7 +118,7 @@ defmodule BurpeeTrainer.Workouts do
 
   # A day without training keeps the latest earlier choice while it still fits the slot, so
   # the next day's Home neither falls back nor plans again.
-  defp previous_choice(user, slot, %CoachRecommendation{home_revision: 0, pending_draft_id: nil}) do
+  defp previous_choice(user, slot, %CoachRecommendation{home_revision: 0}) do
     with %CoachRecommendation{planned_by: by} = previous when not is_nil(by) <-
            Repo.one(
              from(r in CoachRecommendation,
@@ -241,7 +241,7 @@ defmodule BurpeeTrainer.Workouts do
     do: {:error, Error.new(:invalid_recommendation_selection)}
 
   # Do not broaden normal first-use authorization or recover a slot which the loader
-  # could already pin. In particular, a revision-zero pending candidate remains normal.
+  # could already pin.
   defp missing_ensurable_selection(user, burpee_type, recommendation) do
     # ensure_home_selection first requires the real fallback-backed slot row even
     # when a recommendation already exists. Absence of that fallback is genuine
@@ -294,7 +294,7 @@ defmodule BurpeeTrainer.Workouts do
   def select_home_workout(%Scope{user: %User{} = user}, %HomeSelection{} = expected, id) do
     immediate_lifecycle_transaction(fn ->
       with {:ok, r} <- home_recommendation(user, expected),
-           {:ok, plan} <- selectable_home_plan(user, r, id),
+           {:ok, plan} <- get_library_plan(Scope.for_user(user), id),
            :ok <- verify_stored_draft(plan),
            {:ok, changed} <- write_home_pointer(r, plan.id, :owner) do
         {:ok, HomeSelection.new(changed, plan)}
@@ -343,7 +343,7 @@ defmodule BurpeeTrainer.Workouts do
 
   defp replaceable_by(_r, _planned_by), do: :ok
 
-  defp planned_plan(user, r, {:plan, id}), do: selectable_home_plan(user, r, id)
+  defp planned_plan(user, _r, {:plan, id}), do: get_library_plan(Scope.for_user(user), id)
 
   defp planned_plan(user, _r, {:proposal, definition, approval_key}),
     do: approved_workout(user, definition, "Planner", approval_key)
@@ -359,7 +359,7 @@ defmodule BurpeeTrainer.Workouts do
              existing_start(user.id, token, :plan, expected.plan.id, expected.plan.content_hash),
            :ok <- no_other_started_session(user),
            {:ok, plan} <- verify_home_selection(scope, expected),
-           {:ok, published} <- finalize_home_plan(user, expected, plan),
+           {:ok, published} <- finalize_home_plan(user, plan),
            {:ok, session} <- start_plan(scope, published.id, token) do
         finalized = if plan.state == :draft, do: published, else: nil
         {:ok, {session, finalized}}
@@ -397,23 +397,8 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  defp finalize_home_plan(_user, _expected, %{state: :published} = plan), do: {:ok, plan}
-
-  defp finalize_home_plan(user, expected, %{state: :draft} = plan) do
-    if expected.pending_draft_id == plan.id do
-      with {:ok, _} <-
-             accept_candidate(
-               Scope.for_user(user),
-               expected.recommendation_id,
-               plan.id,
-               expected.recommendation_selection
-             ) do
-        get_library_plan(Scope.for_user(user), plan.id)
-      end
-    else
-      publish_unattached_draft(user, plan.id)
-    end
-  end
+  defp finalize_home_plan(_user, %{state: :published} = plan), do: {:ok, plan}
+  defp finalize_home_plan(user, %{state: :draft} = plan), do: publish_draft(user, plan.id)
 
   defp valid_start_token(token) do
     case Ecto.UUID.cast(token) do
@@ -520,32 +505,21 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   defp initial_home_plan(user, burpee_type, %{home_revision: 0} = r) do
-    case verified_home_plan(user, r.pending_draft_id) do
-      {:ok, %{state: :draft} = draft} ->
-        {:ok, draft}
+    # The fallback is the recommendation's required placeholder, not a choice.
+    case verified_home_plan(user, r.selected_workout_plan_id) do
+      {:ok, %{origin: :built_in, name: @fallback_name}} ->
+        verified_home_fallback(user, burpee_type)
+
+      {:ok, %{state: :published} = plan} ->
+        {:ok, plan}
 
       _ ->
-        # The fallback is the recommendation's required placeholder, not a choice.
-        case verified_home_plan(user, r.selected_workout_plan_id) do
-          {:ok, %{origin: :built_in, name: @fallback_name}} ->
-            verified_home_fallback(user, burpee_type)
-
-          {:ok, %{state: :published} = plan} ->
-            {:ok, plan}
-
-          _ ->
-            verified_home_fallback(user, burpee_type)
-        end
+        verified_home_fallback(user, burpee_type)
     end
   end
 
   # A removed/invalid prior pin must not promote a late unrelated candidate.
   defp initial_home_plan(user, burpee_type, _r), do: verified_home_fallback(user, burpee_type)
-
-  defp selectable_home_plan(user, %{pending_draft_id: id}, id)
-       when is_integer(id), do: get_draft(Scope.for_user(user), id)
-
-  defp selectable_home_plan(user, _r, id), do: get_library_plan(Scope.for_user(user), id)
 
   # `planned_by` is who chose: the owner, Claude, the in-app planner, or nil for an
   # automatic pick, which the planner may replace.
@@ -562,8 +536,6 @@ defmodule BurpeeTrainer.Workouts do
       {:error, _} -> {:error, Error.new(:home_selection_changed)}
     end
   end
-
-  @type recommendation_selection :: {:plan, pos_integer()} | {:video, pos_integer()}
 
   @doc "Ensures one fallback-backed recommendation for a deterministic user slot."
   @spec ensure_recommendation(Scope.t(), map()) ::
@@ -602,95 +574,6 @@ defmodule BurpeeTrainer.Workouts do
 
   def ensure_recommendation(%Scope{}, _attrs),
     do: {:error, Error.new(:invalid_recommendation_selection)}
-
-  @doc "Atomically accepts the exact pending draft against the caller's expected selection."
-  @spec accept_candidate(
-          Scope.t(),
-          pos_integer(),
-          pos_integer(),
-          recommendation_selection()
-        ) :: {:ok, CoachRecommendation.t()} | {:error, Error.t()}
-  def accept_candidate(
-        %Scope{user: %User{} = user} = scope,
-        recommendation_id,
-        draft_id,
-        expected_selection
-      ) do
-    case accept_candidate_without_notification(
-           user,
-           recommendation_id,
-           draft_id,
-           expected_selection
-         ) do
-      {:ok, recommendation} ->
-        case get_library_plan(scope, draft_id) do
-          {:ok, _plan} -> :ok
-          _ -> :ok
-        end
-
-        {:ok, recommendation}
-
-      error ->
-        error
-    end
-  end
-
-  defp accept_candidate_without_notification(
-         %User{id: user_id},
-         recommendation_id,
-         draft_id,
-         expected_selection
-       )
-       when is_integer(recommendation_id) and recommendation_id > 0 and is_integer(draft_id) and
-              draft_id > 0 do
-    immediate_lifecycle_transaction(fn ->
-      with {:ok, recommendation} <-
-             current_candidate(user_id, recommendation_id, draft_id, expected_selection),
-           {1, _rows} <- clear_current_candidate(recommendation, draft_id, expected_selection),
-           %WorkoutPlan{user_id: ^user_id, state: :draft} = draft <-
-             Repo.get(WorkoutPlan, draft_id),
-           :ok <- verify_stored_draft(draft),
-           {:ok, published} <-
-             draft
-             |> WorkoutPlan.publish_changeset(lifecycle_now())
-             |> Repo.update()
-             |> normalize_plan_write(),
-           %CoachRecommendation{} = detached <-
-             Repo.one(
-               from(candidate in CoachRecommendation,
-                 where:
-                   candidate.id == ^recommendation_id and candidate.user_id == ^user_id and
-                     is_nil(candidate.pending_draft_id)
-               )
-             ),
-           {:ok, selected} <-
-             detached
-             |> CoachRecommendation.selection_changeset(%{
-               selected_workout_plan_id: published.id,
-               selected_workout_video_id: nil
-             })
-             |> Repo.update() do
-        {:ok, selected}
-      else
-        {:error, %Error{} = error} ->
-          {:error, error}
-
-        {:error, %Ecto.Changeset{}} ->
-          {:error, Error.new(:candidate_no_longer_current)}
-
-        _stale ->
-          {:error, Error.new(:candidate_no_longer_current)}
-      end
-    end)
-  end
-
-  defp accept_candidate_without_notification(
-         %User{},
-         _recommendation_id,
-         _draft_id,
-         _expected_selection
-       ),
-       do: {:error, Error.new(:candidate_no_longer_current)}
 
   @doc "Keeps a recommendation startable by selecting the built-in fallback when its source disappears."
   @spec ensure_recommendation_selection_available(Scope.t(), pos_integer()) ::
@@ -869,19 +752,13 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp publish_unattached_draft(%User{} = user, draft_id) do
+  defp publish_draft(%User{} = user, draft_id) do
     with {:ok, draft} <- get_mutable_draft(user, draft_id),
-         false <- candidate_attached?(draft.id),
-         :ok <- verify_stored_draft(draft),
-         {:ok, published} <-
-           draft
-           |> WorkoutPlan.publish_changeset(lifecycle_now())
-           |> Repo.update()
-           |> normalize_plan_write() do
-      {:ok, published}
-    else
-      true -> {:error, Error.new(:candidate_attached, %{draft_id: draft_id})}
-      {:error, %Error{} = error} -> {:error, error}
+         :ok <- verify_stored_draft(draft) do
+      draft
+      |> WorkoutPlan.publish_changeset(lifecycle_now())
+      |> Repo.update()
+      |> normalize_plan_write()
     end
   end
 
@@ -952,52 +829,6 @@ defmodule BurpeeTrainer.Workouts do
     end
   end
 
-  defp current_candidate(user_id, recommendation_id, draft_id, expected_selection) do
-    case Repo.get_by(CoachRecommendation, id: recommendation_id, user_id: user_id) do
-      %CoachRecommendation{pending_draft_id: ^draft_id} = recommendation ->
-        if current_recommendation_selection(recommendation) == expected_selection do
-          {:ok, recommendation}
-        else
-          {:error, Error.new(:recommendation_selection_changed)}
-        end
-
-      _stale ->
-        {:error, Error.new(:candidate_no_longer_current)}
-    end
-  end
-
-  defp clear_current_candidate(recommendation, draft_id, expected_selection) do
-    query =
-      from(candidate in CoachRecommendation,
-        where:
-          candidate.id == ^recommendation.id and candidate.user_id == ^recommendation.user_id and
-            candidate.pending_draft_id == ^draft_id
-      )
-      |> constrain_expected_selection(expected_selection)
-
-    Repo.update_all(query, set: [pending_draft_id: nil, updated_at: lifecycle_now()])
-  end
-
-  defp constrain_expected_selection(query, {:plan, plan_id})
-       when is_integer(plan_id) and plan_id > 0 do
-    from(candidate in query,
-      where:
-        candidate.selected_workout_plan_id == ^plan_id and
-          is_nil(candidate.selected_workout_video_id)
-    )
-  end
-
-  defp constrain_expected_selection(query, {:video, video_id})
-       when is_integer(video_id) and video_id > 0 do
-    from(candidate in query,
-      where:
-        candidate.selected_workout_video_id == ^video_id and
-          is_nil(candidate.selected_workout_plan_id)
-    )
-  end
-
-  defp constrain_expected_selection(query, _invalid), do: where(query, [candidate], false)
-
   defp current_recommendation_selection(%CoachRecommendation{
          selected_workout_plan_id: plan_id,
          selected_workout_video_id: nil
@@ -1043,14 +874,6 @@ defmodule BurpeeTrainer.Workouts do
       %WorkoutPlan{} = built_in -> {:ok, built_in}
       nil -> {:error, Error.new(:source_unavailable, %{source: :built_in_fallback})}
     end
-  end
-
-  defp candidate_attached?(draft_id) do
-    Repo.exists?(
-      from(recommendation in CoachRecommendation,
-        where: recommendation.pending_draft_id == ^draft_id
-      )
-    )
   end
 
   defp immediate_lifecycle_transaction(fun) when is_function(fun, 0) do
@@ -2622,7 +2445,7 @@ defmodule BurpeeTrainer.Workouts do
                |> WorkoutPlan.new_draft_changeset(content)
                |> Repo.insert()
                |> normalize_plan_write() do
-          publish_unattached_draft(user, draft.id)
+          publish_draft(user, draft.id)
         else
           false -> {:error, Error.new(:design_workspace_changed)}
           {:error, error} -> {:error, error}

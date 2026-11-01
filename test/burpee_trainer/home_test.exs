@@ -31,7 +31,7 @@ defmodule BurpeeTrainer.HomeTest do
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
     assert %{recommendation_id: recommendation_id, plan: %{id: plan_id}} = facts.selection
 
-    assert [{^recommendation_id, _recommendation_plan_id, ^plan_id, _pending_draft_id, _revision}] =
+    assert [{^recommendation_id, _recommendation_plan_id, ^plan_id, _revision}] =
              recommendation_snapshot(user)
 
     assert {:start, %{recommendation_id: ^recommendation_id}} = Home.state(facts)
@@ -45,7 +45,7 @@ defmodule BurpeeTrainer.HomeTest do
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
     assert %{recommendation_id: recommendation_id} = facts.selection
 
-    assert [{^recommendation_id, _plan_id, _home_plan_id, _pending_draft_id, _revision}] =
+    assert [{^recommendation_id, _plan_id, _home_plan_id, _revision}] =
              recommendation_snapshot(user)
   end
 
@@ -142,7 +142,7 @@ defmodule BurpeeTrainer.HomeTest do
     assert recommendation_snapshot(user) == []
     assert {:ok, facts} = Home.facts(Scope.for_user(user), DateTime.utc_now(:second))
     assert {:start, %{plan: %{name: "Starter Six-Count", origin: :built_in}}} = Home.state(facts)
-    assert [{_id, _fallback, _starter, nil, 1}] = recommendation_snapshot(user)
+    assert [{_id, _fallback, _starter, 1}] = recommendation_snapshot(user)
   end
 
   test "started, done-today, and week-complete guards preserve an existing recommendation" do
@@ -207,7 +207,7 @@ defmodule BurpeeTrainer.HomeTest do
     assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
     assert %{plan: %{user_id: nil, origin: :built_in}} = facts.selection
     assert {:start, _} = Home.state(facts)
-    assert [{_, _, _, _, _}] = recommendation_snapshot(user)
+    assert [{_, _, _, _}] = recommendation_snapshot(user)
   end
 
   test "missing built-in fallback leaves an eligible user in choose without writing a recommendation" do
@@ -254,7 +254,6 @@ defmodule BurpeeTrainer.HomeTest do
           recommendation.id,
           recommendation.selected_workout_plan_id,
           recommendation.home_workout_plan_id,
-          recommendation.pending_draft_id,
           recommendation.home_revision
         }
       )
