@@ -19,18 +19,21 @@ jobs:
         with:
           otp-version: "28.5"
           elixir-version: "1.20.4"
+      # Dialyzer keeps its PLTs (OTP, Elixir and the deps) in ~/.mix; building
+      # them is most of a cold run.
       - uses: actions/cache@v4
         with:
           path: |
             deps
             _build
+            ~/.mix/dialyxir_*.plt*
           key: mix-${{ runner.os }}-otp28.5-elixir1.20.4-${{ hashFiles('mix.lock') }}
           restore-keys: |
             mix-${{ runner.os }}-otp28.5-elixir1.20.4-
       - run: mix deps.get
-      - run: mix compile --warnings-as-errors
-      - run: mix format --check-formatted
-      - run: mix test --warnings-as-errors
+      # Compile with warnings as errors, format, tests, Credo, Dialyzer, ExDNA
+      # and Reach: the checks a change must pass before it is done.
+      - run: mix ci
       - uses: actions/setup-node@v4
         with:
           node-version: 24
