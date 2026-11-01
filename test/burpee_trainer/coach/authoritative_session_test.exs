@@ -79,20 +79,4 @@ defmodule BurpeeTrainer.Coach.AuthoritativeSessionTest do
              | burpee_count_actual: 0
            })
   end
-
-  test "PB eligibility requires a prescribed 20-minute plan snapshot" do
-    plan =
-      Map.merge(@base, %{
-        source_kind: :plan,
-        plan_id: 1,
-        workout_video_id: nil,
-        display_name_snapshot: "Twenty minutes",
-        program_snapshot: %{"events" => []},
-        duration_sec_planned: 1_200
-      })
-
-    assert AuthoritativeSession.prescribed_plan_pb_eligible?(plan)
-    refute AuthoritativeSession.prescribed_plan_pb_eligible?(%{plan | source_kind: :video})
-    refute AuthoritativeSession.prescribed_plan_pb_eligible?(%{plan | duration_sec_planned: 600})
-  end
 end

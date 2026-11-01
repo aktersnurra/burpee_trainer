@@ -16,6 +16,9 @@ defmodule BurpeeTrainer.Coach.SelectorTest do
   defp fixture do
     scope = scope_fixture()
     {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+    # A plain 20-minute slot: late in the week the slot is longer (catch-up) or shorter
+    # (pro-rated sign-up week), and the rep band then rules out the fitting plan.
+    slot = %{slot | duration_sec: 1200}
     fit = plan_fixture(scope.user, %{target_reps: 30, target_duration_sec: slot.duration_sec})
     {:ok, before} = Workouts.ensure_home_selection(scope, slot)
     {scope, slot, fit, before}

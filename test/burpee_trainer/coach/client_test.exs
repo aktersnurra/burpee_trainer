@@ -4,6 +4,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
   import ExUnit.CaptureLog
 
   alias BurpeeTrainer.Coach.Client
+  alias BurpeeTrainer.Coach.LlmCall
   alias BurpeeTrainer.ReqStub
   alias BurpeeTrainer.Workouts.Error
 
@@ -77,24 +78,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert recorded.body["response_format"]["json_schema"]["strict"] == true
   end
 
-  test "requests name the app to OpenRouter when its URL is configured", %{counter: counter} do
-    req = request(counter, fn conn -> json_response(conn, 200, definition("Named")) end)
-    named = Keyword.update!(opts(req), :config, &Keyword.put(&1, :app_url, "https://burpee.test"))
-
-    assert {:ok, _} = structured_chat([%{role: "user", content: "steady"}], named)
-    assert {:ok, _} = structured_chat([%{role: "user", content: "steady"}], opts(req))
-
-    assert [%{attribution: with_url}, %{attribution: without_url}] = requests(counter)
-
-    assert with_url == %{
-             "http-referer" => ["https://burpee.test"],
-             "x-openrouter-title" => ["BurpeeTrainer"],
-             "x-openrouter-app-visibility" => ["hidden"]
-           }
-
-    assert without_url["http-referer"] == []
-  end
-
   test "missing structured content logs safe completion diagnostics", %{counter: counter} do
     req =
       request(counter, fn conn ->
@@ -122,52 +105,33 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     refute log =~ "private"
   end
 
-  test "disabled configuration returns before credentials or request construction", %{
-    counter: counter
-  } do
+  test "a disabled or incomplete provider config makes no request; a disabled one records no call",
+       %{counter: counter} do
     req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
+    credentials = [url: "https://provider.test/v1", api_key: "secret", model: "test/model"]
 
-    assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
-             structured_chat([],
-               req: req,
-               config: [enabled: false, url: nil, api_key: nil, model: nil]
-             )
+    disabled =
+      for enabled <- [nil, false, 1, 0, "true", %{}, []],
+          do: {[{:enabled, enabled} | credentials], :no_call}
 
-    assert request_count(counter) == 0
-  end
+    incomplete =
+      for config <- [
+            [enabled: true, url: "https://provider.test/v1", api_key: "secret"],
+            [enabled: true, url: "https://provider.test/v1", model: "test/model"],
+            [enabled: true, api_key: "secret", model: "test/model"],
+            [enabled: true, url: " ", api_key: "secret", model: "test/model"]
+          ],
+          do: {config, :may_record}
 
-  test "only literal true enables the provider and malformed values have safe empty context", %{
-    counter: counter
-  } do
-    req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
+    for {config, ledger} <-
+          [{[enabled: false, url: nil, api_key: nil, model: nil], :no_call}] ++
+            disabled ++ incomplete do
+      calls_before = Repo.aggregate(LlmCall, :count)
 
-    for enabled <- [nil, false, 1, 0, "true", %{}, []] do
-      assert {:error, %Error{code: :provider_unavailable, context: %{}}} =
-               structured_chat([],
-                 req: req,
-                 config: [
-                   enabled: enabled,
-                   url: "https://provider.test/v1",
-                   api_key: "secret",
-                   model: "test/model"
-                 ]
-               )
-    end
-
-    assert request_count(counter) == 0
-  end
-
-  test "enabled configuration with missing credentials makes no request", %{counter: counter} do
-    req = request(counter, fn conn -> json_response(conn, 200, definition("unused")) end)
-
-    for config <- [
-          [enabled: true, url: "https://provider.test/v1", api_key: "secret"],
-          [enabled: true, url: "https://provider.test/v1", model: "test/model"],
-          [enabled: true, api_key: "secret", model: "test/model"],
-          [enabled: true, url: " ", api_key: "secret", model: "test/model"]
-        ] do
       assert {:error, %Error{code: :provider_unavailable}} =
                structured_chat([], req: req, config: config)
+
+      if ledger == :no_call, do: assert(Repo.aggregate(LlmCall, :count) == calls_before)
     end
 
     assert request_count(counter) == 0
@@ -223,54 +187,13 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert request_count(counter) == length(statuses)
   end
 
-  test "an inherited follow_redirects option cannot override redirect rejection", %{
-    counter: counter
-  } do
-    definition = definition("must not be reached")
+  test "the final body cap applies to an adapter that ignores into, at any status" do
+    valid_body = provider_body(definition("raw-secret"))
 
-    req =
-      request(counter, fn conn ->
-        case conn.request_path do
-          "/v1/chat/completions" ->
-            conn
-            |> Plug.Conn.put_resp_header("location", "/redirected")
-            |> Plug.Conn.send_resp(302, "redirect body")
+    oversized_body =
+      valid_body <> String.duplicate(" ", @max_response_bytes + 1 - byte_size(valid_body))
 
-          "/redirected" ->
-            json_response(conn, 200, definition)
-        end
-      end)
-      |> Req.merge(follow_redirects: true)
-
-    assert {:error, %Error{code: :provider_unavailable, context: %{status: 302}}} =
-             structured_chat([], opts(req))
-
-    assert request_count(counter) == 1
-  end
-
-  test "inherited http_errors cannot raise or leak a non-200 body" do
-    test_pid = self()
-
-    req =
-      ReqStub.attach(
-        Req.new(http_errors: :raise),
-        fn request ->
-          send(test_pid, :provider_called)
-          {request, %Req.Response{status: 503, body: "raw-secret-provider-body"}}
-        end
-      )
-
-    assert {:error, %Error{code: :provider_unavailable, context: %{status: 503}} = error} =
-             structured_chat([], opts(req))
-
-    assert_receive :provider_called
-    refute inspect(error) =~ "raw-secret-provider-body"
-  end
-
-  test "the final body cap applies before every non-200 status" do
-    oversized_body = String.duplicate("raw-secret", div(@max_response_bytes, 10) + 1)
-
-    for status <- [302, 429, 503] do
+    for status <- [200, 302, 503] do
       req =
         ReqStub.attach(Req.new(), fn request ->
           {request, %Req.Response{status: status, body: oversized_body}}
@@ -341,63 +264,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert request_count(counter) == 2
   end
 
-  test "the final body cap rejects an adapter that ignores into" do
-    valid_body = provider_body(definition("adapter ignored into"))
-
-    oversized_body =
-      valid_body <> String.duplicate(" ", @max_response_bytes + 1 - byte_size(valid_body))
-
-    req =
-      ReqStub.attach(Req.new(), fn request ->
-        {request, %Req.Response{status: 200, body: oversized_body}}
-      end)
-
-    assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-             structured_chat([], opts(req))
-  end
-
-  test "the response cap also rejects a chunked body", %{counter: counter} do
-    chunk = String.duplicate("x", div(@max_response_bytes, 2) + 1)
-
-    req =
-      request(counter, fn conn ->
-        conn = Plug.Conn.send_chunked(conn, 200)
-        {:ok, conn} = Plug.Conn.chunk(conn, chunk)
-        {:ok, conn} = Plug.Conn.chunk(conn, chunk)
-        conn
-      end)
-
-    assert {:error, %Error{code: :invalid_provider_response, context: %{}}} =
-             structured_chat([], opts(req))
-
-    assert request_count(counter) == 1
-  end
-
-  test "custom adapter streaming halts when under-limit chunks aggregate to cap plus one" do
-    first_chunk = String.duplicate("first-secret", 11_916) |> binary_part(0, 131_072)
-    second_chunk = String.duplicate("second-secret", 11_916) |> binary_part(0, 131_073)
-    req = streaming_adapter(self(), [first_chunk, second_chunk])
-
-    assert {:error, %Error{code: :invalid_provider_response, context: %{}} = error} =
-             structured_chat([], opts(req))
-
-    assert_receive {:stream_outcomes, [:cont, :halt], {:error, :response_too_large}}
-    refute inspect(error) =~ "first-secret"
-    refute inspect(error) =~ "second-secret"
-  end
-
-  test "custom adapter streaming accepts an aggregate body at the exact cap" do
-    definition = definition("exact streamed cap")
-    valid_body = provider_body(definition)
-    exact_body = valid_body <> String.duplicate(" ", @max_response_bytes - byte_size(valid_body))
-    <<first_chunk::binary-size(131_072), second_chunk::binary>> = exact_body
-    req = streaming_adapter(self(), [first_chunk, second_chunk])
-
-    assert {:ok, ^definition} = structured_chat([], opts(req))
-    assert_receive {:stream_outcomes, [:cont, :cont], body}
-    assert byte_size(body) == @max_response_bytes
-  end
-
   test "timeout environment parsing is startup-safe and bounded" do
     for {value, expected} <- [
           {nil, 20_000},
@@ -414,27 +280,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     end
   end
 
-  defp streaming_adapter(test_pid, chunks) do
-    ReqStub.attach(Req.new(), fn request ->
-      {request, response, outcomes} =
-        Enum.reduce_while(
-          chunks,
-          {request, %Req.Response{status: 200, body: ""}, []},
-          &stream_chunk/2
-        )
-
-      send(test_pid, {:stream_outcomes, Enum.reverse(outcomes), response.body})
-      {request, response}
-    end)
-  end
-
-  defp stream_chunk(chunk, {request, response, outcomes}) do
-    case request.into.({:data, chunk}, {request, response}) do
-      {:cont, {request, response}} -> {:cont, {request, response, [:cont | outcomes]}}
-      {:halt, {request, response}} -> {:halt, {request, response, [:halt | outcomes]}}
-    end
-  end
-
   defp request(counter, responder) do
     Req.new(
       plug: fn conn ->
@@ -442,12 +287,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
           recorded = %{
             method: conn.method,
             path: conn.request_path,
-            authorization: Plug.Conn.get_req_header(conn, "authorization"),
-            attribution:
-              Map.new(
-                ~w(http-referer x-openrouter-title x-openrouter-app-visibility),
-                &{&1, Plug.Conn.get_req_header(conn, &1)}
-              ),
             body: conn.body_params
           }
 

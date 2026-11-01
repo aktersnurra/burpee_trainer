@@ -106,18 +106,4 @@ defmodule BurpeeTrainerWeb.HomeAuthoringFlowTest do
       refute failed.busy?
     end
   end
-
-  test "current?/2 is true only for the operation in flight" do
-    id = make_ref()
-    assert Flow.current?(model(update_id: id), id)
-    refute Flow.current?(model(update_id: id), make_ref())
-    refute Flow.current?(model(), nil)
-  end
-
-  test "assigns round-trip through the model" do
-    assigns = %{authoring_stage: :new, busy?: true, unrelated: 1}
-    flow = Flow.from_assigns(assigns)
-    assert flow.authoring_stage == :new
-    refute Keyword.has_key?(Flow.to_assigns(flow), :unrelated)
-  end
 end

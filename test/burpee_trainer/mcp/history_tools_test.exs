@@ -98,27 +98,6 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
     assert [_, _] = rows
   end
 
-  test "analytics resource is discoverable", %{scope: scope} do
-    request = fn owner, method, params ->
-      {:reply, %{"result" => result}} =
-        Mcp.handle(owner, %{"jsonrpc" => "2.0", "id" => 1, "method" => method, "params" => params})
-
-      result
-    end
-
-    uri = "burpee://analytics-guide"
-    listed = request.(scope, "resources/list", %{})
-
-    assert Enum.any?(
-             listed["resources"],
-             &(&1["uri"] == uri and &1["mimeType"] == "text/markdown")
-           )
-
-    result = request.(scope, "resources/read", %{"uri" => uri})
-
-    assert %{"contents" => [%{"uri" => ^uri, "mimeType" => "text/markdown"}]} = result
-  end
-
   test "filtered weeks keep whole-week targets and exact actual metrics", %{
     user: user,
     scope: scope

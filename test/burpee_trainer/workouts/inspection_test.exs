@@ -20,20 +20,23 @@ defmodule BurpeeTrainer.Workouts.InspectionTest do
     })
   end
 
+  # Rows are lossless: their events, in order, are exactly the compiled program's.
+  defp events(rows), do: Enum.flat_map(rows, & &1.events)
+
   defp work(active \\ 5),
     do: %{"kind" => "work", "reps" => 2, "sec_per_rep" => 5, "sec_per_burpee" => active}
 
   test "identical sets precede invented block grouping" do
     p = plan(List.duplicate(work(), 6), 60)
     assert [%{kind: :repeat, count: 6}] = rows = Inspection.rows(p)
-    assert Inspection.flatten(rows) == p.program_json["events"]
+    assert events(rows) == p.program_json["events"]
   end
 
   test "terminal active duration remains exact" do
     p = plan([work(4), work(4)], 19)
     assert length(Inspection.rows(p)) == 2
     assert Enum.map(p.program_json["events"], & &1["duration_sec"]) == [10.0, 9.0]
-    assert Inspection.flatten(Inspection.rows(p)) == p.program_json["events"]
+    assert events(Inspection.rows(p)) == p.program_json["events"]
   end
 
   test "nonadjacent matching work never merges" do
@@ -57,13 +60,13 @@ defmodule BurpeeTrainer.Workouts.InspectionTest do
 
       p = plan(events, 29 + Enum.sum(rests))
       rows = Inspection.rows(p)
-      assert Inspection.flatten(rows) == p.program_json["events"]
+      assert events(rows) == p.program_json["events"]
       assert List.last(rows).kind == :set
       refute Enum.any?(rows, & &1.trailing?)
       assert List.last(List.last(rows).events)["duration_sec"] == 9.0
 
       assert rows
-             |> Inspection.flatten()
+             |> events()
              |> Enum.filter(&(&1["kind"] == "rest"))
              |> Enum.map(& &1["duration_ms"]) == Enum.map(rests, &(&1 * 1_000))
 
@@ -76,7 +79,7 @@ defmodule BurpeeTrainer.Workouts.InspectionTest do
     [first, second, _] = p.program_json["events"]
     assert first == second
     assert length(Inspection.rows(p)) == 3
-    assert Inspection.flatten(Inspection.rows(p)) == p.program_json["events"]
+    assert events(Inspection.rows(p)) == p.program_json["events"]
   end
 
   test "leading recovery and row identities are stable without changing stored content" do
@@ -87,7 +90,7 @@ defmodule BurpeeTrainer.Workouts.InspectionTest do
     assert length(Enum.uniq_by(rows, & &1.id)) == length(rows)
     revised = %{p | updated_at: DateTime.add(p.updated_at, 1, :microsecond)}
     refute Enum.map(rows, & &1.id) == Enum.map(Inspection.rows(revised), & &1.id)
-    assert Inspection.flatten(rows) == p.program_json["events"]
+    assert events(rows) == p.program_json["events"]
     stored = BurpeeTrainer.Repo.get!(BurpeeTrainer.Workouts.WorkoutPlan, p.id)
     assert stored.definition_json == p.definition_json
     assert stored.program_json == p.program_json

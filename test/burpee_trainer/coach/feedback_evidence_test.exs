@@ -12,18 +12,12 @@ defmodule BurpeeTrainer.Coach.FeedbackEvidenceTest do
     user = provisioned_user()
     completed_at = ~U[2025-09-01 12:00:00Z]
 
-    session =
-      completed_session(user, completed_at,
-        context_low_energy: true,
-        context_heat_affected: true,
-        primary_limiter: :breathing,
-        preference_feedback: :choose_again
-      )
-
-    assert session.state == :completed
-    assert session.completed_at == completed_at
-    assert session.display_name_snapshot == "Snapshot workout"
-    assert session.program_snapshot == program_snapshot()
+    completed_session(user, completed_at,
+      context_low_energy: true,
+      context_heat_affected: true,
+      primary_limiter: :breathing,
+      preference_feedback: :choose_again
+    )
 
     assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-02 12:00:00Z])
     assert slot.completed_sec == 1_200

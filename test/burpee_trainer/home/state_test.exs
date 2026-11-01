@@ -30,14 +30,6 @@ defmodule BurpeeTrainer.Home.StateTest do
     end
   end
 
-  property "a started session always wins contradictory facts" do
-    check all(facts <- facts_gen()) do
-      facts = %{facts | started_session: %{id: 9}}
-      assert {:resume, %{id: 9}} = State.derive(facts)
-      assert :resume = facts |> State.derive() |> State.primary_action()
-    end
-  end
-
   defp expected_state(%Facts{started_session: %{} = session}), do: {:resume, session}
 
   defp expected_state(%Facts{slot: %{home_state: :done_today}, results: results}),

@@ -11,67 +11,29 @@ defmodule BurpeeTrainer.HomeTest do
   @now ~U[2025-09-03 12:00:00Z]
   @monday ~U[2025-09-01 10:00:00Z]
 
-  test "a user with history gets a startable selection" do
-    user = user_fixture()
-    _plan = plan_fixture(user)
+  test "every user gets a persisted, startable Home selection" do
+    for {label, setup} <- [
+          {"first use", fn _user -> :ok end},
+          {"history only", &completed_session(&1, @monday)},
+          {"plan only", &plan_fixture/1},
+          {"history and plan",
+           fn user ->
+             plan_fixture(user)
+             completed_session(user, @monday)
+           end}
+        ] do
+      user = user_fixture()
+      setup.(user)
 
-    free_form_session_fixture(user, %{
-      completed_at: DateTime.add(DateTime.utc_now(:second), -10, :day)
-    })
+      assert recommendation_snapshot(user) == [], label
+      assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
 
-    assert {:ok, facts} = Home.facts(Scope.for_user(user), DateTime.utc_now(:second))
-    assert {:start, %{plan: %{}}} = Home.state(facts)
-  end
+      assert {:start, %{recommendation_id: recommendation_id, plan: %{id: plan_id} = plan}} =
+               Home.state(facts)
 
-  test "history-only eligibility ensures a persisted selection" do
-    user = user_fixture()
-    _history = completed_session(user, @monday)
-
-    assert recommendation_snapshot(user) == []
-    assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
-    assert %{recommendation_id: recommendation_id, plan: %{id: plan_id}} = facts.selection
-
-    assert [{^recommendation_id, _recommendation_plan_id, ^plan_id, _revision}] =
-             recommendation_snapshot(user)
-
-    assert {:start, %{recommendation_id: ^recommendation_id}} = Home.state(facts)
-  end
-
-  test "plan-only eligibility ensures a persisted selection" do
-    user = user_fixture()
-    _plan = plan_fixture(user)
-
-    assert recommendation_snapshot(user) == []
-    assert {:ok, facts} = Home.facts(Scope.for_user(user), @now)
-    assert %{recommendation_id: recommendation_id} = facts.selection
-
-    assert [{^recommendation_id, _plan_id, _home_plan_id, _revision}] =
-             recommendation_snapshot(user)
-  end
-
-  test "another user's started session, selection, history, and plan never appear" do
-    owner = user_fixture()
-    other = user_fixture()
-    _plan = plan_fixture(other)
-
-    free_form_session_fixture(other, %{
-      completed_at: DateTime.add(DateTime.utc_now(:second), -10, :day)
-    })
-
-    {:ok, selection} =
-      Workouts.ensure_home_selection(
-        Scope.for_user(other),
-        slot(other, DateTime.utc_now(:second))
-      )
-
-    {:ok, _started} =
-      Workouts.start_home_workout(Scope.for_user(other), selection, Ecto.UUID.generate())
-
-    assert {:ok, facts} = Home.facts(Scope.for_user(owner), DateTime.utc_now(:second))
-    assert facts.started_session == nil
-    assert %{plan: %{user_id: nil, name: "Starter Six-Count"}} = facts.selection
-    refute facts.selection.recommendation_id == selection.recommendation_id
-    assert {:start, _} = Home.state(facts)
+      assert [{^recommendation_id, _selected, ^plan_id, 1}] = recommendation_snapshot(user)
+      if label == "first use", do: assert(%{name: "Starter Six-Count", origin: :built_in} = plan)
+    end
   end
 
   test "eligible owner facts and results exclude another user's recommendation, selection, session, and history" do
@@ -118,7 +80,7 @@ defmodule BurpeeTrainer.HomeTest do
 
     refute plan_id == other_plan.id
     refute recommendation_id == other_selected.recommendation_id
-    refute facts.started_session && facts.started_session.id == other_started.id
+    assert facts.started_session == nil
     assert facts.results.today == []
     assert Enum.map(facts.results.week, & &1.id) == [owner_history.id]
     refute other_history.id in Enum.map(facts.results.week, & &1.id)
@@ -134,15 +96,6 @@ defmodule BurpeeTrainer.HomeTest do
     assert Workouts.current_home_selection(scope, current) == nil
     assert recommendation_snapshot(user) == before
     assert Workouts.current_started_session(scope) == nil
-  end
-
-  test "a first-use user starts on the starter for the slot" do
-    user = user_fixture()
-
-    assert recommendation_snapshot(user) == []
-    assert {:ok, facts} = Home.facts(Scope.for_user(user), DateTime.utc_now(:second))
-    assert {:start, %{plan: %{name: "Starter Six-Count", origin: :built_in}}} = Home.state(facts)
-    assert [{_id, _fallback, _starter, 1}] = recommendation_snapshot(user)
   end
 
   test "started, done-today, and week-complete guards preserve an existing recommendation" do

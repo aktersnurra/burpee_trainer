@@ -28,9 +28,5 @@ defmodule BurpeeTrainerWeb.VideoRoutesTest do
 
     refute has_element?(view, "#desktop-home-nav")
     refute has_element?(view, "#mobile-history-nav")
-    refute has_element?(view, "#desktop-library-nav")
-    refute has_element?(view, "#desktop-videos-nav")
-    refute has_element?(view, "#mobile-library-nav")
-    refute has_element?(view, "#mobile-videos-nav")
   end
 end

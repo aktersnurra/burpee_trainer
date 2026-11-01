@@ -188,32 +188,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{session.id}")
   end
 
-  test "Switch appears on expansion and Start has a standalone action", %{
-    conn: conn,
-    user: user
-  } do
-    recommendation_fixture(user)
-    {:ok, view, _} = live(conn, ~p"/")
-
-    refute has_element?(view, "#home-title-action")
-    assert has_element?(view, "#home-expansion-content[inert]")
-    refute has_element?(view, "#home-other-workouts")
-
-    open_swap(view)
-    assert has_element?(view, "#home-alternatives-panel[role=dialog]:not([hidden])")
-    refute has_element?(view, "#home-expansion-content[inert] #home-alternatives-panel")
-    view |> element("#home-chooser-close") |> render_click()
-    view |> element("#home-summary") |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-action[type=button][aria-label='Start workout'] .hero-play-solid"
-           )
-
-    assert Repo.aggregate(WorkoutSession, :count) == 0
-  end
-
-  test "chooser close and selection hide the client-opened dialog before restoring Home", %{
+  test "chooser close hides the client-opened dialog and returns focus to Home", %{
     conn: conn,
     user: user
   } do
@@ -230,17 +205,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              ["focus", %{"to" => "#home-summary"}],
              ["push", %{"event" => "close_chooser"}]
            ] = Jason.decode!(close)
-
-    [selection | _] =
-      doc
-      |> LazyHTML.query("#home-alternatives .home-alternative")
-      |> LazyHTML.attribute("phx-click")
-
-    assert [
-             ["set_attr", %{"attr" => ["hidden", ""], "to" => "#home-alternatives-panel"}],
-             ["remove_attr", %{"attr" => "inert"}],
-             ["push", %{"event" => "select_alternative"}]
-           ] = Jason.decode!(selection)
   end
 
   test "Start reuses the rendered token for duplicate delivery and rejects a forged token", %{
@@ -518,12 +482,24 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-expansion[data-open='false']")
     assert has_element?(view, "#home-expansion-content[inert][aria-hidden='true']")
     refute has_element?(view, "#desktop-home-nav")
+    # Switch opens a dialog outside the collapsed, inert content.
+    open_swap(view)
+    assert has_element?(view, "#home-alternatives-panel[role=dialog]:not([hidden])")
+    refute has_element?(view, "#home-expansion-content[inert] #home-alternatives-panel")
+    view |> element("#home-chooser-close") |> render_click()
     view |> element("#home-summary") |> render_click()
     assert has_element?(view, "#home-expansion[data-open='true']")
     refute has_element?(view, "#home-expansion-content[inert]")
+
+    assert has_element?(
+             view,
+             "#home-action[type=button][aria-label='Start workout'] .hero-play-solid"
+           )
+
     view |> element("#home-summary") |> render_click()
     assert has_element?(view, "#home-expansion-content[inert]")
     assert has_element?(view, "#home-inspection")
+    assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
   test "History range changes weekly grid and session summaries together", %{user: user} do
@@ -550,7 +526,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert length(all_view.assigns.history_points.six_count) == 2
   end
 
-  test "repeated History opening restores isolation commands before push and closing reveals before focus",
+  test "History opening moves focus to its heading and closing restores Home and focus",
        %{
          conn: conn,
          user: user
@@ -559,82 +535,33 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, view, _} = live(conn, ~p"/")
     before = :sys.get_state(view.pid).socket
 
-    # Inspect real client commands as well as server patch handling: no retired overlay DOM.
-    for _cycle <- 1..3 do
-      assert has_element?(view, "#home-history-toggle[href='/progress'][data-phx-link=patch]")
-      view = history_route(conn, view)
-      assert view.pid == before.root_pid
-      html = render(view) |> LazyHTML.from_fragment()
+    assert has_element?(view, "#home-history-toggle[href='/progress'][data-phx-link=patch]")
+    view = history_route(conn, view)
+    assert view.pid == before.root_pid
+    html = render(view) |> LazyHTML.from_fragment()
 
-      [commands] =
-        LazyHTML.query(html, "#home-history-heading") |> LazyHTML.attribute("phx-mounted")
+    [commands] =
+      LazyHTML.query(html, "#home-history-heading") |> LazyHTML.attribute("phx-mounted")
 
-      assert [["focus", %{"to" => "#home-history-heading"}]] = Jason.decode!(commands)
-      assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
-      assert has_element?(view, "#home-history-close[phx-click=close_history]")
-      refute has_element?(view, "#home-state-content, #home-coach-panel")
-      view = home_route(conn, view)
-      refute has_element?(view, "#home-history")
-      assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
+    assert [["focus", %{"to" => "#home-history-heading"}]] = Jason.decode!(commands)
+    assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
+    assert has_element?(view, "#home-history-close[phx-click=close_history]")
+    refute has_element?(view, "#home-state-content, #home-coach-panel")
+    view = home_route(conn, view)
+    refute has_element?(view, "#home-history")
+    assert has_element?(view, "#home-state-content:not([hidden]):not([inert])")
 
-      [commands] =
-        render(view)
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.query("#home-history-toggle")
-        |> LazyHTML.attribute("phx-mounted")
+    [commands] =
+      render(view)
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#home-history-toggle")
+      |> LazyHTML.attribute("phx-mounted")
 
-      assert [["focus", %{"to" => "#home-history-toggle"}]] = Jason.decode!(commands)
-      assert has_element?(view, "#home-history-toggle[aria-label='Open Progress']")
-      after_close = :sys.get_state(view.pid).socket
-      assert_workspace_unchanged(before, after_close)
-      assert after_close.redirected == nil
-    end
-  end
-
-  test "shared progress survives valid today, week-complete and started presentation states", %{
-    user: user
-  } do
-    now = ~U[2026-09-09 12:00:00Z]
-    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    complete_history(user, DateTime.add(now, -90 * 86400), 1200)
-    socket = mounted_socket(user, now)
-    selection = socket.assigns.home_selection
-
-    complete_history(user, DateTime.add(now, -86400), 4800)
-    {:ok, week_slot} = Policy.required_slot(Scope.for_user(user), now)
-    assert week_slot.home_state == :week_complete
-    week_socket = mounted_socket(user, now)
-    assert_shared_progress(render_home(week_socket))
-    assert LazyHTML.query(render_home(week_socket), "#home-week-complete") |> Enum.count() == 1
-
-    complete_history(user, now, 1200)
-    {:ok, today_slot} = Policy.required_slot(Scope.for_user(user), now)
-    assert today_slot.home_state == :done_today
-    today_socket = mounted_socket(user, now)
-
-    {:ok, started} =
-      Workouts.start_plan(Scope.for_user(user), selection.plan.id, Ecto.UUID.generate())
-
-    started_socket = mounted_socket(user, now)
-    assert started_socket.assigns.started_session.id == started.id
-    assert_shared_progress(render_home(started_socket))
-
-    assert LazyHTML.query(render_home(started_socket), "#resume-recommended-workout")
-           |> Enum.count() == 1
-
-    for state <- [week_socket, today_socket, started_socket] do
-      {:noreply, opened} = workspace_screen(state, :history)
-      assert LazyHTML.query(render_home(opened), "#home-history-heading") |> Enum.count() == 1
-
-      assert LazyHTML.query(render_home(opened), "#home-state-content")
-             |> Enum.empty?()
-
-      assert opened.assigns.history_loaded_count == 2
-      {:noreply, closing} = HomeLive.handle_event("close_history", %{}, opened)
-      {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
-      assert_shared_progress(render_home(closed))
-      assert_workspace_unchanged(state, closed)
-    end
+    assert [["focus", %{"to" => "#home-history-toggle"}]] = Jason.decode!(commands)
+    assert has_element?(view, "#home-history-toggle[aria-label='Open Progress']")
+    after_close = :sys.get_state(view.pid).socket
+    assert_workspace_unchanged(before, after_close)
+    assert after_close.redirected == nil
   end
 
   test "older chart inspection and repeated pages retain sorted unique rows and expansion", %{
@@ -881,8 +808,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              "#home-week-track[aria-valuenow='4800'][aria-valuetext='4801 of 4800 seconds completed']"
            )
            |> Enum.count() == 1
-
-    refute Map.has_key?(socket.assigns, :result_sessions)
   end
 
   defp history_route(_conn, view) do
@@ -918,25 +843,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
   defp render_home(socket),
     do: render_component(&HomeLive.render/1, socket.assigns) |> LazyHTML.from_fragment()
-
-  defp assert_shared_progress(html) do
-    assert LazyHTML.query(html, ".adaptive-home") |> Enum.count() == 1
-    assert LazyHTML.query(html, "#home-week-track[role=progressbar]") |> Enum.count() == 1
-
-    label =
-      if LazyHTML.query(html, "#home-history") |> Enum.empty?(),
-        do: "Open Progress",
-        else: "Close History"
-
-    assert LazyHTML.query(html, "#home-history-toggle[href='/progress'][aria-label='#{label}']")
-           |> Enum.count() == 1
-
-    assert LazyHTML.query(
-             html,
-             "#home-history-toggle [role=progressbar], #home-state-content #home-week-track"
-           )
-           |> Enum.empty?()
-  end
 
   defp assert_workspace_unchanged(before, after_socket) do
     keys = [

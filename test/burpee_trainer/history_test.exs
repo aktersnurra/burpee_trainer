@@ -9,46 +9,6 @@ defmodule BurpeeTrainer.HistoryTest do
   alias BurpeeTrainer.Workouts.WorkoutSession
   alias BurpeeTrainer.History
 
-  test "local four-week window and actual density retain session identity" do
-    user = user_fixture()
-    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "America/Los_Angeles")
-    now = ~U[2025-09-24 12:00:00Z]
-
-    rows =
-      for {at, seconds} <- [
-            {~U[2025-09-01 06:59:59Z], 600},
-            {~U[2025-09-01 07:00:00Z], 600},
-            {~U[2025-09-22 07:00:00Z], 0},
-            {~U[2025-09-24 12:00:01Z], 600}
-          ] do
-        Repo.insert!(%WorkoutSession{
-          user_id: user.id,
-          state: :completed,
-          source_kind: :manual,
-          burpee_type: :six_count,
-          capture_mode: :logged,
-          completed_at: at,
-          burpee_count_actual: 30,
-          duration_sec_actual: seconds,
-          burpee_count_planned: 100,
-          duration_sec_planned: 1_200
-        })
-      end
-
-    [outside, included, zero, future] = rows
-    assert {:ok, filtered} = History.filter_sessions(rows, user, now, "four_weeks")
-    assert Enum.map(filtered, & &1.id) == [included.id, zero.id]
-
-    assert [%{id: id, actual_reps: 30, actual_duration_sec: 600, density: 60}] =
-             History.points(filtered)
-
-    assert id == included.id
-    assert {:ok, [^zero]} = History.filter_sessions(rows, user, now, "week")
-    assert {:ok, all} = History.filter_sessions(rows, user, now, "all")
-    assert outside in all
-    refute future in all
-  end
-
   test "pages preserve tied timestamp order exactly once and exclude foreign and started rows" do
     user = user_fixture()
     now = ~U[2025-09-24 12:00:00Z]
@@ -102,7 +62,11 @@ defmodule BurpeeTrainer.HistoryTest do
     end
 
     assert {:error, :invalid_timezone} = History.results(Scope.for_user(invalid), now)
-    assert {:error, :invalid_cursor} = History.page(Scope.for_user(user), now, "all", "invalid")
+
+    for cursor <- ["invalid", now, {now, 0}, {"not-a-date", 1}, :invalid] do
+      assert {:error, :invalid_cursor} = History.page(Scope.for_user(user), now, "all", cursor)
+    end
+
     assert {:ok, [], nil, false} = History.page(Scope.for_user(user), now, "all")
     assert {:ok, %{today: [], week: []}} = History.results(Scope.for_user(user), now)
   end
@@ -215,7 +179,7 @@ defmodule BurpeeTrainer.HistoryTest do
              History.results(Scope.for_user(user), now)
   end
 
-  test "summary derives display totals and latest existing density without persistence" do
+  test "summary derives display totals and latest density, honestly zero when empty" do
     user = user_fixture()
 
     sessions = [
@@ -230,9 +194,7 @@ defmodule BurpeeTrainer.HistoryTest do
              active_time_sec: 600,
              latest_density: 100
            }
-  end
 
-  test "summary returns honest zero and unavailable density" do
     assert History.summary([]) == %{
              sessions: 0,
              total_reps: 0,

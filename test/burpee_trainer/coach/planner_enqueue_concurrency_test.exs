@@ -12,10 +12,6 @@ defmodule BurpeeTrainer.Coach.PlannerEnqueueConcurrencyTest do
     assert is_binary(path)
     scope = Sandbox.unboxed_run(Repo, fn -> scope_fixture() end)
 
-    IO.puts(
-      "planner concurrency owner id=#{scope.user.id} username=#{scope.user.username} database=#{path}"
-    )
-
     on_exit(fn ->
       Sandbox.unboxed_run(Repo, fn ->
         assert Repo.get_by(BurpeeTrainer.Accounts.User,
@@ -35,8 +31,6 @@ defmodule BurpeeTrainer.Coach.PlannerEnqueueConcurrencyTest do
                    from u in BurpeeTrainer.Accounts.User,
                      where: u.id == ^scope.user.id and u.username == ^scope.user.username
                  )
-
-        IO.puts("planner concurrency cleanup exact owner id=#{scope.user.id}; jobs/user deleted")
       end)
     end)
 

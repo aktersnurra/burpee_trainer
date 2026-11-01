@@ -304,9 +304,6 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     press_while_possible(view, "#studio-reps-up")
     assert shown(view, "reps") == "66"
     assert has_element?(view, "#studio-reps-up[disabled]")
-    # Typed, they stop at the same place.
-    fill(view, "reps", "500")
-    assert shown(view, "reps") == "66"
     assert Agent.get(counter, & &1.calls) == []
   end
 

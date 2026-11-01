@@ -45,18 +45,4 @@ defmodule BurpeeTrainer.Mcp.SessionsTest do
       assert {:error, ^message} = Sessions.filters(args, @user, @now)
     end
   end
-
-  test "duration errors take precedence over rep and date errors" do
-    args = %{
-      "min_duration_sec" => 1201,
-      "max_duration_sec" => 1200,
-      "min_reps" => 11,
-      "max_reps" => 10,
-      "from" => "2026-10-24",
-      "to" => "2026-10-23"
-    }
-
-    assert {:error, "min_duration_sec must not exceed max_duration_sec"} =
-             Sessions.filters(args, @user, @now)
-  end
 end

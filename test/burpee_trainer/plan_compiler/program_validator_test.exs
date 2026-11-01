@@ -23,6 +23,13 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidatorTest do
     assert {:error, %CompileError{code: :invalid_program}} = ProgramValidator.validate(program)
   end
 
+  test "rejects a program that ends in rest" do
+    program = valid_program()
+    program = %{program | events: program.events ++ [ProgramEvent.rest!(%{duration_sec: 5.0})]}
+
+    assert {:error, %CompileError{code: :terminal_rest}} = ProgramValidator.validate(program)
+  end
+
   defp valid_program do
     work =
       ProgramEvent.work!(%{

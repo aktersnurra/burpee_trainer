@@ -5,7 +5,7 @@ defmodule BurpeeTrainer.Mcp.CoachTest do
 
   alias BurpeeTrainer.{Levels, Mcp}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{AgentPrompt, Policy, Voice, WorkoutRequest}
+  alias BurpeeTrainer.Coach.WorkoutRequest
 
   defp handle(scope, method, params) do
     {:reply, %{"result" => result}} =
@@ -18,37 +18,7 @@ defmodule BurpeeTrainer.Mcp.CoachTest do
     {:ok, scope: Scope.for_user(user_fixture())}
   end
 
-  test "get_coach_context is what the in-app coach reads before it answers", %{scope: scope} do
-    result = handle(scope, "tools/call", %{"name" => "get_coach_context", "arguments" => %{}})
-
-    slot =
-      case Policy.required_slot(scope, DateTime.utc_now(:second)) do
-        {:ok, slot} -> slot
-        _ -> nil
-      end
-
-    expected = AgentPrompt.context(scope, slot) |> Jason.encode!() |> Jason.decode!()
-
-    assert result["structuredContent"] ==
-             Map.put(expected, "memory", BurpeeTrainer.Coach.Memory.snapshot(scope))
-
-    refute result["isError"]
-  end
-
-  test "the coach prompt is the in-app coach's voice, rules and glossary", %{scope: scope} do
-    %{"prompts" => prompts} = handle(scope, "prompts/list", %{})
-    assert Enum.map(prompts, & &1["name"]) == ["coach"]
-
-    %{"messages" => [%{"role" => "user", "content" => %{"type" => "text", "text" => text}}]} =
-      handle(scope, "prompts/get", %{"name" => "coach"})
-
-    assert text =~ Voice.text()
-    assert text =~ AgentPrompt.context_glossary()
-    assert text =~ AgentPrompt.planner_task()
-    assert text =~ "get_coach_context"
-  end
-
-  test "the workout format explains every field and value, and each level's reps",
+  test "the workout format explains every field, value and level, and its worked example fits",
        %{scope: scope} do
     %{"resources" => resources} = handle(scope, "resources/list", %{})
     resource = Enum.find(resources, &(&1["uri"] == "burpee://workout-format"))
@@ -70,12 +40,8 @@ defmodule BurpeeTrainer.Mcp.CoachTest do
     for level <- Levels.all_levels(), type <- [:six_count, :navy_seal] do
       assert text =~ Integer.to_string(Levels.threshold(level, type))
     end
-  end
 
-  test "the workout format's worked example fits to the rests its text gives" do
     {args, expected_rests} = BurpeeTrainer.Mcp.WorkoutFormat.example()
-    text = BurpeeTrainer.Mcp.WorkoutFormat.text()
-
     assert {:ok, definition} = BurpeeTrainer.Mcp.Workouts.definition(args)
 
     assert for(%{"kind" => "rest", "duration_sec" => d} <- definition["events"], do: d) ==

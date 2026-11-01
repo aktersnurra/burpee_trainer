@@ -21,7 +21,8 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     for attrs <- [
           %{burpee_type: "navy_seal", target_reps: 30, target_duration_sec: 1200},
           %{target_reps: 100, target_duration_sec: 600},
-          %{target_reps: 111, target_duration_sec: 1200}
+          # Within the 10% ceiling, but without positive feedback the decision is to repeat 100.
+          %{target_reps: 110, target_duration_sec: 1200}
         ] do
       plan = plan_fixture(scope.user, attrs)
 
@@ -38,6 +39,14 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
 
     assert id == allowed.id
     assert {:ok, ^before} = BurpeeTrainer.Workouts.ensure_home_selection(scope, slot)
+
+    # The owner's own choice is not held to the planner's progression.
+    over = plan_fixture(scope.user, %{target_reps: 110, target_duration_sec: 1200})
+
+    assert {:ok, %{plan: %{id: over_id}}} =
+             BurpeeTrainer.Workouts.select_home_workout(scope, before, over.id)
+
+    assert over_id == over.id
   end
 
   test "goal proposal and confirmation are scoped" do

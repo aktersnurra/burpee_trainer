@@ -8,9 +8,8 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
   alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.WorkoutPlan
 
-  setup %{conn: conn} = context do
+  setup do
     parent = self()
-    hold_plan? = context[:hold_edit_plan] || false
     previous_req = Req.default_options()
     previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
 
@@ -26,100 +25,10 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
       model: "test"
     )
 
-    ReqStub.default(fn request ->
-      body = Jason.decode!(request.body)
-      send(parent, {:provider_request, body})
-
-      constraints =
-        Enum.find_value(body["messages"], fn message ->
-          case Jason.decode(message["content"]) do
-            {:ok, %{"scope" => "confirmed_workout_request", "request" => attrs}} -> attrs
-            _ -> nil
-          end
-        end)
-
-      if constraints && hold_plan? do
-        send(parent, {:edit_planning_waiting, self()})
-
-        receive do
-          :release_plan -> :ok
-        end
-      end
-
-      extracting? = is_nil(constraints)
-
-      constraints =
-        constraints ||
-          %{
-            "burpee_type" => "six_count",
-            "target_reps" =>
-              if(
-                Enum.any?(
-                  body["messages"],
-                  &String.contains?(&1["content"], "Increase to 150")
-                ),
-                do: 150,
-                else: 120
-              ),
-            "target_duration_sec" => 1200,
-            "pacing_style" => "unbroken",
-            "recovery" => "required",
-            "requested_pace_sec" => 5,
-            "timed_rests" => []
-          }
-
-      constraints =
-        if extracting?,
-          do:
-            Map.put(
-              constraints,
-              "set_reps",
-              List.duplicate(div(constraints["target_reps"], 2), 2)
-            ),
-          else: constraints
-
-      reps = constraints["target_reps"]
-
-      work = fn reps ->
-        %{"kind" => "work", "reps" => reps, "sec_per_rep" => 5, "sec_per_burpee" => 5}
-      end
-
-      layout = %{
-        "name" => "Independent new workout",
-        "rationale" => "Continuous sets and local recovery.",
-        "phases" => [
-          %{
-            "sets" => [
-              Map.delete(work.(div(reps, 2)), "kind"),
-              Map.delete(work.(reps - div(reps, 2)), "kind")
-            ],
-            "rests" => [%{"share" => 1}]
-          }
-        ]
-      }
-
-      {request,
-       %Req.Response{
-         status: 200,
-         body:
-           Jason.encode!(%{
-             "choices" => [
-               %{
-                 "message" => %{
-                   "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
-                 }
-               }
-             ]
-           })
-       }}
-    end)
-
+    ReqStub.default(fn _request -> send(parent, :provider_request) end)
     user = user_fixture()
     {:ok, user} = Accounts.update_timezone(user, "Etc/UTC")
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
-    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
-    %{view: view, user: user, selected: selected}
+    %{user: user}
   end
 
   test "chooser soft deletes an owned selected workout without losing history", %{
@@ -223,7 +132,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert_redirect(view, "/session/#{started.id}")
     assert Repo.reload!(used) == used
     assert Repo.reload!(foreign).state == :published
-    refute_received {:provider_request, _}
+    refute_received :provider_request
   end
 
   defp selected_slot(user) do

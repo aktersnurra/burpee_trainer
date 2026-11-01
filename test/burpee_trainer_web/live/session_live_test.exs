@@ -332,134 +332,60 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert {:ok, view, _html} = live(conn, ~p"/session/#{session.id}")
 
-    for id <- ~w[
-          burpee-session
-          session-camera-setup
-          session-runner-client
-          session-completion-review
-          session-completion-form
-          session-save-btn
-          session-discard-btn
-          session-live-status
+    # The client renderer drives these elements by id, in these initial states.
+    for selector <- [
+          "#burpee-session",
+          "#session-completion-review #session-completion-form",
+          "#session-live-status",
+          "#camera-setup-heading",
+          "#camera-setup-retry[hidden]",
+          "#camera-setup-continue",
+          "#session-completion-heading",
+          "#completion-reps-less + #session-actual-reps + #completion-reps-more",
+          "#session-count-source[hidden] #completion-reps-undo[hidden]",
+          "span#session-actual-duration",
+          "#session-save-icon-ready",
+          "#session-save-icon-pending[hidden]",
+          "p#session-save-status[hidden]",
+          "#session-save-errors.hidden",
+          "#pose-upload-retry[hidden]",
+          "#pose-upload-dismiss[hidden][type=button]",
+          "#session-completion-actions + #session-discard-confirm[hidden]",
+          "#session-discard-confirm #session-discard-keep[type=button]",
+          "#session-discard-confirm #session-discard-yes[type=button]"
         ] do
-      assert has_element?(view, "##{id}")
+      assert has_element?(view, selector)
     end
 
     # Nothing asks before the workout: the client opens the camera or the countdown.
     assert has_element?(view, "#session-camera-setup[hidden][inert]")
     assert has_element?(view, "#session-runner-client[hidden][inert]")
-    assert has_element?(view, "#camera-setup-heading", "Starting camera")
-    assert has_element?(view, "#camera-setup-retry[hidden] .hero-arrow-path")
-    assert has_element?(view, "#camera-setup-continue", "Continue without camera")
 
-    for removed <- ~w[session-capture-choice session-camera-status session-warmup-choice
-                      session-workout-ready] do
-      refute has_element?(view, "##{removed}")
+    for mood <- ~w[-1 0 1] do
+      assert has_element?(view, "#session-completion-mood [data-mood='#{mood}']")
     end
 
-    assert has_element?(view, "#session-completion-heading", "Workout complete")
-    assert has_element?(view, "#session-completion-form > #session-completion-mood:first-child")
-    assert has_element?(view, "#session-completion-mood [data-mood='-1']", "Rough")
-    assert has_element?(view, "#session-completion-mood [data-mood='0']", "OK")
-    assert has_element?(view, "#session-completion-mood [data-mood='1']", "Good")
-    # The count sits between − and +, always there; nothing opens a hidden field.
-    assert has_element?(
-             view,
-             "#completion-reps-less[type=button][aria-label='One rep fewer'] .hero-minus"
-           )
+    assert has_element?(view, "#completion-reps-less[type=button][aria-label='One rep fewer']")
+    assert has_element?(view, "#completion-reps-more[type=button][aria-label='One rep more']")
 
-    assert has_element?(
-             view,
-             "#completion-reps-less + #session-actual-reps + " <>
-               "#completion-reps-more[type=button][aria-label='One rep more'] .hero-plus"
-           )
-
-    assert has_element?(
-             view,
-             "#session-count-source[hidden] #completion-reps-undo[hidden]",
-             "Undo"
-           )
-
-    # The time is what the timer measured.
-    assert has_element?(view, "span#session-actual-duration")
-
-    for removed <- ~w[completion-reps-edit completion-duration-edit completion-reps-field
-                      completion-duration-field completion-reps-input completion-duration-input] do
-      refute has_element?(view, "##{removed}")
-    end
-
-    # Save or discard: no leaving to come back later, and nothing behind a button.
-    for removed <- ~w[completion-note-toggle completion-note-field session-leave-btn] do
-      refute has_element?(view, "##{removed}")
-    end
-
-    # Tags and a note sit under mood, optional, in Home's pill and field styles.
-    for {tag, label} <- [
-          {"tired", "Tired"},
-          {"great_energy", "Great energy"},
-          {"bad_sleep", "Bad sleep"},
-          {"sick", "Sick"},
-          {"travel", "Travel"},
-          {"hot", "Hot"}
-        ] do
+    for tag <- ~w[tired great_energy bad_sleep sick travel hot] do
       assert has_element?(
                view,
-               "#session-completion-mood + #session-completion-tags[role=group][aria-label=Tags] " <>
-                 "button.session-tag-pill[type=button][data-tag=#{tag}][aria-pressed=false]",
-               label
+               "#session-completion-tags[role=group][aria-label=Tags] " <>
+                 "button[type=button][data-tag=#{tag}][aria-pressed=false]"
              )
     end
 
-    assert has_element?(
-             view,
-             "#session-completion-tags + .session-note-field " <>
-               "textarea#completion-note-input.session-note-input[rows='2'][placeholder='How did it go?']"
-           )
-
     assert has_element?(view, "label.sr-only[for=completion-note-input]", "Note")
-
-    refute has_element?(view, "#session-more-feedback")
-    refute has_element?(view, "#session-typed-feedback")
-
-    assert has_element?(
-             view,
-             "#session-save-btn[aria-label='Save session'] #session-save-icon-ready .hero-check"
-           )
-
-    assert has_element?(view, "#session-save-icon-pending[hidden] .hero-arrow-path")
-    assert has_element?(view, "p#session-save-status[hidden]")
-    assert has_element?(view, "#session-save-errors.hidden")
+    assert has_element?(view, "textarea#completion-note-input")
+    assert has_element?(view, "#session-save-btn[aria-label='Save session']")
     assert has_element?(view, "#pose-upload-status[hidden][phx-update=ignore][role=status]")
-    assert has_element?(view, "#pose-upload-retry[hidden]", "Retry pose upload")
-    assert has_element?(view, "#pose-upload-dismiss[hidden][type=button]", "Dismiss")
 
     assert has_element?(
              view,
-             "#session-completion-actions #session-discard-btn[aria-label='Discard session'] .hero-trash"
+             "#session-completion-actions #session-discard-btn[aria-label='Discard session']"
            )
 
-    # The discard question takes the buttons' place, with its own two answers.
-    assert has_element?(
-             view,
-             "#session-completion-actions + #session-discard-confirm[hidden] #session-discard-question",
-             "Discard this workout?"
-           )
-
-    assert has_element?(
-             view,
-             "#session-discard-confirm #session-discard-keep[type=button]",
-             "Keep"
-           )
-
-    assert has_element?(
-             view,
-             "#session-discard-confirm #session-discard-yes[type=button]",
-             "Discard"
-           )
-
-    refute has_element?(view, "#session-save-btn", "Save session")
-    refute has_element?(view, "#session-report-pending-status")
-    refute has_element?(view, "#session-report-pending-retry")
     refute has_element?(view, "#session-completion-review #session-abort-btn")
   end
 

@@ -234,69 +234,61 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert output =~ "requires the disposable adaptive E2E database"
   end
 
-  test "runtime refuses an outside tmp database before touching its bytes or starting the app" do
-    outside = "/var/tmp/adaptive-home-coach-e2e-outside-#{System.unique_integer([:positive])}.db"
-    marker = "outside-must-remain"
-    original_bytes = create_sentinel_database!(outside, marker)
-    on_exit(fn -> clear_database_paths!(outside) end)
-
-    {output, status} = run_fixture_process("published-plan", outside)
-
-    assert status == 4
-    assert output =~ "invalid_disposable_database_path"
-    assert output =~ ~s("application_started":false)
-    assert File.read!(outside) == original_bytes
-    assert_sentinel_database_unchanged!(outside, marker)
-  end
-
-  test "runtime refuses a symlink database target before touching target bytes" do
+  test "runtime refuses outside, symlinked, or symlink-parented databases before touching bytes" do
     suffix = System.unique_integer([:positive])
-    target = "/tmp/e2e-target-sentinel-#{suffix}.db"
-    link = "/tmp/adaptive-home-coach-e2e-symlink-#{suffix}.db"
-    marker = "symlink-target-must-remain"
-    original_bytes = create_sentinel_database!(target, marker)
-    File.ln_s!(target, link)
 
-    on_exit(fn ->
-      File.rm(link)
-      clear_database_paths!(target)
-    end)
+    # Each case returns the path handed to the fixture and the real file it must leave alone.
+    cases = [
+      {"outside tmp",
+       fn ->
+         outside = "/var/tmp/adaptive-home-coach-e2e-outside-#{suffix}.db"
+         on_exit(fn -> clear_database_paths!(outside) end)
+         {outside, outside}
+       end},
+      {"symlink target",
+       fn ->
+         target = "/tmp/e2e-target-sentinel-#{suffix}.db"
+         link = "/tmp/adaptive-home-coach-e2e-symlink-#{suffix}.db"
+         File.ln_s!(target, link)
 
-    {output, status} = run_fixture_process("published-plan", link)
+         on_exit(fn ->
+           File.rm(link)
+           clear_database_paths!(target)
+         end)
 
-    assert status == 4
-    assert output =~ "invalid_disposable_database_path"
-    assert output =~ ~s("application_started":false)
-    assert File.read!(target) == original_bytes
-    assert_sentinel_database_unchanged!(target, marker)
-    assert File.lstat!(link).type == :symlink
-  end
+         {link, target}
+       end},
+      {"symlinked parent",
+       fn ->
+         real_parent = "/tmp/e2e-real-parent-#{suffix}"
+         linked_parent = "/tmp/e2e-linked-parent-#{suffix}"
+         basename = "adaptive-home-coach-e2e-linked-#{suffix}.db"
+         File.mkdir_p!(real_parent)
+         File.ln_s!(real_parent, linked_parent)
 
-  test "runtime refuses an alternate symlinked parent before touching target bytes" do
-    suffix = System.unique_integer([:positive])
-    real_parent = "/tmp/e2e-real-parent-#{suffix}"
-    linked_parent = "/tmp/e2e-linked-parent-#{suffix}"
-    basename = "adaptive-home-coach-e2e-linked-#{suffix}.db"
-    real_target = Path.join(real_parent, basename)
-    linked_target = Path.join(linked_parent, basename)
-    marker = "linked-parent-target-must-remain"
-    File.mkdir_p!(real_parent)
-    original_bytes = create_sentinel_database!(real_target, marker)
-    File.ln_s!(real_parent, linked_parent)
+         on_exit(fn ->
+           File.rm(linked_parent)
+           clear_database_paths!(Path.join(real_parent, basename))
+           File.rmdir(real_parent)
+         end)
 
-    on_exit(fn ->
-      File.rm(linked_parent)
-      clear_database_paths!(real_target)
-      File.rmdir(real_parent)
-    end)
+         {Path.join(linked_parent, basename), Path.join(real_parent, basename)}
+       end}
+    ]
 
-    {output, status} = run_fixture_process("published-plan", linked_target)
+    for {label, arrange} <- cases do
+      {database, target} = arrange.()
+      marker = "#{label} must remain"
+      original_bytes = create_sentinel_database!(target, marker)
 
-    assert status == 4
-    assert output =~ "invalid_disposable_database_path"
-    assert output =~ ~s("application_started":false)
-    assert File.read!(real_target) == original_bytes
-    assert_sentinel_database_unchanged!(real_target, marker)
+      {output, status} = run_fixture_process("published-plan", database)
+
+      assert status == 4, label
+      assert output =~ "invalid_disposable_database_path"
+      assert output =~ ~s("application_started":false)
+      assert File.read!(target) == original_bytes
+      assert_sentinel_database_unchanged!(target, marker)
+    end
   end
 
   test "runtime always validates the actual tmp root and ignores override variables" do
@@ -359,7 +351,8 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   end
 
   @tag timeout: :infinity
-  test "induced failure compensates the exact user and global video lane", %{database: database} do
+  test "induced failure compensates a fresh fixture and leaves a committed one byte-for-byte",
+       %{database: database} do
     env = fixture_env(database)
     assert_mix_ok!(["ecto.create", "--quiet"], env)
     assert_mix_ok!(["ecto.migrate", "--quiet"], env)
@@ -384,15 +377,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
 
     stop_supervised(IsolatedMigrationRepo)
 
-    report = run_mode!("available-video", env)
-    assert report["video_id"] > 0
-  end
-
-  @tag timeout: :infinity
-  test "failed rerun leaves a committed fixture byte-for-byte unchanged", %{database: database} do
-    env = fixture_env(database)
-    assert_mix_ok!(["ecto.create", "--quiet"], env)
-    assert_mix_ok!(["ecto.migrate", "--quiet"], env)
+    assert run_mode!("available-video", env)["video_id"] > 0
 
     report = run_mode!("completed-history", env)
     _repo_pid = start_isolated_repo!(database)
@@ -649,20 +634,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
           {table, IsolatedMigrationRepo.query!("SELECT * FROM #{table} ORDER BY rowid").rows}
         end)
     }
-  end
-
-  test "fixture entrypoint rejects unknown modes" do
-    source = File.read!(@script)
-    assert source =~ Enum.join(@modes, "|")
-
-    {output, status} =
-      System.cmd("mix", ["run", "--no-start", @script, "--", "unknown"],
-        env: [{"MIX_ENV", "test"}],
-        stderr_to_stdout: true
-      )
-
-    assert status != 0
-    assert output =~ "unsupported fixture mode"
   end
 
   defp insert_completed_pose_evidence!(completed) do

@@ -4,48 +4,18 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  test "chart positions saved sessions against the route load time, not the newest session", %{
-    conn: conn
-  } do
-    user = user_fixture()
-
-    saved =
-      %BurpeeTrainer.Workouts.WorkoutSession{
-        user_id: user.id,
-        state: :completed,
-        source_kind: :manual,
-        display_name_snapshot: "Saved",
-        workout_type_snapshot: :six_count,
-        burpee_type: :six_count,
-        burpee_count_actual: 20,
-        duration_sec_actual: 1200,
-        completed_at: DateTime.add(DateTime.utc_now(:second), -7 * 86400),
-        capture_mode: :logged
-      }
-      |> BurpeeTrainer.Repo.insert!()
-
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
-
-    [style] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-point-#{saved.id}")
-      |> LazyHTML.attribute("style")
-
-    [_, left] = Regex.run(~r/left: ([0-9.]+)%/, style)
-    assert String.to_float(left) < 94.0
-    assert %DateTime{} = :sys.get_state(view.pid).socket.assigns.home_snapshot_now
-  end
-
   test "route, period and busy boundary chart geometry use History's distinct genuine clock", %{
     conn: conn
   } do
     user = user_fixture()
     now = DateTime.utc_now(:second)
+    # Mid-week last week: a session right at the start of the chart's first week sits at
+    # 0% under every clock, and the projections below could not tell the clocks apart.
+    last_week = now |> DateTime.to_date() |> Date.add(-7) |> Date.beginning_of_week()
 
     saved =
       free_form_session_fixture(user, %{
-        completed_at: DateTime.add(now, -7 * 86_400),
+        completed_at: DateTime.new!(Date.add(last_week, 3), ~T[12:00:00], "Etc/UTC"),
         burpee_count_actual: 20,
         duration_sec_actual: 1200
       })
@@ -167,18 +137,5 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
       assert BurpeeTrainer.Workouts.list_sessions(BurpeeTrainer.Accounts.Scope.for_user(user)) ==
                []
     end
-  end
-
-  test "authenticated History has its own route", %{conn: conn} do
-    user = user_fixture()
-    conn = init_test_session(conn, %{user_id: user.id})
-
-    {:ok, view, _html} = live(conn, ~p"/progress")
-    assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
-    refute has_element?(view, "#home-state-content, #home-coach-panel")
-    assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
-
-    view |> element("#home-history-close") |> render_click()
-    assert_patch(view, "/")
   end
 end

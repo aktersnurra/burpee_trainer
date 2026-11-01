@@ -62,30 +62,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
              [{"Can Thursday be mornings?", "Yes."}, {"Make it shorter", "15 minutes."}]
   end
 
-  test "goal confirmation is scoped and admits a new summary", %{conn: conn, scope: scope} do
-    assert {:ok, %{"goal_id" => id}} =
-             BurpeeTrainer.Coach.Tools.ProposeGoal.call(
-               scope,
-               %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_target" => 150,
-                 "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 42))
-               },
-               %{}
-             )
-
-    {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-coach-goal-#{id}[data-status=proposed]")
-    view |> element("#home-coach-goal-#{id}-confirm") |> render_click()
-    # A confirmed goal leaves Coach's list for the header above it, so it reads once.
-    refute has_element?(view, "#home-coach-goal-#{id}")
-    # A confirmed goal leads Progress.
-    render_patch(view, ~p"/progress")
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150")
-    render_patch(view, ~p"/")
-    assert summary_jobs() == 1
-  end
-
   test "real provider tool conversation proposes a goal, replies, then confirms in the same screen",
        %{conn: conn, scope: scope} do
     previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
@@ -168,21 +144,24 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert [goal] = BurpeeTrainer.Goals.list(scope)
     assert goal.status == :proposed
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=proposed]")
+    # The turn queued its own summary; clear it so the confirmation's is the one counted.
+    clear_summary_jobs()
     view |> element("#home-coach-goal-#{goal.id}-confirm") |> render_click()
+    # A confirmed goal leaves Coach's list for the header above it, so it reads once.
     refute has_element?(view, "#home-coach-goal-#{goal.id}")
     # A confirmed goal leads Progress.
     render_patch(view, ~p"/progress")
     assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150")
     render_patch(view, ~p"/")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
+    assert summary_jobs() == 1
   end
 
-  defp summary_jobs do
-    import Ecto.Query
+  defp summary_jobs, do: BurpeeTrainer.Repo.aggregate(summary_job_query(), :count)
+  defp clear_summary_jobs, do: BurpeeTrainer.Repo.delete_all(summary_job_query())
 
-    BurpeeTrainer.Repo.aggregate(
-      from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.SummaryJob"),
-      :count
-    )
+  defp summary_job_query do
+    import Ecto.Query
+    from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.SummaryJob")
   end
 end

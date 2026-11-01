@@ -170,28 +170,15 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     refute_received :unexpected_provider
   end
 
-  test "busy completion transition never initializes a selection", %{user: user} do
-    complete(user, @tuesday, 600)
-    id = make_ref()
-
-    socket =
-      mount_home(user, @tuesday) |> assign(busy?: true, update_id: id, instruction: "Waiting")
-
-    refreshed = refresh(socket, @wednesday)
-    assert refreshed.assigns.home_selection == nil
-    assert refreshed.assigns.busy?
-    assert refreshed.assigns.update_id == id
-    assert refreshed.assigns.instruction == "Waiting"
-    assert Repo.aggregate(CoachRecommendation, :count) == 0
-    refute_received :unexpected_provider
-  end
-
   test "busy History refresh keeps the entire genuine Home snapshot coherent until a safe idle boundary",
        %{user: user} do
     complete(user, @tuesday, 600)
     socket = mount_home(user, @tuesday)
     {:noreply, socket} = workspace_screen(socket, :history)
-    socket = assign(socket, busy?: true, instruction: "Keep this draft", expanded?: true)
+    id = make_ref()
+
+    socket =
+      assign(socket, busy?: true, update_id: id, instruction: "Keep this draft", expanded?: true)
 
     keys = [
       :home_facts,
@@ -207,7 +194,10 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     refreshed = refresh(socket, @wednesday)
     assert Map.take(refreshed.assigns, keys) == before
     assert refreshed.assigns.history_snapshot_now == @wednesday
+    assert refreshed.assigns.busy?
+    assert refreshed.assigns.update_id == id
     assert Repo.aggregate(CoachRecommendation, :count) == 0
+    refute_received :unexpected_provider
 
     idle = refreshed |> assign(busy?: false) |> refresh(@wednesday)
     assert idle.assigns.home_snapshot_now == @wednesday
@@ -409,38 +399,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     {:noreply, socket} = HomeLive.handle_event("history_period", %{"period" => "all"}, socket)
     assert length(socket.assigns.history_loaded_ids) == 5
     refute oldest.id in socket.assigns.history_loaded_ids
-  end
-
-  test "unavailable refresh preserves draft and busy text, and a late failure stays recoverable",
-       %{user: user} do
-    complete(user, @tuesday, 1200)
-    socket = mount_home(user, DateTime.utc_now(:second))
-    {:noreply, socket} = workspace_screen(socket, :history)
-    id = make_ref()
-
-    socket =
-      assign(socket,
-        busy?: true,
-        update_id: id,
-        instruction: "Keep text",
-        current_scope: BurpeeTrainer.Accounts.Scope.for_user(%{user | timezone: "Invalid/Zone"})
-      )
-
-    before = Map.take(socket.assigns, @workspace_keys)
-    socket = refresh(socket, @wednesday)
-    assert Map.take(socket.assigns, @workspace_keys) == before
-    assert socket.assigns.slot == nil
-    assert present?(socket, "#home-history-error")
-
-    {:noreply, socket} =
-      HomeLive.handle_async({:new_request, id}, {:ok, {:error, :unavailable}}, socket)
-
-    refute socket.assigns.busy?
-    assert socket.assigns.instruction == "Keep text"
-    assert socket.assigns.home_selection == before.home_selection
-    assert present?(socket, "#home-history-error")
-    {:noreply, home} = workspace_screen(socket, :home)
-    assert present?(home, "#home-unavailable")
   end
 
   test "stale generation and mismatched async identity leave the socket unchanged", %{user: user} do

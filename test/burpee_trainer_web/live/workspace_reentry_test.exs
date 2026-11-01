@@ -16,37 +16,53 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     %{conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "plan rows replay after visits to Progress", %{
+  test "plan and video rows replay after visits to Progress and stay usable", %{
     conn: conn,
     user: user
   } do
     plan = plan_fixture(user, %{target_reps: 10})
+    video = video_fixture(%{burpee_count: 10, duration_sec: 120})
     {:ok, view, _} = live(conn, ~p"/")
     view |> element("#home-summary") |> render_click()
-    render_click(view, "open_chooser")
-    assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
-    before = workspace(view)
     rows = Repo.all(WorkoutPlan)
     sessions = Workouts.list_sessions(Scope.for_user(user))
 
-    for _ <- 1..2 do
-      roundtrip(view)
-      assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
-      assert workspace(view) == before
-      assert has_element?(view, "#home-expansion[data-open=true]")
-      assert Repo.all(WorkoutPlan) == rows
-      assert Workouts.list_sessions(Scope.for_user(user)) == sessions
-      assert Memory.list(Scope.for_user(user)) == []
+    for {tab, row} <- [
+          {"workouts", "#home-alternative-plan-#{plan.id}-select"},
+          {"videos", "#home-alternative-video-#{video.id}-select"}
+        ] do
+      render_click(view, "open_chooser")
+      render_click(view, "tab", %{"tab" => tab})
+      assert has_element?(view, row)
+      before = workspace(view)
+
+      for _ <- 1..2 do
+        roundtrip(view)
+        assert has_element?(view, row)
+        assert workspace(view) == before
+        assert has_element?(view, "#home-expansion[data-open=true]")
+        assert Repo.all(WorkoutPlan) == rows
+        assert Workouts.list_sessions(Scope.for_user(user)) == sessions
+        assert Memory.list(Scope.for_user(user)) == []
+      end
+
+      if tab == "workouts" do
+        view |> element(row) |> render_click()
+        assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
+      end
     end
 
-    view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
-    assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
+    view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
+    started = Workouts.current_started_session(Scope.for_user(user))
+    assert started.workout_video_id == video.id
+    assert_redirect(view, ~p"/videos/#{video.id}/session/#{started.id}")
   end
 
-  test "a New draft, its answers and its message, survives visits to Progress", %{
-    conn: conn,
-    user: user
-  } do
+  test "a New draft, its answers and its message, survives visits to Progress and a deletion there",
+       %{
+         conn: conn,
+         user: user
+       } do
     plan_fixture(user, %{target_reps: 10})
     {:ok, view, _} = live(conn, ~p"/")
     walk(view, reps: 60, pace_ups: 1)
@@ -65,31 +81,14 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
 
       assert Repo.all(WorkoutPlan) == rows
     end
-  end
 
-  test "video rows replay and remain startable after visits to Progress", %{
-    conn: conn,
-    user: user
-  } do
-    plan_fixture(user)
-    video = video_fixture(%{burpee_count: 10, duration_sec: 120})
-    {:ok, view, _} = live(conn, ~p"/")
-    render_click(view, "tab", %{"tab" => "videos"})
-    render_click(view, "open_chooser")
-    assert has_element?(view, "#home-alternative-video-#{video.id}-select")
-    before = workspace(view)
-
-    for _ <- 1..2 do
-      roundtrip(view)
-      assert has_element?(view, "#home-alternative-video-#{video.id}-select")
-      assert workspace(view) == before
-      assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    end
-
-    view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
-    started = Workouts.current_started_session(Scope.for_user(user))
-    assert started.workout_video_id == video.id
-    assert_redirect(view, ~p"/videos/#{video.id}/session/#{started.id}")
+    saved = complete(user)
+    delete_completion(view, saved)
+    close_history(view)
+    assert workspace(view) == before
+    assert has_element?(view, "#home-studio #studio-note", "20 sets of 6")
+    assert Repo.all(WorkoutPlan) == rows
+    assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 
   test "deleting today's completion restores an existing user's immediately startable fallback",
@@ -125,30 +124,6 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert has_element?(view, "#home-action[aria-label='Start workout']:not([disabled])")
     assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.name == "Starter Six-Count"
     assert Workouts.list_sessions(Scope.for_user(user)) == []
-  end
-
-  test "successful deletion never resets a mounted working selection or new-workout draft", %{
-    conn: conn,
-    user: user
-  } do
-    plan_fixture(user)
-    {:ok, view, _} = live(conn, ~p"/")
-    walk(view, reps: 60, pace_ups: 1)
-    fill(view, "note", "20 sets of 6")
-
-    before = workspace(view)
-    plans = Repo.all(WorkoutPlan)
-    saved = complete(user)
-    delete_completion(view, saved)
-    close_history(view)
-    assert workspace(view) == before
-    assert has_element?(view, "#home-studio")
-
-    assert :sys.get_state(view.pid).socket.assigns.workout_parameters.note ==
-             "20 sets of 6"
-
-    assert Repo.all(WorkoutPlan) == plans
-    assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 
   test "delete and reentry preserve a real in-flight authoring identity and Start token", %{

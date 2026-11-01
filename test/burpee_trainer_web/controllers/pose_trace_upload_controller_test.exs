@@ -2,6 +2,7 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
   import BurpeeTrainer.Fixtures
+  import Ecto.Query, only: [where: 2]
 
   alias BurpeeTrainer.{Repo, Workouts}
   alias BurpeeTrainer.Accounts.Scope
@@ -442,52 +443,26 @@ defmodule BurpeeTrainerWeb.PoseTraceUploadControllerTest do
     assert Repo.one!(PoseCaptureRun).status == :completed
   end
 
-  test "final completion keeps whatever the device sent, whatever count it declared", %{
-    conn: conn
-  } do
-    user = user_fixture()
-    {_plan, session} = completed_session(user)
+  test "completion keeps whatever the device sent, whatever count it declared", %{conn: conn} do
+    for {indexes, declared} <- [{[0, 1], 1}, {[0, 2], 3}, {[2], nil}] do
+      user = user_fixture()
+      {_plan, session} = completed_session(user)
 
-    payload =
-      upload_payload(session.id, session.client_session_id, [chunk(0), chunk(1)], true)
-      |> Map.put("expected_chunk_count", 1)
+      payload =
+        upload_payload(session.id, session.client_session_id, Enum.map(indexes, &chunk/1), true)
 
-    response = conn |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
+      payload =
+        if declared, do: Map.put(payload, "expected_chunk_count", declared), else: payload
 
-    assert json_response(response, 200) == %{"accepted_indexes" => [0, 1], "complete" => true}
-    assert Repo.one!(PoseCaptureRun).status == :completed
-    assert Repo.aggregate(PoseTraceChunk, :count) == 2
-  end
+      response = conn |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
 
-  test "a manifest completes despite chunks the device never wrote", %{conn: conn} do
-    user = user_fixture()
-    {_plan, session} = completed_session(user)
+      assert json_response(response, 200) == %{"accepted_indexes" => indexes, "complete" => true}
 
-    payload =
-      upload_payload(session.id, session.client_session_id, [chunk(0), chunk(2)], true)
-      |> Map.put("expected_chunk_count", 3)
-
-    response =
-      conn |> authenticated_json(user) |> post(~p"/api/session-pose-traces", payload)
-
-    assert json_response(response, 200) == %{"accepted_indexes" => [0, 2], "complete" => true}
-    assert Repo.one!(PoseCaptureRun).status == :completed
-  end
-
-  test "legacy completion without a manifest keeps a trace with gaps", %{conn: conn} do
-    user = user_fixture()
-    {_plan, session} = completed_session(user)
-
-    response =
-      conn
-      |> authenticated_json(user)
-      |> post(
-        ~p"/api/session-pose-traces",
-        upload_payload(session.id, session.client_session_id, [chunk(2)], true)
-      )
-
-    assert json_response(response, 200) == %{"accepted_indexes" => [2], "complete" => true}
-    assert Repo.one!(PoseCaptureRun).status == :completed
+      run = Repo.get_by!(PoseCaptureRun, workout_session_id: session.id)
+      assert run.status == :completed
+      chunks = Repo.all(where(PoseTraceChunk, pose_capture_run_id: ^run.id))
+      assert length(chunks) == length(indexes)
+    end
   end
 
   test "gzip JSON uploads are decoded before validation and stored normally", %{conn: conn} do

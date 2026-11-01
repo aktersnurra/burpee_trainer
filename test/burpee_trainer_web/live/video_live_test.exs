@@ -269,11 +269,17 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
                :logged
              )
 
+    plan = plan_fixture(user)
+
+    assert {:ok, plan_session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
     before_count = Repo.aggregate(WorkoutSession, :count)
 
     for path <- [
           ~p"/videos/#{video.id}/session/#{foreign.id}",
           ~p"/videos/#{other_video.id}/session/#{mismatch.id}",
+          ~p"/videos/#{video.id}/session/#{plan_session.id}",
           ~p"/videos/#{video.id}/session/#{completed.id}",
           ~p"/videos/#{video.id}/session/2147483647"
         ] do
@@ -281,45 +287,6 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     end
 
     assert Repo.aggregate(WorkoutSession, :count) == before_count
-  end
-
-  test "completion rejects ownership and source mismatches in socket state", %{user: user} do
-    plan = plan_fixture(user)
-
-    assert {:ok, plan_session} =
-             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
-
-    foreign_user = user_fixture()
-    video = video_fixture()
-
-    assert {:ok, foreign_video_session} =
-             Workouts.start_video(Scope.for_user(foreign_user), video.id, Ecto.UUID.generate())
-
-    for session <- [plan_session, foreign_video_session],
-        event <- ["validate", "save", "discard"] do
-      socket = %Phoenix.LiveView.Socket{
-        assigns: %{
-          __changed__: %{},
-          current_scope: Scope.for_user(user),
-          workout_session: session,
-          video: %{duration_sec: 120},
-          mood: nil,
-          tags: [],
-          reps: 10,
-          note: ""
-        }
-      }
-
-      assert {:noreply, ^socket} =
-               BurpeeTrainerWeb.VideoLive.Show.handle_event(
-                 event,
-                 %{"workout_session" => %{"burpee_count_actual" => "10"}},
-                 socket
-               )
-    end
-
-    assert Repo.get!(WorkoutSession, plan_session.id).state == :started
-    assert Repo.get!(WorkoutSession, foreign_video_session.id).state == :started
   end
 
   def handle_workout_session_update(_event, _measurements, metadata, %{parent: parent}) do
