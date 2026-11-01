@@ -268,7 +268,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
 
-    # Edit refines by talking, so there is no way back to a form; Run and Save sit under the card.
+    # Edit refines by talking, so there is no way back to a form; Run sits under the card, and
+    # nothing saves a proposal without running it.
     refute has_element?(view, "#home-request-edit")
 
     assert has_element?(
@@ -277,7 +278,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
              "Run"
            )
 
-    assert has_element?(view, "#home-edit-review #home-request-save", "Save")
+    refute has_element?(view, "#home-request-save")
     refute has_element?(view, "#home-chat-dock #home-request-run")
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
@@ -398,8 +399,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#studio-proposal .studio-card-totals", "160 reps")
     refute has_element?(view, "#home-edit-instruction", "Increase")
 
-    view |> element("#home-request-save") |> render_click()
-    render_async(view)
+    view |> element("#home-request-run") |> render_click()
+    assert_redirect(view, 2_000)
 
     assert [saved] =
              Enum.filter(

@@ -19,7 +19,6 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         authoring_stage: :idle,
         workout_parameters: %HomeWorkoutRequest{},
         creation_key: nil,
-        created_plan: nil,
         pending_request: nil,
         design_turns: [],
         pending_turn: nil,

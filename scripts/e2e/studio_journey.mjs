@@ -122,7 +122,7 @@ await page.tap("#home-edit-send");
 await settle(400);
 check(await page.isVisible("#home-update-loading"), "a spinner shows while the coach works");
 await page.waitForSelector("#home-request-run", { timeout: 20000 });
-check(await page.isVisible("#home-request-save"), "Save and Run sit under the proposal");
+check(!(await page.isVisible("#home-request-save")), "Run alone sits under the proposal");
 g = await geometry();
 check(g.small.length === 0, "the proposal's buttons are big enough to hit", g.small.join(", "));
 await shot("05-proposal");

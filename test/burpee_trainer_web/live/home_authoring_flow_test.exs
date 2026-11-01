@@ -91,23 +91,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoringFlowTest do
   end
 
   describe "approval" do
-    test "a saved plan ends the review and asks for fresh alternatives" do
-      id = make_ref()
-
-      {confirming, []} =
-        Flow.update(
-          model(authoring_stage: :review, pending_request: :prepared),
-          {:confirm_started, id}
-        )
-
-      assert confirming.busy?
-
-      {saved, [:refresh_alternatives]} = Flow.update(confirming, {:plan_saved, id, :plan})
-      assert saved.authoring_stage == :saved
-      assert saved.created_plan == :plan
-      assert saved.pending_request == nil
-    end
-
     test "a failed approval keeps the reviewed request" do
       id = make_ref()
 
@@ -121,14 +104,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoringFlowTest do
       assert failed.pending_request == :prepared
       assert failed.authoring_stage == :review
       refute failed.busy?
-    end
-
-    test "selecting the created workout returns to idle" do
-      {selected, []} =
-        Flow.update(model(authoring_stage: :saved, created_plan: :plan), :created_selected)
-
-      assert selected.authoring_stage == :idle
-      assert selected.created_plan == nil
     end
   end
 

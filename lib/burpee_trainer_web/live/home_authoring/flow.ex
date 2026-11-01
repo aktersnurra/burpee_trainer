@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   one in flight, so a late answer to a discarded or superseded request changes nothing.
   """
 
-  @type stage :: :idle | :new | :editing | :review | :saved
+  @type stage :: :idle | :new | :editing | :review
 
   @type command ::
           {:cancel_async, {:new_request, reference()}}
@@ -29,7 +29,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     editing_source: nil,
     workout_parameters: nil,
     creation_key: nil,
-    created_plan: nil,
     pending_request: nil,
     review_inspection_rows: [],
     instruction: "",
@@ -80,7 +79,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     {%{
        discarded
        | authoring_stage: :idle,
-         created_plan: nil,
          # Only New takes the workout away; Edit keeps it in view, so nothing returns.
          authoring_returned?: is_nil(m.editing_source)
      }, commands}
@@ -97,9 +95,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   end
 
   def update(%__MODULE__{} = m, :preparation_discarded), do: discard(m)
-
-  def update(%__MODULE__{authoring_stage: :saved} = m, :created_selected),
-    do: {%{m | authoring_stage: :idle, created_plan: nil}, []}
 
   def update(%__MODULE__{} = m, :request_reopened),
     do: {%{m | pending_request: nil, local_error: nil}, []}
@@ -150,20 +145,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     end)
   end
 
-  def update(%__MODULE__{} = m, {:plan_saved, id, plan}) do
-    settle(m, id, fn m ->
-      {%{m | authoring_stage: :saved, pending_request: nil, created_plan: plan},
-       [:refresh_alternatives]}
-    end)
-  end
-
   def update(%__MODULE__{} = m, {:plan_selected, id}) do
     settle(m, id, fn m ->
       {%{
          m
          | authoring_stage: :idle,
            pending_request: nil,
-           created_plan: nil,
            editing_source: nil,
            authoring_returned?: true
        }, []}
@@ -200,7 +187,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         editing_source: nil,
         workout_parameters: params,
         creation_key: key,
-        created_plan: nil,
         pending_request: nil,
         design_turns: [],
         pending_turn: nil,

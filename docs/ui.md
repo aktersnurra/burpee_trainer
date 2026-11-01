@@ -203,8 +203,8 @@ every animation here.
 ## 4a2. Actions
 
 - One filled pill per view for the primary action, as an icon: Start and Resume are a
-  play mark in a wide pill; Save, Approve and Use this workout a check; Review an arrow
-  right; sending words is the composer's arrow up (4a1).
+  play mark in a wide pill; Approve a check; Review an arrow right; sending words is the
+  composer's arrow up (4a1).
 - Every other action is a quiet icon from one set (heroicons), each with an `aria-label`
   and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
   switches or chooses a workout, plus adds or sets, trash deletes, x-mark cancels, closes,

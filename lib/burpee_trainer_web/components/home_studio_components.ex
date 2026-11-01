@@ -11,7 +11,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents}
 
   @doc "Whether Home gives way to the studio."
-  def studio?(state), do: state.authoring_stage in [:new, :editing, :review, :saved]
+  def studio?(state), do: state.authoring_stage in [:new, :editing, :review]
 
   defp edit?(state), do: not is_nil(state.editing_source)
 
@@ -203,15 +203,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
            camera and warmup choices this device remembers from Home. --%>
       <div id="home-chat-actions" class="studio-actions">
         <button
-          id="home-request-save"
-          type="button"
-          class="studio-pill"
-          phx-click="save_review_to_library"
-          disabled={@state.busy?}
-        >
-          <.icon name="hero-bookmark" class="size-4" /> Save
-        </button>
-        <button
           id="home-request-run"
           type="button"
           class="studio-pill studio-pill-primary"
@@ -303,29 +294,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   ## New
 
   attr(:state, :map, required: true)
-
-  defp new_thread(%{state: %{authoring_stage: :saved}} = assigns) do
-    ~H"""
-    <li id="home-new-saved" class="studio-msg studio-coach">
-      <p class="studio-text">
-        Saved {@state.created_plan.name}. Your current workout is unchanged.
-      </p>
-      <div class="studio-pills">
-        <button id="home-new-dismiss" type="button" class="studio-pill" phx-click="abort_new_workout">
-          Keep current
-        </button>
-        <button
-          id="home-new-select"
-          type="button"
-          class="studio-pill studio-pill-primary"
-          phx-click="select_created_workout"
-        >
-          <.icon name="hero-check" class="size-4" /> Use this one
-        </button>
-      </div>
-    </li>
-    """
-  end
 
   defp new_thread(assigns) do
     ~H"""

@@ -373,8 +373,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "refine_workout",
              "review_current_edit",
              "run_workout_request",
-             "save_review_to_library",
-             "select_created_workout",
              "send_new_workout",
              "step_workout_value",
              "submit_home_action"
@@ -541,7 +539,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_async({kind, _id} = operation, result, socket)
       when kind in [
              :new_request,
-             :new_plan,
              :run_plan,
              :home_revision_request,
              :home_revision

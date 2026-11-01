@@ -171,47 +171,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     count = Repo.aggregate(WorkoutPlan, :count)
     view |> element("#home-request-run") |> render_click()
     render_async(view)
-    refute has_element?(view, "#home-new-saved")
     assert has_element?(view, "#home-adjustment-error", "changed")
     assert Repo.aggregate(WorkoutPlan, :count) == count
 
     assert {:ok, ^changed} =
              Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
 
-    refute_received {:provider_request, _}
-  end
-
-  test "a saved workout stays selectable after dismissing the saved notice", %{
-    view: view,
-    user: user,
-    selected: selected
-  } do
-    walk(view, reps: 10, minutes: 5, pace_ups: 1)
-    create(view)
-    render_async(view, 2_000)
-    assert_receive {:provider_request, _}
-    view |> element("#home-request-save") |> render_click()
-    render_async(view, 2_000)
-    assert has_element?(view, "#home-new-saved")
-    view |> element("#home-new-dismiss") |> render_click()
-    refute has_element?(view, "#home-new-saved")
-
-    [saved] =
-      Enum.filter(
-        Workouts.list_library(Scope.for_user(user)),
-        &(&1.name == "Independent new workout")
-      )
-
-    assert {:ok, unchanged} =
-             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
-
-    assert unchanged.plan.id == selected.plan.id
-
-    render_click(view, "open_chooser", %{})
-    assert has_element?(view, "#home-alternative-plan-#{saved.id}")
-    assert has_element?(view, "#home-delete-workout-#{saved.id}")
-    view |> element("#home-alternative-plan-#{saved.id}-select") |> render_click()
-    assert has_element?(view, "#home-summary", "Independent new workout")
     refute_received {:provider_request, _}
   end
 
@@ -233,10 +198,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert has_element?(view, ".studio-turn", "10 reps")
     assert has_element?(view, "#home-design-ask", "Increase to 150")
     assert has_element?(view, "#studio-proposal", "150 reps")
-
-    view |> element("#home-request-save") |> render_click()
-    render_async(view, 2_000)
-    assert has_element?(view, "#home-new-saved")
   end
 
   test "provider failure retains the answers and the current pin without offering approval", %{

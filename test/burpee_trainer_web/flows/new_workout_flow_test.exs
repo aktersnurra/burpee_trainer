@@ -184,9 +184,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert has_element?(view, "##{group_id}[aria-expanded=true]")
     assert has_element?(view, "#home-inspection .home-prescription-rest", "1:00")
 
-    view |> element("#home-request-save") |> render_click()
-    render_async(view, 2_000)
-    assert has_element?(view, "#home-new-saved", "Minute blocks")
+    view |> element("#home-request-run") |> render_click()
+    assert_redirect(view, 2_000)
 
     [saved] =
       Enum.filter(Workouts.list_library(Scope.for_user(user)), &(&1.name == "Minute blocks"))
@@ -198,10 +197,10 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert {1_080_000_000, 40_000_000} in WorkoutRequest.rest_timeline(definition.events)
     assert Agent.get(counter, & &1.calls) == ["workout_request", "workout_layout"]
 
-    assert {:ok, unchanged} =
-             Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
-
-    assert unchanged.plan.id == selected.plan.id
+    # Run saved it as today's workout in place of the one before.
+    assert {:ok, now} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+    assert now.plan.id == saved.id
+    refute now.plan.id == selected.plan.id
   end
 
   test "an unbroken workout can limit the reps in a set, and the coach is told", %{view: view} do

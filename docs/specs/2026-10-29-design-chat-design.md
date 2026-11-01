@@ -42,7 +42,7 @@ What would you like to change?
 Two even sets with a breather.      ← the proposal arrives as a card
 ╭ Proposal ───────────────╮
 ╰─────────────────────────╯
-              (Save) (▶ Run)         ← under the card
+              (▶ Run)                ← under the card
 ╭─────────────────────────╮
 │ Change anything else? ↑ │
 ╰─────────────────────────╯
@@ -96,7 +96,7 @@ proposal, or from the request in flight, is to the form as it was.
 
 ## Run
 
-A proposal's card has Save and Run under it. **Run** saves the proposal, makes it today's workout
+A proposal's card has Run under it, and nothing else: **Run** saves the proposal, makes it today's workout
 and starts it, as Home's play does, with the camera and warmup choices the device remembers from
 Home; the chat shows no toggles.
 

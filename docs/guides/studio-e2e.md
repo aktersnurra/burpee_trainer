@@ -10,7 +10,7 @@ the composer or the CSS around them.
 - Swap, Edit and New sit along the bottom edge of Home, a tap each.
 - A swipe right opens the swap drawer and a swipe left closes it.
 - Edit: the studio starts at Home's left edge, the docked box starts at the same edge, nothing
-  scrolls sideways, a spinner shows while the coach works, and Save and Run sit under the proposal.
+  scrolls sideways, a spinner shows while the coach works, and Run sits under the proposal.
 - New: one form with Create, style, set size and pace folded under More until it is tapped (and
   open while values change), unbroken asks for a set size, a value's buttons move it by a step, a
   held button keeps stepping, a value can be typed, the form says what the values come to, nothing scrolls sideways, and Run

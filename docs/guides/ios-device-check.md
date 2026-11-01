@@ -32,7 +32,7 @@ not in Safari, as the keyboard behaves differently in each. Do it once in each.
 
 ## Taps
 
-- [ ] Every button can be hit with a thumb without a miss (Save, Run, the round buttons).
+- [ ] Every button can be hit with a thumb without a miss (Run, the suggested asks, the round buttons).
 - [ ] The camera toggle beside Home's play is off and disabled when the camera is unavailable.
 
 Report what failed with the iOS version and whether it was the Home Screen app or Safari.
