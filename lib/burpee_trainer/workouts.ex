@@ -1253,22 +1253,20 @@ defmodule BurpeeTrainer.Workouts do
       changeset = deferred_pose_chunk_changeset(run, attrs)
       index = Ecto.Changeset.get_field(changeset, :chunk_index)
 
-      cond do
-        not changeset.valid? ->
-          Logger.warning(
-            "pose_trace_chunk_dropped run_id=#{run.id} reason=#{rejection_reason(changeset)}"
-          )
+      if changeset.valid? do
+        case repo.insert(changeset,
+               on_conflict: :nothing,
+               conflict_target: [:pose_capture_run_id, :chunk_index]
+             ) do
+          {:ok, _chunk} -> {:cont, {:ok, [index | indexes]}}
+          {:error, changeset} -> {:halt, {:error, changeset}}
+        end
+      else
+        Logger.warning(
+          "pose_trace_chunk_dropped run_id=#{run.id} reason=#{rejection_reason(changeset)}"
+        )
 
-          {:cont, {:ok, if(is_integer(index), do: [index | indexes], else: indexes)}}
-
-        true ->
-          case repo.insert(changeset,
-                 on_conflict: :nothing,
-                 conflict_target: [:pose_capture_run_id, :chunk_index]
-               ) do
-            {:ok, _chunk} -> {:cont, {:ok, [index | indexes]}}
-            {:error, changeset} -> {:halt, {:error, changeset}}
-          end
+        {:cont, {:ok, if(is_integer(index), do: [index | indexes], else: indexes)}}
       end
     end)
     |> case do

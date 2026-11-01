@@ -178,9 +178,10 @@ defmodule BurpeeTrainer.Coach.Memory.Ops do
   end
 
   defp once(text, old) do
-    if length(String.split(text, old)) == 2,
-      do: :ok,
-      else: {:error, "old_text occurs more than once in the entry; give more of it"}
+    case String.split(text, old) do
+      [_, _] -> :ok
+      _ -> {:error, "old_text occurs more than once in the entry; give more of it"}
+    end
   end
 
   defp closest(old, working) do

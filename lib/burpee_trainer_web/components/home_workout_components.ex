@@ -885,17 +885,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do: state |> Map.get(:home_bests, %{}) |> Map.get(state.home_selection.plan.burpee_type)
 
   defp hero_name(state) do
-    cond do
-      swap_review?(state) -> state.swap_preview.source.name
-      true -> state.home_selection.plan.name
-    end
+    if swap_review?(state),
+      do: state.swap_preview.source.name,
+      else: state.home_selection.plan.name
   end
 
   defp hero_totals(state) do
-    cond do
-      swap_review?(state) and state.swap_preview.kind == "plan" -> state.swap_preview.source
-      true -> state.home_selection.plan
-    end
+    if swap_review?(state) and state.swap_preview.kind == "plan",
+      do: state.swap_preview.source,
+      else: state.home_selection.plan
   end
 
   # What the hero is marked against. A swap is another workout, so it reads plain.

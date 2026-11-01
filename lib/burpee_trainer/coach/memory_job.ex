@@ -185,12 +185,7 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
     targets = operations |> Enum.map(& &1["target"]) |> Enum.uniq()
 
     Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
-      ops =
-        for %{"target" => ^target} = op <- operations do
-          op |> Map.drop(["target"]) |> Map.reject(fn {_key, value} -> is_nil(value) end)
-        end
-
-      case Memory.write(scope, target, ops) do
+      case Memory.write(scope, target, target_operations(operations, target)) do
         {:ok, result} ->
           {:cont, {:ok, results ++ [result]}}
 
@@ -198,6 +193,12 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
           {:halt, {:error, Map.put(rejection, "target", target), results}}
       end
     end)
+  end
+
+  defp target_operations(operations, target) do
+    for %{"target" => ^target} = op <- operations do
+      op |> Map.drop(["target"]) |> Map.reject(fn {_key, value} -> is_nil(value) end)
+    end
   end
 
   defp event(scope, %{"exchange_id" => id}) when is_integer(id) do

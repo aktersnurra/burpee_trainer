@@ -139,26 +139,8 @@ defmodule BurpeeTrainer.Coach.Memory do
         entries = list(scope, store)
 
         case Ops.plan(store, Enum.map(entries, &Map.take(&1, [:id, :text])), operations) do
-          {:ok, plan} ->
-            now = DateTime.utc_now()
-
-            for note <- entries, note.id in plan.forget do
-              note |> Ecto.Changeset.change(forgotten_at: now) |> Repo.update!()
-            end
-
-            for %{text: text, supersedes: supersedes} <- plan.add do
-              Repo.insert!(%__MODULE__{
-                user_id: id,
-                store: store,
-                text: text,
-                supersedes_id: supersedes
-              })
-            end
-
-            {plan.add != [] or plan.forget != [], plan.notes}
-
-          {:error, rejection} ->
-            Repo.rollback(rejection)
+          {:ok, plan} -> apply_plan(id, store, entries, plan)
+          {:error, rejection} -> Repo.rollback(rejection)
         end
       end)
 
@@ -180,6 +162,27 @@ defmodule BurpeeTrainer.Coach.Memory do
       {:error, %{} = rejection} ->
         {:error, rejection}
     end
+  end
+
+  # Inside write/3's transaction: forget and add what the plan says, and report whether
+  # anything changed.
+  defp apply_plan(user_id, store, entries, plan) do
+    now = DateTime.utc_now()
+
+    for note <- entries, note.id in plan.forget do
+      note |> Ecto.Changeset.change(forgotten_at: now) |> Repo.update!()
+    end
+
+    for %{text: text, supersedes: supersedes} <- plan.add do
+      Repo.insert!(%__MODULE__{
+        user_id: user_id,
+        store: store,
+        text: text,
+        supersedes_id: supersedes
+      })
+    end
+
+    {plan.add != [] or plan.forget != [], plan.notes}
   end
 
   @doc "The owner removes one entry by hand."

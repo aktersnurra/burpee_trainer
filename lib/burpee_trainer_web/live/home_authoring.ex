@@ -434,17 +434,18 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       )
       when field in ["reps", "every"] and dir in ["-1", "1"] do
     # The sets selected stay the ones changed, however the rows regroup after a step.
-    with {:ok, adjusted} <-
-           Coach.adjust_proposal(
-             prepared,
-             set_indices(prepared.definition, sets),
-             String.to_existing_atom(field),
-             String.to_integer(dir)
-           ) do
-      rows = prepared_inspection(adjusted)
-      {:noreply, step(socket, {:proposal_adjusted, adjusted, rows, edit_steps(adjusted, sets)})}
-    else
-      _ -> {:noreply, socket}
+    case Coach.adjust_proposal(
+           prepared,
+           set_indices(prepared.definition, sets),
+           String.to_existing_atom(field),
+           String.to_integer(dir)
+         ) do
+      {:ok, adjusted} ->
+        rows = prepared_inspection(adjusted)
+        {:noreply, step(socket, {:proposal_adjusted, adjusted, rows, edit_steps(adjusted, sets)})}
+
+      _ ->
+        {:noreply, socket}
     end
   end
 

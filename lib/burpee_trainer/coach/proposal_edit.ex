@@ -45,13 +45,9 @@ defmodule BurpeeTrainer.Coach.ProposalEdit do
     events
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn {event, index}, {:ok, acc} ->
-      if MapSet.member?(indices, index) do
-        case step_event(event, field, dir) do
-          {:ok, event} -> {:cont, {:ok, [event | acc]}}
-          :error -> {:halt, :error}
-        end
-      else
-        {:cont, {:ok, [event | acc]}}
+      case step_selected(event, MapSet.member?(indices, index), field, dir) do
+        {:ok, event} -> {:cont, {:ok, [event | acc]}}
+        :error -> {:halt, :error}
       end
     end)
     |> case do
@@ -59,6 +55,9 @@ defmodule BurpeeTrainer.Coach.ProposalEdit do
       :error -> :error
     end
   end
+
+  defp step_selected(event, true = _selected, field, dir), do: step_event(event, field, dir)
+  defp step_selected(event, false = _selected, _field, _dir), do: {:ok, event}
 
   defp step_event(%{"reps" => reps} = event, :reps, dir) when reps + dir >= 1,
     do: {:ok, %{event | "reps" => reps + dir}}
