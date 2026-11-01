@@ -211,7 +211,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert has_element?(view, "#home-alternative-plan-#{saved.id}")
     assert has_element?(view, "#home-delete-workout-#{saved.id}")
     view |> element("#home-alternative-plan-#{saved.id}-select") |> render_click()
-    view |> element("#home-swap-confirm") |> render_click()
     assert has_element?(view, "#home-summary", "Independent new workout")
     refute_received {:provider_request, _}
   end

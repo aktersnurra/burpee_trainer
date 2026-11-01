@@ -41,7 +41,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     end
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
-    refute :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
+    assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
   end
 
   test "a New draft, its answers and its message, survives History and Coach", %{
@@ -84,7 +84,6 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     view |> element("#home-chooser-close") |> render_click()
     open_swap(view)
     view |> element("#home-alternative-plan-#{owned.id}-select") |> render_click()
-    view |> element("#home-swap-confirm") |> render_click()
     assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == owned.id
     assert Repo.reload!(plan) == plan
   end
@@ -109,8 +108,6 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     end
 
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
-    assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    view |> element("#home-swap-confirm") |> render_click()
     started = Workouts.current_started_session(Scope.for_user(user))
     assert started.workout_video_id == video.id
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{started.id}")

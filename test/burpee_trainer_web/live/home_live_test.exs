@@ -303,7 +303,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            )
 
     view |> element("#home-alternative-plan-#{plan.id}-select") |> render_click()
-    view |> element("#home-swap-confirm") |> render_click()
     assert has_element?(view, "#home-summary", plan.name)
     assert has_element?(view, "#home-alternatives-panel[hidden]")
     assert Repo.aggregate(WorkoutSession, :count) == 0
@@ -320,7 +319,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-alternative-video-#{unknown.id}")
     assert has_element?(view, "#home-summary", plan.name)
     view |> element("#home-alternative-video-#{video.id}-select") |> render_click()
-    view |> element("#home-swap-confirm") |> render_click()
     session = Workouts.current_started_session(Scope.for_user(user))
     assert session.workout_video_id == video.id
     assert_redirect(view, ~p"/videos/#{video.id}/session/#{session.id}")
@@ -377,7 +375,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert [
              ["set_attr", %{"attr" => ["hidden", ""], "to" => "#home-alternatives-panel"}],
              ["remove_attr", %{"attr" => "inert"}],
-             ["push", %{"event" => "preview_alternative"}]
+             ["push", %{"event" => "select_alternative"}]
            ] = Jason.decode!(selection)
   end
 

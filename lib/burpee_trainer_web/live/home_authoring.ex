@@ -179,7 +179,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     {:noreply,
      socket
      |> step(:aborted)
-     |> assign(swap_preview: nil)
      |> adjustment_form("")
      |> HomeLive.assign_home()
      |> HomeWorkspace.refresh_projection()}

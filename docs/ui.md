@@ -164,7 +164,8 @@ Swap, Edit and New are three muted 44px icons (`.home-corner`: bars, pencil, plu
 with the workout opened or not: in a row along the bottom edge on a phone, within the thumb's
 reach, and at the top-left corner on a wide screen, where the Claude app keeps its sidebar and
 new-chat buttons. A swipe right also opens the swap drawer (the page slides right and the workout
-list takes the space; `#home-page` moves with `left`, never a transform). Edit and New are the
+list takes the space; `#home-page` moves with `left`, never a transform). A tap on a workout in
+the drawer makes it today's and closes the drawer; a tap on a video starts it. Edit and New are the
 studio, a full-screen chat on the same page and gutter as Home:
 
 - **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is

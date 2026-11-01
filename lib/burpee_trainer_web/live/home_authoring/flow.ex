@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   one in flight, so a late answer to a discarded or superseded request changes nothing.
   """
 
-  @type stage :: :idle | :new | :editing | :review | :saved | :choosing
+  @type stage :: :idle | :new | :editing | :review | :saved
 
   @type command ::
           {:cancel_async, {:new_request, reference()}}

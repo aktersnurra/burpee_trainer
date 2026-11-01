@@ -18,26 +18,19 @@ defmodule BurpeeTrainerWeb.Flows.SwapReviewFlowTest do
     %{view: view, scope: scope, slot: slot, selected: selected, plan: plan}
   end
 
-  test "preview and cancel preserve selection; explicit Use selects without starting", ctx do
+  test "a tap on another workout makes it today's, without starting it", ctx do
     ctx.view |> element("#home-alternative-plan-#{ctx.plan.id}-select") |> render_click()
-    assert has_element?(ctx.view, "#home-swap-review #home-inspection")
-    assert {:ok, unchanged} = Workouts.ensure_home_selection(ctx.scope, ctx.slot)
-    assert unchanged == ctx.selected
-    ctx.view |> element("#home-swap-abort") |> render_click()
-    assert has_element?(ctx.view, "#home-summary", ctx.selected.plan.name)
-    open_swap(ctx.view)
-    ctx.view |> element("#home-alternative-plan-#{ctx.plan.id}-select") |> render_click()
-    ctx.view |> element("#home-swap-confirm") |> render_click()
     assert {:ok, selected} = Workouts.ensure_home_selection(ctx.scope, ctx.slot)
     assert selected.plan.id == ctx.plan.id
+    assert has_element?(ctx.view, "#home-summary", ctx.plan.name)
+    assert has_element?(ctx.view, "#home-alternatives-panel[hidden]")
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
-  test "a newer choice in another tab is not overwritten by Use", ctx do
-    ctx.view |> element("#home-alternative-plan-#{ctx.plan.id}-select") |> render_click()
+  test "a newer choice in another tab is not overwritten by a tap", ctx do
     other = plan_fixture(ctx.scope.user)
     {:ok, newer} = Workouts.select_home_workout(ctx.scope, ctx.selected, other.id)
-    ctx.view |> element("#home-swap-confirm") |> render_click()
+    ctx.view |> element("#home-alternative-plan-#{ctx.plan.id}-select") |> render_click()
     assert {:ok, ^newer} = Workouts.ensure_home_selection(ctx.scope, ctx.slot)
     assert has_element?(ctx.view, "#home-adjustment-error", "no longer available")
   end

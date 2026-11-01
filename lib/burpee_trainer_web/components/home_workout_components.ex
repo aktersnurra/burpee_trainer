@@ -137,68 +137,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     do:
       "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
 
-  attr(:prefix, :string, default: "home-request")
-  attr(:busy, :boolean, default: false)
-  attr(:authoring, :boolean, default: true)
-  attr(:confirm, :string, default: "confirm_workout_request")
-  attr(:cancel, :string, default: "abort_new_workout")
-  attr(:confirm_label, :string, default: "Use workout")
-
-  def review_actions(assigns) do
-    ~H"""
-    <div class="home-review-actions home-review-actions-split">
-      <button
-        id={@prefix <> "-abort"}
-        type="button"
-        phx-click={@cancel}
-        class="home-text-action home-icon-action"
-        aria-label="Cancel review"
-        title="Cancel"
-        disabled={@busy}
-      >
-        <.icon name="hero-x-mark" class="size-5" />
-      </button>
-      <div class="home-review-actions-group">
-        <button
-          :if={@authoring}
-          id={@prefix <> "-edit"}
-          type="button"
-          phx-click="edit_workout_request"
-          class="home-text-action home-icon-action"
-          aria-label="Edit workout"
-          title="Edit"
-          disabled={@busy}
-        >
-          <.icon name="hero-pencil-square" class="size-5" />
-        </button>
-        <button
-          :if={@authoring}
-          id={@prefix <> "-save"}
-          type="button"
-          phx-click="save_review_to_library"
-          class="home-text-action home-icon-action"
-          aria-label="Save to library"
-          title="Save to library"
-          disabled={@busy}
-        >
-          <.icon name="hero-bookmark" class="size-5" />
-        </button>
-        <button
-          id={@prefix <> "-confirm"}
-          type="button"
-          phx-click={@confirm}
-          class="home-primary-action home-icon-action"
-          aria-label={@confirm_label}
-          title={@confirm_label}
-          disabled={@busy}
-        >
-          <.icon name="hero-check" class="size-5" />
-        </button>
-      </div>
-    </div>
-    """
-  end
-
   @start_choices %{
     "camera" => {"Camera tracking", "hero-video-camera"},
     "warmup" => {"Warmup", "hero-fire"}
@@ -268,31 +206,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     aria-expanded={to_string(@state.expanded?)}
                     aria-controls="home-expansion-content"
                   >
-                    <span class="home-workout-name">
-                      <.changed
-                        value={hero_name(@state)}
-                        was={
-                          if swap_review?(@state),
-                            do: hero_name(@state),
-                            else: @state.home_selection.plan.name
-                        }
-                      />
-                    </span>
+                    <span class="home-workout-name">{@state.home_selection.plan.name}</span>
                   </button>
                 </h1>
               </div>
-              <span :if={swap_video?(@state)} class="home-workout-totals">
-                {duration_label(@state.swap_preview.source.duration_sec)} · Video
-              </span>
-              <span :if={!swap_video?(@state)} class="home-workout-totals">
-                <.changed
-                  value={duration_label(hero_totals(@state).target_duration_sec)}
-                  was={duration_label(hero_was(@state).target_duration_sec)}
-                /> ·
-                <.changed
-                  value={"#{hero_totals(@state).target_reps}"}
-                  was={"#{hero_was(@state).target_reps}"}
-                /> reps
+              <span class="home-workout-totals">
+                {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
               </span>
             </div>
             <p
@@ -348,27 +267,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 expanded={@state.expanded_groups}
               />
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
-                <section
-                  :if={@state.authoring_stage == :choosing}
-                  id="home-swap-review"
-                  class="home-review"
-                  aria-label="Review workout"
-                  phx-mounted={JS.focus(to: "#home-swap-confirm")}
-                >
-                  <.inspection
-                    :if={@state.swap_preview.kind == "plan"}
-                    rows={@state.review_inspection_rows}
-                    expanded={@state.expanded_groups}
-                  />
-                  <.review_actions
-                    prefix="home-swap"
-                    authoring={false}
-                    confirm="use_alternative"
-                    confirm_label={
-                      if @state.swap_preview.kind == "video", do: "Start video", else: "Use workout"
-                    }
-                  />
-                </section>
                 <.request_confirmation
                   :if={@state.pending_request && @state.authoring_stage == :idle}
                   request={@state.pending_request.request}
@@ -620,7 +518,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           |> JS.remove_attribute("inert",
             to: "#home-summary, .home-workout-actions, #home-expansion-content"
           )
-          |> JS.push("preview_alternative")
+          |> JS.push("select_alternative")
         }
         phx-value-id={@item.source_id}
         phx-value-kind={@item.kind}
@@ -837,39 +735,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   attr(:value, :string, required: true)
   attr(:was, :string, required: true)
 
-  # A value Review changed reads marked; an unchanged one reads plain.
-  defp changed(assigns) do
-    ~H"""
-    <mark :if={@value != @was} class="home-changed">{@value}</mark><span :if={@value == @was}>{@value}</span>
-    """
-  end
-
   defp shape(plan), do: BurpeeTrainer.Workouts.Shape.describe(plan.definition_json)
 
   # The athlete's best for this burpee type, per 20 minutes, to read today's reps against.
   defp best(state),
     do: state |> Map.get(:home_bests, %{}) |> Map.get(state.home_selection.plan.burpee_type)
-
-  defp hero_name(state) do
-    if swap_review?(state),
-      do: state.swap_preview.source.name,
-      else: state.home_selection.plan.name
-  end
-
-  defp hero_totals(state) do
-    if swap_review?(state) and state.swap_preview.kind == "plan",
-      do: state.swap_preview.source,
-      else: state.home_selection.plan
-  end
-
-  # What the hero is marked against. A swap is another workout, so it reads plain.
-  defp hero_was(state),
-    do: if(swap_review?(state), do: hero_totals(state), else: state.home_selection.plan)
-
-  defp swap_review?(state),
-    do: state.authoring_stage == :choosing and not is_nil(state.swap_preview)
-
-  defp swap_video?(state), do: swap_review?(state) and state.swap_preview.kind == "video"
 
   defp shared_units(row), do: Enum.take(row.units, div(length(row.units), row.count))
 
