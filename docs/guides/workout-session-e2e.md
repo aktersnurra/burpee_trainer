@@ -48,7 +48,6 @@ supporting context, never substitute browser evidence.
 From the repository root, require all commands to exit zero:
 
 ```bash
-MIX_ENV=test mix run --no-start scripts/migrations/rehearse_coach_first.exs
 MIX_ENV=test mix test test/burpee_trainer/e2e_library_setup_test.exs --max-cases 1
 (cd assets && npm test)
 mix assets.build

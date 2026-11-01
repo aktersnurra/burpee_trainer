@@ -38,8 +38,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
     end
   end
 
-  defp validate_canonical_contract(%Program{}), do: :ok
-
   defp validate_events([]),
     do: {:error, CompileError.new(:empty_program, "Program must contain at least one event")}
 
@@ -75,10 +73,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramValidator do
         {:error, CompileError.new(:terminal_rest, "Program must end with a work event")}
     end
   end
-
-  defp validate_schema_three_work_durations(%Program{schema_version: schema_version})
-       when schema_version < 3,
-       do: :ok
 
   defp validate_schema_three_work_durations(%Program{} = program) do
     terminal_index = length(program.events) - 1
