@@ -47,9 +47,14 @@ defmodule BurpeeTrainer.Coach.WorkoutPreferenceTest do
       min_confidence: 0.6
     ]
 
+    # A weekday slot: the standard twenty minutes. On a weekend the slot is a
+    # catch-up block, and the progression rule would refuse these workouts for
+    # their pace before the preference rule is reached.
+    @wednesday ~U[2026-10-28 12:00:00Z]
+
     defp slot_and_scope do
       scope = scope_fixture()
-      {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+      {:ok, slot} = Policy.required_slot(scope, @wednesday)
       {scope, slot}
     end
 
