@@ -16,7 +16,7 @@ defmodule BurpeeTrainerWeb.HomeChooser do
       do:
         {:noreply,
          socket
-         |> assign(chooser_open?: true, alternatives_open?: true, options_open?: false)
+         |> assign(chooser_open?: true, alternatives_open?: true)
          |> refresh_alternatives()},
       else: {:noreply, socket}
   end

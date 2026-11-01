@@ -695,7 +695,8 @@ button.home-summary:hover .home-workout-name {
 .home-history-sheet-tags { display: flex; flex-wrap: wrap; gap:7px; margin-top:18px; }
 .home-history-sheet-tags span { padding:5px 8px; border:1px solid var(--home-line); border-radius:3px; color:var(--home-muted); font-size: var(--text-small); }
 #home-history-sheet-note { margin-top: 12px; font-size: var(--text-body); line-height: 1.5; }
-@media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); } }
+/* On a phone the bottom row of actions (.home-corner) stays clear of the page's end. */
+@media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); padding-bottom: calc(76px + env(safe-area-inset-bottom)); } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
 /* Measured local-day detail keeps the same 80-minute visual ceiling as weekly cells. */
 .home-history-week-cell { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform var(--motion-quick) ease; }
@@ -1084,25 +1085,21 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
   #home-alternatives-panel:not([hidden]) { box-shadow: none; }
 }
 
-/* On a wide screen there is no swipe: the drawer, Edit and New sit at the top-left corner, where the
-   Claude app keeps its sidebar and new-chat buttons. A phone swipes for them instead. */
-.home-corner { display: none; }
+/* The drawer, Edit and New, one tap each. A phone has them in a row along the bottom edge, within
+   the thumb's reach; a wide screen at the top-left corner, where the Claude app keeps its sidebar
+   and new-chat buttons. */
+.home-corner { position: fixed; z-index: 20; left: 50%; bottom: calc(8px + env(safe-area-inset-bottom)); display: flex; gap: 16px; transform: translateX(-50%); }
+.home-corner-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--home-muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
+.home-corner-action:hover { background: var(--color-base-300); color: #262722; }
+.home-corner-action:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; }
 @media (min-width: 601px) {
-  .home-corner { position: fixed; z-index: 20; top: 12px; left: 12px; display: flex; gap: 2px; }
-  .home-corner-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--home-muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
-  .home-corner-action:hover { background: var(--color-base-300); color: #262722; }
-  .home-corner-action:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; }
+  .home-corner { top: 12px; bottom: auto; left: 12px; gap: 2px; transform: none; }
 }
 
-/* ---- Options sheet: swiped up from the workout. ---- */
-#home-options-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .28); animation: sheet-fade var(--motion-quick) ease backwards; }
-#home-options-sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; display: grid; gap: 8px; width: min(430px, 100%); padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; background: var(--color-base-200); transform: translateX(-50%); animation: sheet-up var(--motion-settle) var(--ease-out) backwards; }
+/* A sheet rises from the bottom edge over a fading backdrop; its grip sits at its top edge. */
 @keyframes sheet-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
 @keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
 .home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--color-base-border); }
-.home-option { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 12px 14px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: transparent; color: #262722; text-align: left; transition: background var(--motion-quick) ease; }
-.home-option:hover, .home-option:focus-visible { background: var(--color-base-100); }
-.home-option-title { font: 600 var(--text-body)/1.3 var(--font-sans); }
 
 /* ---- The studio: Edit and New as a chat. ---- */
 .studio { display: flex; flex-direction: column; max-width: calc(var(--chat-w) + 2 * var(--gutter)); min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: #262722; font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
@@ -1153,6 +1150,15 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-pill-wide { width: 100%; min-height: 52px; font-size: 16px; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
 .studio-actions { display: flex; align-items: center; gap: 8px; }
+/* The coach's suggested asks: quiet pills that wrap, above Save and Run. */
+.studio-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* On a phone one row that scrolls sideways, so the guesses never push the box up the screen. */
+@media (max-width: 600px) {
+  .studio-suggestions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .studio-suggestions::-webkit-scrollbar { display: none; }
+  .studio-suggestion { flex: none; white-space: nowrap; }
+}
+.studio-suggestion { padding: 0 16px; background: transparent; color: var(--home-muted, #736f68); font-size: var(--text-small); text-align: left; }
 .studio-actions .studio-pill { flex: 1; min-height: 48px; }
 
 /* New's form: a card of rows, each a label and its control, then the note and Create. It takes
@@ -1172,6 +1178,8 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; cursor: pointer; transition: background var(--motion-quick) ease; }
 .studio-number-button:hover:not(:disabled) { background: var(--color-base-300); }
 .studio-number-button:disabled { opacity: .3; cursor: default; }
+/* Held to repeat, so a long press must not select text or open the phone's callout. */
+.studio-number-button { -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
 /* The value and its unit read as one: "20 min". */
 .studio-number-field { display: flex; align-items: baseline; justify-content: center; gap: 4px; height: 44px; padding: 0 10px; border: 1px solid var(--color-base-border); border-radius: 12px; background: var(--color-base-100); cursor: text; }
 .studio-number-field:focus-within { outline: 2px solid #5e615b; outline-offset: 1px; }
@@ -1180,41 +1188,30 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-number-unit { flex: 1 1 0; color: var(--home-muted, #736f68); font-size: var(--text-small); white-space: nowrap; }
 .studio-number-input:placeholder-shown { text-align: center; }
 .studio-number-input:placeholder-shown + .studio-number-unit { display: none; }
+/* The folded fields' row: a full-width button that reads as a row, its summary where values sit. */
+.studio-more { width: 100%; min-height: 56px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.studio-more:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; border-radius: var(--radius-surface); }
+.studio-more-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.studio-more-chevron { transition: transform var(--motion-quick) ease; }
+.studio-more[aria-expanded="true"] .studio-more-chevron { transform: rotate(180deg); }
+.studio-more-fields > .studio-row { border-top: 1px solid var(--color-base-border); }
 .studio-note { display: grid; gap: 8px; }
 .studio-note-label { color: var(--home-muted, #736f68); font-size: var(--text-small); }
 .studio-note textarea { width: 100%; min-height: 3.5em; max-height: 12rem; padding: 12px 16px; border: 1px solid var(--color-base-border); border-radius: 16px; background: var(--color-base-200); color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; }
 .studio-note textarea::placeholder { color: #74716A; opacity: 1; }
 .studio-note textarea:focus-visible { outline: none; border-color: #918d83; }
 @media (prefers-reduced-motion: reduce) {
-  .studio, .studio-msg, .studio-form, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
+  .studio, .studio-msg, .studio-form, #home-alternatives-panel:not([hidden]) { animation: none; }
   #home-page, .home-corner-action { transition: none; }
-  .studio-segment-option { transition: none; }
+  .studio-segment-option, .studio-more-chevron { transition: none; }
 }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
 .studio #home-update-loading { display: flex; align-items: center; min-height: 36px; }
 
-/* The way up on an opened workout: a handle at the bottom edge for what a swipe up does. It leaves
-   when the sheet, the drawer or the studio is open. */
-.home-grab-area { position: fixed; inset-inline: 0; bottom: 0; z-index: 10; display: grid; justify-items: center; padding-bottom: calc(4px + env(safe-area-inset-bottom)); pointer-events: none; }
-.home-grab { display: grid; place-items: center; width: 120px; height: 36px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
-.home-grab-bar { width: 40px; height: 4px; border-radius: 2px; background: var(--color-base-border); transition: background var(--motion-quick) ease, width var(--motion-quick) ease; }
-.home-grab:hover .home-grab-bar, .home-grab:focus-visible .home-grab-bar { width: 56px; background: #9A9489; }
-
-#home-options-sheet:focus { outline: none; }
 .coach-summary-loader { margin-top: -8px; }
 
 /* What a proposal changed from the one before: the clay underline, on a chip as its border. */
 .studio-chip-changed { box-shadow: inset 0 0 0 1.5px #a77b5d; font-weight: 600; }
-/* A proposal's set rows take a tap to change their numbers by hand. */
-.studio .home-editable-row { cursor: pointer; }
-.studio .home-selected-row > * { background: var(--color-base-100); }
-.studio-hand-edit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; margin-top: 10px; padding: 10px 14px; border-radius: var(--radius-surface); background: var(--color-base-200); font-variant-numeric: tabular-nums; animation: studio-in var(--motion-quick) var(--ease-out) backwards; }
-.studio-hand-edit-label { flex: 1 0 100%; color: var(--home-muted); font-size: var(--text-small); }
-.studio-hand-step { display: inline-flex; align-items: center; gap: 2px; }
-.studio-hand-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; }
-.studio-hand-button:disabled { opacity: .35; }
-.studio-hand-value { min-width: 48px; font: 600 var(--text-body)/1 var(--font-sans); text-align: center; }
-.studio-hand-value small { margin-left: 2px; color: var(--home-muted); font-weight: 400; font-size: var(--text-small); }
 
 /* What the coach remembers: an icon beside the coach's note that opens a sheet with its two parts. */
 .coach-head { display: flex; align-items: flex-start; gap: 8px; }

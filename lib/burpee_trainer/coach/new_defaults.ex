@@ -15,6 +15,7 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   @step_min 5
   @week_max_min 80
   @rep_step 5
+  @big_rep_steps_from 50
   @pace_step 0.5
   # Beyond a standard session the same pace is not held for longer.
   @long_session_factor 0.9
@@ -64,9 +65,17 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
     rate |> scale(duration_sec) |> snap(@rep_step)
   end
 
-  @doc "The reps one step up or down, never below a step."
+  @doc """
+  The reps one step up or down: five at a time up to #{@big_rep_steps_from}, ten from there, so
+  a hundred is five steps away rather than ten; never below five.
+  """
   @spec step_reps(pos_integer(), :up | :down) :: pos_integer()
+  def step_reps(reps, :up) when reps >= @big_rep_steps_from, do: reps + 2 * @rep_step
   def step_reps(reps, :up), do: reps + @rep_step
+
+  def step_reps(reps, :down) when reps > @big_rep_steps_from,
+    do: max(reps - 2 * @rep_step, @big_rep_steps_from)
+
   def step_reps(reps, :down), do: max(reps - @rep_step, @rep_step)
 
   @doc """

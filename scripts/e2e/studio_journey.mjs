@@ -36,6 +36,15 @@ async function swipe(client, [x1, y1], [x2, y2], steps = 8, ms = 220) {
 	await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 
+// A finger held on an element for `ms`, then lifted.
+async function hold(client, selector, ms) {
+	const b = await page.locator(selector).boundingBox();
+	const point = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+	await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+	await new Promise((r) => setTimeout(r, ms));
+	await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 390, height: 844 },
@@ -64,7 +73,7 @@ async function geometry() {
 		};
 		const small = [...document.querySelectorAll("button, a[href], [role=spinbutton], .studio-segment-option, .studio-number-field")]
 			.filter(visible)
-			.filter((e) => !e.matches(".studio-part, .home-grab"))
+			.filter((e) => !e.matches(".studio-part"))
 			.map((e) => ({ e, r: e.getBoundingClientRect() }))
 			.filter(({ r }) => r.width > 0 && r.height > 0 && (Math.min(r.width, r.height) < 40 || Math.max(r.width, r.height) < 44))
 			.map(({ e, r }) => `${e.id || e.getAttribute("aria-label") || e.textContent.trim().slice(0, 20)} ${Math.round(r.width)}x${Math.round(r.height)}`);
@@ -84,7 +93,9 @@ await settle(800);
 const home = await geometry();
 check(!home.overflow, "Home does not scroll sideways");
 check(home.small.length === 0, "Home's buttons are big enough to hit", home.small.join(", "));
-check(!(await page.$("#home-grab")), "closed, Home offers no Edit, Swap or New of its own");
+// Swap, Edit and New a tap each, along the bottom edge within the thumb's reach.
+const corner = await page.locator("#home-corner-new").boundingBox();
+check(corner && corner.y + corner.height > 844 - 80, "Swap, Edit and New sit along the bottom edge", JSON.stringify(corner));
 await shot("01-home");
 
 // Swipe right: the swap drawer; left: back.
@@ -96,25 +107,8 @@ await swipe(client, [300, 400], [60, 405]);
 await settle(600);
 check(await page.evaluate(() => document.querySelector("#home-alternatives-panel").hidden), "swipe left closes it");
 
-// Swipe up does nothing until the workout is opened; opened, it offers Edit / New; down: back.
-await swipe(client, [200, 640], [205, 340]);
-await settle(500);
-check(!(await page.$("#home-options-sheet")), "swipe up on the closed workout does nothing");
-await page.tap("#home-summary");
-await page.waitForSelector("#home-grab");
-await settle(500);
-await swipe(client, [200, 640], [205, 340]);
-await settle(600);
-check(await page.isVisible("#home-options-sheet"), "swipe up on the opened workout opens Edit / New");
-await shot("03-options");
-await swipe(client, [200, 500], [205, 800]);
-await settle(500);
-check(!(await page.$("#home-options-sheet")), "swipe down closes it");
-
 // Edit.
-await page.tap("#home-grab");
-await page.waitForSelector("#home-options-edit");
-await page.tap("#home-options-edit");
+await page.tap("#home-corner-edit");
 await page.waitForSelector("#home-studio");
 await settle(600);
 let g = await geometry();
@@ -136,13 +130,14 @@ await page.tap("#home-request-abort");
 await page.waitForSelector("#home-summary");
 
 // New.
-if (!(await page.$("#home-grab"))) await page.tap("#home-summary");
-await page.waitForSelector("#home-grab");
-await page.tap("#home-grab");
-await page.tap("#home-options-new");
+await page.tap("#home-corner-new");
 await page.waitForSelector("#studio-new-form");
 check(await page.isVisible("#studio-create"), "New opens on one form with Create");
+check(!(await page.isVisible("#studio-pace")), "style, set size and pace start folded under More");
 await page.tap("label:has(#studio-burpee_type-six_count)");
+await page.tap("#studio-more");
+await settle(300);
+check(await page.isVisible("#studio-pace"), "More unfolds them");
 await page.tap("label:has(#studio-pacing_style-unbroken)");
 await page.waitForSelector("#studio-sets");
 check(await page.isVisible("#studio-sets"), "unbroken asks for a set size");
@@ -151,17 +146,27 @@ await page.tap(before > 5 ? "#studio-duration-down" : "#studio-duration-up");
 await settle(400);
 const after = Number(await page.inputValue("#studio-duration"));
 check(Math.abs(after - before) === 5, "a value's buttons move it by a step", `${before} -> ${after}`);
+const held = Number(await page.inputValue("#studio-reps"));
+await hold(client, "#studio-reps-down", 1100);
+await settle(600);
+const released = Number(await page.inputValue("#studio-reps"));
+check(held - released >= 15, "a held button keeps stepping", `${held} -> ${released}`);
+check(await page.isVisible("#studio-pace"), "More stays open while the values change");
 await page.fill("#studio-reps", "30");
 await page.tap("#studio-note");
 await settle(800);
 check((await page.inputValue("#studio-reps")) === "30", "a value can be typed");
-check((await page.textContent("#studio-pace-hint")).includes("moving"), "the form says what the values come to");
+check((await page.textContent("#studio-reps-hint")).includes("moving"), "the form says what the values come to");
 g = await geometry();
 check(!g.overflow, "the form does not scroll sideways");
 check(g.small.length === 0, "the form's controls are big enough to hit", g.small.join(", "));
 await shot("06-form");
 await page.tap("#studio-create");
 await page.waitForSelector("#home-request-run", { timeout: 20000 });
+check(await page.isVisible("#studio-suggestions .studio-suggestion"), "the coach offers its guesses at the next ask");
+g = await geometry();
+check(!g.overflow, "the proposal does not scroll sideways");
+check(g.small.length === 0, "the suggested asks are big enough to hit", g.small.join(", "));
 await shot("07-new-proposal");
 await page.tap("#home-request-run");
 await page.waitForURL(/\/session\//, { timeout: 20000 });

@@ -52,6 +52,7 @@ BurpeeTrainer.ReqStub.default(fn request ->
         a = div(r, 2)
         pace = constraints["requested_pace_sec"] || 5
         %{"name" => "Steady #{r}", "rationale" => "Two even sets with a proper breather between them.",
+          "suggestions" => ["Split it into four sets", "Add a 1-minute rest at 10:00", "Front-load the reps"],
           "phases" => [%{"sets" => [%{"reps" => a, "sec_per_rep" => pace, "sec_per_burpee" => pace}, %{"reps" => r - a, "sec_per_rep" => pace, "sec_per_burpee" => pace}], "rests" => [%{"share" => 1}]}]}
 
       fixed ->

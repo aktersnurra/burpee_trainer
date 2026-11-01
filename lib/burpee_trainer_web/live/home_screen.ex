@@ -99,16 +99,14 @@ defmodule BurpeeTrainerWeb.HomeScreen do
         {@home_planning_error}
       </p>
       <HomeStudioComponents.studio :if={HomeStudioComponents.studio?(assigns)} state={assigns} />
-      <%!-- The whole screen takes the swipes: right to swap the workout, up to edit it or make
-           a new one. The buttons stay for anyone who cannot swipe. --%>
+      <%!-- The whole screen takes the swipe right to swap the workout; the drawer's button stays
+           for anyone who cannot swipe. --%>
       <div
         :if={not HomeStudioComponents.studio?(assigns)}
         id="home-gestures"
         class="adaptive-home"
         phx-hook="HomeGestures"
         data-chooser-open={to_string(@chooser_open?)}
-        data-options-open={to_string(@options_open?)}
-        data-expanded={to_string(@expanded?)}
       >
         <div id="home-progress-history" class="relative min-h-11">
           <%= if @slot do %>

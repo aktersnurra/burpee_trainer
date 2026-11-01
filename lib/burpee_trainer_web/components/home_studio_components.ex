@@ -176,6 +176,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp proposal(assigns) do
     definition = assigns.state.pending_request.definition
+
     assigns = assign(assigns, definition: definition)
 
     ~H"""
@@ -190,10 +191,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         compare={compare(@state)}
         was={was(@state)}
         expanded={@state.expanded_groups}
-        editable={not @stale?}
-        selected={Map.get(@state, :edit_sets) || []}
       />
-      <.hand_edit :if={not @stale? and Map.get(@state, :edit_sets)} state={@state} />
       <p
         :if={@state.pending_request.request.timed_rests != []}
         id="home-edit-review-pauses"
@@ -248,100 +246,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     end
   end
 
-  attr(:state, :map, required: true)
-
-  # The selected sets' numbers, stepped by hand; the rests are fitted again to keep the length.
-  defp hand_edit(assigns) do
-    sets = assigns.state.edit_sets
-    work = first_work(assigns.state.pending_request.definition, hd(sets))
-
-    assigns =
-      assign(assigns,
-        label: sets_label(sets),
-        work: work,
-        steps: assigns.state.edit_steps || %{}
-      )
-
-    ~H"""
-    <div
-      :if={@work}
-      id="studio-hand-edit"
-      class="studio-hand-edit"
-      role="group"
-      aria-label={@label}
-    >
-      <span class="studio-hand-edit-label">{@label}</span>
-      <.hand_step
-        field="reps"
-        value={@work["reps"]}
-        unit="reps"
-        down?={@steps[{:reps, -1}]}
-        up?={@steps[{:reps, 1}]}
-      />
-      <.hand_step
-        field="every"
-        value={format_beat(@work["sec_per_rep"])}
-        unit="s"
-        down?={@steps[{:every, -1}]}
-        up?={@steps[{:every, 1}]}
-      />
-    </div>
-    """
-  end
-
-  attr(:field, :string, required: true)
-  attr(:value, :any, required: true)
-  attr(:unit, :string, required: true)
-  attr(:down?, :boolean, default: false)
-  attr(:up?, :boolean, default: false)
-
-  defp hand_step(assigns) do
-    ~H"""
-    <span class="studio-hand-step">
-      <button
-        id={"studio-hand-#{@field}-down"}
-        type="button"
-        class="studio-hand-button"
-        phx-click="adjust_proposal"
-        phx-value-field={@field}
-        phx-value-dir="-1"
-        aria-label={"Less #{@field}"}
-        disabled={!@down?}
-      >
-        <.icon name="hero-minus" class="size-4" />
-      </button>
-      <span id={"studio-hand-#{@field}"} class="studio-hand-value">{@value}<small>{@unit}</small></span>
-      <button
-        id={"studio-hand-#{@field}-up"}
-        type="button"
-        class="studio-hand-button"
-        phx-click="adjust_proposal"
-        phx-value-field={@field}
-        phx-value-dir="1"
-        aria-label={"More #{@field}"}
-        disabled={!@up?}
-      >
-        <.icon name="hero-plus" class="size-4" />
-      </button>
-    </span>
-    """
-  end
-
-  # The definition's set numbered `number` (1 for the first).
-  defp first_work(definition, number),
-    do: definition["events"] |> Enum.filter(&(&1["kind"] == "work")) |> Enum.at(number - 1)
-
-  defp sets_label([one]), do: "Set #{one}"
-
-  defp sets_label(sets) do
-    if Enum.max(sets) - Enum.min(sets) + 1 == length(sets),
-      do: "Sets #{Enum.min(sets)}–#{Enum.max(sets)}",
-      else: "Sets " <> Enum.join(sets, ", ")
-  end
-
-  defp format_beat(seconds) when is_integer(seconds), do: Integer.to_string(seconds)
-  defp format_beat(seconds), do: :erlang.float_to_binary(seconds * 1.0, [:short])
-
   attr(:label, :string, default: "Working on it…")
 
   defp working(assigns) do
@@ -363,8 +267,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:was, :map, default: nil)
   attr(:expanded, :any, default: MapSet.new())
   attr(:table?, :boolean, default: true)
-  attr(:editable, :boolean, default: false)
-  attr(:selected, :list, default: [])
 
   # A workout, as the coach shows it: its name, its totals as two chips, a line on
   # why, and the table when it is the one being discussed.
@@ -389,8 +291,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           rows={@rows}
           compare={@compare}
           expanded={@expanded}
-          editable={@editable}
-          selected={@selected}
         />
       </div>
     </article>
@@ -453,10 +353,11 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           at_max?: minutes >= List.last(durations)
         },
         remaining: remaining,
-        at_max_reps?: params.reps + 5 > NewDefaults.max_reps(params.pace, seconds),
+        at_max_reps?: params.reps >= NewDefaults.max_reps(params.pace, seconds),
         sets_at_min?: params.max_set_reps == hd(set_sizes),
         at_max_pace?: params.reps * (params.pace + 0.5) > seconds,
-        budget: split(params, params.pace)
+        budget: split(params, params.pace),
+        more: more_summary(params)
       )
 
     ~H"""
@@ -473,12 +374,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           label="Burpee"
           value={@params.burpee_type}
           options={[{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]}
-        />
-        <.segment
-          field="pacing_style"
-          label="Style"
-          value={@params.pacing_style}
-          options={[{"Even", "even"}, {"Unbroken", "unbroken"}]}
         />
         <.number
           field="duration"
@@ -497,29 +392,55 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           value={@params.reps}
           down?={@params.reps > 5}
           up?={not @at_max_reps?}
-        />
-        <.number
-          :if={@params.pacing_style == "unbroken"}
-          field="sets"
-          label="Max set"
-          unit="reps"
-          value={@params.max_set_reps}
-          placeholder="No limit"
-          down?={not @sets_at_min?}
-          up?={not is_nil(@params.max_set_reps)}
-        />
-        <.number
-          field="pace"
-          label="Pace"
-          unit="s/rep"
-          spoken_unit="seconds per rep"
-          value={format_pace(@params.pace)}
-          step="0.1"
-          inputmode="decimal"
-          down?={@params.pace > 0.5}
-          up?={not @at_max_pace?}
           hint={@budget}
         />
+        <%!-- What most workouts leave as suggested, folded under one row that shows it. The
+             fields stay in the form while folded, so what they hold is always sent. --%>
+        <button
+          id="studio-more"
+          type="button"
+          class="studio-row studio-more"
+          aria-expanded="false"
+          aria-controls="studio-more-fields"
+          phx-click={
+            JS.toggle(to: "#studio-more-fields")
+            |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+          }
+        >
+          <span class="studio-row-label">More</span>
+          <span id="studio-more-summary" class="studio-more-summary">
+            {@more}<.icon name="hero-chevron-down" class="studio-more-chevron size-4" />
+          </span>
+        </button>
+        <div id="studio-more-fields" class="studio-more-fields" style="display: none">
+          <.segment
+            field="pacing_style"
+            label="Style"
+            value={@params.pacing_style}
+            options={[{"Even", "even"}, {"Unbroken", "unbroken"}]}
+          />
+          <.number
+            :if={@params.pacing_style == "unbroken"}
+            field="sets"
+            label="Max set"
+            unit="reps"
+            value={@params.max_set_reps}
+            placeholder="No limit"
+            down?={not @sets_at_min?}
+            up?={not is_nil(@params.max_set_reps)}
+          />
+          <.number
+            field="pace"
+            label="Pace"
+            unit="s/rep"
+            spoken_unit="seconds per rep"
+            value={format_pace(@params.pace)}
+            step="0.1"
+            inputmode="decimal"
+            down?={@params.pace > 0.5}
+            up?={not @at_max_pace?}
+          />
+        </div>
       </div>
       <div class="studio-note">
         <label for="studio-note" class="studio-note-label">Anything else? (optional)</label>
@@ -584,15 +505,16 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:up?, :boolean, required: true)
   attr(:hint, :string, default: nil)
 
-  # A number to type, or to move a step at a time with the buttons beside it. A value typed is
-  # sent when the typing pauses or the field is left.
+  # A number to type, or to move a step at a time with the buttons beside it; held, a button
+  # keeps stepping (the HoldRepeat hook). A value typed is sent when the typing pauses or the
+  # field is left.
   defp number(assigns) do
     ~H"""
     <div class="studio-row">
       <label for={"studio-#{@field}"} class="studio-row-label">
         {@label}<span class="sr-only">, {@spoken_unit || @unit}</span>
       </label>
-      <div class="studio-number">
+      <div id={"studio-#{@field}-stepper"} class="studio-number" phx-hook="HoldRepeat">
         <button
           id={"studio-#{@field}-down"}
           type="button"
@@ -650,6 +572,12 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       assign(assigns,
         # New's form has its own note; the box is for Edit's asks and every follow-up.
         visible?: state.authoring_stage in [:editing, :review],
+        # The coach's guesses at the next ask, for the proposal on screen; gone while it works.
+        suggestions:
+          if(state.authoring_stage == :review and not state.busy?,
+            do: Map.get(state.pending_request, :suggestions, []),
+            else: []
+          ),
         event: event(state),
         placeholder: placeholder(state)
       )
@@ -664,6 +592,25 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       data-scroll-to={scroll_target(@state)}
     >
       <div class="chat-dock-inner">
+        <%!-- Just above the box: a tap sends one, as if it were typed. --%>
+        <div
+          :if={@suggestions != []}
+          id="studio-suggestions"
+          class="studio-suggestions"
+          role="group"
+          aria-label="Suggested changes"
+          data-no-swipe
+        >
+          <button
+            :for={{text, i} <- Enum.with_index(@suggestions)}
+            id={"studio-suggestion-#{i}"}
+            type="button"
+            class="studio-pill studio-suggestion"
+            phx-click={JS.push("refine_workout", value: %{home_adjustment: %{instruction: text}})}
+          >
+            {text}
+          </button>
+        </div>
         <.form
           for={@state.adjustment_form}
           id="home-edit-form"
@@ -743,6 +690,14 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       nil ->
         nil
     end
+  end
+
+  # The folded fields in a line: style, then a set's limit if there is one, then pace.
+  defp more_summary(params) do
+    style = if params.pacing_style == "unbroken", do: "Unbroken", else: "Even"
+    sets = params.pacing_style == "unbroken" && params.max_set_reps
+    pace = "#{format_pace(params.pace)} s/rep"
+    [style, sets && "sets of #{sets}", pace] |> Enum.filter(& &1) |> Enum.join(" · ")
   end
 
   defp format_pace(nil), do: "–"

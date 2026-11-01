@@ -134,7 +134,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-adjustment-form")
     assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
     refute has_element?(view, "#home-edit-workout, #home-title-action, #home-new-workout")
-    refute has_element?(view, "#home-grab")
     refute has_element?(view, "#resume-recommended-workout")
     refute has_element?(view, "#tell-coach-button")
     refute has_element?(view, "#manual-workout-form")
@@ -343,9 +342,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-expansion-content[inert] #home-alternatives-panel")
     view |> element("#home-chooser-close") |> render_click()
     view |> element("#home-summary") |> render_click()
-
-    # Opened, the workout has the handle for edit and new, and the sheet it opens offers all three.
-    assert has_element?(view, "#home-grab[aria-label='Edit, swap or new workout']")
 
     assert has_element?(
              view,

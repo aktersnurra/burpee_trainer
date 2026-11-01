@@ -112,7 +112,7 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     [recorded] = requests(counter)
     response = recorded.body["response_format"]["json_schema"]
     assert response["name"] == "workout_layout"
-    assert response["schema"]["required"] == ["name", "rationale", "phases"]
+    assert response["schema"]["required"] == ["name", "rationale", "phases", "suggestions"]
     assert response["schema"]["properties"]["phases"]["minItems"] == 3
     assert response["schema"]["properties"]["phases"]["maxItems"] == 3
   end

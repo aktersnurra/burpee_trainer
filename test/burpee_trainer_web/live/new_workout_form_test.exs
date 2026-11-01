@@ -110,10 +110,12 @@ defmodule BurpeeTrainerWeb.NewWorkoutFormTest do
     assert change(form, "reps", "50", scope) == form
   end
 
-  test "steps move duration by five, reps by five and pace by half a second", %{scope: scope} do
+  test "steps move duration by five, reps by ten from fifty and pace by half a second", %{
+    scope: scope
+  } do
     form = NewWorkoutForm.open(params(), scope, nil)
     assert step(form, "duration", :up, scope).params.duration == "25:00"
-    assert step(form, "reps", :up, scope).params.reps == 55
+    assert step(form, "reps", :up, scope).params.reps == 60
     assert step(form, "reps", :up, scope).touched == MapSet.new(["reps"])
     assert step(form, "pace", :up, scope).params.pace == 5.0
     assert step(form, "pace", :down, scope).params.pace == 4.0

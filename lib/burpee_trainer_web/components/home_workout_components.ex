@@ -231,8 +231,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   attr(:state, :map, required: true)
 
-  # Today's workout. Swipe right to swap it; swipe up to edit it or make a new one (the
-  # buttons do the same). Edit and New take Home's place as a chat: `HomeStudioComponents`.
+  # Today's workout. Swipe right to swap it (the drawer's button does the same); Edit and New are
+  # a button each, and take Home's place as a chat: `HomeStudioComponents`.
   def workspace(assigns) do
     ~H"""
     <section id="home-ready-recommendation" data-expanded={to_string(@state.expanded?)}>
@@ -379,31 +379,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </div>
             </section>
           </div>
-          <%!-- Edit and New wait until the workout is opened: a swipe up, or this handle. Swap is
-               the swipe right, the left drawer. --%>
-          <div
-            :if={
-              @state.authoring_stage == :idle and @state.expanded? and not @state.options_open? and
-                not @state.chooser_open?
-            }
-            class="home-grab-area"
-          >
-            <button
-              id="home-grab"
-              type="button"
-              class="home-grab"
-              phx-click="open_options"
-              aria-label="Edit, swap or new workout"
-              title="Edit, swap or new workout"
-            >
-              <span class="home-grab-bar"></span>
-            </button>
-          </div>
-          <.corner :if={
-            @state.authoring_stage == :idle and not @state.options_open? and
-              not @state.chooser_open?
-          } />
-          <.options_sheet :if={@state.options_open?} state={@state} />
+          <.corner :if={@state.authoring_stage == :idle and not @state.chooser_open?} />
           <.chooser state={@state} />
         <% end %>
       </div>
@@ -411,7 +387,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  # A wide screen has no swipes: the drawer, Edit and New as buttons in the top-left corner.
+  # The drawer, Edit and New, one tap each: at the top-left corner on a wide screen, as in the
+  # Claude app, and along the bottom edge on a phone, within the thumb's reach.
   defp corner(assigns) do
     ~H"""
     <nav class="home-corner" aria-label="Workout">
@@ -448,45 +425,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <.icon name="hero-plus" class="size-5" />
       </button>
     </nav>
-    """
-  end
-
-  attr(:state, :map, required: true)
-
-  # Swiped up from the workout: what to do with it, in two choices.
-  defp options_sheet(assigns) do
-    ~H"""
-    <div id="home-options-backdrop" phx-click="close_options"></div>
-    <div
-      id="home-options-sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit, swap or make a new workout"
-      phx-window-keydown="close_options"
-      phx-key="Escape"
-      phx-mounted={JS.focus()}
-      tabindex="-1"
-      data-no-swipe
-    >
-      <span class="home-sheet-grip" aria-hidden="true"></span>
-      <button
-        id="home-options-edit"
-        type="button"
-        class="home-option"
-        phx-click="edit_current_workout"
-      >
-        <.icon name="hero-pencil-square" class="size-6" />
-        <span class="home-option-title">Edit this workout</span>
-      </button>
-      <button id="home-options-swap" type="button" class="home-option" phx-click={open_chooser()}>
-        <.icon name="hero-arrows-right-left" class="size-6" />
-        <span class="home-option-title">Swap workout</span>
-      </button>
-      <button id="home-options-new" type="button" class="home-option" phx-click="new_workout">
-        <.icon name="hero-plus" class="size-6" />
-        <span class="home-option-title">New workout</span>
-      </button>
-    </div>
     """
   end
 
@@ -747,13 +685,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     doc: "rows of the current workout; changed cells are marked"
   )
 
-  attr(:editable, :boolean,
-    default: false,
-    doc: "a tap on a set's row selects it for a hand edit (`select_proposal_row`)"
-  )
-
-  attr(:selected, :list, default: [], doc: "the set numbers selected for a hand edit")
-
   def inspection(assigns) do
     show_move? = show_move?(assigns.rows)
 
@@ -806,23 +737,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <%!-- A tap anywhere on a group row toggles it; the button keeps keyboard and screen-reader operation. --%>
             <tr
               id={"#{row.id}-event-#{hd(hd(row.units).paired).index}"}
-              class={[
-                row.count > 1 && "home-group-row",
-                (@editable and row.kind != :recovery) && "home-editable-row",
-                selected?(@rows, row, @selected) && "home-selected-row"
-              ]}
-              phx-click={
-                cond do
-                  @editable and row.kind != :recovery -> "select_proposal_row"
-                  row.count > 1 -> "toggle_group"
-                  true -> nil
-                end
-              }
-              phx-value-index={(@editable and row.kind != :recovery) && first_index(row)}
-              phx-value-id={(not @editable and row.count > 1) && row.id}
-              aria-selected={
-                (@editable and row.kind != :recovery) && to_string(selected?(@rows, row, @selected))
-              }
+              class={row.count > 1 && "home-group-row"}
+              phx-click={row.count > 1 && "toggle_group"}
+              phx-value-id={row.count > 1 && row.id}
             >
               <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
                 <button
@@ -1011,8 +928,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   defp row_label(_rows, %{kind: :recovery}), do: "Recovery"
   defp row_label(rows, row), do: set_range(rows, row)
 
-  defp first_index(row), do: hd(hd(row.units).paired).index
-
   @doc "A row's sets by number, as the table labels them: `5`, or `1–4` for a group."
   def set_range(rows, row) do
     case set_numbers(rows, row) do
@@ -1025,12 +940,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   @doc "The numbers of a row's sets, 1 for the workout's first."
   def set_numbers(rows, row),
     do: row.units |> Enum.filter(&work/1) |> Enum.map(&set_number(rows, &1))
-
-  defp selected?(_rows, _row, selected) when selected in [nil, []], do: false
-  defp selected?(rows, row, selected), do: Enum.any?(set_numbers(rows, row), &(&1 in selected))
-
-  @doc "The row whose first event is at `index`, if any."
-  def row_at(rows, index), do: Enum.find(rows, &(first_index(&1) == index))
 
   defp set_number(rows, unit) do
     rows

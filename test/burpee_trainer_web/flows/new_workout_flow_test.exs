@@ -45,19 +45,20 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert shown(view, "reps") == "50"
     assert shown(view, "pace") == "4.5"
     # What it comes to: 50 reps at 4.5 s is 3:45 moving, the rest of the 20 minutes recovery.
-    assert has_element?(view, "#studio-pace-hint", "3:45 moving · 16:15 recovering")
+    assert has_element?(view, "#studio-reps-hint", "3:45 moving · 16:15 recovering")
 
     view |> element("#studio-duration-up") |> render_click()
     assert shown(view, "duration") == "25"
     view |> element("#studio-duration-down") |> render_click()
     assert shown(view, "duration") == "20"
 
+    # From fifty, reps step by ten.
     view |> element("#studio-reps-up") |> render_click()
-    assert shown(view, "reps") == "55"
-    assert has_element?(view, "#studio-pace-hint", "4:08 moving · 15:52 recovering")
+    assert shown(view, "reps") == "60"
+    assert has_element?(view, "#studio-reps-hint", "4:30 moving · 15:30 recovering")
     view |> element("#studio-pace-up") |> render_click()
     assert shown(view, "pace") == "5.0"
-    assert has_element?(view, "#studio-pace-hint", "4:35 moving · 15:25 recovering")
+    assert has_element?(view, "#studio-reps-hint", "5:00 moving · 15:00 recovering")
 
     fill(view, "reps", "150")
     assert shown(view, "reps") == "150"
@@ -232,6 +233,22 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert shown(view, "sets") == "25"
   end
 
+  test "style, set size and pace are folded under one row that says what they are", %{view: view} do
+    open_new(view)
+
+    assert has_element?(
+             view,
+             "#studio-more[aria-expanded='false'][aria-controls='studio-more-fields']"
+           )
+
+    assert has_element?(view, "#studio-more-summary", "Even · 4.5 s/rep")
+    # Folded, the fields are still in the form, so what they hold is sent.
+    assert has_element?(view, "#studio-new-form #studio-more-fields #studio-pace")
+    fill(view, "pacing_style", "unbroken")
+    fill(view, "sets", "10")
+    assert has_element?(view, "#studio-more-summary", "Unbroken · sets of 10 · 4.5 s/rep")
+  end
+
   test "an even beat has no set size to ask", %{view: view} do
     open_new(view)
     fill(view, "pacing_style", "even")
@@ -294,9 +311,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     counter = fake_authoring_provider(%{})
     open_new(view)
     fill(view, "duration", "5")
-    # 300 s at 4.5 s a rep holds 66 reps; in steps of five from 15, 65 is the last.
+    # 300 s at 4.5 s a rep holds 66 reps; the last step stops there, short of a whole one.
     press_while_possible(view, "#studio-reps-up")
-    assert shown(view, "reps") == "65"
+    assert shown(view, "reps") == "66"
     assert has_element?(view, "#studio-reps-up[disabled]")
     # Typed, they stop at the same place.
     fill(view, "reps", "500")
@@ -314,6 +331,45 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     render_async(view, 2_000)
 
     assert has_element?(view, "#studio-proposal .studio-chip", "30 reps")
+  end
+
+  test "the coach offers its guesses at the next ask; a tap sends one as if typed", %{view: view} do
+    halves = List.duplicate({15, 4.5, 4.5}, 2)
+
+    layout =
+      [halves]
+      |> layout("Thirty")
+      |> Map.put("suggestions", ["Even out the rests", "Add a 1-minute rest at 10:00"])
+
+    counter =
+      fake_authoring_provider(%{
+        "workout_layout" => layout,
+        "workout_request" => %{
+          "burpee_type" => "six_count",
+          "target_reps" => 30,
+          "target_duration_sec" => 1_200,
+          "pacing_style" => "unbroken",
+          "recovery" => "optional",
+          "timed_rests" => [],
+          "requested_pace_sec" => 4.5,
+          "set_reps" => []
+        }
+      })
+
+    open_new(view)
+    view |> form("#studio-new-form", new: %{reps: "30"}) |> render_submit()
+    render_async(view, 2_000)
+
+    assert has_element?(view, "#studio-suggestions[aria-label='Suggested changes']")
+    assert has_element?(view, "#studio-suggestion-0", "Even out the rests")
+    assert has_element?(view, "#studio-suggestion-1", "Add a 1-minute rest at 10:00")
+
+    view |> element("#studio-suggestion-0") |> render_click()
+    render_async(view, 2_000)
+
+    # It went to the coach as the follow-up, and reads in the thread as what was asked.
+    assert Agent.get(counter, & &1.bodies) |> List.last() =~ "Even out the rests"
+    assert has_element?(view, "#studio-thread", "Even out the rests")
   end
 
   defp fake_authoring_provider(responses) do

@@ -13,7 +13,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     HomeWorkspace,
     HomeChooser,
     HomeLive,
-    HomeWorkoutComponents,
     NewWorkoutForm
   }
 
@@ -38,7 +37,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
           {:noreply,
            socket
            |> step({:edit_opened, source, params, "variation:#{Ecto.UUID.generate()}"})
-           |> assign(options_open?: false, workout_parameters: params)
+           |> assign(workout_parameters: params)
            |> adjustment_form("")}
 
         _ ->
@@ -157,18 +156,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     end
   end
 
-  def handle_event("open_options", _, socket) do
-    a = socket.assigns
-
-    if a.authoring_stage == :idle and not is_nil(a.home_selection) and not a.busy? and
-         a.expanded? and not a.chooser_open?,
-       do: {:noreply, assign(socket, options_open?: true)},
-       else: {:noreply, socket}
-  end
-
-  def handle_event("close_options", _, socket),
-    do: {:noreply, assign(socket, options_open?: false)}
-
   # New opens its form on what is suggested, with the week's time left deciding what it offers.
   def handle_event("new_workout", _, socket) do
     a = socket.assigns
@@ -181,7 +168,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       {:noreply,
        socket
        |> step({:new_opened, form.params, "creator:#{Ecto.UUID.generate()}"})
-       |> assign(options_open?: false)
        |> put_new_form(form)
        |> adjustment_form("")}
     else
@@ -349,53 +335,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        end)}
     else
       {:noreply, assign(socket, local_error: "That workout changed. Abort and open Edit again.")}
-    end
-  end
-
-  # A row of the proposal, to change its numbers by hand; no call to the coach.
-  def handle_event(
-        "select_proposal_row",
-        %{"index" => raw},
-        %{assigns: %{authoring_stage: :review, busy?: false, pending_request: %{} = prepared}} =
-          socket
-      ) do
-    rows = socket.assigns.review_inspection_rows
-
-    with {index, ""} <- Integer.parse(to_string(raw)),
-         %{} = row <- HomeWorkoutComponents.row_at(rows, index),
-         [_ | _] = sets <- HomeWorkoutComponents.set_numbers(rows, row) do
-      {:noreply, step(socket, {:row_selected, sets, edit_steps(prepared, sets)})}
-    else
-      _ -> {:noreply, socket}
-    end
-  end
-
-  def handle_event(
-        "adjust_proposal",
-        %{"field" => field, "dir" => dir},
-        %{
-          assigns: %{
-            authoring_stage: :review,
-            busy?: false,
-            pending_request: %{} = prepared,
-            edit_sets: [_ | _] = sets
-          }
-        } = socket
-      )
-      when field in ["reps", "every"] and dir in ["-1", "1"] do
-    # The sets selected stay the ones changed, however the rows regroup after a step.
-    case Coach.adjust_proposal(
-           prepared,
-           set_indices(prepared.definition, sets),
-           String.to_existing_atom(field),
-           String.to_integer(dir)
-         ) do
-      {:ok, adjusted} ->
-        rows = prepared_inspection(adjusted)
-        {:noreply, step(socket, {:proposal_adjusted, adjusted, rows, edit_steps(adjusted, sets)})}
-
-      _ ->
-        {:noreply, socket}
     end
   end
 
@@ -726,23 +665,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   end
 
   # The definition's event indices of the sets numbered `sets` (1 for the first set).
-  defp set_indices(definition, sets) do
-    definition["events"]
-    |> Enum.with_index()
-    |> Enum.filter(fn {event, _index} -> event["kind"] == "work" end)
-    |> Enum.with_index(1)
-    |> Enum.flat_map(fn {{_event, index}, number} -> if number in sets, do: [index], else: [] end)
-  end
-
-  # Which steps the selected sets allow now: each is tried, as a tap would.
-  defp edit_steps(prepared, sets) do
-    indices = set_indices(prepared.definition, sets)
-
-    for field <- [:reps, :every], dir <- [-1, 1], into: %{} do
-      {{field, dir}, match?({:ok, _}, Coach.adjust_proposal(prepared, indices, field, dir))}
-    end
-  end
-
   defp prepared_inspection(prepared) do
     {:ok, definition} = BurpeeTrainer.PlanCompiler.WorkoutDefinition.new(prepared.definition)
     {:ok, program} = BurpeeTrainer.PlanCompiler.compile(definition)

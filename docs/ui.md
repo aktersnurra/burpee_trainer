@@ -10,11 +10,11 @@
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
 - **Show what is needed, reveal the rest when asked.** A screen starts with the one thing to do;
-  what it can also do waits until the athlete asks. Swap is a swipe right (the drawer); Edit and
-  New wait behind the opened workout, a swipe up or its handle. Hiding a control is only right
-  when asking is cheap and findable: the handle on an opened workout is the visible way to ask,
-  the swipes the shortcut.
-- **For someone who knows it.** The athlete knows the app: no hint lines, no suggested replies,
+  what it can also do waits until the athlete asks. Swap, Edit and New are three quiet icons, a
+  tap each; a swipe right is the shortcut to Swap. Hiding a control is only right when asking is
+  cheap and findable, and never worth an extra tap on a way the athlete takes every week.
+- **For someone who knows it.** The athlete knows the app: no hint lines, no canned replies (the
+  coach's suggestions under a proposal are its guesses about this workout, not boilerplate),
   no subtitles that explain a choice, and no number said twice on one screen. Density beats
   explanation: a workout's shape reads in one line (`5 × 3 · every 8s · 4:30 rest`), with their
   best beside it.
@@ -160,12 +160,12 @@ lines rise in rather than jump.
 
 ## 4a1a. Swipes, the drawer and the studio
 
-Home has no Edit, Swap or New buttons. A swipe right opens the swap drawer (the page slides
-right and the workout list takes the space; `#home-page` moves with `left`, never a transform).
-Edit and New are for an athlete who has opened the workout and is not happy with it: a swipe up
-inside the opened workout opens their sheet, titles only. An opened workout has a handle at its
-bottom edge (`#home-grab`, the same sheet); there are no hint lines. The sheet also lists Swap. Edit and New are the studio, a full-screen chat on the same page
-and gutter as Home:
+Swap, Edit and New are three muted 44px icons (`.home-corner`: bars, pencil, plus), a tap each,
+with the workout opened or not: in a row along the bottom edge on a phone, within the thumb's
+reach, and at the top-left corner on a wide screen, where the Claude app keeps its sidebar and
+new-chat buttons. A swipe right also opens the swap drawer (the page slides right and the workout
+list takes the space; `#home-page` moves with `left`, never a transform). Edit and New are the
+studio, a full-screen chat on the same page and gutter as Home:
 
 - **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is
   one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
@@ -176,13 +176,15 @@ and gutter as Home:
   The card needs no label; what it is, the sentence before it says. A proposal is marked against
   the one it replaced (Edit's first, against the workout): a changed chip has a clay ring, a
   changed cell the clay underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
-- **Numbers by hand**: a tap on a set's row of the proposal selects it (a soft row) and opens
-  `.studio-hand-edit` under the card: the reps and the beat, each with 44px round steppers. A step
-  that cannot fit is disabled; the rests are fitted again, so the length holds.
 - **New's form**: one card of rows (`.studio-fields`), each a label and its control: a choice of
   two as a segmented pill (`.studio-segment`), a number as a field with its unit inside
-  (`.studio-number-field`, "20 min") and a 44px round button either side; a hint under a row in
-  small muted type. Then the note and the one filled Create workout.
+  (`.studio-number-field`, "20 min") and a 44px round button either side that keeps stepping while
+  held; a hint under a row in small muted type. Burpee, duration and reps show; style, set size and
+  pace fold under a **More** row that reads them in its summary ("Even · 4.5 s/rep") and unfolds
+  in place. Then the note and the one filled Create workout.
+- **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet outline
+  pills (`.studio-suggestion`, muted small type) just above the chat box, wrapping on a wide screen and in one sideways-scrolling row on a phone, and go while the coach works; a tap sends one as
+  a follow-up.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
   filled ink pill per view is the way on: Run, Create workout), where the rest of the app
   uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio

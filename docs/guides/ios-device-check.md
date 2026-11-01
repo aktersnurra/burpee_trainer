@@ -25,16 +25,14 @@ not in Safari, as the keyboard behaves differently in each. Do it once in each.
 - [ ] Swipe right from the middle of the screen opens the swap list; swipe left closes it.
 - [ ] Swipe right from the very left edge: note what happens. If iOS goes back instead, the swap
       list needs a start point away from the edge.
-- [ ] Swipe up on a long Home (the table expanded) scrolls the page instead of opening the sheet
-      until the page is at its bottom.
-- [ ] Open the workout: a handle appears at the bottom and a swipe up (or the handle) opens the sheet
-  with Edit, New and Swap. On a closed workout a swipe up does nothing.
-- [ ] A swipe on a value (duration, reps, set size, pace) changes it by one step and does not scroll
-      the page.
+- [ ] Swap, Edit and New sit along the bottom edge clear of the home indicator, and a tap on each
+      opens the drawer, Edit or New.
+- [ ] In New, holding + or − keeps stepping without selecting text or opening a callout, and stops
+      at the value's limit.
 
 ## Taps
 
-- [ ] Every button can be hit with a thumb without a miss (Save, Run, the round buttons, the hand-edit steppers).
+- [ ] Every button can be hit with a thumb without a miss (Save, Run, the round buttons).
 - [ ] The camera toggle beside Home's play is off and disabled when the camera is unavailable.
 
 Report what failed with the iOS version and whether it was the Home Screen app or Safari.
