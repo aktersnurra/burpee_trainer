@@ -709,39 +709,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert output =~ "unsupported fixture mode"
   end
 
-  test "canonical setup, verification, and cleanup scripts consume final fixture contracts" do
-    setup = File.read!("scripts/e2e/setup.exs")
-    verify = File.read!("scripts/e2e/verify.exs")
-    cleanup = File.read!("scripts/e2e/cleanup.exs")
-
-    assert setup =~ "library_setup.exs"
-    assert setup =~ "started-plan-session"
-    refute setup =~ "defining" <> " legacy workout"
-
-    for field <-
-          ~w[
-            plan_id workout_video_id display_name_snapshot workout_type_snapshot program_snapshot
-            video_snapshot completed_at
-            burpee_count_planned duration_sec_planned note_pre note_post mood context_low_energy
-            context_high_energy context_heat_affected primary_limiter preference_feedback
-            capture_mode cadence_ms target_pace_sec pace_consistency pose_capture_run_status
-            pose_capture_chunk_count pose_capture_chunk_indexes pose_capture_chunk_digests
-          ] do
-      assert verify =~ field
-    end
-
-    for source <- [verify, cleanup] do
-      assert source =~ "adaptive_e2e_fixture"
-      assert source =~ "adaptive-home-coach-e2e-"
-    end
-
-    assert cleanup =~ "recommendations:"
-    assert cleanup =~ "drafts:"
-    assert cleanup =~ "videos:"
-    assert cleanup =~ ~S|~r/^e2e_workout_[0-9a-f]{16}$/|
-    assert cleanup =~ ~S|owned_video_filename = "e2e-available-#{user.username}.mp4"|
-  end
-
   defp insert_completed_pose_evidence!(completed) do
     started_at = ~U[2026-08-31 00:00:00Z]
 

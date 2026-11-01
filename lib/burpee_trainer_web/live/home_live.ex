@@ -47,17 +47,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
   end
 
   @impl true
-  def handle_params(%{"history" => "1"}, _uri, socket),
-    do: {:noreply, push_patch(socket, to: ~p"/progress")}
-
-  # History is now Progress; old links still land there.
-  def handle_params(_params, _uri, %{assigns: %{live_action: :history_moved}} = socket),
-    do: {:noreply, push_patch(socket, to: ~p"/progress", replace: true)}
-
-  # The coach speaks on Home now; old Coach links land there.
-  def handle_params(_params, _uri, %{assigns: %{live_action: :coach_moved}} = socket),
-    do: {:noreply, push_patch(socket, to: ~p"/", replace: true)}
-
   def handle_params(_params, _uri, socket) do
     screen = socket.assigns[:live_action] || :home
     previous = socket.assigns.workspace_screen

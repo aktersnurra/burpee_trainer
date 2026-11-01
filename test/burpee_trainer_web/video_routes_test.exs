@@ -11,13 +11,6 @@ defmodule BurpeeTrainerWeb.VideoRoutesTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "removed pages are not routed", %{conn: conn} do
-    for path <-
-          ~w[/workouts /workouts/new /workouts/drafts/1 /videos /videos/1 /stats /stats/sessions/1] do
-      assert get(conn, path).status == 404
-    end
-  end
-
   test "a video session, like a plan session, shows no app navigation", %{
     conn: conn,
     user: user

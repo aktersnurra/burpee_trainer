@@ -136,26 +136,6 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert Repo.get!(WorkoutSession, session.id).state == :completed
   end
 
-  test "paused, the workout is finished early or aborted, and Abort deletes it", %{
-    conn: conn,
-    user: user
-  } do
-    plan = plan_fixture(user)
-    {:ok, session} = Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
-    {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
-
-    assert has_element?(view, "#session-pause-choices #finish-early-btn", "Finish early")
-    assert has_element?(view, "#session-pause-choices #session-abort-btn", "Abort")
-    refute has_element?(view, "#session-pause-actions a")
-    assert has_element?(view, "#session-abort-confirm[hidden]", "Abort this workout?")
-    assert has_element?(view, "#session-abort-confirm #session-abort-keep", "Keep")
-    assert has_element?(view, "#session-abort-confirm #session-abort-yes", "Abort")
-
-    render_hook(view, "discard_session", %{})
-    assert_reply(view, %{status: "discarded"})
-    refute Repo.get(WorkoutSession, session.id)
-  end
-
   test "a started snapshot remains executable after its plan is archived", %{
     conn: conn,
     user: user

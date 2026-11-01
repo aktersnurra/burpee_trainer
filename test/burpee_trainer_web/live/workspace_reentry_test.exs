@@ -16,7 +16,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     %{conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "plan rows replay after History and Coach", %{
+  test "plan rows replay after visits to Progress", %{
     conn: conn,
     user: user
   } do
@@ -29,8 +29,8 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     rows = Repo.all(WorkoutPlan)
     sessions = Workouts.list_sessions(Scope.for_user(user))
 
-    for via <- [:history, :coach] do
-      roundtrip(view, via)
+    for _ <- 1..2 do
+      roundtrip(view)
       assert has_element?(view, "#home-alternative-plan-#{plan.id}-select")
       assert workspace(view) == before
       assert has_element?(view, "#home-expansion[data-open=true]")
@@ -43,7 +43,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == plan.id
   end
 
-  test "a New draft, its answers and its message, survives History and Coach", %{
+  test "a New draft, its answers and its message, survives visits to Progress", %{
     conn: conn,
     user: user
   } do
@@ -55,8 +55,8 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     before = workspace(view)
     rows = Repo.all(WorkoutPlan)
 
-    for via <- [:history, :coach] do
-      roundtrip(view, via)
+    for _ <- 1..2 do
+      roundtrip(view)
       assert has_element?(view, "#home-studio #studio-note", "20 sets of 6")
       assert workspace(view) == before
 
@@ -67,27 +67,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     end
   end
 
-  test "the real Switch control reopens plan choices without needing a tab or filter refresh", %{
-    conn: conn,
-    user: user
-  } do
-    plan = plan_fixture(user_fixture(), %{target_reps: 10})
-    owned = plan_fixture(user, %{target_reps: 10})
-    {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-summary") |> render_click()
-    open_swap(view)
-    assert has_element?(view, "#home-alternative-plan-#{owned.id}-select")
-    refute has_element?(view, "#home-alternative-plan-#{plan.id}-select")
-    roundtrip(view, :history)
-    assert has_element?(view, "#home-alternative-plan-#{owned.id}-select")
-    view |> element("#home-chooser-close") |> render_click()
-    open_swap(view)
-    view |> element("#home-alternative-plan-#{owned.id}-select") |> render_click()
-    assert :sys.get_state(view.pid).socket.assigns.home_selection.plan.id == owned.id
-    assert Repo.reload!(plan) == plan
-  end
-
-  test "video rows replay and remain startable after both workspace routes", %{
+  test "video rows replay and remain startable after visits to Progress", %{
     conn: conn,
     user: user
   } do
@@ -99,8 +79,8 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     assert has_element?(view, "#home-alternative-video-#{video.id}-select")
     before = workspace(view)
 
-    for via <- [:history, :coach] do
-      roundtrip(view, via)
+    for _ <- 1..2 do
+      roundtrip(view)
       assert has_element?(view, "#home-alternative-video-#{video.id}-select")
       assert workspace(view) == before
       assert Workouts.current_started_session(Scope.for_user(user)) == nil
@@ -254,18 +234,10 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
     ])
   end
 
-  defp roundtrip(view, via) do
+  defp roundtrip(view) do
     pid = view.pid
     render_patch(view, "/progress")
-
-    if via == :coach do
-      # An old Coach link lands on Home.
-      render_patch(view, ~p"/coach")
-      assert_patch(view, "/")
-    else
-      close_history(view)
-    end
-
+    close_history(view)
     assert view.pid == pid
   end
 

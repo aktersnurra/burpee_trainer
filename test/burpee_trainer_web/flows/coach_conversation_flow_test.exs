@@ -62,20 +62,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
              [{"Can Thursday be mornings?", "Yes."}, {"Make it shorter", "15 minutes."}]
   end
 
-  test "a message is sent to the coach", %{conn: conn} do
-    {:ok, view, _} = live(conn, ~p"/")
-
-    view
-    |> form("#home-coach-message-form", coach_message: %{text: "Make the next one harder"})
-    |> render_submit()
-
-    render_async(view)
-    # No provider in tests: the send happened and the coach says it is unavailable.
-    assert has_element?(view, "#home-coach-reply", "Coach unavailable")
-    # There is no notebook to edit: the coach keeps its memory itself.
-    refute has_element?(view, "#home-coach-notebook")
-  end
-
   test "goal confirmation is scoped and admits a new summary", %{conn: conn, scope: scope} do
     assert {:ok, %{"goal_id" => id}} =
              BurpeeTrainer.Coach.Tools.ProposeGoal.call(

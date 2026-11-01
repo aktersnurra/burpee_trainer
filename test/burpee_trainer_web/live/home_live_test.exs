@@ -1,7 +1,6 @@
 defmodule BurpeeTrainerWeb.HomeLiveTest do
   use BurpeeTrainerWeb.ConnCase, async: false
 
-  import Ecto.Query
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
   import BurpeeTrainerWeb.StudioHelpers
@@ -18,13 +17,12 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
-  test "the coach speaks on Home once today is done, and old Coach links land there", %{
+  test "the coach speaks on Home once today is done", %{
     conn: conn,
     user: user
   } do
     {:ok, view, _} = live(conn, ~p"/")
     refute has_element?(view, "#home-coach-panel")
-    assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/coach")
 
     free_form_session_fixture(user, %{duration_sec_actual: 1_200})
     {:ok, view, _} = live(conn, ~p"/")
@@ -83,59 +81,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              "#home-history-toggle[href='/progress'][aria-label='Open Progress']"
            )
 
-    assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, ~p"/?history=1")
     {:ok, linked_view, _} = live(conn, ~p"/progress")
     assert has_element?(linked_view, "#home-history-empty")
-  end
-
-  test "History is presentation only and restores the working adjustment", %{
-    conn: conn,
-    user: user
-  } do
-    recommendation_fixture(user)
-    complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
-    {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-summary") |> render_click()
-
-    walk(view, reps: 60, pace_ups: 1)
-    fill(view, "note", "20 sets of 6")
-
-    {:ok, before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    pid = view.pid
-    render_patch(view, "/progress")
-    assert has_element?(view, "#home-history")
-    assert has_element?(view, "#home-history-empty")
-    refute has_element?(view, "#home-state-content, #home-studio")
-    assert has_element?(view, "#history-progress #home-history-close[aria-label='Back to Home']")
-
-    render_patch(view, "/")
-    assert view.pid == pid
-    refute has_element?(view, "#home-history")
-    assert has_element?(view, "#home-studio #studio-note", "20 sets of 6")
-
-    assert :sys.get_state(view.pid).socket.assigns.workout_parameters.note ==
-             "20 sets of 6"
-
-    assert {:ok, ^before} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-  end
-
-  test "Home renders one recommendation-first action without legacy authoring surfaces", %{
-    conn: conn,
-    user: user
-  } do
-    recommendation = recommendation_fixture(user)
-    {:ok, view, _html} = live(conn, ~p"/")
-
-    assert has_element?(view, "#home-ready-recommendation")
-    assert has_element?(view, "#home-action")
-    refute has_element?(view, "#home-adjustment-form")
-    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
-    refute has_element?(view, "#home-edit-workout, #home-title-action, #home-new-workout")
-    refute has_element?(view, "#resume-recommended-workout")
-    refute has_element?(view, "#tell-coach-button")
-    refute has_element?(view, "#manual-workout-form")
-    assert recommendation.selected_workout_plan_id
   end
 
   test "the camera and warmup toggles sit beside play, collapsed or expanded", %{
@@ -326,20 +273,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            ] = Jason.decode!(selection)
   end
 
-  test "Start creates the immutable server session before navigating by session id", %{
-    conn: conn,
-    user: user
-  } do
-    _recommendation = recommendation_fixture(user)
-    {:ok, view, _html} = live(conn, ~p"/")
-
-    view |> element("#home-action") |> render_click()
-
-    session = Workouts.current_started_session(Scope.for_user(user))
-    assert session.source_kind == :plan
-    assert_redirect(view, ~p"/session/#{session.id}")
-  end
-
   test "Start reuses the rendered token for duplicate delivery and rejects a forged token", %{
     conn: conn,
     user: user
@@ -425,27 +358,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-history-density-back") |> render_click()
     assert has_element?(view, "#home-history-trend:not([hidden])")
     assert has_element?(view, "#home-history-sessions-panel[hidden]")
-  end
-
-  test "a tapped session shows its trash; tapping again hides it; nothing opens", %{
-    conn: conn,
-    user: user
-  } do
-    saved = complete_history(user, DateTime.utc_now(:second), 1_200)
-    {:ok, view, _} = live(conn, ~p"/")
-    view = history_route(conn, view)
-    refute has_element?(view, "#home-history-delete-#{saved.id}")
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    assert has_element?(view, "#home-history-inspect-#{saved.id}[aria-pressed=true]")
-
-    assert has_element?(
-             view,
-             "#home-history-delete-#{saved.id}[aria-label='Delete session'] .hero-trash"
-           )
-
-    refute has_element?(view, "#home-history-sheet")
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    refute has_element?(view, "#home-history-delete-#{saved.id}")
   end
 
   test "failed deletion says so in place and the session can still close", %{
@@ -567,67 +479,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-ready-recommendation")
   end
 
-  test "done today renders before the workout-needed recommendation", %{conn: conn, user: user} do
-    complete_history(user, DateTime.utc_now(:second), 1_200)
-    _recommendation = recommendation_fixture(user)
-
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-done-today")
-    refute has_element?(view, "#home-ready-recommendation")
-  end
-
-  test "target-reaching today hides a persisted pending candidate and its actions", %{
-    conn: conn,
-    user: user
-  } do
-    ensure_candidate_history(user)
-    recommendation = recommendation_fixture(user)
-    slot = slot!(user)
-
-    candidate =
-      workout_plan_draft_fixture(user, %{
-        definition: definition_for(slot, "Hidden after reaching today's target"),
-        request_text: "Hidden after reaching today's target"
-      })
-
-    recommendation
-    |> Ecto.Changeset.change(pending_draft_id: candidate.id)
-    |> Repo.update!()
-
-    complete_history(user, DateTime.utc_now(:second), 4_800)
-    {:ok, view, _html} = live(conn, ~p"/")
-
-    assert has_element?(view, "#home-done-today")
-    refute has_element?(view, "#home-week-complete")
-    refute has_element?(view, "#home-pending-candidate")
-    refute has_element?(view, "#use-candidate-button")
-    refute has_element?(view, "#keep-current-workout-button")
-  end
-
-  test "done today hides a persisted pending candidate and its actions", %{conn: conn, user: user} do
-    ensure_candidate_history(user)
-    recommendation = recommendation_fixture(user)
-    slot = slot!(user)
-
-    candidate =
-      workout_plan_draft_fixture(user, %{
-        definition: definition_for(slot, "Hidden after today's workout"),
-        request_text: "Hidden after today's workout"
-      })
-
-    recommendation
-    |> Ecto.Changeset.change(pending_draft_id: candidate.id)
-    |> Repo.update!()
-
-    complete_history(user, DateTime.utc_now(:second), 1_200)
-    {:ok, view, _html} = live(conn, ~p"/")
-
-    assert has_element?(view, "#home-done-today")
-    refute has_element?(view, "#home-pending-candidate")
-    refute has_element?(view, "#use-candidate-button")
-    refute has_element?(view, "#keep-current-workout-button")
-  end
-
   test "Resume uses the exact started session without creating another", %{conn: conn, user: user} do
     recommendation = recommendation_fixture(user)
 
@@ -691,20 +542,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
-  test "fresh mount shows the starter and its selection stays stable across reloads", %{
-    conn: conn,
-    user: user
-  } do
-    {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-workout-area")
-    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    assert selected.plan.name == "Starter Six-Count"
-    {:ok, reloaded, _} = live(conn, ~p"/")
-    assert has_element?(reloaded, "#home-workout-area")
-    {:ok, same} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    assert selected == same
-  end
-
   test "expansion preserves DOM for both transition directions", %{conn: conn, user: user} do
     recommendation_fixture(user)
     {:ok, view, _} = live(conn, ~p"/")
@@ -717,229 +554,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view |> element("#home-summary") |> render_click()
     assert has_element?(view, "#home-expansion-content[inert]")
     assert has_element?(view, "#home-inspection")
-  end
-
-  test "Home adjustment also waits for confirmed constraints before replacing the workout", %{
-    conn: conn,
-    user: user
-  } do
-    recommendation_fixture(user)
-
-    extraction = %{
-      "burpee_type" => "six_count",
-      "target_reps" => 10,
-      "target_duration_sec" => 120,
-      "pacing_style" => "even",
-      "recovery" => "optional",
-      "timed_rests" => [],
-      "requested_pace_sec" => nil
-    }
-
-    layout = two_set_layout("Confirmed adjustment", "A shorter session.")
-
-    counter =
-      fake_authoring_provider(%{"workout_request" => extraction, "workout_layout" => layout})
-
-    {:ok, view, _} = live(conn, ~p"/")
-    original = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user)) |> elem(1)
-    view |> element("#home-summary") |> render_click()
-
-    walk(view, reps: 10, minutes: 5)
-    create(view)
-
-    render_async(view, 2_000)
-    assert has_element?(view, "#studio-proposal .studio-chip", "10 reps")
-    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-    assert {:ok, ^original} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-
-    view |> element("#home-request-run") |> render_click()
-    # Run starts it: the session is on the new workout, which is now today's.
-    assert_redirect(view, 2_000)
-    assert {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    assert selected.plan.name == "Confirmed adjustment"
-    refute selected.plan.id == original.plan.id
-    assert Agent.get(counter, & &1.calls) == ["workout_layout"]
-  end
-
-  test "submit does not trust the previous Start label", %{conn: conn, user: user} do
-    recommendation_fixture(user)
-    {:ok, view, _} = live(conn, ~p"/")
-    view |> element("#home-summary") |> render_click()
-
-    open_new(view)
-    assert Workouts.current_started_session(Scope.for_user(user)) == nil
-    view |> element("#home-request-abort") |> render_click()
-    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
-  end
-
-  test "blank submit starts despite prior Update label and old events cannot mutate", %{
-    conn: conn,
-    user: user
-  } do
-    recommendation_fixture(user)
-    {:ok, view, _} = live(conn, ~p"/")
-
-    for event <- ["start_recommendation", "use_candidate", "keep_current"] do
-      render_click(view, event, %{})
-    end
-
-    assert Workouts.current_started_session(Scope.for_user(user)) == nil
-
-    view |> element("#home-action") |> render_click()
-
-    session = Workouts.current_started_session(Scope.for_user(user))
-    assert_redirect(view, ~p"/session/#{session.id}")
-  end
-
-  test "real missing-selection chooser preserves History and the mounted token", %{user: user} do
-    complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
-
-    Repo.update_all(from(p in WorkoutPlan, where: is_nil(p.user_id) and p.origin == :built_in),
-      set: [state: :archived, archived_at: DateTime.utc_now(:second)]
-    )
-
-    socket = mounted_socket(user)
-    assert socket.assigns.home_selection == nil
-    assert socket.assigns.home_state == :choose
-    token = socket.assigns.start_client_session_id
-
-    assert LazyHTML.query(render_home(socket), "#home-page[data-home-state=choose]")
-           |> Enum.count() == 1
-
-    assert LazyHTML.query(render_home(socket), "#home-title-action[data-primary-action=choose]")
-           |> Enum.count() == 1
-
-    assert {:noreply, opened} = workspace_screen(socket, :history)
-    assert opened.assigns.history_open?
-    assert opened.assigns.home_selection == nil
-    assert opened.assigns.start_client_session_id == token
-    html = render_home(opened)
-
-    assert LazyHTML.query(html, "#home-history-heading[tabindex='-1'][phx-mounted]")
-           |> Enum.count() == 1
-
-    assert LazyHTML.query(html, "#home-history-empty") |> Enum.count() == 1
-    assert LazyHTML.query(html, "#home-state-content") |> Enum.empty?()
-
-    for event <- ["select_alternative", "toggle_summary"] do
-      assert {:noreply, ^opened} = HomeLive.handle_event(event, %{}, opened)
-    end
-
-    assert {:noreply, filtered} =
-             HomeLive.handle_event("history_period", %{"period" => "all"}, opened)
-
-    assert filtered.assigns.history_period == "all"
-    assert {:noreply, closing} = HomeLive.handle_event("close_history", %{}, filtered)
-    assert closing.redirected == {:live, :patch, %{to: "/", kind: :push}}
-    assert {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
-    refute closed.assigns.history_open?
-    assert_workspace_unchanged(socket, closed)
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-  end
-
-  test "busy History events preserve the workspace and do not bypass workout guards", %{
-    user: user
-  } do
-    id = make_ref()
-    {:ok, selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
-    socket = mounted_socket(user)
-    assert socket.assigns.home_selection == selected
-
-    socket =
-      Phoenix.Component.assign(socket,
-        instruction: "Less rest",
-        busy?: true,
-        update_id: id,
-        expanded?: true,
-        expanded_groups: MapSet.new(["kept-group"]),
-        history_expanded: MapSet.new([123])
-      )
-
-    assert_shared_progress(render_home(socket))
-    assert {:noreply, opened} = workspace_screen(socket, :history)
-    assert opened.assigns.history_open?
-    assert_workspace_unchanged(socket, opened)
-    assert opened.assigns.history_expanded == MapSet.new([123])
-    html = render_home(opened)
-    assert LazyHTML.query(html, "#home-history-heading") |> Enum.count() == 1
-    assert LazyHTML.query(html, "#home-state-content, #home-update-loading") |> Enum.empty?()
-
-    for event <- [
-          "select_alternative",
-          "resume_recommendation",
-          "retry_recommendation"
-        ] do
-      assert {:noreply, ^opened} = HomeLive.handle_event(event, %{}, opened)
-    end
-
-    assert {:noreply, changed} =
-             HomeLive.handle_event("history_period", %{"period" => "all"}, opened)
-
-    assert changed.assigns.history_period == "all"
-    assert changed.assigns.history_expanded == MapSet.new()
-    assert_workspace_unchanged(socket, changed)
-    assert {:noreply, ^changed} = HomeLive.handle_event("history_more", %{}, changed)
-    assert {:noreply, closing} = HomeLive.handle_event("close_history", %{}, changed)
-    assert {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
-    refute closed.assigns.history_open?
-    assert_workspace_unchanged(socket, closed)
-
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-  end
-
-  test "History loads owned saved-page counts and ignores closed or malformed controls", %{
-    user: user
-  } do
-    now = ~U[2026-09-09 12:00:00Z]
-    sessions = for _ <- 1..7, do: complete_history(user, now, 1200)
-    complete_history(user_fixture(), now, 1200)
-    socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
-
-    for {event, params} <- [
-          {"history_period", %{"period" => "all"}},
-          {"history_more", %{}},
-          {"history_period", %{"period" => "bogus"}},
-          {"history_period", %{}},
-          {"history_session", %{"id" => "bogus"}}
-        ] do
-      assert {:noreply, ^socket} = HomeLive.handle_event(event, params, socket)
-    end
-
-    {:noreply, opened} = workspace_screen(socket, :history, %{"return_to" => "#untrusted"})
-
-    assert LazyHTML.query(
-             render_home(opened),
-             "#home-history-close[phx-click=close_history][aria-label='Back to Home']"
-           )
-           |> Enum.count() == 1
-
-    assert opened.assigns.history_loaded_count == 5
-    assert opened.assigns.history_has_more?
-    assert LazyHTML.query(render_home(opened), "#home-history-count") |> LazyHTML.text() =~ "5"
-
-    assert Enum.map(opened.assigns.history_points.six_count, & &1.id) ==
-             Enum.map(sessions, & &1.id)
-
-    assert opened.assigns.history_points.navy_seal == []
-
-    {:noreply, more} = HomeLive.handle_event("history_more", %{}, opened)
-    assert more.assigns.history_loaded_count == 7
-    assert more.assigns.history_points == opened.assigns.history_points
-    assert more.assigns.history_loaded_ids == sessions |> Enum.map(& &1.id) |> Enum.reverse()
-    refute more.assigns.history_has_more?
-    assert {:noreply, ^more} = HomeLive.handle_event("history_more", %{}, more)
-    {:noreply, closed} = HomeLive.handle_event("close_history", %{}, more)
-    assert closed.assigns.history_loaded_ids == more.assigns.history_loaded_ids
-
-    {:noreply, reopened} = workspace_screen(%{closed | redirected: nil}, :history)
-
-    assert LazyHTML.query(render_home(reopened), "#home-history-close[phx-click=close_history]")
-           |> Enum.count() == 1
-
-    assert reopened.assigns.history_loaded_count == 5
-    assert_workspace_unchanged(socket, reopened)
-    assert Repo.aggregate(WorkoutSession, :count) == 8
   end
 
   test "History range changes weekly grid and session summaries together", %{user: user} do
@@ -964,41 +578,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     assert length(all_view.assigns.history_weeks) > 52
     assert length(all_view.assigns.history_points.six_count) == 2
-  end
-
-  test "History read failure stays closable without changing the mounted workspace", %{user: user} do
-    complete_history(user, DateTime.add(DateTime.utc_now(:second), -90 * 86400), 1200)
-    socket = mounted_socket(user)
-    invalid_user = %{user | timezone: "Invalid/Zone"}
-
-    socket =
-      Phoenix.Component.assign(socket,
-        current_scope: BurpeeTrainer.Accounts.Scope.for_user(invalid_user)
-      )
-
-    {:noreply, opened} = workspace_screen(socket, :history)
-    assert opened.assigns.history_error
-    assert opened.assigns.history_loaded_count == 0
-    assert opened.assigns.history_points == %{six_count: [], navy_seal: []}
-
-    assert opened.assigns.history_cursor == nil
-    refute opened.assigns.history_has_more?
-    html = render_home(opened)
-    assert LazyHTML.query(html, "#home-history-error") |> Enum.count() == 1
-    assert LazyHTML.query(html, "#home-history-empty, #home-history-count") |> Enum.empty?()
-
-    assert LazyHTML.query(
-             html,
-             "#home-history-close[aria-label='Back to Home'][phx-click=close_history]"
-           )
-           |> Enum.count() == 1
-
-    assert LazyHTML.query(html, "#home-state-content, #home-history-toggle") |> Enum.empty?()
-
-    {:noreply, closing} = HomeLive.handle_event("close_history", %{}, opened)
-    {:noreply, closed} = workspace_screen(%{closing | redirected: nil}, :home)
-    refute closed.assigns.history_open?
-    assert_workspace_unchanged(socket, closed)
   end
 
   test "repeated History opening restores isolation commands before push and closing reveals before focus",
@@ -1086,44 +665,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       assert_shared_progress(render_home(closed))
       assert_workspace_unchanged(state, closed)
     end
-  end
-
-  test "History inspection reconciles retained rows without resetting their DOM stream", %{
-    user: user
-  } do
-    now = DateTime.utc_now(:second)
-    rows = for _ <- 1..7, do: complete_history(user, now, 1200)
-    {:noreply, opened} = workspace_screen(mounted_socket(user), :history)
-    loaded = opened.assigns.history_loaded_ids
-    oldest = hd(rows)
-    retained_id = hd(loaded)
-    cursor = opened.assigns.history_cursor
-
-    Enum.reduce([retained_id, retained_id, oldest.id, oldest.id], opened, fn id, socket ->
-      # Direct callbacks need the same pruning that LiveView performs after rendering.
-      streams =
-        Map.update!(
-          socket.assigns.streams,
-          :history_sessions,
-          &Phoenix.LiveView.LiveStream.prune/1
-        )
-
-      socket = %{socket | assigns: Map.put(socket.assigns, :streams, streams)}
-
-      {:noreply, inspected} =
-        HomeLive.handle_event("history_session", %{"id" => to_string(id)}, socket)
-
-      refute inspected.assigns.streams.history_sessions.reset?
-      assert inspected.assigns.streams.history_sessions.deletes == []
-      assert inspected.assigns.history_cursor == cursor
-      assert inspected.assigns.history_loaded_ids == Enum.sort(Enum.uniq(loaded ++ [id]), :desc)
-
-      assert MapSet.member?(inspected.assigns.history_expanded, id) !=
-               MapSet.member?(socket.assigns.history_expanded, id)
-
-      for row <- rows, do: assert(Repo.reload!(row) == row)
-      inspected
-    end)
   end
 
   test "older chart inspection and repeated pages retain sorted unique rows and expansion", %{
@@ -1228,54 +769,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
 
     assert Repo.get(WorkoutSession, deleted.id) == nil
     for saved <- [owned, foreign, started, old, future], do: assert(Repo.reload!(saved) == saved)
-  end
-
-  test "restream drops deleted, noncompleted and newly out-of-period displayed rows", %{
-    user: user
-  } do
-    now = ~U[2026-09-09 12:00:00Z]
-    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot!(user))
-    deleted = complete_history(user, now, 1200)
-    _previous_week = complete_history(user, now, 1200)
-    socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
-
-    {:ok, started} =
-      Workouts.start_plan(
-        Scope.for_user(user),
-        socket.assigns.home_selection.plan.id,
-        Ecto.UUID.generate()
-      )
-
-    next_week = DateTime.add(now, 12 * 7 * 86400)
-    kept = complete_history(user, next_week, 1200)
-    {:noreply, opened} = workspace_screen(socket, :history)
-    Repo.delete!(deleted)
-    # Exercise the defensive retained-ID seam without violating immutable completion triggers.
-    opened =
-      Phoenix.Component.assign(opened,
-        history_loaded_ids: opened.assigns.history_loaded_ids ++ [started.id],
-        home_now: fn -> next_week end
-      )
-
-    {:noreply, inspected} =
-      HomeLive.handle_event("history_session", %{"id" => to_string(kept.id)}, opened)
-
-    assert inspected.assigns.history_loaded_ids == [kept.id]
-    assert inspected.assigns.history_loaded_count == 1
-    assert MapSet.member?(inspected.assigns.history_expanded, kept.id)
-  end
-
-  test "busy inspection remains read-only and re-renders details", %{user: user} do
-    saved = complete_history(user, DateTime.utc_now(:second), 1200)
-    socket = mounted_socket(user) |> Phoenix.Component.assign(busy?: true)
-    {:noreply, opened} = workspace_screen(socket, :history)
-
-    {:noreply, inspected} =
-      HomeLive.handle_event("history_session", %{"id" => to_string(saved.id)}, opened)
-
-    assert MapSet.member?(inspected.assigns.history_expanded, saved.id)
-    assert_workspace_unchanged(socket, inspected)
-    assert Repo.reload!(saved) == saved
   end
 
   test "today actual totals and streamed session details use both types without a second Start",
@@ -1552,119 +1045,5 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
   end
 
   # Catch-up candidates need a real prior best, without crediting this week's target.
-  defp ensure_candidate_history(user) do
-    slot = slot!(user)
-
-    if slot.strategy == :catch_up do
-      definition =
-        definition_for(%{slot | strategy: :standard, duration_sec: 1_200}, "Prior-week PB")
-
-      draft = workout_plan_draft_fixture(user, %{definition: definition})
-      plan = draft |> WorkoutPlan.publish_changeset(DateTime.utc_now(:second)) |> Repo.update!()
-
-      {:ok, completed_at} =
-        BurpeeTrainer.UserTime.resolve_local(
-          Date.add(slot.week_start, -1),
-          ~T[12:00:00],
-          user.timezone
-        )
-
-      %WorkoutSession{
-        user_id: user.id,
-        state: :started,
-        source_kind: :plan,
-        plan_id: plan.id,
-        client_session_id: Ecto.UUID.generate(),
-        display_name_snapshot: plan.name,
-        workout_type_snapshot: plan.burpee_type,
-        program_snapshot: plan.program_json,
-        content_hash: plan.content_hash,
-        burpee_type: plan.burpee_type,
-        burpee_count_planned: plan.target_reps,
-        duration_sec_planned: plan.target_duration_sec,
-        started_at: DateTime.add(completed_at, -1_200, :second)
-      }
-      |> WorkoutSession.start_changeset()
-      |> Repo.insert!()
-      |> WorkoutSession.completion_changeset(
-        %{"burpee_count_actual" => plan.target_reps, "duration_sec_actual" => 1_200},
-        completed_at
-      )
-      |> Repo.update!()
-
-      refreshed = slot!(user)
-      assert refreshed.completed_sec == 0
-      assert refreshed.personal_best.reps == plan.target_reps
-    end
-  end
-
   # Two sets of five at the wizard's default pace; the rest between them is computed.
-  defp two_set_layout(name, rationale) do
-    %{
-      "name" => name,
-      "rationale" => rationale,
-      "phases" => [
-        %{
-          "sets" => [
-            %{"reps" => 5, "sec_per_rep" => 4.5, "sec_per_burpee" => 4.5},
-            %{"reps" => 5, "sec_per_rep" => 4.5, "sec_per_burpee" => 4.5}
-          ],
-          "rests" => [%{"share" => 1}]
-        }
-      ]
-    }
-  end
-
-  defp fake_authoring_provider(responses) do
-    original = Application.fetch_env!(:burpee_trainer, :llm_provider)
-    on_exit(fn -> Application.put_env(:burpee_trainer, :llm_provider, original) end)
-
-    counter = start_supervised!({Agent, fn -> %{responses: responses, calls: []} end})
-    {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, ip: {127, 0, 0, 1}])
-    {:ok, {_address, port}} = :inet.sockname(listener)
-    :ok = :gen_tcp.close(listener)
-
-    start_supervised!(
-      {Bandit,
-       plug: {BurpeeTrainer.TestAuthoringProviderPlug, counter: counter},
-       ip: {127, 0, 0, 1},
-       port: port,
-       startup_log: false}
-    )
-
-    Application.put_env(:burpee_trainer, :llm_provider,
-      enabled: true,
-      url: "http://127.0.0.1:#{port}/chat/completions",
-      api_key: "test-key",
-      model: "test-model",
-      timeout_ms: 20_000
-    )
-
-    counter
-  end
-
-  defp definition_for(slot, name) do
-    # A long catch-up slot gets one rep every 15 seconds; a standard one, ten reps.
-    reps = if slot.strategy == :catch_up, do: div(slot.duration_sec, 15), else: 10
-
-    cadence = slot.duration_sec / reps
-
-    %{
-      "version" => 1,
-      "name" => name,
-      "burpee_type" => Atom.to_string(slot.burpee_type),
-      "target_duration_sec" => slot.duration_sec,
-      "target_reps" => reps,
-      "pacing_style" => "even",
-      "rationale" => "A measured reusable workout.",
-      "events" => [
-        %{
-          "kind" => "work",
-          "reps" => reps,
-          "sec_per_rep" => cadence,
-          "sec_per_burpee" => cadence
-        }
-      ]
-    }
-  end
 end

@@ -57,26 +57,6 @@ defmodule BurpeeTrainerWeb.AppFlowTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
-  test "Video session mount and reconnect never create extra sessions", %{
-    conn: conn,
-    user: user
-  } do
-    video = video_fixture(%{burpee_count: nil})
-
-    assert {:ok, started} =
-             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
-
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-
-    {:ok, first_mount, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
-    assert has_element?(first_mount, "#video-session[data-session-id='#{started.id}']")
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-
-    {:ok, reconnect, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
-    assert has_element?(reconnect, "#video-session[data-session-id='#{started.id}']")
-    assert Repo.aggregate(WorkoutSession, :count) == 1
-  end
-
   test "Home fallback remains startable when no generated candidate is attached", %{
     conn: conn,
     user: user

@@ -55,68 +55,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     %{counter: counter}
   end
 
-  test "workout request extraction uses the compact confirmed-constraints schema", %{
-    counter: counter
-  } do
-    answer = %{
-      "burpee_type" => "six_count",
-      "target_reps" => 140,
-      "target_duration_sec" => 1_200,
-      "pacing_style" => "unbroken",
-      "recovery" => "required",
-      "timed_rests" => [%{"start_sec" => 660, "duration_sec" => 60}],
-      "requested_pace_sec" => nil
-    }
-
-    req = request(counter, fn conn -> json_response(conn, 200, answer) end)
-
-    assert {:ok, ^answer} =
-             structured_chat([], Keyword.put(opts(req), :response_kind, :workout_request))
-
-    [recorded] = requests(counter)
-    schema = recorded.body["response_format"]["json_schema"]
-    assert schema["name"] == "workout_request"
-
-    assert schema["schema"] ==
-             BurpeeTrainer.Coach.WorkoutRequest.json_schema()
-             |> Jason.encode!()
-             |> Jason.decode!()
-  end
-
-  test "confirmed request uses the request-dependent workout layout schema", %{counter: counter} do
-    {:ok, confirmed} =
-      BurpeeTrainer.Coach.WorkoutRequest.new(%{
-        "burpee_type" => "six_count",
-        "target_reps" => 140,
-        "target_duration_sec" => 1_200,
-        "pacing_style" => "unbroken",
-        "recovery" => "required",
-        "timed_rests" => [
-          %{"start_sec" => 660, "duration_sec" => 60},
-          %{"start_sec" => 1_080, "duration_sec" => 30}
-        ],
-        "requested_pace_sec" => nil
-      })
-
-    layout = %{"name" => "layout", "rationale" => "fixture", "phases" => []}
-    req = request(counter, fn conn -> json_response(conn, 200, layout) end)
-
-    assert {:ok, ^layout} =
-             structured_chat(
-               [],
-               opts(req)
-               |> Keyword.put(:confirmed_request, confirmed)
-               |> Keyword.put(:response_kind, :workout_layout)
-             )
-
-    [recorded] = requests(counter)
-    response = recorded.body["response_format"]["json_schema"]
-    assert response["name"] == "workout_layout"
-    assert response["schema"]["required"] == ["name", "rationale", "phases", "suggestions"]
-    assert response["schema"]["properties"]["phases"]["minItems"] == 3
-    assert response["schema"]["properties"]["phases"]["maxItems"] == 3
-  end
-
   test "OpenRouter requests require a provider supporting every requested parameter", %{
     counter: counter
   } do
@@ -137,67 +75,6 @@ defmodule BurpeeTrainer.Coach.ClientTest do
     assert recorded.body["provider"] == %{"require_parameters" => true}
     refute Map.has_key?(recorded.body, "temperature")
     assert recorded.body["response_format"]["json_schema"]["strict"] == true
-  end
-
-  test "one request uses the fixed security and resource options", %{counter: counter} do
-    parent = self()
-    definition = definition("One call")
-
-    request =
-      request(counter, fn conn -> json_response(conn, 200, definition) end)
-      |> Req.Request.prepend_request_steps(
-        capture_boundary: fn request ->
-          send(parent, {:request_boundary, request})
-          request
-        end
-      )
-
-    boundary_opts =
-      request
-      |> opts()
-      |> Keyword.put(:max_tokens, 99_999)
-      |> Keyword.update!(:config, &Keyword.put(&1, :max_tokens, 88_888))
-
-    assert {:ok, ^definition} =
-             structured_chat(
-               [%{role: "user", content: "steady"}],
-               Keyword.put(boundary_opts, :response_kind, :workout_request)
-             )
-
-    assert request_count(counter) == 1
-
-    assert_receive {:request_boundary, captured}
-    assert captured.method == :post
-    assert captured.options.retry == false
-    assert captured.options.redirect == false
-    assert captured.options.decode_body == false
-    assert captured.options.receive_timeout == 12_345
-    assert is_function(captured.into, 2)
-
-    [recorded] = requests(counter)
-    assert recorded.method == "POST"
-    assert recorded.path == "/v1/chat/completions"
-    assert recorded.authorization == ["Bearer test-secret"]
-    assert recorded.body["model"] == "test/model"
-    assert recorded.body["max_tokens"] == 16_384
-    assert recorded.body["temperature"] == 0
-    refute Map.has_key?(recorded.body, "provider")
-
-    assert %{
-             "type" => "json_schema",
-             "json_schema" => %{
-               "name" => "workout_request",
-               "strict" => true,
-               "schema" => schema
-             }
-           } = recorded.body["response_format"]
-
-    assert schema ==
-             BurpeeTrainer.Coach.WorkoutRequest.json_schema()
-             |> Jason.encode!()
-             |> Jason.decode!()
-
-    assert recorded.body["messages"] == [%{"role" => "user", "content" => "steady"}]
   end
 
   test "requests name the app to OpenRouter when its URL is configured", %{counter: counter} do

@@ -58,7 +58,7 @@ mechanism. Screen responsibilities are extracted into cohesive ordinary web modu
   missing values default to Home, never an arbitrary URL.
 - All three routes target the same LiveView inside the same authenticated live session.
   Within this workspace, links use `patch` and handlers use `push_patch`; entering from
-  a different LiveView uses normal navigation. `/?history=1` patches to `/history`.
+  a different LiveView uses normal navigation.
 
 Initialize draft forms once per mount. Screen changes must not overwrite an unsent Coach
 message or Home working adjustment/expansion. Both survive a History roundtrip in the

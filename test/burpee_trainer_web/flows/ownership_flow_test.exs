@@ -52,11 +52,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     [owner_note] = Memory.list(owner_scope)
     {:ok, owner_exchange} = Exchange.record(owner_scope, "Mornings?", "Yes.")
     coach_plans_before = Repo.all(WorkoutPlan)
-    pid = view.pid
-    # The old notebook event is gone, and the memory job reads only the owner's own events.
-    render_submit(view, "coach_notebook_save", %{"coach_notebook" => %{"text" => "Attacker"}})
-    assert view.pid == pid
-
+    # The memory job reads only the owner's own events.
     assert {:cancel, :event_missing} =
              MemoryJob.perform(%Oban.Job{
                args: %{"user_id" => attacker.id, "exchange_id" => owner_exchange.id}

@@ -36,8 +36,8 @@
 | `BurpeeTrainer.Videos` / `BurpeeTrainer.Workouts.WorkoutVideo` | Video workout lookup and session sources |
 | `BurpeeTrainer.Goals`, `BurpeeTrainer.Levels`, `BurpeeTrainer.Milestones`, `BurpeeTrainer.Scoring`, `BurpeeTrainer.Stats.Series` | Progress and scoring domain queries |
 | `BurpeeTrainer.UserTime` | User-local date and time calculations |
-| `BurpeeTrainerWeb.HomeLive` | One LiveView for `/`, `/history`, and `/coach` (live actions `:home`, `:history`, `:coach`) |
-| `BurpeeTrainerWeb.{HomeScreen, HistoryScreen, CoachScreen}` | Screen modules rendered by `HomeLive` |
+| `BurpeeTrainerWeb.HomeLive` | One LiveView for `/` and `/progress` (live actions `:home`, `:history`); the coach speaks on Home once the day is done (`HomeCoach`) |
+| `BurpeeTrainerWeb.{HomeScreen, HistoryScreen}` | Screen modules rendered by `HomeLive` |
 | `BurpeeTrainerWeb.HomeAuthoring.Flow` | Pure authoring transitions: `update(model, event) -> {model, commands}`; work in flight is applied only while its `update_id` is current; each follow-up refines the latest proposal and the ones it replaced stay as `design_turns` (`docs/specs/2026-10-29-design-chat-design.md`) |
 | `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |
 | `BurpeeTrainerWeb.{HomeStudioComponents, NewWorkoutForm}` / `BurpeeTrainer.Coach.NewDefaults` | The studio (Edit as a chat, New as one form then the chat), New's form rules (reps and pace follow duration and type until set by hand; everything fits the duration), and what each value starts from: the week's time left, the athlete's rate, a pace that fits |
@@ -61,7 +61,7 @@ See `docs/ui.md` for the visual system. Use the application palette and existing
 
 Keep a test only when it would fail on a real user-visible regression, data-integrity or ownership violation, or pure-core invariant. Delete styling-, copy-, CSS-, or markup-only assertions, private/internal call-shape checks, mocked forwarding behavior, removed-code coverage, and full-flow duplicates without a distinct failure mode. Keep accessibility contracts even when they use markup or styling assertions: roles, ARIA labels and screen-reader behavior, keyboard operation, reduced-motion behavior, and 44px target-size coverage are user-visible regression protection.
 
-Property tests remain for `PlanCompiler` and `WorkoutRequest` validation. Provider-dependent tests use the local recorded-response plug and never make paid calls. The core-flow suite is documented in `docs/testing.md`.
+Property tests cover the pure cores (listed in `docs/testing.md`). Provider-dependent tests use the local recorded-response plug and never make paid calls. The core-flow suite is documented in `docs/testing.md`.
 
 ## Documentation
 

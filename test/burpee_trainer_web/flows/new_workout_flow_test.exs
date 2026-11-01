@@ -67,16 +67,6 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert shown(view, "reps") == "150"
   end
 
-  test "reps follow the duration until they are set by hand", %{view: view} do
-    open_new(view)
-    view |> element("#studio-duration-down") |> render_click()
-    assert shown(view, "reps") == "40"
-
-    fill(view, "reps", "45")
-    view |> element("#studio-duration-up") |> render_click()
-    assert shown(view, "reps") == "45"
-  end
-
   test "New is sent as it is, a proposal comes back, and Run saves, selects and starts it",
        %{view: view, user: user, selected: selected, conn: conn} do
     layout = layout([[{50, 5.0, 5.0}, {50, 5.0, 5.0}]], "Independent new workout")

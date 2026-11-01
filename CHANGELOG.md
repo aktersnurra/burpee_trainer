@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-02 — Fewer taps, less to maintain
+
+- **Desktop**: wide screens get icon buttons for the drawer, Edit and New at the top-left corner; at 1024px and up the drawer is a sidebar and the page re-centres beside it. The studio's composer follows the Claude app (a rounded card, a filled send arrow, a 680px column) and the working animation sits centred on its label.
+- **Home**: Swap, Edit and New are one tap each on every width, along the bottom edge on a phone; the swipe-up sheet and its handle are gone (swipe right still opens the drawer). A tap on a workout in the drawer makes it today's (a video starts); the preview and its Use workout step are gone, and so are the drawer's filters: every level is listed, nearest yours first.
+- **New** is one form instead of questions: burpee, duration and reps show, with style, set size and pace folded under **More**, which reads them in its summary. Reps and pace follow duration and type until you set them; reps step by 5, then by 10 from 50, and a held −/+ keeps stepping.
+- **Studio**: a proposal changes only by asking the coach; the tap-a-row steppers are gone. With each proposal the coach offers up to three likely next asks as pills just above the box (one row that scrolls sideways on a phone); a tap sends one. Run is the one action under a proposal: Save and its Keep current / Use this one screen are gone.
+- **Done**: the coach's report and conversation sit open under the result, with nothing to tap.
+- **Removed**: the old Home revision path, the unused ChartHook and HomeAdjustment hooks and chart.js, two event handlers nothing sent, a History summary that was never shown, CSS that matched nothing, and the `/history`, `/coach` and `/?history=1` redirects (Progress is `/progress`; the coach is on Home).
+- **Tests**: 82 tests removed under the test policy (934 → 852), about 1,900 lines. They covered removed or unreachable code (the pending-draft path, removed events and ids), only read internal state, asserted prompt copy or call shapes, or repeated another test. Two coach tests that failed on Sundays now pin a 20-minute slot. `docs/testing.md` says which cores have property tests and how to pin a clock-built slot.
+
 ## 2026-10-30 — Built for someone who knows it; the coach remembers like Hermes
 
 - **Less to read.** No hint lines, no predicted replies (the coach and summary no longer generate them), no subtitles in the Edit / Swap / New sheet, and no "min left this week" under the week bar. The studio's proposal has only Save and Run; Run uses Home's camera and warmup choices.

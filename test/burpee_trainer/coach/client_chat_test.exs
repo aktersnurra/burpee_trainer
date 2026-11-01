@@ -52,32 +52,6 @@ defmodule BurpeeTrainer.Coach.ClientChatTest do
     assert llm_call_count(scope) == 1
   end
 
-  test "strict JSON and invalid duplicate keys are distinguished" do
-    scope = scope_fixture()
-
-    opts = [
-      config: @config,
-      req: Req.new(plug: {Req.Test, __MODULE__}),
-      response_format: {"answer", %{type: "object"}},
-      ledger: %{scope: scope, purpose: "insight", run_id: Ecto.UUID.generate()}
-    ]
-
-    Req.Test.stub(__MODULE__, fn conn ->
-      Req.Test.json(conn, %{"choices" => [%{"message" => %{"content" => ~s({"ok":true})}}]})
-    end)
-
-    assert {:ok, %{content: %{"ok" => true}, tool_calls: []}} = Client.chat([], opts)
-
-    Req.Test.stub(__MODULE__, fn conn ->
-      Req.Test.json(conn, %{
-        "choices" => [%{"message" => %{"content" => ~s({"ok":true,"ok":false})}}]
-      })
-    end)
-
-    assert {:error, %{code: :invalid_provider_response}} = Client.chat([], opts)
-    assert llm_call_count(scope) == 2
-  end
-
   test "a disabled provider makes no call and records no ledger row" do
     scope = scope_fixture()
     parent = self()

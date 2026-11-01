@@ -93,36 +93,4 @@ defmodule BurpeeTrainer.Workouts.InspectionTest do
     assert stored.program_json == p.program_json
     assert stored.content_hash == p.content_hash
   end
-
-  test "synthetic non-persistable terminal recovery remains explicit and lossless" do
-    # The authoritative compiler rejects terminal rest. This only exercises
-    # the projection traversal; it is not a valid persisted workout fixture.
-    p = plan([work()], 10)
-    rest = %{"kind" => "rest", "duration_sec" => 10.0}
-
-    synthetic = %{
-      p
-      | definition_json: Map.update!(p.definition_json, "events", &(&1 ++ [rest, rest])),
-        program_json:
-          Map.update!(
-            p.program_json,
-            "events",
-            &(&1 ++
-                [
-                  %{"kind" => "rest", "duration_ms" => 10_000},
-                  %{"kind" => "rest", "duration_ms" => 10_000}
-                ])
-          )
-    }
-
-    rows = Inspection.rows(synthetic)
-
-    assert [
-             %{kind: :set},
-             %{kind: :recovery, trailing?: true},
-             %{kind: :recovery, trailing?: true}
-           ] = rows
-
-    assert Inspection.flatten(rows) == synthetic.program_json["events"]
-  end
 end

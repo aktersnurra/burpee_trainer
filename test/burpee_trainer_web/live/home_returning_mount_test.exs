@@ -18,26 +18,6 @@ defmodule BurpeeTrainerWeb.HomeReturningMountTest do
     :ok
   end
 
-  test "returning user without a completed session sees the starter, not the placeholder", %{
-    conn: _conn
-  } do
-    user = returning_user()
-    now = DateTime.utc_now(:second)
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
-
-    {:ok, pinned} =
-      Workouts.ensure_recommendation(Scope.for_user(user), %{
-        slot_key: slot.slot_key,
-        slot_date: slot.slot_date
-      })
-
-    socket = mounted_socket(user, now)
-
-    assert socket.assigns.home_selection.recommendation_id == pinned.id
-    assert socket.assigns.home_selection.plan.name == "Starter Six-Count"
-    refute_received :unexpected_provider
-  end
-
   test "returning user mount preserves owned draft content without a provider call", %{
     conn: _conn
   } do

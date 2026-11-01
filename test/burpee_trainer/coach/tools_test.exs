@@ -10,10 +10,6 @@ defmodule BurpeeTrainer.Coach.ToolsTest do
     SelectWorkout
   }
 
-  test "select_workout asks for the reason, not a restatement of the workout" do
-    assert SelectWorkout.schema()["properties"]["rationale"]["description"] =~ "why, not what"
-  end
-
   test "saved workout selection enforces the planner slot and recent performance ceiling" do
     scope = scope_fixture()
     logged(scope, 100, 1200, DateTime.add(DateTime.utc_now(:second), -7, :day))

@@ -6,7 +6,7 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
   alias BurpeeTrainer.{Accounts, ReqStub, Workouts, Repo}
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Policy
-  alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutSession}
+  alias BurpeeTrainer.Workouts.WorkoutPlan
 
   setup %{conn: conn} = context do
     parent = self()
@@ -224,48 +224,6 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     assert Repo.reload!(used) == used
     assert Repo.reload!(foreign).state == :published
     refute_received {:provider_request, _}
-  end
-
-  test "archive from the chooser retains completed snapshot and chooses a fallback", %{conn: conn} do
-    user = user_fixture()
-    plan = plan_fixture(user, %{name: "Archived source"})
-    fallback = plan_fixture(user, %{name: "Fallback"})
-
-    {:ok, slot} =
-      BurpeeTrainer.Coach.Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
-
-    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    {:ok, _} = Workouts.select_home_workout(Scope.for_user(user), shown, plan.id)
-    completed_at = DateTime.add(DateTime.utc_now(:second), -86_400, :second)
-
-    completed =
-      Repo.insert!(%WorkoutSession{
-        user_id: user.id,
-        plan_id: plan.id,
-        state: :completed,
-        source_kind: :plan,
-        client_session_id: Ecto.UUID.generate(),
-        display_name_snapshot: plan.name,
-        workout_type_snapshot: plan.burpee_type,
-        burpee_type: plan.burpee_type,
-        program_snapshot: plan.program_json,
-        content_hash: plan.content_hash,
-        burpee_count_planned: plan.target_reps,
-        duration_sec_planned: plan.target_duration_sec,
-        burpee_count_actual: 1,
-        duration_sec_actual: 1,
-        capture_mode: :timed,
-        started_at: DateTime.add(completed_at, -1, :second),
-        completed_at: completed_at
-      })
-
-    {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
-    view |> element("#home-summary") |> render_click()
-    open_swap(view)
-    view |> element("#home-delete-workout-#{plan.id}") |> render_click()
-    assert Repo.get!(WorkoutPlan, plan.id).state == :archived
-    assert Repo.get!(WorkoutSession, completed.id).program_snapshot == completed.program_snapshot
-    assert has_element?(view, "#home-alternative-plan-#{fallback.id}")
   end
 
   defp selected_slot(user) do

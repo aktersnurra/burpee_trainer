@@ -8,7 +8,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
 
   alias BurpeeTrainer.{Accounts, Repo, ReqStub, Workouts}
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.Policy
   alias BurpeeTrainer.Workouts.{CoachRecommendation, WorkoutPlan, WorkoutSession}
   alias BurpeeTrainerWeb.HomeLive
 
@@ -158,31 +157,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
 
     assert card_name(repaired) == selected.plan.name
     assert present?(repaired, "#home-action[data-primary-action=start]")
-    assert_started_selection(repaired, selected)
-  end
-
-  test "idle corrupt pointer repair alone replaces the old inspection and Start revision", %{
-    user: user
-  } do
-    now = DateTime.utc_now(:second)
-    plan_fixture(user)
-    socket = mount_home(user, now)
-    old = socket.assigns.home_selection
-
-    Repo.get!(CoachRecommendation, old.recommendation_id)
-    |> Ecto.Changeset.change(home_workout_plan_id: nil)
-    |> Repo.update!()
-
-    repaired = refresh(socket, now)
-    assert {:start, selected} = repaired.assigns.home_state
-    assert selected.home_revision > old.home_revision
-    assert repaired.assigns.home_selection == selected
-    assert repaired.assigns.home_facts.selection == selected
-
-    assert repaired.assigns.inspection_rows ==
-             BurpeeTrainer.Workouts.Inspection.rows(selected.plan)
-
-    assert card_name(repaired) == selected.plan.name
     assert_started_selection(repaired, selected)
   end
 
@@ -383,48 +357,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     refute_received :unexpected_provider
   end
 
-  test "working owned draft, token, input, groups, filters and in-flight identity survive refresh",
-       %{user: user} do
-    now = DateTime.utc_now(:second)
-    draft = workout_plan_draft_fixture(user)
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
-    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    socket = mount_home(user, now)
-
-    Repo.get!(CoachRecommendation, socket.assigns.home_selection.recommendation_id)
-    |> Ecto.Changeset.change(pending_draft_id: draft.id)
-    |> Repo.update!()
-
-    {:noreply, socket} =
-      HomeLive.handle_event(
-        "select_alternative",
-        %{"kind" => "plan", "id" => to_string(draft.id)},
-        socket
-      )
-
-    assert socket.assigns.home_selection.plan.id == draft.id
-
-    socket =
-      assign(socket,
-        instruction: "My unsent text",
-        expanded_groups: MapSet.new(["group"]),
-        busy?: true,
-        update_id: make_ref()
-      )
-
-    before = Map.take(socket.assigns, @workspace_keys)
-
-    recommendation =
-      Repo.get!(CoachRecommendation, socket.assigns.home_selection.recommendation_id)
-
-    refreshed = refresh(socket, @monday)
-    assert Map.take(refreshed.assigns, @workspace_keys) == before
-    assert refreshed.assigns.slot.completed_sec == 0
-    assert Repo.reload!(recommendation) == recommendation
-    assert Repo.reload!(draft) == draft
-    refute_received :unexpected_provider
-  end
-
   test "boundary retains inspected older rows in period, removes expired rows and captures time once",
        %{user: user} do
     rows = for _ <- 1..8, do: complete(user, @tuesday, 600)
@@ -509,32 +441,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     assert present?(socket, "#home-history-error")
     {:noreply, home} = workspace_screen(socket, :home)
     assert present?(home, "#home-unavailable")
-  end
-
-  test "fresh mount recomputes time and preserves the persisted owned pin", %{user: user} do
-    now = DateTime.utc_now(:second)
-    draft = workout_plan_draft_fixture(user)
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
-    {:ok, _selected} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    socket = mount_home(user, now)
-
-    Repo.get!(CoachRecommendation, socket.assigns.home_selection.recommendation_id)
-    |> Ecto.Changeset.change(pending_draft_id: draft.id)
-    |> Repo.update!()
-
-    {:noreply, socket} =
-      HomeLive.handle_event(
-        "select_alternative",
-        %{"kind" => "plan", "id" => to_string(draft.id)},
-        socket
-      )
-
-    reopened = mount_home(user, now)
-    assert reopened.assigns.home_selection == socket.assigns.home_selection
-    assert reopened.assigns.home_snapshot_now == now
-    # A new process does not promise recovery of unsent editor text.
-    assert reopened.assigns.instruction == ""
-    refute_received :unexpected_provider
   end
 
   test "stale generation and mismatched async identity leave the socket unchanged", %{user: user} do

@@ -169,7 +169,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     end
   end
 
-  test "authenticated History has its own route and legacy query redirects", %{conn: conn} do
+  test "authenticated History has its own route", %{conn: conn} do
     user = user_fixture()
     conn = init_test_session(conn, %{user_id: user.id})
 
@@ -177,13 +177,6 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     assert has_element?(view, "#home-history-heading[tabindex='-1'][phx-mounted]")
     refute has_element?(view, "#home-state-content, #home-coach-panel")
     assert has_element?(view, "#history-page[phx-window-keydown=close_history][phx-key=Escape]")
-    assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, ~p"/?history=1")
-    {:ok, legacy, _} = live(conn, ~p"/")
-    pid = legacy.pid
-    render_patch(legacy, ~p"/?history=1")
-    assert_patch(legacy, "/progress")
-    assert legacy.pid == pid
-    assert has_element?(legacy, "#home-history-heading")
 
     view |> element("#home-history-close") |> render_click()
     assert_patch(view, "/")

@@ -5,13 +5,6 @@ defmodule BurpeeTrainer.Workouts.WorkoutSessionTest do
 
   alias BurpeeTrainer.Workouts.WorkoutSession
 
-  test "final schema has no authorization or persisted execution-program shims" do
-    session = %WorkoutSession{}
-
-    refute Map.has_key?(session, :execution_program_id)
-    refute Map.has_key?(session, :prepared_workout_id)
-  end
-
   test "start changeset accepts a fully snapshotted plan identity" do
     changeset =
       WorkoutSession.start_changeset(%WorkoutSession{
