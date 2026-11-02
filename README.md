@@ -6,11 +6,10 @@ Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks
 
 ## Features
 
-- **Durable workout library** — `workout_plans` is canonical. Home's New and Edit flows prepare a review before saving a new immutable, reusable workout. Published workouts can be selected or archived without changing completed sessions.
-- **Safe LLM authoring** — bounded `Req` extraction, planning, and repair produce a validated, audited review before a workout is saved. Home approval is provider-free: **Use workout** atomically saves and selects the reviewed plan; **Save to library** leaves today's selection unchanged. Swap also previews before Use. Cancellation preserves the selection, and Start remains separate (video reviews explicitly say **Start video**). Invalid or stale approvals do not publish a workout.
-- **Workout-first coaching** — deterministic policy tracks the 80-minute week (pro-rated on sign-up) and suggests the next type and duration, including weekend catch-up. Oban plans after completed/logged sessions and at eligible day boundaries; Home stays startable while planning and updates when the result arrives. The normal offline-provider fallback is a type-appropriate 20-minute starter. The type split is a preference, not a weekly quota.
+- **Durable workout library** — `workout_plans` is canonical. Home's New (one form) and Edit (a chat with the coach) produce a proposal; **Run** saves it as a new immutable, reusable workout and starts it. A tap on a workout in the drawer makes it today's (a video starts). Published workouts can be archived without changing completed sessions.
+- **Safe LLM authoring** — bounded `Req` extraction, planning, and repair produce a validated, audited proposal before anything is saved. A proposal changes only by asking the coach, who offers likely next asks as pills. Invalid or stale approvals do not publish a workout.
+- **Workout-first coaching** — deterministic policy tracks the 80-minute week (pro-rated on sign-up) and suggests the next type and duration, including weekend catch-up. Oban plans the next day after a completed or logged session, and each new week's first workout at Monday 00:00 UTC; a day without training keeps the coach's earlier choice from the same week. Home stays startable while planning and updates when the result arrives. The offline-provider fallback is a type-appropriate 20-minute starter. The type split is a preference, not a weekly quota.
 - **Evidence-based progression** — automatic saved-plan selection and generated proposals obey a deterministic decision from recent, authoritative same-movement sessions. Missing feedback repeats the demonstrated rate; two successful, equally paced prescriptions on separate days permit a 1–5 rep increase per 20 minutes. Early fatigue or missed targets ease off; late fatigue repeats the prescribed rate. Longer sessions are normalized, early finishes retain planned time, and the existing rep ceiling still applies. Manual choices remain unrestricted. This constrains recommendations; it is not evidence of real-model coaching quality.
-- **Quick time choices** — 20/40-minute options prepare a local review without a provider call or changing the selection. Options cannot exceed the week's remaining time. They are visible during weekend catch-up, or when the workout is expanded, and build even short sets at the selected workout's normalized rate with recovery where time allows; the exact structure is reviewed before Use. Progress shows remaining weekly minutes and recent same-movement 20-minute equivalents without requiring both movements.
 - **Immutable execution** — Start creates the exact `started` session ID and stores a plan Work/Rest or video snapshot. Resume reads that snapshot; completion updates the same row exactly once and remains offline-capable during the runner.
 - **Stable History** — completed views use session snapshots, so later plan archival or video changes cannot rewrite the workout that was performed.
 - **Live session runner** — terminal-active timing, audio cues, wake lock, pause/resume, breathing, count-in, and optional BlazePose rep tracking with timer fallback.
@@ -22,7 +21,6 @@ Built with Phoenix LiveView, SQLite, Tailwind CSS, and lightweight browser hooks
 - Ecto with SQLite via `ecto_sqlite3`
 - Tailwind CSS v4
 - Vanilla JavaScript modules and LiveView hooks
-- Chart.js for charts
 - OIDC via `oidcc` for Pocket ID authentication
 
 ## Local development
@@ -128,33 +126,15 @@ Production releases read their runtime configuration from environment variables.
 | `DECISIONS_URL` | No | Decisions API endpoint; defaults to `https://openrouter.ai/api/alpha/decisions` when `LLM_PROVIDER_URL` is on OpenRouter, and uses `LLM_PROVIDER_API_KEY`. |
 | `DECISIONS_ENABLED` | No | Set to `false` to plan with the LLM alone. |
 
-For OpenRouter authoring, set `LLM_PROVIDER_URL` to `https://openrouter.ai/api/v1/chat/completions` and provision `LLM_PROVIDER_API_KEY` from your secret store. Both values are required to enable LLM HTTP; the default Luna model alone does not send requests. Override `LLM_PROVIDER_MODEL` only to select a different model supported by your configured endpoint. Keep provider credentials out of the repository. Eligible users' background jobs can call the provider after training, at an eligible day boundary, or to refresh a stale summary on open; authoring and coach messages can also call it. The call ledger enforces per-user daily call and cost budgets. Opening Home does not itself schedule workout planning. Failed or disabled coaching does not prevent starting an available workout.
+For OpenRouter authoring, set `LLM_PROVIDER_URL` to `https://openrouter.ai/api/v1/chat/completions` and provision `LLM_PROVIDER_API_KEY` from your secret store. Both values are required to enable LLM HTTP; the default Luna model alone does not send requests. Override `LLM_PROVIDER_MODEL` only to select a different model supported by your configured endpoint. Keep provider credentials out of the repository. Eligible users' background jobs can call the provider after training, at the start of each week, or to refresh a stale summary on open; authoring and coach messages can also call it. The call ledger enforces per-user daily call and cost budgets. Opening Home does not itself schedule workout planning. Failed or disabled coaching does not prevent starting an available workout.
 
 The SQLite database and uploaded/runtime data must live in persistent paths managed by the target machine, not under the release directory that deployment replaces.
 
 ## Deployment
 
-Deployment is intentionally owned by a separate private infrastructure repository. On the deployment machine, `./deploy` in this repository is a local symlink to that infra repository’s deploy command; the script itself is not tracked here.
+Deployment follows `master`. A push to `master` runs CI (`.github/workflows/ci.yml`: `mix ci` and the JavaScript tests); when it passes, CI moves the `deploy` branch to that commit. On the NUC, `serai update` runs every minute and deploys `deploy`, but only a commit signed with the owner's key. Merge pull requests locally and push the signed result: GitHub's merge and squash buttons sign with GitHub's own key, and the NUC refuses those commits (a signed commit on top deploys both). `serai up burpee --revision <sha>` on the NUC deploys a commit by hand.
 
-Deploy to the NUC from the BurpeeTrainer repository root:
-
-```bash
-./deploy nuc
-```
-
-Deploy to another configured VPS/host by passing its infra target name:
-
-```bash
-./deploy <target>
-```
-
-If `./deploy` is missing on a deployment machine, restore the symlink using that machine’s private infra checkout rather than adding a deployment script to this repository:
-
-```bash
-ln -s /path/to/private-infra/deploy ./deploy
-```
-
-Target definitions, provisioning, release transfer/build details, migrations, service management, TLS, logs, and rollback procedures belong to the private infra repository. Treat that repository as the authoritative deployment documentation.
+Provisioning, service management, TLS, logs, and rollback belong to the private infrastructure repository (nuc-setup, `docs/OPERATIONS.md`), the authoritative deployment documentation.
 
 ## Project layout
 
@@ -170,4 +150,4 @@ test/                           ExUnit, LiveView, and domain tests
 docs/                           Specs, plans in progress, guides, UI and testing rules
 ```
 
-Deployment infrastructure is deliberately not part of this tree; the deployment machine supplies it through the private infra symlink described above.
+Deployment infrastructure is deliberately not part of this tree; see Deployment above.
