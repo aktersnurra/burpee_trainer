@@ -15,7 +15,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
   defstruct [:params, :touched]
 
   @type field :: String.t()
-  @type t :: %__MODULE__{params: HomeWorkoutRequest.t(), touched: MapSet.t(field())}
+  @type t :: %__MODULE__{params: HomeWorkoutRequest.t(), touched: [field()]}
 
   # The order a submitted form is applied in: what the later values are suggested from first.
   @fields ~w(burpee_type pacing_style duration reps sets pace)
@@ -25,7 +25,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
   def open(params, scope, remaining_sec) do
     minutes = NewDefaults.default_duration(remaining_sec)
     params = %{params | duration: CreationParameters.duration_label(minutes * 60)}
-    %__MODULE__{params: suggest(params, MapSet.new(), scope), touched: MapSet.new()}
+    %__MODULE__{params: suggest(params, [], scope), touched: []}
   end
 
   @doc """
@@ -132,7 +132,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
 
   # Sets the value, re-suggests what follows it and is not the athlete's, then makes it fit.
   defp set(form, field, value, scope) do
-    touched = MapSet.put(form.touched, field)
+    touched = Enum.uniq([field | form.touched])
     p = put(form.params, field, value)
 
     p = if field in ~w(burpee_type duration), do: suggest(p, touched, scope), else: p

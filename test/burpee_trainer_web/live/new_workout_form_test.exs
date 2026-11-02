@@ -37,7 +37,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutFormTest do
     # With no history, the next level's landmark scaled to the duration.
     assert form.params.reps == 50
     assert form.params.pace == 4.5
-    assert form.touched == MapSet.new()
+    assert form.touched == []
 
     assert NewWorkoutForm.open(params(), scope, 600).params.duration == "10:00"
   end
@@ -116,7 +116,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutFormTest do
     form = NewWorkoutForm.open(params(), scope, nil)
     assert step(form, "duration", :up, scope).params.duration == "25:00"
     assert step(form, "reps", :up, scope).params.reps == 60
-    assert step(form, "reps", :up, scope).touched == MapSet.new(["reps"])
+    assert step(form, "reps", :up, scope).touched == ["reps"]
     assert step(form, "pace", :up, scope).params.pace == 5.0
     assert step(form, "pace", :down, scope).params.pace == 4.0
   end
@@ -153,6 +153,6 @@ defmodule BurpeeTrainerWeb.NewWorkoutFormTest do
       )
 
     assert submitted.params.reps == 80
-    assert submitted.touched == MapSet.new(["reps"])
+    assert submitted.touched == ["reps"]
   end
 end
